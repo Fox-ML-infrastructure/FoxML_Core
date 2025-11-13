@@ -75,6 +75,65 @@ def load_target_configs() -> Dict[str, Dict]:
     return config['targets']
 
 
+def discover_all_targets(symbol: str, data_dir: Path) -> Dict[str, Dict]:
+    """
+    Auto-discover all valid targets from data (non-degenerate).
+    
+    Returns dict of {target_name: config} for all valid targets found.
+    """
+    import pandas as pd
+    
+    # Load sample data to discover targets
+    symbol_dir = data_dir / f"symbol={symbol}"
+    parquet_file = symbol_dir / f"{symbol}.parquet"
+    
+    if not parquet_file.exists():
+        raise FileNotFoundError(f"Cannot discover targets: {parquet_file} not found")
+    
+    df = pd.read_parquet(parquet_file)
+    
+    # Find all y_ columns
+    all_targets = [c for c in df.columns if c.startswith('y_')]
+    
+    # Filter out degenerate targets (single class)
+    valid_targets = {}
+    degenerate_count = 0
+    
+    for target_col in all_targets:
+        y = df[target_col].dropna()
+        if len(y) == 0:
+            continue
+        
+        unique_vals = y.unique()
+        n_unique = len(unique_vals)
+        
+        # Skip degenerate targets (single class)
+        if n_unique == 1:
+            degenerate_count += 1
+            continue
+        
+        # Skip first_touch targets (they're leaked - correlated with hit_direction features)
+        if 'first_touch' in target_col:
+            degenerate_count += 1
+            continue
+        
+        # Create a simple config for this target
+        target_name = target_col.replace('y_will_', '').replace('y_', '')
+        valid_targets[target_name] = {
+            'target_column': target_col,
+            'description': f"Auto-discovered target: {target_col}",
+            'use_case': f"{'Classification' if n_unique <= 10 else 'Regression'} target",
+            'top_n': 60,
+            'method': 'mean',
+            'enabled': True
+        }
+    
+    logger.info(f"  Discovered {len(valid_targets)} valid targets")
+    logger.info(f"  Skipped {degenerate_count} degenerate targets (single class)")
+    
+    return valid_targets
+
+
 def load_sample_data(
     symbol: str,
     data_dir: Path,
@@ -113,12 +172,20 @@ def prepare_features_and_target(
     if df.empty:
         raise ValueError("No valid data after dropping NaN in target")
     
-    # Prepare features
-    exclude_cols = [col for col in df.columns 
-                   if col.startswith(('y_', 'fwd_ret_', 'barrier_', 'zigzag_', 'p_')) 
-                   or col in ['ts', 'datetime', 'symbol', target_column, 'interval', 'source']]
+    # LEAKAGE PREVENTION: Filter out leaking features
+    import sys
+    sys.path.insert(0, str(_REPO_ROOT / "scripts"))
+    from filter_leaking_features import filter_features
     
-    X = df.drop(columns=exclude_cols, errors='ignore')
+    all_columns = df.columns.tolist()
+    safe_columns = filter_features(all_columns, verbose=False)
+    
+    # Keep only safe features + target
+    safe_columns_with_target = [c for c in safe_columns if c != target_column] + [target_column]
+    df = df[safe_columns_with_target]
+    
+    # Prepare features (exclude target explicitly)
+    X = df.drop(columns=[target_column], errors='ignore')
     
     # Drop object dtypes
     object_cols = X.select_dtypes(include=['object']).columns.tolist()
@@ -354,6 +421,12 @@ def evaluate_target_predictability(
             # Prepare features
             X, y, feature_names = prepare_features_and_target(df, target_column)
             
+            # Check if target is degenerate in this sample (single class)
+            unique_vals = np.unique(y)
+            if len(unique_vals) == 1:
+                logger.warning(f"    ⚠️  Skipping: Target has only 1 unique value in sample")
+                continue
+            
             # Train and evaluate
             model_scores, importance = train_and_evaluate_models(
                 X, y, feature_names, model_families
@@ -371,11 +444,11 @@ def evaluate_target_predictability(
             continue
     
     if not all_model_scores:
-        logger.warning(f"  ⚠️  No successful evaluations for {target_name}")
+        logger.warning(f"  ⚠️  No successful evaluations for {target_name} (skipping)")
         return TargetPredictabilityScore(
             target_name=target_name,
             target_column=target_column,
-            mean_r2=0.0,
+            mean_r2=-999.0,  # Flag for degenerate/failed targets
             std_r2=1.0,
             mean_importance=0.0,
             consistency=0.0,
@@ -492,6 +565,8 @@ def main():
                        default=_REPO_ROOT / "results/target_rankings")
     parser.add_argument("--targets", type=str,
                        help="Specific targets to evaluate (comma-separated), default: all enabled")
+    parser.add_argument("--discover-all", action="store_true",
+                       help="Auto-discover and rank ALL targets from data (ignores config)")
     parser.add_argument("--model-families", type=str,
                        default="lightgbm,random_forest,neural_network",
                        help="Model families to use")
@@ -508,18 +583,24 @@ def main():
     logger.info(f"Test symbols: {', '.join(symbols)}")
     logger.info(f"Model families: {', '.join(model_families)}")
     
-    # Load target configs
-    target_configs = load_target_configs()
-    
-    # Filter targets
-    if args.targets:
-        requested = [t.strip() for t in args.targets.split(',')]
-        targets_to_eval = {k: v for k, v in target_configs.items() if k in requested}
+    # Discover or load targets
+    if args.discover_all:
+        logger.info("🔍 Auto-discovering ALL targets from data...")
+        targets_to_eval = discover_all_targets(symbols[0], args.data_dir)
+        logger.info(f"Found {len(targets_to_eval)} valid targets\n")
     else:
-        # Only evaluate enabled targets
-        targets_to_eval = {k: v for k, v in target_configs.items() if v.get('enabled', False)}
-    
-    logger.info(f"Evaluating {len(targets_to_eval)} targets\n")
+        # Load target configs
+        target_configs = load_target_configs()
+        
+        # Filter targets
+        if args.targets:
+            requested = [t.strip() for t in args.targets.split(',')]
+            targets_to_eval = {k: v for k, v in target_configs.items() if k in requested}
+        else:
+            # Only evaluate enabled targets
+            targets_to_eval = {k: v for k, v in target_configs.items() if v.get('enabled', False)}
+        
+        logger.info(f"Evaluating {len(targets_to_eval)} targets\n")
     
     # Evaluate each target
     results = []
@@ -527,7 +608,9 @@ def main():
         result = evaluate_target_predictability(
             target_name, target_config, symbols, args.data_dir, model_families
         )
-        results.append(result)
+        # Skip degenerate targets (marked with mean_r2 = -999)
+        if result.mean_r2 != -999.0:
+            results.append(result)
     
     # Save rankings
     save_rankings(results, args.output_dir)

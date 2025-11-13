@@ -354,11 +354,19 @@ def process_single_symbol(
         if len(df) > max_samples:
             df = df.sample(n=max_samples, random_state=42)
         
-        # Prepare features
-        exclude_cols = [col for col in df.columns 
-                       if col.startswith(('y_', 'fwd_ret_', 'barrier_', 'zigzag_', 'p_')) 
-                       or col in ['ts', 'datetime', 'symbol', target_column, 'interval', 'source']]
-        X = df.drop(columns=exclude_cols, errors='ignore')
+        # LEAKAGE PREVENTION: Filter out leaking features
+        sys.path.insert(0, str(_REPO_ROOT / "scripts"))
+        from filter_leaking_features import filter_features
+        
+        all_columns = df.columns.tolist()
+        safe_columns = filter_features(all_columns, verbose=False)
+        
+        # Keep only safe features + target
+        safe_columns_with_target = [c for c in safe_columns if c != target_column] + [target_column]
+        df = df[safe_columns_with_target]
+        
+        # Prepare features (target already in safe list, so exclude it explicitly)
+        X = df.drop(columns=[target_column], errors='ignore')
         
         # Drop object dtypes
         object_cols = X.select_dtypes(include=['object']).columns.tolist()

@@ -1,0 +1,325 @@
+# Excluded Features - Data Leakage Prevention
+#
+# These features are excluded from model training because they leak future information.
+# They use data that wouldn't be available at prediction time.
+#
+# Last updated: 2025-11-13
+
+# Definite leaks - MUST be excluded
+definite_leaks:
+  # Time-in-profit features (look ahead to see if profitable)
+  - time_in_profit_5m
+  - time_in_profit_10m
+  - time_in_profit_15m
+  - time_in_profit_30m
+  - time_in_profit_60m
+  
+  # Time-in-drawdown features (look ahead to see drawdown duration)
+  - time_in_drawdown_5m
+  - time_in_drawdown_10m
+  - time_in_drawdown_15m
+  - time_in_drawdown_30m
+  - time_in_drawdown_60m
+  
+  # MFE/MDD share features (require knowing future path)
+  - mfe_share_5m
+  - mfe_share_10m
+  - mfe_share_15m
+  - mfe_share_30m
+  - mfe_share_60m
+  - mdd_share_5m
+  - mdd_share_10m
+  - mdd_share_15m
+  - mdd_share_30m
+  - mdd_share_60m
+  
+  # Time-to-hit features (when barrier is hit in future)
+  - tth_5m_0.3
+  - tth_5m_0.5
+  - tth_5m_0.8
+  - tth_10m_0.3
+  - tth_10m_0.5
+  - tth_10m_0.8
+  - tth_15m_0.3
+  - tth_15m_0.5
+  - tth_15m_0.8
+  - tth_30m_0.3
+  - tth_30m_0.5
+  - tth_30m_0.8
+  - tth_60m_0.3
+  - tth_60m_0.5
+  - tth_60m_0.8
+  
+  # Absolute time-to-hit
+  - tth_abs_5m_0.3
+  - tth_abs_5m_0.5
+  - tth_abs_5m_0.8
+  - tth_abs_10m_0.3
+  - tth_abs_10m_0.5
+  - tth_abs_10m_0.8
+  - tth_abs_15m_0.3
+  - tth_abs_15m_0.5
+  - tth_abs_15m_0.8
+  - tth_abs_30m_0.3
+  - tth_abs_30m_0.5
+  - tth_abs_30m_0.8
+  - tth_abs_60m_0.3
+  - tth_abs_60m_0.5
+  - tth_abs_60m_0.8
+  
+  # Asymmetric time-to-hit
+  - tth_asym_5m_1.0_0.5
+  - tth_asym_5m_1.5_0.8
+  - tth_asym_5m_2.0_1.0
+  - tth_asym_10m_1.0_0.5
+  - tth_asym_10m_1.5_0.8
+  - tth_asym_10m_2.0_1.0
+  - tth_asym_15m_1.0_0.5
+  - tth_asym_15m_1.5_0.8
+  - tth_asym_15m_2.0_1.0
+  - tth_asym_30m_1.0_0.5
+  - tth_asym_30m_1.5_0.8
+  - tth_asym_30m_2.0_1.0
+  - tth_asym_60m_1.0_0.5
+  - tth_asym_60m_1.5_0.8
+  - tth_asym_60m_2.0_1.0
+  
+  # Flip count (future path crossings)
+  - flipcount_5m
+  - flipcount_10m
+  - flipcount_15m
+  - flipcount_30m
+  - flipcount_60m
+  
+  # Excursion features (future path metrics)
+  - excursion_up_5m
+  - excursion_up_10m
+  - excursion_up_15m
+  - excursion_up_30m
+  - excursion_up_60m
+  - excursion_down_5m
+  - excursion_down_10m
+  - excursion_down_15m
+  - excursion_down_30m
+  - excursion_down_60m
+
+# MFE/MDD raw values (DEFINITE LEAKS - moved from probable)
+  - mfe_5m_0.001
+  - mfe_5m_0.002
+  - mfe_5m_0.005
+  - mfe_10m_0.001
+  - mfe_10m_0.002
+  - mfe_10m_0.005
+  - mfe_15m_0.001
+  - mfe_15m_0.002
+  - mfe_15m_0.005
+  - mfe_30m_0.001
+  - mfe_30m_0.002
+  - mfe_30m_0.005
+  - mfe_60m_0.001
+  - mfe_60m_0.002
+  - mfe_60m_0.005
+  - mdd_5m_0.001
+  - mdd_5m_0.002
+  - mdd_5m_0.005
+  - mdd_10m_0.001
+  - mdd_10m_0.002
+  - mdd_10m_0.005
+  - mdd_15m_0.001
+  - mdd_15m_0.002
+  - mdd_15m_0.005
+  - mdd_30m_0.001
+  - mdd_30m_0.002
+  - mdd_30m_0.005
+  - mdd_60m_0.001
+  - mdd_60m_0.002
+  - mdd_60m_0.005
+  
+  # Max/min return features (require future path)
+  - max_return_5m_0.001
+  - min_return_5m_0.001
+  - max_return_5m_0.002
+  - min_return_5m_0.002
+  - max_return_5m_0.005
+  - min_return_5m_0.005
+  - max_return_10m_0.001
+  - min_return_10m_0.001
+  - max_return_10m_0.002
+  - min_return_10m_0.002
+  - max_return_10m_0.005
+  - min_return_10m_0.005
+  - max_return_15m_0.001
+  - min_return_15m_0.001
+  - max_return_15m_0.002
+  - min_return_15m_0.002
+  - max_return_15m_0.005
+  - min_return_15m_0.005
+  - max_return_30m_0.001
+  - min_return_30m_0.001
+  - max_return_30m_0.002
+  - min_return_30m_0.002
+  - max_return_30m_0.005
+  - min_return_30m_0.005
+  - max_return_60m_0.001
+  - min_return_60m_0.001
+  - max_return_60m_0.002
+  - min_return_60m_0.002
+  - max_return_60m_0.005
+  - min_return_60m_0.005
+  
+  # Hit direction features (which barrier hit first) - ALL thresholds
+  - hit_direction_5m_0.001
+  - hit_direction_5m_0.002
+  - hit_direction_5m_0.003
+  - hit_direction_5m_0.005
+  - hit_direction_5m_0.01
+  - hit_direction_5m_0.02
+  - hit_direction_5m_0.03
+  - hit_direction_5m_0.05
+  - hit_direction_5m_0.1
+  - hit_direction_5m_0.2
+  - hit_direction_5m_0.3
+  - hit_direction_5m_0.5
+  - hit_direction_5m_0.8
+  - hit_direction_10m_0.001
+  - hit_direction_10m_0.002
+  - hit_direction_10m_0.003
+  - hit_direction_10m_0.005
+  - hit_direction_10m_0.01
+  - hit_direction_10m_0.02
+  - hit_direction_10m_0.03
+  - hit_direction_10m_0.05
+  - hit_direction_10m_0.1
+  - hit_direction_10m_0.2
+  - hit_direction_10m_0.3
+  - hit_direction_10m_0.5
+  - hit_direction_10m_0.8
+  - hit_direction_15m_0.001
+  - hit_direction_15m_0.002
+  - hit_direction_15m_0.003
+  - hit_direction_15m_0.005
+  - hit_direction_15m_0.01
+  - hit_direction_15m_0.02
+  - hit_direction_15m_0.03
+  - hit_direction_15m_0.05
+  - hit_direction_15m_0.1
+  - hit_direction_15m_0.2
+  - hit_direction_15m_0.3
+  - hit_direction_15m_0.5
+  - hit_direction_15m_0.8
+  - hit_direction_30m_0.001
+  - hit_direction_30m_0.002
+  - hit_direction_30m_0.003
+  - hit_direction_30m_0.005
+  - hit_direction_30m_0.01
+  - hit_direction_30m_0.02
+  - hit_direction_30m_0.03
+  - hit_direction_30m_0.05
+  - hit_direction_30m_0.1
+  - hit_direction_30m_0.2
+  - hit_direction_30m_0.3
+  - hit_direction_30m_0.5
+  - hit_direction_30m_0.8
+  - hit_direction_60m_0.001
+  - hit_direction_60m_0.002
+  - hit_direction_60m_0.003
+  - hit_direction_60m_0.005
+  - hit_direction_60m_0.01
+  - hit_direction_60m_0.02
+  - hit_direction_60m_0.03
+  - hit_direction_60m_0.05
+  - hit_direction_60m_0.1
+  - hit_direction_60m_0.2
+  - hit_direction_60m_0.3
+  - hit_direction_60m_0.5
+  - hit_direction_60m_0.8
+  
+  # Volatility "at time of hit" features (require future path)
+  - vol_at_t_5m_0.3
+  - vol_at_t_5m_0.5
+  - vol_at_t_5m_0.8
+  - vol_at_t_10m_0.3
+  - vol_at_t_10m_0.5
+  - vol_at_t_10m_0.8
+  - vol_at_t_15m_0.3
+  - vol_at_t_15m_0.5
+  - vol_at_t_15m_0.8
+  - vol_at_t_30m_0.3
+  - vol_at_t_30m_0.5
+  - vol_at_t_30m_0.8
+  - vol_at_t_60m_0.3
+  - vol_at_t_60m_0.5
+  - vol_at_t_60m_0.8
+
+# Probable leaks - Review these, exclude if suspicious
+probable_leaks: []
+
+# Temporal overlap features (for 60m targets)
+# These are backward-looking but create autocorrelation with 60m prediction horizon
+temporal_overlap_30m_plus:
+  # 30m and 60m return features
+  - ret_30m
+  - ret_60m
+  - ret_ord_30m
+  - ret_ord_60m
+  - ret_zscore_30m
+  - ret_zscore_60m
+  - ret2_30m
+  - ret2_60m
+  
+  # 30m and 60m volatility features
+  - vol_30m
+  - vol_60m
+  - vol_clustering_30m
+  - vol_clustering_60m
+  - vol_over_vol_30m
+  - vol_over_vol_60m
+  - vol_x_ret_30m
+  - vol_x_ret_60m
+  
+  # Range compression
+  - range_compression_30m
+  - range_compression_60m
+  
+  # VWAP deviation
+  - vwap_dev_30m
+  - vwap_dev_60m
+  
+  # Intraday seasonality
+  - intraday_seasonality_30m
+  - intraday_seasonality_60m
+  
+  # Asymmetric hit features (30m and 60m)
+  - hit_asym_30m_1.0_0.5
+  - hit_asym_30m_1.5_0.8
+  - hit_asym_30m_2.0_1.0
+  - hit_asym_60m_1.0_0.5
+  - hit_asym_60m_1.5_0.8
+  - hit_asym_60m_2.0_1.0
+
+# Metadata columns to always exclude (not leaks, just not features)
+metadata_columns:
+  - ts
+  - datetime
+  - symbol
+  - interval
+  - source
+  - date
+  - time
+  - timestamp
+
+# Target columns to exclude (never use targets as features)
+target_patterns:
+  - "^y_"           # All target columns
+  - "^fwd_ret_"     # Forward returns
+  - "^barrier_"     # Barrier labels
+  - "^zigzag_"      # Zigzag labels
+  - "^p_"           # Probability labels
+
+# Configuration
+exclude_definite_leaks: true    # Always exclude definite leaks
+exclude_probable_leaks: false   # Set true to be extra safe
+exclude_metadata: true          # Always exclude metadata
+exclude_targets: true           # Always exclude target columns
+exclude_temporal_overlap: true  # Exclude features with windows >= 30m (for 60m targets)
+
