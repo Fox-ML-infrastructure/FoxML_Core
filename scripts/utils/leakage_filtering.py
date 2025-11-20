@@ -261,6 +261,44 @@ def get_excluded_features_for_target(
                 config=config
             )
             excluded.update(temporal_overlap)
+            
+            # SPECIAL CASE: For forward return targets, exclude ALL return/volatility/momentum
+            # features with ANY day-based window (they're inherently autocorrelated)
+            if target_name.startswith('fwd_ret_') and all_feature_names:
+                import re
+                # Patterns that indicate return/volatility/momentum features
+                leaky_patterns = [
+                    r'ret.*\d+[dm]',      # returns_5d, ret_20d, etc.
+                    r'vol.*\d+[dm]',      # volatility_5d, vol_20d, etc.
+                    r'mom.*\d+[dm]',      # momentum_5d, mom_20d, etc.
+                    r'returns_\d+[dm]',   # returns_5d, returns_20d
+                    r'volatility_\d+[dm]', # volatility_5d, volatility_20d
+                    r'price_momentum_\d+[dm]',  # price_momentum_5d
+                    r'sector_momentum_\d+[dm]', # sector_momentum_5d
+                    r'volume_momentum_\d+[dm]',  # volume_momentum_5d
+                    r'relative_performance_\d+[dm]', # relative_performance_5d
+                    r'ret_x_mom_\d+[dm]', # ret_x_mom_5d
+                    r'vol_x_mom_\d+[dm]', # vol_x_mom_5d
+                ]
+                
+                for feature_name in all_feature_names:
+                    # Check if feature matches any leaky pattern
+                    for pattern in leaky_patterns:
+                        if re.search(pattern, feature_name, re.IGNORECASE):
+                            excluded.add(feature_name)
+                            break
+                    
+                    # Also check for _XX patterns (no suffix) that might be days
+                    # Only for return/volatility/momentum features
+                    if any(term in feature_name.lower() for term in ['ret', 'vol', 'mom', 'momentum']):
+                        matches = list(re.finditer(r'_(\d+)(?:_|$)', feature_name))
+                        for match in matches:
+                            value = int(match.group(1))
+                            # If it's a reasonable day value (1-365) and feature is return/vol/mom related
+                            if 1 <= value <= 365:
+                                excluded.add(feature_name)
+                                break
+            
             logger.debug(
                 f"Target {target_name} (horizon: {horizon_info['value']}{horizon_info['unit']}): "
                 f"Excluding {len(temporal_overlap)} temporal overlap features"
