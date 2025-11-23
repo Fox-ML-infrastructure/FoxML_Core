@@ -265,7 +265,7 @@ def get_excluded_features_for_target(
             # SPECIAL CASE: For forward return targets, exclude ALL return/volatility/momentum
             # features with ANY day-based window (they're inherently autocorrelated)
             if target_name.startswith('fwd_ret_') and all_feature_names:
-                import re
+# re is already imported at module level
                 # Patterns that indicate return/volatility/momentum features
                 leaky_patterns = [
                     r'ret.*\d+[dm]',      # returns_5d, ret_20d, etc.

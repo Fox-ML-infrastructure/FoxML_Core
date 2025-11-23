@@ -138,10 +138,20 @@ def discover_all_targets(symbol: str, data_dir: Path) -> Dict[str, Dict]:
     valid_targets = {}
     degenerate_count = 0
     first_touch_count = 0
+    sparse_count = 0
     
     for target_col in all_targets:
         y = df[target_col].dropna()
-        if len(y) == 0:
+        
+        # FIX 2: Check for sparsity - need minimum samples for statistical validity
+        # If target has < 100 non-NaN values, it's too sparse for reliable CV
+        if len(y) < 100:
+            sparse_count += 1
+            continue
+        
+        # Also check as percentage of total dataframe (catch extremely sparse targets)
+        if len(y) < len(df) * 0.01:  # Less than 1% of data
+            sparse_count += 1
             continue
         
         unique_vals = y.unique()
@@ -151,6 +161,15 @@ def discover_all_targets(symbol: str, data_dir: Path) -> Dict[str, Dict]:
         if n_unique == 1:
             degenerate_count += 1
             continue
+        
+        # FIX 3: Check for extreme class imbalance (e.g., single positive sample)
+        # For classification targets (n_unique <= 10), ensure minimum class count
+        if n_unique <= 10:  # Heuristic for classification
+            class_counts = y.value_counts()
+            min_class_count = class_counts.min()
+            if min_class_count < 2:  # Need at least 2 samples per class for CV
+                degenerate_count += 1
+                continue
         
         # For regression targets (fwd_ret_*), also check variance
         if target_col.startswith('fwd_ret_'):
@@ -164,16 +183,20 @@ def discover_all_targets(symbol: str, data_dir: Path) -> Dict[str, Dict]:
             first_touch_count += 1
             continue
         
-        # Create a simple config for this target
+        # FIX 1: Use full target_col as key to avoid collisions
+        # (e.g., y_squeeze and y_will_squeeze both become "squeeze" with old logic)
+        # Store display_name for UI/logging purposes
         if target_col.startswith('y_'):
-            target_name = target_col.replace('y_will_', '').replace('y_', '')
+            display_name = target_col.replace('y_will_', '').replace('y_', '')
             target_type = 'Classification' if n_unique <= 10 else 'Regression'
         else:  # fwd_ret_*
-            target_name = target_col  # Keep full name for forward returns
+            display_name = target_col  # Keep full name for forward returns
             target_type = 'Regression'
         
-        valid_targets[target_name] = {
-            'target_column': target_col,
+        # Use target_col as the key (unique, no collisions)
+        valid_targets[target_col] = {
+            'target_column': target_col,  # Matches the key
+            'display_name': display_name,  # Short name for UI/logging
             'description': f"Auto-discovered target: {target_col}",
             'use_case': f"{target_type} target",
             'top_n': 60,
@@ -184,7 +207,9 @@ def discover_all_targets(symbol: str, data_dir: Path) -> Dict[str, Dict]:
     logger.info(f"  Discovered {len(valid_targets)} valid targets")
     logger.info(f"    - y_* targets: {len([t for t in valid_targets.values() if t['target_column'].startswith('y_')])}")
     logger.info(f"    - fwd_ret_* targets: {len([t for t in valid_targets.values() if t['target_column'].startswith('fwd_ret_')])}")
-    logger.info(f"  Skipped {degenerate_count} degenerate targets (single class/zero variance)")
+    logger.info(f"  Skipped {degenerate_count} degenerate targets (single class/zero variance/extreme imbalance)")
+    if sparse_count > 0:
+        logger.info(f"  Skipped {sparse_count} sparse targets (< 100 samples or < 1% of data)")
     if first_touch_count > 0:
         logger.info(f"  Skipped {first_touch_count} first_touch targets (leaked)")
     
@@ -298,7 +323,7 @@ def train_and_evaluate_models(
         model_scores: Dict of R² scores per model
         mean_importance: Mean absolute feature importance
     """
-    from sklearn.model_selection import cross_val_score
+    from sklearn.model_selection import cross_val_score, TimeSeriesSplit
     from sklearn.preprocessing import StandardScaler
     import lightgbm as lgb
     
@@ -306,6 +331,11 @@ def train_and_evaluate_models(
     cv_config = multi_model_config.get('cross_validation', {}) if multi_model_config else {}
     cv_folds = cv_config.get('cv_folds', 3)
     cv_n_jobs = cv_config.get('n_jobs', 1)
+    
+    # CRITICAL: Use TimeSeriesSplit to enforce temporal causality
+    # Standard K-Fold allows training on future data when testing on past data
+    # This would artificially inflate R² scores and make targets look more predictable
+    tscv = TimeSeriesSplit(n_splits=cv_folds)
     
     if model_families is None:
         # Load from multi-model config if available
@@ -392,7 +422,7 @@ def train_and_evaluate_models(
                     **gpu_params
                 )
             
-            scores = cross_val_score(model, X, y, cv=cv_folds, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
+            scores = cross_val_score(model, X, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
             valid_scores = scores[~np.isnan(scores)]
             model_scores['lightgbm'] = valid_scores.mean() if len(valid_scores) > 0 else np.nan
             
@@ -426,7 +456,7 @@ def train_and_evaluate_models(
             else:
                 model = RandomForestRegressor(**rf_config)
             
-            scores = cross_val_score(model, X, y, cv=cv_folds, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
+            scores = cross_val_score(model, X, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
             valid_scores = scores[~np.isnan(scores)]
             model_scores['random_forest'] = valid_scores.mean() if len(valid_scores) > 0 else np.nan
             
@@ -486,7 +516,7 @@ def train_and_evaluate_models(
                 warnings.filterwarnings('ignore', category=ConvergenceWarning)
                 try:
                     # TransformedTargetRegressor handles scaling within each CV fold (no leakage)
-                    scores = cross_val_score(model, X_scaled, y_for_training, cv=cv_folds, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
+                    scores = cross_val_score(model, X_scaled, y_for_training, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
                     valid_scores = scores[~np.isnan(scores)]
                     model_scores['neural_network'] = valid_scores.mean() if len(valid_scores) > 0 else np.nan
                 except ValueError as e:
@@ -543,7 +573,7 @@ def train_and_evaluate_models(
             
             # XGBoost needs special handling for degenerate targets
             try:
-                scores = cross_val_score(model, X, y, cv=cv_folds, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
+                scores = cross_val_score(model, X, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
                 valid_scores = scores[~np.isnan(scores)]
                 model_scores['xgboost'] = valid_scores.mean() if len(valid_scores) > 0 else np.nan
             except ValueError as e:
@@ -589,7 +619,7 @@ def train_and_evaluate_models(
                 model = cb.CatBoostRegressor(**cb_config_clean)
             
             try:
-                scores = cross_val_score(model, X, y, cv=cv_folds, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
+                scores = cross_val_score(model, X, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
                 valid_scores = scores[~np.isnan(scores)]
                 model_scores['catboost'] = valid_scores.mean() if len(valid_scores) > 0 else np.nan
             except (ValueError, TypeError) as e:
@@ -631,7 +661,7 @@ def train_and_evaluate_models(
             lasso_config = get_model_config('lasso', multi_model_config)
             
             model = Lasso(**lasso_config)
-            scores = cross_val_score(model, X_imputed, y, cv=cv_folds, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
+            scores = cross_val_score(model, X_imputed, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
             valid_scores = scores[~np.isnan(scores)]
             model_scores['lasso'] = valid_scores.mean() if len(valid_scores) > 0 else np.nan
             
@@ -784,7 +814,7 @@ def train_and_evaluate_models(
                     quick_rf = RandomForestRegressor(**quick_rf_config)
                 
                 # Use cross-validation for proper validation (not training score)
-                scores = cross_val_score(quick_rf, X_selected, y, cv=cv_folds, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
+                scores = cross_val_score(quick_rf, X_selected, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
                 valid_scores = scores[~np.isnan(scores)]
                 model_scores['rfe'] = valid_scores.mean() if len(valid_scores) > 0 else np.nan
             else:
@@ -850,7 +880,7 @@ def train_and_evaluate_models(
                     quick_rf = RandomForestRegressor(**quick_rf_config)
                 
                 # Use cross-validation for proper validation (not training score)
-                scores = cross_val_score(quick_rf, X_selected, y, cv=cv_folds, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
+                scores = cross_val_score(quick_rf, X_selected, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
                 valid_scores = scores[~np.isnan(scores)]
                 model_scores['boruta'] = valid_scores.mean() if len(valid_scores) > 0 else np.nan
             else:
@@ -904,13 +934,15 @@ def train_and_evaluate_models(
                 X_boot, y_boot = X_imputed[indices], y[indices]
                 
                 try:
+                    # Use TimeSeriesSplit for internal CV (even though bootstrap breaks temporal order,
+                    # this maintains consistency with the rest of the codebase)
                     if is_binary or is_multiclass:
-                        model = LogisticRegressionCV(Cs=stability_cs, cv=stability_cv, 
+                        model = LogisticRegressionCV(Cs=stability_cs, cv=tscv, 
                                                     random_state=random_state,
                                                     max_iter=lasso_config['max_iter'], 
                                                     n_jobs=stability_n_jobs)
                     else:
-                        model = LassoCV(cv=stability_cv, random_state=random_state,
+                        model = LassoCV(cv=tscv, random_state=random_state,
                                       max_iter=lasso_config['max_iter'], 
                                       n_jobs=stability_n_jobs)
                     
@@ -919,14 +951,16 @@ def train_and_evaluate_models(
                     stability_scores += (np.abs(coef) > 1e-6).astype(int)
                     
                     # Get R² using cross-validation (proper validation, not training score)
+                    # Note: Bootstrap samples break temporal order, but we still use TimeSeriesSplit
+                    # for consistency (it won't help here, but maintains the pattern)
                     # Use a quick model for CV scoring
                     if is_binary or is_multiclass:
-                        cv_model = LogisticRegressionCV(Cs=[1.0], cv=3, random_state=random_state, 
+                        cv_model = LogisticRegressionCV(Cs=[1.0], cv=tscv, random_state=random_state, 
                                                         max_iter=lasso_config['max_iter'], n_jobs=1)
                     else:
-                        cv_model = LassoCV(cv=3, random_state=random_state,
+                        cv_model = LassoCV(cv=tscv, random_state=random_state,
                                           max_iter=lasso_config['max_iter'], n_jobs=1)
-                    cv_scores = cross_val_score(cv_model, X_boot, y_boot, cv=3, scoring=scoring, n_jobs=1, error_score=np.nan)
+                    cv_scores = cross_val_score(cv_model, X_boot, y_boot, cv=tscv, scoring=scoring, n_jobs=1, error_score=np.nan)
                     valid_cv_scores = cv_scores[~np.isnan(cv_scores)]
                     if len(valid_cv_scores) > 0:
                         bootstrap_r2_scores.append(valid_cv_scores.mean())
@@ -970,7 +1004,7 @@ def train_and_evaluate_models(
             else:
                 model = HistGradientBoostingRegressor(**hgb_config_clean)
             
-            scores = cross_val_score(model, X, y, cv=cv_folds, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
+            scores = cross_val_score(model, X, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
             valid_scores = scores[~np.isnan(scores)]
             model_scores['histogram_gradient_boosting'] = valid_scores.mean() if len(valid_scores) > 0 else np.nan
             
@@ -1136,8 +1170,10 @@ def evaluate_target_predictability(
     """Evaluate predictability of a single target across symbols"""
     
     target_column = target_config['target_column']
+    # Use display_name if available, otherwise fall back to target_name
+    display_name = target_config.get('display_name', target_name)
     logger.info(f"\n{'='*60}")
-    logger.info(f"Evaluating: {target_name} ({target_column})")
+    logger.info(f"Evaluating: {display_name} ({target_column})")
     logger.info(f"{'='*60}")
     
     all_model_scores = []
