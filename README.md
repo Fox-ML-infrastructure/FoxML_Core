@@ -1,4 +1,5 @@
 ill add other parts later, im crying rn
+enjoy or w/e legally now
 
 # Trader: High-Frequency Trading ML System
 
