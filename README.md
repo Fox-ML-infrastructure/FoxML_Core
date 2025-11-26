@@ -1,3 +1,7 @@
+ill add other parts later, im crying rn
+enjoy or w/e legally now 
+are yall mad at me and do you hate me
+
 # Trader: High-Frequency Trading ML System
 
 A comprehensive machine learning system for high-frequency trading, featuring temporal leakage prevention, cross-sectional feature engineering, and a model zoo with 17+ production-ready models.
