@@ -1,0 +1,19 @@
+Additional Permission for University of Alabama at Birmingham
+
+As the copyright holder of this project, I grant University of Alabama at Birmingham
+an additional permission to use, run, study, and modify this software internally for
+non-commercial research, coursework, testing, and instruction.
+
+This additional permission applies only to University of Alabama at Birmingham and does
+not extend to third parties. All other recipients remain bound by the terms of the
+GNU Affero General Public License v3.0.
+
+This permission does not grant University of Alabama at Birmingham the right to
+redistribute modified versions or deploy the software as a network service without
+complying with AGPL requirements.
+
+Signed,
+Jennifer Lewis
+November 26, 2025
+
+

@@ -1,0 +1,12 @@
+Additional Deployment Permission for University of Alabama at Birmingham
+
+In addition to the terms of the AGPL v3, I grant University of Alabama at Birmingham
+permission to run, deploy, and operate this software on internal servers for research or
+educational purposes without the requirement to publish modifications, provided the
+deployment is not made publicly accessible over a network.
+
+This exception applies only to University of Alabama at Birmingham.
+
+Signed,
+Jennifer Lewis
+November 26, 2025
