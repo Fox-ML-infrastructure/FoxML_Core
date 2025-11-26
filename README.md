@@ -6,7 +6,9 @@ and it looked really nice. I cant remember his name off the top of my head but h
 I made this open source with this level of documentation specifically to act as a resource where people can learn to integrate, refactor, and structure things. 
 Idk if it will ever make much money because it honestly needs like a $75k compute cluster minimum to even start to be efficient. 
 Shorter intervals like daily data, or maybe even 1h, would be reasonable on consumer hardware, but I personally tried the 5m data I have, and i think it took like
-~30 hours or something to train a zoo on a single batch(15 symbols) for one target. 
+~30 hours or something to train a zoo on a single batch(15 symbols) for one target. Im not sure if thats because my code could be optomized more
+or if its just sheer compute, as always suggestions, review, and critiques are welcome as long as its constructive. :D
+Email: jtlewis204@gmail.com
 
 # Trader: High-Frequency Trading ML System
 
