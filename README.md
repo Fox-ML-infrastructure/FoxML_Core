@@ -1,6 +1,8 @@
-ill add other parts later, im crying rn
-enjoy or w/e legally now 
-are yall mad at me and do you hate me
+Some docs may get outdated as I update this project, Ill do my best to keep them as updated as possible, newest updates will always be under UPDATE or w/e its called
+If you complain about it missing features or things you want, that will be a really fast way to get this set back to private. A gui is not my concern right now nor what I am interested in.
+If you want a gui to play around with this, build your own. 
+If I do ever add monitering with a GUI it will probably be in rust, I saw another person on linkedin who made a trading platform,
+and it looked really nice. I cant remember his name off the top of my head but hes based in the netherlands or something.
 
 # Trader: High-Frequency Trading ML System
 
@@ -136,6 +138,25 @@ A comprehensive machine learning system for high-frequency trading, featuring te
 - **[UPDATE/README.md](UPDATE/README.md)** - Updates overview
 - Various update entries in `UPDATE/` directory
 
+### ALPACA Paper Trading Integration
+
+- **[ALPACA_trading/README.md](ALPACA_trading/README.md)** - ALPACA paper trading system overview
+- **Core Components:**
+  - **[ALPACA_trading/core/README.md](ALPACA_trading/core/README.md)** - Core trading engine components (regime detection, strategy selection, performance tracking, risk management)
+- **Broker Integration:**
+  - **[ALPACA_trading/brokers/README.md](ALPACA_trading/brokers/README.md)** - Broker interface and implementations (Alpaca paper trading, data providers)
+- **Trading Strategies:**
+  - **[ALPACA_trading/strategies/README.md](ALPACA_trading/strategies/README.md)** - Trading strategy implementations (regime-aware ensemble, factory pattern)
+- **ML Integration:**
+  - **[ALPACA_trading/ml/README.md](ALPACA_trading/ml/README.md)** - Machine learning model interface, registry, and runtime
+- **Scripts & Tools:**
+  - **[ALPACA_trading/scripts/README.md](ALPACA_trading/scripts/README.md)** - Executable scripts (paper runner, data fetching)
+  - **[ALPACA_trading/cli/README.md](ALPACA_trading/cli/README.md)** - Command-line interface for paper trading
+  - **[ALPACA_trading/utils/README.md](ALPACA_trading/utils/README.md)** - Utility functions and helpers
+  - **[ALPACA_trading/tools/README.md](ALPACA_trading/tools/README.md)** - Development and debugging tools
+- **Configuration:**
+  - **[ALPACA_trading/config/README.md](ALPACA_trading/config/README.md)** - Configuration files and settings
+
 ### IBKR Trading Integration (Untested)
 
 **️ Warning**: The IBKR trading code is **untested** and should not be used for live trading. See [notes_from_creator.md](notes_from_creator.md) for details.
@@ -192,6 +213,19 @@ trader/
 ├── SETUP/                    # Setup scripts
 ├── UPDATE/                   # Update logs
 │   └── YYYY-MM-DD/          # Date-organized updates
+├── ALPACA_trading/          # ALPACA paper trading integration
+│   ├── scripts/             # Paper trading scripts
+│   │   └── data/            # Data fetching utilities
+│   ├── core/                # Core trading engine
+│   │   ├── risk/            # Risk management guardrails
+│   │   └── telemetry/       # Performance telemetry
+│   ├── brokers/             # Broker interface implementations
+│   ├── strategies/          # Trading strategies
+│   ├── ml/                  # Model interface and registry
+│   ├── cli/                 # Command-line interface
+│   ├── config/              # Configuration files
+│   ├── utils/               # Utility functions
+│   └── tools/               # Development tools
 └── IBKR_trading/            # IBKR trading integration (untested)
     ├── live_trading/        # Live trading components
     ├── cpp_engine/          # C++ inference engine
@@ -270,6 +304,7 @@ This is a research and development project. For questions or feedback, see [note
 
 ## ️ Important Notes
 
+- **ALPACA Paper Trading**: The ALPACA paper trading system is designed for paper trading only. Use Alpaca's paper trading API for safe testing.
 - **IBKR Execution Code**: The IBKR execution code is untested. See [notes_from_creator.md](notes_from_creator.md) for details.
 - **Temporal Leakage**: Always use `PurgedTimeSeriesSplit` for validation. Standard K-Fold is **fatal** for financial ML.
 - **Data Requirements**: Ensure proper data directory setup before running training scripts.
