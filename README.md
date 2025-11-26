@@ -1,5 +1,5 @@
 Some docs may get outdated as I update this project, Ill do my best to keep them as updated as possible, newest updates will always be under UPDATE or w/e its called
-If you complain about it missing features or things you want, that will be a really fast way to get this set back to private. A gui is not my concern right now nor what I am interested in.
+You can suggest things that may be good, or things that are broken, please do not pester me about adding features you want though. A gui is not my concern right now nor what I am interested in.
 If you want a gui to play around with this, build your own. 
 If I do ever add monitering with a GUI it will probably be in rust, I saw another person on linkedin who made a trading platform,
 and it looked really nice. I cant remember his name off the top of my head but hes based in the netherlands or something.
