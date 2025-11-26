@@ -232,6 +232,30 @@ This project is licensed under the **Academic Use Only License** - see the [LICE
 
 **IMPORTANT**: This software is for **ACADEMIC, EDUCATIONAL, AND RESEARCH USE ONLY**. Commercial use, including trading securities, generating revenue, or any for-profit use, is **STRICTLY PROHIBITED**.
 
+## Mathematical Foundations & Credits
+
+### Equations & Formulas
+
+- **[EQUATIONS_LIST.md](EQUATIONS_LIST.md)** - Complete list of all mathematical equations and formulas used throughout the codebase, including:
+  - IBKR Trading System equations (standardization, blending, arbitration, costs, optimization)
+  - Target Ranking System equations (metrics, composite scores, purging)
+  - Performance Metrics (R², IC, Sharpe, MDD, etc.)
+  - Risk Management formulas (gates, thresholds)
+  - Feature Pruning and Data Processing equations
+
+**Total**: 40+ equations documented with file references and implementation details.
+
+### Academic Credits
+
+- **[CREDITS.md](CREDITS.md)** - Complete list of academic contributors whose foundational work underlies the mathematical components, including:
+  - Statistics & Correlation: Karl Pearson, Charles Spearman
+  - Optimization: Gauss & Legendre, Hoerl & Kennard, Ledoit & Wolf
+  - Portfolio Theory: Harry Markowitz, Thierry Roncalli
+  - Market Impact: Almgren & Chriss, Albert Kyle
+  - Machine Learning: Leo Breiman, Friedman, López de Prado
+  - Risk Metrics: William Sharpe, Burke, Magdon-Ismail & Atiya
+  - And many more...
+
 ## ️ Development & Acknowledgments
 
 **Independent Development**: This project was developed entirely on personal hardware without assistance, funding, or resources from the University of Alabama at Birmingham (UAB) or any other institution. All development, research, and computational work was conducted independently.
