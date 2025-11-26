@@ -3,6 +3,8 @@ If you complain about it missing features or things you want, that will be a rea
 If you want a gui to play around with this, build your own. 
 If I do ever add monitering with a GUI it will probably be in rust, I saw another person on linkedin who made a trading platform,
 and it looked really nice. I cant remember his name off the top of my head but hes based in the netherlands or something.
+I made this open source with this level of documentation specifically to act as a resource where people can learn to integrate, refactor, and structure things. 
+Idk if it will ever make much money because it honestly needs like a $75k compute cluster minimum to even start to be efficient. 
 
 # Trader: High-Frequency Trading ML System
 
