@@ -1,0 +1,23 @@
+name: License Compliance Notice
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  warn:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Display LGBTQ+ Protective License Notice
+        run: |
+          echo "**************************************************************"
+          echo "                 ⚠️  IMPORTANT LICENSE NOTICE"
+          echo "This software uses AGPL + a mandatory LGBTQ+ Protective Use Clause."
+          echo "Institutional use is only permitted if:"
+          echo "  - LGBTQ+ protections exist AND"
+          echo "  - all benefit is reinvested into LGBTQ+ support/public service."
+          echo "Commercial finance, hedge funds, proprietary trading,"
+          echo "and profit-seeking financial use are strictly forbidden."
+          echo "**************************************************************"
+

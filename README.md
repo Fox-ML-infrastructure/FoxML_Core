@@ -1,6 +1,96 @@
 email: jtlewis@uab.edu
 
+Any use-case that involves money, forecasting, modeling, optimization, or strategy is prohibited 
+unless the resulting benefit is directly reinvested into LGBTQ+ protection or public service. 
+There are no exceptions, reinterpretations, or edge-case allowances.
+
+
 Disclaimer: I’m still learning this domain, so this may not be perfect. Please review and audit before any production use.
+
+## Licensing Summary
+
+![LGBTQ+ Protective Use Only](https://img.shields.io/badge/Use-LGBTQ%2B%20Protective%20Only-purple?style=for-the-badge)
+
+This project is licensed under the **GNU AGPL v3.0**.  
+In addition to the AGPL, this project includes a **Universal Additional Permission**
+(see `EXCEPTION.md`) granting expanded rights ONLY to nonprofit, academic, medical, public-health, 
+and community-service organizations that maintain enforceable protections for LGBTQ+ individuals.
+
+All institutional use of this software must:
+1. materially benefit LGBTQ+ people,  
+2. materially protect LGBTQ+ people, or  
+3. directly support public-health, patient care, or community-service missions.
+
+Institutions that do NOT maintain LGBTQ+ protections are **not permitted** to use this software 
+for any internal, operational, analytical, financial, forecasting, or strategic purpose.
+
+Commercial entities, hedge funds, trading firms, for-profit finance groups, or any actor seeking 
+commercial profit or financial advantage are **explicitly prohibited** from using this software 
+beyond the baseline rights guaranteed by the AGPL. Financial modeling, forecasting, allocation, 
+alpha research, market analysis, or strategic decision-making use by commercial or anti-LGBTQ 
+organizations is strictly forbidden.
+
+This project may not be used to harm, disadvantage, surveil, target, or restrict LGBTQ+ people 
+under ANY circumstances. No interpretive loopholes exist: if a use-case does not clearly support 
+public good and LGBTQ+ protection, it is prohibited.
+
+## Warning Against Bad-Faith or Strategic Misuse
+
+Any attempt to exploit, reinterpret, or narrow the meaning of this Additional Permission 
+for purposes of bypassing LGBTQ+ protections or enabling financial profit-seeking is 
+considered a violation. 
+
+If a use-case is not clearly and unambiguously aligned with LGBTQ+ protection or public-good 
+missions, it is prohibited.
+
+## License Documentation & Compliance Tools
+
+This repository includes comprehensive licensing documentation and compliance tools:
+
+### Core License Documents
+- **[EXCEPTION.md](EXCEPTION.md)** — Universal Additional Permission with full terms and conditions
+- **[ENFORCEMENT.md](ENFORCEMENT.md)** — Enforcement policy, verification rights, and termination procedures
+- **[FLOWCHART.md](FLOWCHART.md)** — Visual decision flowchart: "Can You Use Aurora?"
+
+### Compliance Forms & Templates
+- **[ATTESTATION_INSTITUTIONAL_USE.md](ATTESTATION_INSTITUTIONAL_USE.md)** — Institutional attestation form (required for institutional use)
+- **[INTERNAL_USE_CERTIFICATION.md](INTERNAL_USE_CERTIFICATION.md)** — Department-level certification form
+- **[DECLARATION_OF_COMPLIANT_USE.md](DECLARATION_OF_COMPLIANT_USE.md)** — Lawyer-facing notice letter template
+
+### Automated Compliance
+- **GitHub Actions Workflow** — Automatic license compliance warning on every push/PR (see `.github/workflows/license-warning.yml`)
+- **Issue Template** — Forces license acknowledgment before opening issues
+- **Pull Request Template** — Requires compliance confirmation for all contributions
+
+### Compliance Badge
+- **SVG Badge**: `lgbtq_protective_use_only.svg` — Machine-readable compliance indicator
+
+**All institutional users must review and comply with these documents before using Aurora.**
+
+# Licensing FAQ
+
+### Q: Can a hedge fund use Aurora?
+**No.** Not for any financial, analytical, or trading purpose. AGPL allows private use only.
+
+### Q: Can a university use Aurora for finance or budgeting?
+Only if they maintain enforceable LGBTQ+ protections.  
+If not, they are prohibited.
+
+### Q: Can a finance department use Aurora to optimize revenue?
+Only if all revenue is used to protect LGBTQ+ people or support public-interest missions.
+
+### Q: Can someone claim their for-profit use “indirectly supports” LGBTQ+ people?
+No. Indirect benefit does not qualify. The benefit must be **direct and material**.
+
+### Q: Can a company claim they “aren’t anti-LGBTQ” as a loophole?
+No. They must have explicit, documented nondiscrimination protections.
+
+### Q: Can a bad actor reinterpret the text creatively?
+No. See the No Loopholes Clause.
+
+### Q: Can anyone weaken the meaning of LGBTQ+ protections?
+No. Definitions are binding. 
+
 
 # High-Frequency Trading (HFT) Machine Learning System
 

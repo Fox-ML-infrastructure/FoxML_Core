@@ -82,6 +82,39 @@ Standard AGPL rights remain unaffected; only the expanded institutional permissi
 
 ---
 
+## Automatic Termination
+
+This Additional Permission terminates immediately and without notice if:
+
+- the institution weakens, removes, or fails to enforce LGBTQ+ protections,
+- the institution engages in any prohibited financial activity,
+- the institution uses the software in any way that harms LGBTQ+ people,
+- the institution uses the software for commercial, trading, or profit-seeking purposes.
+
+Upon termination, the institution must immediately cease all institutional, operational, and analytical 
+use of the software.
+
+
+## No Interpretive Loopholes Clause
+
+This Additional Permission is to be interpreted strictly and solely according to its written intent:
+to ensure LGBTQ+ protection and public-interest benefit. Any attempt to reinterpret, narrow, 
+redefine, or exploit wording for the purpose of bypassing these protections is invalid.
+
+If a use-case does not clearly and unambiguously support LGBTQ+ protection or public-good missions, 
+the use is prohibited.
+
+---
+
+## Warning Against Bad-Faith or Strategic Misuse
+
+Any attempt to exploit, reinterpret, or narrow the meaning of this Additional Permission 
+for purposes of bypassing LGBTQ+ protections or enabling financial profit-seeking is 
+considered a violation. 
+
+If a use-case is not clearly and unambiguously aligned with LGBTQ+ protection or public-good 
+missions, it is prohibited.
+
 **Signed,**  
 Jennifer Lewis  
 November 29, 2025

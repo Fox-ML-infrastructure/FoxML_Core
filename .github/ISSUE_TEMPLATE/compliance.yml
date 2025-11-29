@@ -1,0 +1,27 @@
+name: License Compliance Acknowledgment
+
+description: You must confirm you understand the LGBTQ+ Protective Use Clause.
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### ⚠️ License Notice
+
+        By opening an issue, you acknowledge:
+
+        - This project uses AGPL v3 + a Universal LGBTQ+ Protective Use Clause.
+
+        - Institutional, financial, and operational use is strictly conditional.
+
+        - Commercial finance and profit-seeking use are prohibited.
+
+  - type: checkboxes
+    attributes:
+      label: Confirm
+      description: You must agree to proceed.
+      options:
+        - label: I understand that this project forbids commercial/profit-seeking financial use.
+        - label: I understand that institutional use requires LGBTQ+ protection compliance.
+        - label: I agree not to use this project in any way that harms LGBTQ+ people.
+
