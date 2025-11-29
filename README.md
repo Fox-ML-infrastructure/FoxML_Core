@@ -4,8 +4,27 @@ Any use-case that involves money, forecasting, modeling, optimization, or strate
 unless the resulting benefit is directly reinvested into LGBTQ+ protection or public service. 
 There are no exceptions, reinterpretations, or edge-case allowances.
 
+---
 
-Disclaimer: I’m still learning this domain, so this may not be perfect. Please review and audit before any production use.
+## Why This License Exists
+
+Aurora was built through personal hardship and adversity. This license exists to ensure that:
+
+- People who were cruel, dismissive, or harmful cannot exploit this work
+- Institutions that protect marginalized people can benefit from it
+- Tools are used to uplift, not exploit
+- The communities this project aims to protect are materially supported
+
+**Use of this software requires good-faith respect toward the creator and the communities it aims to protect.**
+
+This project was built by someone who faced discrimination and hostility in technical spaces. 
+This license exists so that people who reproduce that harm cannot exploit my work.
+
+If you were part of creating that harm, you don't get to stand on my shoulders.
+
+---
+
+Disclaimer: I'm still learning this domain, so this may not be perfect. Please review and audit before any production use.
 
 ## Licensing Summary
 
@@ -64,6 +83,12 @@ This repository includes comprehensive licensing documentation and compliance to
 
 ### Compliance Badge
 - **SVG Badge**: `lgbtq_protective_use_only.svg` — Machine-readable compliance indicator
+
+### Values & Purpose
+- **[VALUES.md](VALUES.md)** — Why this license exists and the values behind it
+
+### Practical Safeguards
+- **Compliance Checker**: `scripts/compliance_check.py` — Runtime license reminder (no tracking, just awareness)
 
 **All institutional users must review and comply with these documents before using Aurora.**
 

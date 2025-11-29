@@ -67,6 +67,12 @@ These uses are permanently forbidden:
 - alpha research, model design, or any form of profit-seeking financial exploitation  
 - deployment as a commercial or public network service without full AGPL compliance  
 - any use where profit or benefit is **not** reinvested into LGBTQ+ protection, public health, or community service
+- use in systems that harass, target, discriminate, surveil, or harm marginalized groups
+- use in automated decision-making that affects safety, access, or rights in discriminatory ways
+- use in tools that measure, rank, classify, or score individuals in ways tied to discrimination
+- use by institutions or entities with documented records of discrimination against LGBTQ+ individuals
+- use by institutions or entities with policies that harm LGBTQ+ people
+- use by institutions or entities that participate in targeted harassment of marginalized communities
 
 ---
 
@@ -114,6 +120,35 @@ considered a violation.
 
 If a use-case is not clearly and unambiguously aligned with LGBTQ+ protection or public-good 
 missions, it is prohibited.
+
+---
+
+## Creator Protection Clause
+
+Use of this software is prohibited in contexts where the creator has been the target of 
+harassment, discrimination, professional sabotage, or abuse by the institution or its representatives.
+
+This prohibition applies to:
+- institutions with documented harassment or discrimination against the creator
+- institutions that have engaged in professional sabotage or abuse toward the creator
+- institutions whose representatives have participated in targeted harassment of the creator
+- any use that would contradict the protective purpose of this project
+
+This clause is enforceable based on documented behavior and evidence, not personal vendetta.
+
+---
+
+## Hostile Actor Exclusion
+
+The following entities are explicitly excluded from institutional use of this software:
+
+- Any entity with a documented record of discrimination against LGBTQ+ individuals
+- Any entity with policies that harm LGBTQ+ people
+- Any entity that participates in targeted harassment, including toward the creator or marginalized communities
+- Any entity whose use would contradict the purpose of this project
+- Any entity that has engaged in professional sabotage, abuse, or harassment of the creator
+
+This exclusion is based on documented behavior and institutional policies, not personal feelings.
 
 **Signed,**  
 Jennifer Lewis  

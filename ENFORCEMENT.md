@@ -51,7 +51,13 @@ The Additional Permission terminates **immediately and without notice** if:
 
 - any benefit is used to harm, surveil, suppress, or disadvantage LGBTQ+ people,
 
-- the institution denies verification or fails to provide documentation.
+- the institution denies verification or fails to provide documentation,
+
+- the institution or its representatives have engaged in harassment, discrimination, professional sabotage, or abuse toward the creator,
+
+- the institution has a documented record of discrimination against LGBTQ+ individuals,
+
+- the institution uses the software in systems that harass, target, discriminate, surveil, or harm marginalized groups.
 
 AGPL rights remain unaffected; only expanded institutional permissions terminate.
 
