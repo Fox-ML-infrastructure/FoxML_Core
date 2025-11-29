@@ -14,6 +14,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -51,6 +52,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -88,6 +90,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -125,6 +128,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -162,6 +166,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -199,6 +204,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -236,6 +242,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -273,6 +280,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -310,6 +318,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -347,6 +356,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -384,6 +394,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -421,6 +432,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -458,6 +470,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -496,6 +509,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -534,6 +548,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -571,6 +586,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -608,6 +624,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -645,6 +662,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
@@ -684,6 +702,7 @@ institutional policies, programs, or practices that provide:
 • ensuring that any financial benefit from use of this software is directed toward
 institutional stability, patient care, community services, or protecting LGBTQ+ staff,
 patients, or community members from adverse political or policy changes.
+• If any finance, budgeting, forecasting, strategy, or institutional-analysis department intends to use this software, such use is permitted only if the department maintains formal nondiscrimination protections, support structures, and safe-environment policies for LGBTQ+ students, staff, and community members.
 
 This permission:
 
