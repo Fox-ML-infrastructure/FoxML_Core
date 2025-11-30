@@ -116,6 +116,23 @@ This repository includes comprehensive licensing documentation and compliance to
 
 **All institutional users must review and comply with these documents before using Aurora.**
 
+## Quick Installation
+
+**One-Command Install:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Aurora-Jennifer/Aurora-v2/main/install.sh | bash
+```
+
+This installation script will:
+- Display and require agreement to the license terms
+- Check Python 3.8+ installation
+- Set up a virtual environment (recommended)
+- Install all dependencies
+- Run license compliance checks
+
+**For detailed installation instructions, see [INSTALL.md](INSTALL.md)**
+
 # Licensing FAQ
 
 ### Q: Can a hedge fund use Aurora?
@@ -156,13 +173,40 @@ This system is designed for high-frequency trading research, featuring:
 
 ## Quick Start
 
-1. **Setup Environment**
+### Option 1: One-Command Install (Recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Aurora-Jennifer/Aurora-v2/main/install.sh | bash
+```
+
+The install script will:
+- Show license compliance notice and require agreement
+- Check for Python 3.8+ and pip
+- Create and activate a virtual environment (`aurora_env`)
+- Install all dependencies from `requirements.txt`
+- Run license compliance checks
+
+After installation, activate the virtual environment:
+```bash
+source aurora_env/bin/activate
+```
+
+### Option 2: Manual Installation
+
+1. **Setup Environment (Conda)**
    ```bash
    conda env create -f environment.yml
    conda activate trader_env
    ```
 
-2. **Quick Start Guide**
+2. **Setup Environment (Virtual Environment)**
+   ```bash
+   python3 -m venv aurora_env
+   source aurora_env/bin/activate
+   pip install -r requirements.txt
+   ```
+
+3. **Quick Start Guide**
    - See [INFORMATION/01_QUICK_START.md](INFORMATION/01_QUICK_START.md) for detailed setup instructions
 
 3. **Key HFT Features**
