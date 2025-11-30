@@ -1,4 +1,4 @@
-name: License Compliance Notice
+name: License Notice
 
 on:
   push:
@@ -6,20 +6,15 @@ on:
   workflow_dispatch:
 
 jobs:
-  warn:
+  notice:
     runs-on: ubuntu-latest
     steps:
-      - name: Display Comprehensive Minority Protection License Notice
+      - name: Display License Notice
         run: |
           echo "**************************************************************"
-          echo "                 ⚠️  IMPORTANT LICENSE NOTICE"
-          echo "This software uses AGPL + a mandatory Comprehensive Minority"
-          echo "Protection Clause. Institutional use is only permitted if:"
-          echo "  - Comprehensive protections for ALL minorities exist AND"
-          echo "  - Institutions do NOT cherry-pick protections AND"
-          echo "  - all benefit is reinvested into minority protection/public service."
-          echo "Commercial finance, hedge funds, proprietary trading,"
-          echo "and profit-seeking financial use are strictly forbidden."
+          echo "                      LICENSE NOTICE"
+          echo "This software is licensed under GNU AGPL v3.0"
+          echo "See the LICENSE file for full terms and conditions."
           echo "**************************************************************"
 
 

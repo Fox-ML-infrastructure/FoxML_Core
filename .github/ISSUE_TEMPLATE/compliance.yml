@@ -1,32 +1,24 @@
-name: License Compliance Acknowledgment
+name: License Notice
 
-description: You must confirm you understand the Comprehensive Minority Protection Clause.
+description: Standard license acknowledgment for AGPL v3.0
 
 body:
   - type: markdown
     attributes:
       value: |
-        ### ⚠️ License Notice
+        ### License Notice
 
-        By opening an issue, you acknowledge:
+        This project is licensed under GNU AGPL v3.0.
 
-        - This project uses AGPL v3 + a Universal Comprehensive Minority Protection Clause.
-
-        - Institutional, financial, and operational use is strictly conditional.
-
-        - Institutions must protect ALL minorities comprehensively (cannot cherry-pick protections).
-
-        - Commercial finance and profit-seeking use are prohibited.
+        See the LICENSE file for full terms and conditions.
 
   - type: checkboxes
     attributes:
-      label: Confirm
-      description: You must agree to proceed.
+      label: Acknowledgment
+      description: Confirm you understand the license.
       options:
-        - label: I understand that this project forbids commercial/profit-seeking financial use.
-        - label: I understand that institutional use requires comprehensive protection of ALL marginalized groups.
-        - label: I understand that institutions cannot cherry-pick protections (must protect all minorities).
-        - label: I agree not to use this project in any way that harms ANY marginalized people.
+        - label: I understand this software is licensed under GNU AGPL v3.0
+        - label: I will comply with the AGPL license terms
 
 
 
