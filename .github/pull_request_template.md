@@ -10,3 +10,4 @@ By submitting this pull request, you confirm:
 
 - All institutional benefits from Aurora must support LGBTQ+ protection or public-interest missions.
 
+

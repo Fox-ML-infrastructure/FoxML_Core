@@ -1,0 +1,55 @@
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1759367889.659656  360587 gpu_device.cc:2020] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 5443 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 3080, pci bus id: 0000:01:00.0, compute capability: 8.6
+2025-10-01 20:18:09,661 - __main__ - INFO - 🚀 Starting enhanced training with multiple strategies - Full Original Functionality
+2025-10-01 20:18:09,661 - __main__ - INFO - Data directory: /home/Jennifer/secure/trader/5m_with_barrier_targets_full/interval=5m
+2025-10-01 20:18:09,661 - __main__ - INFO - Symbols: ['CBRE', 'CERN', 'CFG', 'CVX', 'GCI', 'HOG', 'MLM', 'MXIM', 'NI', 'OI', 'PANW', 'SIVB', 'XOM']
+2025-10-01 20:18:09,661 - __main__ - INFO - Strategy: all
+2025-10-01 20:18:09,661 - __main__ - INFO - Families: ['LightGBM', 'XGBoost', 'MLP', 'CNN1D', 'LSTM', 'Transformer', 'TabCNN', 'TabLSTM', 'TabTransformer', 'RewardBased', 'QuantileLightGBM', 'NGBoost', 'GMMRegime', 'ChangePoint', 'FTRLProximal', 'VAE', 'GAN', 'Ensemble', 'MetaLearning', 'MultiTask']
+2025-10-01 20:18:09,661 - __main__ - INFO - Min cross-sectional size: 10
+2025-10-01 20:18:09,661 - __main__ - INFO - Loading MTF data from /home/Jennifer/secure/trader/5m_with_barrier_targets_full/interval=5m
+2025-10-01 20:18:09,947 - __main__ - INFO - Loaded CBRE (polars): (145518, 431)
+2025-10-01 20:18:10,149 - __main__ - INFO - Loaded CERN (polars): (125847, 431)
+2025-10-01 20:18:10,431 - __main__ - INFO - Loaded CFG (polars): (188787, 431)
+2025-10-01 20:18:10,732 - __main__ - INFO - Loaded CVX (polars): (188785, 431)
+2025-10-01 20:18:11,044 - __main__ - INFO - Loaded GCI (polars): (188074, 431)
+2025-10-01 20:18:11,381 - __main__ - INFO - Loaded HOG (polars): (188783, 431)
+2025-10-01 20:18:11,684 - __main__ - INFO - Loaded MLM (polars): (186342, 431)
+2025-10-01 20:18:11,869 - __main__ - INFO - Loaded MXIM (polars): (110523, 431)
+2025-10-01 20:18:12,183 - __main__ - INFO - Loaded NI (polars): (188785, 431)
+2025-10-01 20:18:12,468 - __main__ - INFO - Loaded OI (polars): (188699, 431)
+2025-10-01 20:18:12,736 - __main__ - INFO - Loaded PANW (polars): (188770, 431)
+2025-10-01 20:18:12,940 - __main__ - INFO - Loaded SIVB (polars): (139426, 431)
+2025-10-01 20:18:13,215 - __main__ - INFO - Loaded XOM (polars): (188785, 431)
+2025-10-01 20:18:13,216 - __main__ - INFO - Discovered 102 targets: ['fwd_ret_1d', 'fwd_ret_5d', 'fwd_ret_20d', 'fwd_ret_15m', 'fwd_ret_30m', 'fwd_ret_60m', 'fwd_ret_120m', 'fwd_ret_oc_same_day', 'fwd_ret_5m', 'fwd_ret_10m']...
+2025-10-01 20:18:13,216 - __main__ - INFO - Training on 102 targets: ['fwd_ret_1d', 'fwd_ret_5d', 'fwd_ret_20d', 'fwd_ret_15m', 'fwd_ret_30m']...
+2025-10-01 20:18:13,216 - __main__ - INFO - Training 20 model families: ['LightGBM', 'XGBoost', 'MLP', 'CNN1D', 'LSTM']...
+2025-10-01 20:18:13,332 - __main__ - INFO - Testing strategy: single_task
+2025-10-01 20:18:13,332 - __main__ - INFO - 🎯 Training models for interval: cross_sectional
+2025-10-01 20:18:13,332 - __main__ - INFO - 🎯 Training models for target: fwd_ret_1d
+2025-10-01 20:18:13,332 - __main__ - INFO - 🎯 Building cross-sectional training data for target: fwd_ret_1d
+2025-10-01 20:18:13,332 - __main__ - INFO - 🎯 Building cross-sectional training data (polars, memory-efficient) for target: fwd_ret_1d
+2025-10-01 20:18:14,201 - __main__ - INFO - Combined data shape (polars): (2217124, 431)
+2025-10-01 20:18:16,654 - __main__ - INFO - Extracted target fwd_ret_1d from polars data
+2025-10-01 20:18:16,654 - __main__ - INFO - Extracted target fwd_ret_1d from column fwd_ret_1d
+/home/Jennifer/miniconda3/lib/python3.10/site-packages/sklearn/impute/_base.py:653: UserWarning: Skipping features without any observed values: [8 9]. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+2025-10-01 20:20:42,342 - __main__ - INFO - Cleaned data: 2217066 samples, 326 features
+2025-10-01 20:20:42,342 - __main__ - INFO - Removed 58 rows due to cleaning
+2025-10-01 20:20:42,694 - __main__ - INFO - 🎯 Training LightGBM for fwd_ret_1d
+2025-10-01 20:20:42,694 - strategies.single_task - INFO - 🎯 Training single-task models (Option A)
+2025-10-01 20:20:42,694 - strategies.single_task - INFO - Training model for target: fwd_ret_1d
+2025-10-01 20:20:42,722 - models.registry - INFO - Registered random_forest for classification
+2025-10-01 20:20:42,722 - models.registry - INFO - Registered random_forest for regression
+2025-10-01 20:20:42,722 - models.registry - INFO - Registered logistic_regression for classification
+2025-10-01 20:20:42,722 - models.registry - INFO - Registered ridge for regression
+2025-10-01 20:20:42,722 - models.registry - INFO - Registered mlp_classifier for classification
+2025-10-01 20:20:42,722 - models.registry - INFO - Registered mlp_regressor for regression
+2025-10-01 20:20:42,751 - models.registry - INFO - Registered lightgbm for classification
+2025-10-01 20:20:42,751 - models.registry - INFO - Registered lightgbm for regression
+2025-10-01 20:20:42,763 - models.registry - INFO - Registered xgboost for classification
+2025-10-01 20:20:42,763 - models.registry - INFO - Registered xgboost for regression
+2025-10-01 20:20:42,763 - models.registry - INFO - Registered neural_network for classification
+2025-10-01 20:20:42,763 - models.registry - INFO - Registered neural_network for regression
+2025-10-01 20:20:42,763 - models.registry - WARNING - Could not register MTF model families: cannot import name 'CNN1DTrainer' from 'model_fun.cnn1d_trainer' (/home/Jennifer/secure/trader/TRAINING/model_fun/cnn1d_trainer.py)
+2025-10-01 20:20:42,764 - models.factory - WARNING - Unknown model type LightGBM, using default
+2025-10-01 20:20:42,764 - models.factory - INFO - Created LightGBM model for regression

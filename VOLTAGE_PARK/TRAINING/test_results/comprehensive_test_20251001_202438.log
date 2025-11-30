@@ -1,0 +1,238 @@
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1759368281.738339  384382 gpu_device.cc:2020] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 5661 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 3080, pci bus id: 0000:01:00.0, compute capability: 8.6
+2025-10-01 20:24:41,740 - __main__ - INFO - 🚀 Starting enhanced training with multiple strategies - Full Original Functionality
+2025-10-01 20:24:41,740 - __main__ - INFO - Data directory: /home/Jennifer/secure/trader/5m_with_barrier_targets_full/interval=5m
+2025-10-01 20:24:41,740 - __main__ - INFO - Symbols: ['CBRE', 'CERN', 'CFG', 'CVX', 'GCI', 'HOG', 'MLM', 'MXIM', 'NI', 'OI', 'PANW', 'SIVB', 'XOM']
+2025-10-01 20:24:41,740 - __main__ - INFO - Strategy: all
+2025-10-01 20:24:41,740 - __main__ - INFO - Families: ['LightGBM', 'XGBoost', 'MLP', 'CNN1D', 'LSTM', 'Transformer', 'TabCNN', 'TabLSTM', 'TabTransformer', 'RewardBased', 'QuantileLightGBM', 'NGBoost', 'GMMRegime', 'ChangePoint', 'FTRLProximal', 'VAE', 'GAN', 'Ensemble', 'MetaLearning', 'MultiTask']
+2025-10-01 20:24:41,740 - __main__ - INFO - Min cross-sectional size: 10
+2025-10-01 20:24:41,740 - __main__ - INFO - Loading MTF data from /home/Jennifer/secure/trader/5m_with_barrier_targets_full/interval=5m
+2025-10-01 20:24:41,918 - __main__ - INFO - Loaded CBRE (polars): (145518, 431)
+2025-10-01 20:24:42,047 - __main__ - INFO - Loaded CERN (polars): (125847, 431)
+2025-10-01 20:24:42,240 - __main__ - INFO - Loaded CFG (polars): (188787, 431)
+2025-10-01 20:24:42,440 - __main__ - INFO - Loaded CVX (polars): (188785, 431)
+2025-10-01 20:24:42,613 - __main__ - INFO - Loaded GCI (polars): (188074, 431)
+2025-10-01 20:24:42,803 - __main__ - INFO - Loaded HOG (polars): (188783, 431)
+2025-10-01 20:24:42,991 - __main__ - INFO - Loaded MLM (polars): (186342, 431)
+2025-10-01 20:24:43,105 - __main__ - INFO - Loaded MXIM (polars): (110523, 431)
+2025-10-01 20:24:43,281 - __main__ - INFO - Loaded NI (polars): (188785, 431)
+2025-10-01 20:24:43,456 - __main__ - INFO - Loaded OI (polars): (188699, 431)
+2025-10-01 20:24:43,642 - __main__ - INFO - Loaded PANW (polars): (188770, 431)
+2025-10-01 20:24:43,778 - __main__ - INFO - Loaded SIVB (polars): (139426, 431)
+2025-10-01 20:24:43,967 - __main__ - INFO - Loaded XOM (polars): (188785, 431)
+2025-10-01 20:24:43,968 - __main__ - INFO - Discovered 102 targets: ['fwd_ret_1d', 'fwd_ret_5d', 'fwd_ret_20d', 'fwd_ret_15m', 'fwd_ret_30m', 'fwd_ret_60m', 'fwd_ret_120m', 'fwd_ret_oc_same_day', 'fwd_ret_5m', 'fwd_ret_10m']...
+2025-10-01 20:24:43,968 - __main__ - INFO - Training on 102 targets: ['fwd_ret_1d', 'fwd_ret_5d', 'fwd_ret_20d', 'fwd_ret_15m', 'fwd_ret_30m']...
+2025-10-01 20:24:43,968 - __main__ - INFO - Training 20 model families: ['LightGBM', 'XGBoost', 'MLP', 'CNN1D', 'LSTM']...
+2025-10-01 20:24:44,058 - __main__ - INFO - Testing strategy: single_task
+2025-10-01 20:24:44,058 - __main__ - INFO - 🎯 Training models for interval: cross_sectional
+2025-10-01 20:24:44,058 - __main__ - INFO - 🎯 Training models for target: fwd_ret_1d
+2025-10-01 20:24:44,058 - __main__ - INFO - 🎯 Building cross-sectional training data for target: fwd_ret_1d
+2025-10-01 20:24:44,058 - __main__ - INFO - 🎯 Building cross-sectional training data (polars, memory-efficient) for target: fwd_ret_1d
+2025-10-01 20:24:45,105 - __main__ - INFO - Combined data shape (polars): (2217124, 431)
+2025-10-01 20:24:46,745 - __main__ - INFO - Extracted target fwd_ret_1d from polars data
+2025-10-01 20:24:46,745 - __main__ - INFO - Extracted target fwd_ret_1d from column fwd_ret_1d
+/home/Jennifer/miniconda3/lib/python3.10/site-packages/sklearn/impute/_base.py:653: UserWarning: Skipping features without any observed values: [8 9]. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+2025-10-01 20:27:51,435 - __main__ - INFO - Cleaned data: 2217066 samples, 326 features
+2025-10-01 20:27:51,435 - __main__ - INFO - Removed 58 rows due to cleaning
+2025-10-01 20:27:51,783 - __main__ - INFO - 🎯 Training LightGBM for fwd_ret_1d
+2025-10-01 20:27:51,784 - strategies.single_task - INFO - 🎯 Training single-task models (Option A)
+2025-10-01 20:27:51,784 - strategies.single_task - INFO - Training model for target: fwd_ret_1d
+2025-10-01 20:27:51,810 - models.registry - INFO - Registered random_forest for classification
+2025-10-01 20:27:51,810 - models.registry - INFO - Registered random_forest for regression
+2025-10-01 20:27:51,810 - models.registry - INFO - Registered logistic_regression for classification
+2025-10-01 20:27:51,810 - models.registry - INFO - Registered ridge for regression
+2025-10-01 20:27:51,810 - models.registry - INFO - Registered mlp_classifier for classification
+2025-10-01 20:27:51,810 - models.registry - INFO - Registered mlp_regressor for regression
+2025-10-01 20:27:51,845 - models.registry - INFO - Registered lightgbm for classification
+2025-10-01 20:27:51,845 - models.registry - INFO - Registered lightgbm for regression
+2025-10-01 20:27:51,857 - models.registry - INFO - Registered xgboost for classification
+2025-10-01 20:27:51,857 - models.registry - INFO - Registered xgboost for regression
+2025-10-01 20:27:51,857 - models.registry - INFO - Registered neural_network for classification
+2025-10-01 20:27:51,857 - models.registry - INFO - Registered neural_network for regression
+2025-10-01 20:27:51,864 - models.registry - INFO - Registered LightGBM for classification
+2025-10-01 20:27:51,864 - models.registry - INFO - Registered LightGBM for regression
+2025-10-01 20:27:51,864 - models.registry - INFO - Registered XGBoost for classification
+2025-10-01 20:27:51,864 - models.registry - INFO - Registered XGBoost for regression
+2025-10-01 20:27:51,864 - models.registry - INFO - Registered MLP for classification
+2025-10-01 20:27:51,864 - models.registry - INFO - Registered MLP for regression
+2025-10-01 20:27:51,864 - models.registry - INFO - Registered CNN1D for classification
+2025-10-01 20:27:51,864 - models.registry - INFO - Registered CNN1D for regression
+2025-10-01 20:27:51,864 - models.registry - INFO - Registered LSTM for classification
+2025-10-01 20:27:51,864 - models.registry - INFO - Registered LSTM for regression
+2025-10-01 20:27:51,864 - models.registry - INFO - Registered Transformer for classification
+2025-10-01 20:27:51,864 - models.registry - INFO - Registered Transformer for regression
+2025-10-01 20:27:51,864 - models.registry - INFO - Registered Ensemble for classification
+2025-10-01 20:27:51,864 - models.registry - INFO - Registered Ensemble for regression
+2025-10-01 20:27:51,864 - models.registry - INFO - Registered 7 MTF model families
+2025-10-01 20:27:51,864 - models.factory - INFO - Created LightGBM model for regression
+2025-10-01 20:27:51,864 - __main__ - ERROR - Error training LightGBM with single_task: 'LightGBMTrainer' object has no attribute 'fit'
+2025-10-01 20:27:51,864 - __main__ - WARNING - ❌ LightGBM failed for fwd_ret_1d
+2025-10-01 20:27:51,865 - __main__ - INFO - 🎯 Training XGBoost for fwd_ret_1d
+2025-10-01 20:27:51,865 - strategies.single_task - INFO - 🎯 Training single-task models (Option A)
+2025-10-01 20:27:51,865 - strategies.single_task - INFO - Training model for target: fwd_ret_1d
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered random_forest for classification
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered random_forest for regression
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered logistic_regression for classification
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered ridge for regression
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered mlp_classifier for classification
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered mlp_regressor for regression
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered lightgbm for classification
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered lightgbm for regression
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered xgboost for classification
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered xgboost for regression
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered neural_network for classification
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered neural_network for regression
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered LightGBM for classification
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered LightGBM for regression
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered XGBoost for classification
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered XGBoost for regression
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered MLP for classification
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered MLP for regression
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered CNN1D for classification
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered CNN1D for regression
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered LSTM for classification
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered LSTM for regression
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered Transformer for classification
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered Transformer for regression
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered Ensemble for classification
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered Ensemble for regression
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered 7 MTF model families
+2025-10-01 20:27:51,865 - models.factory - INFO - Created XGBoost model for regression
+2025-10-01 20:27:51,865 - __main__ - ERROR - Error training XGBoost with single_task: 'XGBoostTrainer' object has no attribute 'fit'
+2025-10-01 20:27:51,865 - __main__ - WARNING - ❌ XGBoost failed for fwd_ret_1d
+2025-10-01 20:27:51,865 - __main__ - INFO - 🎯 Training MLP for fwd_ret_1d
+2025-10-01 20:27:51,865 - strategies.single_task - INFO - 🎯 Training single-task models (Option A)
+2025-10-01 20:27:51,865 - strategies.single_task - INFO - Training model for target: fwd_ret_1d
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered random_forest for classification
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered random_forest for regression
+2025-10-01 20:27:51,865 - models.registry - INFO - Registered logistic_regression for classification
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered ridge for regression
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered mlp_classifier for classification
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered mlp_regressor for regression
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered lightgbm for classification
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered lightgbm for regression
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered xgboost for classification
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered xgboost for regression
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered neural_network for classification
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered neural_network for regression
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered LightGBM for classification
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered LightGBM for regression
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered XGBoost for classification
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered XGBoost for regression
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered MLP for classification
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered MLP for regression
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered CNN1D for classification
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered CNN1D for regression
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered LSTM for classification
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered LSTM for regression
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered Transformer for classification
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered Transformer for regression
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered Ensemble for classification
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered Ensemble for regression
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered 7 MTF model families
+2025-10-01 20:27:51,866 - models.factory - INFO - Created MLP model for regression
+2025-10-01 20:27:51,866 - __main__ - ERROR - Error training MLP with single_task: 'MLPTrainer' object has no attribute 'fit'
+2025-10-01 20:27:51,866 - __main__ - WARNING - ❌ MLP failed for fwd_ret_1d
+2025-10-01 20:27:51,866 - __main__ - INFO - 🎯 Training CNN1D for fwd_ret_1d
+2025-10-01 20:27:51,866 - strategies.single_task - INFO - 🎯 Training single-task models (Option A)
+2025-10-01 20:27:51,866 - strategies.single_task - INFO - Training model for target: fwd_ret_1d
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered random_forest for classification
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered random_forest for regression
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered logistic_regression for classification
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered ridge for regression
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered mlp_classifier for classification
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered mlp_regressor for regression
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered lightgbm for classification
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered lightgbm for regression
+2025-10-01 20:27:51,866 - models.registry - INFO - Registered xgboost for classification
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered xgboost for regression
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered neural_network for classification
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered neural_network for regression
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered LightGBM for classification
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered LightGBM for regression
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered XGBoost for classification
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered XGBoost for regression
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered MLP for classification
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered MLP for regression
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered CNN1D for classification
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered CNN1D for regression
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered LSTM for classification
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered LSTM for regression
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered Transformer for classification
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered Transformer for regression
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered Ensemble for classification
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered Ensemble for regression
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered 7 MTF model families
+2025-10-01 20:27:51,867 - models.factory - INFO - Created CNN1D model for regression
+2025-10-01 20:27:51,867 - __main__ - ERROR - Error training CNN1D with single_task: 'CNN1DTrainer' object has no attribute 'fit'
+2025-10-01 20:27:51,867 - __main__ - WARNING - ❌ CNN1D failed for fwd_ret_1d
+2025-10-01 20:27:51,867 - __main__ - INFO - 🎯 Training LSTM for fwd_ret_1d
+2025-10-01 20:27:51,867 - strategies.single_task - INFO - 🎯 Training single-task models (Option A)
+2025-10-01 20:27:51,867 - strategies.single_task - INFO - Training model for target: fwd_ret_1d
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered random_forest for classification
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered random_forest for regression
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered logistic_regression for classification
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered ridge for regression
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered mlp_classifier for classification
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered mlp_regressor for regression
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered lightgbm for classification
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered lightgbm for regression
+2025-10-01 20:27:51,867 - models.registry - INFO - Registered xgboost for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered xgboost for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered neural_network for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered neural_network for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered LightGBM for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered LightGBM for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered XGBoost for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered XGBoost for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered MLP for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered MLP for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered CNN1D for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered CNN1D for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered LSTM for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered LSTM for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered Transformer for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered Transformer for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered Ensemble for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered Ensemble for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered 7 MTF model families
+2025-10-01 20:27:51,868 - models.factory - INFO - Created LSTM model for regression
+2025-10-01 20:27:51,868 - __main__ - ERROR - Error training LSTM with single_task: 'LSTMTrainer' object has no attribute 'fit'
+2025-10-01 20:27:51,868 - __main__ - WARNING - ❌ LSTM failed for fwd_ret_1d
+2025-10-01 20:27:51,868 - __main__ - INFO - 🎯 Training Transformer for fwd_ret_1d
+2025-10-01 20:27:51,868 - strategies.single_task - INFO - 🎯 Training single-task models (Option A)
+2025-10-01 20:27:51,868 - strategies.single_task - INFO - Training model for target: fwd_ret_1d
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered random_forest for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered random_forest for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered logistic_regression for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered ridge for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered mlp_classifier for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered mlp_regressor for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered lightgbm for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered lightgbm for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered xgboost for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered xgboost for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered neural_network for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered neural_network for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered LightGBM for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered LightGBM for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered XGBoost for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered XGBoost for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered MLP for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered MLP for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered CNN1D for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered CNN1D for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered LSTM for classification
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered LSTM for regression
+2025-10-01 20:27:51,868 - models.registry - INFO - Registered Transformer for classification
+2025-10-01 20:27:51,869 - models.registry - INFO - Registered Transformer for regression
+2025-10-01 20:27:51,869 - models.registry - INFO - Registered Ensemble for classification
+2025-10-01 20:27:51,869 - models.registry - INFO - Registered Ensemble for regression
+2025-10-01 20:27:51,869 - models.registry - INFO - Registered 7 MTF model families
+2025-10-01 20:27:51,869 - models.factory - INFO - Created Transformer model for regression
+2025-10-01 20:27:51,869 - __main__ - ERROR - Error training Transformer with single_task: 'TransformerTrainer' object has no attribute 'fit'
+2025-10-01 20:27:51,869 - __main__ - WARNING - ❌ Transformer failed for fwd_ret_1d
+2025-10-01 20:27:51,869 - __main__ - INFO - 🎯 Training TabCNN for fwd_ret_1d
+2025-10-01 20:27:51,869 - strategies.single_task - INFO - 🎯 Training single-task models (Option A)
+2025-10-01 20:27:51,869 - strategies.single_task - INFO - Training model for target: fwd_ret_1d

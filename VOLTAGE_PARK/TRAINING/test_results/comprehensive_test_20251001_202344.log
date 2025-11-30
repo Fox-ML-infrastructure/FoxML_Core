@@ -1,0 +1,33 @@
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1759368227.501337  380836 gpu_device.cc:2020] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 5395 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 3080, pci bus id: 0000:01:00.0, compute capability: 8.6
+2025-10-01 20:23:47,503 - __main__ - INFO - 🚀 Starting enhanced training with multiple strategies - Full Original Functionality
+2025-10-01 20:23:47,503 - __main__ - INFO - Data directory: /home/Jennifer/secure/trader/5m_with_barrier_targets_full/interval=5m
+2025-10-01 20:23:47,503 - __main__ - INFO - Symbols: ['CBRE', 'CERN', 'CFG', 'CVX', 'GCI', 'HOG', 'MLM', 'MXIM', 'NI', 'OI', 'PANW', 'SIVB', 'XOM']
+2025-10-01 20:23:47,503 - __main__ - INFO - Strategy: all
+2025-10-01 20:23:47,503 - __main__ - INFO - Families: ['LightGBM', 'XGBoost', 'MLP', 'CNN1D', 'LSTM', 'Transformer', 'TabCNN', 'TabLSTM', 'TabTransformer', 'RewardBased', 'QuantileLightGBM', 'NGBoost', 'GMMRegime', 'ChangePoint', 'FTRLProximal', 'VAE', 'GAN', 'Ensemble', 'MetaLearning', 'MultiTask']
+2025-10-01 20:23:47,503 - __main__ - INFO - Min cross-sectional size: 10
+2025-10-01 20:23:47,503 - __main__ - INFO - Loading MTF data from /home/Jennifer/secure/trader/5m_with_barrier_targets_full/interval=5m
+2025-10-01 20:23:47,692 - __main__ - INFO - Loaded CBRE (polars): (145518, 431)
+2025-10-01 20:23:47,833 - __main__ - INFO - Loaded CERN (polars): (125847, 431)
+2025-10-01 20:23:48,033 - __main__ - INFO - Loaded CFG (polars): (188787, 431)
+2025-10-01 20:23:48,237 - __main__ - INFO - Loaded CVX (polars): (188785, 431)
+2025-10-01 20:23:48,422 - __main__ - INFO - Loaded GCI (polars): (188074, 431)
+2025-10-01 20:23:48,618 - __main__ - INFO - Loaded HOG (polars): (188783, 431)
+2025-10-01 20:23:48,808 - __main__ - INFO - Loaded MLM (polars): (186342, 431)
+2025-10-01 20:23:48,922 - __main__ - INFO - Loaded MXIM (polars): (110523, 431)
+2025-10-01 20:23:49,106 - __main__ - INFO - Loaded NI (polars): (188785, 431)
+2025-10-01 20:23:49,293 - __main__ - INFO - Loaded OI (polars): (188699, 431)
+2025-10-01 20:23:49,493 - __main__ - INFO - Loaded PANW (polars): (188770, 431)
+2025-10-01 20:23:49,635 - __main__ - INFO - Loaded SIVB (polars): (139426, 431)
+2025-10-01 20:23:49,820 - __main__ - INFO - Loaded XOM (polars): (188785, 431)
+2025-10-01 20:23:49,821 - __main__ - INFO - Discovered 102 targets: ['fwd_ret_1d', 'fwd_ret_5d', 'fwd_ret_20d', 'fwd_ret_15m', 'fwd_ret_30m', 'fwd_ret_60m', 'fwd_ret_120m', 'fwd_ret_oc_same_day', 'fwd_ret_5m', 'fwd_ret_10m']...
+2025-10-01 20:23:49,821 - __main__ - INFO - Training on 102 targets: ['fwd_ret_1d', 'fwd_ret_5d', 'fwd_ret_20d', 'fwd_ret_15m', 'fwd_ret_30m']...
+2025-10-01 20:23:49,821 - __main__ - INFO - Training 20 model families: ['LightGBM', 'XGBoost', 'MLP', 'CNN1D', 'LSTM']...
+2025-10-01 20:23:49,914 - __main__ - INFO - Testing strategy: single_task
+2025-10-01 20:23:49,914 - __main__ - INFO - 🎯 Training models for interval: cross_sectional
+2025-10-01 20:23:49,914 - __main__ - INFO - 🎯 Training models for target: fwd_ret_1d
+2025-10-01 20:23:49,914 - __main__ - INFO - 🎯 Building cross-sectional training data for target: fwd_ret_1d
+2025-10-01 20:23:49,914 - __main__ - INFO - 🎯 Building cross-sectional training data (polars, memory-efficient) for target: fwd_ret_1d
+2025-10-01 20:23:50,856 - __main__ - INFO - Combined data shape (polars): (2217124, 431)
+2025-10-01 20:23:52,529 - __main__ - INFO - Extracted target fwd_ret_1d from polars data
+2025-10-01 20:23:52,529 - __main__ - INFO - Extracted target fwd_ret_1d from column fwd_ret_1d
