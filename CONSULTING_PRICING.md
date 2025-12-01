@@ -93,7 +93,7 @@ Monthly retainers are available for organizations that require:
 * long-term research partnerships
 * access to technical expertise on standby
 
-Retainer engagements begin at **10–40 hours per month** depending on scope.
+Retainer engagements typically range from **15–40 hours per month** depending on scope.
 
 ### **Upfront Payments**
 
