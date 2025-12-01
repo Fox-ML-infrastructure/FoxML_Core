@@ -57,14 +57,16 @@ Email: jenn.lewis5789@gmail.com
 Subject: Consulting Inquiry — [Your Organization Name]
 
 **Next steps:**
-1. Review [`CONSULTING_POLICY.md`](CONSULTING_POLICY.md) for professional terms and rates
-2. Review [`MASTER_CONSULTING_AGREEMENT.md`](MASTER_CONSULTING_AGREEMENT.md) for standard agreement framework
-3. Contact me to discuss your requirements and receive a formal proposal
+1. Review [`CONSULTING_POLICY.md`](CONSULTING_POLICY.md) for professional terms and policies
+2. Review [`CONSULTING_PRICING.md`](CONSULTING_PRICING.md) for detailed pricing tiers and rate structure
+3. Review [`MASTER_CONSULTING_AGREEMENT.md`](MASTER_CONSULTING_AGREEMENT.md) for standard agreement framework
+4. Contact me to discuss your requirements and receive a formal proposal
 
 ---
 
 ## Related Documents
 
 - [`CONSULTING_POLICY.md`](CONSULTING_POLICY.md) — Professional terms, rates, and policies
+- [`CONSULTING_PRICING.md`](CONSULTING_PRICING.md) — Detailed pricing tiers and rate structure
 - [`MASTER_CONSULTING_AGREEMENT.md`](MASTER_CONSULTING_AGREEMENT.md) — Standard agreement framework
 - [`STATEMENT_OF_WORK.md`](STATEMENT_OF_WORK.md) — SOW template

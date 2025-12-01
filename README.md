@@ -53,7 +53,7 @@ All other services extend from these core competencies.
 - **Remote contract work** — All engagements conducted remotely
 - **Defined deliverables** — Every project includes a formal Statement of Work (SOW)
 - **Flexible engagement** — Hourly, project-based, or retainer arrangements
-- **Rates** — Standard consulting starts at **$300/hr**, with higher rates for latency-critical, 24/7, or high-urgency work (see [`CONSULTING_POLICY.md`](CONSULTING_POLICY.md) for details)
+- **Rates** — Standard consulting starts at **$300/hr**, with higher rates for latency-critical, 24/7, or high-urgency work (see [`CONSULTING_POLICY.md`](CONSULTING_POLICY.md) and [`CONSULTING_PRICING.md`](CONSULTING_PRICING.md) for details)
 - **Organizational focus** — Specialized support for institutions, research organizations, and enterprises
 
 ---
@@ -76,6 +76,7 @@ All other services extend from these core competencies.
 1. **Review consulting materials:**
    - [`CONSULTING.md`](CONSULTING.md) — Overview of services and engagement process
    - [`CONSULTING_POLICY.md`](CONSULTING_POLICY.md) — Professional terms, rates, and policies
+   - [`CONSULTING_PRICING.md`](CONSULTING_PRICING.md) — Detailed pricing tiers and rate structure
    - [`MASTER_CONSULTING_AGREEMENT.md`](MASTER_CONSULTING_AGREEMENT.md) — Standard agreement framework
    - [`STATEMENT_OF_WORK.md`](STATEMENT_OF_WORK.md) — SOW template
 
