@@ -1,0 +1,298 @@
+# Multi-Model Feature Selection Configuration
+# Combines importance from multiple model families for robust feature ranking
+
+# Model families configuration
+model_families:
+  # ============================================================================
+  # TREE-BASED MODELS (fast, native importance)
+  # ============================================================================
+  
+  lightgbm:
+    enabled: true
+    importance_method: "native"  # Uses gain importance
+    weight: 1.0
+    config:
+      objective: "regression_l1"
+      metric: "mae"
+      boosting_type: "gbdt"
+      n_estimators: 300
+      learning_rate: 0.05
+      num_leaves: 31
+      max_depth: -1
+      min_child_samples: 20
+      subsample: 0.8
+      colsample_bytree: 0.8
+      reg_alpha: 0.1
+      reg_lambda: 0.1
+      verbose: -1
+      random_state: 42
+      device: "cpu"  # Set to "cuda" or "gpu" if available
+  
+  xgboost:
+    enabled: true
+    importance_method: "native"  # Uses gain importance
+    weight: 1.0
+    config:
+      objective: "reg:squarederror"
+      eval_metric: "mae"
+      n_estimators: 300
+      learning_rate: 0.05
+      max_depth: 6
+      min_child_weight: 3
+      subsample: 0.8
+      colsample_bytree: 0.8
+      reg_alpha: 0.1
+      reg_lambda: 0.1
+      verbosity: 0
+      random_state: 42
+      tree_method: "auto"  # Set to "gpu_hist" if CUDA available
+  
+  random_forest:
+    enabled: true
+    importance_method: "native"  # Uses gini/entropy importance
+    weight: 0.8  # Slightly lower weight (can be correlated with other trees)
+    config:
+      n_estimators: 200
+      max_depth: 15
+      max_features: "sqrt"
+      min_samples_split: 20
+      min_samples_leaf: 10
+      bootstrap: true
+      n_jobs: 4
+      random_state: 42
+  
+  histogram_gradient_boosting:
+    enabled: false  # Disable by default (similar to LightGBM)
+    importance_method: "native"
+    weight: 0.9
+    config:
+      max_iter: 300
+      max_depth: 8
+      learning_rate: 0.05
+      max_bins: 255
+      l2_regularization: 0.0001
+      early_stopping: true
+      validation_fraction: 0.1
+      random_state: 42
+  
+  # ============================================================================
+  # NEURAL NETWORKS (slower, permutation/SHAP importance)
+  # ============================================================================
+  
+  neural_network:
+    enabled: true
+    importance_method: "permutation"  # Permutation importance
+    weight: 1.2  # Higher weight (different architecture family)
+    config:
+      hidden_layer_sizes: [128, 64]
+      activation: "relu"
+      solver: "adam"
+      alpha: 0.0001
+      batch_size: "auto"
+      learning_rate_init: 0.001
+      max_iter: 300
+      early_stopping: true
+      validation_fraction: 0.1
+      n_iter_no_change: 10
+      random_state: 42
+  
+  # ============================================================================
+  # SPECIALIZED MODELS (optional, for specific use cases)
+  # ============================================================================
+  
+  ridge:
+    enabled: false  # Linear baseline
+    importance_method: "native"  # Uses absolute coefficients
+    weight: 0.7
+    config:
+      alpha: 1.0
+      fit_intercept: true
+      random_state: 42
+  
+  elastic_net:
+    enabled: false  # Sparse linear model
+    importance_method: "native"
+    weight: 0.8
+    config:
+      alpha: 1.0
+      l1_ratio: 0.5
+      max_iter: 1000
+      random_state: 42
+  
+  # ============================================================================
+  # ADDITIONAL MODELS (Recommended for production)
+  # ============================================================================
+  
+  catboost:
+    enabled: true  # ✅ ENABLED - Diverse tree-based selection
+    importance_method: "native"  # Uses PredictionValuesChange
+    weight: 1.0
+    config:
+      iterations: 300
+      learning_rate: 0.05
+      depth: 6
+      loss_function: "RMSE"
+      verbose: false
+      random_seed: 42
+  
+  lasso:
+    enabled: true  # ✅ ENABLED - Explicit sparse feature selection
+    importance_method: "native"  # Uses abs(coef_)
+    weight: 0.9
+    config:
+      alpha: 0.1
+      max_iter: 1000
+      random_state: 42
+  
+  mutual_information:
+    enabled: true  # ✅ ENABLED - Information-theoretic baseline
+    importance_method: "native"  # Direct calculation (no model)
+    weight: 0.8
+    config:
+      discrete_features: "auto"
+      random_state: 42
+  
+  # ============================================================================
+  # STATISTICAL & WRAPPER METHODS
+  # ============================================================================
+  
+  univariate_selection:
+    enabled: true  # ✅ ENABLED - Statistical F-test baseline
+    importance_method: "native"  # F-statistics (f_regression/f_classif)
+    weight: 0.7
+    config:
+      # Uses f_regression for regression, f_classif for classification
+      # No additional config needed
+  
+  rfe:
+    enabled: true  # ✅ ENABLED - Recursive feature elimination
+    importance_method: "native"  # Ranking-based (1/rank)
+    weight: 0.8
+    config:
+      n_features_to_select: 50  # Number of features to select
+      step: 5  # Number of features to remove per iteration
+  
+  boruta:
+    enabled: true  # ✅ ENABLED - All-relevant feature selection (slower)
+    importance_method: "native"  # Selection-based (selected/tentative/rejected)
+    weight: 1.0
+    config:
+      max_iter: 100  # Maximum iterations
+      random_state: 42
+  
+  stability_selection:
+    enabled: true  # ✅ ENABLED - Bootstrap-based stable feature selection (slower)
+    importance_method: "native"  # Fraction of times selected across bootstraps
+    weight: 0.9
+    config:
+      n_bootstrap: 50  # Number of bootstrap iterations (reduced for speed)
+      random_state: 42
+      Cs: 10  # Number of C values to try for LogisticRegressionCV
+      cv: 3  # CV folds for LassoCV/LogisticRegressionCV
+      n_jobs: 1  # Parallel jobs for CV
+
+# Aggregation strategies
+aggregation:
+  # How to aggregate importance across symbols (for single model family)
+  per_symbol_method: "mean"  # mean, median, sum
+  
+  # How to combine across model families
+  cross_model_method: "weighted_mean"  # weighted_mean, median, geometric_mean
+  
+  # Require feature to be important in at least N models
+  require_min_models: 2  # 2 = must appear in at least 2 families
+  
+  # Consensus threshold (0-1): fraction of models that must agree
+  consensus_threshold: 0.5  # 50% of models must find feature important
+
+# Sampling and performance
+sampling:
+  max_samples_per_symbol: 50000  # Limit rows per symbol (for speed)
+  validation_split: 0.2  # Fraction for validation (if needed)
+  random_state: 42
+
+# SHAP configuration (if using SHAP method)
+shap:
+  max_samples: 1000  # Max samples for SHAP calculation
+  use_tree_explainer: true  # Use TreeExplainer when possible (fast)
+  kernel_explainer_background: 100  # Background samples for KernelExplainer
+
+# Permutation importance configuration
+permutation:
+  n_repeats: 5  # Number of permutation repeats
+  random_state: 42
+
+# Cross-validation configuration
+cross_validation:
+  cv_folds: 3  # Number of CV folds for model evaluation
+  n_jobs: 1  # Number of parallel jobs for CV (1 = sequential)
+
+# Output configuration
+output:
+  save_per_family_rankings: true  # Save individual family rankings
+  save_agreement_matrix: true  # Save model agreement matrix
+  save_metadata: true  # Save run metadata JSON
+  include_model_scores: true  # Include individual model scores in summary
+
+# Computational budgets (for large-scale runs)
+compute:
+  max_symbols: null  # Limit symbols (null = all)
+  max_features: null  # Limit features per model (null = all)
+  parallel_symbols: false  # Process symbols in parallel (risky with GPU)
+  use_gpu: false  # Enable GPU acceleration where supported
+
+# Presets for quick switching
+presets:
+  fast:
+    # Quick validation on 3-5 symbols
+    model_families:
+      lightgbm:
+        enabled: true
+        config:
+          n_estimators: 100
+      xgboost:
+        enabled: false
+      random_forest:
+        enabled: false
+      neural_network:
+        enabled: false
+    sampling:
+      max_samples_per_symbol: 10000
+  
+  balanced:
+    # Default balanced approach
+    model_families:
+      lightgbm:
+        enabled: true
+      xgboost:
+        enabled: true
+      random_forest:
+        enabled: true
+      neural_network:
+        enabled: true
+    sampling:
+      max_samples_per_symbol: 50000
+  
+  comprehensive:
+    # Maximum robustness (slow)
+    model_families:
+      lightgbm:
+        enabled: true
+      xgboost:
+        enabled: true
+      random_forest:
+        enabled: true
+      histogram_gradient_boosting:
+        enabled: true
+      neural_network:
+        enabled: true
+      ridge:
+        enabled: true
+    sampling:
+      max_samples_per_symbol: 100000
+    aggregation:
+      require_min_models: 3
+
+# Active preset (uncomment to use)
+# active_preset: "balanced"
+

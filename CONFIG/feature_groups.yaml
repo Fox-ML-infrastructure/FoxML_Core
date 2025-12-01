@@ -1,0 +1,238 @@
+# Feature Grouping Configuration
+# Groups features by concept/family for aggregated importance analysis
+
+# Price-based features
+price_features:
+  - close
+  - open
+  - high
+  - low
+  
+# Return features (raw returns at different timescales)
+returns:
+  - ret_1m
+  - ret_5m
+  - ret_10m
+  - ret_15m
+  - ret_30m
+  - ret_60m
+  - ret_120m
+  - ret_1d
+  - ret_3d
+  - ret_5d
+
+# Return z-scores (standardized returns)
+returns_zscore:
+  - ret_zscore_5m
+  - ret_zscore_10m
+  - ret_zscore_15m
+  - ret_zscore_30m
+  - ret_zscore_60m
+
+# Return ordinals (rank-based returns)
+returns_ordinal:
+  - ret_ord_5m
+  - ret_ord_10m
+  - ret_ord_15m
+  - ret_ord_30m
+  - ret_ord_60m
+
+# Volatility features
+volatility:
+  - vol_5m
+  - vol_10m
+  - vol_15m
+  - vol_30m
+  - vol_60m
+  - vol_1d
+  - vol_5d
+  - vol_20d
+  - realized_vol_5m
+  - realized_vol_15m
+  - realized_vol_60m
+
+# ATR (Average True Range)
+atr:
+  - atr_14
+  - atr_28
+  - atr_56
+
+# RSI (Relative Strength Index)
+rsi:
+  - rsi_14
+  - rsi_21
+  - rsi_28
+  - rsi_56
+
+# MACD (Moving Average Convergence Divergence)
+macd:
+  - macd
+  - macd_signal
+  - macd_hist
+
+# Bollinger Bands
+bollinger:
+  - bb_upper
+  - bb_middle
+  - bb_lower
+  - bb_width
+  - bb_pct
+
+# Moving Averages (Simple)
+sma:
+  - sma_5
+  - sma_10
+  - sma_20
+  - sma_50
+  - sma_200
+
+# Moving Averages (Exponential)
+ema:
+  - ema_5
+  - ema_10
+  - ema_20
+  - ema_50
+  - ema_200
+
+# Momentum indicators
+momentum:
+  - mom_5
+  - mom_10
+  - mom_20
+  - mom_60
+  - roc
+  - roc_5
+  - roc_10
+
+# Volume features
+volume:
+  - volume
+  - volume_ma_5
+  - volume_ma_20
+  - volume_delta_1
+  - dollar_volume
+  - turnover_5
+  - turnover_20
+  - volume_volatility_5d
+  - volume_volatility_20d
+
+# Stochastic Oscillator
+stochastic:
+  - stoch_k
+  - stoch_d
+
+# Williams %R
+williams:
+  - williams_r
+
+# CCI (Commodity Channel Index)
+cci:
+  - cci
+
+# ADX (Average Directional Index)
+adx:
+  - adx
+  - plus_di
+  - minus_di
+
+# Time-to-hit (barrier targets)
+time_to_hit:
+  - tth_5m_0.8
+  - tth_10m_0.8
+  - tth_15m_0.8
+  - tth_30m_0.8
+  - tth_60m_0.8
+  - tth_abs_5m_0.8
+  - tth_abs_10m_0.8
+  - tth_abs_15m_0.8
+  - tth_abs_30m_0.8
+  - tth_abs_60m_0.8
+  - tth_asym_5m_1.5_0.8
+  - tth_asym_10m_1.5_0.8
+  - tth_asym_15m_1.5_0.8
+  - tth_asym_30m_1.5_0.8
+  - tth_asym_60m_1.5_0.8
+
+# Max favorable/adverse excursion
+excursion:
+  - max_return_5m_0.001
+  - max_return_10m_0.001
+  - max_return_15m_0.001
+  - max_return_30m_0.001
+  - max_return_60m_0.001
+  - mfe_share_5m
+  - mfe_share_10m
+  - mfe_share_15m
+  - mfe_share_30m
+  - mfe_share_60m
+  - mdd_share_5m
+  - mdd_share_10m
+  - mdd_share_15m
+  - mdd_share_30m
+  - mdd_share_60m
+
+# Time in profit/drawdown
+time_metrics:
+  - time_in_profit_5m
+  - time_in_profit_10m
+  - time_in_profit_15m
+  - time_in_profit_30m
+  - time_in_profit_60m
+  - time_in_drawdown_5m
+  - time_in_drawdown_10m
+  - time_in_drawdown_15m
+  - time_in_drawdown_30m
+  - time_in_drawdown_60m
+
+# Flip count (direction changes)
+flip_metrics:
+  - flipcount_5m
+  - flipcount_10m
+  - flipcount_15m
+  - flipcount_30m
+  - flipcount_60m
+
+# Hit direction
+hit_direction:
+  - hit_direction_5m_0.8
+  - hit_direction_10m_0.8
+  - hit_direction_15m_0.8
+  - hit_direction_30m_0.8
+  - hit_direction_60m_0.8
+
+# Ichimoku
+ichimoku:
+  - ichimoku_conv
+  - ichimoku_base
+
+# Donchian Channels
+donchian:
+  - donchian_upper
+  - donchian_lower
+
+# Keltner Channels
+keltner:
+  - keltner_upper
+  - keltner_lower
+
+# Parabolic SAR
+psar:
+  - psar
+
+# Aroon
+aroon:
+  - aroon_up
+  - aroon_down
+
+# Mass Index
+mass_index:
+  - mass_index
+
+# Cross-sectional (relative to universe)
+cross_sectional:
+  - rank_return
+  - rank_volume
+  - rank_volatility
+  - zscore_return
+  - zscore_volume
+

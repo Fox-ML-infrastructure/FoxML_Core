@@ -1,0 +1,91 @@
+# Feature Selection Configuration
+# Controls behavior of select_features.py
+
+# Default paths (can be overridden by command line args)
+paths:
+  data_dir: "data/data_labeled/interval=5m"  # Relative to repo root
+  output_dir: "DATA_PROCESSING/data/features"  # Relative to repo root
+
+# Default feature selection parameters
+defaults:
+  top_n: 60                    # Number of features to select
+  method: "mean"               # Aggregation method: mean, median, frequency
+  num_workers: 12              # Number of parallel processes (0 = auto-detect)
+  target_column: "y_will_peak_60m_0.8"  # Default target if not specified
+
+# LightGBM configuration for feature importance calculation
+lightgbm:
+  # Core parameters
+  objective: "regression_l1"   # MAE objective for robustness
+  metric: "mae"
+  boosting_type: "gbdt"
+  
+  # GPU Configuration (set device: "cpu" to disable GPU)
+  device: "cuda"               # "cuda", "gpu" (OpenCL), or "cpu"
+  gpu_device_id: 0             # GPU device ID (usually 0)
+  max_bin: 63                  # Reduce memory usage (63 or 127 for GPU, default 255)
+  
+  # Tree parameters
+  n_estimators: 500            # Number of boosting rounds
+  learning_rate: 0.05          # Step size shrinkage
+  num_leaves: 31               # Max number of leaves per tree
+  max_depth: -1                # No depth limit (-1)
+  min_child_samples: 20        # Minimum data in leaf
+  
+  # Sampling parameters
+  subsample: 0.8               # Row sampling ratio
+  subsample_freq: 1            # Frequency of subsampling
+  colsample_bytree: 0.8        # Column sampling ratio per tree
+  
+  # Regularization
+  reg_alpha: 0.1               # L1 regularization
+  reg_lambda: 0.1              # L2 regularization
+  min_split_gain: 0.0          # Minimum loss reduction for split
+  
+  # Performance
+  n_jobs: 1                    # Single-threaded (GPU handles parallelism internally)
+  verbose: -1                  # Suppress output
+  
+  # Determinism
+  random_state: 42
+  deterministic: true
+  force_col_wise: false        # Must be false for GPU
+  
+  # Memory optimization for 7GB VRAM
+  gpu_use_dp: false            # Use single precision (float32) instead of double
+  max_cat_to_onehot: 4         # Limit one-hot encoding to save memory
+
+# Importance extraction settings
+importance:
+  type: "gain"                 # Importance type: gain, split, cover
+  normalize: false             # Whether to normalize importance scores
+  
+# Aggregation settings (how to combine importance across symbols)
+aggregation:
+  method: "mean"               # mean, median, sum
+  min_symbols: 1               # Minimum symbols a feature must appear in
+  frequency_threshold: 0.0     # Minimum frequency percentage (0-100)
+  
+# Data filtering
+data:
+  exclude_columns:             # Columns to always exclude
+    - ts
+    - datetime
+    - symbol
+    - interval
+    - source
+  exclude_patterns:            # Column name patterns to exclude
+    - "^y_"                    # Target columns
+    - "^fwd_ret_"              # Forward return columns
+    - "^barrier_"              # Raw barrier values
+    - "^zigzag_"               # Zigzag labels
+    - "^p_"                    # Probability columns
+  drop_object_dtypes: true     # Drop any remaining object dtype columns
+  min_valid_samples: 100       # Minimum samples after filtering NaN
+
+# Logging
+logging:
+  level: "INFO"                # DEBUG, INFO, WARNING, ERROR
+  show_progress: true          # Show progress bars
+  log_top_features: 5          # Number of top features to log per symbol
+

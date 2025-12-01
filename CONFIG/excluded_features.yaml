@@ -1,0 +1,138 @@
+# Excluded Features - Data Leakage Prevention
+#
+# This config defines patterns for features that leak future information.
+# All patterns are configurable - no hardcoded exclusions in code.
+#
+# Last updated: 2025-11-22
+
+# Pattern types:
+# - regex: Python regex patterns (e.g., "^tth_")
+# - prefix: String prefixes (e.g., "tth_")
+# - keyword: Keywords that must appear in feature name (e.g., "peak")
+# - exact: Exact feature names (e.g., "time_in_profit_5m")
+
+# Always excluded patterns (applied to all targets)
+always_exclude:
+  regex_patterns:
+    - "^tth_"                    # time-to-hit
+    - "^tth_abs_"                # absolute time-to-hit
+    - "^mfe_share_"              # max favorable excursion share
+    - "^mdd_share_"              # max drawdown share
+    - "^time_in_profit_"         # time in profit
+    - "^time_in_drawdown_"       # time in drawdown
+    - "^flipcount_"              # flip count
+    - "^hit_direction_"          # hit direction
+    - "^hit_asym_"               # asymmetric hit
+    - "^y_first_touch"           # first touch (leaked)
+    - "^y_"                      # ALL y_* targets
+    - "^p_"                      # ALL p_* probability/prediction features
+    - "^max_return_"            # max return (requires future path)
+    - "^min_return_"             # min return (requires future path)
+    - "^excursion_"              # excursion metrics (requires future path)
+    - "^vol_at_t_"               # volatility at time of hit (requires future)
+    - "^mfe_\\d+m_"              # MFE raw values (e.g., mfe_5m_0.001)
+    - "^mdd_\\d+m_"              # MDD raw values (e.g., mdd_5m_0.001)
+    - "^barrier_"                # Barrier features (directly encode barrier logic - LEAK!)
+  
+  prefix_patterns:
+    - "tth_"
+    - "tth_abs_"
+    - "mfe_share_"
+    - "mdd_share_"
+    - "mfe_"                    # MFE raw values (e.g., mfe_5m_0.001, mfe_60m_0.002)
+    - "mdd_"                    # MDD raw values (e.g., mdd_5m_0.001, mdd_60m_0.002)
+    - "time_in_profit_"
+    - "time_in_drawdown_"
+    - "flipcount_"
+    - "hit_direction_"
+    - "hit_asym_"
+    - "max_return_"
+    - "min_return_"
+    - "excursion_"
+    - "vol_at_t_"
+    - "barrier_"                 # Barrier features (directly encode barrier logic - LEAK!)
+  
+  keyword_patterns:
+    - "first_touch"              # Any feature with "first_touch" in name
+  
+  exact_patterns: []             # Add specific feature names here if needed
+
+# Target type specific exclusions
+target_type_rules:
+  forward_return:
+    # For forward return targets (fwd_ret_*)
+    prefix_patterns:
+      - "fwd_ret_"               # Exclude ALL forward returns (they're targets, not features)
+    horizon_overlap:
+      enabled: true
+      exclude_if_ge: true        # Exclude if feature horizon >= target horizon
+      exclude_all: true          # Exclude ALL forward returns regardless of horizon
+  
+  barrier:
+    # For barrier targets (y_will_*)
+    prefix_patterns:
+      - "tth_"
+      - "tth_abs_"
+      - "hit_direction_"
+      - "hit_asym_"
+      - "fwd_ret_"               # Forward returns are targets, not features
+    keyword_patterns:
+      - "peak"                   # Features containing "peak"
+      - "valley"                 # Features containing "valley"
+      - "swing"                  # Features containing "swing"
+      - "first_touch"
+      - "zigzag_high"            # ZigZag high (encodes peak information - exclude for peak targets)
+      - "zigzag_low"             # ZigZag low (encodes valley information - exclude for valley targets)
+      # Note: HIGH/upper/max features excluded dynamically for peak targets (see code)
+      # Note: LOW/lower/min features excluded dynamically for valley targets (see code)
+    horizon_overlap:
+      enabled: true
+      exclude_matching_horizon: true  # CRITICAL: Exclude features with same horizon (temporal overlap)
+      exclude_overlapping_horizon: true  # Exclude features with horizon >= target_horizon/4 (autocorrelation)
+      # Features computed over the same time window as the target leak information
+      # Example: ret_zscore_60m for target y_will_peak_60m_0.8 is a leak
+      # Also exclude features with overlapping horizons (>= target/4) due to autocorrelation
+      # For 60m target: exclude 15m+ features (catches 15m, 20m, 30m, 45m, 60m)
+      # More aggressive threshold to prevent all autocorrelation leaks
+  
+  first_touch:
+    # First touch targets are already leaked
+    use_barrier_rules: true      # Use same rules as barrier targets
+
+# Target classification rules (how to identify target types)
+target_classification:
+  forward_return:
+    prefix: "fwd_ret_"
+  barrier:
+    prefix: "y_will_"
+  first_touch:
+    keyword: "first_touch"
+    prefix: "y_"
+
+# Horizon extraction patterns (for temporal overlap detection)
+horizon_extraction:
+  patterns:
+    - regex: '(\d+)m'            # Match digits followed by 'm' (minutes)
+      multiplier: 1
+    - regex: '(\d+)h'            # Match digits followed by 'h' (hours)
+      multiplier: 60
+    - regex: '(\d+)d'            # Match digits followed by 'd' (days)
+      multiplier: 1440
+
+# Metadata columns (not leaks, just not features)
+metadata_columns:
+  - "ts"
+  - "datetime"
+  - "symbol"
+  - "interval"
+  - "source"
+  - "date"
+  - "time"
+  - "timestamp"
+
+# Configuration flags
+config:
+  exclude_metadata: true
+  exclude_targets: true
+  exclude_temporal_overlap: true
+  verbose_logging: false

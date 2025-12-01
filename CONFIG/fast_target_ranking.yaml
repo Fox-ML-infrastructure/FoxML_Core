@@ -1,0 +1,73 @@
+# Fast Target Ranking Configuration
+# Use this to speed up target ranking while still getting reliable results
+# Based on leakage.md findings - optimized for speed without sacrificing quality
+
+# Model Configuration - Use fewer, faster models for initial ranking
+model_families:
+  lightgbm:
+    enabled: true
+    params:
+      n_estimators: 100  # Reduced from default (faster)
+      max_depth: 6       # Reduced depth (faster)
+      num_leaves: 31     # Reduced leaves (faster)
+      learning_rate: 0.1 # Higher learning rate (faster convergence)
+  
+  random_forest:
+    enabled: true
+    params:
+      n_estimators: 50   # Reduced from default (faster)
+      max_depth: 8       # Reduced depth (faster)
+  
+  neural_network:
+    enabled: false       # Disabled - slowest model
+    params:
+      hidden_layer_sizes: [64, 32]
+      max_iter: 200
+  
+  xgboost:
+    enabled: false       # Disabled - similar to LightGBM, redundant for ranking
+  
+  histogram_gradient_boosting:
+    enabled: false      # Disabled - slower than LightGBM
+  
+  catboost:
+    enabled: false      # Disabled - slower than LightGBM
+  
+  lasso:
+    enabled: false      # Disabled - not needed for initial ranking
+  
+  mutual_information:
+    enabled: false      # Disabled - slow for many features
+  
+  univariate_selection:
+    enabled: false      # Disabled - slow for many features
+  
+  rfe:
+    enabled: false      # Disabled - very slow
+  
+  boruta:
+    enabled: false      # Disabled - very slow
+  
+  stability_selection:
+    enabled: false      # Disabled - very slow
+
+# Sampling Configuration
+sampling:
+  max_samples_per_symbol: 10000  # Reduced from 50000 (faster, still representative)
+  
+# Cross-validation
+cross_validation:
+  cv_folds: 3           # Reduced from 5 (faster)
+  
+# Feature Filtering (CRITICAL - prevents leakage)
+feature_filtering:
+  exclude_leaking: true
+  excluded_features_file: "CONFIG/excluded_features.yaml"
+
+# Expected Runtime:
+# - 5 symbols: ~10-15 minutes (vs 2-3 hours with all models)
+# - All targets: ~30-45 minutes (vs 4+ days with all models)
+# 
+# Trade-off: Slightly less robust ranking, but 10-20x faster
+# Recommendation: Use this for initial ranking, then re-run top targets with full models
+

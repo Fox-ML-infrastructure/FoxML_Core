@@ -1,0 +1,51 @@
+# Comprehensive Feature Ranking Configuration
+# Combines target-dependent (predictive) and target-independent (quality) metrics
+
+# Target-dependent (predictive edge) weights
+predictive_weights:
+  model_importance: 0.50  # Weight for model-based importance
+  consensus: 0.30  # Weight for cross-model agreement
+  consistency: 0.20  # Weight for consistency across symbols
+
+# Target-independent (data quality edge) weights
+quality_weights:
+  completeness: 0.40  # Weight for low missing rate
+  variance: 0.35  # Weight for high variance (more informative)
+  distribution: 0.25  # Weight for distribution quality (skewness, kurtosis)
+
+# Redundancy penalty
+redundancy:
+  max_correlation_penalty: 0.20  # Penalty for high correlation with other features
+  high_corr_threshold: 0.90  # Correlation threshold for "high correlation"
+  n_high_corr_penalty: 0.10  # Additional penalty per highly correlated feature
+
+# Composite edge score weights
+composite_weights:
+  predictive: 0.50  # Weight for predictive edge
+  quality: 0.30  # Weight for data quality edge
+  redundancy: -0.20  # Penalty for redundancy (negative = penalty)
+
+# Model families for predictive metrics
+model_families:
+  - lightgbm
+  - random_forest
+  - neural_network
+
+# Sampling
+sampling:
+  max_samples_per_symbol: 50000
+  random_state: 42
+
+# Output configuration
+output:
+  save_csv: true
+  save_json: true
+  save_report: true
+  top_n_display: 50  # Number of top features to display in report
+
+# Feature filtering
+filtering:
+  min_variance: 1e-6  # Minimum variance threshold
+  max_missing_rate: 0.95  # Maximum missing rate (95% = exclude)
+  exclude_constant: true  # Exclude features with zero variance
+

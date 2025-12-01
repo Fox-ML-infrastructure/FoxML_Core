@@ -1,35 +1,116 @@
-# block data
-data/ 
-datasets/
-*.csv
-*.parquet
-*.h5
-*.pkl
-models/weights/
-results/
-DATA_PROCESSING/data
-dep/
-models/
-logs/
-config/
-catboost_info/
-CONFIG/
-catboost_info
-build_whitepaper.sh
-Aurora_v2_Whitepaper.pdf
-MASTER_TEMPLATE.md
-VOLTAGE_PARK/
-VOLTAGE_PARK
-.gitignore
-# random junk
-__pycahce__/
-*.pay[cod]
-venv/
-.env
-.ipynb_checkpoints/
+# Whitelist approach: Ignore everything, then explicitly include core files and docs
 
-#sys junk 
+# Ignore everything
+*
+
+# But keep .gitignore itself
+!.gitignore
+
+# Keep core documentation and config files at root
+!README.md
+!LICENSE
+!requirements.txt
+!environment.yml
+!CONSULTING.md
+!CONSULTING_POLICY.md
+!CONSULTING_PRICING.md
+!MASTER_CONSULTING_AGREEMENT.md
+!STATEMENT_OF_WORK.md
+
+# Keep core source code directories (must un-ignore directories before files)
+!ALPACA_trading/
+!IBKR_trading/
+!DATA_PROCESSING/
+!TRAINING/
+!CONFIG/
+!scripts/
+!SETUP/
+!INFORMATION/
+!NOTES/
+!docs/
+
+# Within kept directories, keep all Python, config, and markdown files
+!**/*.py
+!**/*.yaml
+!**/*.yml
+!**/*.json
+!**/*.md
+!**/*.sh
+!**/*.cpp
+!**/*.h
+!**/*.hpp
+!**/*.c
+!**/*.service
+!**/*.txt
+
+# But ignore common build/cache artifacts even in core dirs
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/*.so
+**/.Python
+**/build/
+**/develop-eggs/
+**/dist/
+**/downloads/
+**/eggs/
+**/.eggs/
+**/lib/
+**/lib64/
+**/parts/
+**/sdist/
+**/var/
+**/wheels/
+**/*.egg-info/
+**/.installed.cfg
+**/*.egg
+
+# Ignore data, models, results, logs (even in core dirs)
+**/data/
+**/datasets/
+**/*.csv
+**/*.parquet
+**/*.h5
+**/*.pkl
+**/models/weights/
+**/models/*.pkl
+**/models/*.h5
+**/models/*.joblib
+**/models/*.ckpt
+**/results/
+**/logs/
+**/catboost_info/
+**/tmp/
+**/temp/
+
+# System files
 .DS_Store
 *.swp
+*.swo
+*~
+.~lock.*
+.vscode/
+.idea/
+*.iml
 
-.~lock.REFLECTION.docx#
+# Environment files
+.env
+.env.local
+.venv/
+venv/
+ENV/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# IDE
+*.sublime-project
+*.sublime-workspace
+
+# Build artifacts
+*.pdf
+*.docx
+*.doc
+build_*.sh

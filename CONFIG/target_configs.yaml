@@ -1,0 +1,629 @@
+# Complete Target Configuration Library
+# All 63 available targets from your schema
+#
+# Strategy: 7 core targets enabled, 56 ready to enable as needed
+# Each target creates: features/<target_name>/selected_features.txt
+#
+# Enable/disable by changing: enabled: true/false
+
+targets:
+  # ============================================================================
+  # CORE TARGETS (ENABLED) - Baseline set covering all major use cases
+  # ============================================================================
+  
+  # Triple Barrier Method (60m horizon, 0.8 threshold)
+  peak_60m:
+    target_column: "y_will_peak_60m_0.8"
+    description: "Predict upward barrier hits (peaks) at 60m horizon"
+    use_case: "Long entry signals, profit target optimization"
+    top_n: 60
+    method: "mean"
+    enabled: true
+    
+  valley_60m:
+    target_column: "y_will_valley_60m_0.8"
+    description: "Predict downward barrier hits (valleys) at 60m horizon"
+    use_case: "Short entry signals, stop loss optimization"
+    top_n: 60
+    method: "mean"
+    enabled: true
+    
+  first_touch_60m:
+    target_column: "y_first_touch_60m_0.8"
+    description: "Predict which barrier (-1, 0, +1) hits first at 60m"
+    use_case: "Direction prediction, meta-labeling"
+    top_n: 60
+    method: "mean"
+    enabled: true
+  
+  # Swing Reversals (15m horizon, medium threshold)
+  swing_high_15m:
+    target_column: "y_will_swing_high_15m_0.10"
+    description: "Predict local swing highs at 15m with 0.10 threshold"
+    use_case: "Short-term reversal trading (short entries)"
+    top_n: 50
+    method: "mean"
+    enabled: true
+    
+  swing_low_15m:
+    target_column: "y_will_swing_low_15m_0.10"
+    description: "Predict local swing lows at 15m with 0.10 threshold"
+    use_case: "Short-term reversal trading (long entries)"
+    top_n: 50
+    method: "mean"
+    enabled: true
+  
+  # Max Favorable Excursion / Max Drawdown (15m horizon, medium threshold)
+  mfe_15m:
+    target_column: "y_will_peak_mfe_15m_0.002"
+    description: "Predict max favorable excursion (MFE) at 15m"
+    use_case: "Profit target sizing, risk-reward optimization"
+    top_n: 50
+    method: "mean"
+    enabled: true
+    
+  mdd_15m:
+    target_column: "y_will_valley_mdd_15m_0.002"
+    description: "Predict max drawdown (MDD) at 15m"
+    use_case: "Stop loss sizing, risk management"
+    top_n: 50
+    method: "mean"
+    enabled: true
+
+  # ============================================================================
+  # SWING TARGETS - 5 Minute Horizon (6 targets)
+  # ============================================================================
+  
+  swing_high_5m_tight:
+    target_column: "y_will_swing_high_5m_0.05"
+    description: "Predict swing highs at 5m with TIGHT 0.05 threshold"
+    use_case: "Ultra-short-term reversals (short), high precision"
+    top_n: 45
+    method: "mean"
+    enabled: false
+    
+  swing_low_5m_tight:
+    target_column: "y_will_swing_low_5m_0.05"
+    description: "Predict swing lows at 5m with TIGHT 0.05 threshold"
+    use_case: "Ultra-short-term reversals (long), high precision"
+    top_n: 45
+    method: "mean"
+    enabled: false
+  
+  swing_high_5m:
+    target_column: "y_will_swing_high_5m_0.10"
+    description: "Predict swing highs at 5m with 0.10 threshold"
+    use_case: "Ultra-short-term reversals (short), balanced"
+    top_n: 45
+    method: "mean"
+    enabled: true
+    
+  swing_low_5m:
+    target_column: "y_will_swing_low_5m_0.10"
+    description: "Predict swing lows at 5m with 0.10 threshold"
+    use_case: "Ultra-short-term reversals (long), balanced"
+    top_n: 45
+    method: "mean"
+    enabled: true
+  
+  swing_high_5m_wide:
+    target_column: "y_will_swing_high_5m_0.20"
+    description: "Predict swing highs at 5m with WIDE 0.20 threshold"
+    use_case: "Ultra-short-term reversals (short), high recall"
+    top_n: 45
+    method: "mean"
+    enabled: false
+    
+  swing_low_5m_wide:
+    target_column: "y_will_swing_low_5m_0.20"
+    description: "Predict swing lows at 5m with WIDE 0.20 threshold"
+    use_case: "Ultra-short-term reversals (long), high recall"
+    top_n: 45
+    method: "mean"
+    enabled: false
+
+  # ============================================================================
+  # SWING TARGETS - 10 Minute Horizon (6 targets)
+  # ============================================================================
+  
+  swing_high_10m_tight:
+    target_column: "y_will_swing_high_10m_0.05"
+    description: "Predict swing highs at 10m with TIGHT 0.05 threshold"
+    use_case: "Short-term reversals (short), high precision"
+    top_n: 50
+    method: "mean"
+    enabled: false
+    
+  swing_low_10m_tight:
+    target_column: "y_will_swing_low_10m_0.05"
+    description: "Predict swing lows at 10m with TIGHT 0.05 threshold"
+    use_case: "Short-term reversals (long), high precision"
+    top_n: 50
+    method: "mean"
+    enabled: false
+  
+  swing_high_10m:
+    target_column: "y_will_swing_high_10m_0.10"
+    description: "Predict swing highs at 10m with 0.10 threshold"
+    use_case: "Short-term reversals (short), balanced"
+    top_n: 50
+    method: "mean"
+    enabled: true
+    
+  swing_low_10m:
+    target_column: "y_will_swing_low_10m_0.10"
+    description: "Predict swing lows at 10m with 0.10 threshold"
+    use_case: "Short-term reversals (long), balanced"
+    top_n: 50
+    method: "mean"
+    enabled: true
+  
+  swing_high_10m_wide:
+    target_column: "y_will_swing_high_10m_0.20"
+    description: "Predict swing highs at 10m with WIDE 0.20 threshold"
+    use_case: "Short-term reversals (short), high recall"
+    top_n: 50
+    method: "mean"
+    enabled: false
+    
+  swing_low_10m_wide:
+    target_column: "y_will_swing_low_10m_0.20"
+    description: "Predict swing lows at 10m with WIDE 0.20 threshold"
+    use_case: "Short-term reversals (long), high recall"
+    top_n: 50
+    method: "mean"
+    enabled: false
+
+  # ============================================================================
+  # SWING TARGETS - 15 Minute Horizon (6 targets, 3 already enabled above)
+  # ============================================================================
+  
+  swing_high_15m_tight:
+    target_column: "y_will_swing_high_15m_0.05"
+    description: "Predict swing highs at 15m with TIGHT 0.05 threshold"
+    use_case: "Medium-term reversals (short), high precision"
+    top_n: 50
+    method: "mean"
+    enabled: false
+    
+  swing_low_15m_tight:
+    target_column: "y_will_swing_low_15m_0.05"
+    description: "Predict swing lows at 15m with TIGHT 0.05 threshold"
+    use_case: "Medium-term reversals (long), high precision"
+    top_n: 50
+    method: "mean"
+    enabled: false
+  
+  # swing_high_15m and swing_low_15m are already enabled above (0.10 threshold)
+  
+  swing_high_15m_wide:
+    target_column: "y_will_swing_high_15m_0.20"
+    description: "Predict swing highs at 15m with WIDE 0.20 threshold"
+    use_case: "Medium-term reversals (short), high recall"
+    top_n: 50
+    method: "mean"
+    enabled: false
+    
+  swing_low_15m_wide:
+    target_column: "y_will_swing_low_15m_0.20"
+    description: "Predict swing lows at 15m with WIDE 0.20 threshold"
+    use_case: "Medium-term reversals (long), high recall"
+    top_n: 50
+    method: "mean"
+    enabled: false
+
+  # ============================================================================
+  # SWING TARGETS - 30 Minute Horizon (6 targets)
+  # ============================================================================
+  
+  swing_high_30m_tight:
+    target_column: "y_will_swing_high_30m_0.05"
+    description: "Predict swing highs at 30m with TIGHT 0.05 threshold"
+    use_case: "Medium-term reversals (short), high precision"
+    top_n: 55
+    method: "mean"
+    enabled: false
+    
+  swing_low_30m_tight:
+    target_column: "y_will_swing_low_30m_0.05"
+    description: "Predict swing lows at 30m with TIGHT 0.05 threshold"
+    use_case: "Medium-term reversals (long), high precision"
+    top_n: 55
+    method: "mean"
+    enabled: false
+  
+  swing_high_30m:
+    target_column: "y_will_swing_high_30m_0.10"
+    description: "Predict swing highs at 30m with 0.10 threshold"
+    use_case: "Medium-term reversals (short), balanced"
+    top_n: 55
+    method: "mean"
+    enabled: true
+    
+  swing_low_30m:
+    target_column: "y_will_swing_low_30m_0.10"
+    description: "Predict swing lows at 30m with 0.10 threshold"
+    use_case: "Medium-term reversals (long), balanced"
+    top_n: 55
+    method: "mean"
+    enabled: true
+  
+  swing_high_30m_wide:
+    target_column: "y_will_swing_high_30m_0.20"
+    description: "Predict swing highs at 30m with WIDE 0.20 threshold"
+    use_case: "Medium-term reversals (short), high recall"
+    top_n: 55
+    method: "mean"
+    enabled: false
+    
+  swing_low_30m_wide:
+    target_column: "y_will_swing_low_30m_0.20"
+    description: "Predict swing lows at 30m with WIDE 0.20 threshold"
+    use_case: "Medium-term reversals (long), high recall"
+    top_n: 55
+    method: "mean"
+    enabled: false
+
+  # ============================================================================
+  # SWING TARGETS - 60 Minute Horizon (6 targets)
+  # ============================================================================
+  
+  swing_high_60m_tight:
+    target_column: "y_will_swing_high_60m_0.05"
+    description: "Predict swing highs at 60m with TIGHT 0.05 threshold"
+    use_case: "Longer-term reversals (short), high precision"
+    top_n: 60
+    method: "mean"
+    enabled: false
+    
+  swing_low_60m_tight:
+    target_column: "y_will_swing_low_60m_0.05"
+    description: "Predict swing lows at 60m with TIGHT 0.05 threshold"
+    use_case: "Longer-term reversals (long), high precision"
+    top_n: 60
+    method: "mean"
+    enabled: false
+  
+  swing_high_60m:
+    target_column: "y_will_swing_high_60m_0.10"
+    description: "Predict swing highs at 60m with 0.10 threshold"
+    use_case: "Longer-term reversals (short), balanced"
+    top_n: 60
+    method: "mean"
+    enabled: true
+    
+  swing_low_60m:
+    target_column: "y_will_swing_low_60m_0.10"
+    description: "Predict swing lows at 60m with 0.10 threshold"
+    use_case: "Longer-term reversals (long), balanced"
+    top_n: 60
+    method: "mean"
+    enabled: true
+  
+  swing_high_60m_wide:
+    target_column: "y_will_swing_high_60m_0.20"
+    description: "Predict swing highs at 60m with WIDE 0.20 threshold"
+    use_case: "Longer-term reversals (short), high recall"
+    top_n: 60
+    method: "mean"
+    enabled: false
+    
+  swing_low_60m_wide:
+    target_column: "y_will_swing_low_60m_0.20"
+    description: "Predict swing lows at 60m with WIDE 0.20 threshold"
+    use_case: "Longer-term reversals (long), high recall"
+    top_n: 60
+    method: "mean"
+    enabled: false
+
+  # ============================================================================
+  # MFE TARGETS - 5 Minute Horizon (3 targets)
+  # ============================================================================
+  
+  mfe_5m_small:
+    target_column: "y_will_peak_mfe_5m_0.001"
+    description: "Predict small MFE (0.001) at 5m horizon"
+    use_case: "Ultra-short-term profit targets, conservative"
+    top_n: 45
+    method: "mean"
+    enabled: false
+  
+  mfe_5m:
+    target_column: "y_will_peak_mfe_5m_0.002"
+    description: "Predict medium MFE (0.002) at 5m horizon"
+    use_case: "Ultra-short-term profit targets, balanced"
+    top_n: 45
+    method: "mean"
+    enabled: true
+  
+  mfe_5m_large:
+    target_column: "y_will_peak_mfe_5m_0.005"
+    description: "Predict large MFE (0.005) at 5m horizon"
+    use_case: "Ultra-short-term profit targets, aggressive"
+    top_n: 45
+    method: "mean"
+    enabled: false
+
+  # ============================================================================
+  # MDD TARGETS - 5 Minute Horizon (3 targets)
+  # ============================================================================
+  
+  mdd_5m_small:
+    target_column: "y_will_valley_mdd_5m_0.001"
+    description: "Predict small MDD (0.001) at 5m horizon"
+    use_case: "Ultra-short-term stop loss, tight"
+    top_n: 45
+    method: "mean"
+    enabled: false
+  
+  mdd_5m:
+    target_column: "y_will_valley_mdd_5m_0.002"
+    description: "Predict medium MDD (0.002) at 5m horizon"
+    use_case: "Ultra-short-term stop loss, balanced"
+    top_n: 45
+    method: "mean"
+    enabled: true
+  
+  mdd_5m_large:
+    target_column: "y_will_valley_mdd_5m_0.005"
+    description: "Predict large MDD (0.005) at 5m horizon"
+    use_case: "Ultra-short-term stop loss, wide"
+    top_n: 45
+    method: "mean"
+    enabled: false
+
+  # ============================================================================
+  # MFE TARGETS - 10 Minute Horizon (3 targets)
+  # ============================================================================
+  
+  mfe_10m_small:
+    target_column: "y_will_peak_mfe_10m_0.001"
+    description: "Predict small MFE (0.001) at 10m horizon"
+    use_case: "Short-term profit targets, conservative"
+    top_n: 50
+    method: "mean"
+    enabled: false
+  
+  mfe_10m:
+    target_column: "y_will_peak_mfe_10m_0.002"
+    description: "Predict medium MFE (0.002) at 10m horizon"
+    use_case: "Short-term profit targets, balanced"
+    top_n: 50
+    method: "mean"
+    enabled: true
+  
+  mfe_10m_large:
+    target_column: "y_will_peak_mfe_10m_0.005"
+    description: "Predict large MFE (0.005) at 10m horizon"
+    use_case: "Short-term profit targets, aggressive"
+    top_n: 50
+    method: "mean"
+    enabled: false
+
+  # ============================================================================
+  # MDD TARGETS - 10 Minute Horizon (3 targets)
+  # ============================================================================
+  
+  mdd_10m_small:
+    target_column: "y_will_valley_mdd_10m_0.001"
+    description: "Predict small MDD (0.001) at 10m horizon"
+    use_case: "Short-term stop loss, tight"
+    top_n: 50
+    method: "mean"
+    enabled: false
+  
+  mdd_10m:
+    target_column: "y_will_valley_mdd_10m_0.002"
+    description: "Predict medium MDD (0.002) at 10m horizon"
+    use_case: "Short-term stop loss, balanced"
+    top_n: 50
+    method: "mean"
+    enabled: true
+  
+  mdd_10m_large:
+    target_column: "y_will_valley_mdd_10m_0.005"
+    description: "Predict large MDD (0.005) at 10m horizon"
+    use_case: "Short-term stop loss, wide"
+    top_n: 50
+    method: "mean"
+    enabled: false
+
+  # ============================================================================
+  # MFE TARGETS - 15 Minute Horizon (3 targets, 1 already enabled above)
+  # ============================================================================
+  
+  mfe_15m_small:
+    target_column: "y_will_peak_mfe_15m_0.001"
+    description: "Predict small MFE (0.001) at 15m horizon"
+    use_case: "Medium-term profit targets, conservative"
+    top_n: 50
+    method: "mean"
+    enabled: false
+  
+  # mfe_15m is already enabled above (0.002 threshold)
+  
+  mfe_15m_large:
+    target_column: "y_will_peak_mfe_15m_0.005"
+    description: "Predict large MFE (0.005) at 15m horizon"
+    use_case: "Medium-term profit targets, aggressive"
+    top_n: 50
+    method: "mean"
+    enabled: false
+
+  # ============================================================================
+  # MDD TARGETS - 15 Minute Horizon (3 targets, 1 already enabled above)
+  # ============================================================================
+  
+  mdd_15m_small:
+    target_column: "y_will_valley_mdd_15m_0.001"
+    description: "Predict small MDD (0.001) at 15m horizon"
+    use_case: "Medium-term stop loss, tight"
+    top_n: 50
+    method: "mean"
+    enabled: false
+  
+  # mdd_15m is already enabled above (0.002 threshold)
+  
+  mdd_15m_large:
+    target_column: "y_will_valley_mdd_15m_0.005"
+    description: "Predict large MDD (0.005) at 15m horizon"
+    use_case: "Medium-term stop loss, wide"
+    top_n: 50
+    method: "mean"
+    enabled: false
+
+  # ============================================================================
+  # MFE TARGETS - 30 Minute Horizon (3 targets)
+  # ============================================================================
+  
+  mfe_30m_small:
+    target_column: "y_will_peak_mfe_30m_0.001"
+    description: "Predict small MFE (0.001) at 30m horizon"
+    use_case: "Medium-term profit targets, conservative"
+    top_n: 55
+    method: "mean"
+    enabled: false
+  
+  mfe_30m:
+    target_column: "y_will_peak_mfe_30m_0.002"
+    description: "Predict medium MFE (0.002) at 30m horizon"
+    use_case: "Medium-term profit targets, balanced"
+    top_n: 55
+    method: "mean"
+    enabled: true
+  
+  mfe_30m_large:
+    target_column: "y_will_peak_mfe_30m_0.005"
+    description: "Predict large MFE (0.005) at 30m horizon"
+    use_case: "Medium-term profit targets, aggressive"
+    top_n: 55
+    method: "mean"
+    enabled: false
+
+  # ============================================================================
+  # MDD TARGETS - 30 Minute Horizon (3 targets)
+  # ============================================================================
+  
+  mdd_30m_small:
+    target_column: "y_will_valley_mdd_30m_0.001"
+    description: "Predict small MDD (0.001) at 30m horizon"
+    use_case: "Medium-term stop loss, tight"
+    top_n: 55
+    method: "mean"
+    enabled: false
+  
+  mdd_30m:
+    target_column: "y_will_valley_mdd_30m_0.002"
+    description: "Predict medium MDD (0.002) at 30m horizon"
+    use_case: "Medium-term stop loss, balanced"
+    top_n: 55
+    method: "mean"
+    enabled: true
+  
+  mdd_30m_large:
+    target_column: "y_will_valley_mdd_30m_0.005"
+    description: "Predict large MDD (0.005) at 30m horizon"
+    use_case: "Medium-term stop loss, wide"
+    top_n: 55
+    method: "mean"
+    enabled: false
+
+  # ============================================================================
+  # MFE TARGETS - 60 Minute Horizon (3 targets)
+  # ============================================================================
+  
+  mfe_60m_small:
+    target_column: "y_will_peak_mfe_60m_0.001"
+    description: "Predict small MFE (0.001) at 60m horizon"
+    use_case: "Longer-term profit targets, conservative"
+    top_n: 60
+    method: "mean"
+    enabled: false
+  
+  mfe_60m:
+    target_column: "y_will_peak_mfe_60m_0.002"
+    description: "Predict medium MFE (0.002) at 60m horizon"
+    use_case: "Longer-term profit targets, balanced"
+    top_n: 60
+    method: "mean"
+    enabled: true
+  
+  mfe_60m_large:
+    target_column: "y_will_peak_mfe_60m_0.005"
+    description: "Predict large MFE (0.005) at 60m horizon"
+    use_case: "Longer-term profit targets, aggressive"
+    top_n: 60
+    method: "mean"
+    enabled: false
+
+  # ============================================================================
+  # MDD TARGETS - 60 Minute Horizon (3 targets)
+  # ============================================================================
+  
+  mdd_60m_small:
+    target_column: "y_will_valley_mdd_60m_0.001"
+    description: "Predict small MDD (0.001) at 60m horizon"
+    use_case: "Longer-term stop loss, tight"
+    top_n: 60
+    method: "mean"
+    enabled: false
+  
+  mdd_60m:
+    target_column: "y_will_valley_mdd_60m_0.002"
+    description: "Predict medium MDD (0.002) at 60m horizon"
+    use_case: "Longer-term stop loss, balanced"
+    top_n: 60
+    method: "mean"
+    enabled: true
+  
+  mdd_60m_large:
+    target_column: "y_will_valley_mdd_60m_0.005"
+    description: "Predict large MDD (0.005) at 60m horizon"
+    use_case: "Longer-term stop loss, wide"
+    top_n: 60
+    method: "mean"
+    enabled: false
+
+# ============================================================================
+# Multi-target run settings
+# ============================================================================
+
+multi_target:
+  parallel_targets: false       # Run targets sequentially (safer, less memory)
+  skip_on_error: true          # Continue to next target if one fails
+  save_summary: true           # Save multi_target_summary.json
+  aggregate_by_groups: false   # Auto-run group aggregation after each target
+
+# ============================================================================
+# Output organization
+# ============================================================================
+
+output:
+  create_subdirs: true         # Create subdirectory per target (features/peak_60m/, etc.)
+  save_metadata: true          # Save metadata JSON files
+  save_summary_csv: true       # Save feature_importance_summary.csv
+  save_feature_list: true      # Save selected_features.txt
+  overwrite_existing: false    # Skip if target already processed (set true to rerun)
+
+# ============================================================================
+# Summary Statistics
+# ============================================================================
+# Total targets: 63
+#   - Enabled: 7 (core baseline set)
+#   - Disabled: 56 (ready to enable as needed)
+#
+# By category:
+#   - Triple Barrier: 3 (1 enabled: first_touch_60m)
+#   - Swing High/Low: 30 (2 enabled: swing_high_15m, swing_low_15m)
+#   - MFE (profit targets): 15 (1 enabled: mfe_15m)
+#   - MDD (stop loss): 15 (1 enabled: mdd_15m)
+#
+# By horizon:
+#   - 5m:  12 targets (0 enabled)
+#   - 10m: 12 targets (0 enabled)
+#   - 15m: 14 targets (4 enabled)
+#   - 30m: 12 targets (0 enabled)
+#   - 60m: 13 targets (3 enabled)
+#
+# Estimated runtime per target: 1-3 hours for full universe (728 symbols)
+# Test first: python scripts/run_multi_target_selection.py --symbols AAPL,MSFT,GOOGL
