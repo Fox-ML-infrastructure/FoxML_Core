@@ -30,7 +30,7 @@ I provide contract-based consulting and custom development services for organiza
 ## Engagement Process
 
 1. **Initial inquiry** — Contact me with your organization's requirements
-2. **Discovery call** — We'll discuss scope, timeline, and technical approach
+2. **Discovery phase** — We'll discuss scope, timeline, and technical approach via email or scheduled video conference
 3. **Statement of Work (SOW)** — Formal proposal with deliverables, milestones, and terms
 4. **Agreement execution** — Master Consulting Agreement + SOW
 5. **Project execution** — Remote work with regular milestone reviews

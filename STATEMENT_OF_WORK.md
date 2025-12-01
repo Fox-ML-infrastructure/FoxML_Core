@@ -48,8 +48,8 @@ Define expected schedule and milestone points.
 
 4. Rate & Payment
 
-Base Hourly Rate: $300/hr
-Adjusted Rate (if applicable): $____/hr
+Hourly Rate: $____/hr
+(Note: Base rate is $300/hr; complex projects may be billed at a higher rate per CONSULTING_POLICY.md)
 Billing: Weekly / Biweekly / Monthly
 Terms: Net 15
 Payment Method: Bank transfer / PayPal / Stripe / Other

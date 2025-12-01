@@ -159,7 +159,7 @@ Subject: Consulting Inquiry — [Your Organization Name]
 	•	Preferred engagement timeline
 	•	Any specific technical constraints or requirements
 
-I will respond within 2-3 business days to schedule a discovery call and discuss a formal proposal.
+I respond within 2-3 business days. Please note that I conduct all initial intake via email or asynchronous communication; I do not schedule unscheduled phone calls.
 
 ---
 
