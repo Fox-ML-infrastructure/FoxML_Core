@@ -1,167 +1,173 @@
-## Jennifer Lewis — ML & Quantitative Systems Consultant
+# Jennifer Lewis — ML & Quantitative Systems Consultant
 
-**Independent Contractor | Machine Learning Engineering | Quantitative Research | High-Performance Systems**
+Independent Contractor | Machine Learning Engineering | Quantitative Research | High-Performance Systems
 
-I build ML research pipelines, quantitative modeling systems, and HPC workflows for institutions that need high-performance engineering without hiring a full-time team.
+I build ML research pipelines, quantitative modeling infrastructure, and HPC-optimized engineering workflows for organizations that require high-performance systems without maintaining a full in-house engineering team.
 
-🔗 **Aurora-v2** (50k+ LOC Quant/ML System): This repository demonstrates research-grade ML pipelines, quantitative research frameworks, and high-performance trading infrastructure. It is a reference system for internal research and engineering—not a plug-and-play trading bot.
+Aurora-v2 (~50,000 LOC):
+A research-grade ML and quantitative systems architecture demonstrating production-style workflows, high-performance feature engineering, leakage-safe validation structures, and scalable model-training infrastructure.
+Aurora is a reference system, not a turnkey trading bot.
 
----
+---------------------------------------------------------------------
 
-## 📑 Table of Contents
+## Project Scope and Intended Audience
 
-### Consulting & Services
-- Consulting overview, policies, pricing, and agreement templates are **available upon request via email**.
+### Appropriate Use Cases
+- Quantitative research and analysis
+- ML systems evaluation and workflow study
+- Academic or institutional research
+- Internal engineering experimentation
+- Benchmarking or architecture review
 
-### Quick Start & Core Documentation
-- [Quick Start Guide](INFORMATION/01_QUICK_START.md) — Get started with the system
-- [Project Overview](INFORMATION/07_PROJECT_OVERVIEW.md) — High-level system architecture
-- [Config Reference](INFORMATION/02_CONFIG_REFERENCE.md) — Configuration file structure
-- [Data Pipeline Guide](INFORMATION/04_DATA_PIPELINE.md) — Data processing workflows
-- [Model Training Guide](INFORMATION/05_MODEL_TRAINING.md) — Training workflows and best practices
-- [Feature Selection Guide](INFORMATION/08_FEATURE_SELECTION.md) — Feature engineering and selection
-- [Multi-Model Feature Selection](INFORMATION/MULTI_MODEL_FEATURE_SELECTION.md) — Ensemble approaches
-- [Column Reference](INFORMATION/06_COLUMN_REFERENCE.md) — Data schema and column definitions
-- [Migration Notes](INFORMATION/03_MIGRATION_NOTES.md) — Migration and upgrade guidance
+### Not Appropriate For
+- Turnkey trading or financial advice
+- Retail deployment or one-click strategies
+- Commercial use without a license
+- Running unmodified code in production HFT or trading environments
 
-### Component Documentation
-- [Alpaca Trading](ALPACA_trading/README.md) — Paper trading service documentation
-- [IBKR Trading](IBKR_trading/README.md) — Interactive Brokers integration
-- [Data Processing](DATA_PROCESSING/README.md) — Data pipelines and feature engineering
-- [Configuration Management](CONFIG/README.md) — Config system and overlays
+Aurora provides system architecture and research workflows. It does not provide alpha, signals, or production-ready trading strategies.
 
-### Training & Model Development
-- [Feature Selection Guide](TRAINING/FEATURE_SELECTION_GUIDE.md) — Feature selection workflows
-- [Training Optimization Guide](TRAINING/TRAINING_OPTIMIZATION_GUIDE.md) — Performance optimization
-- [Training Experiments](TRAINING/EXPERIMENTS/README.md) — Experimental workflows
-- [Quick Start Feature Ranking](NOTES/QUICK_START_FEATURE_RANKING.md) — Feature ranking quick start
+---------------------------------------------------------------------
 
-### Technical Guides & Reference
-- [GPU Setup Multi-Model](docs/GPU_SETUP_MULTI_MODEL.md) — GPU configuration for multi-model training
-- [Comprehensive Feature Ranking](docs/COMPREHENSIVE_FEATURE_RANKING.md) — Feature ranking methodology
-- [Target Discovery Update](docs/TARGET_DISCOVERY_UPDATE.md) — Target variable selection
-- [Target to Feature Workflow](docs/TARGET_TO_FEATURE_WORKFLOW.md) — Workflow documentation
-- [Validation Leak Audit](docs/VALIDATION_LEAK_AUDIT.md) — Leakage prevention and validation
-- [Feature Importance Fix](docs/FEATURE_IMPORTANCE_FIX.md) — Feature importance corrections
-- [Dataset Sizing Strategy](docs/DATASET_SIZING_STRATEGY.md) — Data sizing recommendations
-- [Journald Logging](docs/JOURNALD_LOGGING.md) — System logging configuration
-- [Code Review Bugs](docs/CODE_REVIEW_BUGS.md) — Known issues and fixes
-- [Alpha Enhancement Roadmap](docs/ALPHA_ENHANCEMENT_ROADMAP.md) — Enhancement planning
+## Licensing Model (Dual License)
 
-### Fixes & Technical Notes
-- [Leakage Fixes](docs/FIXES/) — Collection of leakage-related fixes and analyses
-- [Target Leakage Clarification](docs/TARGET_LEAKAGE_CLARIFICATION.md) — Leakage prevention
-- [Forward Return Leakage Analysis](docs/FWD_RET_20D_LEAKAGE_ANALYSIS.md) — Temporal leakage analysis
+Aurora is distributed under a dual-license model.
 
----
+### AGPL-3.0 (Open Source)
+Permitted for:
+- academic work
+- personal research
+- open-source contributions
 
-## About
+AGPL requires that any modified version deployed over a network must publish those modifications under the same license.
 
-I am an independent contractor specializing in **ML Systems + Quant Infrastructure + HPC Pipelines** for financial and research organizations. My work has been used in research environments, academic contexts, and internal experimentation by multiple developers and analysts.
+### Commercial License (Required for Enterprise Use)
+A commercial license is required for any use by businesses, institutions, or organizations, including:
 
-**For organizations requiring custom development, enterprise integrations, or specialized consulting services, I provide contract-based solutions tailored to your needs.**
+- internal research and analysis
+- modeling, forecasting, or optimization workflows
+- trading, strategy development, or quantitative pipelines
+- integration into proprietary systems or software
+- any revenue-generating use
 
----
+Commercial licensing provides:
+- internal deployment without AGPL disclosure
+- proprietary modifications
+- integration support as contracted
+- the ability to use Aurora within closed systems
 
-## Services for Organizations
+For licensing or enterprise use, contact:
+jenn.lewis5789@gmail.com
+Subject: Aurora Licensing Inquiry
 
-**Primary Specialization:** ML Systems + Quant Infrastructure + HPC Pipelines
+---------------------------------------------------------------------
 
-All other services extend from these core competencies.
+## Consulting and Professional Services
 
-### Core Expertise
+I work with organizations that require advanced ML, quantitative, or HPC infrastructure. Engagements are scoped through a Statement of Work (SOW) with clearly defined deliverables and timelines.
 
-**Machine Learning Pipeline Development**
-- End-to-end ML infrastructure design and implementation
-- Feature engineering and leakage-safe validation frameworks
-- Multi-model ensemble systems and model zoo management
+### Core Areas of Expertise
+
+#### Machine Learning Systems
+- End-to-end pipeline design and implementation
+- Leakage-safe validation and research architecture
+- Multi-model ensembles and configurable model zoos
 - GPU-accelerated training and inference workflows
 
-**Quantitative Research Systems**
-- Financial modeling and backtesting frameworks
-- Walk-forward validation and research tooling
+#### Quantitative Research Engineering
+- Research infrastructure and tooling
+- Walk-forward validation and rigorous leakage audits
 - Data processing pipelines with strict quality controls
-- Performance optimization for research workloads
+- Performance and latency optimization
 
-**High-Performance Computing**
-- C++ inference engine development and optimization
-- HPC workflow design for GPU clusters and cloud infrastructure
-- Latency-critical systems for HFT and real-time applications
-- Infrastructure-specific optimizations
+#### High-Performance Computing
+- C++ inference engine development
+- GPU and multi-node workflow design
+- HPC orchestration for large-scale experiments
+- System-level optimizations for throughput and latency
 
-**Systems Architecture & Engineering**
-- Hybrid C++/Python system design
-- Enterprise-grade deployment and integration
-- Compliance-focused configurations and governance
-- Code review, audit, and optimization services
+#### Systems Architecture
+- Hybrid C++/Python systems design
+- Configuration-driven architecture and reproducible workflows
+- Enterprise-grade deployment patterns
+- Code review, auditing, and workflow correction
 
 ### Engagement Model
+- Remote contract work
+- Hourly, project-based, or retainer structures
+- Comprehensive documentation with every deliverable
+- Professional communication and milestone-based development
+- Consulting overview, policies, and pricing available upon request
 
-- **Remote contract work** — All engagements conducted remotely
-- **Defined deliverables** — Every project includes a formal Statement of Work (SOW)
-- **Flexible engagement** — Hourly, project-based, or retainer arrangements
-- **Rates** — **Current consulting rates and detailed pricing structures are available upon request via email**
-- **Organizational focus** — Specialized support for institutions, research organizations, and enterprises
+---------------------------------------------------------------------
 
----
+## Documentation Overview
 
-## Why Work With Me
+### Quick Start and Core References
+- Quick Start Guide — Getting started
+- Project Overview — System architecture
+- Configuration Reference — Config structure
+- Data Pipeline Guide — Ingestion and feature workflows
+- Model Training Guide — Training and optimization
+- Feature Selection Guide — Methodology and ranking
+- Multi-Model Feature Selection — Ensemble-based approaches
+- Column Reference — Data schema
+- Migration Notes — Upgrading and transitions
 
-- **Deep system-building background** — Production experience with large-scale ML and quant systems
-- **Fast delivery speed** — Efficient workflows and clear communication reduce project timelines
-- **Clear documentation** — Every deliverable includes comprehensive documentation and reproducible workflows
-- **Strong communication** — Defined scope, milestones, and regular updates throughout engagement
-- **Low onboarding cost** — Self-contained expertise reduces integration overhead
-- **Specialized domain knowledge** — Focused expertise in ML pipelines, quant research, and HPC optimization
+### Component Documentation
+- Alpaca Trading — Paper trading integration
+- IBKR Trading — Interactive Brokers integration
+- Data Processing — Pipeline and feature engineering
+- Configuration Management — Config overlays and system rules
 
----
+### Training and Model Development
+- Feature Selection Workflows
+- Training Optimization
+- Experimental Workflows
+- Quick Start Feature Ranking
 
-## Getting Started
+### Technical Notes and Reference
+- GPU Setup for multi-model workloads
+- Comprehensive Feature Ranking methodology
+- Target Discovery and workflow updates
+- Validation leakage audits
+- Dataset sizing strategy
+- Journald logging
+- Code review notes and known fixes
+- Alpha enhancement roadmap
 
-### For Organizations Seeking Consulting Services
+### Fixes and Technical Notes
+- Leakage-related fixes
+- Target leakage clarifications
+- Temporal leakage analyses
 
-1. **Request consulting materials:** Email me to receive the consulting overview, policies, pricing information, standard agreement framework, and SOW templates.
-2. **Contact:** jenn.lewis5789@gmail.com  
-   **Subject:** Consulting Inquiry — [Your Organization Name]
-3. **Initial discussion:** We'll discuss your requirements, scope, and timeline to prepare a formal SOW.
-
-### For Developers & Researchers
-
-See individual component READMEs for technical documentation:
-
-- [`ALPACA_trading/README.md`](ALPACA_trading/README.md) — Paper trading service
-- [`IBKR_trading/README.md`](IBKR_trading/README.md) — Interactive Brokers integration
-- [`DATA_PROCESSING/README.md`](DATA_PROCESSING/README.md) — Data processing pipelines
-- [`TRAINING/`](TRAINING/) — Model training and feature engineering workflows
-
----
+---------------------------------------------------------------------
 
 ## Repository Structure
 
-```
 trader/
-├── ALPACA_trading/          # Alpaca paper trading service
-├── IBKR_trading/            # Interactive Brokers live trading
-├── DATA_PROCESSING/         # Data pipelines and feature engineering
-├── TRAINING/                # Model training and research workflows
-├── CONFIG/                  # Configuration management
-├── docs/                    # Technical documentation
-├── scripts/                 # Utility scripts and tools
-└── [consulting docs]        # Consulting materials available upon request
-```
+├── ALPACA_trading/         Paper trading service
+├── IBKR_trading/           Interactive Brokers integration
+├── DATA_PROCESSING/        Data pipelines and feature engineering
+├── TRAINING/               Model training and research workflows
+├── CONFIG/                 Configuration management
+├── docs/                   Technical documentation
+├── scripts/                Utilities and tooling
+└── consulting/             Consulting documents (provided upon request)
 
----
+---------------------------------------------------------------------
 
 ## Professional Standards
 
-- **Client neutrality** — I work with any organization that respects professional boundaries and contractual terms
-- **Confidentiality** — All client materials and proprietary information are protected under standard NDAs
-- **Quality deliverables** — Structured, documented, and production-ready code
-- **Clear communication** — Defined scope, milestones, and expectations in every engagement
+- Clear communication and well-defined scopes
+- Confidential handling of client data under NDA
+- High-quality, documented, and reproducible code
+- Minimal onboarding overhead for client teams
+- Formal SOWs and milestone structures for all engagements
 
----
+---------------------------------------------------------------------
 
-## License
+## Contact
 
-Open-source components are available under their respective licenses. Custom work and deliverables are governed by individual Statements of Work and the Master Consulting Agreement (provided as part of the contracting materials on request).
-
+For consulting services, licensing inquiries, or organizational engagements:
+jenn.lewis5789@gmail.com
