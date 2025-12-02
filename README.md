@@ -161,15 +161,6 @@ trader/
 
 ---
 
-## Contact
-
-**Email:** jenn.lewis5789@gmail.com  
-**Subject:** Consulting Inquiry — [Your Organization Name]
-
-For custom development, enterprise integrations, or specialized consulting services, please reach out to discuss your requirements. Detailed contracting documents and current rates are available upon request.
-
----
-
 ## License
 
 Open-source components are available under their respective licenses. Custom work and deliverables are governed by individual Statements of Work and the Master Consulting Agreement (provided as part of the contracting materials on request).
