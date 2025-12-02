@@ -8,6 +8,57 @@ I build ML research pipelines, quantitative modeling systems, and HPC workflows 
 
 ---
 
+## 📑 Table of Contents
+
+### Consulting & Services
+- [Consulting Overview](CONSULTING.md) — Services and engagement process
+- [Consulting Policy](CONSULTING_POLICY.md) — Professional terms, rates, and policies
+- [Consulting Pricing](CONSULTING_PRICING.md) — Detailed pricing tiers and rate structure
+- [Master Consulting Agreement](MASTER_CONSULTING_AGREEMENT.md) — Standard agreement framework
+- [Statement of Work Template](STATEMENT_OF_WORK.md) — SOW template
+
+### Quick Start & Core Documentation
+- [Quick Start Guide](INFORMATION/01_QUICK_START.md) — Get started with the system
+- [Project Overview](INFORMATION/07_PROJECT_OVERVIEW.md) — High-level system architecture
+- [Config Reference](INFORMATION/02_CONFIG_REFERENCE.md) — Configuration file structure
+- [Data Pipeline Guide](INFORMATION/04_DATA_PIPELINE.md) — Data processing workflows
+- [Model Training Guide](INFORMATION/05_MODEL_TRAINING.md) — Training workflows and best practices
+- [Feature Selection Guide](INFORMATION/08_FEATURE_SELECTION.md) — Feature engineering and selection
+- [Multi-Model Feature Selection](INFORMATION/MULTI_MODEL_FEATURE_SELECTION.md) — Ensemble approaches
+- [Column Reference](INFORMATION/06_COLUMN_REFERENCE.md) — Data schema and column definitions
+- [Migration Notes](INFORMATION/03_MIGRATION_NOTES.md) — Migration and upgrade guidance
+
+### Component Documentation
+- [Alpaca Trading](ALPACA_trading/README.md) — Paper trading service documentation
+- [IBKR Trading](IBKR_trading/README.md) — Interactive Brokers integration
+- [Data Processing](DATA_PROCESSING/README.md) — Data pipelines and feature engineering
+- [Configuration Management](CONFIG/README.md) — Config system and overlays
+
+### Training & Model Development
+- [Feature Selection Guide](TRAINING/FEATURE_SELECTION_GUIDE.md) — Feature selection workflows
+- [Training Optimization Guide](TRAINING/TRAINING_OPTIMIZATION_GUIDE.md) — Performance optimization
+- [Training Experiments](TRAINING/EXPERIMENTS/README.md) — Experimental workflows
+- [Quick Start Feature Ranking](NOTES/QUICK_START_FEATURE_RANKING.md) — Feature ranking quick start
+
+### Technical Guides & Reference
+- [GPU Setup Multi-Model](docs/GPU_SETUP_MULTI_MODEL.md) — GPU configuration for multi-model training
+- [Comprehensive Feature Ranking](docs/COMPREHENSIVE_FEATURE_RANKING.md) — Feature ranking methodology
+- [Target Discovery Update](docs/TARGET_DISCOVERY_UPDATE.md) — Target variable selection
+- [Target to Feature Workflow](docs/TARGET_TO_FEATURE_WORKFLOW.md) — Workflow documentation
+- [Validation Leak Audit](docs/VALIDATION_LEAK_AUDIT.md) — Leakage prevention and validation
+- [Feature Importance Fix](docs/FEATURE_IMPORTANCE_FIX.md) — Feature importance corrections
+- [Dataset Sizing Strategy](docs/DATASET_SIZING_STRATEGY.md) — Data sizing recommendations
+- [Journald Logging](docs/JOURNALD_LOGGING.md) — System logging configuration
+- [Code Review Bugs](docs/CODE_REVIEW_BUGS.md) — Known issues and fixes
+- [Alpha Enhancement Roadmap](docs/ALPHA_ENHANCEMENT_ROADMAP.md) — Enhancement planning
+
+### Fixes & Technical Notes
+- [Leakage Fixes](docs/FIXES/) — Collection of leakage-related fixes and analyses
+- [Target Leakage Clarification](docs/TARGET_LEAKAGE_CLARIFICATION.md) — Leakage prevention
+- [Forward Return Leakage Analysis](docs/FWD_RET_20D_LEAKAGE_ANALYSIS.md) — Temporal leakage analysis
+
+---
+
 ## About
 
 I am an independent contractor specializing in **ML Systems + Quant Infrastructure + HPC Pipelines** for financial and research organizations. My work has been used in research environments, academic contexts, and internal experimentation by multiple developers and analysts.
