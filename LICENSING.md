@@ -12,4 +12,4 @@ Aurora is dual-licensed:
    - Allows internal modification and deployment without AGPL disclosure.
 
 For licensing inquiries or SOW-based consulting, contact:
-[your email]
+jenn.lewis5789@gmail.com
