@@ -4,7 +4,7 @@ Independent Contractor | Machine Learning Engineering | Quantitative Research | 
 
 I build ML research pipelines, quantitative modeling infrastructure, and HPC-optimized engineering workflows for organizations that require high-performance systems without maintaining a full in-house engineering team.
 
-Aurora-v2 (~50,000 LOC):
+Aurora-v2 :
 A research-grade ML and quantitative systems architecture demonstrating production-style workflows, high-performance feature engineering, leakage-safe validation structures, and scalable model-training infrastructure.
 Aurora is a reference system, not a turnkey trading bot.
 
