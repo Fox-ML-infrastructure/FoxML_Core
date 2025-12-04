@@ -79,7 +79,7 @@ Subject: **Fox Infrastructure Licensing Inquiry**
 I provide advanced engineering and research infrastructure consulting for organizations requiring specialized ML, quantitative, or HPC systems.
 
 For full policies and contracting information:  
-https://github.com/Aurora-Jennifer/Contracting_Docs  
+(https://github.com/Fox-ML-infrastructure/Contracting_Docs) 
 
 ### Core Expertise
 
