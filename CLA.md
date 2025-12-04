@@ -1,101 +1,108 @@
-Fox-v1-infra – Commercial License Agreement (CLA)
+Fox-v1-infra — Commercial License Agreement (CLA v1.2)
 
-Version 1.1
 Fox ML Infrastructure LLC
 © 2025 Jennifer Lewis. All rights reserved.
 
-This Commercial License Agreement (“Agreement”) is entered into between
-Fox ML Infrastructure LLC (“Licensor”) and the purchasing organization
-(“Licensee”). This Agreement governs commercial use of the software known as
-Fox-v1-infra (“Software”).
+This Commercial License Agreement (“Agreement”) is entered into between Fox ML Infrastructure LLC (“Licensor”) and the purchasing organization (“Licensee”). This Agreement governs commercial use of the software known as Fox-v1-infra (“Software”).
 
 1. Definitions
-
 Software
-Fox-v1-infra, including all source code, modules, pipelines, documentation, and any updates provided under this Agreement.
+
+The Fox-v1-infra codebase, modules, pipelines, configurations, documentation, and all updates provided under this Agreement.
 
 Internal Use
-Use of the Software exclusively within Licensee’s organization, with no distribution or access provided to external parties.
+
+Use of the Software solely within the Licensee’s organization, accessible only to Licensee’s employees or contractors under confidentiality obligations.
 
 Derivative Works
-Modifications, extensions, or integrations created by Licensee based on the Software for internal use only.
+
+Any modifications, extensions, or integrations created by Licensee based on the Software, used exclusively for Internal Use.
 
 Effective Date
-The date this Agreement is executed by both parties or payment is received, whichever occurs first.
+
+The earlier of (a) the date payment is received, or (b) the date this Agreement is executed by both parties.
+
+Organization Size
+
+Licensee’s total number of employees (not engineers), used to determine the applicable annual license fee.
 
 2. Grant of Rights
 
-Subject to full payment and compliance, Licensor grants Licensee a non-exclusive, non-transferable, revocable license to:
+Upon receipt of payment and subject to compliance with this Agreement, Licensor grants Licensee a non-exclusive, non-transferable, revocable license to:
 
-Use the Software internally for research, development, backtesting, modeling, deployment, and production workflows.
+Use the Software for Internal Use.
 
-Modify and create derivative works for internal use.
+Modify the Software and create Derivative Works for Internal Use.
 
-Maintain private forks or internal repositories containing the Software.
+Maintain private internal forks or repositories.
 
-Integrate the Software with internal data systems, research frameworks, or execution infrastructure.
+Integrate the Software with internal systems, workflows, data layers, and research infrastructure.
 
-This license DOES NOT permit:
+This license DOES NOT permit Licensee to:
 
-redistribution of the Software or derivative works
+Redistribute the Software or any Derivative Works.
 
-sublicensing or resale
+Host the Software as a commercial service (SaaS/PaaS).
 
-hosting the Software as a commercial service
+Provide the Software or derivatives to clients or external users.
 
-making the Software accessible to clients or third parties
+Publish or disclose source code publicly.
 
-publishing the Software (modified or unmodified) as open source
+Sublicense, rent, lease, or sell the Software.
 
-using the Software to build or enhance a competing ML/quant research infrastructure product
+Use the Software to build a competing ML/quant infrastructure product.
 
-All rights not explicitly granted are reserved.
+All rights not expressly granted are reserved by Licensor.
 
 3. Restrictions
 
 Licensee agrees NOT to:
 
-Distribute or provide access to the Software outside its organization.
+Make the Software available to third parties outside its organization.
 
-Offer the Software or derivative works to clients or external users.
+Publish any portion of the Software, including modified versions.
 
-Publish or disclose source code publicly, including on GitHub or any other platform.
+Bypass or remove copyright, license notices, or attribution.
 
-Sublicense, rent, lease, or resell the Software.
+Claim ownership of the Software or its architectural design.
 
-Remove or alter any copyright notices.
+Use the Software in violation of applicable law or export controls.
 
-Use the Software to create competing frameworks, platforms, or commercial ML/quant infrastructure products.
+Violation constitutes a material breach and may result in immediate termination.
 
-Any violation constitutes a material breach and results in immediate termination.
+4. Fees & Payment Terms
 
-4. Payment Terms
-
-Licensee agrees to pay the annual commercial license fee corresponding to organizational size:
+Annual license fees are based on Organization Size, aligned with the public pricing schedule:
 
 Annual Commercial License Fees
 
-Starter (<20 engineers): $18,000 per year
+1–10 employees — $18,000 / year
 
-Professional (20–100 engineers): $45,000 per year
+11–50 employees — $36,000 / year
 
-Enterprise (>100 engineers): $150,000 per year
+51–250 employees — $90,000 / year
+
+251–1000 employees — $180,000 / year
+
+1000+ employees — starts at $300,000 / year (custom quote)
 
 Payment is due within 30 days of invoice unless otherwise agreed in writing.
-Failure to pay may result in suspension or termination of license rights.
 
-Licenses automatically renew annually unless canceled prior to renewal date.
+Renewal
+
+Licenses renew annually at the then-current pricing unless canceled prior to the renewal date.
+
+Failure to pay may result in suspension or termination of rights under this Agreement.
 
 5. Updates
 
-Licensor may, at its discretion, provide updates, patches, improvements, or new versions.
-Updates are included during the active paid license term.
+Licensor may, at its discretion, provide updates, patches, performance improvements, or new modules. Updates are included during the active paid term.
 
-Licensor is under no obligation to develop specific features or enhancements.
+Licensor does not guarantee development of specific features.
 
 6. Support (Optional)
 
-Support is not included unless purchased separately. Optional support services may include:
+Support is not included unless purchased separately. Optional support may include:
 
 email assistance
 
@@ -103,45 +110,45 @@ debugging help
 
 integration support
 
-custom pipeline or model architecture work
+modeling pipeline improvements
 
-Support is billed under a separate agreement at Licensor’s standard professional service rates.
+custom feature development
 
-7. Intellectual Property Ownership
+Support is billed under a separate Statement of Work (SOW).
+
+7. Intellectual Property
 
 Licensor retains all rights, title, and interest in:
 
-the Software
+the Software,
 
-all included modules
+documentation,
 
-documentation
+updates and improvements,
 
-updates
+architectural design,
 
-infrastructure design
+proprietary modules and algorithms.
 
-any related intellectual property
-
-Licensee owns its internal derivative works but may not distribute, commercialize, or publish them.
+Licensee owns its internal Derivative Works but may not distribute, publish, or commercialize them.
 
 8. Confidentiality
 
-Both parties agree to maintain confidentiality of:
+Licensee must protect:
 
-source code
+source code,
 
-proprietary techniques
+internal architecture,
 
-internal documentation
+proprietary techniques,
 
-derivative works
+derivative works,
 
-pricing and terms
+pricing and licensing terms,
 
-business information
+business information.
 
-Licensee must implement reasonable technical and administrative controls to protect the Software.
+Both parties agree to reasonable technical and administrative safeguards.
 
 9. Term & Termination
 
@@ -149,29 +156,31 @@ This Agreement:
 
 begins on the Effective Date,
 
-renews annually, and
+renews annually,
 
 remains in effect unless terminated.
 
 Licensor may terminate immediately if Licensee:
 
-violates license restrictions
+violates license restrictions,
 
-redistributes the Software
+redistributes the Software,
 
-fails to pay license fees
+fails to pay fees,
 
-attempts to commercialize derivative works
+commercializes derivative works,
 
-uses the Software to build competing infrastructure
+builds competing infrastructure.
 
-Upon termination, Licensee must immediately:
+Upon termination:
 
-stop all use of the Software
+Licensee must:
 
-delete all copies and derivatives
+cease all use of the Software,
 
-certify deletion in writing
+delete all copies and derivatives,
+
+certify deletion in writing within 7 days.
 
 No refunds are provided for terminated licenses.
 
@@ -181,13 +190,13 @@ This Agreement is governed by the laws of the State of Alabama, USA, without reg
 
 11. Entire Agreement
 
-This Agreement constitutes the entire understanding between the parties regarding licensing of the Software and supersedes all prior agreements or communications.
+This Agreement constitutes the entire understanding between the parties and supersedes all prior communications regarding licensing of the Software.
 
 Signatures
 
-Licensee Representative: ____________________
-Title: ____________________
-Date: ____________________
+Licensee Representative: _________________________
+Title: _________________________
+Date: _________________________
 
-Licensor (Fox ML Infrastructure LLC): ____________________
-Date: ____________________
+Licensor (Fox ML Infrastructure LLC): _________________________
+Date: _________________________
