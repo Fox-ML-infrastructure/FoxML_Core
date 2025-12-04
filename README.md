@@ -1,174 +1,179 @@
-# Jennifer Lewis — ML & Quantitative Systems Consultant
+# Fox-v1-infra — ML & Quantitative Systems Infrastructure
 
-Independent Contractor | Machine Learning Engineering | Quantitative Research | High-Performance Systems
+Fox-v1-infra is a high-performance research and machine learning infrastructure stack.  
+It provides a reference-grade architecture for ML pipelines, quantitative workflows, reproducible experiments, and HPC-optimized engineering without exposing proprietary signals or production-ready trading systems.
 
-I build ML research pipelines, quantitative modeling infrastructure, and HPC-optimized engineering workflows for organizations that require high-performance systems without maintaining a full in-house engineering team.
-
-Aurora-v2 :
-A research-grade ML and quantitative systems architecture demonstrating production-style workflows, high-performance feature engineering, leakage-safe validation structures, and scalable model-training infrastructure.
-Aurora is a reference system, not a turnkey trading bot.
+Developed and maintained by **Jennifer Lewis**  
+Independent Contractor • ML Engineering • Quantitative Research • Systems Architecture
 
 ---------------------------------------------------------------------
 
-## Project Scope and Intended Audience
+## Overview
+
+Fox-v1-infra demonstrates:
+
+- scalable ML workflow design  
+- leakage-safe research architecture  
+- high-throughput data processing  
+- multi-model training systems  
+- hybrid C++/Python infrastructure  
+- HPC-compatible orchestration patterns  
+
+This is a **research infrastructure system**, not a trading bot or financial product.
+
+---------------------------------------------------------------------
+
+## Intended Use
 
 ### Appropriate Use Cases
-- Quantitative research and analysis
-- ML systems evaluation and workflow study
-- Academic or institutional research
-- Internal engineering experimentation
-- Benchmarking or architecture review
+- Research and experimentation  
+- ML workflow and architecture study  
+- Institutional or academic analysis  
+- Internal engineering reference  
+- Benchmarking and systems review  
 
 ### Not Appropriate For
-- Turnkey trading or financial advice
-- Retail deployment or one-click strategies
-- Commercial use without a license
-- Running unmodified code in production HFT or trading environments
+- Turnkey trading or retail strategy deployment  
+- Financial advice or automated trading  
+- Commercial use without a license  
+- Unmodified production HFT or revenue-generating systems  
 
-Aurora provides system architecture and research workflows. It does not provide alpha, signals, or production-ready trading strategies.
+Fox-v1-infra provides **architecture**, not alpha.
 
 ---------------------------------------------------------------------
 
-## Licensing Model (Dual License)
+## Licensing (Dual-License Model)
 
-Aurora is distributed under a dual-license model.
+Fox-v1-infra is distributed under a dual licensing system.
 
 ### AGPL-3.0 (Open Source)
 Permitted for:
-- academic work
-- personal research
-- open-source contributions
+- academic research  
+- personal study  
+- open-source contributions  
 
-AGPL requires that any modified version deployed over a network must publish those modifications under the same license.
+AGPL requires that any modified version deployed over a network must publicly release those modifications.
 
-### Commercial License (Required for Enterprise Use)
-A commercial license is required for any use by businesses, institutions, or organizations, including:
-
-- internal research and analysis
-- modeling, forecasting, or optimization workflows
-- trading, strategy development, or quantitative pipelines
-- integration into proprietary systems or software
-- any revenue-generating use
+### Commercial License (Required for Organizational Use)
+Required for any use by:
+- businesses, institutions, or funds  
+- internal research or modeling  
+- proprietary workflows  
+- trading systems  
+- any revenue-associated use  
 
 Commercial licensing provides:
-- internal deployment without AGPL disclosure
-- proprietary modifications
-- integration support as contracted
-- the ability to use Aurora within closed systems
+- internal deployment without AGPL disclosure  
+- proprietary modifications  
+- integration support (contracted)  
+- closed-system usage rights  
 
-For licensing or enterprise use, contact:
-jenn.lewis5789@gmail.com
-Subject: Aurora Licensing Inquiry
+For licensing inquiries:  
+**jenn.lewis5789@gmail.com**  
+Subject: **Fox Infrastructure Licensing Inquiry**
 
 ---------------------------------------------------------------------
 
-## Consulting and Professional Services
+## Consulting Services
 
-I work with organizations that require advanced ML, quantitative, or HPC infrastructure. Engagements are scoped through a Statement of Work (SOW) with clearly defined deliverables and timelines.
-For more information: https://github.com/Aurora-Jennifer/Contracting_Docs
+I provide advanced engineering and research infrastructure consulting for organizations requiring specialized ML, quantitative, or HPC systems.
 
-### Core Areas of Expertise
+For full policies and contracting information:  
+https://github.com/Aurora-Jennifer/Contracting_Docs  
 
-#### Machine Learning Systems
-- End-to-end pipeline design and implementation
-- Leakage-safe validation and research architecture
-- Multi-model ensembles and configurable model zoos
-- GPU-accelerated training and inference workflows
+### Core Expertise
+
+#### Machine Learning Infrastructure
+- End-to-end pipeline architecture  
+- Leakage-safe validation systems  
+- Configurable model zoos  
+- GPU-optimized training  
 
 #### Quantitative Research Engineering
-- Research infrastructure and tooling
-- Walk-forward validation and rigorous leakage audits
-- Data processing pipelines with strict quality controls
-- Performance and latency optimization
+- Walk-forward analysis frameworks  
+- Strict leakage auditing  
+- Research-oriented data pipelines  
+- Feature engineering at scale  
 
 #### High-Performance Computing
-- C++ inference engine development
-- GPU and multi-node workflow design
-- HPC orchestration for large-scale experiments
-- System-level optimizations for throughput and latency
+- C++ inference engines  
+- Multi-node and GPU workflows  
+- System-level throughput optimization  
+- Parallel experiment execution  
 
 #### Systems Architecture
-- Hybrid C++/Python systems design
-- Configuration-driven architecture and reproducible workflows
-- Enterprise-grade deployment patterns
-- Code review, auditing, and workflow correction
+- Hybrid C++/Python system design  
+- Reproducible, config-driven workflows  
+- Enterprise deployment patterns  
+- Code correctness and architecture review  
 
 ### Engagement Model
-- Remote contract work
-- Hourly, project-based, or retainer structures
-- Comprehensive documentation with every deliverable
-- Professional communication and milestone-based development
-- Consulting overview, policies, and pricing available upon request
+- Remote contract work  
+- Hourly, project-based, or retainer  
+- SOW-defined milestones  
+- Professional communication  
+- Full documentation with deliverables  
 
 ---------------------------------------------------------------------
 
-## Documentation Overview
+## Documentation Index
 
-### Quick Start and Core References
-- Quick Start Guide — Getting started
-- Project Overview — System architecture
-- Configuration Reference — Config structure
-- Data Pipeline Guide — Ingestion and feature workflows
-- Model Training Guide — Training and optimization
-- Feature Selection Guide — Methodology and ranking
-- Multi-Model Feature Selection — Ensemble-based approaches
-- Column Reference — Data schema
-- Migration Notes — Upgrading and transitions
+### Core Docs
+- Quick Start Guide  
+- Architecture Overview  
+- Configuration Reference  
+- Data Processing Guide  
+- Model Training Manual  
+- Feature Selection Methodology  
+- Column Reference / Data Schema  
+- Migration Notes  
 
-### Component Documentation
-- Alpaca Trading — Paper trading integration
-- IBKR Trading — Interactive Brokers integration
-- Data Processing — Pipeline and feature engineering
-- Configuration Management — Config overlays and system rules
+### Components
+- Trading integrations (paper trading only)  
+- Data pipelines  
+- Feature engineering workflows  
+- Configuration system  
 
-### Training and Model Development
-- Feature Selection Workflows
-- Training Optimization
-- Experimental Workflows
-- Quick Start Feature Ranking
+### Research & Training
+- Feature selection pipelines  
+- Optimization workflows  
+- Experimental workflow design  
+- Multi-model feature ranking  
 
-### Technical Notes and Reference
-- GPU Setup for multi-model workloads
-- Comprehensive Feature Ranking methodology
-- Target Discovery and workflow updates
-- Validation leakage audits
-- Dataset sizing strategy
-- Journald logging
-- Code review notes and known fixes
-- Alpha enhancement roadmap
-
-### Fixes and Technical Notes
-- Leakage-related fixes
-- Target leakage clarifications
-- Temporal leakage analyses
+### Technical Notes
+- GPU setup  
+- Leakage audits  
+- Dataset sizing  
+- Journald logging  
+- Code corrections and known issues  
+- Roadmaps and improvement notes  
 
 ---------------------------------------------------------------------
 
 ## Repository Structure
 
-trader/
-├── ALPACA_trading/         Paper trading service
-├── IBKR_trading/           Interactive Brokers integration
-├── DATA_PROCESSING/        Data pipelines and feature engineering
-├── TRAINING/               Model training and research workflows
-├── CONFIG/                 Configuration management
-├── docs/                   Technical documentation
-├── scripts/                Utilities and tooling
-└── consulting/             Consulting documents (provided upon request)
+fox-v1-infra/
+├── trading/               (Paper trading integrations, if applicable)
+├── data_processing/       (Pipelines & feature engineering)
+├── training/              (Model training & research workflows)
+├── config/                (Configuration management system)
+├── docs/                  (Technical documentation)
+├── scripts/               (Utilities & tools)
+└── consulting/            (Provided upon request)
 
 ---------------------------------------------------------------------
 
 ## Professional Standards
 
-- Clear communication and well-defined scopes
-- Confidential handling of client data under NDA
-- High-quality, documented, and reproducible code
-- Minimal onboarding overhead for client teams
-- Formal SOWs and milestone structures for all engagements
+- Defined scopes and clear communication  
+- NDA-compliant handling of client datasets  
+- High-quality, reproducible engineering  
+- Minimal onboarding overhead for teams  
+- SOW-structured engagements  
 
 ---------------------------------------------------------------------
 
 ## Contact
 
-For consulting services, licensing inquiries, or organizational engagements:
-jenn.lewis5789@gmail.com
+For consulting, enterprise licensing, or organizational engagements:  
+**jenn.lewis5789@gmail.com**
