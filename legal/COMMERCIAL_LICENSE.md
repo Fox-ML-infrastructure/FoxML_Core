@@ -1,5 +1,5 @@
 # FOX ML INFRASTRUCTURE — COMMERCIAL LICENSE v1.0
-Copyright (c) 2024–2025 Jennifer Lewis
+Copyright (c) 2025-2026 Jennifer Lewis
 
 1. DEFINITIONS  
 “Software” refers to the Fox-v1-infra codebase, modules, configurations, models, documentation, and all included assets, excluding third-party components governed by their own licenses.
