@@ -21,81 +21,121 @@ First-time users start here.
 
 Step-by-step guides for common tasks.
 
-### Configuration
-- [Quick Start Guide](../INFORMATION/01_QUICK_START.md) - Configuration fundamentals
-- [Config Reference](../INFORMATION/02_CONFIG_REFERENCE.md) - Complete configuration guide
-- [Migration Notes](../INFORMATION/03_MIGRATION_NOTES.md) - Configuration migration
+### Setup
+- [Installation](01_tutorials/setup/INSTALLATION.md) - System installation
+- [Environment Setup](01_tutorials/setup/ENVIRONMENT_SETUP.md) - Python environment
+- [GPU Setup](01_tutorials/setup/GPU_SETUP.md) - GPU configuration
 
-### Data Processing
-- [Data Pipeline Guide](../INFORMATION/04_DATA_PIPELINE.md) - Complete data processing workflow
-- [Data Processing README](../DATA_PROCESSING/README.md) - Data processing module overview
+### Pipelines
+- [First Pipeline Run](01_tutorials/pipelines/FIRST_PIPELINE_RUN.md) - Run your first pipeline
+- [Data Processing Walkthrough](01_tutorials/pipelines/DATA_PROCESSING_WALKTHROUGH.md) - Data pipeline guide
+- [Feature Engineering Tutorial](01_tutorials/pipelines/FEATURE_ENGINEERING_TUTORIAL.md) - Feature creation
 
 ### Training
-- [Model Training Guide](../INFORMATION/05_MODEL_TRAINING.md) - Complete model training guide
-- [Feature Selection Guide](../TRAINING/FEATURE_SELECTION_GUIDE.md) - Feature selection workflow
-- [Training Optimization](../TRAINING/TRAINING_OPTIMIZATION_GUIDE.md) - Training optimization
-- [3-Phase Workflow](../TRAINING/EXPERIMENTS/README.md) - Optimized training workflow
-- [3-Phase Quick Start](../TRAINING/EXPERIMENTS/QUICK_START.md) - Quick start for 3-phase workflow
-- [3-Phase Operations](../TRAINING/EXPERIMENTS/OPERATIONS_GUIDE.md) - Operations guide
+- [Model Training Guide](01_tutorials/training/MODEL_TRAINING_GUIDE.md) - Train models
+- [Walk-Forward Validation](01_tutorials/training/WALKFORWARD_VALIDATION.md) - Validation workflow
+- [Feature Selection Tutorial](01_tutorials/training/FEATURE_SELECTION_TUTORIAL.md) - Feature selection
 
 ### Trading
-- [Alpaca Trading](../ALPACA_trading/README.md) - Alpaca paper trading system
-- [IBKR Trading](../IBKR_trading/README.md) - IBKR live trading system
-- [IBKR Live Trading Integration](../IBKR_trading/LIVE_TRADING_INTEGRATION.md) - IBKR integration guide
-- [IBKR Daily Testing](../IBKR_trading/DAILY_TESTING_README.md) - Daily testing procedures
+- [Paper Trading Setup](01_tutorials/trading/PAPER_TRADING_SETUP.md) - Paper trading
+- [IBKR Integration](01_tutorials/trading/IBKR_INTEGRATION.md) - IBKR setup
+- [Alpaca Integration](01_tutorials/trading/ALPACA_INTEGRATION.md) - Alpaca setup
+
+### Configuration
+- [Config Basics](01_tutorials/configuration/CONFIG_BASICS.md) - Configuration fundamentals
+- [Config Examples](01_tutorials/configuration/CONFIG_EXAMPLES.md) - Example configs
+- [Advanced Config](01_tutorials/configuration/ADVANCED_CONFIG.md) - Advanced configuration
 
 ## Tier C: Core Reference Docs
 
 Complete technical reference for daily use.
 
+### API Reference
+- [Module Reference](02_reference/api/MODULE_REFERENCE.md) - Python API
+- [CLI Reference](02_reference/api/CLI_REFERENCE.md) - Command-line tools
+- [Config Schema](02_reference/api/CONFIG_SCHEMA.md) - Configuration schema
+
 ### Data Reference
-- [Column Reference](../INFORMATION/06_COLUMN_REFERENCE.md) - Complete column documentation
-- [Data README](../data/README.md) - Data directory structure
+- [Data Format Spec](02_reference/data/DATA_FORMAT_SPEC.md) - Data formats
+- [Column Reference](../INFORMATION/06_COLUMN_REFERENCE.md) - Column documentation
+- [Data Sanity Rules](02_reference/data/DATA_SANITY_RULES.md) - Validation rules
 
-### Feature Selection
-- [Feature Selection](../INFORMATION/08_FEATURE_SELECTION.md) - Feature selection guide
-- [Multi-Model Feature Selection](../INFORMATION/MULTI_MODEL_FEATURE_SELECTION.md) - Multi-model selection
-- [Comprehensive Feature Ranking](COMPREHENSIVE_FEATURE_RANKING.md) - Feature ranking methodology
-- [Feature Ranking Quick Start](../NOTES/QUICK_START_FEATURE_RANKING.md) - Quick start for ranking
-
-### Configuration Reference
-- [Config Reference](../INFORMATION/02_CONFIG_REFERENCE.md) - Complete configuration reference
-- [Config README](../CONFIG/README.md) - Configuration directory overview
+### Models Reference
+- [Model Catalog](02_reference/models/MODEL_CATALOG.md) - All available models
+- [Model Config Reference](02_reference/models/MODEL_CONFIG_REFERENCE.md) - Model configurations
+- [Training Parameters](02_reference/models/TRAINING_PARAMETERS.md) - Training settings
 
 ### Systems Reference
-- [IBKR Implementation Status](../IBKR_trading/IMPLEMENTATION_STATUS.md) - IBKR implementation status
-- [IBKR Testing Plan](../IBKR_trading/TESTING_PLAN.md) - IBKR testing strategy
-- [IBKR Testing Summary](../IBKR_trading/TESTING_SUMMARY.md) - Testing results
-- [IBKR C++ Engine](../IBKR_trading/cpp_engine/README.md) - C++ performance components
-- [Alpaca Core Components](../ALPACA_trading/core/README.md) - Alpaca core components
-- [Alpaca Brokers](../ALPACA_trading/brokers/README.md) - Broker integration
-- [Alpaca Strategies](../ALPACA_trading/strategies/README.md) - Trading strategies
-- [Alpaca ML Integration](../ALPACA_trading/ml/README.md) - ML integration
-- [Alpaca Config](../ALPACA_trading/config/README.md) - Configuration files
+- [IBKR System Reference](02_reference/systems/IBKR_SYSTEM_REFERENCE.md) - IBKR integration
+- [Alpaca System Reference](02_reference/systems/ALPACA_SYSTEM_REFERENCE.md) - Alpaca integration
+- [Pipeline Reference](02_reference/systems/PIPELINE_REFERENCE.md) - Data pipelines
 
-### Project Overview
-- [Project Overview](../INFORMATION/07_PROJECT_OVERVIEW.md) - Complete project overview
+### Configuration Reference
+- [Config Loader API](02_reference/configuration/CONFIG_LOADER_API.md) - Config loading
+- [Config Overlays](02_reference/configuration/CONFIG_OVERLAYS.md) - Overlay system
+- [Environment Variables](02_reference/configuration/ENVIRONMENT_VARIABLES.md) - Environment config
 
 ## Tier D: Deep Technical Appendices
 
 Research notes, design rationale, advanced topics.
 
+### Research
+- [Leakage Analysis](03_technical/research/LEAKAGE_ANALYSIS.md) - Leakage research
+- [Feature Importance Methodology](03_technical/research/FEATURE_IMPORTANCE_METHODOLOGY.md) - Feature importance
+- [Target Discovery](03_technical/research/TARGET_DISCOVERY.md) - Target research
+- [Validation Methodology](03_technical/research/VALIDATION_METHODOLOGY.md) - Validation research
+
 ### Design
-- [Mathematical Foundations](../IBKR_trading/MATHEMATICAL_FOUNDATIONS.md) - Mathematical background
-- [C++ Integration Summary](../IBKR_trading/live_trading/C++_INTEGRATION_SUMMARY.md) - C++ integration details
+- [Architecture Deep Dive](03_technical/design/ARCHITECTURE_DEEP_DIVE.md) - System architecture
+- [Mathematical Foundations](03_technical/design/MATHEMATICAL_FOUNDATIONS.md) - Math background
+- [Optimization Engine](03_technical/design/OPTIMIZATION_ENGINE.md) - Optimization design
+- [C++ Integration](03_technical/design/C++_INTEGRATION.md) - C++ components
+
+### Benchmarks
+- [Performance Metrics](03_technical/benchmarks/PERFORMANCE_METRICS.md) - Performance data
+- [Model Comparisons](03_technical/benchmarks/MODEL_COMPARISONS.md) - Model benchmarks
+- [Dataset Sizing](03_technical/benchmarks/DATASET_SIZING.md) - Dataset strategies
+
+### Fixes
+- [Known Issues](03_technical/fixes/KNOWN_ISSUES.md) - Current issues
+- [Bug Fixes](03_technical/fixes/BUG_FIXES.md) - Fix history
+- [Migration Notes](03_technical/fixes/MIGRATION_NOTES.md) - Migration guide
+
+### Roadmaps
+- [Alpha Enhancement Roadmap](03_technical/roadmaps/ALPHA_ENHANCEMENT_ROADMAP.md) - Enhancement plan
+- [Future Work](03_technical/roadmaps/FUTURE_WORK.md) - Planned features
 
 ### Implementation
-- [Safe Target Pattern](../TRAINING/SAFE_TARGET_PATTERN_IMPLEMENTATION.md) - Target pattern implementation
-- [Import Audit](../TRAINING/IMPORT_AUDIT_AND_STRUCTURE.md) - Import structure audit
-- [First Batch Specs](../TRAINING/FIRST_BATCH_SPECS_IMPLEMENTATION.md) - Training specifications
+- [IBKR Status](03_technical/implementation/IBKR_STATUS.md) - IBKR implementation
+- [Pressure Test Plan](03_technical/implementation/PRESSURE_TEST_PLAN.md) - Testing plan
+- [Performance Optimization](03_technical/implementation/PERFORMANCE_OPTIMIZATION.md) - Optimization work
+
+### Testing
+- [Testing Plan](03_technical/testing/TESTING_PLAN.md) - Test strategy
+- [Testing Summary](03_technical/testing/TESTING_SUMMARY.md) - Test results
+- [Daily Testing](03_technical/testing/DAILY_TESTING.md) - Daily test procedures
 
 ### Operations
-- [Journald Logging](JOURNALD_LOGGING.md) - Logging setup
-- [Restore from Logs](RESTORE_FROM_LOGS.md) - Recovery procedures
-- [Next Steps Workflow](NEXT_STEPS_WORKFLOW.md) - Workflow guide
+- [Journald Logging](03_technical/operations/JOURNALD_LOGGING.md) - Logging setup
+- [Restore from Logs](03_technical/operations/RESTORE_FROM_LOGS.md) - Recovery procedures
+- [Avoid Long Runs](03_technical/operations/AVOID_LONG_RUNS.md) - Performance tips
+- [Systemd Deployment](03_technical/operations/SYSTEMD_DEPLOYMENT.md) - Deployment guide
 
-### Deprecated
-- [IBKR Deprecated Components](../IBKR_trading/deprecated/README.md) - Deprecated IBKR components
+## Additional Documentation
+
+### Existing Guides
+- [Data Pipeline Guide](../INFORMATION/04_DATA_PIPELINE.md) - Complete data processing workflow
+- [Model Training Guide](../INFORMATION/05_MODEL_TRAINING.md) - Complete model training guide
+- [Feature Selection Guide](../TRAINING/FEATURE_SELECTION_GUIDE.md) - Feature selection workflow
+- [Training Optimization](../TRAINING/TRAINING_OPTIMIZATION_GUIDE.md) - Training optimization
+- [3-Phase Workflow](../TRAINING/EXPERIMENTS/README.md) - Optimized training workflow
+- [Comprehensive Feature Ranking](COMPREHENSIVE_FEATURE_RANKING.md) - Feature ranking methodology
+
+### System Documentation
+- [IBKR Trading](../IBKR_trading/README.md) - IBKR live trading system
+- [IBKR Live Trading Integration](../IBKR_trading/LIVE_TRADING_INTEGRATION.md) - IBKR integration guide
+- [Alpaca Trading](../ALPACA_trading/README.md) - Alpaca paper trading system
+- [IBKR C++ Engine](../IBKR_trading/cpp_engine/README.md) - C++ performance components
 
 ## Documentation Architecture
 
@@ -103,6 +143,4 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the documentation structure and maint
 
 ## Migration Status
 
-This documentation structure is being implemented. See [MIGRATION_PLAN.md](MIGRATION_PLAN.md) for current status.
-
-**Note**: Some planned documentation files are not yet created. This index only includes files that currently exist. For the complete planned structure, see [ARCHITECTURE.md](ARCHITECTURE.md).
+This documentation structure is now complete. All planned documentation files have been created. See [MIGRATION_PLAN.md](MIGRATION_PLAN.md) for migration details.
