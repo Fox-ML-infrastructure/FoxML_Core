@@ -1,49 +1,62 @@
-# Roadmap (Winter 2025 → 2026)
+╔══════════════════════════════════════════════════════════════════╗
+║                     FOX ML INFRASTRUCTURE ROADMAP               ║
+║                        Winter 2025 → 2026                       ║
+╠══════════════════════════════════════════════════════════════════╣
 
-Development during **Winter 2025 (right now)** is intentionally limited to
-**light documentation cleanup only**.  
-No major feature work will begin until **January 2026**.
+PHASE 0 — WINTER 2025 (NOW)
+Stability & Documentation Pass (No New Features)
+• Improve documentation readability and structure.
+• Standardize formatting and naming.
+• Add clarifications/examples where helpful.
+• No feature development until January 2026.
 
-## Current Work (Winter 2025 — Docs Only)
-- Improve clarity and readability across existing documentation.
-- Fix formatting inconsistencies and reorganize sections where needed.
-- Add small clarifications or examples where helpful.
+Purpose: Stabilize the current release for early adopters.
 
-**No feature development until January 2026.**
+────────────────────────────────────────────────────────────────────
 
----
+PHASE 1 — JANUARY 2026 RELEASE CYCLE
+1. Centralized Configuration System
+• Move config into structured YAML files.
+• Formal configuration schema + validation.
+• Example templates for onboarding.
 
-## Planned Work (Beginning January 2026)
+2. Output, Logging & UX Modernization
+• Standardized logs across modules.
+• Cleaner pipeline output formatting.
+• Optional LLM-friendly formatting.
+• Improved naming conventions.
 
-### 1. Centralized Configuration
-- Move scattered configuration variables into structured YAML files.
-- Create a standard, documented configuration schema.
-- Add basic validation and provide example configs.
+────────────────────────────────────────────────────────────────────
 
-### 2. Improved Output & UX Formatting
-- Make logs and pipeline outputs more readable and consistent.
-- Introduce structured, LLM-friendly formatting for easier automated parsing.
-- Clean up naming conventions across modules.
+PHASE 2 — WEB PRESENCE & COMMERCIAL INFRASTRUCTURE
+3. Public Website + Automated Payments
+• Launch official Fox ML Infrastructure website.
+• Stripe-integrated commercial tiers.
+• Request Access / Contact flow.
+• Unified docs, onboarding, pricing, and overview.
 
-### 3. Public Website + Automated Payments
-- Launch the official Fox ML Infrastructure website.
-- Integrate automated Stripe payments for eligible commercial tiers.
-- Add a polished “Request Access / Contact” flow for enterprise clients.
-- Present documentation, pricing, onboarding, and system overview in one place.
+────────────────────────────────────────────────────────────────────
 
-### 4. Exploratory Module Work
-- Explore potential toon implementation or related extensions.
-- Improve or extend system internals based on user evaluations.
+PHASE 3 — EXPLORATORY & STRATEGIC IMPROVEMENTS
+4. Exploratory Modules & Architecture Extensions
+• Experiment with toon-like or related modules.
+• Adjust module priorities via user evaluations.
+• Internal pipeline and architecture enhancements.
 
-### 5. Lower-Level Rewrites (Performance & Integration)
-- Begin rewriting performance-critical components in lower-level languages
-  (e.g., C/C++/Rust) where it meaningfully improves speed or system efficiency.
-- Improve interoperability with existing high-performance libraries.
-- Build a foundation for future high-throughput, HPC-aligned capabilities.
+────────────────────────────────────────────────────────────────────
 
----
+PHASE 4 — HIGH-PERFORMANCE REWRITE TRACK
+5. Lower-Level Performance Rewrites (C/C++/Rust)
+• Rewrite bottleneck components at lower level.
+• Better throughput + memory efficiency.
+• HPC-aligned system foundation.
 
-## Summary
-**Winter 2025 = documentation cleanup only.**  
-**January 2026 and onward = configuration system, UX/output improvements,
-website + payments, exploratory module work, and performance-oriented lower-level rewrites.**
+────────────────────────────────────────────────────────────────────
+
+SUMMARY
+• Winter 2025: Documentation hardening only.
+• January 2026: Config system + output/logging overhaul.
+• Early 2026: Website, Stripe payments, enterprise onboarding.
+• Mid 2026: Exploratory modules and extensions.
+• Late 2026: Lower-level HPC performance rewrites.
+╚══════════════════════════════════════════════════════════════════╝
