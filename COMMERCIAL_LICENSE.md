@@ -76,11 +76,68 @@ Commercial licensing fees are determined based on:
 - additional deliverables,
 - criticality of deployment.
 
-## 8. GOVERNING LAW
+## 8. AUDIT RIGHTS
 
-This License is governed by the laws of the United States and the State of Alabama, without regard to conflicts of law.
+Licensor reserves the right to audit Licensee's use of the Software to verify compliance with this License.
 
-## 9. CONTACT
+**Audit Terms:**
+- Licensor may conduct one audit per calendar year
+- Licensor must provide at least 30 days' written notice
+- Audit scope limited to verification of Software usage and compliance with license restrictions
+- Remote audit methods are permitted (e.g., usage logs, deployment verification)
+- If audit reveals material violation (>5% non-compliance), Licensee must reimburse Licensor's reasonable audit costs
+- Licensee must provide reasonable cooperation and access to relevant records
+
+**Confidentiality:** All audit information shall be treated as confidential and used solely for compliance verification.
+
+## 9. ASSIGNMENT
+
+**Licensee Assignment:**
+Licensee may not assign, transfer, or delegate this License or any rights hereunder without Licensor's prior written consent, except that Licensee may assign this License to an affiliate or in connection with a merger, acquisition, or sale of all or substantially all of Licensee's assets, provided that:
+- The assignee agrees in writing to be bound by all terms of this License
+- The assignee is not a direct competitor of Licensor
+- Licensee provides Licensor with 30 days' prior written notice
+
+**Licensor Assignment:**
+Licensor may freely assign this License, including in connection with a merger, acquisition, or sale of all or substantially all of Licensor's assets. Such assignment shall not affect Licensee's rights under this License.
+
+Any attempted assignment in violation of this section is void.
+
+## 10. DISPUTE RESOLUTION
+
+**Informal Resolution:**
+The parties agree to attempt to resolve disputes through good faith negotiation for at least 30 days before initiating formal proceedings.
+
+**Arbitration for Small Claims:**
+For claims under $250,000, either party may elect binding arbitration under the Commercial Arbitration Rules of the American Arbitration Association (AAA). Arbitration shall be conducted in Delaware by a single arbitrator with expertise in software licensing disputes.
+
+**Litigation for Large Claims:**
+For claims of $250,000 or more, disputes shall be resolved in the state or federal courts located in Delaware. Both parties consent to the exclusive jurisdiction and venue of such courts.
+
+**Class Action Waiver:**
+Both parties waive any right to participate in class actions, collective actions, or representative proceedings.
+
+## 11. GOVERNING LAW
+
+This License is governed by the laws of the State of Delaware, United States, without regard to conflicts of law principles. The United Nations Convention on Contracts for the International Sale of Goods does not apply.
+
+## 12. DATA HANDLING AND CONFIDENTIALITY
+
+**Licensee Confidentiality Obligations:**
+Licensee agrees to maintain the confidentiality of:
+- Source code and internal architecture of the Software
+- Proprietary algorithms and techniques
+- Documentation marked as confidential
+- Pricing and licensing terms
+- Any other information designated as confidential by Licensor
+
+**Security Requirements:**
+Licensee must implement reasonable technical and administrative safeguards to protect the Software and prevent unauthorized access, use, or disclosure.
+
+**Breach Notification:**
+Licensee must notify Licensor immediately upon discovery of any unauthorized use, disclosure, or breach of security related to the Software.
+
+## 13. CONTACT
 
 For commercial licensing, enterprise usage, or SOW negotiation, contact:
 

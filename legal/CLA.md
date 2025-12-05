@@ -184,11 +184,52 @@ certify deletion in writing within 7 days.
 
 No refunds are provided for terminated licenses.
 
-10. Governing Law
+10. Audit Rights
 
-This Agreement is governed by the laws of the State of Alabama, USA, without regard to conflict-of-law principles.
+Licensor reserves the right to audit Licensee's use of the Software to verify compliance with this Agreement.
 
-11. Entire Agreement
+Audit Terms:
+- Licensor may conduct one audit per calendar year
+- Licensor must provide at least 30 days' written notice
+- Audit scope limited to verification of Software usage and compliance with license restrictions
+- Remote audit methods are permitted (e.g., usage logs, deployment verification)
+- If audit reveals material violation (>5% non-compliance), Licensee must reimburse Licensor's reasonable audit costs
+- Licensee must provide reasonable cooperation and access to relevant records
+
+Confidentiality: All audit information shall be treated as confidential and used solely for compliance verification.
+
+11. Assignment
+
+Licensee Assignment:
+Licensee may not assign, transfer, or delegate this Agreement or any rights hereunder without Licensor's prior written consent, except that Licensee may assign this Agreement to an affiliate or in connection with a merger, acquisition, or sale of all or substantially all of Licensee's assets, provided that:
+- The assignee agrees in writing to be bound by all terms of this Agreement
+- The assignee is not a direct competitor of Licensor
+- Licensee provides Licensor with 30 days' prior written notice
+
+Licensor Assignment:
+Licensor may freely assign this Agreement, including in connection with a merger, acquisition, or sale of all or substantially all of Licensor's assets. Such assignment shall not affect Licensee's rights under this Agreement.
+
+Any attempted assignment in violation of this section is void.
+
+12. Dispute Resolution
+
+Informal Resolution:
+The parties agree to attempt to resolve disputes through good faith negotiation for at least 30 days before initiating formal proceedings.
+
+Arbitration for Small Claims:
+For claims under $250,000, either party may elect binding arbitration under the Commercial Arbitration Rules of the American Arbitration Association (AAA). Arbitration shall be conducted in Delaware by a single arbitrator with expertise in software licensing disputes.
+
+Litigation for Large Claims:
+For claims of $250,000 or more, disputes shall be resolved in the state or federal courts located in Delaware. Both parties consent to the exclusive jurisdiction and venue of such courts.
+
+Class Action Waiver:
+Both parties waive any right to participate in class actions, collective actions, or representative proceedings.
+
+13. Governing Law
+
+This Agreement is governed by the laws of the State of Delaware, United States, without regard to conflicts of law principles. The United Nations Convention on Contracts for the International Sale of Goods does not apply.
+
+14. Entire Agreement
 
 This Agreement constitutes the entire understanding between the parties and supersedes all prior communications regarding licensing of the Software.
 
