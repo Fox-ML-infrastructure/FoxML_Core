@@ -72,6 +72,8 @@ For licensing inquiries:
 **jenn.lewis5789@gmail.com**  
 Subject: **Fox Infrastructure Licensing Inquiry**
 
+See the [`legal/`](legal/) directory for complete licensing documentation.
+
 ---------------------------------------------------------------------
 
 ## Consulting Services
