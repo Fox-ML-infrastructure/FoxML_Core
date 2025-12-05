@@ -30,7 +30,7 @@ This directory is organized into the following structure:
 ### 📁 Root Level — Licensing Documents
 
 - **`LICENSING.md`** — Overview of the dual-licensing model (AGPL-3.0 and Commercial License)
-- **`COMMERCIAL_LICENSE.md`** — Commercial License terms and conditions
+- **`../COMMERCIAL_LICENSE.md`** — Commercial License terms and conditions (located in repository root)
 - **`CLA.md`** — Commercial License Agreement (CLA) for organizational use
 - **`SUBSCRIPTIONS.md`** — Licensing request process and pricing information
 - **`TOS.md`** — Terms of Service
