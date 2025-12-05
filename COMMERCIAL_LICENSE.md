@@ -1,5 +1,5 @@
 # FOX ML INFRASTRUCTURE — COMMERCIAL LICENSE v1.0
-Copyright (c) 2025 Jennifer Lewis
+Copyright (c) 2025-2026 Jennifer Lewis
 
 ## 1. DEFINITIONS
 
