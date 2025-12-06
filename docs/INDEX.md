@@ -109,6 +109,7 @@ Research notes, design rationale, advanced topics.
 - [IBKR Status](03_technical/implementation/IBKR_STATUS.md) - IBKR implementation
 - [Pressure Test Plan](03_technical/implementation/PRESSURE_TEST_PLAN.md) - Testing plan
 - [Performance Optimization](03_technical/implementation/PERFORMANCE_OPTIMIZATION.md) - Optimization work
+- [Adding Proprietary Models](03_technical/implementation/ADDING_PROPRIETARY_MODELS.md) - Using BaseModelTrainer to add custom models
 
 ### Testing
 - [Testing Plan](03_technical/testing/TESTING_PLAN.md) - Test strategy
