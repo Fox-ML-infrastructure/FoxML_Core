@@ -1036,11 +1036,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 imputer_path = target_dir / f"{family.lower()}_mtf_b0_imputer.joblib"
                                 joblib.dump(wrapped_model.imputer, imputer_path)
                                 logger.info(f"💾 Imputer saved: {imputer_path}")
-                            else:
-                                # Save the imputer from data preparation
-                                imputer_path = target_dir / f"{family.lower()}_mtf_b0_imputer.joblib"
-                                joblib.dump(imputer, imputer_path)
-                                logger.info(f"💾 Imputer saved: {imputer_path}")
+                            # Note: If wrapped_model.imputer is None, no imputer was used/needed
                             
                             # Save metadata (match original format exactly)
                             if save_info['is_lightgbm']:  # LightGBM - JSON format
