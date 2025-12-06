@@ -24,6 +24,7 @@ Fox-v1 is maintained with an **enterprise reliability mindset**:
 
 * **GPU Models — functional**
   * Most TensorFlow-based families (MLP, GAN, MetaLearning, MultiTask) run correctly with GPU.
+  * Sequential models (CNN1D, LSTM, Transformer) 3D preprocessing issue resolved.
   * VAE has a serialization quirk being fixed.
 
 * **TensorFlow GPU — functional**
@@ -60,6 +61,8 @@ Fox-v1 is maintained with an **enterprise reliability mindset**:
 * GPU acceleration functional across major model families
 * XGBoost source-build stability fixes
 * Readline and child-process dependency issues resolved
+* Sequential models (CNN1D, LSTM, Transformer) 3D preprocessing fix
+* Scaffolded base trainers for 2D and 3D models (future refactoring)
 
 ## Active Work
 
@@ -74,6 +77,7 @@ Fox-v1 is maintained with an **enterprise reliability mindset**:
 * Improved feature engineering integration
 * Automated hyperparameter search
 * Robust cross-sectional + time-series workflows
+* Refactor trainers to use scaffolded base classes (`base_2d_trainer.py`, `base_3d_trainer.py`) for centralized dimension-specific logic
 
 **Outcome:** TRAINING evolves from "functional" → "adaptive intelligence layer."
 

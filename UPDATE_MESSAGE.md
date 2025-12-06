@@ -22,7 +22,7 @@ With this foundation in place, **active development has now resumed**, and focus
 
   TensorFlow GPU families are operational and producing artifacts.
 
-  MetaLearning GPU usage issue resolved. Continued GPU testing and validation underway.
+  MetaLearning GPU usage issue resolved. Sequential models (CNN1D, LSTM, Transformer) 3D preprocessing issue fixed. Continued GPU testing and validation underway.
 
 * **Target ranking & selection — testing**
 
@@ -31,6 +31,8 @@ With this foundation in place, **active development has now resumed**, and focus
 * **Upcoming refactors**
 
   Planning deeper improvements to training intelligence, model selection, and automated workflows.
+  
+  Scaffolded base trainers (`base_2d_trainer.py`, `base_3d_trainer.py`) for future refactoring to centralize dimension-specific preprocessing logic.
 
 ## Next Steps
 
