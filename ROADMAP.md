@@ -6,6 +6,11 @@ Direction and priorities for ongoing development. Timelines are aspirational and
 
 As issues are discovered, they will be fixed immediately as time allows. Getting documentation and legal compliance sorted was a significant undertaking, and now the focus can shift back to core functionality. Response times will vary based on availability, but broken functionality will be addressed as quickly as possible.
 
+**Current Development Focus:**
+- **TRAINING pipeline** - Primary focus is on updating and fixing the TRAINING pipeline
+- **Target ranking scripts** - Will be confirmed working after TRAINING pipeline updates
+- **Integration** - Target ranking functionality will eventually be rolled into the TRAINING pipeline for easier use
+
 ## Phase 0 — Winter 2025 (Right Now)
 
 ### Stability & Documentation Hardening
@@ -147,7 +152,9 @@ Impact: Positions Fox ML Infrastructure as a high-performance, HPC-aligned ML st
 Current focus areas (in rough order, subject to change):
 
 - ✅ **Completed**: Documentation hardening (55 new files, 50+ rewritten)
-- **Current Focus**: Training and ranking portions
+- **Current Focus**: TRAINING pipeline updates and fixes (primary priority)
+- **Next**: Target ranking scripts - confirmed working after TRAINING pipeline updates
+- **Future**: Integration - target ranking rolled into TRAINING pipeline for easier use
 - **Next**: Config system + logging/output overhaul
 - **Next**: Fix automated memory batching and control
 - **Next**: Optimize Polars cross-sectional dataframe building
