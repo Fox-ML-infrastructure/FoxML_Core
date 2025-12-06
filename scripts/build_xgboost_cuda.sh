@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build XGBoost with CUDA support from source
-# For RTX 3080 (compute capability 8.6)
+# Auto-detects system configuration (conda vs system CUDA, GPU compute capability)
 
 set -e
 
@@ -9,11 +9,25 @@ echo "🔧 Building XGBoost with CUDA support..."
 # Check if CUDA is available
 if ! command -v nvcc &> /dev/null; then
     echo "❌ nvcc not found. CUDA toolkit may not be installed."
+    echo "   Install with: conda install -c conda-forge cuda-toolkit -y"
     exit 1
 fi
 
-# Get CUDA compute capability (RTX 3080 = 8.6)
-CUDA_ARCH="86"
+# Auto-detect GPU compute capability
+echo "🔍 Detecting GPU compute capability..."
+if command -v nvidia-smi &> /dev/null; then
+    COMPUTE_CAP=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader,nounits | head -1 | tr -d '.')
+    if [ -n "$COMPUTE_CAP" ]; then
+        CUDA_ARCH="$COMPUTE_CAP"
+        echo "   ✅ Detected compute capability: $CUDA_ARCH"
+    else
+        echo "   ⚠️  Could not detect compute capability, defaulting to 86 (RTX 3080/3090)"
+        CUDA_ARCH="86"
+    fi
+else
+    echo "   ⚠️  nvidia-smi not available, defaulting to 86 (RTX 3080/3090)"
+    CUDA_ARCH="86"
+fi
 
 # Create temporary build directory
 BUILD_DIR="/tmp/xgboost_build"
@@ -30,36 +44,68 @@ echo "🔨 Building XGBoost with CUDA support..."
 mkdir -p build
 cd build
 
-# Find CUDA paths in conda environment
-# Conda CUDA is typically in targets/x86_64-linux/
-CUDA_TARGETS="$CONDA_PREFIX/targets/x86_64-linux"
-CUDA_INCLUDE="$CUDA_TARGETS/include"
-CUDA_LIB="$CUDA_TARGETS/lib"
+# Auto-detect CUDA installation (conda vs system)
+echo "🔍 Detecting CUDA installation..."
 
-# Check if targets directory exists, if not try root
-if [ ! -d "$CUDA_INCLUDE" ] || [ ! -f "$CUDA_INCLUDE/cuda_runtime.h" ]; then
+# Try conda environment first
+if [ -n "$CONDA_PREFIX" ] && [ -f "$CONDA_PREFIX/targets/x86_64-linux/include/cuda_runtime.h" ]; then
+    echo "   ✅ Found conda CUDA installation"
+    CUDA_TOOLKIT_ROOT="$CONDA_PREFIX"
+    CUDA_INCLUDE="$CONDA_PREFIX/targets/x86_64-linux/include"
+    CUDA_LIB="$CONDA_PREFIX/targets/x86_64-linux/lib"
+    CUDA_COMPILER="$CONDA_PREFIX/bin/nvcc"
+elif [ -n "$CONDA_PREFIX" ] && [ -f "$CONDA_PREFIX/include/cuda_runtime.h" ]; then
+    echo "   ✅ Found conda CUDA installation (alternative location)"
+    CUDA_TOOLKIT_ROOT="$CONDA_PREFIX"
     CUDA_INCLUDE="$CONDA_PREFIX/include"
     CUDA_LIB="$CONDA_PREFIX/lib"
+    CUDA_COMPILER="$CONDA_PREFIX/bin/nvcc"
+# Try system CUDA
+elif [ -f "/usr/local/cuda/include/cuda_runtime.h" ]; then
+    echo "   ✅ Found system CUDA installation"
+    CUDA_TOOLKIT_ROOT="/usr/local/cuda"
+    CUDA_INCLUDE="/usr/local/cuda/include"
+    CUDA_LIB="/usr/local/cuda/lib64"
+    CUDA_COMPILER="/usr/local/cuda/bin/nvcc"
+# Try common system locations
+elif [ -f "/opt/cuda/include/cuda_runtime.h" ]; then
+    echo "   ✅ Found system CUDA installation (alternative location)"
+    CUDA_TOOLKIT_ROOT="/opt/cuda"
+    CUDA_INCLUDE="/opt/cuda/include"
+    CUDA_LIB="/opt/cuda/lib64"
+    CUDA_COMPILER="/opt/cuda/bin/nvcc"
+else
+    echo "❌ ERROR: Could not find CUDA headers (cuda_runtime.h)"
+    echo ""
+    echo "   Searched locations:"
+    echo "     - $CONDA_PREFIX/targets/x86_64-linux/include/"
+    echo "     - $CONDA_PREFIX/include/"
+    echo "     - /usr/local/cuda/include/"
+    echo "     - /opt/cuda/include/"
+    echo ""
+    echo "   Solutions:"
+    echo "     1. For conda: conda install -c conda-forge cuda-toolkit -y"
+    echo "     2. For system: Install CUDA toolkit from NVIDIA"
+    echo "     3. Set CUDA_TOOLKIT_ROOT_DIR manually if CUDA is in a custom location"
+    exit 1
 fi
 
 # Verify CUDA headers exist
 if [ ! -f "$CUDA_INCLUDE/cuda_runtime.h" ]; then
-    echo "❌ ERROR: Could not find cuda_runtime.h"
-    echo "   Searched in: $CUDA_INCLUDE"
-    echo "   Please ensure CUDA toolkit is installed in conda environment"
-    echo "   Try: conda install -c conda-forge cuda-toolkit"
+    echo "❌ ERROR: cuda_runtime.h not found at $CUDA_INCLUDE"
     exit 1
 fi
 
+echo "📁 CUDA toolkit root: $CUDA_TOOLKIT_ROOT"
 echo "📁 CUDA include: $CUDA_INCLUDE"
 echo "📁 CUDA lib: $CUDA_LIB"
-echo "📁 CUDA compiler: $CONDA_PREFIX/bin/nvcc"
+echo "📁 CUDA compiler: $CUDA_COMPILER"
 
 # Set environment variables for CMake
-export CUDA_TOOLKIT_ROOT_DIR="$CONDA_PREFIX"
-export CUDA_PATH="$CONDA_PREFIX"
-export CUDA_HOME="$CONDA_PREFIX"
-export PATH="$CONDA_PREFIX/bin:$PATH"
+export CUDA_TOOLKIT_ROOT_DIR="$CUDA_TOOLKIT_ROOT"
+export CUDA_PATH="$CUDA_TOOLKIT_ROOT"
+export CUDA_HOME="$CUDA_TOOLKIT_ROOT"
+export PATH="$(dirname $CUDA_COMPILER):$PATH"
 export LD_LIBRARY_PATH="$CUDA_LIB:$LD_LIBRARY_PATH"
 
 cmake .. \
