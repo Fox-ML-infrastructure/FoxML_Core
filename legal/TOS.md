@@ -93,8 +93,9 @@ time by discontinuing use of the Services. All rights end immediately upon
 termination.
 
 13. Governing Law
-These Terms are governed by the laws of the State of Alabama. All disputes must
-be resolved in the state or federal courts in Jefferson County, Alabama.
+These Terms are governed by the laws of the State of Delaware, United States, without regard to conflicts of law principles. All disputes must be resolved in the state or federal courts located in Delaware. The United Nations Convention on Contracts for the International Sale of Goods does not apply.
+
+**Note:** These Terms of Service govern use of hosted services. For commercial licensing of the Software itself, see `COMMERCIAL_LICENSE.md` and `legal/CLA.md`, which are governed by Delaware law.
 
 14. Changes to Terms
 We may update these Terms at any time. Continued use of the Services after
