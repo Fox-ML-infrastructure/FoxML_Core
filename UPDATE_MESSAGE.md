@@ -22,7 +22,7 @@ With this foundation in place, **active development has now resumed**, and focus
 
   TensorFlow GPU families are operational and producing artifacts.
 
-  Continued GPU testing and validation underway.
+  MetaLearning GPU usage issue resolved. Continued GPU testing and validation underway.
 
 * **Target ranking & selection — testing**
 
