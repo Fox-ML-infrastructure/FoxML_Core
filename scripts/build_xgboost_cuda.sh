@@ -30,11 +30,32 @@ echo "🔨 Building XGBoost with CUDA support..."
 mkdir -p build
 cd build
 
+# Find CUDA paths in conda environment
+CUDA_INCLUDE="$CONDA_PREFIX/targets/x86_64-linux/include"
+CUDA_LIB="$CONDA_PREFIX/targets/x86_64-linux/lib"
+
+if [ ! -d "$CUDA_INCLUDE" ]; then
+    # Try alternative location
+    CUDA_INCLUDE="$CONDA_PREFIX/include"
+    CUDA_LIB="$CONDA_PREFIX/lib"
+fi
+
+echo "📁 CUDA include: $CUDA_INCLUDE"
+echo "📁 CUDA lib: $CUDA_LIB"
+
+# Set CUDA paths for CMake
+export CUDA_TOOLKIT_ROOT_DIR="$CONDA_PREFIX"
+export CUDA_PATH="$CONDA_PREFIX"
+
 cmake .. \
     -DUSE_CUDA=ON \
     -DCUDA_ARCHITECTURES="$CUDA_ARCH" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX="$CONDA_PREFIX"
+    -DCMAKE_INSTALL_PREFIX="$CONDA_PREFIX" \
+    -DCUDA_TOOLKIT_ROOT_DIR="$CONDA_PREFIX" \
+    -DCUDA_INCLUDE_DIRS="$CUDA_INCLUDE" \
+    -DCUDA_CUDART_LIBRARY="$CUDA_LIB/libcudart.so" \
+    -DCMAKE_CUDA_COMPILER="$CONDA_PREFIX/bin/nvcc"
 
 make -j$(nproc)
 
