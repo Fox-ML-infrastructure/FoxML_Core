@@ -29,8 +29,13 @@ else
     CUDA_ARCH="86"
 fi
 
-# Create temporary build directory
-BUILD_DIR="/tmp/xgboost_build"
+# Create build directory (use persistent location to avoid .pth file issues)
+# If /tmp gets cleaned, editable installs break. Use home directory instead.
+if [ -n "$CONDA_PREFIX" ]; then
+    BUILD_DIR="$CONDA_PREFIX/xgboost_build"
+else
+    BUILD_DIR="$HOME/xgboost_build"
+fi
 if [ -d "$BUILD_DIR" ]; then
     echo "📁 Removing existing build directory..."
     rm -rf "$BUILD_DIR"
@@ -135,7 +140,9 @@ make install
 
 echo "📦 Installing XGBoost Python package..."
 cd ../python-package
-pip install -e . --no-deps
+# Use non-editable install to avoid .pth file pointing to build directory
+# This prevents breakage if build directory is deleted
+pip install . --no-deps
 
 echo "✅ XGBoost with CUDA support installed!"
 echo ""
