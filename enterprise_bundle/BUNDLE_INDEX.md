@@ -18,12 +18,14 @@ This directory contains PDF versions of all enterprise-ready legal and operation
 3. **SECURITY.pdf** — Public-facing security statement
 4. **DATA_PROCESSING_ADDENDUM.pdf** — Data Processing Addendum (DPA)
 5. **INFOSEC_SELF_ASSESSMENT.pdf** — Information security self-assessment
-6. **EXPORT_COMPLIANCE.pdf** — Export compliance statement (EAR99)
-7. **PRIVACY_POLICY.pdf** — Privacy Policy (public-facing)
-8. **DATA_RETENTION_DELETION_POLICY.pdf** — Data retention and deletion policy
-9. **INCIDENT_RESPONSE_PLAN.pdf** — Incident Response Plan (IRP)
-10. **BUSINESS_CONTINUITY_PLAN.pdf** — Business Continuity Plan (BCP)
-11. **RISK_ASSESSMENT_MATRIX.pdf** — Risk assessment matrix
+6. **SECURITY_CONTROLS_MATRIX.pdf** — Security controls matrix (access control, encryption, logging, secrets)
+7. **EXPORT_COMPLIANCE.pdf** — Export compliance statement (EAR99)
+8. **PRIVACY_POLICY.pdf** — Privacy Policy (public-facing)
+9. **DATA_RETENTION_DELETION_POLICY.pdf** — Data retention and deletion policy
+10. **INCIDENT_RESPONSE_PLAN.pdf** — Incident Response Plan (IRP)
+11. **BUSINESS_CONTINUITY_PLAN.pdf** — Business Continuity Plan (BCP)
+12. **RISK_ASSESSMENT_MATRIX.pdf** — Risk assessment matrix
+13. **PENETRATION_TESTING_STATEMENT.pdf** — Penetration testing statement
 
 ### Legal & Risk Management
 
@@ -49,9 +51,13 @@ This directory contains PDF versions of all enterprise-ready legal and operation
 
 18. **RELEASE_NOTES_TAGGING_STANDARD.pdf** — Release notes and tagging standard
 
+### Architecture
+
+19. **SYSTEM_ARCHITECTURE_DIAGRAM.pdf** — System architecture diagram
+
 ---
 
-## Total: 23 PDF Documents
+## Total: 26 PDF Documents
 
 All documents are ready for enterprise procurement, legal review, and compliance audits.
 
