@@ -7,9 +7,10 @@ Direction and priorities for ongoing development. Timelines are aspirational and
 As issues are discovered, they will be fixed immediately as time allows. Getting documentation and legal compliance sorted was a significant undertaking, and now the focus can shift back to core functionality. Response times will vary based on availability, but broken functionality will be addressed as quickly as possible.
 
 **Current Development Focus:**
-- **TRAINING pipeline** - Primary focus is on updating and fixing the TRAINING pipeline
+- **TRAINING pipeline** - ✅ **BACK TO BEING FUNCTIONAL** - Pipeline is now working correctly after fixing XGBoost installation issues and readline errors
+- **GPU models** - Testing GPU models more later today
+- **Target ranking and selection scripts** - Testing these scripts today to confirm they're working
 - **Deeper refactors** - Planned for more intelligent training capabilities
-- **Target ranking scripts** - Will be confirmed working after TRAINING pipeline updates
 - **Integration** - Target ranking functionality will eventually be rolled into the TRAINING pipeline for easier use
 
 ## Phase 0 — Winter 2025 (Right Now)
@@ -43,10 +44,13 @@ This phase addresses the highest-impact improvements to onboarding, reliability,
 
 ### TRAINING Pipeline Refactoring
 
-**Current Focus:**
-- Update and fix existing TRAINING pipeline functionality
-- Address immediate bugs and stability issues
-- Ensure all model families work correctly
+**Current Status: ✅ FUNCTIONAL**
+- ✅ TRAINING pipeline is back to being functional
+- ✅ Fixed XGBoost installation issues (was pointing to deleted /tmp directory)
+- ✅ Fixed readline symbol lookup errors in child processes
+- ✅ All model families can now be imported and trained correctly
+- 🔄 Testing GPU models more later today
+- 🔄 Testing target ranking and selection scripts today
 
 **Planned Deeper Refactors:**
 - More intelligent training capabilities
@@ -172,8 +176,8 @@ Impact: Positions Fox ML Infrastructure as a high-performance, HPC-aligned ML st
 Current focus areas (in rough order, subject to change):
 
 - ✅ **Completed**: Documentation hardening (55 new files, 50+ rewritten)
-- **Current Focus**: TRAINING pipeline updates and fixes (primary priority)
-- **Next**: Target ranking scripts - confirmed working after TRAINING pipeline updates
+- ✅ **Completed**: TRAINING pipeline fixes - back to being functional
+- **Current Focus**: Testing GPU models and target ranking/selection scripts today
 - **Future**: Integration - target ranking rolled into TRAINING pipeline for easier use
 - **Next**: Config system + logging/output overhaul
 - **Next**: Fix automated memory batching and control
