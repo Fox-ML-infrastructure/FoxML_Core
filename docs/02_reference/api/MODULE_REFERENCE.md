@@ -91,7 +91,10 @@ from TRAINING.model_fun import (
 
 trainer = LightGBMTrainer(config)
 trainer.train(X_train, y_train)
-metrics = trainer.evaluate(X_test, y_test)
+predictions = trainer.predict(X_test)
+# Note: evaluate() method doesn't exist. Use sklearn metrics or compute manually:
+# from sklearn.metrics import mean_squared_error, r2_score
+# metrics = {'mse': mean_squared_error(y_test, predictions), 'r2': r2_score(y_test, predictions)}
 ```
 
 ### Training Strategies
