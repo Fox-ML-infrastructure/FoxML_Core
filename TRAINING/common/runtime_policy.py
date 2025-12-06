@@ -146,10 +146,12 @@ CROSS_SECTIONAL_POLICIES: Dict[str, RuntimePolicy] = {
     ),
     
     "MetaLearning": RuntimePolicy(
-        run_mode="inproc",
-        needs_gpu=False,
-        backends=frozenset(),  # Pure sklearn
-        omp_user_api="openmp"
+        run_mode="process",
+        needs_gpu=True,
+        backends=frozenset({"tf"}),
+        omp_user_api="openmp",
+        cap_vram_mb=4096,
+        force_isolation_reason="TensorFlow CUDA context persists in-process"
     ),
     
     "FTRLProximal": RuntimePolicy(

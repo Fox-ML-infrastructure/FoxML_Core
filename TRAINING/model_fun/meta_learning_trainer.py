@@ -53,30 +53,71 @@ class MetaLearningTrainer(BaseModelTrainer):
         
         # DEPRECATED: Hardcoded defaults kept for backward compatibility
         # To change these, edit CONFIG/model_config/meta_learning.yaml
-        self.config.setdefault("outer_lr", self.config.get("final_alpha", 1.0))  # Support old "final_alpha" key
-        self.config.setdefault("n_estimators", 80)
-        self.config.setdefault("max_depth", 10)
-        self.config.setdefault("n_jobs", -1)
+        self.config.setdefault("epochs", 50)
+        self.config.setdefault("batch_size", 512)
+        self.config.setdefault("hidden_dim", 128)
+        self.config.setdefault("dropout", 0.2)
+        self.config.setdefault("learning_rate", 1e-3)
+        self.config.setdefault("patience", 10)
 
     def train(self, X_tr: np.ndarray, y_tr: np.ndarray, 
               X_va=None, y_va=None, feature_names: List[str] = None, **kwargs) -> Any:
+        from common.threads import ensure_gpu_visible
+        
+        # Ensure GPU is visible (restore if hidden by prior CPU-only family)
+        gpu_available = ensure_gpu_visible("MetaLearning")
+        
         # 1) Preprocess data
         X_tr, y_tr = self.preprocess_data(X_tr, y_tr)
         self.feature_names = feature_names or [f"f{i}" for i in range(X_tr.shape[1])]
         
-        # 2) Split only if no external validation provided
+        # 2) Configure TensorFlow
+        configure_tf(cpu_only=kwargs.get("cpu_only", False) or not gpu_available)
+        
+        # TensorFlow is already initialized by _bootstrap_family_runtime in isolation_runner
+        # Just import it here - threading and GPU config already done
+        import tensorflow as tf
+        
+        # Check if we have GPUs (already configured by bootstrap)
+        gpus = tf.config.list_physical_devices("GPU")
+        logger.info("[MetaLearning] Starting training with %d GPUs available", len(gpus))
+        
+        if not gpus and gpu_available:
+            logger.warning("[MetaLearning] GPU was visible but TensorFlow cannot access it - check CUDA installation")
+        
+        # Enable mixed precision for Ampere GPUs (compute capability 8.6+)
+        if gpus:
+            try:
+                tf.keras.mixed_precision.set_global_policy("mixed_float16")
+                logger.info("🚀 [MetaLearning] Enabled mixed precision (float16) for faster training")
+            except Exception as e:
+                logger.debug("Mixed precision not available: %s", e)
+        
+        # 3) Split only if no external validation provided
         if X_va is None or y_va is None:
             X_tr, X_va, y_tr, y_va = train_test_split(
                 X_tr, y_tr, test_size=0.2, random_state=42
             )
         
-        # 3) Build model with safe defaults
-        model = self._build_model()
+        # 4) Build model with safe defaults
+        model = self._build_model(X_tr.shape[1])
         
-        # 4) Train
-        model.fit(X_tr, y_tr)
+        # 5) Train with callbacks
+        cbs = [
+            callbacks.EarlyStopping(patience=self.config.get("patience", 10), restore_best_weights=True),
+            callbacks.ReduceLROnPlateau(patience=5, factor=0.5, min_lr=1e-6)
+        ]
         
-        # 5) Store state and sanity check
+        model.fit(
+            X_tr, y_tr,
+            validation_data=(X_va, y_va),
+            epochs=self.config.get("epochs", 50),
+            batch_size=self.config.get("batch_size", 512),
+            callbacks=cbs,
+            verbose=0
+        )
+        
+        # 6) Store state and sanity check
         self.model = model
         self.is_trained = True
         self.post_fit_sanity(X_tr, "MetaLearning")
@@ -89,21 +130,40 @@ class MetaLearningTrainer(BaseModelTrainer):
         preds = self.model.predict(Xp)
         return np.nan_to_num(preds, nan=0.0).astype(np.float32)
 
-    def _build_model(self):
-        """Build MetaLearning model with safe defaults"""
-        base_estimators = [
-            ("lr", LinearRegression()),
-            ("rf", RandomForestRegressor(
-                n_estimators=self.config["n_estimators"],
-                max_depth=self.config["max_depth"],
-                n_jobs=self.config["n_jobs"],
-                random_state=42
-            ))
-        ]
+    def _build_model(self, input_dim: int) -> Model:
+        """Build MetaLearning model with TensorFlow/Keras - GPU accelerated"""
+        inputs = layers.Input(shape=(input_dim,), dtype="float32", name="x")
         
-        outer_lr = self.config.get("outer_lr", self.config.get("final_alpha", 1.0))
-        model = StackingRegressor(
-            estimators=base_estimators,
-            final_estimator=Ridge(alpha=outer_lr)
+        # Base learner 1: Linear path
+        linear = layers.Dense(self.config["hidden_dim"], activation="relu", name="linear_base")(inputs)
+        linear = layers.BatchNormalization()(linear)
+        linear = layers.Dropout(self.config["dropout"])(linear)
+        linear_out = layers.Dense(1, name="linear_pred")(linear)
+        
+        # Base learner 2: Non-linear path (deeper network)
+        nonlinear = layers.Dense(self.config["hidden_dim"] * 2, activation="relu", name="nonlinear_base1")(inputs)
+        nonlinear = layers.BatchNormalization()(nonlinear)
+        nonlinear = layers.Dropout(self.config["dropout"])(nonlinear)
+        nonlinear = layers.Dense(self.config["hidden_dim"], activation="relu", name="nonlinear_base2")(nonlinear)
+        nonlinear = layers.BatchNormalization()(nonlinear)
+        nonlinear = layers.Dropout(self.config["dropout"])(nonlinear)
+        nonlinear_out = layers.Dense(1, name="nonlinear_pred")(nonlinear)
+        
+        # Meta-learner: Combine base learners
+        combined = layers.Concatenate(name="meta_combine")([linear_out, nonlinear_out])
+        meta = layers.Dense(self.config["hidden_dim"], activation="relu", name="meta_layer")(combined)
+        meta = layers.BatchNormalization()(meta)
+        meta = layers.Dropout(self.config["dropout"])(meta)
+        outputs = layers.Dense(1, name="meta_pred")(meta)
+        
+        model = Model(inputs, outputs, name="meta_learning")
+        
+        # Compile with gradient clipping
+        opt = optimizers.Adam(
+            learning_rate=self.config["learning_rate"],
+            clipnorm=1.0
         )
+        
+        model.compile(optimizer=opt, loss="mse", metrics=["mae"])
+        
         return model
