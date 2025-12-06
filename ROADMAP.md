@@ -1,214 +1,225 @@
-# Fox ML Infrastructure — Roadmap
+# Fox ML Infrastructure — Strategic Roadmap
 
 Direction and priorities for ongoing development. Timelines are aspirational and subject to change.
 
-## Development Approach
+---
 
-As issues are discovered, they will be fixed immediately as time allows. Getting documentation and legal compliance sorted was a significant undertaking, and now the focus can shift back to core functionality. Response times will vary based on availability, but broken functionality will be addressed as quickly as possible.
+## Development Philosophy
 
-**Current Development Focus:**
-- **TRAINING pipeline** - ✅ **BACK TO BEING FUNCTIONAL** - Pipeline is now working correctly after fixing XGBoost installation issues and readline errors
-- **Orchestration** - ✅ **WORKING FINE** - Training pipeline orchestration is functioning correctly
-- **TensorFlow** - TensorFlow is working correctly with GPU support. Some warnings (version compatibility, plugin registration) are just noise - investigating further to clean up output. **Note:** These warnings may be computer-specific; waiting on feedback if others experience similar issues.
-- **GPU models** - ✅ **WORKING** - GPU models are functional and producing artifacts. Working on reducing noise and warning messages in output.
-- **GPU models** - Testing GPU models more later today
-- **Target ranking and selection scripts** - Testing these scripts today to confirm they're working
-- **Deeper refactors** - Planned for more intelligent training capabilities
-- **Integration** - Target ranking functionality will eventually be rolled into the TRAINING pipeline for easier use
+Fox-v1 is maintained with an **enterprise reliability mindset**:
 
-## Phase 0 — Winter 2025 (Right Now)
+* Critical issues are fixed immediately.
+* Documentation and legal compliance are treated as first-class deliverables.
+* Stability always precedes new features.
+* GPU acceleration, orchestration, and model tooling will remain backwards-compatible.
 
-### Stability & Documentation Hardening
+---
 
-**Status: ✅ COMPLETE**
+# Current Status — Winter 2025
 
-Documentation restructuring and creation completed:
-- ✅ Created complete 4-tier documentation hierarchy (55 new files)
-- ✅ Rewrote 50+ existing documentation files to enterprise standards
-- ✅ Organized internal documentation into `docs/internal/`
-- ✅ Created comprehensive navigation structure (`docs/INDEX.md`)
-- ✅ Standardized formatting and naming conventions
-- ✅ Added cross-links and "See Also" sections throughout
-- ✅ Configured enterprise `.gitignore` (excludes datasets, internal files)
-- ✅ Updated all legal documentation to 2025-2026
-- ✅ Added enterprise-grade commercial license clauses
+## Core System Status
 
-**Documentation Structure:**
-- **Tier A (Executive)**: 4 files - Quick Start, Architecture Overview, Getting Started
-- **Tier B (Tutorials)**: 14 files - Setup, Pipelines, Training, Trading, Configuration
-- **Tier C (Reference)**: 15 files - API, Data, Models, Systems, Configuration
-- **Tier D (Technical)**: 26 files - Research, Design, Benchmarks, Fixes, Roadmaps, Implementation, Testing, Operations
+* **TRAINING Pipeline — fully functional**
+  * XGBoost issues resolved, orchestration stable, GPU training operational.
 
-Goal: Deliver a stable, understandable release for early evaluators and commercial inquiries. **✅ ACHIEVED**
+* **GPU Models — functional**
+  * Most TensorFlow-based families (MLP, GAN, MetaLearning, MultiTask) run correctly with GPU.
+  * VAE has a serialization quirk being fixed.
 
-## Phase 1 — Next Development Cycle
+* **TensorFlow GPU — functional**
+  * Minor warnings are environment-specific; awaiting more user reports.
 
-This phase addresses the highest-impact improvements to onboarding, reliability, and developer experience.
+* **Target Ranking & Selection — testing in progress**
+  * Validating correctness before integration into the TRAINING pipeline.
 
-### TRAINING Pipeline Refactoring
+* **Documentation Overhaul — complete**
+  * 55 new files created, 50+ rewritten, standardized across all tiers.
 
-**Current Status: ✅ FUNCTIONAL**
-- ✅ TRAINING pipeline is back to being functional
-- ✅ Orchestration working fine - training pipeline orchestration is functioning correctly
-- ✅ Fixed XGBoost installation issues (was pointing to deleted /tmp directory)
-- ✅ Fixed readline symbol lookup errors in child processes
-- ✅ All model families can now be imported and trained correctly
-- ⚠️ TensorFlow warnings - TensorFlow is working correctly with GPU support. Some warnings (version compatibility, plugin registration) are just noise - investigating further to clean up output. **Note:** These warnings may be computer-specific; waiting on feedback if others experience similar issues.
-- ✅ **GPU models mostly working** - Most GPU models (MLP, GAN, MetaLearning, MultiTask) are functional and producing artifacts. VAE has a serialization issue being fixed. Working on reducing noise and warning messages in output.
-- 🔄 Testing target ranking and selection scripts today
+---
 
-**Planned Deeper Refactors:**
-- More intelligent training capabilities
-- Enhanced model selection and ensemble strategies
-- Improved feature engineering integration
-- Smarter hyperparameter optimization
-- Better handling of cross-sectional and time-series data
-- Advanced training workflows and automation
+# Phase 0 — Stability & Documentation (Complete)
 
-Impact: Transforms TRAINING from a functional system into an intelligent, adaptive training framework.
+## Deliverables Achieved
 
-### Centralized Configuration System
-- Move scattered config values into structured YAML.
-- Introduce a documented configuration schema.
-- Add validation + example templates to simplify onboarding.
+* Full 4-tier documentation hierarchy
+* Enterprise-grade legal docs
+* Navigation and cross-linking
+* Internal docs organized into `docs/internal/`
+* Consistent formatting, naming, and structure
+* Stable release for evaluators and enterprise inquiries
 
-Impact: Makes the system easier to deploy, audit, and reason about.
+**Outcome:** This phase **established Fox-v1 as an evaluable, commercial-grade product.**
 
-### Logging, Output & Developer UX Modernization
-- Standardize log formatting across all modules.
-- Improve readability and consistency of pipeline output.
-- Add optional LLM-friendly output modes for automated parsing.
-- Clean up naming conventions and internal terminology.
+---
 
-Impact: A smoother experience for both open-source users and enterprise clients.
+# Phase 1 — Intelligent Training Framework (In Progress)
 
-### Automated Memory Batching & Control
-- ✅ **Auto memory cleanup working** - Memory cleanup between model families is functioning correctly
-- ⚠️ **Auto memory management and batching still problematic** - The automated memory batching system has "wonky" behavior
-- Fix and improve automated memory batching system
-- Implement reliable memory control mechanisms
-- Address current "wonky" behavior in memory management module
-- Ensure stable memory usage during large-scale training runs
-- Add proper memory monitoring and automatic batching adjustments
+## Completed
 
-Impact: Prevents OOM errors and enables training on larger datasets reliably.
+* TRAINING pipeline restored and validated
+* GPU acceleration functional across major model families
+* XGBoost source-build stability fixes
+* Readline and child-process dependency issues resolved
 
-### Polars Cross-Sectional DataFrame Optimization
-- Optimize Polars cross-sectional dataframe building to avoid huge RAM spikes
-- Create cleaner, more manageable memory usage patterns
-- Implement streaming/chunked processing for large cross-sectional datasets
-- Reduce memory footprint during dataframe concatenation and transformation
-- Add memory-efficient cross-sectional aggregation methods
+## Active Work
 
-Impact: Enables processing of larger symbol universes without memory exhaustion, improves stability during training.
+* Testing target-ranking and selection modules
+* Reducing TensorFlow output noise and warnings
+* Fixing VAE serialization
 
-### Testing & Validation
+## Planned Deep Refactors
 
-**Current Status:**
-- **TensorFlow Module**: ✅ **FUNCTIONAL** - Previously had system-level library issue (executable stack permissions) that was resolved by user. TensorFlow GPU support is now working for the main TRAINING module. All TensorFlow families (MLP, VAE, GAN, MetaLearning, MultiTask, etc.) can use GPU.
-- **Alpaca Trading Module**: Broken due to minor errors - needs fixes
-- **IBKR Trading Module**: Untested - requires comprehensive testing
-- **Focus**: Training and ranking portions are the primary development priority
+* Intelligent training orchestration
+* Smarter model/ensemble selection
+* Improved feature engineering integration
+* Automated hyperparameter search
+* Robust cross-sectional + time-series workflows
 
-**Alpaca Trading Module**
-- Fix minor errors causing module breakage
-- Comprehensive testing suite for paper trading system
-- Integration testing with Alpaca API
-- Performance validation and optimization
-- Bug fixes and stability improvements
-- Documentation updates based on testing findings
+**Outcome:** TRAINING evolves from "functional" → "adaptive intelligence layer."
 
-**IBKR Trading Module**
-- Complete C++ component testing and validation
-- IBKR API integration testing
-- Live trading system testing and validation
-- Performance benchmarking and optimization
-- Safety and risk management validation
-- Bug fixes and stability improvements
+---
 
-## Phase 2 — Web Presence & Payment Flow
+# Phase 2 — Centralized Configuration & UX Modernization
 
-Stripe is already fully functional through email-based invoicing.
-This phase turns it into a seamless, professional customer journey.
+## Goals
 
-### Public Website + Integrated Payment Flow
-- Launch official Fox ML Infrastructure website.
-- Convert existing Stripe setup into a self-serve checkout flow.
-- Add clear pricing tiers and a "Request Access / Contact Sales" path.
-- Centralize docs, onboarding, system overview, and commercial materials.
+* YAML-based config schema (single source of truth)
+* Validation layer + example templates
+* Unified logging + consistent output formatting
+* Optional LLM-friendly structured logs for automation
+* Naming and terminology cleanup across modules
 
-Impact: Makes Fox ML Infrastructure feel like a complete, production-ready product.
+**Outcome:** Faster onboarding, easier enterprise deployment, more predictable behavior.
 
-## Phase 3 — Production Readiness
+---
 
-- Complete test coverage for all trading modules
-- Performance optimization across all components
-- Enhanced monitoring and observability
-- Production deployment guides
-- Disaster recovery procedures
+# Phase 3 — Memory & Data Efficiency
 
-## Phase 4 — Exploratory & Architectural Extensions
+## Automated Memory Batching
 
-Focused on expanding capabilities while keeping the core stable.
+* Fix current unstable behavior
+* Add monitoring & adaptive batching
+* Ensure clean memory reuse across model families
 
-### Exploratory Modules & Internal Enhancements
-- Explore toon-like or related module implementations.
-- Review user feedback and prioritize expansions accordingly.
-- Refine internal architecture based on evaluator insights.
+## Polars Cross-Sectional Optimization
 
-Impact: Controlled innovation without destabilizing the core system.
+* Streaming build operations
+* Large-universe symbol handling
+* Memory-efficient aggregation patterns
 
-## Phase 5 — High-Performance Rewrite Track
+**Outcome:** Enables large-scale training without OOM failures.
 
-Long-term improvements targeting performance at the systems level.
+---
 
-### Lower-Level Rewrites (C/C++/Rust)
-- Reimplement performance-critical paths in lower-level languages.
-- Boost throughput, memory efficiency, and integration with HPC tooling.
-- Build the foundation for future high-throughput variants of Fox-v1.
+# Phase 4 — Trading Modules (Alpaca & IBKR)
 
-Impact: Positions Fox ML Infrastructure as a high-performance, HPC-aligned ML stack.
+## Alpaca (Fixes Required)
 
-### Advanced Features
-- Enhanced model ensemble strategies
-- Advanced risk management features
-- Multi-asset class support
-- Real-time performance analytics
-- Advanced execution algorithms
+* Resolve current module breakage
+* Add paper-trading test suite
+* Improve stability and retry logic
+* Update documentation & examples
 
-### ROCm Support (Future)
-- **Status**: Planned for post-architecture-solidification phase
-- Add AMD GPU support via ROCm once major architecture is solidified
-- Enable TensorFlow/XGBoost/LightGBM GPU acceleration on AMD hardware
-- Requires stable CUDA abstraction layer and framework compatibility
-- Will follow same patterns as CUDA support but with ROCm backend
+## IBKR (Untested)
 
-Impact: Expands GPU acceleration support to AMD hardware, increasing accessibility and deployment options.
+* Complete C++ component verification
+* Live and paper trading tests
+* Performance benchmarking
+* Risk management validation
 
-## Development Priorities
+**Outcome:** Production-ready trading connectivity.
 
-Current focus areas (in rough order, subject to change):
+---
 
-- ✅ **Completed**: Documentation hardening (55 new files, 50+ rewritten)
-- ✅ **Completed**: TRAINING pipeline fixes - back to being functional
-- **Current Focus**: Testing GPU models and target ranking/selection scripts today
-- **Future**: Integration - target ranking rolled into TRAINING pipeline for easier use
-- **Next**: Config system + logging/output overhaul
-- **Next**: Fix automated memory batching and control
-- **Next**: Optimize Polars cross-sectional dataframe building
-- **Pending**: Alpaca module fixes (broken due to minor errors)
-- **Pending**: IBKR module testing (untested, needs validation)
-- **Future**: Website + integrated Stripe checkout
-- **Future**: Production readiness and deployment guides
-- **Future**: Exploratory modules and enhancements
-- **Long-term**: Lower-level performance rewrites and advanced features
+# Phase 5 — Web Presence & Payments
 
-*Note: As a solo developer, timelines are flexible and priorities may shift based on user feedback and project needs.*
+## Website + Stripe Checkout
 
-## Long-term Vision
+* Public Fox ML Infrastructure homepage
+* Pricing tiers + purchase flow
+* "Request Access / Contact Sales" onboarding
+* Hosted docs + system overview
 
-- Enterprise-grade trading infrastructure
-- Scalable multi-strategy framework
-- Comprehensive risk management
-- Production-ready deployment
-- Extensive documentation and support
+**Outcome:** Enterprise-ready commercial experience.
+
+---
+
+# Phase 6 — Production Hardening
+
+* Full test coverage
+* Monitoring & observability
+* Deployment guides
+* Disaster recovery patterns
+* Performance tuning
+
+**Outcome:** Ready for institutional deployment.
+
+---
+
+# Phase 7 — High-Performance Rewrite Track (Long-Term)
+
+## Low-Level Rewrites (C/C++/Rust)
+
+* Rewrite performance-critical paths
+* HPC alignment + low-latency architecture
+* GPU-first and multi-GPU scaling
+
+## Advanced Features
+
+* Model ensemble architecture
+* Multi-asset support
+* Advanced execution and risk engines
+* Real-time analytics pipeline
+
+## ROCm Support (Future)
+
+* AMD GPU backend
+* TensorFlow/XGBoost/LightGBM support via ROCm
+* Parity with CUDA workflows
+
+**Outcome:** Fox-v1 becomes an HPC-aligned, cross-platform ML stack.
+
+---
+
+# Development Priorities (Live List)
+
+1. **Testing GPU models + ranking system**
+2. Configuration system & logging revamp
+3. Memory batching + Polars optimizations
+4. Alpaca module fixes
+5. IBKR validation
+6. Website + Stripe checkout
+7. Production readiness
+8. Exploratory modules
+9. High-performance rewrite track
+
+---
+
+# Vision
+
+Fox ML Infrastructure is evolving into:
+
+* A full-scale enterprise ML & trading infrastructure stack
+* Multi-strategy, multi-model, GPU-accelerated
+* Well-documented, configurable, and production-grade
+* A foundation for future HPC and cross-platform ML systems
+
+This roadmap reflects the maturation of Fox-v1 from a high-powered solo project into a **commercially viable, enterprise-class ML platform.**
+
+---
+
+# Known Issues & Environment Notes
+
+## TensorFlow GPU Warnings
+
+Some TensorFlow warnings (version compatibility, plugin registration) may appear during training. These are typically environment-specific and do not affect functionality:
+
+* **Version compatibility warnings** (`use_unbounded_threadpool`) — Harmless version mismatch messages when graphs are created with newer TensorFlow than runtime.
+* **Plugin registration warnings** (cuFFT, cuDNN, cuBLAS) — Expected when TensorFlow initializes CUDA plugins multiple times in isolated processes.
+* **Status:** TensorFlow GPU support is functional. Warnings are being investigated and may be computer-specific. Waiting on feedback if others experience similar issues.
+
+## Module Status
+
+* **Alpaca Trading Module:** Broken due to minor errors — needs fixes
+* **IBKR Trading Module:** Untested — requires comprehensive testing
+* **Focus:** Training and ranking portions are the primary development priority
