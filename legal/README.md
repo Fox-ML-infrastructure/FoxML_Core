@@ -37,6 +37,36 @@ This directory is organized into the following structure:
 - **`ENTERPRISE_DELIVERY.md`** — Enterprise delivery model: repository structure, IP rules, git workflow, and pricing alignment
 - **`Comprehensive overview.md`** — Comprehensive overview of services and capabilities
 
+### 📁 Root Level — Enterprise & Operational Documents
+
+Enterprise-ready documentation for buyers, legal departments, and CTOs:
+
+**Support & Service Levels:**
+- **`SUPPORT_POLICY.md`** — Support tiers (Standard, Business, Enterprise, Premium) with response times and coverage
+- **`SERVICE_LEVEL_AGREEMENT.md`** — SLA terms for Enterprise support tier
+
+**Security & Compliance:**
+- **`SECURITY.md`** — Public-facing security statement: data handling, privacy, supply chain integrity, and client-hosted architecture
+- **`DATA_PROCESSING_ADDENDUM.md`** — Data Processing Addendum (DPA): zero data processing, no telemetry, client-hosted architecture
+- **`INFOSEC_SELF_ASSESSMENT.md`** — Information security self-assessment: pre-empts enterprise security review questions
+
+**Legal & Risk Management:**
+- **`INDEMNIFICATION.md`** — Standalone indemnification clause: licensee and licensor indemnification obligations
+- **`WARRANTY_LIABILITY_ADDENDUM.md`** — Warranty & liability addendum: "AS IS" provision, liability cap, no financial guarantees
+- **`ACCEPTABLE_USE_POLICY.md`** — Acceptable Use Policy (AUP): permitted and prohibited uses, compliance requirements
+- **`EXPORT_COMPLIANCE.md`** — Export compliance statement: EAR99 classification, licensee responsibilities, international compliance
+- **`IP_OWNERSHIP_CLARIFICATION.md`** — IP ownership clarification: core platform IP, client-owned IP, custom features, reuse rights
+
+**Release & Delivery:**
+- **`RELEASE_POLICY.md`** — Versioning strategy (semantic versioning), release cadence, deprecation policy, and safe migration guidelines
+- **`CHANGELOG_ENTERPRISE.md`** — Enterprise changelog documenting all changes for commercial licensees
+- **`ENTERPRISE_DELIVERY.md`** — Enterprise delivery model: repository structure, IP rules, git workflow, and pricing alignment
+
+**Onboarding & Operations:**
+- **`CLIENT_ONBOARDING.md`** — Client onboarding guide: setup, configuration, integration, and custom feature requests
+- **`ENTERPRISE_CHECKLIST.md`** — Enterprise readiness checklist: documentation, logging, security, testing, deployability, and compliance
+- **`TRADEMARK_POLICY.md`** — Trademark and branding policy: permitted uses, prohibited uses, and brand protection
+
 ### 📁 `consulting/` — Consulting & Custom Development Documents
 
 Core documents for consulting engagements:
@@ -48,9 +78,7 @@ Core documents for consulting engagements:
 - **`CONSULTING_PRICING.md`** — Details pricing tiers, deliverable-based rates, and engagement structures
 - **`CONSULTING_OVERVIEW.md`** — High-level overview of consulting methodology, engagement format, and workflow
 - **`CONSULTING.md`** — Detailed services description
-- **`SERVICES.md`** — Organizational services overview
 - **`ADVANCED_OUTLINE_WIP.md`** — Working outline for multi-phase ML or HPC engagements
-- **`IP_TERMS.md`** — Detailed IP terms document
 
 *Note: Licensing documents (LICENSING.md, COMMERCIAL_LICENSE.md, CLA.md, SUBSCRIPTIONS.md, TOS.md) are located in the root of this directory.*
 
@@ -59,7 +87,6 @@ Core documents for consulting engagements:
 Internal documents and client-facing forms:
 
 - **`SECURITY_AND_ACCESS_POLICY.md`** — Data handling, credential rules, infrastructure access, and compliance practices
-- **`SECURITY_POLICY.md`** — Summary security policy
 - **`INTAKE_FORM.md`** — Structured form for clients to submit project details and initial scoping information
 - **`CURRENT_AVAILABILITY.md`** — Current availability status and readiness information
 - **`NOTICE_IMPORTANT.md`** — Important business formation and insurance status

@@ -19,9 +19,9 @@ Intended for: Students, researchers, hobbyists, internal evaluation prior to pur
 
 ⸻
 
-B. Commercial License (Standard Support)
+B. Standard Support (Included with Commercial License)
 
-Included with paid commercial licenses.
+Included with all paid commercial licenses.
 
 Channels:
 	•	Email support
@@ -29,8 +29,9 @@ Channels:
 	•	Access to documentation and onboarding materials
 
 Response Times:
-	•	Initial acknowledgement: within 3 business days
+	•	Initial acknowledgement: within 3 business days (72 hours)
 	•	Substantive response: within 7 business days
+	•	No guaranteed resolution timelines
 
 Coverage:
 	•	Installation issues
@@ -43,21 +44,55 @@ Excludes:
 	•	Custom feature requests
 	•	SLA guarantees
 	•	Real-time support
+	•	Priority bug fixes
+	•	Scheduled calls
 
 ⸻
 
-C. Enterprise Support (Premium)
+C. Business Support
 
-Available for organizations requiring stricter guarantees.
+Available as an add-on for organizations requiring faster response times.
 
 Channels:
 	•	Dedicated support email
-	•	Optional scheduled call windows
-	•	Prioritized issue handling
+	•	Issue tracking via private repository
+	•	Access to documentation and onboarding materials
 
 Response Times:
-	•	Initial acknowledgement: within 1 business day
+	•	Initial acknowledgement: within 1 business day (24 hours)
 	•	Substantive response: within 3 business days
+	•	Limited to standard business hours (US Central Time)
+
+Coverage:
+	•	Priority bug-fix handling
+	•	Deployment guidance
+	•	Integration questions
+	•	Configuration assistance
+	•	Best practices guidance
+
+Excludes:
+	•	Custom feature development
+	•	Scheduled calls
+	•	Emergency patches
+	•	Real-time support
+
+⸻
+
+D. Enterprise Support
+
+Available for organizations requiring same-business-day response and scheduled support windows.
+
+Channels:
+	•	Dedicated enterprise support email
+	•	Optional scheduled call windows (pre-arranged)
+	•	Prioritized issue handling
+	•	Private issue tracking
+
+Response Times:
+	•	Initial acknowledgement: same business day
+	•	Substantive response: within 1-2 business days
+	•	Status updates: every 3 business days for critical issues
+	•	Emergency patches: best-effort, negotiated case-by-case
 
 Coverage:
 	•	Priority bug fixes
@@ -65,12 +100,45 @@ Coverage:
 	•	Integration questions
 	•	Pre-purchase architectural discussions
 	•	Assistance with configuration / best practices
+	•	Scheduled support calls (limited hours)
 
 Optional Add-ons (Negotiated Separately):
-	•	Custom feature development
-	•	On-site or virtual training
 	•	Extended SLAs
 	•	Long-term maintenance agreements
+	•	Custom feature development (via SOW)
+
+⸻
+
+E. Premium Support ("White-Glove")
+
+Available for organizations requiring the highest level of support and priority engineering.
+
+Channels:
+	•	Dedicated premium support email
+	•	Scheduled support calls (flexible scheduling)
+	•	Highest priority issue handling
+	•	Direct access to engineering resources
+
+Response Times:
+	•	Initial acknowledgement: same business day (typically within hours)
+	•	Substantive response: within 1 business day
+	•	Status updates: every 1-2 business days for critical issues
+	•	Emergency patches: priority engineering resources
+
+Coverage:
+	•	Highest priority bug fixes
+	•	Priority custom feature development (via SOW)
+	•	Deployment guidance and architecture review
+	•	Integration questions and best practices
+	•	Scheduled support calls (flexible hours)
+	•	Pre-purchase architectural discussions
+	•	Direct engineering consultation
+
+Optional Add-ons (Negotiated Separately):
+	•	Extended SLAs with specific guarantees
+	•	Long-term maintenance agreements
+	•	Custom feature development with priority scheduling
+	•	On-site or virtual training
 
 ⸻
 
