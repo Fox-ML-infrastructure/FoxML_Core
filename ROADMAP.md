@@ -96,7 +96,7 @@ Impact: Enables processing of larger symbol universes without memory exhaustion,
 Stripe is already fully functional through email-based invoicing.
 This phase turns it into a seamless, professional customer journey.
 
-### 4. Public Website + Integrated Payment Flow
+### Public Website + Integrated Payment Flow
 - Launch official Fox ML Infrastructure website.
 - Convert existing Stripe setup into a self-serve checkout flow.
 - Add clear pricing tiers and a "Request Access / Contact Sales" path.
