@@ -574,11 +574,18 @@ def build_sequences_from_features(X, lookback=64):
     return X_seq
 
 def tf_available():
-    """Check if TensorFlow is available."""
+    """Check if TensorFlow is available.
+    
+    Note: This is a lenient check - we only verify the module can be imported.
+    Full initialization happens in child processes, so we don't need to verify
+    GPU availability or full library loading here.
+    """
     try:
-        import tensorflow as tf
+        import tensorflow as tf  # noqa: F401
         return True
-    except ImportError:
+    except (ImportError, Exception):
+        # Catch all exceptions - TensorFlow might fail to import for various reasons
+        # (library loading, CUDA issues, etc.) but child processes will handle it
         return False
 
 def ngboost_available():
@@ -966,9 +973,14 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                 # Check TensorFlow dependency (skip for torch families)
                 if caps.get("backend") == "torch":
                     pass  # never gate on TF for torch families
-                elif caps.get("needs_tf") and not tf_available():
-                    logger.warning(f"TensorFlow missing → skipping {family}")
-                    continue
+                elif caps.get("needs_tf"):
+                    # For isolated models, let child process handle TF availability
+                    # For in-process models, check TF availability in parent
+                    from TRAINING.common.runtime_policy import should_isolate
+                    if not should_isolate(family) and not tf_available():
+                        logger.warning(f"TensorFlow missing → skipping {family}")
+                        continue
+                    # If isolated, child process will handle TF import/initialization
                 
                 # Check NGBoost dependency
                 if family == "NGBoost" and not ngboost_available():
