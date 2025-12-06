@@ -57,7 +57,13 @@ Impact: Prevents OOM errors and enables training on larger datasets reliably.
 
 ### 4. Testing & Validation
 
+**Current Status:**
+- **Alpaca Trading Module**: Broken due to minor errors - needs fixes
+- **IBKR Trading Module**: Untested - requires comprehensive testing
+- **Focus**: Training and ranking portions are the primary development priority
+
 **Alpaca Trading Module**
+- Fix minor errors causing module breakage
 - Comprehensive testing suite for paper trading system
 - Integration testing with Alpaca API
 - Performance validation and optimization
@@ -127,9 +133,11 @@ Impact: Positions Fox ML Infrastructure as a high-performance, HPC-aligned ML st
 Current focus areas (in rough order, subject to change):
 
 - ✅ **Completed**: Documentation hardening (55 new files, 50+ rewritten)
+- **Current Focus**: Training and ranking portions
 - **Next**: Config system + logging/output overhaul
 - **Next**: Fix automated memory batching and control
-- **Ongoing**: Testing & validation for Alpaca and IBKR modules
+- **Pending**: Alpaca module fixes (broken due to minor errors)
+- **Pending**: IBKR module testing (untested, needs validation)
 - **Future**: Website + integrated Stripe checkout
 - **Future**: Production readiness and deployment guides
 - **Future**: Exploratory modules and enhancements
