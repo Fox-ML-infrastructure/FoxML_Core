@@ -2,6 +2,10 @@
 
 Direction and priorities for ongoing development. Timelines are aspirational and subject to change.
 
+## Development Approach
+
+As issues are discovered, they will be fixed immediately as time allows. Getting documentation and legal compliance sorted was a significant undertaking, and now the focus can shift back to core functionality. Response times will vary based on availability, but broken functionality will be addressed as quickly as possible.
+
 ## Phase 0 — Winter 2025 (Right Now)
 
 ### Stability & Documentation Hardening
@@ -142,10 +146,6 @@ Current focus areas (in rough order, subject to change):
 - **Future**: Production readiness and deployment guides
 - **Future**: Exploratory modules and enhancements
 - **Long-term**: Lower-level performance rewrites and advanced features
-
-### Development Approach
-
-As issues are discovered, they will be fixed immediately as time allows. Getting documentation and legal compliance sorted was a significant undertaking, and now the focus can shift back to core functionality. Response times will vary based on availability, but broken functionality will be addressed as quickly as possible.
 
 *Note: As a solo developer, timelines are flexible and priorities may shift based on user feedback and project needs.*
 
