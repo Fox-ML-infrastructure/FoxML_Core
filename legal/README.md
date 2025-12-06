@@ -49,6 +49,11 @@ Enterprise-ready documentation for buyers, legal departments, and CTOs:
 - **`SECURITY.md`** — Public-facing security statement: data handling, privacy, supply chain integrity, and client-hosted architecture
 - **`DATA_PROCESSING_ADDENDUM.md`** — Data Processing Addendum (DPA): zero data processing, no telemetry, client-hosted architecture
 - **`INFOSEC_SELF_ASSESSMENT.md`** — Information security self-assessment: pre-empts enterprise security review questions
+- **`PRIVACY_POLICY.md`** — Privacy Policy: data collection, usage, retention, and user rights
+- **`DATA_RETENTION_DELETION_POLICY.md`** — Data retention periods and deletion procedures
+- **`INCIDENT_RESPONSE_PLAN.md`** — Incident Response Plan (IRP): detection, response, and notification procedures
+- **`BUSINESS_CONTINUITY_PLAN.md`** — Business Continuity Plan (BCP): operational resilience and recovery procedures
+- **`RISK_ASSESSMENT_MATRIX.md`** — Risk assessment matrix: risk identification, assessment, and mitigation strategies
 
 **Legal & Risk Management:**
 - **`INDEMNIFICATION.md`** — Standalone indemnification clause: licensee and licensor indemnification obligations
@@ -59,6 +64,7 @@ Enterprise-ready documentation for buyers, legal departments, and CTOs:
 
 **Release & Delivery:**
 - **`RELEASE_POLICY.md`** — Versioning strategy (semantic versioning), release cadence, deprecation policy, and safe migration guidelines
+- **`RELEASE_NOTES_TAGGING_STANDARD.md`** — Release notes and tagging standard: format, structure, and guidelines
 - **`CHANGELOG_ENTERPRISE.md`** — Enterprise changelog documenting all changes for commercial licensees
 - **`ENTERPRISE_DELIVERY.md`** — Enterprise delivery model: repository structure, IP rules, git workflow, and pricing alignment
 
