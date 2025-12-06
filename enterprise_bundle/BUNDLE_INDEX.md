@@ -19,6 +19,11 @@ This directory contains PDF versions of all enterprise-ready legal and operation
 4. **DATA_PROCESSING_ADDENDUM.pdf** — Data Processing Addendum (DPA)
 5. **INFOSEC_SELF_ASSESSMENT.pdf** — Information security self-assessment
 6. **EXPORT_COMPLIANCE.pdf** — Export compliance statement (EAR99)
+7. **PRIVACY_POLICY.pdf** — Privacy Policy (public-facing)
+8. **DATA_RETENTION_DELETION_POLICY.pdf** — Data retention and deletion policy
+9. **INCIDENT_RESPONSE_PLAN.pdf** — Incident Response Plan (IRP)
+10. **BUSINESS_CONTINUITY_PLAN.pdf** — Business Continuity Plan (BCP)
+11. **RISK_ASSESSMENT_MATRIX.pdf** — Risk assessment matrix
 
 ### Legal & Risk Management
 
@@ -40,9 +45,13 @@ This directory contains PDF versions of all enterprise-ready legal and operation
 16. **ENTERPRISE_CHECKLIST.pdf** — Enterprise readiness checklist
 17. **TRADEMARK_POLICY.pdf** — Trademark and branding policy
 
+### Release & Standards
+
+18. **RELEASE_NOTES_TAGGING_STANDARD.pdf** — Release notes and tagging standard
+
 ---
 
-## Total: 17 PDF Documents
+## Total: 23 PDF Documents
 
 All documents are ready for enterprise procurement, legal review, and compliance audits.
 
