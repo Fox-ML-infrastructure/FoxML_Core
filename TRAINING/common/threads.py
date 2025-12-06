@@ -337,8 +337,9 @@ def child_env_for_family(family: str, threads: int, gpu_ok: bool = True) -> dict
     env = {
         # Fix readline library symbol lookup error
         # Suppress "sh: undefined symbol: rl_print_keybinding" errors
-        "SHELL": os.environ.get("SHELL", "/usr/bin/bash"),  # Use bash instead of sh
+        "SHELL": "/usr/bin/bash",  # Force bash instead of sh
         "TERM": "dumb",  # Disable readline features to avoid symbol lookup errors
+        "INPUTRC": "/dev/null",  # Disable readline config file
         
         # Threading knobs
         "OMP_NUM_THREADS": str(actual_omp),

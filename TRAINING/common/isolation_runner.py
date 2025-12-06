@@ -58,8 +58,13 @@ _CPU_FAMILIES = {"QuantileLightGBM", "LightGBM", "RewardBased", "Ensemble",
 # ---- Fix readline library symbol lookup error ----
 # Suppress readline issues that can cause "sh: undefined symbol: rl_print_keybinding"
 # This happens when sh/bash was compiled against a different readline version
-_os.environ.setdefault("SHELL", "/usr/bin/bash")  # Use bash instead of sh if available
-_os.environ.setdefault("TERM", "dumb")  # Disable readline features
+# Set these BEFORE any imports that might spawn subprocesses
+if "SHELL" not in _os.environ:
+    _os.environ["SHELL"] = "/usr/bin/bash"  # Use bash instead of sh if available
+if "TERM" not in _os.environ:
+    _os.environ["TERM"] = "dumb"  # Disable readline features
+# Also suppress readline completely
+_os.environ.setdefault("INPUTRC", "/dev/null")  # Disable readline config
 
 if _FAMILY in _GPU_FAMILIES:
     # GPU family: expose GPU 0 (unless parent explicitly set a different value)
