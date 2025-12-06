@@ -120,6 +120,10 @@ class LSTMTrainer(BaseModelTrainer):
     def predict(self, X: np.ndarray) -> np.ndarray:
         if not self.is_trained:
             raise ValueError("Model not trained yet")
+        # Handle 3D input (from post_fit_sanity) by reshaping to 2D for preprocessing
+        # LSTM uses shape (samples, timesteps, 1), so reshape to (samples, timesteps)
+        if len(X.shape) == 3:
+            X = X.reshape(X.shape[0], X.shape[1])
         Xp, _ = self.preprocess_data(X, None)
         Xp = Xp.reshape(Xp.shape[0], Xp.shape[1], 1)
         preds = self.model.predict(Xp, verbose=0).ravel()
