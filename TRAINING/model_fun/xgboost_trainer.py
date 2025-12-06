@@ -112,8 +112,10 @@ class XGBoostTrainer(BaseModelTrainer):
                     dvalid = xgb.DMatrix(X_va, label=y_va)
                 
                 # Get booster directly for more control
+                # XGBoost 3.x API: use device='cuda' with tree_method='hist'
                 params = {
-                    'tree_method': 'gpu_hist',
+                    'device': 'cuda',  # XGBoost 3.x API
+                    'tree_method': 'hist',
                     'predictor': 'gpu_predictor',
                     'max_depth': self.config["max_depth"],
                     'min_child_weight': self.config["min_child_weight"],
@@ -172,7 +174,7 @@ class XGBoostTrainer(BaseModelTrainer):
                         # Retry on CPU - MUST update model to CPU mode and rebuild DMatrix
                         logger.info("[XGBoost] Retrying with CPU (hist method)")
                         
-                        # Set CPU parameters (critical - model still has gpu_hist!)
+                        # Set CPU parameters (critical - model still has device='cuda'!)
                         model.set_params(
                             tree_method='hist',
                             predictor='cpu_predictor',
@@ -262,21 +264,22 @@ class XGBoostTrainer(BaseModelTrainer):
                 logger.info("[XGBoost] nvidia-smi not available, GPU not accessible")
                 return False
             
-            # Try to actually use gpu_hist - this is the real test
+            # Try to actually use GPU - this is the real test
+            # XGBoost 3.x uses device='cuda' with tree_method='hist' (not gpu_hist)
             try:
                 test_data = xgb.DMatrix([[1, 2, 3]], label=[1])
-                # Try with gpu_hist - if this fails, GPU isn't actually usable
-                xgb.train({"tree_method": "gpu_hist", "max_depth": 1}, test_data, num_boost_round=1)
+                # Try with device='cuda' (XGBoost 3.x API)
+                xgb.train({"device": "cuda", "tree_method": "hist", "max_depth": 1}, test_data, num_boost_round=1)
                 logger.info("[XGBoost] ✅ GPU available and working!")
                 return True
-            except ValueError as ve:
-                # ValueError means gpu_hist isn't a valid option (even if built with CUDA)
+            except (ValueError, RuntimeError) as ve:
+                # ValueError/RuntimeError means GPU isn't available or not properly configured
                 error_msg = str(ve).lower()
-                if "gpu_hist" in error_msg or "valid values" in error_msg:
-                    logger.warning(f"[XGBoost] ❌ GPU tree_method not available: {ve}")
+                if "device" in error_msg or "cuda" in error_msg or "gpu" in error_msg:
+                    logger.warning(f"[XGBoost] ❌ GPU not available: {ve}")
                     logger.info("[XGBoost] Falling back to CPU (tree_method='hist')")
                     return False
-                raise  # Re-raise if it's a different ValueError
+                raise  # Re-raise if it's a different error
             except Exception as e:
                 # Any other error means GPU isn't working
                 logger.warning(f"[XGBoost] ❌ GPU test failed: {e}")
@@ -289,20 +292,25 @@ class XGBoostTrainer(BaseModelTrainer):
     
     def _build_model(self, cpu_only: bool = False):
         """Build XGBoost model with safe defaults"""
+        # XGBoost 3.x uses device='cuda' with tree_method='hist' (not gpu_hist)
         # Always use CPU if explicitly requested or if GPU isn't available
-        tree_method = "hist" if cpu_only else "gpu_hist"
+        tree_method = "hist"  # Always use hist (GPU is controlled by device parameter)
+        use_gpu = False
         
-        # Double-check: if gpu_hist was selected but GPU isn't actually available, fall back to hist
-        if tree_method == "gpu_hist":
-            if not self._check_gpu_available():
-                logger.warning("[XGBoost] GPU check failed during model build, forcing CPU (hist)")
-                tree_method = "hist"
+        if not cpu_only:
+            # Check if GPU is available before using it
+            if self._check_gpu_available():
+                use_gpu = True
+            else:
+                logger.warning("[XGBoost] GPU check failed during model build, forcing CPU")
                 cpu_only = True
         
         # Memory-efficient settings for GPU
         extra_params = {}
-        if not cpu_only:
+        if use_gpu:
+            # XGBoost 3.x API: use device='cuda' with tree_method='hist'
             extra_params.update({
+                'device': 'cuda',  # Enable GPU (XGBoost 3.x API)
                 'max_bin': 256,  # Reduce memory usage
                 'single_precision_histogram': True,  # Half precision for histograms
             })

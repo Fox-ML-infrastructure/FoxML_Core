@@ -69,6 +69,8 @@ TRAINING/modular_output/
 TRAINING/EXPERIMENTS/output/
 TRAINING/EXPERIMENTS/metadata/
 TRAINING/EXPERIMENTS/logs/
+TRAINING/test_output*/
+**/test_output*/
 catboost_info/
 lightgbm_models/
 xgboost_models/

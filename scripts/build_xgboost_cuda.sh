@@ -130,6 +130,9 @@ cmake .. \
 
 make -j$(nproc)
 
+echo "📦 Installing XGBoost library to system..."
+make install
+
 echo "📦 Installing XGBoost Python package..."
 cd ../python-package
 pip install -e . --no-deps
@@ -144,7 +147,8 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
 
 try:
     test_data = xgb.DMatrix([[1, 2, 3]], label=[1])
-    xgb.train({"tree_method": "gpu_hist", "max_depth": 1}, test_data, num_boost_round=1)
+    # XGBoost 3.x API: use device='cuda' with tree_method='hist' (not gpu_hist)
+    xgb.train({"device": "cuda", "tree_method": "hist", "max_depth": 1}, test_data, num_boost_round=1)
     print("✅ SUCCESS! XGBoost GPU support is working!")
 except Exception as e:
     print(f"❌ GPU support not working: {e}")

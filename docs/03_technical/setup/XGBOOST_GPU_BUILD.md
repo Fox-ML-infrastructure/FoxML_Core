@@ -121,7 +121,8 @@ import os
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
 
 test_data = xgb.DMatrix([[1, 2, 3]], label=[1])
-xgb.train({"tree_method": "gpu_hist", "max_depth": 1}, test_data, num_boost_round=1)
+# XGBoost 3.x API: use device='cuda' with tree_method='hist' (not gpu_hist)
+xgb.train({"device": "cuda", "tree_method": "hist", "max_depth": 1}, test_data, num_boost_round=1)
 print("✅ XGBoost GPU support is working!")
 ```
 
@@ -165,7 +166,17 @@ conda install gcc_linux-64 gxx_linux-64 -y
 
 ### Issue: "gpu_hist" still not available after build
 
-**Solution:** 
+**Solution:** XGBoost 3.x uses a different API! Use `device='cuda'` with `tree_method='hist'` instead of `tree_method='gpu_hist'`:
+
+```python
+# Old API (XGBoost 2.x):
+xgb.train({"tree_method": "gpu_hist", ...}, ...)
+
+# New API (XGBoost 3.x):
+xgb.train({"device": "cuda", "tree_method": "hist", ...}, ...)
+```
+
+If you still have issues:
 1. Verify the build completed successfully
 2. Uninstall old XGBoost: `pip uninstall xgboost -y`
 3. Reinstall from the built package
@@ -240,11 +251,12 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 # This should work if GPU support is properly built
+# XGBoost 3.x API: use device='cuda' with tree_method='hist'
 test_data = xgb.DMatrix([[1, 2, 3]], label=[1])
 try:
-    xgb.train({"tree_method": "gpu_hist", "max_depth": 1}, test_data, num_boost_round=1)
+    xgb.train({"device": "cuda", "tree_method": "hist", "max_depth": 1}, test_data, num_boost_round=1)
     print("✅ GPU support working!")
-except ValueError as e:
+except (ValueError, RuntimeError) as e:
     print(f"❌ GPU support not available: {e}")
 ```
 
