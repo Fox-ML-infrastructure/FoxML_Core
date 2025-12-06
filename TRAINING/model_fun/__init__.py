@@ -53,7 +53,24 @@ __all__ = [
 # ---- TensorFlow families (only import if TF is allowed and available) ----
 if _os.getenv("TRAINER_CHILD_NO_TF", "0") != "1":
     try:
-        import tensorflow as tf
+        # Suppress CUDA warnings during import (they're harmless - TF will use CPU)
+        import sys
+        import io
+        import contextlib
+        
+        # Redirect stderr during TensorFlow import to suppress CUDA warnings
+        @contextlib.contextmanager
+        def suppress_stderr():
+            """Temporarily redirect stderr to suppress TensorFlow CUDA warnings."""
+            old_stderr = sys.stderr
+            try:
+                sys.stderr = io.StringIO()
+                yield
+            finally:
+                sys.stderr = old_stderr
+        
+        with suppress_stderr():
+            import tensorflow as tf
         _TF_AVAILABLE = True
     except ImportError:
         _TF_AVAILABLE = False

@@ -19,6 +19,26 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import os, sys
 from pathlib import Path
 
+# CRITICAL: Set LD_LIBRARY_PATH for conda CUDA libraries BEFORE any imports
+# This must happen before TensorFlow tries to load CUDA libraries
+conda_prefix = os.environ.get("CONDA_PREFIX")
+if conda_prefix:
+    conda_lib = os.path.join(conda_prefix, "lib")
+    conda_targets_lib = os.path.join(conda_prefix, "targets", "x86_64-linux", "lib")
+    current_ld_path = os.environ.get("LD_LIBRARY_PATH", "")
+    new_paths = []
+    if conda_lib not in current_ld_path:
+        new_paths.append(conda_lib)
+    if conda_targets_lib not in current_ld_path:
+        new_paths.append(conda_targets_lib)
+    if new_paths:
+        updated_ld_path = ":".join(new_paths + [current_ld_path] if current_ld_path else new_paths)
+        os.environ["LD_LIBRARY_PATH"] = updated_ld_path
+
+# Suppress TensorFlow CUDA warnings (they're harmless - TF will just use CPU)
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")  # ERROR level only
+os.environ.setdefault("TF_LOGGING_VERBOSITY", "ERROR")
+
 # project root likely: .../secure/trader (parent of TRAINING)
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -394,7 +414,7 @@ _env_guard(max(1, (os.cpu_count() or 2) - 1), mkl_threads=1)
 os.environ.setdefault("PYTHONHASHSEED", "42")
 os.environ.setdefault("TF_DETERMINISTIC_OPS", "1")
 os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
-os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+# TF_CPP_MIN_LOG_LEVEL already set at top of file
 
 # CRITICAL: Import determinism FIRST before any ML libraries
 from TRAINING.common.determinism import set_global_determinism, stable_seed_from, seed_for, get_deterministic_params, log_determinism_info

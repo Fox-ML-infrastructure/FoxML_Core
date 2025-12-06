@@ -72,7 +72,10 @@ if _os.getenv("TRAINER_CHILD_NO_TORCH", "0") == "1":
     for module_name in ("torch", "torch._C", "torch.cuda", "pytorch_lightning", "torchvision"):
         _block_module(module_name)
 
-# Block TF if NO_TF=1 (prevents TF GPU init in CPU families)
+# Suppress TensorFlow CUDA warnings (they're harmless - TF will just use CPU)
+_os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")  # ERROR level only
+_os.environ.setdefault("TF_LOGGING_VERBOSITY", "ERROR")
+
 # Ensure conda CUDA libraries are accessible to TensorFlow
 _conda_prefix = _os.environ.get("CONDA_PREFIX")
 if _conda_prefix:
@@ -88,6 +91,8 @@ if _conda_prefix:
     if _new_paths:
         _updated_ld_path = ":".join(_new_paths + [_current_ld_path] if _current_ld_path else _new_paths)
         _os.environ["LD_LIBRARY_PATH"] = _updated_ld_path
+
+# Block TF if NO_TF=1 (prevents TF GPU init in CPU families)
 
 # NOTE: Do NOT touch CUDA_VISIBLE_DEVICES here - it's set above based on family
 if _os.getenv("TRAINER_CHILD_NO_TF", "0") == "1":
