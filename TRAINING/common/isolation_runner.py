@@ -187,7 +187,23 @@ def _bootstrap_family_runtime(family: str, logger_inst):
         if "tf" in policy.backends and not no_tf:
             # Ensure TF memory growth is enabled before import
             _os.environ.setdefault("TF_FORCE_GPU_ALLOW_GROWTH", "true")
-            import tensorflow as tf
+            # Suppress CUDA warnings during import (they're harmless - TF will use CPU)
+            import sys
+            import io
+            import contextlib
+            
+            @contextlib.contextmanager
+            def suppress_stderr():
+                """Temporarily redirect stderr to suppress TensorFlow CUDA warnings."""
+                old_stderr = sys.stderr
+                try:
+                    sys.stderr = io.StringIO()
+                    yield
+                finally:
+                    sys.stderr = old_stderr
+            
+            with suppress_stderr():
+                import tensorflow as tf
             
             # Set TF threading (read from env vars set by child_env_for_family)
             intra = int(_os.getenv("TF_NUM_INTRAOP_THREADS", "1"))
