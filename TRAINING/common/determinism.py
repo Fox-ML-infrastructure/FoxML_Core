@@ -100,6 +100,22 @@ def set_global_determinism(
     logger.info(f"🔒 Setting global determinism: seed={s}, threads={threads}, deterministic={deterministic_algorithms}")
 
     # Python & OS environment
+    # Ensure conda CUDA libraries are in LD_LIBRARY_PATH for TensorFlow
+    conda_prefix = os.environ.get("CONDA_PREFIX")
+    if conda_prefix:
+        conda_lib = os.path.join(conda_prefix, "lib")
+        conda_targets_lib = os.path.join(conda_prefix, "targets", "x86_64-linux", "lib")
+        current_ld_path = os.environ.get("LD_LIBRARY_PATH", "")
+        # Add conda lib paths if not already present
+        new_paths = []
+        if conda_lib not in current_ld_path:
+            new_paths.append(conda_lib)
+        if conda_targets_lib not in current_ld_path:
+            new_paths.append(conda_targets_lib)
+        if new_paths:
+            updated_ld_path = ":".join(new_paths + [current_ld_path] if current_ld_path else new_paths)
+            os.environ["LD_LIBRARY_PATH"] = updated_ld_path
+    
     _export_env({
         "PYTHONHASHSEED": str(s),
         # Threading & BLAS – fewer threads → less nondeterminism

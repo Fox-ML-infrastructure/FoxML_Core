@@ -73,6 +73,22 @@ if _os.getenv("TRAINER_CHILD_NO_TORCH", "0") == "1":
         _block_module(module_name)
 
 # Block TF if NO_TF=1 (prevents TF GPU init in CPU families)
+# Ensure conda CUDA libraries are accessible to TensorFlow
+_conda_prefix = _os.environ.get("CONDA_PREFIX")
+if _conda_prefix:
+    _conda_lib = _os.path.join(_conda_prefix, "lib")
+    _conda_targets_lib = _os.path.join(_conda_prefix, "targets", "x86_64-linux", "lib")
+    _current_ld_path = _os.environ.get("LD_LIBRARY_PATH", "")
+    # Add conda lib paths if not already present
+    _new_paths = []
+    if _conda_lib not in _current_ld_path:
+        _new_paths.append(_conda_lib)
+    if _conda_targets_lib not in _current_ld_path:
+        _new_paths.append(_conda_targets_lib)
+    if _new_paths:
+        _updated_ld_path = ":".join(_new_paths + [_current_ld_path] if _current_ld_path else _new_paths)
+        _os.environ["LD_LIBRARY_PATH"] = _updated_ld_path
+
 # NOTE: Do NOT touch CUDA_VISIBLE_DEVICES here - it's set above based on family
 if _os.getenv("TRAINER_CHILD_NO_TF", "0") == "1":
     for module_name in ("tensorflow", "tf", "jax", "jaxlib"):
