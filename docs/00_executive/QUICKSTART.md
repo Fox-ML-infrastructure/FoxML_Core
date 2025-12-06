@@ -52,6 +52,7 @@ python DATA_PROCESSING/pipeline/barrier_pipeline.py \
 from TRAINING.model_fun import LightGBMTrainer
 from CONFIG.config_loader import load_model_config
 import polars as pl
+import numpy as np
 
 # Load data
 df = pl.read_parquet("DATA_PROCESSING/data/labeled/AAPL_labeled.parquet")
@@ -69,9 +70,14 @@ config = load_model_config("lightgbm", variant="conservative")
 trainer = LightGBMTrainer(config)
 trainer.train(X, y)
 
-# Feature importance
+# Feature importance (returns numpy array)
 importance = trainer.get_feature_importance()
-print(importance.head(20))
+if importance is not None:
+    # Get top 20 features
+    top_indices = np.argsort(importance)[-20:][::-1]
+    print("Top 20 features:")
+    for idx in top_indices:
+        print(f"  Feature {idx}: {importance[idx]:.4f}")
 ```
 
 ## Troubleshooting

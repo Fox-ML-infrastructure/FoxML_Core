@@ -127,8 +127,13 @@ config = load_model_config("lightgbm", variant="conservative")
 trainer = LightGBMTrainer(config)
 trainer.train(X_train, y_train)
 
-# Evaluate
-metrics = trainer.evaluate(X_test, y_test)
+# Evaluate (compute metrics manually)
+predictions = trainer.predict(X_test)
+from sklearn.metrics import mean_squared_error, r2_score
+metrics = {
+    'mse': mean_squared_error(y_test, predictions),
+    'r2': r2_score(y_test, predictions)
+}
 print(metrics)
 ```
 

@@ -109,6 +109,7 @@ See [Data Processing Walkthrough](../01_tutorials/pipelines/DATA_PROCESSING_WALK
 ```python
 from TRAINING.model_fun import LightGBMTrainer
 from CONFIG.config_loader import load_model_config
+import numpy as np
 import polars as pl
 from sklearn.model_selection import train_test_split
 
@@ -135,8 +136,12 @@ trainer.train(X_train, y_train, X_val, y_val)
 
 # Results
 importance = trainer.get_feature_importance()
-print("Top 20 Features:")
-print(importance.head(20))
+if importance is not None:
+    # Get top 20 features
+    top_indices = np.argsort(importance)[-20:][::-1]
+    print("Top 20 Features:")
+    for idx in top_indices:
+        print(f"  Feature {idx}: {importance[idx]:.4f}")
 ```
 
 ### Results
