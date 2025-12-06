@@ -28,7 +28,13 @@ Fox-v1 is maintained with an **enterprise reliability mindset**:
 
 # Phase 0 — Stability & Documentation ✅
 
-**Deliverables:** ✅ Full 4-tier documentation hierarchy | ✅ Enterprise-grade legal docs | ✅ Navigation and cross-linking | ✅ Internal docs organized | ✅ Consistent formatting, naming, and structure | ✅ Stable release for evaluators and enterprise inquiries
+**Deliverables:**
+* ✅ Full 4-tier documentation hierarchy
+* ✅ Enterprise-grade legal docs
+* ✅ Navigation and cross-linking
+* ✅ Internal docs organized
+* ✅ Consistent formatting, naming, and structure
+* ✅ Stable release for evaluators and enterprise inquiries
 
 **Outcome:** Established Fox-v1 as an evaluable, commercial-grade product.
 
@@ -36,11 +42,26 @@ Fox-v1 is maintained with an **enterprise reliability mindset**:
 
 # Phase 1 — Intelligent Training Framework (In Progress)
 
-**Completed:** ✅ TRAINING pipeline restored and validated | ✅ GPU acceleration functional across major model families | ✅ XGBoost source-build stability fixes | ✅ Readline and child-process dependency issues resolved | ✅ Sequential models 3D preprocessing fix | ✅ Scaffolded base trainers for 2D and 3D models
+**Completed:**
+* ✅ TRAINING pipeline restored and validated
+* ✅ GPU acceleration functional across major model families
+* ✅ XGBoost source-build stability fixes
+* ✅ Readline and child-process dependency issues resolved
+* ✅ Sequential models 3D preprocessing fix
+* ✅ Scaffolded base trainers for 2D and 3D models
 
-**Active Work:** Testing target-ranking and selection modules | Reducing TensorFlow output noise and warnings | Fixing VAE serialization
+**Active Work:**
+* Testing target-ranking and selection modules
+* Reducing TensorFlow output noise and warnings
+* Fixing VAE serialization
 
-**Planned Refactors:** Intelligent training orchestration | Smarter model/ensemble selection | Improved feature engineering integration | Automated hyperparameter search | Robust cross-sectional + time-series workflows | Refactor trainers to use scaffolded base classes for centralized dimension-specific logic
+**Planned Refactors:**
+* Intelligent training orchestration
+* Smarter model/ensemble selection
+* Improved feature engineering integration
+* Automated hyperparameter search
+* Robust cross-sectional + time-series workflows
+* Refactor trainers to use scaffolded base classes for centralized dimension-specific logic
 
 **Outcome:** TRAINING evolves from "functional" → "adaptive intelligence layer."
 
@@ -48,7 +69,12 @@ Fox-v1 is maintained with an **enterprise reliability mindset**:
 
 # Phase 2 — Centralized Configuration & UX Modernization
 
-**Goals:** YAML-based config schema (single source of truth) | Validation layer + example templates | Unified logging + consistent output formatting | Optional LLM-friendly structured logs | Naming and terminology cleanup across modules
+**Goals:**
+* YAML-based config schema (single source of truth)
+* Validation layer + example templates
+* Unified logging + consistent output formatting
+* Optional LLM-friendly structured logs
+* Naming and terminology cleanup across modules
 
 **Note:** Centralized configuration work is likely to be completed sooner than originally expected.
 
@@ -58,9 +84,15 @@ Fox-v1 is maintained with an **enterprise reliability mindset**:
 
 # Phase 3 — Memory & Data Efficiency
 
-**Automated Memory Batching:** Fix current unstable behavior | Add monitoring & adaptive batching | Ensure clean memory reuse across model families
+**Automated Memory Batching:**
+* Fix current unstable behavior
+* Add monitoring & adaptive batching
+* Ensure clean memory reuse across model families
 
-**Polars Cross-Sectional Optimization:** Streaming build operations | Large-universe symbol handling | Memory-efficient aggregation patterns
+**Polars Cross-Sectional Optimization:**
+* Streaming build operations
+* Large-universe symbol handling
+* Memory-efficient aggregation patterns
 
 **Outcome:** Enables large-scale training without OOM failures.
 
@@ -68,9 +100,17 @@ Fox-v1 is maintained with an **enterprise reliability mindset**:
 
 # Phase 4 — Trading Modules (Alpaca & IBKR)
 
-**Alpaca (Fixes Required):** Resolve current module breakage | Add paper-trading test suite | Improve stability and retry logic | Update documentation & examples
+**Alpaca (Fixes Required):**
+* Resolve current module breakage
+* Add paper-trading test suite
+* Improve stability and retry logic
+* Update documentation & examples
 
-**IBKR (Untested):** Complete C++ component verification | Live and paper trading tests | Performance benchmarking | Risk management validation
+**IBKR (Untested):**
+* Complete C++ component verification
+* Live and paper trading tests
+* Performance benchmarking
+* Risk management validation
 
 **Outcome:** Production-ready trading connectivity.
 
@@ -78,7 +118,11 @@ Fox-v1 is maintained with an **enterprise reliability mindset**:
 
 # Phase 5 — Web Presence & Payments
 
-**Website + Stripe Checkout:** Public Fox ML Infrastructure homepage | Pricing tiers + purchase flow | "Request Access / Contact Sales" onboarding | Hosted docs + system overview
+**Website + Stripe Checkout:**
+* Public Fox ML Infrastructure homepage
+* Pricing tiers + purchase flow
+* "Request Access / Contact Sales" onboarding
+* Hosted docs + system overview
 
 **Outcome:** Enterprise-ready commercial experience.
 
@@ -86,7 +130,12 @@ Fox-v1 is maintained with an **enterprise reliability mindset**:
 
 # Phase 6 — Production Hardening
 
-**Tasks:** Full test coverage | Monitoring & observability | Deployment guides | Disaster recovery patterns | Performance tuning
+**Tasks:**
+* Full test coverage
+* Monitoring & observability
+* Deployment guides
+* Disaster recovery patterns
+* Performance tuning
 
 **Outcome:** Ready for institutional deployment.
 
@@ -94,11 +143,21 @@ Fox-v1 is maintained with an **enterprise reliability mindset**:
 
 # Phase 7 — High-Performance Rewrite Track (Long-Term)
 
-**Low-Level Rewrites (C/C++/Rust):** Rewrite performance-critical paths | HPC alignment + low-latency architecture | GPU-first and multi-GPU scaling
+**Low-Level Rewrites (C/C++/Rust):**
+* Rewrite performance-critical paths
+* HPC alignment + low-latency architecture
+* GPU-first and multi-GPU scaling
 
-**Advanced Features:** Model ensemble architecture | Multi-asset support | Advanced execution and risk engines | Real-time analytics pipeline
+**Advanced Features:**
+* Model ensemble architecture
+* Multi-asset support
+* Advanced execution and risk engines
+* Real-time analytics pipeline
 
-**ROCm Support (Future):** AMD GPU backend | TensorFlow/XGBoost/LightGBM support via ROCm | Parity with CUDA workflows
+**ROCm Support (Future):**
+* AMD GPU backend
+* TensorFlow/XGBoost/LightGBM support via ROCm
+* Parity with CUDA workflows
 
 **Outcome:** Fox-v1 becomes an HPC-aligned, cross-platform ML stack.
 
