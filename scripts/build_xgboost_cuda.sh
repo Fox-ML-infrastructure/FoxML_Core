@@ -108,15 +108,24 @@ export CUDA_HOME="$CUDA_TOOLKIT_ROOT"
 export PATH="$(dirname $CUDA_COMPILER):$PATH"
 export LD_LIBRARY_PATH="$CUDA_LIB:$LD_LIBRARY_PATH"
 
+# Determine install prefix (use conda if available, otherwise system default)
+if [ -n "$CONDA_PREFIX" ]; then
+    INSTALL_PREFIX="$CONDA_PREFIX"
+else
+    INSTALL_PREFIX="/usr/local"
+fi
+
+echo "📦 Install prefix: $INSTALL_PREFIX"
+
 cmake .. \
     -DUSE_CUDA=ON \
     -DCUDA_ARCHITECTURES="$CUDA_ARCH" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX="$CONDA_PREFIX" \
-    -DCUDA_TOOLKIT_ROOT_DIR="$CONDA_PREFIX" \
+    -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
+    -DCUDA_TOOLKIT_ROOT_DIR="$CUDA_TOOLKIT_ROOT" \
     -DCUDA_INCLUDE_DIRS="$CUDA_INCLUDE" \
     -DCUDA_CUDART_LIBRARY="$CUDA_LIB/libcudart.so" \
-    -DCMAKE_CUDA_COMPILER="$CONDA_PREFIX/bin/nvcc" \
+    -DCMAKE_CUDA_COMPILER="$CUDA_COMPILER" \
     -DCMAKE_CUDA_HOST_COMPILER="$(which g++)"
 
 make -j$(nproc)
