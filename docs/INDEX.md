@@ -100,6 +100,7 @@ Research notes, design rationale, advanced topics.
 - [Known Issues](03_technical/fixes/KNOWN_ISSUES.md) - Current issues
 - [Bug Fixes](03_technical/fixes/BUG_FIXES.md) - Fix history
 - [Migration Notes](03_technical/fixes/MIGRATION_NOTES.md) - Migration guide
+- [TensorFlow Executable Stack Fix](03_technical/fixes/TENSORFLOW_EXECUTABLE_STACK_FIX.md) - Fix for libtensorflow_cc.so executable stack error
 
 ### Roadmaps
 - [Alpha Enhancement Roadmap](03_technical/roadmaps/ALPHA_ENHANCEMENT_ROADMAP.md) - Enhancement plan
