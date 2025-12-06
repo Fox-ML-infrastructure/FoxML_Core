@@ -430,11 +430,17 @@ def child_isolated(payload_path, mod, cls, X_or_spec, y_unused, omp_t, mkl_t, kw
                 logger.info(f"[child] Threadpools: {pool_detail}")
                 
                 # Check for dangerous libiomp5 presence in CPU families
+                # Only warn if MKL_THREADING_LAYER is NOT set to GNU (which forces libgomp)
+                mkl_layer = _os.getenv("MKL_THREADING_LAYER", "")
                 for p in pools:
                     filepath = p.get('filepath', '')
                     if 'iomp' in filepath or 'libmkl_rt' in filepath:
-                        logger.warning(f"⚠️  Intel OpenMP detected in CPU family: {filepath}")
-                        logger.warning("    This can cause conflicts with libgomp!")
+                        if mkl_layer != "GNU":
+                            logger.warning(f"⚠️  Intel OpenMP detected in CPU family: {filepath}")
+                            logger.warning("    This can cause conflicts with libgomp!")
+                            logger.warning(f"    Set MKL_THREADING_LAYER=GNU to use libgomp instead")
+                        else:
+                            logger.debug(f"Intel OpenMP detected but MKL_THREADING_LAYER=GNU is set (using libgomp): {filepath}")
             except Exception as e:
                 logger.debug(f"Could not log threadpool info: {e}")
             
