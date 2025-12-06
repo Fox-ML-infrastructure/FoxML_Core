@@ -10,6 +10,8 @@ ImportError: libtensorflow_cc.so.2: cannot enable executable stack as shared obj
 
 This is a system-level security issue. The TensorFlow library (`libtensorflow_cc.so.2`) requires an executable stack, but your system's security policy (likely SELinux or PaX) is preventing it.
 
+**Note**: Unlike XGBoost, TensorFlow does **NOT** need to be built from source. Pre-built TensorFlow packages from conda/pip already include GPU support. This is a system security policy issue, not a compilation issue. Building TensorFlow from source is possible but extremely complex (requires Bazel, takes hours) and may not solve the executable stack issue if it's a kernel-level security policy (PaX/grsecurity).
+
 ## Solution
 
 ### Option 1: Fix TensorFlow Libraries (Recommended)
@@ -44,13 +46,26 @@ pip install tensorflow-cpu
 
 **Note**: This disables GPU acceleration but allows TensorFlow to work.
 
-### Option 3: Disable Security Policy (Not Recommended)
+### Option 3: Build TensorFlow from Source (Not Recommended)
+
+Building TensorFlow from source is possible but **extremely complex** and may not solve the executable stack issue:
+
+- Requires Bazel build system
+- Takes 2-4+ hours to compile
+- Very complex configuration
+- May not fix the issue if it's a kernel-level security policy (PaX/grsecurity)
+- Pre-built binaries already have GPU support
+
+**Recommendation**: Use Option 1 (execstack fix) or Option 2 (CPU-only) instead.
+
+### Option 4: Disable Security Policy (Not Recommended)
 
 If you have root access and understand the security implications:
 
 ```bash
 # Disable PaX/ASLR for TensorFlow (NOT RECOMMENDED for production)
 # This is a system-level change and may have security implications
+# Only if execstack doesn't work and you understand the risks
 ```
 
 ## Verification
