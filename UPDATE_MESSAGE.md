@@ -14,9 +14,9 @@ With this foundation in place, **active development has now resumed**, and focus
 
   All GPU model families are operational and producing artifacts. Expect some noise and warnings during GPU model training (version compatibility messages, plugin registration notices) — these are harmless and do not affect functionality.
 
-* **LSTM variants — timing out but appear functional**
+* **Sequential models — all working** ✅
 
-  LSTM and LSTM-based models are timing out at the 3-hour limit (10800s), but they appear to run fine and produce outputs — they simply require longer training time than the current timeout allows. Other sequential models (CNN1D, Transformer) are working normally. 3D preprocessing issues resolved.
+  All sequential models (CNN1D, LSTM, Transformer, and LSTM-based variants) are working and producing outputs. LSTM variants may require longer training time than the current timeout allows, but they function correctly. 3D preprocessing issues resolved.
 
 * **Target ranking & selection — testing**
 
