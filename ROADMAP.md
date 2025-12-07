@@ -11,7 +11,7 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 * Documentation and legal compliance are treated as first-class deliverables.
 * Stability always precedes new features.
 * GPU acceleration, orchestration, and model tooling will remain backwards-compatible.
-* **UI is not a core component or priority** — FoxML Core is designed to integrate with existing UI configurations and dashboards. The system provides APIs, data interfaces, and hooks for integration rather than built-in user interfaces.
+* **UI integration approach** — FoxML Core provides APIs and integration points for external dashboards. A native UI layer is optional and out of scope for the core infrastructure.
 
 ---
 
