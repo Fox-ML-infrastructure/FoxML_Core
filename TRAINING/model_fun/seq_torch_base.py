@@ -23,9 +23,26 @@ Minimal, reusable PyTorch training loop for (B, T, F) → scalar.
 """
 
 import os
+import sys
 import time
 import logging
 import numpy as np
+from pathlib import Path
+
+# Add CONFIG directory to path for centralized config loading
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_CONFIG_DIR = _REPO_ROOT / "CONFIG"
+if str(_CONFIG_DIR) not in sys.path:
+    sys.path.insert(0, str(_CONFIG_DIR))
+
+# Try to import config loader
+_CONFIG_AVAILABLE = False
+try:
+    from config_loader import get_cfg
+    _CONFIG_AVAILABLE = True
+except ImportError:
+    logger = logging.getLogger(__name__)
+    logger.debug("Config loader not available; using hardcoded defaults")
 
 # CRITICAL: Guard torch import to prevent libiomp5 in CPU-only children
 _TORCH_DISABLED = os.getenv("TRAINER_CHILD_NO_TORCH", "0") == "1"
@@ -39,6 +56,20 @@ else:
     DataLoader = None
 
 logger = logging.getLogger(__name__)
+
+# Add CONFIG directory to path for centralized config loading
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_CONFIG_DIR = _REPO_ROOT / "CONFIG"
+if str(_CONFIG_DIR) not in sys.path:
+    sys.path.insert(0, str(_CONFIG_DIR))
+
+# Try to import config loader
+_CONFIG_AVAILABLE = False
+try:
+    from config_loader import get_cfg
+    _CONFIG_AVAILABLE = True
+except ImportError:
+    logger.debug("Config loader not available; using hardcoded defaults")
 
 class _SeqDataset(Dataset):
     """Simple dataset for sequential data."""
@@ -54,6 +85,16 @@ class _SeqDataset(Dataset):
 
 class SeqTorchTrainerBase:
     """Minimal, reusable PyTorch training loop for (B, T, F) → scalar."""
+    
+    def _get_max_norm(self) -> float:
+        """Get gradient clipping max_norm from config, with fallback to default."""
+        if _CONFIG_AVAILABLE:
+            try:
+                max_norm = get_cfg("safety.gradient_clipping.max_norm", default=1.0, config_name="safety_config")
+                return float(max_norm)
+            except Exception as e:
+                logger.debug(f"Failed to load max_norm from config: {e}")
+        return 1.0  # Default fallback
     
     def __init__(self, model, config=None):
         self.model = model
@@ -128,14 +169,18 @@ class SeqTorchTrainerBase:
                         pred = self.model(xb)
                         loss = crit(pred, yb)
                     self.scaler.scale(loss).backward()
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                    # Load max_norm from config if available
+                    max_norm = self._get_max_norm()
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=max_norm)
                     self.scaler.step(opt)
                     self.scaler.update()
                 else:
                     pred = self.model(xb)
                     loss = crit(pred, yb)
                     loss.backward()
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                    # Load max_norm from config if available
+                    max_norm = self._get_max_norm()
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
                     opt.step()
                 
                 bs = xb.shape[0]

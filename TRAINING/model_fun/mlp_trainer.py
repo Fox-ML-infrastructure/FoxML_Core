@@ -141,10 +141,11 @@ class MLPTrainer(BaseModelTrainer):
         
         model = tf.keras.Model(inputs, outputs)
         
-        # Compile with gradient clipping
+        # Compile with gradient clipping (load from config if available)
+        clipnorm = self._get_clipnorm()
         optimizer = tf.keras.optimizers.Adam(
             learning_rate=self.config["learning_rate"],
-            clipnorm=1.0
+            clipnorm=clipnorm
         )
         
         model.compile(

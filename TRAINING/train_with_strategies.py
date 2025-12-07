@@ -625,17 +625,23 @@ FAMILY_CAPS = {
 }
 
 
-def build_sequences_from_features(X, lookback=64):
+def build_sequences_from_features(X, lookback=None):
     """
     Convert 2D features (N, F) to 3D sequences (N', T, F) using rolling windows.
     
     Args:
         X: (N, F) feature matrix
-        lookback: sequence length T
+        lookback: sequence length T (loads from config if None)
         
     Returns:
         X_seq: (N', T, F) where N' = N - lookback + 1
     """
+    # Load lookback from config if not provided
+    if lookback is None:
+        if _CONFIG_AVAILABLE:
+            lookback = get_cfg("pipeline.sequential.default_lookback", default=64)
+        else:
+            lookback = 64
     N, F = X.shape
     if N <= lookback:
         # If not enough data, pad with zeros
@@ -929,9 +935,16 @@ def _process_combined_data_pandas(combined_df: pd.DataFrame, target: str, featur
     y_clean = y[valid_mask]
     symbols_clean = combined_df['symbol'].values[valid_mask]
     
-    # Fill remaining NaN values with median
+    # Fill remaining NaN values with median (load strategy from config if available)
     from sklearn.impute import SimpleImputer
-    imputer = SimpleImputer(strategy='median')
+    if _CONFIG_AVAILABLE:
+        try:
+            imputation_strategy = get_cfg("preprocessing.imputation.strategy", default="median", config_name="preprocessing_config")
+        except Exception:
+            imputation_strategy = "median"
+    else:
+        imputation_strategy = "median"
+    imputer = SimpleImputer(strategy=imputation_strategy)
     X_clean = imputer.fit_transform(X_clean)
     
     logger.info(f"Cleaned data: {len(X_clean)} samples, {X_clean.shape[1]} features")
@@ -1455,7 +1468,9 @@ def _legacy_train_fallback(family: str, X: np.ndarray, y: np.ndarray, **kwargs):
         
         # Convert to sequential format if needed
         if len(X.shape) == 2:  # (N, F) -> (N, T, F)
-            X_seq = build_sequences_from_features(X, lookback=64)
+            # Load lookback from config if available
+            lookback = None  # Will use config default in function
+            X_seq = build_sequences_from_features(X, lookback=lookback)
         else:
             X_seq = X  # Already sequential
         
@@ -2104,8 +2119,15 @@ def main():
                        help='Ranking label method: dense for dense ranks (default), raw for continuous values')
     
     # Sequence models
-    parser.add_argument('--seq-lookback', type=int, default=64, 
-                       help='Lookback window for temporal sequence models (default: 64)')
+    # Load default seq_lookback from config if available
+    default_lookback = 64
+    if _CONFIG_AVAILABLE:
+        try:
+            default_lookback = get_cfg("pipeline.sequential.default_lookback", default=64)
+        except Exception:
+            pass
+    parser.add_argument('--seq-lookback', type=int, default=default_lookback, 
+                       help=f'Lookback window for temporal sequence models (default: {default_lookback})')
     parser.add_argument('--epochs', type=int, default=50, 
                        help='Number of epochs for sequence models (default: 50, use 1000 for production)')
     

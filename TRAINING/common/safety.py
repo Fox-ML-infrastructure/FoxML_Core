@@ -16,22 +16,71 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 # common/safety.py
-import os, numpy as np, logging
+import os, numpy as np, logging, sys
+from pathlib import Path
 logger = logging.getLogger(__name__)
+
+# Add CONFIG directory to path for centralized config loading
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_CONFIG_DIR = _REPO_ROOT / "CONFIG"
+if str(_CONFIG_DIR) not in sys.path:
+    sys.path.insert(0, str(_CONFIG_DIR))
+
+# Try to import config loader
+_CONFIG_AVAILABLE = False
+try:
+    from config_loader import get_cfg
+    _CONFIG_AVAILABLE = True
+except ImportError:
+    logger.debug("Config loader not available; using hardcoded safety defaults")
+
+def _get_safety_config(key: str, default):
+    """Get safety config value, with fallback to default."""
+    if _CONFIG_AVAILABLE:
+        try:
+            return get_cfg(f"safety.{key}", default=default, config_name="safety_config")
+        except Exception as e:
+            logger.debug(f"Failed to load safety config {key}: {e}")
+    return default
 
 def set_global_numeric_guards():
     """Don't crash; warn loudly on bad numerics"""
-    np.seterr(over='warn', invalid='warn', divide='warn', under='ignore')
+    if _CONFIG_AVAILABLE:
+        try:
+            error_handling = _get_safety_config("numerical.numpy_error_handling", {})
+            np.seterr(
+                over=error_handling.get('over', 'warn'),
+                invalid=error_handling.get('invalid', 'warn'),
+                divide=error_handling.get('divide', 'warn'),
+                under=error_handling.get('under', 'ignore')
+            )
+        except Exception:
+            # Fallback to defaults
+            np.seterr(over='warn', invalid='warn', divide='warn', under='ignore')
+    else:
+        np.seterr(over='warn', invalid='warn', divide='warn', under='ignore')
 
-def guard_features(X, clip=1e3):
+def guard_features(X, clip=None):
     """Clip extreme features to prevent numerical explosions"""
+    if clip is None:
+        clip_config = _get_safety_config("feature_clipping", {})
+        if clip_config.get('enabled', True):
+            clip = clip_config.get('clip_value', 1000.0)
+        else:
+            clip = 1e3  # Default if disabled but function called
     X = np.asarray(X)
     np.nan_to_num(X, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
     np.clip(X, -clip, clip, out=X)
     return X
 
-def guard_targets(y, cap_sigma=15.0):
+def guard_targets(y, cap_sigma=None):
     """Clip heavy-tailed targets using robust MAD cap"""
+    if cap_sigma is None:
+        cap_config = _get_safety_config("target_capping", {})
+        if cap_config.get('enabled', True):
+            cap_sigma = cap_config.get('cap_sigma', 15.0)
+        else:
+            cap_sigma = 15.0  # Default if disabled but function called
     y = np.asarray(y)
     med = float(np.nanmedian(y))
     mad = float(np.nanmedian(np.abs(y - med))) or 1e-9
@@ -72,6 +121,10 @@ def configure_tf(cpu_only=False, intra=1, inter=1, mem_growth=True):
     except Exception as e:
         logger.debug(f"TF config skipped: {e}")
 
-def safe_exp(x, lo=-40.0, hi=40.0):
+def safe_exp(x, lo=None, hi=None):
     """Safe exponential to prevent overflow"""
+    if lo is None or hi is None:
+        bounds = _get_safety_config("numerical.safe_exp_bounds", {})
+        lo = bounds.get('lo', -40.0) if lo is None else lo
+        hi = bounds.get('hi', 40.0) if hi is None else hi
     return np.exp(np.clip(x, lo, hi))

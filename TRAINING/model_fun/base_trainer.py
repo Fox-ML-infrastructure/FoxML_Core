@@ -160,6 +160,37 @@ class BaseModelTrainer(ABC):
         else:
             raise NotImplementedError("predict_proba not supported for this trainer")
     
+    def _get_clipnorm(self) -> float:
+        """Get gradient clipping norm from config, with fallback to default."""
+        if _CONFIG_AVAILABLE:
+            try:
+                clipnorm = get_cfg("safety.gradient_clipping.clipnorm", default=1.0, config_name="safety_config")
+                return float(clipnorm)
+            except Exception as e:
+                logger.debug(f"Failed to load clipnorm from config: {e}")
+        return 1.0  # Default fallback
+    
+    def _get_test_split_params(self) -> tuple[float, int]:
+        """Get test_size and random_state from config, with fallback to defaults."""
+        if _CONFIG_AVAILABLE:
+            try:
+                test_size = get_cfg("preprocessing.validation.test_size", default=0.2, config_name="preprocessing_config")
+                random_state = get_cfg("preprocessing.validation.random_state", default=42, config_name="preprocessing_config")
+                return float(test_size), int(random_state)
+            except Exception as e:
+                logger.debug(f"Failed to load test split params from config: {e}")
+        return 0.2, 42  # Default fallback
+    
+    def _get_imputation_strategy(self) -> str:
+        """Get imputation strategy from config, with fallback to default."""
+        if _CONFIG_AVAILABLE:
+            try:
+                strategy = get_cfg("preprocessing.imputation.strategy", default="median", config_name="preprocessing_config")
+                return str(strategy)
+            except Exception as e:
+                logger.debug(f"Failed to load imputation strategy from config: {e}")
+        return "median"  # Default fallback
+    
     def get_callbacks(self, family_name: str = None) -> List[Any]:
         """
         Get training callbacks from centralized config.

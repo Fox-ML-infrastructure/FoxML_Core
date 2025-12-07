@@ -75,8 +75,10 @@ class GANTrainer(BaseModelTrainer):
         
         # 3) Split only if no external validation provided
         if X_va is None or y_va is None:
+            # Load test split params from config
+            test_size, random_state = self._get_test_split_params()
             X_tr, X_va, y_tr, y_va = train_test_split(
-                X_tr, y_tr, test_size=0.2, random_state=42
+                X_tr, y_tr, test_size=test_size, random_state=random_state
             )
         
         # 4) Build model with safe defaults
@@ -133,7 +135,7 @@ class GANTrainer(BaseModelTrainer):
         learning_rate = self.config.get("learning_rate_generator", self.config.get("learning_rate", 1e-3))
         optimizer = tf.keras.optimizers.Adam(
             learning_rate=learning_rate,
-            clipnorm=1.0
+            clipnorm=self._get_clipnorm()
         )
         
         model.compile(

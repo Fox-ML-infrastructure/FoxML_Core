@@ -35,9 +35,11 @@ if str(_CONFIG_DIR) not in sys.path:
 
 # Try to import config loader
 _USE_CENTRALIZED_CONFIG = False
+_CONFIG_AVAILABLE = False
 try:
-    from config_loader import load_model_config
+    from config_loader import load_model_config, get_cfg
     _USE_CENTRALIZED_CONFIG = True
+    _CONFIG_AVAILABLE = True
 except ImportError:
     logger.debug("config_loader not available; using hardcoded defaults")
 
@@ -82,8 +84,20 @@ class NGBoostTrainer(BaseModelTrainer):
         self.feature_names = feature_names or [f"f{i}" for i in range(X.shape[1])]
         
         # Split for early stopping (prevents blowups)
-        s = int(self.config.get("seed", 42))
-        X_tr, X_va, y_tr, y_va = train_test_split(X, y, test_size=0.15, random_state=s)
+        # NGBoost uses val_ratio (0.15) instead of test_size (0.2)
+        if _CONFIG_AVAILABLE:
+            try:
+                from config_loader import get_cfg
+                val_ratio = get_cfg("preprocessing.validation.val_ratio", default=0.15, config_name="preprocessing_config")
+                random_state = get_cfg("preprocessing.validation.random_state", default=42, config_name="preprocessing_config")
+                test_size = float(val_ratio)
+            except Exception:
+                test_size = 0.15
+                random_state = int(self.config.get("seed", 42))
+        else:
+            test_size = 0.15
+            random_state = int(self.config.get("seed", 42))
+        X_tr, X_va, y_tr, y_va = train_test_split(X, y, test_size=test_size, random_state=random_state)
 
         # Use histogram single-tree base learner (much faster)
         from sklearn.ensemble import HistGradientBoostingRegressor
@@ -91,7 +105,7 @@ class NGBoostTrainer(BaseModelTrainer):
             max_iter=1,  # Single tree per boosting round
             max_depth=6,
             learning_rate=0.1,
-            random_state=s
+            random_state=random_state
         )
         
         ngb = NGBRegressor(
@@ -103,7 +117,7 @@ class NGBoostTrainer(BaseModelTrainer):
             natural_gradient=True,
             col_sample=self.config.get("col_sample", 0.6),
             minibatch_frac=self.config.get("minibatch_frac", 0.2),
-            random_state=s,
+            random_state=random_state,
             verbose=False,
             tol=1e-4
         )
