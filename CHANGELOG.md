@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [1.0.0] - 2025-12-06
 
 ### Added
 - Centralized configuration system with 9 training config YAML files (pipeline, GPU, memory, preprocessing, threading, safety, callbacks, optimizer, system)
@@ -24,12 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced copyright headers across codebase (2025-2026 Fox ML Infrastructure LLC)
 
 ### Changed
-- Commercial license pricing recalibrated by 40% to align with enterprise market norms:
-  - 1-10 employees: $18,000 → $25,200/year
-  - 11-50 employees: $36,000 → $60,000/year
-  - 51-250 employees: $90,000 → $165,000/year
-  - 251-1000 employees: $180,000 → $252,000/year
-  - 1000+ employees: $300,000 → $500,000+/year (custom quote)
 - All model trainers updated to use centralized configs (preprocessing, callbacks, optimizers, safety guards)
 - Pipeline, threading, memory, GPU, and system settings integrated into centralized config system
 - Updated company address in Terms of Service (STE B 212 W. Troy St., Dothan, AL 36303)
@@ -50,6 +44,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - License enforcement procedures documented
 - Copyright notice requirements standardized
 
+### Commercial
+- Commercial license pricing recalibrated to align with enterprise market norms:
+  - 1-10 employees: $18,000 → $25,200/year
+  - 11-50 employees: $36,000 → $60,000/year
+  - 51-250 employees: $90,000 → $165,000/year
+  - 251-1000 employees: $180,000 → $252,000/year
+  - 1000+ employees: $300,000 → $500,000+/year (custom quote)
+
 ### Documentation
 - 55+ new documentation files created
 - 50+ existing files rewritten and standardized
@@ -58,12 +60,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cross-linking and navigation improved
 - Module reference documentation added
 - Configuration schema documentation added
-
----
-
-## [Previous Releases]
-
-*Note: This changelog was introduced in December 2025. Previous changes are documented in commit history.*
 
 ---
 
@@ -84,5 +80,6 @@ Releases follow [Semantic Versioning](https://semver.org/):
 - **Removed** - Removed features
 - **Fixed** - Bug fixes
 - **Security** - Security improvements
+- **Commercial** - Business and licensing changes
 - **Documentation** - Documentation changes
 
