@@ -6,23 +6,17 @@ With this foundation in place, **active development has now resumed**, and focus
 
 ## **Current Development Status**
 
-* **TRAINING pipeline — fully functional**
+* **TRAINING pipeline — testing and verified** ✅
 
-  XGBoost source-build issues and readline symbol errors resolved.
+  Pipeline is fully functional and verified. XGBoost source-build issues and readline symbol errors resolved.
 
-* **Orchestration — stable**
+* **GPU families — confirmed working** ✅
 
-  Training orchestration is working as intended across all model families.
+  All GPU model families are operational and producing artifacts. Expect some noise and warnings during GPU model training (version compatibility messages, plugin registration notices) — these are harmless and do not affect functionality.
 
-* **TensorFlow (GPU) — functional**
+* **Sequential models — final 4 in testing**
 
-  GPU acceleration works. Some environment-specific warnings (version checks, plugin registration) are being investigated for cleanup.
-
-* **GPU models — functional**
-
-  TensorFlow GPU families are operational and producing artifacts.
-
-  MetaLearning GPU usage issue resolved. Sequential models (CNN1D, LSTM, Transformer) 3D preprocessing issue fixed. Continued GPU testing and validation underway.
+  CNN1D, LSTM, Transformer, and remaining sequential models are in final testing phase. 3D preprocessing issues resolved.
 
 * **Target ranking & selection — testing**
 
@@ -36,10 +30,9 @@ With this foundation in place, **active development has now resumed**, and focus
 
 ## Next Steps
 
-* Continue GPU model testing and validation
+* Complete final testing of remaining sequential models
 * Validate ranking/selection scripts
 * Begin configuration system and logging modernization (likely sooner than expected)
-* Reduce environment noise and streamline GPU warnings
 
 Thank you again for your understanding during this infrastructure-heavy cycle. The system is now **clearer, more maintainable, legally compliant, and ready for continued development**.
 

@@ -18,9 +18,9 @@ Fox-v1 is maintained with an **enterprise reliability mindset**:
 
 ## Core System Status
 
-* **TRAINING Pipeline** ✅ — XGBoost issues resolved, orchestration stable, GPU training operational.
-* **GPU Models** ✅ — Most TensorFlow families (MLP, GAN, MetaLearning, MultiTask) run correctly with GPU. Sequential models (CNN1D, LSTM, Transformer) 3D preprocessing issue resolved. VAE serialization quirk being fixed.
-* **TensorFlow GPU** ✅ — Functional. Minor warnings are environment-specific; awaiting more user reports.
+* **TRAINING Pipeline** ✅ — Testing and verified. XGBoost issues resolved, orchestration stable, GPU training operational.
+* **GPU Families** ✅ — Confirmed working. All GPU model families operational and producing artifacts. Expect some noise and warnings during training (harmless, do not affect functionality).
+* **Sequential Models** — Final 4 in testing (CNN1D, LSTM, Transformer, and remaining). 3D preprocessing issues resolved.
 * **Target Ranking & Selection** — Testing in progress, validating correctness before integration.
 * **Documentation Overhaul** ✅ — 55 new files created, 50+ rewritten, standardized across all tiers.
 
