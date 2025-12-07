@@ -51,6 +51,8 @@ With this foundation in place, **active development has now resumed**, and focus
 
 ## Next Steps
 
+* Testing other models today — validating additional model families and configurations
+* More core work will begin after testing completes
 * Complete final testing of remaining sequential models
 * Validate ranking/selection scripts
 * Complete configuration system validation and logging modernization
