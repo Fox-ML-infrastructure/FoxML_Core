@@ -37,6 +37,7 @@ This directory is organized into the following structure:
 - **`LICENSE_ENFORCEMENT.md`** — License enforcement procedures and compliance requirements
 - **`COMPLIANCE_FAQ.md`** — Frequently asked questions about compliance and licensing
 - **`PRODUCTION_USE_NOTIFICATION.md`** — Production use notification form and requirements
+- **`COPYRIGHT_NOTICE.md`** — Copyright notice requirements and format
 - **`TOS.md`** — Terms of Service
 - **`ENTERPRISE_DELIVERY.md`** — Enterprise delivery model: repository structure, IP rules, git workflow, and pricing alignment
 - **`Comprehensive overview.md`** — Comprehensive overview of services and capabilities
