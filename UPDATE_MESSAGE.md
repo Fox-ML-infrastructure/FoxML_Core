@@ -36,10 +36,10 @@ With this foundation in place, **active development has now resumed**, and focus
 
 * **Commercial license pricing — updated** 💰
 
-  Pricing structure recalibrated by 40% to align with enterprise market norms and traction metrics:
+  Pricing structure recalibrated to align with enterprise market norms and traction metrics:
   * 1-10 employees: $25,200/year
-  * 11-50 employees: $50,400/year
-  * 51-250 employees: $126,000/year
+  * 11-50 employees: $60,000/year
+  * 51-250 employees: $165,000/year
   * 251-1000 employees: $252,000/year
   * Enterprise (1000+ employees): Pricing starts at $500,000/year (custom quote)
 

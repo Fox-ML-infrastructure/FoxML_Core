@@ -90,7 +90,7 @@ This addendum is designed for enterprise legal teams and procurement departments
 
 **Examples of liability cap application:**
 
-- **Annual license fee: $50,400** — Maximum liability is $50,400 (fees paid in preceding 12 months)
+- **Annual license fee: $60,000** — Maximum liability is $60,000 (fees paid in preceding 12 months)
 - **Multiple incidents** — Total liability across all incidents is capped at fees paid in preceding 12 months
 - **No carryover** — Liability cap resets each 12-month period
 
