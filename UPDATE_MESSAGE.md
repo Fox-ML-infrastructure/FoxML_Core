@@ -34,6 +34,15 @@ With this foundation in place, **active development has now resumed**, and focus
   * 🔧 Minor fixes underway — addressing type conversion and edge cases discovered during testing
   * 🔄 Validation layer and logging modernization in progress
 
+* **Commercial license pricing — updated** 💰
+
+  Pricing structure recalibrated by 40% to align with enterprise market norms and traction metrics:
+  * 1-10 employees: $25,200/year
+  * 11-50 employees: $50,400/year
+  * 51-250 employees: $126,000/year
+  * 251-1000 employees: $252,000/year
+  * 1000+ employees: starts at $500,000/year (custom quote)
+
 * **Upcoming refactors**
 
   Planning deeper improvements to training intelligence, model selection, and automated workflows.
