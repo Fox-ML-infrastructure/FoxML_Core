@@ -12,11 +12,11 @@ Please include:
 - Work email  
 - Company website or LinkedIn  
 - Organization size (choose one):
-    • 1–10 employees  — $18,000 / year  
-    • 11–50 employees — $36,000 / year  
-    • 51–250 employees — $90,000 / year  
-    • 251–1000 employees — $180,000 / year  
-    • 1000+ employees — starts at $300,000 / year (custom quote)
+    • 1–10 employees  — $25,200 / year  
+    • 11–50 employees — $50,400 / year  
+    • 51–250 employees — $126,000 / year  
+    • 251–1000 employees — $252,000 / year  
+    • 1000+ employees — starts at $500,000 / year (custom quote)
 - Primary use case (1–3 sentences)
 - Desired start timeline
 - Any special requirements (optional)
