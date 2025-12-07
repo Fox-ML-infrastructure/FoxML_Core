@@ -87,7 +87,6 @@ class NGBoostTrainer(BaseModelTrainer):
         # NGBoost uses val_ratio (0.15) instead of test_size (0.2)
         if _CONFIG_AVAILABLE:
             try:
-                from config_loader import get_cfg
                 val_ratio = get_cfg("preprocessing.validation.val_ratio", default=0.15, config_name="preprocessing_config")
                 random_state = get_cfg("preprocessing.validation.random_state", default=42, config_name="preprocessing_config")
                 test_size = float(val_ratio)

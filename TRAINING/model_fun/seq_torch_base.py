@@ -57,20 +57,6 @@ else:
 
 logger = logging.getLogger(__name__)
 
-# Add CONFIG directory to path for centralized config loading
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-_CONFIG_DIR = _REPO_ROOT / "CONFIG"
-if str(_CONFIG_DIR) not in sys.path:
-    sys.path.insert(0, str(_CONFIG_DIR))
-
-# Try to import config loader
-_CONFIG_AVAILABLE = False
-try:
-    from config_loader import get_cfg
-    _CONFIG_AVAILABLE = True
-except ImportError:
-    logger.debug("Config loader not available; using hardcoded defaults")
-
 class _SeqDataset(Dataset):
     """Simple dataset for sequential data."""
     def __init__(self, X, y):
