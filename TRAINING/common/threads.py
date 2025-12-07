@@ -217,7 +217,8 @@ def default_threads() -> int:
     """
     if _CONFIG_AVAILABLE:
         try:
-            default = get_cfg("threading.defaults.default_threads", config_name="threading_config")
+            from config_loader import get_cfg
+            default = get_cfg("threading.defaults.default_threads", default=None, config_name="threading_config")
             if default is not None and isinstance(default, int):
                 return default
         except Exception as e:
