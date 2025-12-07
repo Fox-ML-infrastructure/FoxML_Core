@@ -23,11 +23,27 @@ Unified threading & runtime control for all trainers.
 from __future__ import annotations
 
 import os
+import sys
 import logging
 from contextlib import contextmanager
 from typing import Any
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Add CONFIG directory to path for centralized config loading
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_CONFIG_DIR = _REPO_ROOT / "CONFIG"
+if str(_CONFIG_DIR) not in sys.path:
+    sys.path.insert(0, str(_CONFIG_DIR))
+
+# Try to import config loader
+_CONFIG_AVAILABLE = False
+try:
+    from config_loader import get_cfg
+    _CONFIG_AVAILABLE = True
+except ImportError:
+    logger.debug("Config loader not available; using hardcoded defaults")
 
 try:
     from threadpoolctl import threadpool_limits, threadpool_info, ThreadpoolController
@@ -217,7 +233,6 @@ def default_threads() -> int:
     """
     if _CONFIG_AVAILABLE:
         try:
-            from config_loader import get_cfg
             default = get_cfg("threading.defaults.default_threads", default=None, config_name="threading_config")
             if default is not None and isinstance(default, int):
                 return default
