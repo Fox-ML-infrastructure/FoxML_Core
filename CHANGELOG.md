@@ -7,17 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.0] - 2025-12-07
+## [Unreleased]
 
 ### Added
 - Centralized configuration system with 9 training config YAML files (pipeline, GPU, memory, preprocessing, threading, safety, callbacks, optimizer, system)
 - Config loader with nested access and family-specific overrides
 - Compliance documentation suite:
-  - `LICENSE_ENFORCEMENT.md` - License enforcement procedures and compliance requirements
-  - `COMMERCIAL_USE.md` - Quick reference guide for commercial use
-  - `COMPLIANCE_FAQ.md` - Frequently asked compliance questions
-  - `PRODUCTION_USE_NOTIFICATION.md` - Production use notification form
-  - `COPYRIGHT_NOTICE.md` - Copyright notice requirements
+  - `LICENSE_ENFORCEMENT.md` – License enforcement procedures and compliance requirements
+  - `COMMERCIAL_USE.md` – Quick reference guide for commercial use
+  - `COMPLIANCE_FAQ.md` – Frequently asked compliance questions
+  - `PRODUCTION_USE_NOTIFICATION.md` – Production use notification form
+  - `COPYRIGHT_NOTICE.md` – Copyright notice requirements
 - Base trainer scaffolding for 2D and 3D models (`base_2d_trainer.py`, `base_3d_trainer.py`)
 - Production use notification requirements
 - Fork notification requirements
@@ -74,12 +74,12 @@ Releases follow [Semantic Versioning](https://semver.org/):
 
 ## Categories
 
-- **Added** - New features
-- **Changed** - Changes in existing functionality
-- **Deprecated** - Soon-to-be removed features
-- **Removed** - Removed features
-- **Fixed** - Bug fixes
-- **Security** - Security improvements
-- **Commercial** - Business and licensing changes
-- **Documentation** - Documentation changes
+- **Added** – New features
+- **Changed** – Changes in existing functionality
+- **Commercial** – Business/pricing/licensing changes
+- **Deprecated** – Soon-to-be removed features
+- **Removed** – Removed features
+- **Fixed** – Bug fixes
+- **Security** – Security improvements
+- **Documentation** – Documentation changes
 
