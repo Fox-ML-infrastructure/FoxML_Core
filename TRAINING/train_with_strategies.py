@@ -68,13 +68,35 @@ if str(_TRAINING_ROOT) not in sys.path:
 if '.' not in sys.path:
     sys.path.insert(0, '.')
 
+# Add CONFIG directory to path for centralized config loading
+_CONFIG_DIR = _PROJECT_ROOT / "CONFIG"
+if str(_CONFIG_DIR) not in sys.path:
+    sys.path.insert(0, str(_CONFIG_DIR))
+
+# Import config loader
+try:
+    from config_loader import get_pipeline_config, get_family_timeout, get_cfg, get_system_config
+    _CONFIG_AVAILABLE = True
+except ImportError:
+    _CONFIG_AVAILABLE = False
+    import logging
+    logging.getLogger(__name__).warning("Config loader not available; using hardcoded defaults")
+
 from TRAINING.common.safety import set_global_numeric_guards
 set_global_numeric_guards()
 
 # ---- JOBLIB/LOKY CLEANUP: prevent resource tracker warnings ----
 import atexit
 # Set persistent temp folder for joblib memmapping
-_JOBLIB_TMP = Path.home() / "trainer_tmp" / "joblib"
+# Load from config if available, otherwise use default
+if _CONFIG_AVAILABLE:
+    joblib_temp = get_cfg("system.paths.joblib_temp", config_name="system_config")
+    if joblib_temp:
+        _JOBLIB_TMP = Path(joblib_temp)
+    else:
+        _JOBLIB_TMP = Path.home() / "trainer_tmp" / "joblib"
+else:
+    _JOBLIB_TMP = Path.home() / "trainer_tmp" / "joblib"
 _JOBLIB_TMP.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("JOBLIB_TEMP_FOLDER", str(_JOBLIB_TMP))
 
@@ -219,9 +241,15 @@ def _run_family_inproc(family: str, X, y, total_threads: int = 12, trainer_kwarg
         logger.info(f"[InProc] {family} training completed successfully")
         return result
 
-def _run_family_isolated(family: str, X, y, timeout_s: int = 7200,
+def _run_family_isolated(family: str, X, y, timeout_s: int = None,
                          omp_threads: int | None = None, mkl_threads: int | None = None,
                          trainer_kwargs: dict | None = None):
+    # Load timeout from config if not provided
+    if timeout_s is None:
+        if _CONFIG_AVAILABLE:
+            timeout_s = get_family_timeout(family, default=7200)
+        else:
+            timeout_s = 7200
     import tempfile, joblib, multiprocessing as mp, os, time as _time, numpy as np, shutil
 
     MODMAP = {
@@ -410,8 +438,18 @@ def safe_duration(t0):
     except Exception: return "n/a"
 
 # global knobs filled by main()
-THREADS = max(1, (os.cpu_count() or 2) - 1)
-MKL_THREADS_DEFAULT = 1
+# Load from config if available, otherwise use defaults
+if _CONFIG_AVAILABLE:
+    pipeline_cfg = get_pipeline_config()
+    threading_cfg = get_cfg("threading.defaults.default_threads", config_name="threading_config")
+    if threading_cfg is None:
+        THREADS = max(1, (os.cpu_count() or 2) - 1)
+    else:
+        THREADS = threading_cfg if isinstance(threading_cfg, int) else max(1, (os.cpu_count() or 2) - 1)
+    MKL_THREADS_DEFAULT = get_cfg("threading.defaults.mkl_threads", default=1, config_name="threading_config")
+else:
+    THREADS = max(1, (os.cpu_count() or 2) - 1)
+    MKL_THREADS_DEFAULT = 1
 CPU_ONLY = False
 
 def _pkg_ver(name):
@@ -437,8 +475,15 @@ _env_guard(max(1, (os.cpu_count() or 2) - 1), mkl_threads=1)
 # multiprocessing start method BEFORE heavy imports
 
 # TF env before any TF import
-os.environ.setdefault("PYTHONHASHSEED", "42")
-os.environ.setdefault("TF_DETERMINISTIC_OPS", "1")
+# Load from config if available
+if _CONFIG_AVAILABLE:
+    python_hash_seed = get_cfg("pipeline.determinism.python_hash_seed", default="42")
+    tf_deterministic = get_cfg("pipeline.determinism.tf_deterministic_ops", default="1")
+    os.environ.setdefault("PYTHONHASHSEED", python_hash_seed)
+    os.environ.setdefault("TF_DETERMINISTIC_OPS", tf_deterministic)
+else:
+    os.environ.setdefault("PYTHONHASHSEED", "42")
+    os.environ.setdefault("TF_DETERMINISTIC_OPS", "1")
 os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
 # TF_CPP_MIN_LOG_LEVEL already set at top of file
 
@@ -446,8 +491,13 @@ os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
 from TRAINING.common.determinism import set_global_determinism, stable_seed_from, seed_for, get_deterministic_params, log_determinism_info
 
 # Set global determinism immediately - OPTIMIZED FOR PERFORMANCE
+# Load base_seed from config if available
+if _CONFIG_AVAILABLE:
+    base_seed = get_cfg("pipeline.determinism.base_seed", default=42)
+else:
+    base_seed = 42
 BASE_SEED = set_global_determinism(
-    base_seed=42,
+    base_seed=base_seed,
     threads=None,  # Auto-detect optimal thread count
     deterministic_algorithms=False,  # Allow parallel algorithms
     prefer_cpu_tree_train=False,  # Use GPU when available
@@ -474,7 +524,8 @@ from datetime import datetime
 import time
 
 # Polars optimization (same as original script)
-DEFAULT_THREADS = str(max(1, (os.cpu_count() or 2) - 1))
+# Use global THREADS variable (already loaded from config if available)
+DEFAULT_THREADS = str(THREADS)
 USE_POLARS = os.getenv("USE_POLARS", "1") == "1"
 if USE_POLARS:
     try:
@@ -650,12 +701,17 @@ def prepare_training_data_cross_sectional(mtf_data: Dict[str, pd.DataFrame],
     """Prepare cross-sectional training data with polars optimization for memory efficiency."""
     
     logger.info(f"🎯 Building cross-sectional training data for target: {target}")
-    if max_cs_samples:
-        logger.info(f"📊 Cross-sectional sampling: max {max_cs_samples} samples per timestamp")
-    else:
-        # Default aggressive sampling for speed
-        max_cs_samples = 1000
+    if max_cs_samples is None:
+        # Load from config if available, otherwise use default
+        if _CONFIG_AVAILABLE:
+            max_cs_samples = get_cfg("pipeline.data_limits.max_cross_sectional_samples", default=1000)
+            if max_cs_samples is None:
+                max_cs_samples = 1000  # Config has null, use default
+        else:
+            max_cs_samples = 1000
         logger.info(f"📊 Using default aggressive sampling: max {max_cs_samples} samples per timestamp")
+    else:
+        logger.info(f"📊 Cross-sectional sampling: max {max_cs_samples} samples per timestamp")
     
     if USE_POLARS:
         return _prepare_training_data_polars(mtf_data, target, feature_names, min_cs, max_cs_samples)
