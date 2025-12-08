@@ -266,18 +266,26 @@ class LeakageAutoFixer:
             logger.warning(f"Leakage sentinels failed: {e}")
         
         # Method 3: Pattern-based detection (known leaky patterns)
-        for feat_name in feature_names:
-            if self._is_known_leaky_pattern(feat_name):
-                detections.append(LeakageDetection(
-                    feature_name=feat_name,
-                    confidence=0.95,  # High confidence for known patterns
-                    reason="Matches known leaky pattern",
-                    source="pattern_detection",
-                    suggested_action=self._suggest_action(feat_name)
-                ))
+        # Only run if we haven't already detected leaks from perfect scores
+        # (to avoid duplicate detections, but still check patterns if no importance data)
+        if not detections or (train_score is None or train_score < 0.99):
+            logger.debug("Method 3: Checking for known leaky patterns")
+            pattern_detections = []
+            for feat_name in feature_names:
+                if self._is_known_leaky_pattern(feat_name):
+                    pattern_detections.append(LeakageDetection(
+                        feature_name=feat_name,
+                        confidence=0.95,  # High confidence for known patterns
+                        reason="Matches known leaky pattern",
+                        source="pattern_detection",
+                        suggested_action=self._suggest_action(feat_name)
+                    ))
+            detections.extend(pattern_detections)
+            logger.debug(f"Method 3: Found {len(pattern_detections)} known leaky patterns")
         
         # Deduplicate and merge confidence scores
         merged = self._merge_detections(detections)
+        logger.debug(f"Total detections after merge: {len(merged)}")
         
         return merged
     
