@@ -228,8 +228,10 @@ python TRAINING/train.py \
 
 ## Output Structure
 
+**Note**: Output directories are automatically timestamped by default (format: `YYYYMMDD_HHMMSS`) to make runs distinguishable. For example, `intelligent_output` becomes `intelligent_output_20251208_143022`.
+
 ```
-output_dir/
+output_dir_YYYYMMDD_HHMMSS/
 ├── target_rankings/
 │   ├── target_predictability_rankings.csv
 │   └── feature_importances/
@@ -246,6 +248,8 @@ output_dir/
     └── feature_selections/
         └── {target}.json
 ```
+
+To disable timestamping, use `add_timestamp=False` when initializing `IntelligentTrainer` programmatically.
 
 ## Caching Strategy
 

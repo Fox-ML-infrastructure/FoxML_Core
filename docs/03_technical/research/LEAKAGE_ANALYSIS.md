@@ -99,6 +99,14 @@ The system automatically detects leakage during training and can auto-fix it:
 - Perfect correlation between predictions and targets
 
 **Auto-Fixer:**
+
+**Backup System:**
+- Config backups are automatically created in `CONFIG/backups/{target}/{timestamp}/` whenever auto-fix mode runs
+- Backups are created even when no leaks are detected (to preserve state history)
+- Each backup includes a manifest with git commit, timestamp, and file paths
+- Automatic retention policy keeps the last N backups per target (configurable, default: 20)
+
+**Auto-Fixer:**
 - Automatically identifies leaking features
 - Updates `excluded_features.yaml` and `feature_registry.yaml`
 - Re-runs training until no leakage is detected

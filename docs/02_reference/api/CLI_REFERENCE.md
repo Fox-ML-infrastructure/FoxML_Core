@@ -38,7 +38,7 @@ python TRAINING/train.py \
 **Training:**
 - `--families`: Model families to train (default: all)
 - `--strategy`: Training strategy - single_task, multi_task, cascade (default: single_task)
-- `--output-dir`: Output directory (default: intelligent_output)
+- `--output-dir`: Output directory (default: intelligent_output). **Note**: Automatically timestamped by default (format: `YYYYMMDD_HHMMSS`) to make runs distinguishable. Example: `intelligent_output` becomes `intelligent_output_20251208_143022`.
 
 **Cache Control:**
 - `--force-refresh`: Force refresh of cached rankings/selections

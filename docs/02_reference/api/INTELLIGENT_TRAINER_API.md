@@ -20,7 +20,8 @@ trainer = IntelligentTrainer(
     data_dir=Path("data/data_labeled/interval=5m"),
     symbols=["AAPL", "MSFT", "GOOGL"],
     output_dir=Path("output"),
-    cache_dir=None  # Optional, defaults to output_dir/cache
+    cache_dir=None,  # Optional, defaults to output_dir/cache
+    add_timestamp=True  # Optional, append timestamp to output_dir (default: True)
 )
 ```
 
@@ -29,6 +30,7 @@ trainer = IntelligentTrainer(
 - `symbols` (List[str]): List of symbols to train on
 - `output_dir` (Path): Output directory for training results
 - `cache_dir` (Optional[Path]): Cache directory for rankings/selections (default: output_dir/cache)
+- `add_timestamp` (bool): Append timestamp to output_dir (format: `YYYYMMDD_HHMMSS`) to make runs distinguishable (default: True)
 
 ### Methods
 
