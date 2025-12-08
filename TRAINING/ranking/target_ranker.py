@@ -210,14 +210,16 @@ def rank_targets(
         }
     
     # Limit targets to evaluate if specified (for faster testing)
+    all_targets_count = len(targets)
     targets_to_evaluate = targets
     if max_targets_to_evaluate is not None and max_targets_to_evaluate > 0:
         # Take first N targets (they're already in a reasonable order from discovery)
         target_items = list(targets.items())[:max_targets_to_evaluate]
         targets_to_evaluate = dict(target_items)
-        logger.info(f"Limiting evaluation to {len(targets_to_evaluate)} targets (out of {len(targets)} total) for faster testing")
+        logger.info(f"Limiting evaluation to {len(targets_to_evaluate)} targets (out of {all_targets_count} total) for faster testing")
     
-    logger.info(f"Ranking {len(targets_to_evaluate)} targets across {len(symbols)} symbols")
+    total_to_evaluate = len(targets_to_evaluate)
+    logger.info(f"Ranking {total_to_evaluate} targets across {len(symbols)} symbols")
     logger.info(f"Model families: {', '.join(model_families)}")
     
     # Load auto-rerun config
@@ -237,8 +239,9 @@ def rank_targets(
         except Exception:
             pass
     
-    for idx, (target_name, target_config) in enumerate(targets.items(), 1):
-        logger.info(f"[{idx}/{len(targets)}] Evaluating {target_name}...")
+    # Evaluate each target (use targets_to_evaluate, not original targets dict)
+    for idx, (target_name, target_config) in enumerate(targets_to_evaluate.items(), 1):
+        logger.info(f"[{idx}/{total_to_evaluate}] Evaluating {target_name}...")
         
         try:
             # Use auto-rerun wrapper if enabled, otherwise use regular evaluation
