@@ -78,15 +78,15 @@ Annual license fees are based on Organization Size, aligned with the public pric
 
 Annual Commercial License Fees
 
-1–10 employees — $25,200 / year
+1–10 employees — $30,000 / year
 
-11–50 employees — $60,000 / year
+11–50 employees — $75,000 / year
 
-51–250 employees — $165,000 / year
+51–250 employees — $200,000 / year
 
-251–1000 employees — $252,000 / year
+251–1000 employees — $350,000 / year
 
-1000+ employees — starts at $500,000 / year (custom quote)
+1000+ employees — starts at $750,000 / year (custom quote)
 
 Payment is due within 30 days of invoice unless otherwise agreed in writing.
 
