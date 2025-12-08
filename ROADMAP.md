@@ -60,7 +60,12 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 **Planned Refactors:**
 * Intelligent training orchestration
 * Smarter model/ensemble selection
-* Improved feature engineering integration
+* **Feature Engineering Revamp** — The initial feature set was created to have data available for testing. Feature engineering will be thoroughly revamped and checked more closely for:
+  * Proper temporal alignment and lag structure
+  * Leakage prevention and validation
+  * Statistical significance and predictive power
+  * Cross-sectional vs. time-series feature design
+  * Integration with the feature registry and schema system
 * Automated hyperparameter search
 * Robust cross-sectional + time-series workflows
 * Refactor trainers to use scaffolded base classes for centralized dimension-specific logic
