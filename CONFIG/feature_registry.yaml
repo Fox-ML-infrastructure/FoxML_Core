@@ -520,6 +520,18 @@ features:
     source: unknown
     rejected: true
     description: 'AUTO-REJECTED: Detected as leaky feature'
+  volume_std_20d:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vol_persistence:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
 feature_families:
   lagged_returns:
     pattern: ^ret_\d+$

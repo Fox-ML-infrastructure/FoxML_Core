@@ -410,7 +410,8 @@ class IntelligentTrainer:
             multi_model_config=multi_model_config,
             top_n=top_m,
             output_dir=self.output_dir / "feature_selections" / target,
-            feature_selection_config=feature_selection_config  # Pass typed config if available
+            feature_selection_config=feature_selection_config,  # Pass typed config if available
+            experiment_config=self.experiment_config  # Pass experiment config for data.bar_interval
         )
         
         # Save to cache

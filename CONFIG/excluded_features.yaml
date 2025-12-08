@@ -72,9 +72,11 @@ always_exclude:
   - vol_clustering_15m
   - vol_over_vol_15m
   - vol_over_vol_60m
+  - vol_persistence
   - volatility_60d
   - volume_ratio_20d
   - volume_sma_50
+  - volume_std_20d
   - volume_volatility_20d
   - yz_vol_20
 target_type_rules:

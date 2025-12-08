@@ -26,7 +26,7 @@ reusing the original functions.
 import sys
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Union
 import pandas as pd
 import warnings
 
@@ -84,7 +84,9 @@ def select_features_for_target(
     max_samples_per_symbol: int = 50000,
     top_n: Optional[int] = None,
     output_dir: Path = None,
-    feature_selection_config: Optional['FeatureSelectionConfig'] = None  # New typed config (optional)
+    feature_selection_config: Optional['FeatureSelectionConfig'] = None,  # New typed config (optional)
+    explicit_interval: Optional[Union[int, str]] = None,  # Optional explicit interval (e.g., "5m" or 5)
+    experiment_config: Optional[Any] = None  # Optional ExperimentConfig (for data.bar_interval)
 ) -> Tuple[List[str], pd.DataFrame]:
     """
     Select top features for a target using multi-model consensus.
@@ -108,6 +110,7 @@ def select_features_for_target(
         Tuple of (selected_feature_names, importance_dataframe)
     """
     # NEW: Use typed config if provided
+    # Note: explicit_interval can be passed directly or extracted from experiment config
     if feature_selection_config is not None and _NEW_CONFIG_AVAILABLE:
         # Extract values from typed config
         model_families_config = feature_selection_config.model_families
@@ -123,6 +126,9 @@ def select_features_for_target(
             symbols = feature_selection_config.symbols
         if feature_selection_config.data_dir:
             data_dir = feature_selection_config.data_dir
+        # Extract interval if available (from experiment config that built this)
+        # Note: FeatureSelectionConfig doesn't have interval, but ExperimentConfig does
+        # We'll check if there's an experiment_config attribute or pass it separately
     else:
         # LEGACY: Load config if not provided
         if multi_model_config is None:
@@ -161,7 +167,9 @@ def select_features_for_target(
                 data_path=data_path,
                 target_column=target_column,
                 model_families_config=model_families_config,
-                max_samples=max_samples_per_symbol
+                max_samples=max_samples_per_symbol,
+                explicit_interval=explicit_interval,
+                experiment_config=experiment_config
             )
             
             all_results.extend(symbol_results)

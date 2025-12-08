@@ -38,7 +38,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional, Union
 import pandas as pd
 import numpy as np
 import lightgbm as lgb
@@ -452,14 +452,18 @@ def train_model_and_get_importance(
                 for v in unique_vals
             )
             
-            # Avoid duplicate verbose if already in config
-            cb_config = {k: v for k, v in model_config.items() if k != 'verbose'}
+            # Remove task-specific params from config (we set these based on task type)
+            cb_config = {k: v for k, v in model_config.items() if k not in ['verbose', 'loss_function']}
+            
             if is_binary:
-                model = cb.CatBoostClassifier(**cb_config, verbose=False)
+                # Binary classification: use Logloss (default for CatBoostClassifier)
+                model = cb.CatBoostClassifier(**cb_config, verbose=False, loss_function='Logloss')
             elif is_multiclass:
-                model = cb.CatBoostClassifier(**cb_config, verbose=False)
+                # Multiclass: use MultiClass (default for CatBoostClassifier)
+                model = cb.CatBoostClassifier(**cb_config, verbose=False, loss_function='MultiClass')
             else:
-                model = cb.CatBoostRegressor(**cb_config, verbose=False)
+                # Regression: use RMSE (default for CatBoostRegressor)
+                model = cb.CatBoostRegressor(**cb_config, verbose=False, loss_function='RMSE')
             
             try:
                 model.fit(X, y)
@@ -476,28 +480,30 @@ def train_model_and_get_importance(
     
     elif model_family == 'lasso':
         from sklearn.linear_model import Lasso
+        from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+        
+        # Lasso doesn't handle NaNs - use sklearn-safe conversion
+        X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
+        
         # Avoid duplicate random_state if already in config
         lasso_config = {k: v for k, v in model_config.items() if k != 'random_state'}
         model = Lasso(**lasso_config, random_state=42)
-        model.fit(X, y)
-        train_score = model.score(X, y)
+        model.fit(X_dense, y)
+        train_score = model.score(X_dense, y)
+        
+        # Update feature_names to match dense array
+        feature_names = feature_names_dense
     
     elif model_family == 'mutual_information':
         # Mutual information doesn't train a model, just calculates information
         from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
-        from sklearn.impute import SimpleImputer
+        from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
         
-        # Handle NaN values (mutual information doesn't support NaN)
-        mask = ~(np.isnan(X).any(axis=1) | np.isnan(y))
-        if mask.sum() < 10:
-            logger.warning(f"    mutual_information: Too few valid samples after NaN removal ({mask.sum()})")
-            return None, pd.Series(0.0, index=feature_names), importance_method, 0.0
-        
-        X_clean = X[mask]
-        y_clean = y[mask]
+        # Mutual information doesn't support NaN - use sklearn-safe conversion
+        X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
         
         # Determine task type
-        unique_vals = np.unique(y_clean)
+        unique_vals = np.unique(y[~np.isnan(y)])
         is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
         is_multiclass = len(unique_vals) <= 10 and all(
             isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer())
@@ -505,9 +511,12 @@ def train_model_and_get_importance(
         )
         
         if is_binary or is_multiclass:
-            importance_values = mutual_info_classif(X_clean, y_clean, random_state=42, discrete_features='auto')
+            importance_values = mutual_info_classif(X_dense, y, random_state=42, discrete_features='auto')
         else:
-            importance_values = mutual_info_regression(X_clean, y_clean, random_state=42, discrete_features='auto')
+            importance_values = mutual_info_regression(X_dense, y, random_state=42, discrete_features='auto')
+        
+        # Update feature_names to match dense array
+        feature_names = feature_names_dense
         
         # Create a dummy model for compatibility (mutual info doesn't need a model)
         class DummyModel:
@@ -522,18 +531,13 @@ def train_model_and_get_importance(
     elif model_family == 'univariate_selection':
         # Univariate Feature Selection (f_regression/f_classif)
         from sklearn.feature_selection import f_regression, f_classif, chi2
+        from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
         
-        # Handle NaN values (univariate selection doesn't support NaN)
-        mask = ~(np.isnan(X).any(axis=1) | np.isnan(y))
-        if mask.sum() < 10:
-            logger.warning(f"    univariate_selection: Too few valid samples after NaN removal ({mask.sum()})")
-            return None, pd.Series(0.0, index=feature_names), importance_method, 0.0
-        
-        X_clean = X[mask]
-        y_clean = y[mask]
+        # Univariate selection doesn't support NaN - use sklearn-safe conversion
+        X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
         
         # Determine task type
-        unique_vals = np.unique(y_clean)
+        unique_vals = np.unique(y[~np.isnan(y)])
         is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
         is_multiclass = len(unique_vals) <= 10 and all(
             isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer())
@@ -541,9 +545,12 @@ def train_model_and_get_importance(
         )
         
         if is_binary or is_multiclass:
-            scores, pvalues = f_classif(X_clean, y_clean)
+            scores, pvalues = f_classif(X_dense, y)
         else:
-            scores, pvalues = f_regression(X_clean, y_clean)
+            scores, pvalues = f_regression(X_dense, y)
+        
+        # Update feature_names to match dense array
+        feature_names = feature_names_dense
         
         # Normalize scores (F-statistics can be very large)
         if np.max(scores) > 0:
@@ -605,19 +612,13 @@ def train_model_and_get_importance(
         try:
             from boruta import BorutaPy
             from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-            from sklearn.impute import SimpleImputer
+            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
             
-            # Handle NaN values (Boruta doesn't support NaN)
-            mask = ~(np.isnan(X).any(axis=1) | np.isnan(y))
-            if mask.sum() < 10:
-                logger.warning(f"    boruta: Too few valid samples after NaN removal ({mask.sum()})")
-                return None, pd.Series(0.0, index=feature_names), importance_method, 0.0
-            
-            X_clean = X[mask]
-            y_clean = y[mask]
+            # Boruta doesn't support NaN - use sklearn-safe conversion
+            X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
             
             # Determine task type
-            unique_vals = np.unique(y_clean)
+            unique_vals = np.unique(y[~np.isnan(y)])
             is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
             is_multiclass = len(unique_vals) <= 10 and all(
                 isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer())
@@ -630,7 +631,10 @@ def train_model_and_get_importance(
                 rf = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=1)
             
             boruta = BorutaPy(rf, n_estimators='auto', verbose=0, random_state=42, max_iter=model_config.get('max_iter', 100))
-            boruta.fit(X_clean, y_clean)
+            boruta.fit(X_dense, y)
+            
+            # Update feature_names to match dense array
+            feature_names = feature_names_dense
             
             # Convert to importance: selected features get high importance, rejected get low
             ranking = boruta.ranking_
@@ -738,7 +742,9 @@ def process_single_symbol(
     data_path: Path,
     target_column: str,
     model_families_config: Dict[str, Dict[str, Any]],
-    max_samples: int = 50000
+    max_samples: int = 50000,
+    explicit_interval: Optional[Union[int, str]] = None,  # Optional explicit interval from config
+    experiment_config: Optional[Any] = None  # Optional ExperimentConfig (for data.bar_interval)
 ) -> List[ImportanceResult]:
     """Process a single symbol with multiple model families"""
     
@@ -768,7 +774,13 @@ def process_single_symbol(
         from TRAINING.utils.data_interval import detect_interval_from_dataframe
         
         # Detect data interval for horizon conversion
-        detected_interval = detect_interval_from_dataframe(df, timestamp_column='ts', default=5)
+        detected_interval = detect_interval_from_dataframe(
+            df, 
+            timestamp_column='ts', 
+            default=5,
+            explicit_interval=explicit_interval,
+            experiment_config=experiment_config
+        )
         
         all_columns = df.columns.tolist()
         # Use target-aware filtering with registry validation
@@ -803,9 +815,11 @@ def process_single_symbol(
         X_arr = X.to_numpy()
         y_arr = y.to_numpy()
         
-        # CRITICAL: Auto-detect data interval to prevent leakage in PurgedTimeSeriesSplit
-        from TRAINING.utils.data_interval import detect_interval_from_dataframe
-        detected_interval = detect_interval_from_dataframe(df, timestamp_column='ts', default=5)
+        # CRITICAL: Use already-detected interval (detected above at line 773)
+        # No need to detect again - use the same detected_interval from above
+            explicit_interval=explicit_interval,
+            experiment_config=experiment_config
+        )
         if detected_interval != 5:
             logger.info(f"  Detected data interval: {detected_interval}m (was assuming 5m)")
         
