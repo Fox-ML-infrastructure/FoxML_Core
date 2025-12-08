@@ -245,6 +245,7 @@ class IntelligentTrainer:
         multi_model_config: Optional[Dict[str, Any]] = None,
         force_refresh: bool = False,
         use_cache: bool = True,
+        max_targets_to_evaluate: Optional[int] = None,  # Limit number of targets to evaluate (for faster testing)
         target_ranking_config: Optional['TargetRankingConfig'] = None  # New typed config (optional)
     ) -> List[str]:
         """
@@ -256,6 +257,7 @@ class IntelligentTrainer:
             multi_model_config: Optional multi-model config [LEGACY]
             force_refresh: If True, ignore cache and re-rank
             use_cache: If True, use cached rankings if available
+            max_targets_to_evaluate: Optional limit on number of targets to evaluate (for faster testing)
             target_ranking_config: Optional TargetRankingConfig object [NEW - preferred]
         
         Returns:
@@ -332,6 +334,7 @@ class IntelligentTrainer:
             multi_model_config=multi_model_config,
             output_dir=self.output_dir / "target_rankings",
             top_n=None,  # Get all rankings for caching
+            max_targets_to_evaluate=max_targets_to_evaluate,  # Limit evaluation if specified
             target_ranking_config=target_ranking_config  # Pass typed config if available
         )
         
@@ -441,6 +444,7 @@ class IntelligentTrainer:
             auto_features: If True, automatically select features per target
             top_m_features: Number of top features per target (if auto_features=True)
             targets: Manual target list (overrides auto_targets if provided)
+            max_targets_to_evaluate: Optional limit on number of targets to evaluate (for faster testing)
             features: Manual feature list (overrides auto_features if provided)
             families: Model families to train
             strategy: Training strategy ('single_task', 'multi_task', 'cascade')
@@ -457,7 +461,11 @@ class IntelligentTrainer:
             logger.info("="*80)
             logger.info("STEP 1: Automatic Target Ranking")
             logger.info("="*80)
-            targets = self.rank_targets_auto(top_n=top_n_targets, use_cache=use_cache)
+            targets = self.rank_targets_auto(
+                top_n=top_n_targets,
+                use_cache=use_cache,
+                max_targets_to_evaluate=max_targets_to_evaluate
+            )
             if not targets:
                 raise ValueError(
                     "No targets selected after ranking. This usually means:\n"
@@ -637,6 +645,8 @@ Examples:
                        help='Disable automatic target ranking')
     parser.add_argument('--top-n-targets', type=int, default=5,
                        help='Number of top targets to select (default: 5)')
+    parser.add_argument('--max-targets-to-evaluate', type=int, default=None,
+                       help='Limit number of targets to evaluate for faster testing (default: evaluate all)')
     parser.add_argument('--targets', nargs='+',
                        help='Manual target list (overrides --auto-targets)')
     

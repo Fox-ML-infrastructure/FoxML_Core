@@ -158,6 +158,7 @@ def rank_targets(
     max_cs_samples: Optional[int] = None,
     max_rows_per_symbol: int = 50000,
     top_n: Optional[int] = None,
+    max_targets_to_evaluate: Optional[int] = None,  # Limit number of targets to evaluate (for faster testing)
     target_ranking_config: Optional['TargetRankingConfig'] = None  # New typed config (optional)
 ) -> List[TargetPredictabilityScore]:
     """
@@ -176,7 +177,8 @@ def rank_targets(
         min_cs: Minimum cross-sectional size per timestamp
         max_cs_samples: Maximum samples per timestamp for cross-sectional sampling
         max_rows_per_symbol: Maximum rows to load per symbol
-        top_n: Optional limit on number of top targets to return
+        top_n: Optional limit on number of top targets to return (after ranking)
+        max_targets_to_evaluate: Optional limit on number of targets to evaluate (for faster testing)
         target_ranking_config: Optional TargetRankingConfig object [NEW - preferred]
     
     Returns:
@@ -207,7 +209,15 @@ def rank_targets(
             'ranking': target_ranking_config.ranking
         }
     
-    logger.info(f"Ranking {len(targets)} targets across {len(symbols)} symbols")
+    # Limit targets to evaluate if specified (for faster testing)
+    targets_to_evaluate = targets
+    if max_targets_to_evaluate is not None and max_targets_to_evaluate > 0:
+        # Take first N targets (they're already in a reasonable order from discovery)
+        target_items = list(targets.items())[:max_targets_to_evaluate]
+        targets_to_evaluate = dict(target_items)
+        logger.info(f"Limiting evaluation to {len(targets_to_evaluate)} targets (out of {len(targets)} total) for faster testing")
+    
+    logger.info(f"Ranking {len(targets_to_evaluate)} targets across {len(symbols)} symbols")
     logger.info(f"Model families: {', '.join(model_families)}")
     
     # Load auto-rerun config
