@@ -358,7 +358,9 @@ def load_sample_data(
 def prepare_features_and_target(
     df: pd.DataFrame,
     target_column: str,
-    target_config: Optional[TargetConfig] = None
+    target_config: Optional[TargetConfig] = None,
+    explicit_interval: Optional[Union[int, str]] = None,  # Explicit interval from config
+    experiment_config: Optional[Any] = None  # Optional ExperimentConfig (for data.bar_interval)
 ) -> Tuple[np.ndarray, np.ndarray, List[str], TaskType]:
     """
     Prepare features and target for modeling
@@ -390,8 +392,14 @@ def prepare_features_and_target(
     from TRAINING.utils.leakage_filtering import filter_features_for_target
     from TRAINING.utils.data_interval import detect_interval_from_dataframe
     
-    # Detect data interval for horizon conversion
-    detected_interval = detect_interval_from_dataframe(df, timestamp_column='ts', default=5)
+    # Detect data interval for horizon conversion (use explicit_interval if provided)
+    detected_interval = detect_interval_from_dataframe(
+        df, 
+        timestamp_column='ts', 
+        default=5,
+        explicit_interval=explicit_interval,
+        experiment_config=experiment_config
+    )
     
     all_columns = df.columns.tolist()
     # Use target-aware filtering with registry validation
@@ -693,7 +701,9 @@ def train_and_evaluate_models(
     multi_model_config: Dict[str, Any] = None,
     target_column: str = None,  # For leak reporting and horizon extraction
     data_interval_minutes: int = 5,  # Data bar interval (default: 5-minute bars)
-    time_vals: Optional[np.ndarray] = None  # Timestamps for each sample (for fold timestamp tracking)
+    time_vals: Optional[np.ndarray] = None,  # Timestamps for each sample (for fold timestamp tracking)
+    explicit_interval: Optional[Union[int, str]] = None,  # Explicit interval from config (for consistency)
+    experiment_config: Optional[Any] = None  # Optional ExperimentConfig (for data.bar_interval)
 ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, float], float, Dict[str, List[Tuple[str, float]]], Dict[str, Dict[str, float]], List[Dict[str, Any]]]:
     """
     Train multiple models and return task-aware metrics + importance magnitude
@@ -1205,13 +1215,12 @@ def train_and_evaluate_models(
             else:
                 model_metrics[model_name] = {'accuracy': primary_score}
     
-        # Helper function to update both model_scores and model_metrics
-        # NOTE: This is now mainly for backward compat - full metrics computed after training
+    # Helper function to update both model_scores and model_metrics
+    # NOTE: This is now mainly for backward compat - full metrics computed after training
     def _update_model_score(model_name: str, score: float):
         """Update model_scores (backward compat) - full metrics computed separately"""
         model_scores[model_name] = score
     
-        # Check for degenerate target BEFORE training models
     # Check for degenerate target BEFORE training models
     # A target is degenerate if it has < 2 unique values or one class has < 2 samples
     unique_vals = np.unique(y[~np.isnan(y)])
@@ -1652,22 +1661,33 @@ def train_and_evaluate_models(
     if 'catboost' in model_families:
         try:
             import catboost as cb
+            from TRAINING.utils.target_utils import is_classification_target, is_binary_classification_target
             
             # Get config values
             cb_config = get_model_config('catboost', multi_model_config)
             # Defensive check: ensure config is a dict
             if not isinstance(cb_config, dict):
                 cb_config = {}
-            # Remove task-specific parameters (we set these explicitly based on task type)
-            cb_config_clean = {k: v for k, v in cb_config.items() if k not in ['loss_function']}
             
-            if is_binary:
-                model = cb.CatBoostClassifier(**cb_config_clean)
-            elif is_multiclass:
-                n_classes = len(unique_vals)
-                model = cb.CatBoostClassifier(**cb_config_clean)
+            # Build params dict (copy to avoid mutating original)
+            params = dict(cb_config)
+            
+            # Auto-detect target type and set loss_function if not specified
+            if "loss_function" not in params:
+                if is_classification_target(y):
+                    if is_binary_classification_target(y):
+                        params["loss_function"] = "Logloss"
+                    else:
+                        params["loss_function"] = "MultiClass"
+                else:
+                    params["loss_function"] = "RMSE"
+            # If loss_function is specified in config, respect it (YAML in charge)
+            
+            # Choose model class based on target type
+            if is_classification_target(y):
+                model = cb.CatBoostClassifier(**params)
             else:
-                model = cb.CatBoostRegressor(**cb_config_clean)
+                model = cb.CatBoostRegressor(**params)
             
             try:
                 scores = cross_val_score(model, X, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
@@ -1708,36 +1728,42 @@ def train_and_evaluate_models(
     if 'lasso' in model_families:
         try:
             from sklearn.linear_model import Lasso
-            from sklearn.impute import SimpleImputer
             from sklearn.pipeline import Pipeline
+            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
             
             # Get config values
             lasso_config = get_model_config('lasso', multi_model_config)
             
-            # CRITICAL FIX: Pipeline ensures imputation + scaling happens within each CV fold (no leakage)
+            # Use sklearn-safe conversion (handles NaNs, dtypes, infs)
+            X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
+            
+            # CRITICAL FIX: Pipeline ensures scaling happens within each CV fold (no leakage)
             # Lasso requires scaling for proper convergence (features must be on similar scales)
+            # Note: X_dense is already imputed by make_sklearn_dense_X, so we only need scaler
             steps = [
-                ('imputer', SimpleImputer(strategy='median')),
                 ('scaler', StandardScaler()),  # Required for Lasso convergence
                 ('model', Lasso(**lasso_config))
             ]
             pipeline = Pipeline(steps)
             
-            scores = cross_val_score(pipeline, X, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
+            scores = cross_val_score(pipeline, X_dense, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
             valid_scores = scores[~np.isnan(scores)]
             primary_score = valid_scores.mean() if len(valid_scores) > 0 else np.nan
             
             # ⚠️ IMPORTANCE BIAS WARNING: This fits on the full dataset (in-sample)
             # See comment above for details
-            pipeline.fit(X, y)
+            pipeline.fit(X_dense, y)
             
             # Compute and store full task-aware metrics (Lasso is regression-only)
             if not np.isnan(primary_score) and task_type == TaskType.REGRESSION:
-                _compute_and_store_metrics('lasso', pipeline, X, y, primary_score, task_type)
+                _compute_and_store_metrics('lasso', pipeline, X_dense, y, primary_score, task_type)
             
             # Extract coefficients from the fitted model
             model = pipeline.named_steps['model']
             importance = np.abs(model.coef_)
+            
+            # Update feature_names to match dense array
+            feature_names = feature_names_dense
             if len(importance) > 0:
                 total_importance = np.sum(importance)
                 if total_importance > 0:
@@ -1756,11 +1782,10 @@ def train_and_evaluate_models(
     if 'mutual_information' in model_families:
         try:
             from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
-            from sklearn.impute import SimpleImputer
+            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
             
-            # Mutual information doesn't handle NaN - need to impute
-            imputer = SimpleImputer(strategy='median')
-            X_imputed = imputer.fit_transform(X)
+            # Mutual information doesn't handle NaN - use sklearn-safe conversion
+            X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
             
             # Get config values
             mi_config = get_model_config('mutual_information', multi_model_config)
@@ -1769,13 +1794,16 @@ def train_and_evaluate_models(
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
                 if is_binary or is_multiclass:
-                    importance = mutual_info_classif(X_imputed, y, 
+                    importance = mutual_info_classif(X_dense, y, 
                                                     random_state=mi_config['random_state'],
                                                     discrete_features=mi_config['discrete_features'])
                 else:
-                    importance = mutual_info_regression(X_imputed, y, 
+                    importance = mutual_info_regression(X_dense, y, 
                                                        random_state=mi_config['random_state'],
                                                        discrete_features=mi_config['discrete_features'])
+            
+            # Update feature_names to match dense array
+            feature_names = feature_names_dense
             
             # Handle NaN/inf
             importance = np.nan_to_num(importance, nan=0.0, posinf=0.0, neginf=0.0)
@@ -1806,19 +1834,21 @@ def train_and_evaluate_models(
     if 'univariate_selection' in model_families:
         try:
             from sklearn.feature_selection import f_regression, f_classif
-            from sklearn.impute import SimpleImputer
+            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
             
-            # F-tests don't handle NaN - need to impute
-            imputer = SimpleImputer(strategy='median')
-            X_imputed = imputer.fit_transform(X)
+            # F-tests don't handle NaN - use sklearn-safe conversion
+            X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
             
             # Suppress division by zero warnings (expected for zero-variance features)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
                 if is_binary or is_multiclass:
-                    scores, pvalues = f_classif(X_imputed, y)
+                    scores, pvalues = f_classif(X_dense, y)
                 else:
-                    scores, pvalues = f_regression(X_imputed, y)
+                    scores, pvalues = f_regression(X_dense, y)
+            
+            # Update feature_names to match dense array
+            feature_names = feature_names_dense
             
             # Handle NaN/inf in scores (from zero-variance features)
             scores = np.nan_to_num(scores, nan=0.0, posinf=0.0, neginf=0.0)
@@ -1913,11 +1943,10 @@ def train_and_evaluate_models(
         try:
             from boruta import BorutaPy
             from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-            from sklearn.impute import SimpleImputer
+            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
             
-            # Boruta uses RandomForest which handles NaN, but let's impute for consistency
-            imputer = SimpleImputer(strategy='median')
-            X_imputed = imputer.fit_transform(X)
+            # Boruta doesn't support NaN - use sklearn-safe conversion
+            X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
             
             # Get config values
             boruta_config = get_model_config('boruta', multi_model_config)
@@ -1933,12 +1962,12 @@ def train_and_evaluate_models(
             boruta = BorutaPy(rf, n_estimators='auto', verbose=0, 
                             random_state=boruta_config['random_state'],
                             max_iter=boruta_config['max_iter'])
-            boruta.fit(X_imputed, y)
+            boruta.fit(X_dense, y)
             
             # Get R² using cross-validation on selected features (proper validation)
             selected_features = boruta.support_
             if np.any(selected_features):
-                X_selected = X_imputed[:, selected_features]
+                X_selected = X_dense[:, selected_features]
                 # Quick RF for scoring (use smaller config)
                 quick_rf_config = get_model_config('random_forest', multi_model_config).copy()
                 # Use smaller model for quick scoring
@@ -1956,6 +1985,9 @@ def train_and_evaluate_models(
                 model_scores['boruta'] = valid_scores.mean() if len(valid_scores) > 0 else np.nan
             else:
                 model_scores['boruta'] = np.nan
+            
+            # Update feature_names to match dense array
+            feature_names = feature_names_dense
             
             # Convert to importance
             ranking = boruta.ranking_
@@ -1981,11 +2013,10 @@ def train_and_evaluate_models(
     if 'stability_selection' in model_families:
         try:
             from sklearn.linear_model import LassoCV, LogisticRegressionCV
-            from sklearn.impute import SimpleImputer
+            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
             
             # Stability selection uses Lasso/LogisticRegression which don't handle NaN
-            imputer = SimpleImputer(strategy='median')
-            X_imputed = imputer.fit_transform(X)
+            X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
             
             # Get config values
             stability_config = get_model_config('stability_selection', multi_model_config)
@@ -1994,15 +2025,15 @@ def train_and_evaluate_models(
             stability_cv = stability_config['cv']
             stability_n_jobs = stability_config['n_jobs']
             stability_cs = stability_config['Cs']
-            stability_scores = np.zeros(X_imputed.shape[1])
+            stability_scores = np.zeros(X_dense.shape[1])
             bootstrap_r2_scores = []
             
             # Use lasso config for stability selection models
             lasso_config = get_model_config('lasso', multi_model_config)
             
             for _ in range(n_bootstrap):
-                indices = np.random.choice(len(X_imputed), size=len(X_imputed), replace=True)
-                X_boot, y_boot = X_imputed[indices], y[indices]
+                indices = np.random.choice(len(X_dense), size=len(X_dense), replace=True)
+                X_boot, y_boot = X_dense[indices], y[indices]
                 
                 try:
                     # Use TimeSeriesSplit for internal CV (even though bootstrap breaks temporal order,
@@ -2037,6 +2068,9 @@ def train_and_evaluate_models(
                         bootstrap_r2_scores.append(valid_cv_scores.mean())
                 except:
                     continue
+            
+            # Update feature_names to match dense array
+            feature_names = feature_names_dense
             
             # Average R² across bootstraps
             if bootstrap_r2_scores:
@@ -2377,7 +2411,9 @@ def evaluate_target_predictability(
     output_dir: Path = None,
     min_cs: int = 10,
     max_cs_samples: Optional[int] = None,
-    max_rows_per_symbol: int = 50000
+    max_rows_per_symbol: int = 50000,
+    explicit_interval: Optional[Union[int, str]] = None,  # Explicit interval from config (e.g., "5m")
+    experiment_config: Optional[Any] = None  # Optional ExperimentConfig (for data.bar_interval)
 ) -> TargetPredictabilityScore:
     """Evaluate predictability of a single target across symbols"""
     
@@ -2429,9 +2465,15 @@ def evaluate_target_predictability(
     sample_df = next(iter(mtf_data.values()))
     all_columns = sample_df.columns.tolist()
     
-    # Detect data interval for horizon conversion
+    # Detect data interval for horizon conversion (use explicit_interval if provided)
     from TRAINING.utils.data_interval import detect_interval_from_dataframe
-    detected_interval = detect_interval_from_dataframe(sample_df, timestamp_column='ts', default=5)
+    detected_interval = detect_interval_from_dataframe(
+        sample_df, 
+        timestamp_column='ts', 
+        default=5,
+        explicit_interval=explicit_interval,
+        experiment_config=experiment_config
+    )
     
     # Extract target horizon for error messages
     from TRAINING.utils.leakage_filtering import _load_leakage_config, _extract_horizon
@@ -2684,7 +2726,9 @@ def evaluate_target_predictability(
             X, y, feature_names, task_type, model_families, multi_model_config,
             target_column=target_column,
             data_interval_minutes=detected_interval,  # Auto-detected or default
-            time_vals=time_vals  # Pass timestamps for fold tracking
+            time_vals=time_vals,  # Pass timestamps for fold tracking
+            explicit_interval=explicit_interval,  # Pass explicit interval for consistency
+            experiment_config=experiment_config  # Pass experiment config
         )
         
         if result is None or len(result) != 7:

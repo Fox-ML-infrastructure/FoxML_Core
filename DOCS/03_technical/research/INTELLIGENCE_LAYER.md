@@ -375,8 +375,11 @@ system:
 ## Related Documentation
 
 - [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - How to use the pipeline
+- [Ranking and Selection Consistency](../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior (interval handling, sklearn preprocessing, CatBoost configuration)
 - [Intelligent Trainer API](../../02_reference/api/INTELLIGENT_TRAINER_API.md) - API reference
+- [Modular Config System](../../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md) - Config system guide (includes `logging_config.yaml`)
 - [Leakage Analysis](LEAKAGE_ANALYSIS.md) - Detailed leakage detection documentation
 - [Target Discovery](TARGET_DISCOVERY.md) - How targets are discovered
+- [Feature Importance Methodology](FEATURE_IMPORTANCE_METHODOLOGY.md) - Feature importance research
 - [Feature Importance Methodology](FEATURE_IMPORTANCE_METHODOLOGY.md) - How feature importance is calculated
 

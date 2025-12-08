@@ -108,6 +108,9 @@ python SCRIPTS/rank_features_comprehensive.py \
 
 ## See Also
 
-- [Feature Selection Tutorial](../../01_tutorials/training/FEATURE_SELECTION_TUTORIAL.md) - Selection guide
-- [Comprehensive Feature Ranking](../../COMPREHENSIVE_FEATURE_RANKING.md) - Ranking methodology
+- [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Automated feature selection workflow
+- [Ranking and Selection Consistency](../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior (includes sklearn preprocessing)
+- [Feature Selection Tutorial](../../01_tutorials/training/FEATURE_SELECTION_TUTORIAL.md) - Manual feature selection guide
+- [Feature Selection Implementation](../../03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Implementation details
+- [Modular Config System](../../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md) - Config system guide
 

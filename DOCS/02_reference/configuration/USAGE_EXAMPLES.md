@@ -46,6 +46,44 @@ with open("CONFIG/target_configs.yaml") as f:
     targets = yaml.safe_load(f)
 ```
 
+## Example 0: Setting Data Interval in Experiment Config
+
+**Goal:** Prevent interval auto-detection warnings and ensure consistent behavior across ranking and selection.
+
+**Steps:**
+
+1. **Add `bar_interval` to experiment config:**
+```yaml
+# CONFIG/experiments/my_experiment.yaml
+experiment:
+  name: my_experiment
+
+data:
+  data_dir: data/data_labeled/interval=5m
+  symbols: [AAPL, MSFT, GOOGL]
+  bar_interval: "5m"  # Explicit interval (prevents warnings)
+  max_samples_per_symbol: 5000
+```
+
+2. **Run with experiment config:**
+```bash
+python TRAINING/train.py \
+    --experiment-config my_experiment \
+    --auto-targets \
+    --top-n-targets 5 \
+    --auto-features
+```
+
+**Benefits:**
+- No interval auto-detection warnings in logs
+- Consistent interval handling across ranking and selection
+- Proper horizon conversion for leakage filtering
+- Supports formats: `"5m"`, `"15m"`, `"1h"`, `"1d"`, or integer minutes
+
+**Note:** If `bar_interval` is not specified, the pipeline will auto-detect from timestamps, but may log warnings if detection is unclear.
+
+---
+
 ## Example 1: Adding a New Feature
 
 **Goal:** Add a custom feature and make it available for training.
@@ -136,7 +174,49 @@ leakage_detection:
 
 ---
 
-## Example 4: Configuring Multi-GPU Setup
+## Example 4: Configuring CatBoost Loss Function
+
+**Goal:** Override CatBoost's auto-detected loss function (if needed).
+
+**Context:** By default, CatBoost auto-detects target type and sets:
+- `Logloss` for binary classification
+- `MultiClass` for multiclass classification  
+- `RMSE` for regression
+
+**Steps:**
+
+1. **Override in model config** (`CONFIG/training_config/multi_model_feature_selection.yaml` or experiment config):
+```yaml
+model_families:
+  catboost:
+    enabled: true
+    loss_function: "CrossEntropy"  # Override auto-detection
+    # ... other params
+```
+
+2. **Or let auto-detection handle it** (recommended):
+```yaml
+model_families:
+  catboost:
+    enabled: true
+    # loss_function not specified - will be auto-detected from target type
+    # ... other params
+```
+
+**Usage:**
+```python
+# Auto-detection happens automatically in ranking and selection
+# No code changes needed
+```
+
+**When to override:**
+- Custom loss functions for specific use cases
+- Multi-class with specific class weights
+- Regression with custom objectives
+
+---
+
+## Example 5: Configuring Multi-GPU Setup
 
 **Goal:** Use multiple GPUs for training.
 
@@ -162,7 +242,7 @@ print(gpu_config["gpu"]["device_visibility"])  # Should show [0, 1, 2, 3]
 
 ---
 
-## Example 5: Enabling More Targets
+## Example 6: Enabling More Targets
 
 **Goal:** Enable additional targets for training.
 
@@ -192,7 +272,7 @@ with open("CONFIG/target_configs.yaml") as f:
 
 ---
 
-## Example 6: Customizing Model Hyperparameters
+## Example 7: Customizing Model Hyperparameters
 
 **Goal:** Create a custom model variant.
 
@@ -221,7 +301,7 @@ trainer.train(X_train, y_train)
 
 ---
 
-## Example 7: Adjusting Backup Retention
+## Example 8: Adjusting Backup Retention
 
 **Goal:** Keep more or fewer config backups.
 
@@ -244,7 +324,7 @@ print(f"Max backups per target: {max_backups}")
 
 ---
 
-## Example 8: Changing Default Paths
+## Example 9: Changing Default Paths
 
 **Goal:** Use custom data/output directories.
 
@@ -526,10 +606,13 @@ python TRAINING/train.py \
 
 ## Related Documentation
 
-- **[Modular Config System](MODULAR_CONFIG_SYSTEM.md)** - NEW: Complete guide to modular configs
-- [Configuration System Overview](README.md) - Main configuration overview
+- **[Modular Config System](MODULAR_CONFIG_SYSTEM.md)** - Complete guide to modular configs (includes `logging_config.yaml`)
+- [Configuration System Overview](README.md) - Main configuration overview (includes `logging_config.yaml` documentation)
+- [Config Loader API](CONFIG_LOADER_API.md) - Programmatic config loading (includes logging config utilities)
+- [Ranking and Selection Consistency](../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior guide
 - [Feature & Target Configs](FEATURE_TARGET_CONFIGS.md) - Feature configuration guide
 - [Training Pipeline Configs](TRAINING_PIPELINE_CONFIGS.md) - Training configuration guide
+- [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Complete pipeline guide
 - [Safety & Leakage Configs](SAFETY_LEAKAGE_CONFIGS.md) - Leakage detection guide
 - [Model Configuration](MODEL_CONFIGURATION.md) - Model hyperparameters guide
 

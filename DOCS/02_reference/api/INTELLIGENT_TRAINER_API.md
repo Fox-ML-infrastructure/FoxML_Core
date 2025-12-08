@@ -21,7 +21,8 @@ trainer = IntelligentTrainer(
     symbols=["AAPL", "MSFT", "GOOGL"],
     output_dir=Path("output"),
     cache_dir=None,  # Optional, defaults to output_dir/cache
-    add_timestamp=True  # Optional, append timestamp to output_dir (default: True)
+    add_timestamp=True,  # Optional, append timestamp to output_dir (default: True)
+    experiment_config=None  # Optional ExperimentConfig object (for data.bar_interval)
 )
 ```
 
@@ -31,6 +32,12 @@ trainer = IntelligentTrainer(
 - `output_dir` (Path): Output directory for training results
 - `cache_dir` (Optional[Path]): Cache directory for rankings/selections (default: output_dir/cache)
 - `add_timestamp` (bool): Append timestamp to output_dir (format: `YYYYMMDD_HHMMSS`) to make runs distinguishable (default: True)
+- `experiment_config` (Optional[ExperimentConfig]): Experiment config object (provides `data.bar_interval` for consistent interval handling)
+
+**Note on Interval Handling:**
+- If `experiment_config` is provided and has `data.bar_interval`, it will be used throughout ranking and selection pipelines
+- This prevents interval auto-detection warnings and ensures consistent behavior
+- See [Modular Config System](../../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md) for details
 
 ### Methods
 
@@ -354,6 +361,9 @@ targets = trainer.rank_targets_auto(
 ## Related Documentation
 
 - [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Complete tutorial
+- [Ranking and Selection Consistency](../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior guide
+- [Modular Config System](../configuration/MODULAR_CONFIG_SYSTEM.md) - Config system guide (includes `logging_config.yaml`)
+- [Module Reference](MODULE_REFERENCE.md) - Python API overview (includes utility modules)
 - [CLI Reference](CLI_REFERENCE.md) - Command-line interface
-- [Module Reference](MODULE_REFERENCE.md) - Python API overview
+- [Config Loader API](../configuration/CONFIG_LOADER_API.md) - Configuration loading
 

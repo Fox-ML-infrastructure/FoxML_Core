@@ -30,6 +30,9 @@ CONFIG/
 ├── training/                 # Training module configs
 │   └── models.yaml           # Model families for training
 │
+├── logging_config.yaml       # Structured logging configuration (NEW)
+│                             # Global, module-level, and backend verbosity controls
+│
 ├── training_config/          # Legacy training configs (still used)
 │   ├── pipeline_config.yaml
 │   ├── gpu_config.yaml
@@ -116,6 +119,59 @@ python TRAINING/train.py --experiment-config my_experiment
 - `training`: Training-specific overrides
 
 **Location:** `CONFIG/training/models.yaml`
+
+### 5. Logging Config (`CONFIG/logging_config.yaml`)
+
+**Purpose:** Control verbosity and detail levels for different modules and backend libraries.
+
+**Key Settings:**
+- `global_level`: Global logging level (DEBUG/INFO/WARNING/ERROR)
+- `modules`: Per-module verbosity controls (gpu_detail, cv_detail, edu_hints, detail)
+- `backends`: Backend library verbosity (native_verbosity, show_sparse_warnings)
+- `profiles`: Predefined profiles (default, debug_run, quiet)
+
+**Location:** `CONFIG/logging_config.yaml`
+
+**Example:**
+```yaml
+logging:
+  global_level: INFO
+  modules:
+    rank_target_predictability:
+      level: INFO
+      gpu_detail: false      # GPU confirmations, dataset size notes
+      cv_detail: false       # Fold timestamps, splits
+      edu_hints: false       # Educational hints
+  backends:
+    lightgbm:
+      native_verbosity: -1   # -1=silent, 0=info, >0=more spam
+  profiles:
+    debug_run:
+      global_level: DEBUG
+      modules:
+        rank_target_predictability:
+          gpu_detail: true
+          cv_detail: true
+```
+
+**Usage:**
+```python
+from CONFIG.logging_config_utils import (
+    get_module_logging_config,
+    get_backend_logging_config
+)
+
+# Get module config
+log_cfg = get_module_logging_config('rank_target_predictability')
+if log_cfg.gpu_detail:
+    logger.info("🚀 Training on GPU...")
+
+# Get backend config
+lgbm_cfg = get_backend_logging_config('lightgbm')
+lgbm_params['verbose'] = lgbm_cfg.native_verbosity
+```
+
+See [Structured Logging Configuration](../../../CHANGELOG.md#structured-logging-configuration-system) for complete details.
 
 ## Typed Config Classes
 
@@ -350,8 +406,10 @@ ValueError: ExperimentConfig.name cannot be empty
 
 ## See Also
 
-- [Configuration Overview](README.md) - Complete config system overview
-- [Usage Examples](USAGE_EXAMPLES.md) - Practical examples
-- [CLI Reference](../../api/CLI_REFERENCE.md) - Command-line options
+- [Configuration Overview](README.md) - Complete config system overview (includes `logging_config.yaml`)
+- [Usage Examples](USAGE_EXAMPLES.md) - Practical examples (includes interval config and CatBoost examples)
+- [Config Loader API](CONFIG_LOADER_API.md) - Programmatic config loading (includes logging config utilities)
+- [Ranking and Selection Consistency](../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior guide
 - [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Complete tutorial
+- [CLI Reference](../../api/CLI_REFERENCE.md) - Command-line options
 

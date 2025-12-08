@@ -2,6 +2,8 @@
 
 Select the most important features for your models.
 
+> **Note**: For the intelligent training pipeline, feature selection is automated. See [Intelligent Training Tutorial](INTELLIGENT_TRAINING_TUTORIAL.md) for the automated workflow. This tutorial covers manual feature selection.
+
 ## Overview
 
 Feature selection reduces dimensionality and improves model performance by:
@@ -9,6 +11,12 @@ Feature selection reduces dimensionality and improves model performance by:
 2. Ranking features by importance
 3. Selecting top N features
 4. Retraining with selected features
+
+**For automated feature selection**, the intelligent training pipeline uses:
+- Multi-model consensus (LightGBM, XGBoost, Random Forest, CatBoost, Neural Network, Lasso, Mutual Information, Univariate Selection, Boruta, Stability Selection)
+- Consistent preprocessing (shared `make_sklearn_dense_X()` helper for sklearn models)
+- Unified interval handling (respects `data.bar_interval` from experiment config)
+- See [Ranking and Selection Consistency](RANKING_SELECTION_CONSISTENCY.md) for details
 
 ## Quick Start
 
@@ -129,7 +137,9 @@ strategy.train(X_selected, y, selected_features)
 
 ## Next Steps
 
+- [Intelligent Training Tutorial](INTELLIGENT_TRAINING_TUTORIAL.md) - Automated feature selection workflow (recommended)
+- [Ranking and Selection Consistency](RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior (includes sklearn preprocessing details)
 - [Feature Selection Implementation](../../03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Implementation details
-- [Comprehensive Feature Ranking](../../COMPREHENSIVE_FEATURE_RANKING.md) - Advanced ranking
-- [Feature Selection Guide](../../03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Complete feature selection methodology
+- [Modular Config System](../../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md) - Config system guide
+- [Usage Examples](../../02_reference/configuration/USAGE_EXAMPLES.md) - Practical configuration examples
 

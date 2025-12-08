@@ -72,6 +72,8 @@ CONFIG/
 ├── multi_model_feature_selection.yaml  # Multi-model consensus config
 ├── comprehensive_feature_ranking.yaml  # Comprehensive ranking config
 ├── fast_target_ranking.yaml       # Fast ranking config
+├── logging_config.yaml            # Structured logging configuration (NEW)
+│                                 # Global, module-level, and backend verbosity controls
 └── target_configs.yaml            # Target definitions (63 targets)
 ```
 
@@ -177,7 +179,44 @@ features:
 **Purpose:** Defines feature groups for organization and analysis.
 
 #### `comprehensive_feature_ranking.yaml` & `fast_target_ranking.yaml`
-**Purpose:** Alternative ranking configurations for different use cases.
+**Purpose:** Alternative ranking configurations for different use cases (legacy - prefer experiment configs).
+
+#### `logging_config.yaml` (NEW)
+**Purpose:** Structured logging configuration for controlling verbosity across modules and backend libraries.
+
+**Structure:**
+- `global_level` - Global logging level (DEBUG/INFO/WARNING/ERROR)
+- `modules.{module_name}` - Per-module verbosity controls:
+  - `level` - Module-specific logging level
+  - `gpu_detail` - GPU confirmations, dataset size notes (for rank_target_predictability)
+  - `cv_detail` - Fold timestamps, splits (for rank_target_predictability)
+  - `edu_hints` - Educational hints (for rank_target_predictability)
+  - `detail` - General detailed logging (for other modules)
+- `backends.{backend_name}` - Backend library verbosity:
+  - `native_verbosity` - Native library verbosity level (e.g., LightGBM `verbose` parameter)
+  - `show_sparse_warnings` - Show sparse data warnings
+- `profiles` - Predefined profiles (default, debug_run, quiet)
+
+**Usage:**
+```python
+from CONFIG.logging_config_utils import (
+    get_module_logging_config,
+    get_backend_logging_config
+)
+
+# Get module config
+log_cfg = get_module_logging_config('rank_target_predictability')
+if log_cfg.gpu_detail:
+    logger.info("🚀 Training on GPU...")
+
+# Get backend config
+lgbm_cfg = get_backend_logging_config('lightgbm')
+lgbm_params['verbose'] = lgbm_cfg.native_verbosity
+```
+
+**Location:** `CONFIG/logging_config.yaml`
+
+See [Structured Logging Configuration](../../../CHANGELOG.md#structured-logging-configuration-system) for complete details.
 
 ### 2. Training Configuration (`training_config/`)
 
@@ -818,12 +857,16 @@ For configuration questions or issues, refer to:
 
 ## Related Documentation
 
-- [Config Basics](../docs/01_tutorials/configuration/CONFIG_BASICS.md) - Configuration fundamentals tutorial
-- [Config Examples](../docs/01_tutorials/configuration/CONFIG_EXAMPLES.md) - Example configurations
-- [Advanced Config](../docs/01_tutorials/configuration/ADVANCED_CONFIG.md) - Advanced configuration guide
-- [Config Loader API](../docs/02_reference/configuration/CONFIG_LOADER_API.md) - Complete API reference
-- [Config Schema](../docs/02_reference/api/CONFIG_SCHEMA.md) - Configuration schema documentation
-- [Environment Variables](../docs/02_reference/configuration/ENVIRONMENT_VARIABLES.md) - Environment variable overrides
-- [Model Config Reference](../docs/02_reference/models/MODEL_CONFIG_REFERENCE.md) - Model-specific configurations
-- [Intelligence Layer Overview](../docs/03_technical/research/INTELLIGENCE_LAYER.md) - How configs are used in intelligent training
-- [Leakage Analysis](../docs/03_technical/research/LEAKAGE_ANALYSIS.md) - Leakage detection configuration details
+- **[Modular Config System](MODULAR_CONFIG_SYSTEM.md)** - Complete guide to modular configs (includes `logging_config.yaml`)
+- [Config Basics](../01_tutorials/configuration/CONFIG_BASICS.md) - Configuration fundamentals tutorial (includes `logging_config.yaml` example)
+- [Config Examples](../01_tutorials/configuration/CONFIG_EXAMPLES.md) - Example configurations
+- [Advanced Config](../01_tutorials/configuration/ADVANCED_CONFIG.md) - Advanced configuration guide
+- [Config Loader API](CONFIG_LOADER_API.md) - Complete API reference (includes logging config utilities)
+- [Usage Examples](USAGE_EXAMPLES.md) - Practical examples (includes interval config and CatBoost examples)
+- [Ranking and Selection Consistency](../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior guide
+- [Intelligent Training Tutorial](../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Complete pipeline guide
+- [Config Schema](../api/CONFIG_SCHEMA.md) - Configuration schema documentation
+- [Environment Variables](ENVIRONMENT_VARIABLES.md) - Environment variable overrides
+- [Model Config Reference](../models/MODEL_CONFIG_REFERENCE.md) - Model-specific configurations
+- [Intelligence Layer Overview](../03_technical/research/INTELLIGENCE_LAYER.md) - How configs are used in intelligent training
+- [Leakage Analysis](../03_technical/research/LEAKAGE_ANALYSIS.md) - Leakage detection configuration details

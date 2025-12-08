@@ -227,6 +227,9 @@ trader/
 
 - [Getting Started](GETTING_STARTED.md)
 - [Quick Start](QUICKSTART.md)
+- [Intelligent Training Tutorial](../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Automated training pipeline
+- [Ranking and Selection Consistency](../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior
+- [Modular Config System](../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md) - Configuration system
 - [System Reference](../02_reference/systems/)
 - [Architecture Deep Dive](../03_technical/design/ARCHITECTURE_DEEP_DIVE.md)
 - [Module Reference](../02_reference/api/MODULE_REFERENCE.md)

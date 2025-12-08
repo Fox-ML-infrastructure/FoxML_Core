@@ -1,24 +1,33 @@
 # Testing Notice
 
-**Status**: Target Ranking Appears Working  
+**Status**: Ranking and Selection Pipeline Unified  
 **Date**: 2025-12-08
 
 ## Current Status
 
-**Target ranking appears to be working.** However, there may be issues due to feature engineering that will be investigated. Moving forward to fix issues in feature selection.
+**Target ranking and feature selection now have consistent behavior.** Recent fixes ensure:
+- ✅ Interval detection respects `data.bar_interval` from config (no spurious warnings)
+- ✅ All sklearn models use shared preprocessing (`make_sklearn_dense_X`) for consistent NaN/dtype handling
+- ✅ CatBoost auto-detects target type and sets correct loss function
+- ✅ Ranking and selection pipelines are behaviorally identical
 
 ## What's Being Tested
 
-- ✅ Target ranking workflows — Appears working, may have feature engineering issues
-- 🔄 Feature selection — Currently investigating and fixing issues
-- Modular config system integration
-- Training pipeline orchestration
-- Configuration file updates
+- ✅ Target ranking workflows — Working with unified interval handling
+- ✅ Feature selection — Fixed sklearn NaN/dtype issues, CatBoost loss function
+- ✅ Pipeline consistency — Ranking and selection now use same helpers and patterns
+- 🔄 End-to-end testing — Full pipeline from target ranking → feature selection → training
+
+## Recent Fixes
+
+- **Interval handling**: Wired `explicit_interval` through entire ranking call chain
+- **Sklearn preprocessing**: Replaced ad-hoc imputers with shared `make_sklearn_dense_X()` helper
+- **CatBoost configuration**: Auto-detects classification vs regression and sets appropriate loss function
+- **Shared utilities**: Created `TRAINING/utils/target_utils.py` for consistent target type detection
 
 ## Known Considerations
 
-- Target ranking may have issues related to feature engineering (temporal alignment, lag structure, leakage validation)
-- Feature selection issues are being actively addressed
+- Feature engineering may still require human review and validation
 - Some configurations may require adjustment based on your specific use case
 - Performance characteristics may vary depending on hardware and dataset size
 - Edge cases and error handling are still being validated
@@ -33,11 +42,10 @@ If you encounter issues during testing:
 
 ## Next Steps
 
-- Investigate feature engineering issues that may affect target ranking
-- Fix issues in feature selection
-- Continue monitoring test results
-- Address any issues that arise
-- Update this notice as testing progresses
+- Continue end-to-end testing with multiple targets and model families
+- Monitor for any remaining interval detection warnings
+- Verify CatBoost runs successfully for both classification and regression targets
+- Validate sklearn models handle edge cases (sparse data, extreme values, etc.)
 
 ---
 

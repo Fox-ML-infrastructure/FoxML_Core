@@ -74,6 +74,57 @@ df = compute_neutral_band(df, horizon="5m")
 df = classify_excess_return(df, horizon="5m")
 ```
 
+## Training Utilities
+
+### Target Type Detection
+
+**Module:** `TRAINING/utils/target_utils.py`
+
+Provides reusable helpers for detecting target types consistently:
+
+```python
+from TRAINING.utils.target_utils import (
+    is_classification_target,
+    is_binary_classification_target,
+    is_multiclass_target
+)
+
+# Detect target type
+if is_classification_target(y):
+    if is_binary_classification_target(y):
+        # Binary classification (0/1)
+    elif is_multiclass_target(y):
+        # Multiclass (3+ classes)
+else:
+    # Regression
+```
+
+**Functions:**
+- `is_classification_target(y, max_classes=20)` - Detects classification vs regression
+- `is_binary_classification_target(y)` - Detects binary classification
+- `is_multiclass_target(y, max_classes=10)` - Detects multiclass classification
+
+**Used by:** CatBoost model builder (ranking and selection)
+
+### Sklearn Preprocessing
+
+**Module:** `TRAINING/utils/sklearn_safe.py`
+
+Provides consistent preprocessing for sklearn-based models:
+
+```python
+from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+
+# Convert to dense float32 array with consistent preprocessing
+X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
+# Returns: dense float32, median-imputed, inf values handled
+```
+
+**Function:**
+- `make_sklearn_dense_X(X, feature_names=None)` - Converts tabular data to dense float32 numpy array
+
+**Used by:** Lasso, Mutual Information, Univariate Selection, Boruta, Stability Selection (ranking and selection)
+
 ## Training
 
 ### Model Trainers
@@ -139,6 +190,10 @@ system.run()
 
 ## See Also
 
+- [Ranking and Selection Consistency](../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Guide to unified pipeline behavior (includes utility usage)
+- [Intelligent Trainer API](INTELLIGENT_TRAINER_API.md) - Intelligent training pipeline API
+- [Config Loader API](../configuration/CONFIG_LOADER_API.md) - Configuration loading (includes logging config utilities)
+- [Module Reference](MODULE_REFERENCE.md) - This file
 - [CLI Reference](CLI_REFERENCE.md) - Command-line tools
 - [Config Schema](CONFIG_SCHEMA.md) - Configuration schema
 

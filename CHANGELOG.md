@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-**Status**: Phase 1 functioning properly - Investigating minor issues in feature and target engineering. Phase 2 work underway.
+**Status**: Phase 1 functioning properly - Ranking and selection pipelines unified with consistent behavior. Documentation updated and cross-linked.
 
-**Note**: Phase 1 of the pipeline (intelligent training framework) appears to be functioning properly. Minor issues are being investigated that likely reside in feature and target engineering. Phase 2 (centralized configuration & UX modernization) is now being actively worked on. Backward functionality remains fully operational. All existing training workflows continue to function as before, and legacy config locations are still supported with deprecation warnings.
+**Note**: Phase 1 of the pipeline (intelligent training framework) is functioning properly. Ranking and selection pipelines now have unified behavior (interval handling, sklearn preprocessing, CatBoost configuration). All documentation has been updated with cross-links and references to new config files and utilities. Backward functionality remains fully operational. All existing training workflows continue to function as before, and legacy config locations are still supported with deprecation warnings.
 
 ### Stability Guarantees
 
@@ -59,6 +59,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `lightgbm_trainer.py` uses backend config for verbose parameter
   - No hardcoded logging flags scattered throughout codebase
   - Easy to switch between quiet production runs and verbose debug runs via config
+
+#### **Ranking and Selection Pipeline Consistency**
+- **Unified interval handling** — `explicit_interval` parameter now wired through entire ranking pipeline (orchestrator → rank_targets → evaluate_target_predictability → train_and_evaluate_models). All interval detection respects `data.bar_interval` from experiment config, eliminating spurious auto-detection warnings.
+- **Shared sklearn preprocessing** — All sklearn-based models in ranking now use `make_sklearn_dense_X()` helper (same as feature selection) for consistent NaN/dtype/inf handling. Applied to Lasso, Mutual Information, Univariate Selection, Boruta, and Stability Selection.
+- **Unified CatBoost builder** — CatBoost in ranking now uses same target type detection and loss function selection as feature selection. Auto-detects classification vs regression and sets appropriate `loss_function` (`Logloss`/`MultiClass`/`RMSE`) with YAML override support.
+- **Shared target utilities** — New `TRAINING/utils/target_utils.py` module with reusable helpers (`is_classification_target()`, `is_binary_classification_target()`, `is_multiclass_target()`) used consistently across ranking and selection.
 
 #### **Modular Configuration System** (Testing in Progress)
 - **Typed configuration schemas** (`CONFIG/config_schemas.py`):
@@ -244,6 +250,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - LSTM timeout issues — dynamic batch and epoch scaling implemented
 - Transformer OOM errors — reduced batch size and attention heads, dynamic scaling
 - CNN1D, LSTM, Transformer input shape mismatches — 3D to 2D reshape fixes
+- **Interval detection warnings in ranking** — Fixed spurious interval auto-detection warnings by wiring `explicit_interval` through entire ranking call chain (orchestrator → rank_targets → evaluate_target_predictability → train_and_evaluate_models → prepare_features_and_target). All `detect_interval_from_dataframe()` calls now respect `data.bar_interval` from experiment config.
+- **CatBoost loss function for classification** — Fixed CatBoost using `RMSE` loss for binary classification targets. Now auto-detects target type and sets `loss_function` appropriately (`Logloss` for binary, `MultiClass` for multiclass, `RMSE` for regression). YAML config can still override if needed.
+- **Sklearn NaN/dtype handling in ranking** — Replaced ad-hoc `SimpleImputer` usage with shared `make_sklearn_dense_X()` helper for all sklearn-based models (Lasso, Mutual Information, Univariate Selection, Boruta, Stability Selection). Ensures consistent preprocessing (dense float32, median imputation, inf handling) across ranking and feature selection pipelines.
+- **Shared target type detection** — Created `TRAINING/utils/target_utils.py` with reusable helpers (`is_classification_target()`, `is_binary_classification_target()`, `is_multiclass_target()`) used consistently across ranking and feature selection for CatBoost and other model builders.
+- **Comprehensive documentation updates** — Updated all documentation with cross-links and new content:
+  - Added `RANKING_SELECTION_CONSISTENCY.md` guide explaining unified pipeline behavior
+  - Updated all configuration docs to include `logging_config.yaml` references
+  - Added comprehensive cross-links throughout all documentation files
+  - Updated main `INDEX.md` with new files and references
+  - Fixed broken references to non-existent files
+  - Created `CROSS_REFERENCES.md` tracking document
+  - All API references now include utility modules (`target_utils.py`, `sklearn_safe.py`)
+  - All training tutorials now reference unified pipeline behavior
+  - Configuration examples updated with interval config and CatBoost examples
+  - All "Related Documentation" sections updated with proper cross-references
 
 ### Security
 - Enhanced compliance documentation for production use

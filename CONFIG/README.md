@@ -16,6 +16,8 @@ CONFIG/
 │   └── multi_model.yaml
 ├── training/                 # Training module configs
 │   └── models.yaml
+├── logging_config.yaml       # Structured logging configuration (NEW)
+│                             # Global, module-level, and backend verbosity controls
 ├── leakage/                  # Leakage detection configs
 ├── system/                   # System-level configs (paths, logging)
 └── training_config/          # Legacy training configs (still used)

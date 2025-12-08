@@ -102,7 +102,10 @@ python TRAINING/train.py \
 
 **See Also:**
 - [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Complete tutorial
+- [Ranking and Selection Consistency](../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior guide
 - [Model Training Guide](../../01_tutorials/training/MODEL_TRAINING_GUIDE.md) - Manual training workflow
+- [Modular Config System](../configuration/MODULAR_CONFIG_SYSTEM.md) - Config system guide (includes `logging_config.yaml`)
+- [Usage Examples](../configuration/USAGE_EXAMPLES.md) - Practical examples
 
 ## Feature Selection
 
@@ -202,6 +205,9 @@ python IBKR_trading/test_daily_models.py
 
 ## See Also
 
-- [Module Reference](MODULE_REFERENCE.md) - Python API
+- [Module Reference](MODULE_REFERENCE.md) - Python API (includes utility modules)
+- [Intelligent Trainer API](INTELLIGENT_TRAINER_API.md) - Intelligent training pipeline API
 - [Config Schema](CONFIG_SCHEMA.md) - Configuration reference
+- [Config Loader API](../configuration/CONFIG_LOADER_API.md) - Configuration loading
+- [Ranking and Selection Consistency](../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior guide
 

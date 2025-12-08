@@ -324,6 +324,16 @@ class IntelligentTrainer:
             else:
                 model_families = ['lightgbm', 'random_forest', 'neural_network']
         
+        # Get explicit interval from experiment config if available
+        explicit_interval = None
+        experiment_config = None
+        try:
+            if hasattr(self, 'experiment_config') and self.experiment_config:
+                experiment_config = self.experiment_config
+                explicit_interval = getattr(self.experiment_config.data, 'bar_interval', None)
+        except Exception:
+            pass
+        
         # Rank targets
         logger.info(f"Evaluating {len(targets_dict)} targets with {len(model_families)} model families...")
         rankings = rank_targets(
@@ -335,7 +345,9 @@ class IntelligentTrainer:
             output_dir=self.output_dir / "target_rankings",
             top_n=None,  # Get all rankings for caching
             max_targets_to_evaluate=max_targets_to_evaluate,  # Limit evaluation if specified
-            target_ranking_config=target_ranking_config  # Pass typed config if available
+            target_ranking_config=target_ranking_config,  # Pass typed config if available
+            explicit_interval=explicit_interval,  # Pass explicit interval
+            experiment_config=experiment_config  # Pass experiment config
         )
         
         # Save to cache

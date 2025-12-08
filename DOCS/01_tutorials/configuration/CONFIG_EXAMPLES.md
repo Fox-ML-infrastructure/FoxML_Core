@@ -176,9 +176,12 @@ risk:
 
 ## Next Steps
 
-- [Config Basics](CONFIG_BASICS.md) - Configuration fundamentals
+- [Config Basics](CONFIG_BASICS.md) - Configuration fundamentals (includes `logging_config.yaml` example)
 - [Advanced Config](ADVANCED_CONFIG.md) - Advanced configuration
-- [Configuration Reference](../../02_reference/configuration/README.md) - Complete configuration guide
-- [Config Loader API](../../02_reference/configuration/CONFIG_LOADER_API.md) - Programmatic config loading
+- **[Modular Config System](../../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md)** - Complete guide to modular configs (includes `logging_config.yaml`)
+- [Configuration Reference](../../02_reference/configuration/README.md) - Complete configuration guide (includes `logging_config.yaml` documentation)
+- [Config Loader API](../../02_reference/configuration/CONFIG_LOADER_API.md) - Programmatic config loading (includes logging config utilities)
+- [Usage Examples](../../02_reference/configuration/USAGE_EXAMPLES.md) - Practical examples (includes interval config and CatBoost examples)
+- [Ranking and Selection Consistency](../training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior guide
 - [Usage Examples](../../02_reference/configuration/USAGE_EXAMPLES.md) - Practical examples
 

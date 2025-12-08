@@ -23,6 +23,12 @@ Trained Models
 - **Intelligent selection**: Multi-model consensus for ranking/selection
 - **Cached results**: Rankings/selections cached for faster reruns
 - **Leakage-free**: All existing safeguards preserved
+- **Unified behavior**: Ranking and selection use consistent preprocessing and configuration
+
+**Pipeline Consistency:**
+- **Interval handling**: Both ranking and selection respect `data.bar_interval` from experiment config (no spurious auto-detection warnings)
+- **Sklearn preprocessing**: All sklearn-based models use shared `make_sklearn_dense_X()` helper for consistent NaN/dtype/inf handling
+- **CatBoost configuration**: Auto-detects target type (classification vs regression) and sets appropriate loss function
 
 ## Quick Start
 
@@ -39,6 +45,7 @@ data:
   data_dir: data/data_labeled/interval=5m
   symbols: [AAPL, MSFT, GOOGL]
   max_samples_per_symbol: 5000
+  bar_interval: "5m"  # Explicit interval (prevents auto-detection warnings)
 
 targets:
   primary: fwd_ret_60m
@@ -50,6 +57,8 @@ feature_selection:
 training:
   model_families: [lightgbm, xgboost]
 ```
+
+**Note on `bar_interval`**: Setting `data.bar_interval` explicitly prevents interval auto-detection warnings in both ranking and selection pipelines. The interval is used for horizon conversion and leakage filtering. Supported formats: `"5m"`, `"15m"`, `"1h"`, `"1d"`, or integer minutes (e.g., `5`).
 
 **2. Run with experiment config:**
 ```bash
@@ -150,16 +159,27 @@ python TRAINING/train.py \
 
 The pipeline automatically discovers and ranks all available targets using multiple model families:
 
-- **LightGBM** - Gradient boosting
-- **XGBoost** - Gradient boosting
-- **Random Forest** - Ensemble method
-- **Neural Network** - Deep learning
+- **LightGBM** - Gradient boosting (handles NaNs natively)
+- **XGBoost** - Gradient boosting (handles NaNs natively)
+- **Random Forest** - Ensemble method (handles NaNs natively)
+- **CatBoost** - Gradient boosting (handles NaNs natively, auto-detects classification vs regression)
+- **Neural Network** - Deep learning (preprocessed for sklearn compatibility)
+- **Lasso** - Linear model (uses shared sklearn preprocessing)
+- **Mutual Information** - Statistical feature selection (uses shared sklearn preprocessing)
+- **Univariate Selection** - F-test based selection (uses shared sklearn preprocessing)
+- **Boruta** - All-relevant feature selection (uses shared sklearn preprocessing)
+- **Stability Selection** - Bootstrap-based selection (uses shared sklearn preprocessing)
 
 **Ranking Criteria:**
 - Cross-validated R²/ROC-AUC scores
 - Feature importance magnitude
 - Consistency across models
 - Leakage detection flags
+
+**Preprocessing Consistency:**
+- **Tree-based models** (LightGBM, XGBoost, RF, CatBoost): Use raw data (handle NaNs natively)
+- **Sklearn-based models** (Lasso, MI, Univariate, Boruta, Stability): Use `make_sklearn_dense_X()` helper for consistent preprocessing (dense float32, median imputation, inf handling)
+- **CatBoost**: Auto-detects target type and sets `loss_function` appropriately (`Logloss` for binary, `MultiClass` for multiclass, `RMSE` for regression). YAML config can override if needed.
 
 **Automatic Leakage Detection:**
 The pipeline automatically detects and fixes data leakage:
@@ -195,10 +215,15 @@ python TRAINING/train.py \
 For each selected target, the pipeline automatically selects the best features using multi-model consensus:
 
 **Selection Method:**
-- Trains multiple model families (LightGBM, Random Forest, Neural Network)
-- Extracts feature importance (native/SHAP/permutation)
+- Trains multiple model families (LightGBM, XGBoost, Random Forest, CatBoost, Neural Network, Lasso, Mutual Information, Univariate Selection, Boruta, Stability Selection)
+- Extracts feature importance (native/SHAP/permutation/coefficients)
 - Aggregates importance across models and symbols
 - Ranks features by consensus score
+
+**Preprocessing Consistency:**
+- Same preprocessing behavior as ranking: tree models use raw data, sklearn models use `make_sklearn_dense_X()` helper
+- CatBoost uses same auto-detection logic as ranking
+- Interval handling respects `data.bar_interval` from experiment config (same as ranking)
 
 **Output:**
 - `output_dir/feature_selections/{target}/selected_features.txt` - Feature list
@@ -468,8 +493,12 @@ python TRAINING/train.py --auto-targets --auto-features
 
 ## Related Documentation
 
+- [Ranking and Selection Consistency](RANKING_SELECTION_CONSISTENCY.md) - **NEW**: Unified pipeline behavior (interval handling, sklearn preprocessing, CatBoost configuration)
 - [Model Training Guide](MODEL_TRAINING_GUIDE.md) - Manual training workflow
 - [Feature Selection Tutorial](FEATURE_SELECTION_TUTORIAL.md) - Manual feature selection
+- [Modular Config System](../../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md) - Complete config system guide (includes `logging_config.yaml`)
+- [Usage Examples](../../02_reference/configuration/USAGE_EXAMPLES.md) - Practical configuration examples
+- [Intelligent Trainer API](../../02_reference/api/INTELLIGENT_TRAINER_API.md) - Complete API reference
 - [CLI Reference](../../02_reference/api/CLI_REFERENCE.md) - Complete CLI documentation
 - [Target Discovery](../../03_technical/research/TARGET_DISCOVERY.md) - Target research
 - [Feature Importance Methodology](../../03_technical/research/FEATURE_IMPORTANCE_METHODOLOGY.md) - Feature importance research

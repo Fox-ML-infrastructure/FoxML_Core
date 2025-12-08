@@ -2,6 +2,55 @@
 
 Complete API reference for configuration loading.
 
+## Logging Configuration
+
+### get_module_logging_config
+
+Get module-specific logging configuration.
+
+```python
+from CONFIG.logging_config_utils import get_module_logging_config
+
+# Get config for a specific module
+log_cfg = get_module_logging_config('rank_target_predictability')
+
+# Use in code
+if log_cfg.gpu_detail:
+    logger.info("🚀 Training on GPU...")
+if log_cfg.cv_detail:
+    logger.info("Using PurgedTimeSeriesSplit: %s folds", n_folds)
+if log_cfg.edu_hints:
+    logger.info("💡 Note: GPU is most efficient for large datasets")
+```
+
+**Parameters:**
+- `module_name` (str): Module name (e.g., "rank_target_predictability", "feature_selection")
+
+**Returns:** `ModuleLoggingConfig` - Module-specific logging config object
+
+### get_backend_logging_config
+
+Get backend library logging configuration.
+
+```python
+from CONFIG.logging_config_utils import get_backend_logging_config
+
+# Get config for a backend library
+lgbm_cfg = get_backend_logging_config('lightgbm')
+
+# Use in model parameters
+lgbm_params['verbose'] = lgbm_cfg.native_verbosity
+```
+
+**Parameters:**
+- `backend_name` (str): Backend name (e.g., "lightgbm", "xgboost", "tensorflow")
+
+**Returns:** `BackendLoggingConfig` - Backend-specific logging config object
+
+**Configuration File:** `CONFIG/logging_config.yaml`
+
+See [Structured Logging Configuration](../../../CHANGELOG.md#structured-logging-configuration-system) for complete details.
+
 ## Functions
 
 ### load_model_config

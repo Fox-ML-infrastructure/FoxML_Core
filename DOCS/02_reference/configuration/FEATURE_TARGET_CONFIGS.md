@@ -395,9 +395,12 @@ model_families:
 
 ## Related Documentation
 
-- [Configuration System Overview](README.md) - Main configuration overview
+- **[Modular Config System](MODULAR_CONFIG_SYSTEM.md)** - Complete guide to modular configs (includes `logging_config.yaml`)
+- [Configuration System Overview](README.md) - Main configuration overview (includes `logging_config.yaml` documentation)
+- [Usage Examples](USAGE_EXAMPLES.md) - Practical configuration examples (includes interval config and CatBoost examples)
+- [Ranking and Selection Consistency](../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior guide
 - [Training Pipeline Configs](TRAINING_PIPELINE_CONFIGS.md) - Training configuration
 - [Safety & Leakage Configs](SAFETY_LEAKAGE_CONFIGS.md) - Leakage detection settings
-- [Usage Examples](USAGE_EXAMPLES.md) - Practical configuration examples
 - [Leakage Analysis](../../03_technical/research/LEAKAGE_ANALYSIS.md) - Detailed leakage documentation
+- [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Complete pipeline guide
 

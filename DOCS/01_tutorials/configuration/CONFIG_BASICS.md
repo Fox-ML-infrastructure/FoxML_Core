@@ -63,6 +63,8 @@ config = load_model_config("lightgbm", variant="conservative")
 
 ## Configuration Structure
 
+### Model Configs
+
 ```yaml
 # CONFIG/model_config/lightgbm.yaml
 default:
@@ -88,6 +90,42 @@ variants:
     reg_lambda: 0.01
 ```
 
+### Logging Config (NEW)
+
+```yaml
+# CONFIG/logging_config.yaml
+logging:
+  global_level: INFO
+  
+  modules:
+    rank_target_predictability:
+      level: INFO
+      gpu_detail: false      # GPU confirmations
+      cv_detail: false        # Fold timestamps
+      edu_hints: false        # Educational hints
+  
+  backends:
+    lightgbm:
+      native_verbosity: -1    # -1=silent, 0=info, >0=more spam
+  
+  profiles:
+    debug_run:
+      global_level: DEBUG
+      modules:
+        rank_target_predictability:
+          gpu_detail: true
+          cv_detail: true
+```
+
+**Usage:**
+```python
+from CONFIG.logging_config_utils import get_module_logging_config
+
+log_cfg = get_module_logging_config('rank_target_predictability')
+if log_cfg.gpu_detail:
+    logger.info("🚀 Training on GPU...")
+```
+
 ## Common Overrides
 
 ```python
@@ -108,7 +146,9 @@ config = load_model_config("mlp", overrides={"epochs": 200})
 
 - [Config Examples](CONFIG_EXAMPLES.md) - Example configurations
 - [Advanced Config](ADVANCED_CONFIG.md) - Advanced configuration
-- [Configuration Reference](../../02_reference/configuration/README.md) - Complete configuration guide
-- [Config Loader API](../../02_reference/configuration/CONFIG_LOADER_API.md) - Programmatic config loading
-- [Usage Examples](../../02_reference/configuration/USAGE_EXAMPLES.md) - Practical configuration examples
+- **[Modular Config System](../../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md)** - Complete guide to modular configs (includes `logging_config.yaml`)
+- [Configuration Reference](../../02_reference/configuration/README.md) - Complete configuration guide (includes `logging_config.yaml` documentation)
+- [Config Loader API](../../02_reference/configuration/CONFIG_LOADER_API.md) - Programmatic config loading (includes logging config utilities)
+- [Usage Examples](../../02_reference/configuration/USAGE_EXAMPLES.md) - Practical configuration examples (includes interval config and CatBoost examples)
+- [Ranking and Selection Consistency](../training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior guide
 

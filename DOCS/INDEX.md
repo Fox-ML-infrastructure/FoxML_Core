@@ -2,6 +2,9 @@
 
 Complete navigation guide for FoxML Core documentation.
 
+**Last Updated**: 2025-12-08  
+**Recent Updates**: Added unified pipeline consistency guide, structured logging configuration, and shared utility modules documentation.
+
 ## Quick Navigation
 
 - [Quick Start](00_executive/QUICKSTART.md) - Get running in 5 minutes
@@ -48,6 +51,7 @@ Step-by-step guides for common tasks.
 
 ### Training
 - [Intelligent Training Tutorial](01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Automated target ranking, feature selection, and training (includes timestamped outputs and backup system)
+- [Ranking and Selection Consistency](01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - **NEW**: Unified pipeline behavior (interval handling, sklearn preprocessing, CatBoost configuration)
 - [Model Training Guide](01_tutorials/training/MODEL_TRAINING_GUIDE.md) - Manual training workflow (how to run it)
 - [Walk-Forward Validation](01_tutorials/training/WALKFORWARD_VALIDATION.md) - Validation workflow
 - [Feature Selection Tutorial](01_tutorials/training/FEATURE_SELECTION_TUTORIAL.md) - Manual feature selection
@@ -71,7 +75,8 @@ Step-by-step guides for common tasks.
 Complete technical reference for daily use.
 
 ### API Reference
-- [Module Reference](02_reference/api/MODULE_REFERENCE.md) - Python API
+- [Module Reference](02_reference/api/MODULE_REFERENCE.md) - Python API (includes `target_utils.py` and `sklearn_safe.py` utilities)
+- [Intelligent Trainer API](02_reference/api/INTELLIGENT_TRAINER_API.md) - Intelligent training pipeline API reference
 - [CLI Reference](02_reference/api/CLI_REFERENCE.md) - Command-line tools
 - [Config Schema](02_reference/api/CONFIG_SCHEMA.md) - Configuration schema
 
@@ -91,14 +96,14 @@ Complete technical reference for daily use.
 - [Pipeline Reference](02_reference/systems/PIPELINE_REFERENCE.md) - Data pipelines
 
 ### Configuration Reference
-- **[Modular Config System](02_reference/configuration/MODULAR_CONFIG_SYSTEM.md)** - NEW: Complete guide to modular configs, experiment configs, typed configs, migration
-- [Configuration System Overview](02_reference/configuration/README.md) - Centralized configuration system overview
+- **[Modular Config System](02_reference/configuration/MODULAR_CONFIG_SYSTEM.md)** - Complete guide to modular configs, experiment configs, typed configs, migration (includes `logging_config.yaml`)
+- [Configuration System Overview](02_reference/configuration/README.md) - Centralized configuration system overview (includes `logging_config.yaml` documentation)
 - [Feature & Target Configs](02_reference/configuration/FEATURE_TARGET_CONFIGS.md) - Feature/target configuration guide
 - [Training Pipeline Configs](02_reference/configuration/TRAINING_PIPELINE_CONFIGS.md) - System resources and training behavior
 - [Safety & Leakage Configs](02_reference/configuration/SAFETY_LEAKAGE_CONFIGS.md) - Leakage detection and numerical stability
 - [Model Configuration](02_reference/configuration/MODEL_CONFIGURATION.md) - Model hyperparameters and variants
-- [Usage Examples](02_reference/configuration/USAGE_EXAMPLES.md) - Practical configuration examples
-- [Config Loader API](02_reference/configuration/CONFIG_LOADER_API.md) - Programmatic config loading
+- [Usage Examples](02_reference/configuration/USAGE_EXAMPLES.md) - Practical configuration examples (includes interval config and CatBoost examples)
+- [Config Loader API](02_reference/configuration/CONFIG_LOADER_API.md) - Programmatic config loading (includes logging config utilities)
 - [Config Overlays](02_reference/configuration/CONFIG_OVERLAYS.md) - Overlay system for environment-specific configs
 - [Environment Variables](02_reference/configuration/ENVIRONMENT_VARIABLES.md) - Environment-based configuration
 
@@ -109,7 +114,7 @@ Research notes, design rationale, advanced topics.
 ### Research
 - [Intelligence Layer Overview](03_technical/research/INTELLIGENCE_LAYER.md) - Complete overview of intelligent training pipeline decision-making and automation
 - [Leakage Analysis](03_technical/research/LEAKAGE_ANALYSIS.md) - Leakage research
-- [Feature Importance Methodology](03_technical/research/FEATURE_IMPORTANCE_METHODOLOGY.md) - Feature importance
+- [Feature Importance Methodology](03_technical/research/FEATURE_IMPORTANCE_METHODOLOGY.md) - Feature importance research
 - [Target Discovery](03_technical/research/TARGET_DISCOVERY.md) - Target research
 - [Validation Methodology](03_technical/research/VALIDATION_METHODOLOGY.md) - Validation research
 
@@ -135,7 +140,7 @@ Research notes, design rationale, advanced topics.
 - [Future Work](03_technical/roadmaps/FUTURE_WORK.md) - Planned features
 
 ### Implementation
-- [Feature Selection Implementation](03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Feature selection implementation details
+- [Feature Selection Implementation](03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Feature selection implementation details (see also [Ranking and Selection Consistency](01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) for unified pipeline behavior)
 - [Training Optimization](03_technical/implementation/TRAINING_OPTIMIZATION_GUIDE.md) - Training optimization guide
 - [Safe Target Pattern](03_technical/implementation/SAFE_TARGET_PATTERN_IMPLEMENTATION.md) - Safe target pattern implementation
 - [First Batch Specs](03_technical/implementation/FIRST_BATCH_SPECS_IMPLEMENTATION.md) - First batch specifications
@@ -160,7 +165,8 @@ Research notes, design rationale, advanced topics.
 ## Additional Documentation
 
 ### System Specifications
-- [Comprehensive Feature Ranking](COMPREHENSIVE_FEATURE_RANKING.md) - Feature ranking methodology
+- See [Ranking and Selection Consistency](01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) for unified pipeline behavior
+- See [Feature Selection Implementation](03_technical/implementation/FEATURE_SELECTION_GUIDE.md) for implementation details
 
 ### System Documentation
 - [IBKR Trading](../IBKR_trading/README.md) - IBKR live trading system

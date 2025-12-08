@@ -191,6 +191,10 @@ This catches obvious leaks (like a feature that's literally the target column) b
 
 ## See Also
 
-- [Leakage Fix README](../../../dep/LEAKAGE_FIX_README.md) - Detailed fix documentation
+- [Ranking and Selection Consistency](../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior (includes sklearn preprocessing)
+- [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Complete pipeline guide
+- [Safety & Leakage Configs](../../02_reference/configuration/SAFETY_LEAKAGE_CONFIGS.md) - Leakage detection configuration
+- [Feature & Target Configs](../../02_reference/configuration/FEATURE_TARGET_CONFIGS.md) - Feature/target configuration guide
 - [Safe Target Pattern](../implementation/SAFE_TARGET_PATTERN_IMPLEMENTATION.md) - Implementation details
+- [Intelligence Layer Overview](INTELLIGENCE_LAYER.md) - Complete intelligence layer overview
 

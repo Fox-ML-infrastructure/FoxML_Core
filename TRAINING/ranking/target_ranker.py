@@ -26,7 +26,7 @@ reusing the original functions.
 import sys
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Union
 import warnings
 
 # Add project root to path for imports
@@ -81,7 +81,9 @@ def evaluate_target_predictability(
     output_dir: Path = None,
     min_cs: int = 10,
     max_cs_samples: Optional[int] = None,
-    max_rows_per_symbol: int = 50000
+    max_rows_per_symbol: int = 50000,
+    explicit_interval: Optional[Union[int, str]] = None,  # Explicit interval from config
+    experiment_config: Optional[Any] = None  # Optional ExperimentConfig (for data.bar_interval)
 ) -> TargetPredictabilityScore:
     """
     Evaluate predictability of a single target across symbols.
@@ -114,7 +116,9 @@ def evaluate_target_predictability(
         output_dir=output_dir,
         min_cs=min_cs,
         max_cs_samples=max_cs_samples,
-        max_rows_per_symbol=max_rows_per_symbol
+        max_rows_per_symbol=max_rows_per_symbol,
+        explicit_interval=None,  # Will be passed from rank_targets
+        experiment_config=None  # Will be passed from rank_targets
     )
 
 
@@ -159,7 +163,9 @@ def rank_targets(
     max_rows_per_symbol: int = 50000,
     top_n: Optional[int] = None,
     max_targets_to_evaluate: Optional[int] = None,  # Limit number of targets to evaluate (for faster testing)
-    target_ranking_config: Optional['TargetRankingConfig'] = None  # New typed config (optional)
+    target_ranking_config: Optional['TargetRankingConfig'] = None,  # New typed config (optional)
+    explicit_interval: Optional[Union[int, str]] = None,  # Explicit interval from config (e.g., "5m")
+    experiment_config: Optional[Any] = None  # Optional ExperimentConfig (for data.bar_interval)
 ) -> List[TargetPredictabilityScore]:
     """
     Rank multiple targets by predictability.
@@ -259,7 +265,9 @@ def rank_targets(
                     max_rows_per_symbol=max_rows_per_symbol,
                     max_reruns=max_reruns,
                     rerun_on_perfect_train_acc=rerun_on_perfect_train_acc,
-                    rerun_on_high_auc_only=rerun_on_high_auc_only
+                    rerun_on_high_auc_only=rerun_on_high_auc_only,
+                    explicit_interval=explicit_interval,
+                    experiment_config=experiment_config
                 )
             else:
                 result = evaluate_target_predictability(
@@ -272,7 +280,9 @@ def rank_targets(
                     output_dir=output_dir,
                     min_cs=min_cs,
                     max_cs_samples=max_cs_samples,
-                    max_rows_per_symbol=max_rows_per_symbol
+                    max_rows_per_symbol=max_rows_per_symbol,
+                    explicit_interval=explicit_interval,
+                    experiment_config=experiment_config
                 )
             
             # Skip degenerate/failed targets (marked with mean_score = -999)
