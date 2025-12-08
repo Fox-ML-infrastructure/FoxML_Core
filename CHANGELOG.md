@@ -168,6 +168,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pricing aligned with market comps for enterprise ML infrastructure and reflects value of replacing 4–8 engineers + MLOps team + compliance overhead
 
 ### Documentation
+- **Documentation structure reorganization**:
+  - Moved all CONFIG documentation to `docs/02_reference/configuration/`:
+    - Configuration system overview, feature/target configs, training pipeline configs, safety/leakage configs, model configuration, usage examples
+    - Created minimal `CONFIG/README.md` that points to docs folder
+  - Moved all TRAINING documentation to `docs/` folder:
+    - Implementation guides → `docs/03_technical/implementation/` (feature selection, training optimization, safe target pattern, first batch specs, strategy updates, experiments implementation)
+    - Tutorial/workflow docs → `docs/01_tutorials/training/` (experiments workflow, quick start, operations, phase 1 feature engineering)
+    - Internal docs → `docs/internal/planning/` (import audit and structure)
+    - Created minimal `TRAINING/README.md` and `TRAINING/EXPERIMENTS/README.md` that point to docs
+  - Created comprehensive legal documentation index (`docs/LEGAL_INDEX.md`):
+    - Complete index of all legal, licensing, compliance, and enterprise documentation
+    - Organized by category: Licensing, Terms & Policies, Enterprise & Compliance, Security, Legal Agreements, Consulting Services
+  - Cleaned up main documentation index (`docs/INDEX.md`):
+    - Removed duplicate sections (Implementation Guides was duplicating Tier D → Implementation)
+    - Added "Project Status & Licensing" block after Quick Navigation (surfaces Roadmap, Changelog, Subscriptions, Legal Index)
+    - Added "Who Should Read What" routing guide for different audiences
+    - Clarified Model Training Guide differentiation (tutorial: "how to run it" vs specification: "what the system is")
+    - Renamed "Additional Documentation" to "System Specifications" for clarity
+  - Fixed all cross-references throughout documentation:
+    - Updated all broken links to point to correct locations in docs/ folder
+    - Added proper cross-links between related documentation
+    - All relative paths corrected
+  - Code directories now contain only code and minimal README pointers:
+    - `CONFIG/` contains only YAML config files and minimal README
+    - `TRAINING/` contains only code and minimal README
+    - All documentation centralized in `docs/` for professional organization
 - Updated `LEAKAGE_ANALYSIS.md` with pre-training leak scan and new config options
 - Updated `INTELLIGENT_TRAINING_TUTORIAL.md` with configuration details
 - Marked target ranking integration as completed in planning docs
