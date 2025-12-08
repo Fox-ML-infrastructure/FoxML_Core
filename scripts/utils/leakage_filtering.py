@@ -36,7 +36,62 @@ logger = logging.getLogger(__name__)
 
 # Cache for loaded config
 _LEAKAGE_CONFIG: Optional[Dict[str, Any]] = None
-_CONFIG_PATH = Path(__file__).resolve().parents[2] / "CONFIG" / "excluded_features.yaml"
+_CONFIG_PATH_CACHE: Optional[Path] = None
+
+# Robust path resolution: try multiple possible locations
+def _find_config_path() -> Path:
+    """Find the excluded_features.yaml config file using multiple strategies."""
+    # Strategy 1: Relative to this file (scripts/utils/leakage_filtering.py -> repo root)
+    # Go up: scripts/utils/ -> scripts/ -> repo_root/
+    script_file = Path(__file__).resolve()
+    repo_root_via_script = script_file.parents[2] / "CONFIG" / "excluded_features.yaml"
+    if repo_root_via_script.exists():
+        return repo_root_via_script
+    
+    # Strategy 2: Look for CONFIG directory in current working directory
+    cwd_config = Path.cwd() / "CONFIG" / "excluded_features.yaml"
+    if cwd_config.exists():
+        return cwd_config
+    
+    # Strategy 3: Try to find repo root by looking for .git or CONFIG directory
+    # Start from current working directory and walk up
+    current = Path.cwd()
+    for _ in range(10):  # Search up to 10 levels (more generous)
+        config_path = current / "CONFIG" / "excluded_features.yaml"
+        if config_path.exists():
+            return config_path
+        # Also check if we're at repo root (has .git or CONFIG dir)
+        if (current / ".git").exists() or (current / "CONFIG").is_dir():
+            if config_path.exists():
+                return config_path
+        current = current.parent
+        if current == current.parent:  # Reached filesystem root
+            break
+    
+    # Strategy 4: Try relative to script file again, but also check parent directories
+    # Sometimes __file__ resolves differently depending on how module is imported
+    script_dir = script_file.parent
+    for level in range(1, 6):  # Try going up 1-5 levels from script
+        potential_root = script_dir
+        for _ in range(level):
+            potential_root = potential_root.parent
+        config_path = potential_root / "CONFIG" / "excluded_features.yaml"
+        if config_path.exists():
+            return config_path
+    
+    # Fallback: return the most likely path (will show error if not found)
+    return repo_root_via_script
+
+def _get_config_path() -> Path:
+    """Get config path, with caching and re-evaluation if needed."""
+    global _CONFIG_PATH_CACHE
+    
+    # Re-evaluate if cache is None or if cached path doesn't exist
+    if _CONFIG_PATH_CACHE is None or not _CONFIG_PATH_CACHE.exists():
+        _CONFIG_PATH_CACHE = _find_config_path()
+    
+    return _CONFIG_PATH_CACHE
+
 _CONFIG_MTIME: Optional[float] = None  # Track file modification time for cache invalidation
 
 
@@ -51,13 +106,16 @@ def _load_leakage_config(force_reload: bool = False) -> Dict[str, Any]:
     """
     global _LEAKAGE_CONFIG, _CONFIG_MTIME
     
+    # Get config path (lazy evaluation)
+    config_path = _get_config_path()
+    
     # Check if config file was modified (cache invalidation)
     if _LEAKAGE_CONFIG is not None and not force_reload:
-        if _CONFIG_PATH.exists():
-            current_mtime = _CONFIG_PATH.stat().st_mtime
+        if config_path.exists():
+            current_mtime = config_path.stat().st_mtime
             if _CONFIG_MTIME is not None and current_mtime > _CONFIG_MTIME:
                 # File was modified, clear cache
-                logger.info(f"Config file modified, reloading from {_CONFIG_PATH}")
+                logger.info(f"Config file modified, reloading from {config_path}")
                 _LEAKAGE_CONFIG = None
                 _CONFIG_MTIME = None
         elif _CONFIG_MTIME is not None:
@@ -69,8 +127,15 @@ def _load_leakage_config(force_reload: bool = False) -> Dict[str, Any]:
     if _LEAKAGE_CONFIG is not None:
         return _LEAKAGE_CONFIG
     
-    if not _CONFIG_PATH.exists():
-        logger.warning(f"Leakage config not found: {_CONFIG_PATH}, using empty config")
+    if not config_path.exists():
+        logger.error(
+            f"⚠️  CRITICAL: Leakage config not found at {config_path}\n"
+            f"   This will cause data leakage! Features like 'ts', 'p_*', and target-related features will NOT be filtered.\n"
+            f"   Please ensure CONFIG/excluded_features.yaml exists in the repo root.\n"
+            f"   Current working directory: {Path.cwd()}\n"
+            f"   Script file location: {Path(__file__).resolve()}\n"
+            f"   Using empty config (NO LEAKAGE PROTECTION)"
+        )
         _LEAKAGE_CONFIG = {
             'always_exclude': {'regex_patterns': [], 'prefix_patterns': [], 'keyword_patterns': [], 'exact_patterns': []},
             'target_type_rules': {},
@@ -82,11 +147,11 @@ def _load_leakage_config(force_reload: bool = False) -> Dict[str, Any]:
         return _LEAKAGE_CONFIG
     
     try:
-        with open(_CONFIG_PATH, 'r') as f:
+        with open(config_path, 'r') as f:
             _LEAKAGE_CONFIG = yaml.safe_load(f) or {}
         
         # Store modification time for cache invalidation
-        _CONFIG_MTIME = _CONFIG_PATH.stat().st_mtime
+        _CONFIG_MTIME = config_path.stat().st_mtime
         
         # Ensure all required keys exist with defaults
         defaults = {
@@ -119,10 +184,10 @@ def _load_leakage_config(force_reload: bool = False) -> Dict[str, Any]:
             logger.warning(
                 f"⚠️  WARNING: Config loaded but has ZERO exclusion patterns! "
                 f"This will allow all features (including leaks). "
-                f"Check {_CONFIG_PATH}"
+                f"Check {config_path}"
             )
         else:
-            logger.debug(f"Loaded leakage config from {_CONFIG_PATH} ({total_patterns} patterns)")
+            logger.debug(f"Loaded leakage config from {config_path} ({total_patterns} patterns)")
         
         return _LEAKAGE_CONFIG
     except Exception as e:

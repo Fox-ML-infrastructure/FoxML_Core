@@ -976,7 +976,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                            output_dir: str = 'output',
                                            min_cs: int = 10,
                                            max_cs_samples: int = None,
-                                           max_rows_train: int = None) -> Dict[str, Any]:
+                                           max_rows_train: int = None,
+                                           target_features: Dict[str, List[str]] = None) -> Dict[str, Any]:
     """Train models for a specific interval using comprehensive approach (replicates original script)."""
     
     logger.info(f"🎯 Training models for interval: {interval}")
@@ -996,8 +997,15 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         # Prepare training data with cross-sectional sampling
         print(f"🔄 Preparing training data for target: {target}")  # Debug print
         prep_start = time.time()
+        
+        # Use selected features for this target if provided
+        selected_features = None
+        if target_features and target in target_features:
+            selected_features = target_features[target]
+            logger.info(f"Using {len(selected_features)} selected features for {target}")
+        
         X, y, feature_names, symbols, indices, feat_cols, time_vals, routing_meta = prepare_training_data_cross_sectional(
-            mtf_data, target, min_cs=min_cs, max_cs_samples=max_cs_samples
+            mtf_data, target, feature_names=selected_features, min_cs=min_cs, max_cs_samples=max_cs_samples
         )
         prep_elapsed = time.time() - prep_start
         print(f"✅ Data preparation completed in {prep_elapsed:.2f}s")  # Debug print
