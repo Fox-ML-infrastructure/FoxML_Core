@@ -91,9 +91,21 @@
 - **251–1000 employees** — $350,000 / year
 - **1000+ employees** — Starts at $750,000 / year (custom quote)
 
-**See `legal/SUBSCRIPTIONS.md` for complete pricing information.**
+**See `legal/SUBSCRIPTIONS.md` for complete pricing information and optional add-ons.**
 
-### 4.2 What's Included
+### 4.2 Optional Add-Ons
+
+Enterprise deployments often require additional services:
+
+- **Dedicated Support Retainer** — $3,500–$12,000/month (SLA-based)
+- **Custom Integration Projects** — $25,000–$150,000 one-time
+- **Onboarding & Deployment** — $15,000–$50,000 one-time
+- **Private Slack / Direct Founder Access** — $18,000–$60,000/year
+- **Additional User Seats** — $500–$2,000 per seat/year
+
+**See `legal/SUBSCRIPTIONS.md` for complete add-on details.**
+
+### 4.3 What's Included
 
 **Commercial license includes:**
 
