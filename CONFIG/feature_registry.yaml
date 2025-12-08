@@ -18,7 +18,7 @@ features:
   ret_1:
     source: price
     lag_bars: 1
-    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    allowed_horizons: [1, 2, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
     description: "1-bar lagged return"
   
   ret_2:
@@ -61,101 +61,101 @@ features:
   rsi_10:
     source: derived
     lag_bars: 10
-    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1 (lookback is 10, but value is current)
+    allowed_horizons: [1, 2, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1 (lookback is 10, but value is current)
     description: "RSI with 10-bar lookback"
   
   rsi_14:
     source: derived
     lag_bars: 14
-    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    allowed_horizons: [1, 2, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
     description: "RSI with 14-bar lookback"
   
   sma_20:
     source: derived
     lag_bars: 20
-    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    allowed_horizons: [1, 2, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
     description: "20-bar simple moving average"
   
   sma_50:
     source: derived
     lag_bars: 50
-    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    allowed_horizons: [1, 2, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
     description: "50-bar simple moving average"
   
   sma_200:
     source: derived
     lag_bars: 200
-    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    allowed_horizons: [1, 2, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
     description: "200-bar simple moving average"
   
   ema_12:
     source: derived
     lag_bars: 12
-    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    allowed_horizons: [1, 2, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
     description: "12-bar exponential moving average"
   
   ema_26:
     source: derived
     lag_bars: 26
-    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    allowed_horizons: [1, 2, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
     description: "26-bar exponential moving average"
   
   # Volume features (safe)
   volume:
     source: volume
     lag_bars: 1
-    allowed_horizons: [1, 3, 5, 12, 24, 60]
+    allowed_horizons: [1, 2, 3, 5, 12, 24, 60]
     description: "Volume (1-bar lag)"
   
   volume_sma_20:
     source: derived
     lag_bars: 20
-    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    allowed_horizons: [1, 2, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
     description: "20-bar volume moving average"
   
   # Volatility features (safe)
   volatility_10:
     source: derived
     lag_bars: 10
-    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    allowed_horizons: [1, 2, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
     description: "10-bar volatility"
   
   volatility_20:
     source: derived
     lag_bars: 20
-    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    allowed_horizons: [1, 2, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
     description: "20-bar volatility"
   
   # VWAP features (safe)
   vwap:
     source: derived
     lag_bars: 1
-    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    allowed_horizons: [1, 2, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
     description: "Volume-weighted average price (1-bar lag)"
   
   vwap_dev_high:
     source: derived
     lag_bars: 1
-    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    allowed_horizons: [1, 2, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
     description: "VWAP deviation high (1-bar lag)"
   
   vwap_dev_low:
     source: derived
     lag_bars: 1
-    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    allowed_horizons: [1, 2, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
     description: "VWAP deviation low (1-bar lag)"
   
   # Momentum features (safe)
   momentum_10:
     source: derived
     lag_bars: 10
-    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    allowed_horizons: [1, 2, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
     description: "10-bar momentum"
   
   momentum_20:
     source: derived
     lag_bars: 20
-    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    allowed_horizons: [1, 2, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
     description: "20-bar momentum"
   
   # Rejected features (explicitly marked as leaky)
@@ -216,25 +216,25 @@ feature_families:
   lagged_returns:
     pattern: "^ret_\\d+$"
     default_lag_bars: null  # Must be specified per feature
-    default_allowed_horizons: [1, 3, 5, 12, 24, 60]
+    default_allowed_horizons: [1, 2, 3, 5, 12, 24, 60]
     description: "Lagged returns (ret_N where N is lag)"
   
   technical_indicators:
     pattern: "^(rsi|sma|ema|macd|bb|atr|adx)_\\d+$"
     default_lag_bars: null
-    default_allowed_horizons: [1, 3, 5, 12, 24, 60]
+    default_allowed_horizons: [1, 2, 3, 5, 12, 24, 60]
     description: "Technical indicators with numeric lookback"
   
   volume_features:
     pattern: "^(volume|vol_|obv|ad|cmf)"
     default_lag_bars: 1
-    default_allowed_horizons: [1, 3, 5, 12, 24, 60]
+    default_allowed_horizons: [1, 2, 3, 5, 12, 24, 60]
     description: "Volume-based features"
   
   volatility_features:
     pattern: "^(volatility|vol_|std_|var_)"
     default_lag_bars: null
-    default_allowed_horizons: [1, 3, 5, 12, 24, 60]
+    default_allowed_horizons: [1, 2, 3, 5, 12, 24, 60]
     description: "Volatility features"
   
   # Rejected families (always excluded)

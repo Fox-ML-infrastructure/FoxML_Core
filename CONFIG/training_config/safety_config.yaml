@@ -43,4 +43,19 @@ safety:
     min_history_bars: 120  # Minimum history bars before feature use
     max_na_fraction: 0.05  # Maximum NaN fraction (5%)
     hold_on_nan: true  # Return HOLD action on NaN in predictions
+  
+  # Leakage Detection & Auto-Fix Thresholds
+  leakage_detection:
+    # Auto-fixer triggers when scores exceed these thresholds
+    auto_fix_thresholds:
+      cv_score: 0.99  # Cross-validation score threshold (0.99 = 99%)
+      training_accuracy: 0.999  # Training accuracy threshold (0.999 = 99.9%)
+      training_r2: 0.999  # Training R² threshold for regression (0.999 = 99.9%)
+      perfect_correlation: 0.999  # Perfect correlation threshold (0.999 = 99.9%)
+    
+    # Minimum confidence for auto-fixer to apply fixes (0.0 to 1.0)
+    auto_fix_min_confidence: 0.8  # Only auto-fix leaks with >= 80% confidence
+    
+    # Enable/disable auto-fixer
+    auto_fix_enabled: true  # Set to false to disable automatic leakage fixing
 

@@ -82,6 +82,12 @@ vram_cap = get_cfg("gpu.vram_cap_mb", default=4096, config_name="gpu_config")
 - **Purpose:** Memory thresholds and cleanup policies
 - **Key Settings:** Memory caps, chunk sizes, cleanup aggressiveness
 
+#### Safety Configuration
+- **File:** `training_config/safety_config.yaml`
+- **Purpose:** Numerical stability guards and leakage detection
+- **Key Settings:** Feature clipping, target capping, gradient clipping, **leakage detection thresholds**
+- **Leakage Detection:** Configurable thresholds for auto-fixer (CV scores, training accuracy, R², correlation)
+
 ## Environment Variable Overrides
 
 Most configuration values can be overridden via environment variables:

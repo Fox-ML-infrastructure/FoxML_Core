@@ -61,6 +61,19 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+# Add CONFIG directory to path for centralized config loading
+_CONFIG_DIR = _REPO_ROOT / "CONFIG"
+if str(_CONFIG_DIR) not in sys.path:
+    sys.path.insert(0, str(_CONFIG_DIR))
+
+# Try to import config loader
+_CONFIG_AVAILABLE = False
+try:
+    from config_loader import get_cfg, get_safety_config
+    _CONFIG_AVAILABLE = True
+except ImportError:
+    logger.debug("Config loader not available; using hardcoded defaults")
+
 # Import checkpoint utility (after path is set)
 from TRAINING.utils.checkpoint import CheckpointManager
 
@@ -865,6 +878,19 @@ def train_and_evaluate_models(
         scoring = 'accuracy'
     
     # Helper function to detect perfect correlation (data leakage)
+    # Track which models had perfect correlation warnings (for auto-fixer)
+    _perfect_correlation_models = set()
+    
+    # Load correlation threshold from config (used by _check_for_perfect_correlation)
+    if _CONFIG_AVAILABLE:
+        try:
+            safety_cfg = get_safety_config()
+            _correlation_threshold = float(safety_cfg.get('leakage_detection', {}).get('auto_fix_thresholds', {}).get('perfect_correlation', 0.999))
+        except:
+            _correlation_threshold = 0.999
+    else:
+        _correlation_threshold = 0.999
+    
     def _check_for_perfect_correlation(y_true: np.ndarray, y_pred: np.ndarray, model_name: str) -> bool:
         """
         Check if predictions are perfectly correlated with targets (indicates leakage).
@@ -875,17 +901,18 @@ def train_and_evaluate_models(
             if task_type in {TaskType.BINARY_CLASSIFICATION, TaskType.MULTICLASS_CLASSIFICATION}:
                 if len(y_true) == len(y_pred):
                     accuracy = np.mean(y_true == y_pred)
-                    if accuracy >= 0.999:  # 99.9% accuracy = suspicious
+                    if accuracy >= _correlation_threshold:  # Configurable threshold (default: 99.9%)
                         metric_name = "training accuracy"  # Clarify this is training, not CV
-                        logger.warning(f"  LEAKAGE WARNING: {model_name} has {accuracy:.1%} {metric_name} - likely data leakage!")
+                        logger.warning(f"  LEAKAGE WARNING: {model_name} has {accuracy:.1%} {metric_name} (threshold: {_correlation_threshold:.1%}) - likely data leakage!")
+                        _perfect_correlation_models.add(model_name)  # Track for auto-fixer
                         return True
             
             # For regression, check correlation
             elif task_type == TaskType.REGRESSION:
                 if len(y_true) == len(y_pred):
                     corr = np.corrcoef(y_true, y_pred)[0, 1]
-                    if not np.isnan(corr) and abs(corr) >= 0.999:
-                        logger.warning(f"  LEAKAGE WARNING: {model_name} has correlation {corr:.4f} - likely data leakage!")
+                    if not np.isnan(corr) and abs(corr) >= _correlation_threshold:
+                        logger.warning(f"  LEAKAGE WARNING: {model_name} has correlation {corr:.4f} (threshold: {_correlation_threshold:.4f}) - likely data leakage!")
                         return True
         except Exception:
             pass
@@ -1014,9 +1041,14 @@ def train_and_evaluate_models(
             # Remove objective and device from config (we set these explicitly)
             lgb_config_clean = {k: v for k, v in lgb_config.items() if k not in ['device', 'objective', 'metric']}
             
+            # Set verbose level for GPU verification (only if GPU is enabled)
+            # Note: verbose is a model constructor parameter, not fit() parameter
+            verbose_level = 1 if 'device' in gpu_params else -1
+            
             if is_binary:
                 model = lgb.LGBMClassifier(
                     objective='binary',
+                    verbose=verbose_level,  # Enable verbose for GPU verification
                     **lgb_config_clean,
                     **gpu_params
                 )
@@ -1025,12 +1057,14 @@ def train_and_evaluate_models(
                 model = lgb.LGBMClassifier(
                     objective='multiclass',
                     num_class=n_classes,
+                    verbose=verbose_level,  # Enable verbose for GPU verification
                     **lgb_config_clean,
                     **gpu_params
                 )
             else:
                 model = lgb.LGBMRegressor(
                     objective='regression',
+                    verbose=verbose_level,  # Enable verbose for GPU verification
                     **lgb_config_clean,
                     **gpu_params
                 )
@@ -1064,11 +1098,31 @@ def train_and_evaluate_models(
                 # Fallback: use all data if too small
                 X_train_final, X_val_final = X, X
                 y_train_final, y_val_final = y, y
+            # Log GPU usage if available
+            if 'device' in gpu_params:
+                logger.info(f"  🚀 Training LightGBM on {gpu_params['device'].upper()} (device_id={gpu_params.get('gpu_device_id', 0)})")
+                logger.info(f"  📊 Dataset size: {len(X_train_final)} samples, {X_train_final.shape[1]} features")
+                logger.info(f"  💡 Note: GPU is most efficient for large datasets (>100k samples)")
+            
             model.fit(
                 X_train_final, y_train_final,
                 eval_set=[(X_val_final, y_val_final)],
                 callbacks=[lgb.early_stopping(early_stopping_rounds, verbose=False)]
             )
+            
+            # Verify GPU was actually used
+            if 'device' in gpu_params:
+                # Check model parameters to see what device was actually used
+                try:
+                    model_params = model.get_params()
+                    actual_device = model_params.get('device', 'unknown')
+                    if actual_device != 'cpu':
+                        logger.info(f"  ✅ LightGBM confirmed using {actual_device.upper()}")
+                    else:
+                        logger.warning(f"  ⚠️  LightGBM fell back to CPU despite GPU params")
+                        logger.warning(f"     This can happen if dataset is too small or GPU not properly configured")
+                except:
+                    logger.debug("  Could not verify device from model params")
             
             # CRITICAL: Check for suspiciously high scores (likely leakage)
             has_leak = False
@@ -2288,11 +2342,74 @@ def evaluate_target_predictability(
             _log_suspicious_features(target_column, "CROSS_SECTIONAL", suspicious_features)
         
         # AUTO-FIX LEAKAGE: If leakage detected, automatically fix and re-run
-        # Check if we should auto-fix (only if perfect scores or high leakage flag)
-        should_auto_fix = False
-        if any(score >= 0.99 for score in primary_scores.values() if not np.isnan(score)):
-            should_auto_fix = True
-            logger.warning("🚨 Perfect scores detected - enabling auto-fix mode")
+        # Load thresholds from config (with sensible defaults)
+        if _CONFIG_AVAILABLE:
+            try:
+                safety_cfg = get_safety_config()
+                leakage_cfg = safety_cfg.get('leakage_detection', {})
+                auto_fix_cfg = leakage_cfg.get('auto_fix_thresholds', {})
+                cv_threshold = float(auto_fix_cfg.get('cv_score', 0.99))
+                accuracy_threshold = float(auto_fix_cfg.get('training_accuracy', 0.999))
+                r2_threshold = float(auto_fix_cfg.get('training_r2', 0.999))
+                correlation_threshold = float(auto_fix_cfg.get('perfect_correlation', 0.999))
+                auto_fix_enabled = leakage_cfg.get('auto_fix_enabled', True)
+                auto_fix_min_confidence = float(leakage_cfg.get('auto_fix_min_confidence', 0.8))
+            except Exception as e:
+                logger.debug(f"Failed to load leakage detection config: {e}, using defaults")
+                cv_threshold = 0.99
+                accuracy_threshold = 0.999
+                r2_threshold = 0.999
+                correlation_threshold = 0.999
+                auto_fix_enabled = True
+                auto_fix_min_confidence = 0.8
+        else:
+            # Hardcoded defaults
+            cv_threshold = 0.99
+            accuracy_threshold = 0.999
+            r2_threshold = 0.999
+            correlation_threshold = 0.999
+            auto_fix_enabled = True
+            auto_fix_min_confidence = 0.8
+        
+        # Check if auto-fixer is enabled
+        if not auto_fix_enabled:
+            logger.debug("Auto-fixer is disabled in config")
+            should_auto_fix = False
+        else:
+            should_auto_fix = False
+            
+            # Check 1: Perfect CV scores (cross-validation)
+            if any(score >= cv_threshold for score in primary_scores.values() if not np.isnan(score)):
+                should_auto_fix = True
+                logger.warning(f"🚨 Perfect CV scores detected (>= {cv_threshold:.1%}) - enabling auto-fix mode")
+            
+            # Check 2: Perfect in-sample training accuracy (indicates leakage even if CV is lower)
+            if not should_auto_fix and model_metrics:
+                logger.debug(f"Checking model_metrics for perfect scores: {list(model_metrics.keys())}")
+                for model_name, metrics in model_metrics.items():
+                    if isinstance(metrics, dict):
+                        logger.debug(f"  {model_name} metrics: {list(metrics.keys())}")
+                        # Check for perfect training accuracy in classification tasks
+                        if 'accuracy' in metrics:
+                            acc = metrics['accuracy']
+                            logger.debug(f"    {model_name} accuracy: {acc:.4f}")
+                            if acc >= accuracy_threshold:
+                                should_auto_fix = True
+                                logger.warning(f"🚨 Perfect training accuracy detected in {model_name} ({acc:.1%} >= {accuracy_threshold:.1%}) - enabling auto-fix mode")
+                                break
+                        # Check for perfect correlation in regression tasks
+                        if 'r2' in metrics:
+                            r2 = metrics['r2']
+                            logger.debug(f"    {model_name} R²: {r2:.4f}")
+                            if r2 >= r2_threshold:
+                                should_auto_fix = True
+                                logger.warning(f"🚨 Perfect R² detected in {model_name} ({r2:.4f} >= {r2_threshold:.4f}) - enabling auto-fix mode")
+                                break
+            
+            # Check 3: Models that triggered perfect correlation warnings (fallback check)
+            if not should_auto_fix and _perfect_correlation_models:
+                should_auto_fix = True
+                logger.warning(f"🚨 Perfect correlation detected in models: {', '.join(_perfect_correlation_models)} (>= {correlation_threshold:.1%}) - enabling auto-fix mode")
         
         if should_auto_fix:
             try:

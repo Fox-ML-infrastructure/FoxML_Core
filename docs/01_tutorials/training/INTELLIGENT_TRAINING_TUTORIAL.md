@@ -97,6 +97,13 @@ The pipeline automatically discovers and ranks all available targets using multi
 - Consistency across models
 - Leakage detection flags
 
+**Automatic Leakage Detection:**
+The pipeline automatically detects and fixes data leakage:
+- Detects perfect scores (≥99% CV, ≥99.9% training accuracy)
+- Identifies leaking features using multiple methods
+- Auto-updates exclusion configs and re-runs until clean
+- Configurable thresholds in `CONFIG/training_config/safety_config.yaml`
+
 **Output:**
 - `output_dir/target_rankings/target_predictability_rankings.csv` - Full rankings
 - `output_dir/cache/target_rankings.json` - Cached results
