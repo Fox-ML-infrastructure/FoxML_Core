@@ -34,7 +34,10 @@ from .config_schemas import (
     TrainingConfig,
     LeakageConfig,
     SystemConfig,
-    DataConfig
+    DataConfig,
+    LoggingConfig,
+    ModuleLoggingConfig,
+    BackendLoggingConfig
 )
 
 logger = logging.getLogger(__name__)
@@ -91,13 +94,24 @@ def load_experiment_config(experiment_name: str) -> ExperimentConfig:
     if not targets_data.get('primary'):
         raise ValueError(f"Experiment config missing required field: targets.primary")
     
+    # Build DataConfig from data section
+    # Support both old format (interval) and new format (bar_interval)
+    bar_interval = data_data.get('bar_interval') or data_data.get('interval', '5m')
+    data_config = DataConfig(
+        timestamp_column=data_data.get('timestamp_column', 'ts'),
+        bar_interval=bar_interval,
+        max_samples_per_symbol=data_data.get('max_samples_per_symbol', 50000),
+        validation_split=data_data.get('validation_split', 0.2),
+        random_state=data_data.get('random_state', 42)
+    )
+    
     # Build ExperimentConfig (validation happens in __post_init__)
     return ExperimentConfig(
         name=exp_data.get('name', experiment_name),
         data_dir=Path(data_data['data_dir']),
         symbols=data_data['symbols'],
         target=targets_data['primary'],
-        interval=data_data.get('interval', '5m'),
+        data=data_config,
         max_samples_per_symbol=data_data.get('max_samples_per_symbol', 5000),
         description=exp_data.get('description'),
         feature_selection_overrides=data.get('feature_selection', {}),
@@ -391,4 +405,65 @@ def build_data_config(experiment_cfg: Optional[ExperimentConfig] = None) -> Data
         )
     else:
         return DataConfig()
+
+
+def build_logging_config(
+    config_path: Optional[Path] = None,
+    profile: Optional[str] = None
+) -> LoggingConfig:
+    """
+    Build LoggingConfig from YAML file.
+    
+    Args:
+        config_path: Optional path to logging config (default: logging_config.yaml)
+        profile: Optional profile name to apply (default: "default")
+    
+    Returns:
+        LoggingConfig object
+    """
+    if config_path is None:
+        config_path = CONFIG_DIR / "logging_config.yaml"
+    
+    data = load_yaml(config_path)
+    logging_data = data.get('logging', {})
+    
+    # Apply profile if specified
+    if profile and profile != "default":
+        profiles = logging_data.get('profiles', {})
+        if profile in profiles:
+            profile_data = profiles[profile]
+            # Merge profile into base config
+            if 'global_level' in profile_data:
+                logging_data['global_level'] = profile_data['global_level']
+            if 'modules' in profile_data:
+                for module_name, module_overrides in profile_data['modules'].items():
+                    if module_name not in logging_data.get('modules', {}):
+                        logging_data.setdefault('modules', {})[module_name] = {}
+                    logging_data['modules'][module_name].update(module_overrides)
+    
+    # Build module configs
+    modules = {}
+    for module_name, module_data in logging_data.get('modules', {}).items():
+        modules[module_name] = ModuleLoggingConfig(
+            level=module_data.get('level', logging_data.get('global_level', 'INFO')),
+            gpu_detail=module_data.get('gpu_detail', False),
+            cv_detail=module_data.get('cv_detail', False),
+            edu_hints=module_data.get('edu_hints', False),
+            detail=module_data.get('detail', False)
+        )
+    
+    # Build backend configs
+    backends = {}
+    for backend_name, backend_data in logging_data.get('backends', {}).items():
+        backends[backend_name] = BackendLoggingConfig(
+            native_verbosity=backend_data.get('native_verbosity', -1),
+            show_sparse_warnings=backend_data.get('show_sparse_warnings', True)
+        )
+    
+    return LoggingConfig(
+        global_level=logging_data.get('global_level', 'INFO'),
+        modules=modules,
+        backends=backends,
+        profiles=logging_data.get('profiles', {})
+    )
 

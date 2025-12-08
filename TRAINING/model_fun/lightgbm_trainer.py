@@ -122,6 +122,14 @@ class LightGBMTrainer(BaseModelTrainer):
         plan = plan_for_family("LightGBM", self.num_threads)
         threads = plan["OMP"]
         
+        # Get LightGBM verbosity from logging config
+        try:
+            from CONFIG.logging_config_utils import get_backend_logging_config
+            lgbm_backend_cfg = get_backend_logging_config('lightgbm')
+            verbose_level = lgbm_backend_cfg.native_verbosity
+        except ImportError:
+            verbose_level = -1  # Default to silent
+        
         model = lgb.LGBMRegressor(
             objective="regression",
             num_leaves=self.config["num_leaves"],
@@ -138,7 +146,7 @@ class LightGBMTrainer(BaseModelTrainer):
             n_jobs=threads,          # sklearn alias
             num_threads=threads,     # LightGBM native (belt and suspenders)
             random_state=42,
-            verbose=-1,
+            verbose=verbose_level,
             # Speed optimizations (don't change model quality)
             feature_pre_filter=True,
             bin_construct_sample_cnt=200000,  # limits binning cost

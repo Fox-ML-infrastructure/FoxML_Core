@@ -72,7 +72,21 @@ try:
     from config_loader import get_cfg, get_safety_config
     _CONFIG_AVAILABLE = True
 except ImportError:
-    logger.debug("Config loader not available; using hardcoded defaults")
+    pass  # Logger not yet initialized, will be set up below
+
+# Import logging config utilities
+try:
+    from CONFIG.logging_config_utils import get_module_logging_config, get_backend_logging_config
+    _LOGGING_CONFIG_AVAILABLE = True
+except ImportError:
+    _LOGGING_CONFIG_AVAILABLE = False
+    # Fallback: create a simple config-like object
+    class _DummyLoggingConfig:
+        def __init__(self):
+            self.gpu_detail = False
+            self.cv_detail = False
+            self.edu_hints = False
+            self.detail = False
 
 # Import checkpoint utility (after path is set)
 from TRAINING.utils.checkpoint import CheckpointManager
@@ -703,6 +717,14 @@ def train_and_evaluate_models(
     
     Always returns 7 values, even on error (returns empty dicts, 0.0, empty list, and empty set)
     """
+    # Get logging config for this module (at function start)
+    if _LOGGING_CONFIG_AVAILABLE:
+        log_cfg = get_module_logging_config('rank_target_predictability')
+        lgbm_backend_cfg = get_backend_logging_config('lightgbm')
+    else:
+        log_cfg = _DummyLoggingConfig()
+        lgbm_backend_cfg = type('obj', (object,), {'native_verbosity': -1, 'show_sparse_warnings': True})()
+    
     # Initialize return values (ensures we always return 6 values)
     model_metrics = {}
     model_scores = {}
@@ -947,7 +969,8 @@ def train_and_evaluate_models(
             purge_overlap_time=purge_time,
             time_column_values=time_vals
         )
-        logger.info(f"  Using PurgedTimeSeriesSplit (TIME-BASED): {cv_folds} folds, purge_time={purge_time}")
+        if log_cfg.cv_detail:
+            logger.info(f"  Using PurgedTimeSeriesSplit (TIME-BASED): {cv_folds} folds, purge_time={purge_time}")
     else:
         # CRITICAL: Row-count based purging is INVALID for panel data (multiple symbols per timestamp)
         # With 50 symbols, 1 bar = 50 rows. Using row counts causes catastrophic leakage.
@@ -974,7 +997,8 @@ def train_and_evaluate_models(
                     'train_samples': len(train_idx),
                     'test_samples': len(test_idx)
                 })
-            logger.info(f"  Captured timestamps for {len(fold_timestamps)} folds")
+            if log_cfg.cv_detail:
+                logger.info(f"  Captured timestamps for {len(fold_timestamps)} folds")
         except Exception as e:
             logger.warning(f"  Failed to capture fold timestamps: {e}")
             fold_timestamps = []
@@ -1210,19 +1234,22 @@ def train_and_evaluate_models(
             gpu_params = {}
             try:
                 # Try CUDA first (fastest)
-                test_model = lgb.LGBMRegressor(device='cuda', n_estimators=1, verbose=-1)
+                test_model = lgb.LGBMRegressor(device='cuda', n_estimators=1, verbose=lgbm_backend_cfg.native_verbosity)
                 test_model.fit(np.random.rand(10, 5), np.random.rand(10))
                 gpu_params = {'device': 'cuda', 'gpu_device_id': 0}
-                logger.info("  Using GPU (CUDA) for LightGBM")
+                if log_cfg.gpu_detail:
+                    logger.info("  Using GPU (CUDA) for LightGBM")
             except:
                 try:
                     # Try OpenCL
-                    test_model = lgb.LGBMRegressor(device='gpu', n_estimators=1, verbose=-1)
+                    test_model = lgb.LGBMRegressor(device='gpu', n_estimators=1, verbose=lgbm_backend_cfg.native_verbosity)
                     test_model.fit(np.random.rand(10, 5), np.random.rand(10))
                     gpu_params = {'device': 'gpu', 'gpu_platform_id': 0, 'gpu_device_id': 0}
-                    logger.info("  Using GPU (OpenCL) for LightGBM")
+                    if log_cfg.gpu_detail:
+                        logger.info("  Using GPU (OpenCL) for LightGBM")
                 except:
-                    logger.info("  Using CPU for LightGBM")
+                    if log_cfg.gpu_detail:
+                        logger.info("  Using CPU for LightGBM")
             
             # Get config values
             lgb_config = get_model_config('lightgbm', multi_model_config)
@@ -1232,9 +1259,9 @@ def train_and_evaluate_models(
             # Remove objective and device from config (we set these explicitly)
             lgb_config_clean = {k: v for k, v in lgb_config.items() if k not in ['device', 'objective', 'metric']}
             
-            # Set verbose level for GPU verification (only if GPU is enabled)
+            # Set verbose level from backend config
             # Note: verbose is a model constructor parameter, not fit() parameter
-            verbose_level = 1 if 'device' in gpu_params else -1
+            verbose_level = lgbm_backend_cfg.native_verbosity
             
             if is_binary:
                 model = lgb.LGBMClassifier(
@@ -1264,7 +1291,8 @@ def train_and_evaluate_models(
             # Get early stopping rounds from config (default: 50)
             early_stopping_rounds = lgb_config.get('early_stopping_rounds', 50) if isinstance(lgb_config, dict) else 50
             
-            logger.info(f"  Using CV with early stopping (rounds={early_stopping_rounds}) for LightGBM")
+            if log_cfg.cv_detail:
+                logger.info(f"  Using CV with early stopping (rounds={early_stopping_rounds}) for LightGBM")
             scores = cross_val_score_with_early_stopping(
                 model, X, y, cv=tscv, scoring=scoring, 
                 early_stopping_rounds=early_stopping_rounds, n_jobs=1  # n_jobs=1 for early stopping compatibility
@@ -1289,11 +1317,12 @@ def train_and_evaluate_models(
                 # Fallback: use all data if too small
                 X_train_final, X_val_final = X, X
                 y_train_final, y_val_final = y, y
-            # Log GPU usage if available
-            if 'device' in gpu_params:
+            # Log GPU usage if available (controlled by config)
+            if 'device' in gpu_params and log_cfg.gpu_detail:
                 logger.info(f"  🚀 Training LightGBM on {gpu_params['device'].upper()} (device_id={gpu_params.get('gpu_device_id', 0)})")
                 logger.info(f"  📊 Dataset size: {len(X_train_final)} samples, {X_train_final.shape[1]} features")
-                logger.info(f"  💡 Note: GPU is most efficient for large datasets (>100k samples)")
+                if log_cfg.edu_hints:
+                    logger.info(f"  💡 Note: GPU is most efficient for large datasets (>100k samples)")
             
             model.fit(
                 X_train_final, y_train_final,
@@ -1301,8 +1330,8 @@ def train_and_evaluate_models(
                 callbacks=[lgb.early_stopping(early_stopping_rounds, verbose=False)]
             )
             
-            # Verify GPU was actually used
-            if 'device' in gpu_params:
+            # Verify GPU was actually used (only if gpu_detail enabled)
+            if 'device' in gpu_params and log_cfg.gpu_detail:
                 # Check model parameters to see what device was actually used
                 try:
                     model_params = model.get_params()

@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-**Status**: Testing in progress - Reproducibility validation and modular config system testing underway
+**Status**: Phase 1 functioning properly - Investigating minor issues in feature and target engineering. Phase 2 work underway.
 
-**Note**: Backward functionality remains fully operational. The ranking and intelligent training pipeline is currently being tested for reproducibility. The new modular configuration system is also under active testing. All existing training workflows continue to function as before, and legacy config locations are still supported with deprecation warnings.
+**Note**: Phase 1 of the pipeline (intelligent training framework) appears to be functioning properly. Minor issues are being investigated that likely reside in feature and target engineering. Phase 2 (centralized configuration & UX modernization) is now being actively worked on. Backward functionality remains fully operational. All existing training workflows continue to function as before, and legacy config locations are still supported with deprecation warnings.
 
 ### Stability Guarantees
 
@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Phase 2-3 of experiments workflow** (core models and sequential models) require implementation beyond Phase 1
 
 **TL;DR**:
+- **New**: Structured logging configuration system with per-module and backend verbosity controls
 - **New**: Modular configuration system with typed configs, experiment configs, and config validation
 - **New**: Automated leakage detection + auto-fixer with production-grade backup system
 - **New**: Centralized safety configs and feature/target schema system
@@ -37,6 +38,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **New**: Full compliance documentation suite + commercial pricing update
 
 ### Added
+
+#### **Structured Logging Configuration System**
+- **Logging configuration schema** (`CONFIG/config_schemas.py`):
+  - `LoggingConfig` - Global logging configuration with module and backend controls
+  - `ModuleLoggingConfig` - Per-module verbosity controls (gpu_detail, cv_detail, edu_hints, detail)
+  - `BackendLoggingConfig` - Backend library verbosity (native_verbosity, show_sparse_warnings)
+- **Logging configuration YAML** (`CONFIG/logging_config.yaml`):
+  - Global logging level control
+  - Per-module verbosity flags (rank_target_predictability, feature_selection, etc.)
+  - Backend verbosity controls (LightGBM, XGBoost, TensorFlow)
+  - Profile support (default, debug_run, quiet)
+- **Logging config utilities** (`CONFIG/logging_config_utils.py`):
+  - `LoggingConfigManager` singleton for centralized config management
+  - `get_module_logging_config()` - Get module-specific logging config
+  - `get_backend_logging_config()` - Get backend-specific logging config
+  - Profile support for switching between quiet/verbose modes
+- **Integration**:
+  - `rank_target_predictability.py` uses config for GPU detail, CV detail, and educational hints
+  - `lightgbm_trainer.py` uses backend config for verbose parameter
+  - No hardcoded logging flags scattered throughout codebase
+  - Easy to switch between quiet production runs and verbose debug runs via config
 
 #### **Modular Configuration System** (Testing in Progress)
 - **Typed configuration schemas** (`CONFIG/config_schemas.py`):
@@ -173,6 +195,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced copyright headers across codebase (2025-2026 Fox ML Infrastructure LLC)
 
 ### Changed
+- **Logging system refactored**:
+  - Replaced hardcoded logging flags with structured configuration system
+  - `rank_target_predictability.py` now uses config-driven logging (GPU detail, CV detail, educational hints)
+  - `lightgbm_trainer.py` uses backend config for verbose parameter instead of hardcoded `-1`
+  - All logging verbosity controlled via `CONFIG/logging_config.yaml` without code changes
+  - Supports profiles (default, debug_run, quiet) for easy switching between modes
 - **Leakage Safety Suite improvements**:
   - **Leakage filtering now supports ranking mode**:
     - `filter_features_for_target()` accepts `for_ranking` parameter
@@ -189,6 +217,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated company address in Terms of Service (STE B 212 W. Troy St., Dothan, AL 36303)
 
 ### Fixed
+- **Logging configuration**:
+  - Fixed method name mismatch in `logging_config_utils.py` (`get_backend_logging_config` now correctly calls `get_backend_config`)
+  - Fixed logger initialization order in `rank_target_predictability.py` (config import before logger usage)
 - Fixed `_perfect_correlation_models` NameError in target ranking
 - Fixed insufficient features handling (now properly filters targets with <2 features)
 - Fixed early exit logic when leakage detected (removed false positive triggers)

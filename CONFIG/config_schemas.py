@@ -34,7 +34,7 @@ class ExperimentConfig:
     data_dir: Path
     symbols: List[str]
     target: str
-    interval: str = "5m"
+    data: DataConfig = field(default_factory=lambda: DataConfig())  # Data configuration
     max_samples_per_symbol: int = 5000
     description: Optional[str] = None
     
@@ -57,6 +57,11 @@ class ExperimentConfig:
             raise ValueError("ExperimentConfig.target cannot be empty")
         if self.max_samples_per_symbol < 1:
             raise ValueError(f"ExperimentConfig.max_samples_per_symbol must be >= 1, got {self.max_samples_per_symbol}")
+    
+    @property
+    def bar_interval(self) -> Optional[str]:
+        """Convenience property to access data.bar_interval"""
+        return self.data.bar_interval if self.data else None
 
 
 @dataclass
@@ -151,6 +156,44 @@ class LeakageConfig:
 
 
 @dataclass
+class ModuleLoggingConfig:
+    """Per-module logging configuration"""
+    level: str = "INFO"  # DEBUG / INFO / WARNING / ERROR
+    gpu_detail: bool = False  # GPU confirmations, device info
+    cv_detail: bool = False  # Cross-validation fold details, timestamps
+    edu_hints: bool = False  # Educational hints (💡 messages)
+    detail: bool = False  # General detailed logging
+
+
+@dataclass
+class BackendLoggingConfig:
+    """Backend library logging configuration"""
+    native_verbosity: int = -1  # -1=silent, 0=info, >0=more verbose
+    show_sparse_warnings: bool = True  # Show sparse matrix warnings
+
+
+@dataclass
+class LoggingConfig:
+    """Structured logging configuration"""
+    global_level: str = "INFO"  # DEBUG / INFO / WARNING / ERROR
+    modules: Dict[str, ModuleLoggingConfig] = field(default_factory=dict)
+    backends: Dict[str, BackendLoggingConfig] = field(default_factory=dict)
+    profiles: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    
+    def get_module_config(self, module_name: str) -> ModuleLoggingConfig:
+        """Get module config, with defaults if not specified"""
+        if module_name in self.modules:
+            return self.modules[module_name]
+        return ModuleLoggingConfig()
+    
+    def get_backend_config(self, backend_name: str) -> BackendLoggingConfig:
+        """Get backend config, with defaults if not specified"""
+        if backend_name in self.backends:
+            return self.backends[backend_name]
+        return BackendLoggingConfig()
+
+
+@dataclass
 class SystemConfig:
     """System-level configuration (paths, logging, etc.)"""
     paths: Dict[str, Any] = field(default_factory=dict)
@@ -163,8 +206,28 @@ class SystemConfig:
 class DataConfig:
     """Data loading configuration"""
     timestamp_column: str = "ts"
-    interval: str = "5m"
+    bar_interval: Optional[str] = "5m"  # Normalized interval string (e.g., "5m", "15m", "1h")
     max_samples_per_symbol: int = 50000
     validation_split: float = 0.2
     random_state: int = 42
+    
+    def __post_init__(self):
+        """Validate and normalize bar_interval"""
+        if self.bar_interval is not None:
+            # Validate format using regex (avoid circular import)
+            import re
+            interval_str = str(self.bar_interval).lower().strip()
+            
+            # Check format: "5m", "15m", "1h", "300s", or integer
+            valid_patterns = [
+                r'^\d+[mh]$',  # "5m", "15m", "1h"
+                r'^\d+s$',     # "300s"
+                r'^\d+$'       # integer
+            ]
+            
+            if not any(re.match(pattern, interval_str) for pattern in valid_patterns):
+                raise ValueError(
+                    f"Invalid bar_interval format '{self.bar_interval}'. "
+                    f"Expected: '5m', '15m', '1h', '300s', or integer"
+                )
 

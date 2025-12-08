@@ -1,0 +1,66 @@
+# Structured Logging Configuration
+# Controls verbosity and detail levels for different modules and backends
+
+logging:
+  # Global logging level (applies to all modules unless overridden)
+  global_level: INFO  # DEBUG / INFO / WARNING / ERROR
+
+  # Per-module verbosity controls
+  modules:
+    rank_target_predictability:
+      level: INFO
+      gpu_detail: false        # 🚀 / ✅ CUDA confirmations, dataset size notes
+      cv_detail: false         # fold timestamps, splits, etc.
+      edu_hints: false         # 💡 "GPU is most efficient >100k" kind of stuff
+
+    feature_selection:
+      level: INFO
+      detail: false            # General detailed logging
+
+    feature_selector:
+      level: INFO
+      detail: false
+
+    intelligent_trainer:
+      level: INFO
+      detail: false
+
+    multi_model_feature_selection:
+      level: INFO
+      detail: false
+
+  # Backend library verbosity
+  backends:
+    lightgbm:
+      native_verbosity: -1     # -1=silent, 0=info, >0=more spam
+      show_sparse_warnings: true
+
+    xgboost:
+      native_verbosity: 0      # 0=silent, 1=warning, 2=info, 3=debug
+      show_sparse_warnings: true
+
+    tensorflow:
+      native_verbosity: 1      # 0=silent, 1=filtered, 2=warn, 3=all
+      show_sparse_warnings: true
+
+  # Profiles for different use cases
+  profiles:
+    default: {}  # Uses base config above
+
+    debug_run:
+      global_level: DEBUG
+      modules:
+        rank_target_predictability:
+          gpu_detail: true
+          cv_detail: true
+          edu_hints: true
+
+    quiet:
+      global_level: WARNING
+      modules:
+        rank_target_predictability:
+          level: WARNING
+          gpu_detail: false
+          cv_detail: false
+          edu_hints: false
+
