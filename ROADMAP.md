@@ -52,6 +52,7 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 * ✅ Scaffolded base trainers for 2D and 3D models
 
 **Active Work:**
+* 🔄 Intelligent training pipeline — integrating target ranking, feature selection, and automated leakage detection into unified workflow
 * Testing target-ranking and selection modules
 * Reducing TensorFlow output noise and warnings
 * ✅ VAE serialization fixed — all models appear to be working correctly
