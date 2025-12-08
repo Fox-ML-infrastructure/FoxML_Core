@@ -111,6 +111,25 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 
 ---
 
+# Phase 3.5 — Multi-GPU & NVLink Exploration (Future)
+
+**NVLink Compatibility Research:**
+* Explore NVLink support for multi-GPU training workflows
+* Evaluate performance benefits for large model families (LSTM, Transformer, large MLPs)
+* Test multi-GPU data parallelism patterns
+* Benchmark NVLink vs PCIe bandwidth for model parameter synchronization
+* Investigate framework support (TensorFlow, PyTorch, XGBoost multi-GPU)
+
+**Multi-GPU Training Architecture:**
+* Design multi-GPU training patterns for cross-sectional + sequential models
+* Evaluate model parallelism vs data parallelism trade-offs
+* Test gradient aggregation strategies across GPUs
+* Memory-efficient multi-GPU batch distribution
+
+**Outcome:** Foundation for scaling to multi-GPU systems when needed, with validated performance characteristics.
+
+---
+
 # Phase 4 — Trading Modules (Alpaca & IBKR)
 
 **Alpaca (Fixes Required):**
@@ -186,7 +205,8 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 6. **Website + Stripe checkout**
 7. **Production readiness**
 8. **Exploratory modules**
-9. **High-performance rewrite track**
+9. **NVLink & multi-GPU exploration** (research phase)
+10. **High-performance rewrite track**
 
 ---
 
