@@ -4,7 +4,9 @@ Learn the fundamentals of FoxML Core configuration.
 
 ## Overview
 
-FoxML Core uses centralized YAML configuration files for all models and training workflows. All 17 production trainers auto-load configs from `CONFIG/model_config/`.
+FoxML Core uses centralized YAML configuration files for all models and training workflows. All 17 production trainers auto-load configs from the `CONFIG/model_config/` directory.
+
+> **📚 For complete configuration documentation, see the [Configuration Reference](../../02_reference/configuration/README.md).**
 
 ## Basic Usage
 
@@ -13,7 +15,7 @@ FoxML Core uses centralized YAML configuration files for all models and training
 ```python
 from TRAINING.model_fun import LightGBMTrainer
 
-# Automatically loads CONFIG/model_config/lightgbm.yaml
+# Automatically loads config from CONFIG/model_config/lightgbm.yaml
 trainer = LightGBMTrainer()
 trainer.train(X, y)
 ```
@@ -104,5 +106,7 @@ config = load_model_config("mlp", overrides={"epochs": 200})
 
 - [Config Examples](CONFIG_EXAMPLES.md) - Example configurations
 - [Advanced Config](ADVANCED_CONFIG.md) - Advanced configuration
-- [Config Reference](../../02_reference/configuration/CONFIG_LOADER_API.md) - Complete API reference
+- [Configuration Reference](../../02_reference/configuration/README.md) - Complete configuration guide
+- [Config Loader API](../../02_reference/configuration/CONFIG_LOADER_API.md) - Programmatic config loading
+- [Usage Examples](../../02_reference/configuration/USAGE_EXAMPLES.md) - Practical configuration examples
 

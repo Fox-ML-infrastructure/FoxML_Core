@@ -2,6 +2,8 @@
 
 Example configurations for common use cases.
 
+> **📚 For comprehensive configuration documentation, see the [Configuration Reference](../../02_reference/configuration/README.md).**
+
 ## Conservative Training
 
 High regularization to prevent overfitting:
@@ -70,7 +72,7 @@ defaults:
 ## Training Workflow Config
 
 ```yaml
-# CONFIG/training_config/first_batch_specs.yaml
+# Example: training_config/first_batch_specs.yaml
 data:
   train_test_split: 0.2
   validation_split: 0.2

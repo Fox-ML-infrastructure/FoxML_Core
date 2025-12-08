@@ -132,7 +132,7 @@ Check Result
 
 ### Configuration
 
-Auto-rerun is configured in `CONFIG/training_config/safety_config.yaml`:
+Auto-rerun is configured in `training_config/safety_config.yaml` (see [Safety & Leakage Configs](../../02_reference/configuration/SAFETY_LEAKAGE_CONFIGS.md)):
 
 ```yaml
 leakage_detection:
@@ -271,7 +271,7 @@ Manual invalidation:
 
 All intelligence layer behavior is configurable via YAML configs:
 
-### Safety Config (`CONFIG/training_config/safety_config.yaml`)
+### Safety Config (`training_config/safety_config.yaml`)
 
 ```yaml
 leakage_detection:
@@ -307,7 +307,7 @@ leakage_detection:
     rerun_on_high_auc_only: false
 ```
 
-### System Config (`CONFIG/training_config/system_config.yaml`)
+### System Config (`training_config/system_config.yaml`)
 
 ```yaml
 system:

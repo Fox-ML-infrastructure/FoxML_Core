@@ -153,7 +153,7 @@ Trains and validates ML models.
 - Rankings: Saved to `{output_dir}_YYYYMMDD_HHMMSS/target_rankings/`
 - Feature Selections: Saved to `{output_dir}_YYYYMMDD_HHMMSS/feature_selections/`
 - Config Backups: Saved to `CONFIG/backups/{target}/{timestamp}/` (when auto-fix runs)
-- Configs: Versioned in `CONFIG/model_config/`
+- Configs: Versioned in `CONFIG/model_config/` (see [Configuration Reference](../02_reference/configuration/README.md))
 
 ### Stage 5: Evaluation
 - Input: Trained models
@@ -212,7 +212,7 @@ Infrastructure:
 
 ```
 trader/
-├── CONFIG/              # Centralized configurations
+├── CONFIG/              # Centralized configurations (see [Configuration Reference](../02_reference/configuration/README.md))
 ├── DATA_PROCESSING/     # ETL pipelines
 ├── TRAINING/            # Model training
 ├── IBKR_trading/        # IBKR integration (optional)

@@ -54,7 +54,6 @@ always_exclude:
   - mass_index
   - negative_volume_index
   - obv_ema
-  - parkinson_vol_5
   - price_volume_trend
   - ret_zscore_10m
   - ret_zscore_15m

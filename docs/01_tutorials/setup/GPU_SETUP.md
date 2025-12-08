@@ -30,7 +30,7 @@ This verifies:
 
 ### 2. Enable GPU Mode
 
-Edit `CONFIG/feature_selection_config.yaml`:
+Edit `feature_selection_config.yaml` in the `CONFIG/` directory (see [Configuration Reference](../../02_reference/configuration/README.md)):
 
 ```yaml
 lightgbm:

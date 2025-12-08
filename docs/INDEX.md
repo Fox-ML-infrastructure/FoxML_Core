@@ -72,10 +72,15 @@ Complete technical reference for daily use.
 - [Pipeline Reference](02_reference/systems/PIPELINE_REFERENCE.md) - Data pipelines
 
 ### Configuration Reference
-- [Configuration System](../CONFIG/README.md) - Centralized configuration system overview
-- [Config Loader API](02_reference/configuration/CONFIG_LOADER_API.md) - Config loading
-- [Config Overlays](02_reference/configuration/CONFIG_OVERLAYS.md) - Overlay system
-- [Environment Variables](02_reference/configuration/ENVIRONMENT_VARIABLES.md) - Environment config
+- [Configuration System Overview](02_reference/configuration/README.md) - Centralized configuration system overview
+- [Feature & Target Configs](02_reference/configuration/FEATURE_TARGET_CONFIGS.md) - Feature/target configuration guide
+- [Training Pipeline Configs](02_reference/configuration/TRAINING_PIPELINE_CONFIGS.md) - System resources and training behavior
+- [Safety & Leakage Configs](02_reference/configuration/SAFETY_LEAKAGE_CONFIGS.md) - Leakage detection and numerical stability
+- [Model Configuration](02_reference/configuration/MODEL_CONFIGURATION.md) - Model hyperparameters and variants
+- [Usage Examples](02_reference/configuration/USAGE_EXAMPLES.md) - Practical configuration examples
+- [Config Loader API](02_reference/configuration/CONFIG_LOADER_API.md) - Programmatic config loading
+- [Config Overlays](02_reference/configuration/CONFIG_OVERLAYS.md) - Overlay system for environment-specific configs
+- [Environment Variables](02_reference/configuration/ENVIRONMENT_VARIABLES.md) - Environment-based configuration
 
 ## Tier D: Deep Technical Appendices
 

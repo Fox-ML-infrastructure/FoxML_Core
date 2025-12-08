@@ -111,7 +111,7 @@ The system automatically detects leakage during training and can auto-fix it:
 - Updates `excluded_features.yaml` and `feature_registry.yaml`
 - Re-runs training until no leakage is detected
 
-**Configuration** (`CONFIG/training_config/safety_config.yaml`):
+**Configuration** (`training_config/safety_config.yaml` - see [Safety & Leakage Configs](../../02_reference/configuration/SAFETY_LEAKAGE_CONFIGS.md)):
 
 ```yaml
 safety:

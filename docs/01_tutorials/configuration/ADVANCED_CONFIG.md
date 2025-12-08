@@ -2,6 +2,8 @@
 
 Advanced configuration techniques and patterns.
 
+> **📚 For comprehensive configuration documentation, see the [Configuration Reference](../../02_reference/configuration/README.md).**
+
 ## Configuration Overlays
 
 Combine multiple config files:
@@ -10,12 +12,12 @@ Combine multiple config files:
 import yaml
 from pathlib import Path
 
-# Load base config
-with open("CONFIG/base.yaml") as f:
+# Load base config (example - adjust path as needed)
+with open("CONFIG/training_config/pipeline_config.yaml") as f:
     base_config = yaml.safe_load(f)
 
-# Load overlay
-with open("CONFIG/overlays/custom.yaml") as f:
+# Load overlay (example - adjust path as needed)
+with open("CONFIG/training_config/gpu_config.yaml") as f:
     overlay_config = yaml.safe_load(f)
 
 # Merge (overlay takes precedence)
@@ -78,7 +80,7 @@ except Exception as e:
 Configure for multiple targets:
 
 ```yaml
-# CONFIG/target_configs.yaml
+# Example: target_configs.yaml
 targets:
   fwd_ret_5m:
     horizon: "5m"
@@ -96,7 +98,7 @@ targets:
 Define feature groups for concept-based selection:
 
 ```yaml
-# CONFIG/feature_groups.yaml
+# Example: feature_groups.yaml
 feature_groups:
   price_features:
     - "return_1m"
@@ -148,5 +150,7 @@ config = apply_template("lightgbm", CONSERVATIVE_TEMPLATE)
 
 - [Config Basics](CONFIG_BASICS.md) - Configuration fundamentals
 - [Config Examples](CONFIG_EXAMPLES.md) - Example configurations
-- [Config Loader API](../../02_reference/configuration/CONFIG_LOADER_API.md) - Complete API
+- [Configuration Reference](../../02_reference/configuration/README.md) - Complete configuration guide
+- [Config Loader API](../../02_reference/configuration/CONFIG_LOADER_API.md) - Programmatic config loading
+- [Usage Examples](../../02_reference/configuration/USAGE_EXAMPLES.md) - Practical examples
 

@@ -27,7 +27,7 @@ variants:
 
 ## Available Models
 
-17 model types with configs in `CONFIG/model_config/`:
+17 model types with configs in the `CONFIG/model_config/` directory (see [Model Configuration](../../02_reference/configuration/MODEL_CONFIGURATION.md) for details):
 
 - `lightgbm.yaml`
 - `xgboost.yaml`

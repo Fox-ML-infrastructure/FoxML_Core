@@ -102,7 +102,7 @@ The pipeline automatically detects and fixes data leakage:
 - **Pre-training scan**: Detects near-copy features before model training
 - **During training**: Detects perfect scores (≥99% CV, ≥99.9% training accuracy)
 - **Auto-fixer**: Identifies leaking features and auto-updates exclusion configs
-- **Configurable**: All thresholds configurable in `CONFIG/training_config/safety_config.yaml`
+- **Configurable**: All thresholds configurable in `training_config/safety_config.yaml` (see [Safety & Leakage Configs](../../02_reference/configuration/SAFETY_LEAKAGE_CONFIGS.md))
 
 **Configuration Options:**
 - Pre-scan thresholds (min_match, min_corr)

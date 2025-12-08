@@ -199,7 +199,7 @@ targets_dict = discover_targets(
 
 ### Target Ranking Config
 
-Default location: `CONFIG/training_config/target_ranking_config.yaml`
+Default location: `training_config/target_ranking_config.yaml` in the `CONFIG/` directory
 
 ```yaml
 target_ranking:
