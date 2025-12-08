@@ -2,6 +2,88 @@
 
 Command-line interface reference for FoxML Core.
 
+## Intelligent Training Pipeline
+
+### Main Training Script
+
+The intelligent training pipeline automates target ranking, feature selection, and model training in a single command.
+
+```bash
+python TRAINING/train.py \
+    --data-dir data/data_labeled/interval=5m \
+    --symbols AAPL MSFT GOOGL \
+    --auto-targets \
+    --top-n-targets 5 \
+    --auto-features \
+    --top-m-features 100 \
+    --families LightGBM XGBoost MLP
+```
+
+**Required Options:**
+- `--data-dir`: Data directory containing symbol data
+- `--symbols`: List of symbols to train on
+
+**Target Selection:**
+- `--auto-targets`: Enable automatic target ranking (default: True)
+- `--no-auto-targets`: Disable automatic target ranking
+- `--top-n-targets`: Number of top targets to select (default: 5)
+- `--targets`: Manual target list (overrides --auto-targets)
+
+**Feature Selection:**
+- `--auto-features`: Enable automatic feature selection (default: True)
+- `--no-auto-features`: Disable automatic feature selection
+- `--top-m-features`: Number of top features per target (default: 100)
+- `--features`: Manual feature list (overrides --auto-features)
+
+**Training:**
+- `--families`: Model families to train (default: all)
+- `--strategy`: Training strategy - single_task, multi_task, cascade (default: single_task)
+- `--output-dir`: Output directory (default: intelligent_output)
+
+**Cache Control:**
+- `--force-refresh`: Force refresh of cached rankings/selections
+- `--no-refresh-cache`: Never refresh cache (use existing only)
+- `--no-cache`: Disable caching entirely
+
+**Data Limits (for testing):**
+- `--min-cs`: Minimum cross-sectional samples (default: 10)
+- `--max-rows-per-symbol`: Maximum rows to load per symbol
+- `--max-rows-train`: Maximum training rows
+- `--max-cs-samples`: Maximum cross-sectional samples per timestamp
+
+**Config Files:**
+- `--target-ranking-config`: Path to target ranking config YAML
+- `--multi-model-config`: Path to feature selection config YAML
+
+**Examples:**
+
+```bash
+# Fully automatic (defaults)
+python TRAINING/train.py \
+    --data-dir data/data_labeled/interval=5m \
+    --symbols AAPL MSFT GOOGL
+
+# Manual targets, auto features
+python TRAINING/train.py \
+    --data-dir data/data_labeled/interval=5m \
+    --symbols AAPL MSFT \
+    --targets fwd_ret_5m fwd_ret_15m \
+    --auto-features \
+    --top-m-features 50
+
+# Use cached results (faster)
+python TRAINING/train.py \
+    --data-dir data/data_labeled/interval=5m \
+    --symbols AAPL MSFT GOOGL \
+    --auto-targets \
+    --top-n-targets 5 \
+    --no-refresh-cache
+```
+
+**See Also:**
+- [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Complete tutorial
+- [Model Training Guide](../../01_tutorials/training/MODEL_TRAINING_GUIDE.md) - Manual training workflow
+
 ## Feature Selection
 
 ### Comprehensive Feature Ranking

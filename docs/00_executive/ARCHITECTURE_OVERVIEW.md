@@ -89,19 +89,25 @@ Output: Labeled datasets with 200+ features and multiple target types.
 
 Trains and validates ML models.
 
-Available Models:
+**Intelligent Training Pipeline:**
+- Automatic target ranking (multi-model consensus)
+- Automatic feature selection (per target)
+- Unified workflow: ranking → selection → training
+- Caching for faster iterative development
+
+**Available Models:**
 - Core: LightGBM, XGBoost, Ensemble, MultiTask
 - Deep Learning: MLP, Transformer, LSTM, CNN1D
 - Feature Engineering: VAE, GAN, GMMRegime
 - Probabilistic: NGBoost, QuantileLightGBM
 - Advanced: ChangePoint, FTRL, RewardBased, MetaLearning
 
-Training Strategies:
+**Training Strategies:**
 - Single-task (one model per target)
 - Multi-task (shared model for correlated targets)
 - Cascade (sequential dependencies)
 
-Validation: Walk-forward analysis for realistic performance estimation.
+**Validation:** Walk-forward analysis for realistic performance estimation.
 
 ### 4. Trading Integrations (Optional)
 
