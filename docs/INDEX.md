@@ -8,6 +8,21 @@ Complete navigation guide for FoxML Core documentation.
 - [Architecture Overview](00_executive/ARCHITECTURE_OVERVIEW.md) - System at a glance
 - [Getting Started](00_executive/GETTING_STARTED.md) - Onboarding guide
 
+### Project Status & Licensing
+
+- [Roadmap](../ROADMAP.md) - Current development focus and upcoming work
+- [Changelog](../CHANGELOG.md) - Recent technical and compliance changes
+- [Licensing & Subscriptions](../legal/SUBSCRIPTIONS.md) - AGPL vs commercial usage and subscription tiers
+- [Legal Documentation Index](LEGAL_INDEX.md) - Complete legal and compliance documentation
+
+### Who Should Read What
+
+- **Execs / PMs / Stakeholders** → README, Quick Start, Architecture Overview, Roadmap, Changelog
+- **Quants / Researchers** → Getting Started → Pipelines & Training tutorials → Intelligence Layer Overview
+- **Infra / MLOps** → Setup tutorials, Configuration Reference, Systems Reference, Operations
+- **Trading / Desk Ops** → Trading tutorials, IBKR/Alpaca System Reference, System Documentation
+- **Legal / Compliance** → [Legal Documentation Index](LEGAL_INDEX.md)
+
 ## Tier A: Executive / High-Level
 
 First-time users start here.
@@ -33,9 +48,13 @@ Step-by-step guides for common tasks.
 
 ### Training
 - [Intelligent Training Tutorial](01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Automated target ranking, feature selection, and training (includes timestamped outputs and backup system)
-- [Model Training Guide](01_tutorials/training/MODEL_TRAINING_GUIDE.md) - Manual training workflow
+- [Model Training Guide](01_tutorials/training/MODEL_TRAINING_GUIDE.md) - Manual training workflow (how to run it)
 - [Walk-Forward Validation](01_tutorials/training/WALKFORWARD_VALIDATION.md) - Validation workflow
 - [Feature Selection Tutorial](01_tutorials/training/FEATURE_SELECTION_TUTORIAL.md) - Manual feature selection
+- [Experiments Workflow](01_tutorials/training/EXPERIMENTS_WORKFLOW.md) - 3-phase optimized training workflow
+- [Experiments Quick Start](01_tutorials/training/EXPERIMENTS_QUICK_START.md) - Quick start guide
+- [Experiments Operations](01_tutorials/training/EXPERIMENTS_OPERATIONS.md) - Step-by-step operations
+- [Phase 1: Feature Engineering](01_tutorials/training/PHASE1_FEATURE_ENGINEERING.md) - Phase 1 documentation
 
 ### Trading
 - [Paper Trading Setup](01_tutorials/trading/PAPER_TRADING_SETUP.md) - Paper trading
@@ -138,8 +157,10 @@ Research notes, design rationale, advanced topics.
 - [Systemd Deployment](03_technical/operations/SYSTEMD_DEPLOYMENT.md) - Deployment guide
 
 ## Additional Documentation
-- [Data Pipeline Guide](../INFORMATION/04_DATA_PIPELINE.md) - Complete data processing workflow
-- [Model Training Guide](../INFORMATION/05_MODEL_TRAINING.md) - Complete model training guide
+
+### System Specifications
+- [Data Pipeline Specification](../INFORMATION/04_DATA_PIPELINE.md) - Complete data processing workflow specification
+- [Model Training Specification](../INFORMATION/05_MODEL_TRAINING.md) - Complete training system specification (what the system is)
 - [Comprehensive Feature Ranking](COMPREHENSIVE_FEATURE_RANKING.md) - Feature ranking methodology
 
 ### System Documentation
