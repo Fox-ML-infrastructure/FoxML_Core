@@ -433,6 +433,7 @@ class IntelligentTrainer:
         strategy: str = 'single_task',
         use_cache: bool = True,
         run_leakage_diagnostics: bool = False,
+        max_targets_to_evaluate: Optional[int] = None,  # Limit number of targets to evaluate (for faster testing)
         **train_kwargs
     ) -> Dict[str, Any]:
         """
