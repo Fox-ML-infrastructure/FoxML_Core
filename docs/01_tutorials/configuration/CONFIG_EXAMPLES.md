@@ -130,5 +130,7 @@ risk:
 
 - [Config Basics](CONFIG_BASICS.md) - Configuration fundamentals
 - [Advanced Config](ADVANCED_CONFIG.md) - Advanced configuration
-- [Config Schema](../../02_reference/api/CONFIG_SCHEMA.md) - Complete schema
+- [Configuration Reference](../../02_reference/configuration/README.md) - Complete configuration guide
+- [Config Loader API](../../02_reference/configuration/CONFIG_LOADER_API.md) - Programmatic config loading
+- [Usage Examples](../../02_reference/configuration/USAGE_EXAMPLES.md) - Practical examples
 
