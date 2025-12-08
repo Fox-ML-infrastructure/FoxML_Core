@@ -281,7 +281,7 @@ strategy.train(X, y_dict, feature_names)
 3. `TRAINING/config/first_batch_specs.yaml` (NEW)
    - Complete configuration with all recommended parameters
 
-4. `TRAINING/TRAINING_OPTIMIZATION_GUIDE.md` (NEW)
+4. [Training Optimization Guide](TRAINING_OPTIMIZATION_GUIDE.md) (NEW)
    - Comprehensive guide for training optimization
 
 ## Next Steps

@@ -115,6 +115,12 @@ Research notes, design rationale, advanced topics.
 - [Future Work](03_technical/roadmaps/FUTURE_WORK.md) - Planned features
 
 ### Implementation
+- [Feature Selection Implementation](03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Feature selection implementation details
+- [Training Optimization](03_technical/implementation/TRAINING_OPTIMIZATION_GUIDE.md) - Training optimization guide
+- [Safe Target Pattern](03_technical/implementation/SAFE_TARGET_PATTERN_IMPLEMENTATION.md) - Safe target pattern implementation
+- [First Batch Specs](03_technical/implementation/FIRST_BATCH_SPECS_IMPLEMENTATION.md) - First batch specifications
+- [Strategy Updates](03_technical/implementation/STRATEGY_UPDATES.md) - Training strategy updates
+- [Experiments Implementation](03_technical/implementation/EXPERIMENTS_IMPLEMENTATION.md) - Experiments implementation summary
 - [IBKR Status](03_technical/implementation/IBKR_STATUS.md) - IBKR implementation
 - [Pressure Test Plan](03_technical/implementation/PRESSURE_TEST_PLAN.md) - Testing plan
 - [Performance Optimization](03_technical/implementation/PERFORMANCE_OPTIMIZATION.md) - Optimization work
