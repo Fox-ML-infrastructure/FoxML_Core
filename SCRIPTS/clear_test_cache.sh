@@ -1,6 +1,6 @@
 #!/bin/bash
 # Clear test cache files before fresh runs
-# Usage: ./clear_test_cache.sh
+# Usage: SCRIPTS/SCRIPTS/clear_test_cache.sh
 
 echo "🧹 Clearing test cache files..."
 

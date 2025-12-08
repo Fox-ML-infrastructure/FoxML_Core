@@ -4,7 +4,7 @@ Quick test script for Phase 2: Feature Selection
 Runs feature selection for a target without running target ranking.
 
 Usage:
-    python test_phase2_feature_selection.py \
+    python SCRIPTS/test_phase2_feature_selection.py \
         --target fwd_ret_60m \
         --symbols AAPL MSFT \
         --data-dir "data/data_labeled/interval=5m" \
