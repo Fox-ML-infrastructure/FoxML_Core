@@ -228,16 +228,32 @@ def rank_targets(
                 )
             
             # Skip degenerate/failed targets (marked with mean_score = -999)
-            # Also skip targets with unresolved leakage
-            if result.mean_score != -999.0 and result.status not in ["LEAKAGE_UNRESOLVED", "LEAKAGE_UNRESOLVED_MAX_RETRIES"]:
+            # Also skip targets with unresolved leakage or suspicious scores
+            # SUSPICIOUS/SUSPICIOUS_STRONG targets are excluded - they likely have structural leakage
+            skip_statuses = [
+                "LEAKAGE_UNRESOLVED", 
+                "LEAKAGE_UNRESOLVED_MAX_RETRIES",
+                "SUSPICIOUS",
+                "SUSPICIOUS_STRONG"
+            ]
+            
+            if result.mean_score != -999.0 and result.status not in skip_statuses:
                 results.append(result)
             else:
                 # Provide more specific reason for skipping
-                if result.status in ["LEAKAGE_UNRESOLVED", "LEAKAGE_UNRESOLVED_MAX_RETRIES"]:
+                if result.status in skip_statuses:
                     reason = result.status
+                    if result.status in ["SUSPICIOUS", "SUSPICIOUS_STRONG"]:
+                        logger.warning(
+                            f"  ⚠️  Excluded {target_name} ({reason}) - "
+                            f"High score ({result.mean_score:.3f}) suggests structural leakage. "
+                            f"Review target construction and label logic."
+                        )
+                    else:
+                        logger.info(f"  Skipped {target_name} ({reason})")
                 else:
                     reason = result.leakage_flag if result.leakage_flag != "OK" else "degenerate/failed"
-                logger.info(f"  Skipped {target_name} ({reason})")
+                    logger.info(f"  Skipped {target_name} ({reason})")
         
         except Exception as e:
             logger.error(f"  Failed to evaluate {target_name}: {e}")

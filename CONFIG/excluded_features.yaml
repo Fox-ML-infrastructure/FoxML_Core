@@ -38,7 +38,17 @@ always_exclude:
   - vol_at_t_
   keyword_patterns:
   - first_touch
-  exact_patterns: []
+  exact_patterns:
+  - flipcount_60m
+  - ret_zscore_10m
+  - ret_zscore_15m
+  - ret_zscore_30m
+  - ret_zscore_5m
+  - ret_zscore_60m
+  - time_in_profit_60m
+  - vol_clustering_15m
+  - vol_over_vol_15m
+  - vol_over_vol_60m
 target_type_rules:
   forward_return:
     prefix_patterns:

@@ -2968,6 +2968,19 @@ def evaluate_target_predictability(
         "suspicious_flag": leakage_flag != "OK"
     }
     
+    # Determine status: SUSPICIOUS targets should be excluded from rankings
+    # High AUC/R² after auto-fix suggests structural leakage (target construction issue)
+    if leakage_flag in ["SUSPICIOUS", "HIGH_SCORE"]:
+        # If we have very high scores, this is likely structural leakage, not just feature leakage
+        if final_task_type == TaskType.BINARY_CLASSIFICATION and mean_score > 0.95:
+            final_status = "SUSPICIOUS_STRONG"
+        elif final_task_type == TaskType.REGRESSION and mean_score > 0.80:
+            final_status = "SUSPICIOUS_STRONG"
+        else:
+            final_status = "SUSPICIOUS"
+    else:
+        final_status = "OK"
+    
     result = TargetPredictabilityScore(
         target_name=target_name,
         target_column=target_column,
@@ -2984,7 +2997,7 @@ def evaluate_target_predictability(
         fold_timestamps=fold_timestamps,
         leakage_flags=leakage_flags,
         autofix_info=autofix_info if 'autofix_info' in locals() else None,
-        status="OK",
+        status=final_status,
         attempts=1
     )
     
