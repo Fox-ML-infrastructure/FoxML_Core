@@ -191,7 +191,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Moved all TRAINING documentation to `docs/` folder:
     - Implementation guides → `docs/03_technical/implementation/` (feature selection, training optimization, safe target pattern, first batch specs, strategy updates, experiments implementation)
     - Tutorial/workflow docs → `docs/01_tutorials/training/` (experiments workflow, quick start, operations, phase 1 feature engineering)
-    - Internal docs → `docs/internal/planning/` (import audit and structure)
     - Created minimal `TRAINING/README.md` and `TRAINING/EXPERIMENTS/README.md` that point to docs
   - Created comprehensive legal documentation index (`docs/LEGAL_INDEX.md`):
     - Complete index of all legal, licensing, compliance, and enterprise documentation
@@ -214,7 +213,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated `INTELLIGENT_TRAINING_TUTORIAL.md` with configuration details
 - Marked target ranking integration as completed in planning docs
 - Updated `README.md` with direct commercial licensing focus and recent feature improvements
-- Added NVLink-ready architecture planning document (`docs/internal/planning/NVLINK_READY_ARCHITECTURE.md`)
+- Added NVLink-ready architecture planning documentation
 - Updated `ROADMAP.md` with NVLink compatibility exploration and feature engineering revamp plans
 - Hardened `COMMERCIAL_LICENSE.md` with enterprise-grade improvements (AGPL clarity, termination, audit, SaaS restrictions)
 - Added comprehensive configuration documentation for all leakage detection thresholds
@@ -239,7 +238,7 @@ The current intelligence layer provides automated target ranking, feature select
 - **Predictive leakage prevention**: Proactively flags potential leakage before training begins
 - **Multi-target optimization**: Optimizes feature selection across multiple targets simultaneously
 
-See `docs/internal/planning/ADAPTIVE_LEAKAGE_CONTROLLER.md` for detailed design.
+Adaptive intelligence layer design is documented in planning materials.
 
 ---
 

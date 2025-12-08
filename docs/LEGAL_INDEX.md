@@ -93,9 +93,6 @@ Complete index of all legal, licensing, compliance, and enterprise documentation
 
 - [Enterprise Changelog](../legal/CHANGELOG_ENTERPRISE.md) - Enterprise-focused changelog
 
-## Internal Documentation
-
-> **Note**: Internal documentation is not publicly accessible. See `legal/internal/` for internal policies and procedures.
 
 ## Related Documentation
 
