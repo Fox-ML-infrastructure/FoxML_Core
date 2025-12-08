@@ -131,5 +131,5 @@ strategy.train(X_selected, y, selected_features)
 
 - [Feature Selection Implementation](../../03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Implementation details
 - [Comprehensive Feature Ranking](../../COMPREHENSIVE_FEATURE_RANKING.md) - Advanced ranking
-- [Multi-Model Feature Selection](../../../INFORMATION/MULTI_MODEL_FEATURE_SELECTION.md) - Multi-model approach
+- [Feature Selection Guide](../../03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Complete feature selection methodology
 

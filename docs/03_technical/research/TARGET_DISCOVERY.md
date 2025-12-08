@@ -84,5 +84,5 @@ for family in model_families:
 ## See Also
 
 - [Target Ranking Script](../../../scripts/rank_target_predictability.py) - Ranking tool
-- [Multi-Model Feature Selection](../../../INFORMATION/MULTI_MODEL_FEATURE_SELECTION.md) - Multi-model approach
+- [Feature Selection Guide](../implementation/FEATURE_SELECTION_GUIDE.md) - Complete feature selection methodology
 

@@ -77,7 +77,7 @@ Complete technical reference for daily use.
 
 ### Data Reference
 - [Data Format Spec](02_reference/data/DATA_FORMAT_SPEC.md) - Data formats
-- [Column Reference](../INFORMATION/06_COLUMN_REFERENCE.md) - Column documentation
+- [Column Reference](02_reference/data/COLUMN_REFERENCE.md) - Column documentation
 - [Data Sanity Rules](02_reference/data/DATA_SANITY_RULES.md) - Validation rules
 
 ### Models Reference
@@ -160,8 +160,6 @@ Research notes, design rationale, advanced topics.
 ## Additional Documentation
 
 ### System Specifications
-- [Data Pipeline Specification](../INFORMATION/04_DATA_PIPELINE.md) - Complete data processing workflow specification
-- [Model Training Specification](../INFORMATION/05_MODEL_TRAINING.md) - Complete training system specification (what the system is)
 - [Comprehensive Feature Ranking](COMPREHENSIVE_FEATURE_RANKING.md) - Feature ranking methodology
 
 ### System Documentation

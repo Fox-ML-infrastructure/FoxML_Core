@@ -57,6 +57,6 @@ trainer = LightGBMTrainer(config)
 
 ## See Also
 
-- [Migration Notes](../../../INFORMATION/03_MIGRATION_NOTES.md) - Complete details
 - [Config Basics](../../01_tutorials/configuration/CONFIG_BASICS.md) - Configuration tutorial
+- [Modular Config System](../../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md) - New modular config system
 
