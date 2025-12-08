@@ -91,6 +91,7 @@ Complete technical reference for daily use.
 - [Pipeline Reference](02_reference/systems/PIPELINE_REFERENCE.md) - Data pipelines
 
 ### Configuration Reference
+- **[Modular Config System](02_reference/configuration/MODULAR_CONFIG_SYSTEM.md)** - NEW: Complete guide to modular configs, experiment configs, typed configs, migration
 - [Configuration System Overview](02_reference/configuration/README.md) - Centralized configuration system overview
 - [Feature & Target Configs](02_reference/configuration/FEATURE_TARGET_CONFIGS.md) - Feature/target configuration guide
 - [Training Pipeline Configs](02_reference/configuration/TRAINING_PIPELINE_CONFIGS.md) - System resources and training behavior

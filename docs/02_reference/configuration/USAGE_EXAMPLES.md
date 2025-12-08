@@ -409,7 +409,11 @@ Tuning model hyperparameters?
   → model_config/{model_name}.yaml
 
 Configuring feature selection?
-  → multi_model_feature_selection.yaml
+  → CONFIG/feature_selection/multi_model.yaml (NEW)
+  → multi_model_feature_selection.yaml (LEGACY - deprecated)
+
+Using experiment configs?
+  → CONFIG/experiments/*.yaml (NEW - recommended)
 
 Changing system paths/backups?
   → training_config/system_config.yaml
@@ -420,8 +424,107 @@ Adjusting training pipeline?
 
 ---
 
+## Example 13: Using Experiment Configs (NEW - Recommended)
+
+**Goal:** Use the new modular config system with experiment configs.
+
+**Steps:**
+
+1. **Create experiment config** (`CONFIG/experiments/my_experiment.yaml`):
+```yaml
+experiment:
+  name: my_experiment
+  description: "Test run for fwd_ret_60m"
+
+data:
+  data_dir: data/data_labeled/interval=5m
+  symbols: [AAPL, MSFT]
+  interval: 5m
+  max_samples_per_symbol: 3000
+
+targets:
+  primary: fwd_ret_60m
+
+feature_selection:
+  top_n: 30
+  model_families: [lightgbm, xgboost]
+
+training:
+  model_families: [lightgbm, xgboost]
+  cv_folds: 5
+```
+
+2. **Use in CLI:**
+```bash
+python TRAINING/train.py \
+    --experiment-config my_experiment \
+    --auto-targets \
+    --top-n-targets 5 \
+    --max-targets-to-evaluate 23
+```
+
+3. **Or use programmatically:**
+```python
+from CONFIG.config_builder import load_experiment_config
+from TRAINING.orchestration.intelligent_trainer import IntelligentTrainer
+
+# Load experiment config
+exp_cfg = load_experiment_config("my_experiment")
+
+# Create trainer
+trainer = IntelligentTrainer(
+    data_dir=exp_cfg.data_dir,
+    symbols=exp_cfg.symbols,
+    output_dir=Path("output"),
+    experiment_config=exp_cfg
+)
+
+# Train (configs built automatically)
+results = trainer.train_with_intelligence(
+    auto_targets=True,
+    top_n_targets=5,
+    max_targets_to_evaluate=23  # Limit for faster testing
+)
+```
+
+**Benefits:**
+- All settings in one file
+- Type-safe configs with validation
+- No config "crossing" between modules
+- Easy to version and share
+
+---
+
+## Example 14: Faster E2E Testing
+
+**Goal:** Speed up end-to-end testing by limiting target evaluation.
+
+**Steps:**
+
+1. **Use `--max-targets-to-evaluate` option:**
+```bash
+python TRAINING/train.py \
+    --data-dir data/data_labeled/interval=5m \
+    --symbols AAPL MSFT \
+    --auto-targets \
+    --top-n-targets 3 \
+    --max-targets-to-evaluate 23 \
+    --min-cs 3 \
+    --max-rows-per-symbol 5000
+```
+
+**What it does:**
+- Evaluates only first 23 targets (instead of all 63)
+- Still returns top 3 targets after ranking
+- Significantly faster for E2E testing
+
+**Use case:** Quick validation of pipeline functionality without waiting for all 63 targets.
+
+---
+
 ## Related Documentation
 
+- **[Modular Config System](MODULAR_CONFIG_SYSTEM.md)** - NEW: Complete guide to modular configs
 - [Configuration System Overview](README.md) - Main configuration overview
 - [Feature & Target Configs](FEATURE_TARGET_CONFIGS.md) - Feature configuration guide
 - [Training Pipeline Configs](TRAINING_PIPELINE_CONFIGS.md) - Training configuration guide
