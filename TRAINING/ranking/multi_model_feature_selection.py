@@ -293,7 +293,8 @@ def train_model_and_get_importance(
     X: np.ndarray,
     y: np.ndarray,
     feature_names: List[str],
-    data_interval_minutes: int = 5  # Data bar interval (default: 5 minutes)
+    data_interval_minutes: int = 5,  # Data bar interval (default: 5 minutes)
+    target_column: Optional[str] = None  # Target column name for horizon extraction
 ) -> Tuple[Any, pd.Series, str]:
     """Train a single model family and extract importance"""
     
@@ -316,22 +317,64 @@ def train_model_and_get_importance(
     
     # Train model based on family
     if model_family == 'lightgbm':
-        lgb_data = lgb.Dataset(X, label=y, feature_name=feature_names)
-        model = lgb.train(
-            params=model_config,
-            train_set=lgb_data,
-            num_boost_round=model_config.get('n_estimators', 300),
-            callbacks=[lgb.log_evaluation(period=0)]
-        )
-        train_score = model.best_score.get('training', {}).get(model_config.get('metric', 'l1'), 0.0)
+        # Use sklearn wrapper for consistent scoring (same as xgboost)
+        try:
+            from lightgbm import LGBMRegressor, LGBMClassifier
+            # Determine task type
+            unique_vals = np.unique(y[~np.isnan(y)])
+            is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
+            is_multiclass = len(unique_vals) <= 10 and all(
+                isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer())
+                for v in unique_vals
+            )
+            
+            # Clean config: remove params that don't apply to sklearn wrapper
+            lgb_config = {k: v for k, v in model_config.items() 
+                         if k not in ['boosting_type', 'device']}  # device -> n_jobs handled separately
+            # Map n_estimators if present
+            if 'n_estimators' in lgb_config:
+                lgb_config['n_estimators'] = lgb_config['n_estimators']
+            
+            if is_binary or is_multiclass:
+                model = LGBMClassifier(**lgb_config)
+            else:
+                model = LGBMRegressor(**lgb_config)
+            
+            model.fit(X, y)
+            train_score = model.score(X, y)  # R² for regression, accuracy for classification
+            
+            # Log metric for debugging
+            metric_name = 'R²' if not (is_binary or is_multiclass) else 'accuracy'
+            logger.debug(f"    lightgbm: metric={metric_name}, score={train_score:.4f}")
+            
+        except Exception as e:
+            logger.error(f"LightGBM failed: {e}")
+            return None, pd.Series(0.0, index=feature_names), importance_method, 0.0
     
     elif model_family == 'xgboost':
         try:
             import xgboost as xgb
-            model = xgb.XGBRegressor(**model_config)
+            # Determine task type for proper model selection
+            unique_vals = np.unique(y[~np.isnan(y)])
+            is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
+            is_multiclass = len(unique_vals) <= 10 and all(
+                isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer())
+                for v in unique_vals
+            )
+            
+            if is_binary or is_multiclass:
+                model = xgb.XGBClassifier(**model_config)
+            else:
+                model = xgb.XGBRegressor(**model_config)
+            
             try:
                 model.fit(X, y)
-                train_score = model.score(X, y)
+                train_score = model.score(X, y)  # R² for regression, accuracy for classification
+                
+                # Log metric for debugging
+                metric_name = 'R²' if not (is_binary or is_multiclass) else 'accuracy'
+                logger.debug(f"    xgboost: metric={metric_name}, score={train_score:.4f}")
+                
             except (ValueError, TypeError) as e:
                 error_str = str(e).lower()
                 if any(kw in error_str for kw in ['invalid classes', 'expected', 'too few']):
@@ -344,7 +387,9 @@ def train_model_and_get_importance(
     
     elif model_family == 'random_forest':
         from sklearn.ensemble import RandomForestRegressor
-        model = RandomForestRegressor(**model_config, random_state=42)
+        # Avoid duplicate random_state if already in config
+        rf_config = {k: v for k, v in model_config.items() if k != 'random_state'}
+        model = RandomForestRegressor(**rf_config, random_state=42)
         model.fit(X, y)
         train_score = model.score(X, y)
     
@@ -361,7 +406,9 @@ def train_model_and_get_importance(
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X_imputed)
         
-        model = MLPRegressor(**model_config, random_state=42)
+        # Avoid duplicate random_state if already in config
+        nn_config = {k: v for k, v in model_config.items() if k != 'random_state'}
+        model = MLPRegressor(**nn_config, random_state=42)
         try:
             model.fit(X_scaled, y)
             train_score = model.score(X_scaled, y)
@@ -386,12 +433,14 @@ def train_model_and_get_importance(
                 for v in unique_vals
             )
             
+            # Avoid duplicate verbose if already in config
+            cb_config = {k: v for k, v in model_config.items() if k != 'verbose'}
             if is_binary:
-                model = cb.CatBoostClassifier(**model_config, verbose=False)
+                model = cb.CatBoostClassifier(**cb_config, verbose=False)
             elif is_multiclass:
-                model = cb.CatBoostClassifier(**model_config, verbose=False)
+                model = cb.CatBoostClassifier(**cb_config, verbose=False)
             else:
-                model = cb.CatBoostRegressor(**model_config, verbose=False)
+                model = cb.CatBoostRegressor(**cb_config, verbose=False)
             
             try:
                 model.fit(X, y)
@@ -408,15 +457,28 @@ def train_model_and_get_importance(
     
     elif model_family == 'lasso':
         from sklearn.linear_model import Lasso
-        model = Lasso(**model_config, random_state=42)
+        # Avoid duplicate random_state if already in config
+        lasso_config = {k: v for k, v in model_config.items() if k != 'random_state'}
+        model = Lasso(**lasso_config, random_state=42)
         model.fit(X, y)
         train_score = model.score(X, y)
     
     elif model_family == 'mutual_information':
         # Mutual information doesn't train a model, just calculates information
         from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
+        from sklearn.impute import SimpleImputer
+        
+        # Handle NaN values (mutual information doesn't support NaN)
+        mask = ~(np.isnan(X).any(axis=1) | np.isnan(y))
+        if mask.sum() < 10:
+            logger.warning(f"    mutual_information: Too few valid samples after NaN removal ({mask.sum()})")
+            return None, pd.Series(0.0, index=feature_names), importance_method, 0.0
+        
+        X_clean = X[mask]
+        y_clean = y[mask]
+        
         # Determine task type
-        unique_vals = np.unique(y[~np.isnan(y)])
+        unique_vals = np.unique(y_clean)
         is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
         is_multiclass = len(unique_vals) <= 10 and all(
             isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer())
@@ -424,9 +486,9 @@ def train_model_and_get_importance(
         )
         
         if is_binary or is_multiclass:
-            importance_values = mutual_info_classif(X, y, random_state=42, discrete_features='auto')
+            importance_values = mutual_info_classif(X_clean, y_clean, random_state=42, discrete_features='auto')
         else:
-            importance_values = mutual_info_regression(X, y, random_state=42, discrete_features='auto')
+            importance_values = mutual_info_regression(X_clean, y_clean, random_state=42, discrete_features='auto')
         
         # Create a dummy model for compatibility (mutual info doesn't need a model)
         class DummyModel:
@@ -442,8 +504,17 @@ def train_model_and_get_importance(
         # Univariate Feature Selection (f_regression/f_classif)
         from sklearn.feature_selection import f_regression, f_classif, chi2
         
+        # Handle NaN values (univariate selection doesn't support NaN)
+        mask = ~(np.isnan(X).any(axis=1) | np.isnan(y))
+        if mask.sum() < 10:
+            logger.warning(f"    univariate_selection: Too few valid samples after NaN removal ({mask.sum()})")
+            return None, pd.Series(0.0, index=feature_names), importance_method, 0.0
+        
+        X_clean = X[mask]
+        y_clean = y[mask]
+        
         # Determine task type
-        unique_vals = np.unique(y[~np.isnan(y)])
+        unique_vals = np.unique(y_clean)
         is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
         is_multiclass = len(unique_vals) <= 10 and all(
             isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer())
@@ -451,9 +522,9 @@ def train_model_and_get_importance(
         )
         
         if is_binary or is_multiclass:
-            scores, pvalues = f_classif(X, y)
+            scores, pvalues = f_classif(X_clean, y_clean)
         else:
-            scores, pvalues = f_regression(X, y)
+            scores, pvalues = f_regression(X_clean, y_clean)
         
         # Normalize scores (F-statistics can be very large)
         if np.max(scores) > 0:
@@ -503,16 +574,31 @@ def train_model_and_get_importance(
                 self.importance = importance
         
         model = DummyModel(importance_values)
-        train_score = selector.estimator_.score(X, y) if hasattr(selector, 'estimator_') else 0.0
+        # RFE's estimator was trained on transformed (reduced) features, so score with transformed X
+        try:
+            X_transformed = selector.transform(X)
+            train_score = selector.estimator_.score(X_transformed, y) if hasattr(selector, 'estimator_') else 0.0
+        except:
+            train_score = 0.0
     
     elif model_family == 'boruta':
         # Boruta - All-relevant feature selection
         try:
             from boruta import BorutaPy
             from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+            from sklearn.impute import SimpleImputer
+            
+            # Handle NaN values (Boruta doesn't support NaN)
+            mask = ~(np.isnan(X).any(axis=1) | np.isnan(y))
+            if mask.sum() < 10:
+                logger.warning(f"    boruta: Too few valid samples after NaN removal ({mask.sum()})")
+                return None, pd.Series(0.0, index=feature_names), importance_method, 0.0
+            
+            X_clean = X[mask]
+            y_clean = y[mask]
             
             # Determine task type
-            unique_vals = np.unique(y[~np.isnan(y)])
+            unique_vals = np.unique(y_clean)
             is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
             is_multiclass = len(unique_vals) <= 10 and all(
                 isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer())
@@ -525,13 +611,14 @@ def train_model_and_get_importance(
                 rf = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=1)
             
             boruta = BorutaPy(rf, n_estimators='auto', verbose=0, random_state=42, max_iter=model_config.get('max_iter', 100))
-            boruta.fit(X, y)
+            boruta.fit(X_clean, y_clean)
             
             # Convert to importance: selected features get high importance, rejected get low
             ranking = boruta.ranking_
             selected = boruta.support_
             
             # Importance: selected=1.0, tentative=0.5, rejected=0.1
+            # Boruta returns per-feature importance (not per-sample), so no mapping needed
             importance_values = np.where(selected, 1.0, np.where(ranking == 2, 0.5, 0.1))
             
             class DummyModel:
@@ -539,7 +626,7 @@ def train_model_and_get_importance(
                     self.importance = importance
             
             model = DummyModel(importance_values)
-            train_score = rf.score(X, y) if hasattr(rf, 'score') else 0.0
+            train_score = rf.score(X_clean, y_clean) if hasattr(rf, 'score') else 0.0
         except ImportError:
             logger.error("Boruta not available (pip install Boruta)")
             return None, pd.Series(0.0, index=feature_names), importance_method, 0.0
@@ -712,7 +799,8 @@ def process_single_symbol(
                 logger.info(f"  {symbol}: Training {family_name}...")
                 model, importance, method, train_score = train_model_and_get_importance(
                     family_name, family_config, X_arr, y_arr, feature_names,
-                    data_interval_minutes=detected_interval
+                    data_interval_minutes=detected_interval,
+                    target_column=target_column
                 )
                 
                 if importance is not None and importance.sum() > 0:

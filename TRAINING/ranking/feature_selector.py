@@ -148,8 +148,13 @@ def select_features_for_target(
     
     # Aggregate across models and symbols
     aggregation_config = multi_model_config.get('aggregation', {}) if multi_model_config else {}
+    # Get model_families_config from multi_model_config or use the provided one
+    if model_families_config is None:
+        model_families_config = multi_model_config.get('model_families', {}) if multi_model_config else {}
+    
     summary_df, selected_features = _aggregate_multi_model_importance(
         all_results=all_results,
+        model_families_config=model_families_config,
         aggregation_config=aggregation_config,
         top_n=top_n
     )
