@@ -238,10 +238,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Modular configuration system documentation**:
   - Created `MODULAR_CONFIG_SYSTEM.md` - Complete guide to new config system
   - Updated `CLI_REFERENCE.md` with `--max-targets-to-evaluate` and `--experiment-config` options
-  - Updated `INTELLIGENT_TRAINING_TUTORIAL.md` with faster E2E testing examples
+  - Updated `INTELLIGENT_TRAINING_TUTORIAL.md` with faster E2E testing examples and experiment configs as preferred method
   - Added experiment config examples to `USAGE_EXAMPLES.md`
   - Updated configuration README to highlight modular config system
   - Updated main docs index to link to modular config guide
+  - Updated `CONFIG_BASICS.md`, `CONFIG_EXAMPLES.md`, `MODEL_TRAINING_GUIDE.md`, and `FEATURE_TARGET_CONFIGS.md` to emphasize experiment configs
+- **Documentation cleanup and consolidation**:
+  - Integrated `INFORMATION/` and `NOTES/` folders into `docs/` folder
+  - Moved `COLUMN_REFERENCE.md` to `docs/02_reference/data/` (proper location)
+  - Removed outdated documentation referencing deprecated scripts and old workflows
+  - Updated all cross-references to point to current documentation locations
+  - Deleted `INFORMATION/` and `NOTES/` folders (content outdated or already in docs)
+- **README updates**:
+  - Added "Domain Focus & Extensibility" section clarifying finance-first focus with architectural extensibility
+  - Explicitly states official support focuses on financial data
+  - Clarifies requirements for non-financial domain adaptation
 - **Documentation structure reorganization**:
   - Moved all CONFIG documentation to `docs/02_reference/configuration/`:
     - Configuration system overview, feature/target configs, training pipeline configs, safety/leakage configs, model configuration, usage examples
