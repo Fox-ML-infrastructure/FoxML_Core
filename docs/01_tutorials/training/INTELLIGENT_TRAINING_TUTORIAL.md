@@ -193,6 +193,7 @@ python TRAINING/train.py \
 - `--auto-targets`: Enable automatic target ranking (default: True)
 - `--no-auto-targets`: Disable automatic target ranking
 - `--top-n-targets`: Number of top targets to select (default: 5)
+- `--max-targets-to-evaluate`: Limit number of targets to evaluate during ranking (default: evaluate all). Useful for faster E2E testing.
 - `--targets`: Manual target list (overrides --auto-targets if provided)
 
 ### Feature Selection

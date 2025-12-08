@@ -27,6 +27,7 @@ python TRAINING/train.py \
 - `--auto-targets`: Enable automatic target ranking (default: True)
 - `--no-auto-targets`: Disable automatic target ranking
 - `--top-n-targets`: Number of top targets to select (default: 5)
+- `--max-targets-to-evaluate`: Limit number of targets to evaluate for faster testing (default: evaluate all). Useful for E2E testing without processing all 63 targets.
 - `--targets`: Manual target list (overrides --auto-targets)
 
 **Feature Selection:**
@@ -50,10 +51,12 @@ python TRAINING/train.py \
 - `--max-rows-per-symbol`: Maximum rows to load per symbol
 - `--max-rows-train`: Maximum training rows
 - `--max-cs-samples`: Maximum cross-sectional samples per timestamp
+- `--max-targets-to-evaluate`: Limit number of targets evaluated during ranking (speeds up E2E testing)
 
 **Config Files:**
-- `--target-ranking-config`: Path to target ranking config YAML
-- `--multi-model-config`: Path to feature selection config YAML
+- `--experiment-config`: Experiment config name (without .yaml) from `CONFIG/experiments/` [NEW - preferred]
+- `--target-ranking-config`: Path to target ranking config YAML [LEGACY]
+- `--multi-model-config`: Path to feature selection config YAML [LEGACY]
 
 **Examples:**
 
@@ -78,6 +81,23 @@ python TRAINING/train.py \
     --auto-targets \
     --top-n-targets 5 \
     --no-refresh-cache
+
+# Faster E2E testing (limit evaluation to 23 targets)
+python TRAINING/train.py \
+    --data-dir data/data_labeled/interval=5m \
+    --symbols AAPL MSFT \
+    --auto-targets \
+    --top-n-targets 3 \
+    --max-targets-to-evaluate 23 \
+    --min-cs 3 \
+    --max-rows-per-symbol 5000
+
+# Using experiment config (NEW - preferred)
+python TRAINING/train.py \
+    --experiment-config fwd_ret_60m_test \
+    --auto-targets \
+    --top-n-targets 5 \
+    --max-targets-to-evaluate 23
 ```
 
 **See Also:**
