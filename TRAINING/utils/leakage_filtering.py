@@ -48,7 +48,31 @@ def _load_schema_config(force_reload: bool = False) -> Dict[str, Any]:
     """
     global _SCHEMA_CONFIG, _SCHEMA_CONFIG_PATH_CACHE
     
-    schema_path = _find_config_path().parent / "feature_target_schema.yaml"
+    # Try to get schema path from config first
+    schema_path = None
+    if _CONFIG_AVAILABLE:
+        try:
+            system_cfg = get_system_config()
+            config_path = system_cfg.get('system', {}).get('paths', {})
+            schema_path_str = config_path.get('feature_target_schema')
+            if schema_path_str:
+                schema_path = Path(schema_path_str)
+                if not schema_path.is_absolute():
+                    script_file = Path(__file__).resolve()
+                    repo_root = script_file.parents[2]
+                    schema_path = repo_root / schema_path_str
+            else:
+                # Use config_dir from config
+                config_dir = config_path.get('config_dir', 'CONFIG')
+                script_file = Path(__file__).resolve()
+                repo_root = script_file.parents[2]
+                schema_path = repo_root / config_dir / "feature_target_schema.yaml"
+        except Exception:
+            pass  # Fall through to default
+    
+    # Fallback to default location
+    if schema_path is None or not schema_path.exists():
+        schema_path = _find_config_path().parent / "feature_target_schema.yaml"
     
     # Use cache if available and path matches
     if not force_reload and _SCHEMA_CONFIG is not None and _SCHEMA_CONFIG_PATH_CACHE == schema_path:
@@ -268,9 +292,46 @@ def _is_ranking_safe_feature(feature_name: str) -> bool:
     
     return False
 
+# Try to import config loader for path configuration
+_CONFIG_AVAILABLE = False
+try:
+    from config_loader import get_system_config
+    _CONFIG_AVAILABLE = True
+except ImportError:
+    pass
+
 # Robust path resolution: try multiple possible locations
 def _find_config_path() -> Path:
     """Find the excluded_features.yaml config file using multiple strategies."""
+    # Strategy 0: Use config if available
+    if _CONFIG_AVAILABLE:
+        try:
+            system_cfg = get_system_config()
+            config_path = system_cfg.get('system', {}).get('paths', {})
+            excluded_path = config_path.get('excluded_features')
+            if excluded_path:
+                config_file = Path(excluded_path)
+                if config_file.is_absolute():
+                    if config_file.exists():
+                        return config_file
+                else:
+                    # Relative path - find repo root
+                    script_file = Path(__file__).resolve()
+                    repo_root = script_file.parents[2]
+                    config_file = repo_root / excluded_path
+                    if config_file.exists():
+                        return config_file
+            else:
+                # Use config_dir from config
+                config_dir = config_path.get('config_dir', 'CONFIG')
+                script_file = Path(__file__).resolve()
+                repo_root = script_file.parents[2]
+                config_file = repo_root / config_dir / "excluded_features.yaml"
+                if config_file.exists():
+                    return config_file
+        except Exception:
+            pass  # Fall through to fallback strategies
+    
     # Strategy 1: Relative to this file (TRAINING/utils/leakage_filtering.py -> repo root)
     # Go up: TRAINING/utils/ -> TRAINING/ -> repo_root/
     script_file = Path(__file__).resolve()

@@ -9,6 +9,13 @@ system:
     temp_dir: null  # null = use system temp, or set custom path
     joblib_temp: null  # null = ~/trainer_tmp/joblib, or set custom path
     model_cache_dir: null  # null = no caching, or set directory for model caching
+    
+    # Config file paths (relative to repo root, or absolute paths)
+    config_dir: "CONFIG"  # Main config directory
+    excluded_features: null  # null = CONFIG/excluded_features.yaml, or set custom path
+    feature_registry: null  # null = CONFIG/feature_registry.yaml, or set custom path
+    feature_target_schema: null  # null = CONFIG/feature_target_schema.yaml, or set custom path
+    config_backup_dir: null  # null = CONFIG/backups/, or set custom backup directory
   
   # Environment Variables
   environment:

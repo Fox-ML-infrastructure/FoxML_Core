@@ -31,6 +31,14 @@ import hashlib
 
 logger = logging.getLogger(__name__)
 
+# Try to import config loader for path configuration
+_CONFIG_AVAILABLE = False
+try:
+    from config_loader import get_system_config
+    _CONFIG_AVAILABLE = True
+except ImportError:
+    pass
+
 # Global registry instance (lazy-loaded)
 _REGISTRY: Optional['FeatureRegistry'] = None
 
@@ -55,12 +63,33 @@ class FeatureRegistry:
         Initialize feature registry from YAML config.
         
         Args:
-            config_path: Path to feature_registry.yaml (default: CONFIG/feature_registry.yaml)
+            config_path: Path to feature_registry.yaml (default: from config or CONFIG/feature_registry.yaml)
         """
         if config_path is None:
-            # Try to find CONFIG directory
-            repo_root = Path(__file__).resolve().parents[2]
-            config_path = repo_root / "CONFIG" / "feature_registry.yaml"
+            # Try to get path from config first
+            if _CONFIG_AVAILABLE:
+                try:
+                    system_cfg = get_system_config()
+                    config_paths = system_cfg.get('system', {}).get('paths', {})
+                    registry_path_str = config_paths.get('feature_registry')
+                    if registry_path_str:
+                        config_path = Path(registry_path_str)
+                        if not config_path.is_absolute():
+                            repo_root = Path(__file__).resolve().parents[2]
+                            config_path = repo_root / registry_path_str
+                    else:
+                        # Use config_dir from config
+                        config_dir = config_paths.get('config_dir', 'CONFIG')
+                        repo_root = Path(__file__).resolve().parents[2]
+                        config_path = repo_root / config_dir / "feature_registry.yaml"
+                except Exception:
+                    # Fallback to default
+                    repo_root = Path(__file__).resolve().parents[2]
+                    config_path = repo_root / "CONFIG" / "feature_registry.yaml"
+            else:
+                # Fallback to default
+                repo_root = Path(__file__).resolve().parents[2]
+                config_path = repo_root / "CONFIG" / "feature_registry.yaml"
         
         self.config_path = Path(config_path)
         self.config = self._load_config()

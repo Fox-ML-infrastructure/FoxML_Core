@@ -47,6 +47,14 @@ from TRAINING.utils.leakage_filtering import filter_features_for_target, _load_l
 
 logger = logging.getLogger(__name__)
 
+# Try to import config loader for path configuration
+_CONFIG_AVAILABLE = False
+try:
+    from config_loader import get_system_config
+    _CONFIG_AVAILABLE = True
+except ImportError:
+    pass
+
 
 @dataclass
 class LeakageDetection:
@@ -92,14 +100,71 @@ class LeakageAutoFixer:
             feature_registry_path: Path to feature_registry.yaml (default: CONFIG/feature_registry.yaml)
             backup_configs: If True, backup configs before modifying
         """
+        # Load paths from config if available, otherwise use defaults
         if excluded_features_path is None:
-            excluded_features_path = _REPO_ROOT / "CONFIG" / "excluded_features.yaml"
+            if _CONFIG_AVAILABLE:
+                try:
+                    system_cfg = get_system_config()
+                    config_path = system_cfg.get('system', {}).get('paths', {})
+                    excluded_path = config_path.get('excluded_features')
+                    if excluded_path:
+                        excluded_features_path = Path(excluded_path)
+                        if not excluded_features_path.is_absolute():
+                            excluded_features_path = _REPO_ROOT / excluded_path
+                    else:
+                        # Use default: CONFIG/excluded_features.yaml
+                        config_dir = config_path.get('config_dir', 'CONFIG')
+                        excluded_features_path = _REPO_ROOT / config_dir / "excluded_features.yaml"
+                except Exception:
+                    # Fallback to default
+                    excluded_features_path = _REPO_ROOT / "CONFIG" / "excluded_features.yaml"
+            else:
+                excluded_features_path = _REPO_ROOT / "CONFIG" / "excluded_features.yaml"
+        
         if feature_registry_path is None:
-            feature_registry_path = _REPO_ROOT / "CONFIG" / "feature_registry.yaml"
+            if _CONFIG_AVAILABLE:
+                try:
+                    system_cfg = get_system_config()
+                    config_path = system_cfg.get('system', {}).get('paths', {})
+                    registry_path = config_path.get('feature_registry')
+                    if registry_path:
+                        feature_registry_path = Path(registry_path)
+                        if not feature_registry_path.is_absolute():
+                            feature_registry_path = _REPO_ROOT / registry_path
+                    else:
+                        # Use default: CONFIG/feature_registry.yaml
+                        config_dir = config_path.get('config_dir', 'CONFIG')
+                        feature_registry_path = _REPO_ROOT / config_dir / "feature_registry.yaml"
+                except Exception:
+                    # Fallback to default
+                    feature_registry_path = _REPO_ROOT / "CONFIG" / "feature_registry.yaml"
+            else:
+                feature_registry_path = _REPO_ROOT / "CONFIG" / "feature_registry.yaml"
         
         self.excluded_features_path = Path(excluded_features_path)
         self.feature_registry_path = Path(feature_registry_path)
         self.backup_configs = backup_configs
+        
+        # Get backup directory from config
+        if _CONFIG_AVAILABLE:
+            try:
+                system_cfg = get_system_config()
+                config_path = system_cfg.get('system', {}).get('paths', {})
+                backup_dir = config_path.get('config_backup_dir')
+                if backup_dir:
+                    self.backup_dir = Path(backup_dir)
+                    if not self.backup_dir.is_absolute():
+                        self.backup_dir = _REPO_ROOT / backup_dir
+                else:
+                    # Default: CONFIG/backups/
+                    config_dir = config_path.get('config_dir', 'CONFIG')
+                    self.backup_dir = _REPO_ROOT / config_dir / "backups"
+            except Exception:
+                # Fallback to default
+                self.backup_dir = self.excluded_features_path.parent / "backups"
+        else:
+            # Fallback to default
+            self.backup_dir = self.excluded_features_path.parent / "backups"
         
         # Track detected leaks across iterations
         self.detected_leaks: Dict[str, LeakageDetection] = {}
@@ -468,9 +533,9 @@ class LeakageAutoFixer:
         import shutil
         from datetime import datetime
         
-        # Create backups subdirectory in CONFIG folder
-        backup_dir = self.excluded_features_path.parent / "backups"
-        backup_dir.mkdir(exist_ok=True)
+        # Use configured backup directory (set in __init__)
+        backup_dir = self.backup_dir
+        backup_dir.mkdir(parents=True, exist_ok=True)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         

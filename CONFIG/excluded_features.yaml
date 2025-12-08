@@ -39,16 +39,37 @@ always_exclude:
   keyword_patterns:
   - first_touch
   exact_patterns:
+  - _hour
+  - _month
+  - atr_x_vol
+  - day_of_month
+  - flipcount_10m
+  - flipcount_15m
+  - flipcount_5m
   - flipcount_60m
+  - market_correlation_20d
+  - mass_index
+  - negative_volume_index
+  - obv_ema
+  - price_volume_trend
   - ret_zscore_10m
   - ret_zscore_15m
   - ret_zscore_30m
   - ret_zscore_5m
   - ret_zscore_60m
+  - rsi_21
+  - time_in_profit_10m
+  - time_in_profit_15m
+  - time_in_profit_5m
   - time_in_profit_60m
+  - vol_15m
   - vol_clustering_15m
   - vol_over_vol_15m
   - vol_over_vol_60m
+  - volatility_60d
+  - volume_ratio_20d
+  - volume_sma_50
+  - yz_vol_20
 target_type_rules:
   forward_return:
     prefix_patterns:
