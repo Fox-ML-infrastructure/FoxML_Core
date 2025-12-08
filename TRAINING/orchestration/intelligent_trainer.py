@@ -73,6 +73,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Import leakage sentinels
+try:
+    from TRAINING.common.leakage_sentinels import LeakageSentinel, SentinelResult
+    _SENTINELS_AVAILABLE = True
+except ImportError:
+    _SENTINELS_AVAILABLE = False
+    logger.debug("Leakage sentinels not available")
+
+# Import pandas for sentinel diagnostics
+try:
+    import pandas as pd
+    _PANDAS_AVAILABLE = True
+except ImportError:
+    _PANDAS_AVAILABLE = False
+
 
 class IntelligentTrainer:
     """
@@ -98,13 +113,26 @@ class IntelligentTrainer:
         self.data_dir = Path(data_dir)
         self.symbols = symbols
         self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         self.cache_dir = Path(cache_dir) if cache_dir else self.output_dir / "cache"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create subdirectories
+        (self.output_dir / "target_rankings").mkdir(exist_ok=True)
+        (self.output_dir / "feature_selections").mkdir(exist_ok=True)
+        (self.output_dir / "training_results").mkdir(exist_ok=True)
+        (self.output_dir / "leakage_diagnostics").mkdir(exist_ok=True)
         
         # Cache paths
         self.target_ranking_cache = self.cache_dir / "target_rankings.json"
         self.feature_selection_cache = self.cache_dir / "feature_selections"
         self.feature_selection_cache.mkdir(parents=True, exist_ok=True)
+        
+        # Initialize leakage sentinel if available
+        if _SENTINELS_AVAILABLE:
+            self.sentinel = LeakageSentinel()
+        else:
+            self.sentinel = None
     
     def _get_cache_key(self, symbols: List[str], config_hash: str) -> str:
         """Generate cache key from symbols and config."""
@@ -329,6 +357,7 @@ class IntelligentTrainer:
         families: Optional[List[str]] = None,
         strategy: str = 'single_task',
         use_cache: bool = True,
+        run_leakage_diagnostics: bool = False,
         **train_kwargs
     ) -> Dict[str, Any]:
         """
@@ -343,6 +372,7 @@ class IntelligentTrainer:
             features: Manual feature list (overrides auto_features if provided)
             families: Model families to train
             strategy: Training strategy ('single_task', 'multi_task', 'cascade')
+            run_leakage_diagnostics: If True, run leakage sentinel tests after training
             **train_kwargs: Additional arguments passed to train_with_strategies
         
         Returns:
@@ -453,12 +483,27 @@ class IntelligentTrainer:
         )
         logger.info(f"Trained {total_models} models across {len(targets)} targets")
         
+        # Run leakage diagnostics if enabled
+        sentinel_results = {}
+        if run_leakage_diagnostics:
+            logger.info("="*80)
+            logger.info("STEP 4: Leakage Diagnostics (Sentinels)")
+            logger.info("="*80)
+            try:
+                sentinel_results = self._run_leakage_diagnostics(
+                    training_results, targets, mtf_data, train_kwargs
+                )
+            except Exception as e:
+                logger.warning(f"Leakage diagnostics failed: {e}")
+                sentinel_results = {'error': str(e)}
+        
         return {
             'targets': targets,
             'target_features': target_features,
             'strategy': strategy,
             'training_results': training_results,
             'total_models': total_models,
+            'sentinel_results': sentinel_results,
             'status': 'completed'
         }
 
@@ -537,6 +582,8 @@ Examples:
                        help='Maximum training rows (for testing)')
     parser.add_argument('--max-cs-samples', type=int,
                        help='Maximum cross-sectional samples per timestamp')
+    parser.add_argument('--run-leakage-diagnostics', action='store_true',
+                       help='Run leakage sentinel tests after training (optional diagnostic mode)')
     
     # Cache control
     parser.add_argument('--force-refresh', action='store_true',
@@ -587,6 +634,7 @@ Examples:
             strategy=args.strategy,
             force_refresh=args.force_refresh,
             use_cache=use_cache,
+            run_leakage_diagnostics=args.run_leakage_diagnostics,
             min_cs=args.min_cs,
             max_rows_per_symbol=args.max_rows_per_symbol,
             max_rows_train=args.max_rows_train,

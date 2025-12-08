@@ -156,6 +156,28 @@ def select_features_for_target(
     
     logger.info(f"✅ Selected {len(selected_features)} features")
     
+    # Run importance diff detector if enabled (optional diagnostic)
+    # This compares models trained with all features vs. safe features only
+    try:
+        from TRAINING.common.importance_diff_detector import ImportanceDiffDetector
+        from TRAINING.common.feature_registry import get_registry
+        from scripts.utils.data_interval import detect_interval_from_dataframe
+        from scripts.utils.leakage_filtering import filter_features_for_target, _extract_horizon, _load_leakage_config
+        
+        # Check if we should run importance diff detection
+        # (This would require training two sets of models - full vs safe)
+        # For now, we'll add it as an optional post-processing step
+        # that can be enabled via config
+        
+        # Placeholder for future implementation:
+        # 1. Train models with all features (already done)
+        # 2. Train models with only safe features (registry-validated)
+        # 3. Compare importances to detect suspicious features
+        
+        logger.debug("Importance diff detector available (not yet integrated into selection pipeline)")
+    except ImportError:
+        logger.debug("Importance diff detector not available")
+    
     # Save results if output_dir provided
     if output_dir:
         output_dir.mkdir(parents=True, exist_ok=True)

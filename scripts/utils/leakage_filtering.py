@@ -109,6 +109,16 @@ def _load_leakage_config(force_reload: bool = False) -> Dict[str, Any]:
     # Get config path (lazy evaluation)
     config_path = _get_config_path()
     
+    # Final fallback: try CWD/CONFIG if path doesn't exist
+    if not config_path.exists():
+        cwd_config = Path.cwd() / "CONFIG" / "excluded_features.yaml"
+        if cwd_config.exists():
+            logger.debug(f"Using config from CWD: {cwd_config}")
+            config_path = cwd_config
+            # Update cache
+            global _CONFIG_PATH_CACHE
+            _CONFIG_PATH_CACHE = cwd_config
+    
     # Check if config file was modified (cache invalidation)
     if _LEAKAGE_CONFIG is not None and not force_reload:
         if config_path.exists():
@@ -206,18 +216,22 @@ def _load_leakage_config(force_reload: bool = False) -> Dict[str, Any]:
 def filter_features_for_target(
     all_columns: List[str],
     target_column: str,
-    verbose: bool = False
+    verbose: bool = False,
+    use_registry: bool = True,
+    data_interval_minutes: int = 5
 ) -> List[str]:
     """
     Filter features that would leak information about the target.
     
-    All exclusion patterns are loaded from CONFIG/excluded_features.yaml.
-    Works with any dataset, features, and targets - fully configurable.
+    Uses both pattern-based filtering (excluded_features.yaml) and
+    structural rules (feature_registry.yaml) if enabled.
     
     Args:
         all_columns: List of all column names in the dataset
         target_column: Name of the target column being predicted
         verbose: If True, log excluded features
+        use_registry: If True, use FeatureRegistry for structural validation (default: True)
+        data_interval_minutes: Data bar interval in minutes (default: 5) for horizon conversion
     
     Returns:
         List of safe feature column names
@@ -237,7 +251,43 @@ def filter_features_for_target(
     
     # Get target metadata
     target_type = _classify_target_type(target_column, config)
-    target_horizon = _extract_horizon(target_column, config)
+    target_horizon_minutes = _extract_horizon(target_column, config)
+    
+    # Convert horizon from minutes to bars for registry
+    target_horizon_bars = None
+    if target_horizon_minutes is not None and data_interval_minutes > 0:
+        target_horizon_bars = target_horizon_minutes // data_interval_minutes
+        if verbose:
+            logger.debug(f"  Target horizon: {target_horizon_minutes}m = {target_horizon_bars} bars (interval={data_interval_minutes}m)")
+    
+    # Apply feature registry filtering if enabled
+    # Registry can filter metadata columns even without horizon (use horizon=1 as default)
+    if use_registry:
+        try:
+            from TRAINING.common.feature_registry import get_registry
+            registry = get_registry()
+            
+            # Use target_horizon_bars if available, otherwise use default (1 bar)
+            # This allows registry to filter metadata columns even when horizon extraction fails
+            registry_horizon = target_horizon_bars if target_horizon_bars is not None else 1
+            
+            # Filter using registry
+            registry_allowed = registry.get_allowed_features(safe_columns, registry_horizon, verbose=verbose)
+            
+            # Registry is more restrictive (structural rules), so use its result
+            # But keep pattern-based filtering as additional safety layer
+            safe_columns = registry_allowed
+            
+            if verbose:
+                if target_horizon_bars is not None:
+                    logger.info(f"  Feature registry: {len(registry_allowed)} features allowed for horizon={target_horizon_bars} bars")
+                else:
+                    logger.info(f"  Feature registry: {len(registry_allowed)} features allowed (horizon extraction failed, using default horizon=1)")
+        except Exception as e:
+            logger.warning(f"  Feature registry not available: {e}. Using pattern-based filtering only.")
+    
+    # Continue with existing pattern-based filtering (as additional safety layer)
+    target_horizon = target_horizon_minutes  # Keep original for pattern-based filtering
     
     # Apply always-exclude patterns (regardless of target type)
     always_exclude = config.get('always_exclude', {})

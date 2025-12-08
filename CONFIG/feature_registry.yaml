@@ -1,0 +1,303 @@
+# Feature Registry
+# 
+# Defines feature metadata and temporal rules to prevent data leakage.
+# Features must have:
+#   - lag_bars: How many bars back the feature is allowed to peek (>= 0)
+#   - allowed_horizons: List of target horizons this feature can predict (in bars)
+#   - source: Where the feature comes from (price, volume, derived, etc.)
+#
+# Hard rules enforced:
+#   - lag_bars >= 0 (cannot look into future)
+#   - lag_bars >= horizon_bars for price/derived features
+#   - allowed_horizons must be non-empty for usable features
+#
+# Last updated: 2025-12-07
+
+features:
+  # Lagged returns (safe)
+  ret_1:
+    source: price
+    lag_bars: 1
+    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    description: "1-bar lagged return"
+  
+  ret_2:
+    source: price
+    lag_bars: 2
+    allowed_horizons: [2, 3, 5, 12, 24, 60]  # Can predict any horizon >= 2
+    description: "2-bar lagged return"
+  
+  ret_5:
+    source: price
+    lag_bars: 5
+    allowed_horizons: [5, 12, 24, 60]  # Can predict any horizon >= 5
+    description: "5-bar lagged return"
+  
+  ret_10:
+    source: price
+    lag_bars: 10
+    allowed_horizons: [10, 12, 24, 60]  # Can predict any horizon >= 10
+    description: "10-bar lagged return"
+  
+  ret_15:
+    source: price
+    lag_bars: 15
+    allowed_horizons: [15, 24, 60]  # Can predict any horizon >= 15
+    description: "15-bar lagged return"
+  
+  ret_30:
+    source: price
+    lag_bars: 30
+    allowed_horizons: [30, 60]  # Can predict any horizon >= 30
+    description: "30-bar lagged return"
+  
+  ret_60:
+    source: price
+    lag_bars: 60
+    allowed_horizons: [60]  # Can predict horizon >= 60
+    description: "60-bar lagged return"
+  
+  # Technical indicators (safe)
+  rsi_10:
+    source: derived
+    lag_bars: 10
+    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1 (lookback is 10, but value is current)
+    description: "RSI with 10-bar lookback"
+  
+  rsi_14:
+    source: derived
+    lag_bars: 14
+    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    description: "RSI with 14-bar lookback"
+  
+  sma_20:
+    source: derived
+    lag_bars: 20
+    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    description: "20-bar simple moving average"
+  
+  sma_50:
+    source: derived
+    lag_bars: 50
+    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    description: "50-bar simple moving average"
+  
+  sma_200:
+    source: derived
+    lag_bars: 200
+    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    description: "200-bar simple moving average"
+  
+  ema_12:
+    source: derived
+    lag_bars: 12
+    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    description: "12-bar exponential moving average"
+  
+  ema_26:
+    source: derived
+    lag_bars: 26
+    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    description: "26-bar exponential moving average"
+  
+  # Volume features (safe)
+  volume:
+    source: volume
+    lag_bars: 1
+    allowed_horizons: [1, 3, 5, 12, 24, 60]
+    description: "Volume (1-bar lag)"
+  
+  volume_sma_20:
+    source: derived
+    lag_bars: 20
+    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    description: "20-bar volume moving average"
+  
+  # Volatility features (safe)
+  volatility_10:
+    source: derived
+    lag_bars: 10
+    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    description: "10-bar volatility"
+  
+  volatility_20:
+    source: derived
+    lag_bars: 20
+    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    description: "20-bar volatility"
+  
+  # VWAP features (safe)
+  vwap:
+    source: derived
+    lag_bars: 1
+    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    description: "Volume-weighted average price (1-bar lag)"
+  
+  vwap_dev_high:
+    source: derived
+    lag_bars: 1
+    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    description: "VWAP deviation high (1-bar lag)"
+  
+  vwap_dev_low:
+    source: derived
+    lag_bars: 1
+    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    description: "VWAP deviation low (1-bar lag)"
+  
+  # Momentum features (safe)
+  momentum_10:
+    source: derived
+    lag_bars: 10
+    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    description: "10-bar momentum"
+  
+  momentum_20:
+    source: derived
+    lag_bars: 20
+    allowed_horizons: [1, 3, 5, 12, 24, 60]  # Can predict any horizon >= 1
+    description: "20-bar momentum"
+  
+  # Rejected features (explicitly marked as leaky)
+  # These are included for documentation - they will be rejected
+  ret_future_1:
+    source: price
+    lag_bars: -1
+    allowed_horizons: []
+    rejected: true
+    description: "REJECTED: Future return (looks into future)"
+  
+  tth_5m:
+    source: derived
+    lag_bars: 0
+    allowed_horizons: []
+    rejected: true
+    description: "REJECTED: Time-to-hit requires future path"
+  
+  barrier_5m_0.8:
+    source: derived
+    lag_bars: 0
+    allowed_horizons: []
+    rejected: true
+    description: "REJECTED: Barrier features encode barrier logic"
+  
+  p_up_60m_0.8:
+    lag_bars: 0
+    allowed_horizons: []
+    source: target_proxy
+    rejected: true
+    description: "REJECTED: Prediction/probability feature (leaky)"
+  
+  # Metadata columns (always rejected)
+  ts:
+    lag_bars: 0
+    allowed_horizons: []
+    source: metadata
+    rejected: true
+    description: "REJECTED: Timestamp column - metadata, not a feature"
+  
+  symbol:
+    lag_bars: 0
+    allowed_horizons: []
+    source: metadata
+    rejected: true
+    description: "REJECTED: Symbol column - metadata, not a feature"
+  
+  date:
+    lag_bars: 0
+    allowed_horizons: []
+    source: metadata
+    rejected: true
+    description: "REJECTED: Date column - metadata, not a feature"
+
+# Feature families (pattern-based groups)
+feature_families:
+  # Safe families
+  lagged_returns:
+    pattern: "^ret_\\d+$"
+    default_lag_bars: null  # Must be specified per feature
+    default_allowed_horizons: [1, 3, 5, 12, 24, 60]
+    description: "Lagged returns (ret_N where N is lag)"
+  
+  technical_indicators:
+    pattern: "^(rsi|sma|ema|macd|bb|atr|adx)_\\d+$"
+    default_lag_bars: null
+    default_allowed_horizons: [1, 3, 5, 12, 24, 60]
+    description: "Technical indicators with numeric lookback"
+  
+  volume_features:
+    pattern: "^(volume|vol_|obv|ad|cmf)"
+    default_lag_bars: 1
+    default_allowed_horizons: [1, 3, 5, 12, 24, 60]
+    description: "Volume-based features"
+  
+  volatility_features:
+    pattern: "^(volatility|vol_|std_|var_)"
+    default_lag_bars: null
+    default_allowed_horizons: [1, 3, 5, 12, 24, 60]
+    description: "Volatility features"
+  
+  # Rejected families (always excluded)
+  rejected_future_returns:
+    pattern: "^(ret_future_|fwd_ret_)"
+    default_lag_bars: -1
+    default_allowed_horizons: []
+    rejected: true
+    description: "REJECTED: Future returns (leaky)"
+  
+  rejected_time_to_hit:
+    pattern: "^tth_"
+    default_lag_bars: 0
+    default_allowed_horizons: []
+    rejected: true
+    description: "REJECTED: Time-to-hit features (leaky)"
+  
+  rejected_mfe_mdd:
+    pattern: "^(mfe|mdd)_"
+    default_lag_bars: 0
+    default_allowed_horizons: []
+    rejected: true
+    description: "REJECTED: MFE/MDD features (leaky)"
+  
+  rejected_barriers:
+    pattern: "^barrier_"
+    default_lag_bars: 0
+    default_allowed_horizons: []
+    rejected: true
+    description: "REJECTED: Barrier features (leaky)"
+  
+  rejected_targets:
+    pattern: "^(y_|target_)"
+    default_lag_bars: 0
+    default_allowed_horizons: []
+    rejected: true
+    description: "REJECTED: Target columns (leaky)"
+  
+  rejected_predictions:
+    pattern: "^p_"
+    default_lag_bars: 0
+    default_allowed_horizons: []
+    rejected: true
+    description: "REJECTED: Prediction/probability features (leaky)"
+  
+  rejected_metadata:
+    pattern: "^(ts|timestamp|symbol|time)$"
+    default_lag_bars: 0
+    default_allowed_horizons: []
+    rejected: true
+    description: "REJECTED: Metadata columns"
+
+# Validation rules
+validation:
+  hard_rules:
+    - "lag_bars >= 0"  # Cannot look into future
+    - "allowed_horizons must be non-empty for usable features"
+    # Note: lag_bars does NOT need to be >= horizon_bars
+    # A feature with lag_bars=1 CAN predict a 3-bar horizon target.
+    # The feature just needs to be from the past (lag_bars >= 0).
+    # Temporal safety is enforced by PurgedTimeSeriesSplit (purge gap = horizon).
+  
+  warnings:
+    - "lag_bars == 0 and source in ['price', 'derived']"  # Warning if no lag (might be leaky)
+    - "source == 'unknown'"  # Warning if source not specified
+

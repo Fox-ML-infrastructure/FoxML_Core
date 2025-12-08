@@ -778,13 +778,45 @@ def _prepare_training_data_polars(mtf_data: Dict[str, pd.DataFrame],
     combined_pl = pl.concat(all_data_pl)
     logger.info(f"Combined data shape (polars): {combined_pl.shape}")
     
-    # Auto-discover features if not provided
+    # Auto-discover features if not provided, then validate with registry
     if feature_names is None:
         all_cols = combined_pl.columns
         feature_names = [col for col in all_cols 
                         if not any(col.startswith(prefix) for prefix in 
                                  ['fwd_ret_', 'will_peak', 'will_valley', 'mdd_', 'mfe_', 'y_will_'])
                         and col not in ['symbol', 'timestamp', 'ts']]
+    
+    # Validate features with registry (if enabled)
+    if feature_names:
+        try:
+            from scripts.utils.leakage_filtering import filter_features_for_target
+            from scripts.utils.data_interval import detect_interval_from_dataframe
+            
+            # Detect data interval for horizon conversion
+            first_df = next(iter(mtf_data.values()))
+            detected_interval = detect_interval_from_dataframe(first_df, timestamp_column='ts', default=5)
+            # Ensure interval is valid (> 0)
+            if detected_interval <= 0:
+                detected_interval = 5
+                logger.warning(f"  Invalid detected interval, using default: 5m")
+            
+            # Filter features using registry
+            all_columns = list(combined_pl.columns)
+            validated_features = filter_features_for_target(
+                all_columns,
+                target,
+                verbose=True,  # Enable verbose to see what's being filtered
+                use_registry=True,  # Enable registry validation
+                data_interval_minutes=detected_interval
+            )
+            
+            # Keep only features that are both in feature_names and validated
+            feature_names = [f for f in feature_names if f in validated_features]
+            
+            if len(feature_names) < len([f for f in feature_names if f in validated_features]):
+                logger.info(f"  Feature registry: Validated {len(feature_names)} features for target {target}")
+        except Exception as e:
+            logger.warning(f"  Feature registry validation failed: {e}. Using provided features as-is.")
     
     # Normalize time column name
     ts_name = "timestamp" if "timestamp" in combined_pl.columns else ("ts" if "ts" in combined_pl.columns else None)
@@ -865,12 +897,43 @@ def _prepare_training_data_pandas(mtf_data: Dict[str, pd.DataFrame],
                            .head(max_cs_samples)
                            .drop(columns="_rn"))
     
-    # Auto-discover features
+    # Auto-discover features, then validate with registry
     if feature_names is None:
         feature_names = [col for col in combined_df.columns 
                         if not any(col.startswith(prefix) for prefix in 
                                  ['fwd_ret_', 'will_peak', 'will_valley', 'mdd_', 'mfe_', 'y_will_'])
                         and col not in ['symbol', time_col]]
+    
+    # Validate features with registry (if enabled)
+    if feature_names:
+        try:
+            from scripts.utils.leakage_filtering import filter_features_for_target
+            from scripts.utils.data_interval import detect_interval_from_dataframe
+            
+            # Detect data interval for horizon conversion
+            detected_interval = detect_interval_from_dataframe(combined_df, timestamp_column=time_col or 'ts', default=5)
+            # Ensure interval is valid (> 0)
+            if detected_interval <= 0:
+                detected_interval = 5
+                logger.warning(f"  Invalid detected interval, using default: 5m")
+            
+            # Filter features using registry
+            all_columns = combined_df.columns.tolist()
+            validated_features = filter_features_for_target(
+                all_columns,
+                target,
+                verbose=True,  # Enable verbose to see what's being filtered
+                use_registry=True,  # Enable registry validation
+                data_interval_minutes=detected_interval
+            )
+            
+            # Keep only features that are both in feature_names and validated
+            feature_names = [f for f in feature_names if f in validated_features]
+            
+            if len(feature_names) > 0:
+                logger.info(f"  Feature registry: Validated {len(feature_names)} features for target {target}")
+        except Exception as e:
+            logger.warning(f"  Feature registry validation failed: {e}. Using provided features as-is.")
     
     return _process_combined_data_pandas(combined_df, target, feature_names)
 

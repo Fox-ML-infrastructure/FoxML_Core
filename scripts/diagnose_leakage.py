@@ -44,7 +44,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from scripts.utils.leakage_filtering import filter_features_for_target, _load_leakage_config, _CONFIG_PATH
+    from scripts.utils.leakage_filtering import filter_features_for_target, _load_leakage_config, _get_config_path
 
 
 def diagnose_leakage(target_column: str, symbol: str = "AAPL", data_dir: Path = None):
@@ -75,10 +75,11 @@ def diagnose_leakage(target_column: str, symbol: str = "AAPL", data_dir: Path = 
     print("="*80)
     print("1. CONFIG STATUS")
     print("="*80)
-    print(f"Config path: {_CONFIG_PATH}")
-    print(f"Config exists: {_CONFIG_PATH.exists()}")
+    config_path = _get_config_path()
+    print(f"Config path: {config_path}")
+    print(f"Config exists: {config_path.exists()}")
     
-    if _CONFIG_PATH.exists():
+    if config_path.exists():
         config = _load_leakage_config(force_reload=True)
         always_exclude = config.get('always_exclude', {})
         barrier_in_regex = any('barrier_' in p for p in always_exclude.get('regex_patterns', []))

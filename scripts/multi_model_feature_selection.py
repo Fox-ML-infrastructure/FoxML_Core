@@ -656,12 +656,22 @@ def process_single_symbol(
         if len(df) > max_samples:
             df = df.sample(n=max_samples, random_state=42)
         
-        # LEAKAGE PREVENTION: Filter out leaking features
-        sys.path.insert(0, str(_REPO_ROOT / "scripts"))
-        from filter_leaking_features import filter_features
+        # LEAKAGE PREVENTION: Filter out leaking features (with registry validation)
+        from scripts.utils.leakage_filtering import filter_features_for_target
+        from scripts.utils.data_interval import detect_interval_from_dataframe
+        
+        # Detect data interval for horizon conversion
+        detected_interval = detect_interval_from_dataframe(df, timestamp_column='ts', default=5)
         
         all_columns = df.columns.tolist()
-        safe_columns = filter_features(all_columns, verbose=False)
+        # Use target-aware filtering with registry validation
+        safe_columns = filter_features_for_target(
+            all_columns, 
+            target_column, 
+            verbose=False,
+            use_registry=True,  # Enable registry validation
+            data_interval_minutes=detected_interval
+        )
         
         # Keep only safe features + target
         safe_columns_with_target = [c for c in safe_columns if c != target_column] + [target_column]

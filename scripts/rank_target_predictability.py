@@ -353,13 +353,23 @@ def prepare_features_and_target(
     else:
         task_type = target_config.task_type
     
-    # LEAKAGE PREVENTION: Filter out leaking features (target-aware)
+    # LEAKAGE PREVENTION: Filter out leaking features (target-aware, with registry validation)
     from scripts.utils.leakage_filtering import filter_features_for_target
+    from scripts.utils.data_interval import detect_interval_from_dataframe
+    
+    # Detect data interval for horizon conversion
+    detected_interval = detect_interval_from_dataframe(df, timestamp_column='ts', default=5)
     
     all_columns = df.columns.tolist()
-    # Use target-aware filtering to exclude temporal overlap features
+    # Use target-aware filtering with registry validation
     # Enable verbose logging to see what's being filtered
-    safe_columns = filter_features_for_target(all_columns, target_column, verbose=True)
+    safe_columns = filter_features_for_target(
+        all_columns, 
+        target_column, 
+        verbose=True,
+        use_registry=True,  # Enable registry validation
+        data_interval_minutes=detected_interval
+    )
     
     # Log filtering summary
     excluded_count = len(all_columns) - len(safe_columns) - 1  # -1 for target itself
@@ -2123,11 +2133,23 @@ def evaluate_target_predictability(
             model_scores={}
         )
     
-    # Apply leakage filtering to feature list BEFORE preparing data
+    # Apply leakage filtering to feature list BEFORE preparing data (with registry validation)
     # Get all columns from first symbol to determine available features
     sample_df = next(iter(mtf_data.values()))
     all_columns = sample_df.columns.tolist()
-    safe_columns = filter_features_for_target(all_columns, target_column, verbose=True)
+    
+    # Detect data interval for horizon conversion
+    from scripts.utils.data_interval import detect_interval_from_dataframe
+    detected_interval = detect_interval_from_dataframe(sample_df, timestamp_column='ts', default=5)
+    
+    # Use target-aware filtering with registry validation
+    safe_columns = filter_features_for_target(
+        all_columns, 
+        target_column, 
+        verbose=True,
+        use_registry=True,  # Enable registry validation
+        data_interval_minutes=detected_interval
+    )
     
     excluded_count = len(all_columns) - len(safe_columns) - 1  # -1 for target itself
     logger.info(f"Filtered out {excluded_count} potentially leaking features (kept {len(safe_columns)} safe features)")
