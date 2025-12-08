@@ -517,6 +517,22 @@ class LeakageAutoFixer:
         # Filter by confidence
         high_confidence = [d for d in detections if d.confidence >= min_confidence]
         
+        # Backup configs BEFORE checking if there are leaks to fix
+        # This ensures we have a backup even when auto-fix mode is enabled but no leaks detected
+        backup_files = []
+        if self.backup_configs and not dry_run:
+            # Use provided max_backups or fall back to instance config
+            backup_max = max_backups_per_target if max_backups_per_target is not None else self.max_backups_per_target
+            backup_files = self._backup_configs(
+                target_name=target_name,
+                max_backups_per_target=backup_max
+            )
+            if not high_confidence:
+                logger.info(
+                    f"Created backup (no leaks detected with confidence >= {min_confidence}): "
+                    f"{len(backup_files)} backup files"
+                )
+        
         if not high_confidence:
             logger.info(f"No leaks detected with confidence >= {min_confidence}")
             empty_autofix_info = AutoFixInfo(
@@ -525,7 +541,7 @@ class LeakageAutoFixer:
                 modified_features=[],
                 excluded_features_updates={},
                 feature_registry_updates={},
-                backup_files=None
+                backup_files=backup_files  # Include backup files even when no leaks
             )
             return {'excluded_features_updates': {}, 'feature_registry_updates': {}}, empty_autofix_info
         
@@ -542,16 +558,6 @@ class LeakageAutoFixer:
             f"Auto-fixing {len(high_confidence)} leaks "
             f"(confidence >= {min_confidence}, max_features={max_features})"
         )
-        
-        # Backup configs if requested
-        backup_files = []
-        if self.backup_configs and not dry_run:
-            # Use provided max_backups or fall back to instance config
-            backup_max = max_backups_per_target if max_backups_per_target is not None else self.max_backups_per_target
-            backup_files = self._backup_configs(
-                target_name=target_name,
-                max_backups_per_target=backup_max
-            )
         
         # Group by action type
         exact_matches = []

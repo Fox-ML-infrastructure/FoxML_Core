@@ -99,7 +99,8 @@ class IntelligentTrainer:
         data_dir: Path,
         symbols: List[str],
         output_dir: Path,
-        cache_dir: Optional[Path] = None
+        cache_dir: Optional[Path] = None,
+        add_timestamp: bool = True
     ):
         """
         Initialize the intelligent trainer.
@@ -109,11 +110,28 @@ class IntelligentTrainer:
             symbols: List of symbols to train on
             output_dir: Output directory for training results
             cache_dir: Optional cache directory for ranking/selection results
+            add_timestamp: If True, append timestamp to output_dir to make runs distinguishable
         """
+        from datetime import datetime
+        
         self.data_dir = Path(data_dir)
         self.symbols = symbols
-        self.output_dir = Path(output_dir)
+        
+        # Add timestamp to output directory if requested
+        if add_timestamp:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_dir = Path(output_dir)
+            # Only add timestamp if output_dir doesn't already have one (avoid double-timestamping)
+            if not any(c.isdigit() for c in output_dir.name[-15:]):
+                self.output_dir = output_dir.parent / f"{output_dir.name}_{timestamp}"
+            else:
+                self.output_dir = output_dir
+        else:
+            self.output_dir = Path(output_dir)
+        
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"📁 Output directory: {self.output_dir}")
+        
         self.cache_dir = Path(cache_dir) if cache_dir else self.output_dir / "cache"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         
