@@ -15,6 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Integration with leakage sentinels (shifted-target, symbol-holdout, randomized-time tests)
   - Automatic config file updates (`excluded_features.yaml`, `feature_registry.yaml`)
   - Auto-fixer triggers automatically when perfect scores (≥0.99) are detected during target ranking
+  - **Configurable auto-fixer thresholds** in `safety_config.yaml`:
+    - CV score threshold (default: 0.99)
+    - Training accuracy threshold (default: 0.999)
+    - Training R² threshold (default: 0.999)
+    - Perfect correlation threshold (default: 0.999)
+    - Minimum confidence for auto-fix (default: 0.8)
+    - Enable/disable auto-fixer flag
+- **Feature registry system** (`CONFIG/feature_registry.yaml`):
+  - Structural rules based on temporal metadata (`lag_bars`, `allowed_horizons`, `source`)
+  - Automatic filtering based on target horizon to prevent leakage
+  - Support for short-horizon targets (added horizon=2 for 10-minute targets)
+- **LightGBM GPU support** in target ranking:
+  - Automatic GPU detection and usage (CUDA/OpenCL)
+  - GPU verification diagnostics
+  - Fallback to CPU if GPU unavailable
 - **Leakage sentinels** (`TRAINING/common/leakage_sentinels.py`):
   - Shifted target test – detects features encoding future information
   - Symbol holdout test – detects symbol-specific leakage
@@ -46,6 +61,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated company address in Terms of Service (STE B 212 W. Troy St., Dothan, AL 36303)
 
 ### Fixed
+- **Auto-fixer import path** — fixed `parents[3]` to `parents[2]` in `leakage_auto_fixer.py` for correct repo root detection
+- **Auto-fixer training accuracy detection** — now passes actual training accuracy (from `model_metrics`) instead of CV scores to auto-fixer
+- **Auto-fixer pattern-based fallback** — added fallback detection when `model_importance` is missing
+- **LightGBM GPU verbose parameter** — moved `verbose` from `fit()` to model constructor (LightGBM API requirement)
 - **Leakage filtering path resolution** — fixed config path lookup in `leakage_filtering.py` when moved to `TRAINING/utils/`
 - **Hardcoded safety net in leakage filtering** — added fallback patterns to exclude known leaky features even when config fails to load
 - **Path resolution in moved files** — corrected `parents[2]` vs `parents[3]` for repo root detection
@@ -66,12 +85,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Copyright notice requirements standardized
 
 ### Commercial
-- Commercial license pricing recalibrated to align with enterprise market norms:
-  - 1–10 employees: $18,000 → $25,200/year
-  - 11–50 employees: $36,000 → $60,000/year
-  - 51–250 employees: $90,000 → $165,000/year
-  - 251–1000 employees: $180,000 → $252,000/year
-  - 1000+ employees: $300,000 → $500,000+/year (custom quote)
+- Commercial license pricing updated to market-aligned enterprise infrastructure tiers:
+  - 1–10 employees: $30,000/year
+  - 11–50 employees: $75,000/year
+  - 51–250 employees: $200,000/year
+  - 251–1000 employees: $350,000/year
+  - 1000+ employees: Starts at $750,000/year (custom quote)
+- Added optional add-ons for enterprise deployments:
+  - Dedicated Support Retainer: $3,500–$12,000/month (SLA-based)
+  - Custom Integration Projects: $25,000–$150,000 one-time
+  - Onboarding & Deployment: $15,000–$50,000 one-time
+  - Private Slack / Direct Founder Access: $18,000–$60,000/year
+  - Additional User Seats: $500–$2,000 per seat/year
+- Pricing aligned with market comps (Databricks, Hopsworks, QuantConnect Institution) and reflects value of replacing 4–8 engineers + MLOps team + compliance overhead
 
 ### Documentation
 - 55+ new documentation files created

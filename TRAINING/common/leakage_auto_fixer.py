@@ -36,7 +36,8 @@ from dataclasses import dataclass
 import json
 
 # Add project root to path
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+# TRAINING/common/leakage_auto_fixer.py -> parents[2] = repo root
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
