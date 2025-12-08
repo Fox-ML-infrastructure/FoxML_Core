@@ -44,6 +44,15 @@ from TRAINING.ranking.multi_model_feature_selection import (
     save_multi_model_results as _save_multi_model_results
 )
 
+# Import new config system (optional - for backward compatibility)
+try:
+    from CONFIG.config_builder import build_feature_selection_config
+    from CONFIG.config_schemas import ExperimentConfig, FeatureSelectionConfig
+    _NEW_CONFIG_AVAILABLE = True
+except ImportError:
+    _NEW_CONFIG_AVAILABLE = False
+    logger.debug("New config system not available, using legacy configs")
+
 # Suppress expected warnings
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=UserWarning)
@@ -73,7 +82,8 @@ def select_features_for_target(
     multi_model_config: Dict[str, Any] = None,
     max_samples_per_symbol: int = 50000,
     top_n: Optional[int] = None,
-    output_dir: Path = None
+    output_dir: Path = None,
+    feature_selection_config: Optional['FeatureSelectionConfig'] = None  # New typed config (optional)
 ) -> Tuple[List[str], pd.DataFrame]:
     """
     Select top features for a target using multi-model consensus.
@@ -86,25 +96,45 @@ def select_features_for_target(
         target_column: Target column name
         symbols: List of symbols to process
         data_dir: Directory containing symbol data
-        model_families_config: Optional model families config (overrides multi_model_config)
-        multi_model_config: Optional multi-model config dict
+        model_families_config: Optional model families config (overrides multi_model_config) [LEGACY]
+        multi_model_config: Optional multi-model config dict [LEGACY]
         max_samples_per_symbol: Maximum samples per symbol
         top_n: Number of top features to return
         output_dir: Optional output directory for results
+        feature_selection_config: Optional FeatureSelectionConfig object [NEW - preferred]
     
     Returns:
         Tuple of (selected_feature_names, importance_dataframe)
     """
-    # Load config if not provided
-    if multi_model_config is None:
-        multi_model_config = load_multi_model_config()
-    
-    # Use model_families_config if provided, otherwise use from multi_model_config
-    if model_families_config is None:
-        if multi_model_config and 'model_families' in multi_model_config:
-            model_families_config = multi_model_config['model_families']
-        else:
-            raise ValueError("Must provide either model_families_config or multi_model_config with model_families")
+    # NEW: Use typed config if provided
+    if feature_selection_config is not None and _NEW_CONFIG_AVAILABLE:
+        # Extract values from typed config
+        model_families_config = feature_selection_config.model_families
+        aggregation_config = feature_selection_config.aggregation
+        if top_n is None:
+            top_n = feature_selection_config.top_n
+        if max_samples_per_symbol == 50000 and feature_selection_config.max_samples_per_symbol:
+            max_samples_per_symbol = feature_selection_config.max_samples_per_symbol
+        # Use target/symbols/data_dir from config if available
+        if feature_selection_config.target:
+            target_column = feature_selection_config.target
+        if feature_selection_config.symbols:
+            symbols = feature_selection_config.symbols
+        if feature_selection_config.data_dir:
+            data_dir = feature_selection_config.data_dir
+    else:
+        # LEGACY: Load config if not provided
+        if multi_model_config is None:
+            multi_model_config = load_multi_model_config()
+        
+        # Use model_families_config if provided, otherwise use from multi_model_config
+        if model_families_config is None:
+            if multi_model_config and 'model_families' in multi_model_config:
+                model_families_config = multi_model_config['model_families']
+            else:
+                raise ValueError("Must provide either model_families_config or multi_model_config with model_families")
+        
+        aggregation_config = multi_model_config.get('aggregation', {}) if multi_model_config else {}
     
     logger.info(f"Selecting features for target: {target_column}")
     logger.info(f"Processing {len(symbols)} symbols")
@@ -147,11 +177,7 @@ def select_features_for_target(
     logger.info(f"\nAggregating results from {len(all_results)} model runs...")
     
     # Aggregate across models and symbols
-    aggregation_config = multi_model_config.get('aggregation', {}) if multi_model_config else {}
-    # Get model_families_config from multi_model_config or use the provided one
-    if model_families_config is None:
-        model_families_config = multi_model_config.get('model_families', {}) if multi_model_config else {}
-    
+    # aggregation_config and model_families_config are already set above (from typed config or legacy)
     summary_df, selected_features = _aggregate_multi_model_importance(
         all_results=all_results,
         model_families_config=model_families_config,

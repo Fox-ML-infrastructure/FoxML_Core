@@ -96,9 +96,25 @@ class ImportanceResult:
 
 
 def load_multi_model_config(config_path: Path = None) -> Dict[str, Any]:
-    """Load multi-model feature selection configuration"""
+    """Load multi-model feature selection configuration
+    
+    Checks new location first (CONFIG/feature_selection/multi_model.yaml),
+    then falls back to legacy location (CONFIG/multi_model_feature_selection.yaml).
+    """
     if config_path is None:
-        config_path = _REPO_ROOT / "CONFIG" / "multi_model_feature_selection.yaml"
+        # Try new location first
+        new_path = _REPO_ROOT / "CONFIG" / "feature_selection" / "multi_model.yaml"
+        legacy_path = _REPO_ROOT / "CONFIG" / "multi_model_feature_selection.yaml"
+        
+        if new_path.exists():
+            config_path = new_path
+            logger.debug(f"Using new config location: {config_path}")
+        elif legacy_path.exists():
+            config_path = legacy_path
+            logger.debug(f"Using legacy config location: {config_path}")
+        else:
+            logger.warning(f"Config not found in new ({new_path}) or legacy ({legacy_path}) locations, using defaults")
+            return get_default_config()
     
     if not config_path.exists():
         logger.warning(f"Config not found: {config_path}, using defaults")
