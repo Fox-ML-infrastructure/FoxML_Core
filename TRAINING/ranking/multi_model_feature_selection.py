@@ -49,8 +49,9 @@ from collections import defaultdict
 from dataclasses import dataclass, asdict
 import warnings
 
-# Add project root FIRST (before any scripts.* imports)
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+# Add project root FIRST (before any TRAINING.* imports)
+# TRAINING/ranking/multi_model_feature_selection.py -> parents[2] = repo root
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
@@ -58,10 +59,10 @@ from CONFIG.config_loader import load_model_config
 import yaml
 
 # Import checkpoint utility (after path is set)
-from scripts.utils.checkpoint import CheckpointManager
+from TRAINING.utils.checkpoint import CheckpointManager
 
 # Setup logging with journald support (after path is set)
-from scripts.utils.logging_setup import setup_logging
+from TRAINING.utils.logging_setup import setup_logging
 logger = setup_logging(
     script_name="multi_model_feature_selection",
     level=logging.INFO,
@@ -557,8 +558,8 @@ def train_model_and_get_importance(
         )
         
         # CRITICAL: Use PurgedTimeSeriesSplit to prevent temporal leakage
-        from scripts.utils.purged_time_series_split import PurgedTimeSeriesSplit
-        from scripts.utils.leakage_filtering import _extract_horizon, _load_leakage_config
+        from TRAINING.utils.purged_time_series_split import PurgedTimeSeriesSplit
+        from TRAINING.utils.leakage_filtering import _extract_horizon, _load_leakage_config
         
         # Calculate purge_overlap from target horizon
         # CRITICAL: Use the data_interval_minutes parameter (detected in calling function)
@@ -657,8 +658,8 @@ def process_single_symbol(
             df = df.sample(n=max_samples, random_state=42)
         
         # LEAKAGE PREVENTION: Filter out leaking features (with registry validation)
-        from scripts.utils.leakage_filtering import filter_features_for_target
-        from scripts.utils.data_interval import detect_interval_from_dataframe
+        from TRAINING.utils.leakage_filtering import filter_features_for_target
+        from TRAINING.utils.data_interval import detect_interval_from_dataframe
         
         # Detect data interval for horizon conversion
         detected_interval = detect_interval_from_dataframe(df, timestamp_column='ts', default=5)
@@ -697,7 +698,7 @@ def process_single_symbol(
         y_arr = y.to_numpy()
         
         # CRITICAL: Auto-detect data interval to prevent leakage in PurgedTimeSeriesSplit
-        from scripts.utils.data_interval import detect_interval_from_dataframe
+        from TRAINING.utils.data_interval import detect_interval_from_dataframe
         detected_interval = detect_interval_from_dataframe(df, timestamp_column='ts', default=5)
         if detected_interval != 5:
             logger.info(f"  Detected data interval: {detected_interval}m (was assuming 5m)")

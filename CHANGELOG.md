@@ -10,6 +10,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Automated leakage detection and auto-fix system**:
+  - `LeakageAutoFixer` class for automatic detection and remediation of data leakage
+  - Integration with leakage sentinels (shifted-target, symbol-holdout, randomized-time tests)
+  - Automatic config file updates (`excluded_features.yaml`, `feature_registry.yaml`)
+  - Auto-fixer triggers automatically when perfect scores (≥0.99) are detected during target ranking
+  - **Configurable auto-fixer thresholds** in `safety_config.yaml`:
+    - CV score threshold (default: 0.99)
+    - Training accuracy threshold (default: 0.999)
+    - Training R² threshold (default: 0.999)
+    - Perfect correlation threshold (default: 0.999)
+    - Minimum confidence for auto-fix (default: 0.8)
+    - Enable/disable auto-fixer flag
+- **Feature registry system** (`CONFIG/feature_registry.yaml`):
+  - Structural rules based on temporal metadata (`lag_bars`, `allowed_horizons`, `source`)
+  - Automatic filtering based on target horizon to prevent leakage
+  - Support for short-horizon targets (added horizon=2 for 10-minute targets)
+- **LightGBM GPU support** in target ranking:
+  - Automatic GPU detection and usage (CUDA/OpenCL)
+  - GPU verification diagnostics
+  - Fallback to CPU if GPU unavailable
+- **Leakage sentinels** (`TRAINING/common/leakage_sentinels.py`):
+  - Shifted target test – detects features encoding future information
+  - Symbol holdout test – detects symbol-specific leakage
+  - Randomized time test – detects temporal information leakage
+- **Feature importance diff detector** (`TRAINING/common/importance_diff_detector.py`):
+  - Compares feature importances between full vs. safe feature sets
+  - Identifies suspicious features with high importance in full model but low in safe model
+- **TRAINING module self-contained**:
+  - Moved all utility dependencies from `scripts/` to `TRAINING/utils/`
+  - Moved `rank_target_predictability.py` to `TRAINING/ranking/`
+  - Moved `multi_model_feature_selection.py` to `TRAINING/ranking/`
+  - TRAINING module now has zero dependencies on `scripts/` folder
 - Centralized configuration system with 9 training config YAML files (pipeline, GPU, memory, preprocessing, threading, safety, callbacks, optimizer, system)
 - Config loader with nested access and family-specific overrides
 - Compliance documentation suite:
@@ -29,6 +61,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated company address in Terms of Service (STE B 212 W. Troy St., Dothan, AL 36303)
 
 ### Fixed
+- **Auto-fixer import path** — fixed `parents[3]` to `parents[2]` in `leakage_auto_fixer.py` for correct repo root detection
+- **Auto-fixer training accuracy detection** — now passes actual training accuracy (from `model_metrics`) instead of CV scores to auto-fixer
+- **Auto-fixer pattern-based fallback** — added fallback detection when `model_importance` is missing
+- **LightGBM GPU verbose parameter** — moved `verbose` from `fit()` to model constructor (LightGBM API requirement)
+- **Leakage filtering path resolution** — fixed config path lookup in `leakage_filtering.py` when moved to `TRAINING/utils/`
+- **Hardcoded safety net in leakage filtering** — added fallback patterns to exclude known leaky features even when config fails to load
+- **Path resolution in moved files** — corrected `parents[2]` vs `parents[3]` for repo root detection
+- **Import paths after module migration** — all `scripts.utils.*` imports updated to `TRAINING.utils.*`
 - VAE serialization issues — custom Keras layers now properly imported before deserialization
 - Sequential models 3D preprocessing issues — input shape handling corrected
 - XGBoost source-build stability — persistent build directory and non-editable install

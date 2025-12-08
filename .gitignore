@@ -349,3 +349,5 @@ docs/COMPREHENSIVE_FEATURE_RANKING.md
 # Small example/config CSVs (needed)
 !CONFIG/**/*.csv
 !docs/**/*.csv
+intelligent_output/
+test_*_output/

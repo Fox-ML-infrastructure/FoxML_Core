@@ -43,4 +43,51 @@ safety:
     min_history_bars: 120  # Minimum history bars before feature use
     max_na_fraction: 0.05  # Maximum NaN fraction (5%)
     hold_on_nan: true  # Return HOLD action on NaN in predictions
+  
+  # Leakage Detection & Auto-Fix Thresholds
+  leakage_detection:
+    # Auto-fixer triggers when scores exceed these thresholds
+    auto_fix_thresholds:
+      cv_score: 0.99  # Cross-validation score threshold (0.99 = 99%)
+      training_accuracy: 0.999  # Training accuracy threshold (0.999 = 99.9%)
+      training_r2: 0.999  # Training R² threshold for regression (0.999 = 99.9%)
+      perfect_correlation: 0.999  # Perfect correlation threshold (0.999 = 99.9%)
+    
+    # Minimum confidence for auto-fixer to apply fixes (0.0 to 1.0)
+    auto_fix_min_confidence: 0.8  # Only auto-fix leaks with >= 80% confidence
+    
+    # Maximum number of features to auto-fix per run (prevents overly aggressive fixes)
+    auto_fix_max_features_per_run: 20  # Limit auto-fixes to top N most confident detections
+    
+    # Enable/disable auto-fixer
+    auto_fix_enabled: true  # Set to false to disable automatic leakage fixing
+    
+    # Pre-training leak scan thresholds
+    pre_scan:
+      min_match: 0.999  # Minimum match ratio for binary classification (99.9%)
+      min_corr: 0.999  # Minimum correlation for regression (99.9%)
+      min_valid_pairs: 10  # Minimum valid pairs needed for correlation check
+    
+    # Feature count requirements for ranking
+    ranking:
+      min_features_required: 2  # Minimum features needed after filtering (for ranking)
+      min_features_for_model: 3  # Minimum features needed for meaningful model training
+      min_features_after_leak_removal: 2  # Minimum features after removing leaky features
+    
+    # Leakage warning thresholds (for detect_leakage function)
+    warning_thresholds:
+      classification:
+        high: 0.90  # ROC-AUC/Accuracy > 0.90 is suspicious
+        very_high: 0.95  # ROC-AUC/Accuracy > 0.95 is extremely suspicious
+      regression:
+        forward_return:
+          high: 0.50  # R² > 0.50 is suspicious for forward returns
+          very_high: 0.60  # R² > 0.60 is extremely suspicious
+        barrier:
+          high: 0.70  # R² > 0.70 is suspicious for barrier targets
+          very_high: 0.80  # R² > 0.80 is extremely suspicious
+    
+    # Model-specific leakage alert thresholds
+    model_alerts:
+      suspicious_score: 0.99  # Score >= 0.99 triggers leakage alert (for LightGBM, RF, etc.)
 

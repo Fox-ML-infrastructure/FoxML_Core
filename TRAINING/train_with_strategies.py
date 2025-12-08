@@ -778,13 +778,45 @@ def _prepare_training_data_polars(mtf_data: Dict[str, pd.DataFrame],
     combined_pl = pl.concat(all_data_pl)
     logger.info(f"Combined data shape (polars): {combined_pl.shape}")
     
-    # Auto-discover features if not provided
+    # Auto-discover features if not provided, then validate with registry
     if feature_names is None:
         all_cols = combined_pl.columns
         feature_names = [col for col in all_cols 
                         if not any(col.startswith(prefix) for prefix in 
                                  ['fwd_ret_', 'will_peak', 'will_valley', 'mdd_', 'mfe_', 'y_will_'])
                         and col not in ['symbol', 'timestamp', 'ts']]
+    
+    # Validate features with registry (if enabled)
+    if feature_names:
+        try:
+            from TRAINING.utils.leakage_filtering import filter_features_for_target
+            from TRAINING.utils.data_interval import detect_interval_from_dataframe
+            
+            # Detect data interval for horizon conversion
+            first_df = next(iter(mtf_data.values()))
+            detected_interval = detect_interval_from_dataframe(first_df, timestamp_column='ts', default=5)
+            # Ensure interval is valid (> 0)
+            if detected_interval <= 0:
+                detected_interval = 5
+                logger.warning(f"  Invalid detected interval, using default: 5m")
+            
+            # Filter features using registry
+            all_columns = list(combined_pl.columns)
+            validated_features = filter_features_for_target(
+                all_columns,
+                target,
+                verbose=True,  # Enable verbose to see what's being filtered
+                use_registry=True,  # Enable registry validation
+                data_interval_minutes=detected_interval
+            )
+            
+            # Keep only features that are both in feature_names and validated
+            feature_names = [f for f in feature_names if f in validated_features]
+            
+            if len(feature_names) < len([f for f in feature_names if f in validated_features]):
+                logger.info(f"  Feature registry: Validated {len(feature_names)} features for target {target}")
+        except Exception as e:
+            logger.warning(f"  Feature registry validation failed: {e}. Using provided features as-is.")
     
     # Normalize time column name
     ts_name = "timestamp" if "timestamp" in combined_pl.columns else ("ts" if "ts" in combined_pl.columns else None)
@@ -865,12 +897,43 @@ def _prepare_training_data_pandas(mtf_data: Dict[str, pd.DataFrame],
                            .head(max_cs_samples)
                            .drop(columns="_rn"))
     
-    # Auto-discover features
+    # Auto-discover features, then validate with registry
     if feature_names is None:
         feature_names = [col for col in combined_df.columns 
                         if not any(col.startswith(prefix) for prefix in 
                                  ['fwd_ret_', 'will_peak', 'will_valley', 'mdd_', 'mfe_', 'y_will_'])
                         and col not in ['symbol', time_col]]
+    
+    # Validate features with registry (if enabled)
+    if feature_names:
+        try:
+            from TRAINING.utils.leakage_filtering import filter_features_for_target
+            from TRAINING.utils.data_interval import detect_interval_from_dataframe
+            
+            # Detect data interval for horizon conversion
+            detected_interval = detect_interval_from_dataframe(combined_df, timestamp_column=time_col or 'ts', default=5)
+            # Ensure interval is valid (> 0)
+            if detected_interval <= 0:
+                detected_interval = 5
+                logger.warning(f"  Invalid detected interval, using default: 5m")
+            
+            # Filter features using registry
+            all_columns = combined_df.columns.tolist()
+            validated_features = filter_features_for_target(
+                all_columns,
+                target,
+                verbose=True,  # Enable verbose to see what's being filtered
+                use_registry=True,  # Enable registry validation
+                data_interval_minutes=detected_interval
+            )
+            
+            # Keep only features that are both in feature_names and validated
+            feature_names = [f for f in feature_names if f in validated_features]
+            
+            if len(feature_names) > 0:
+                logger.info(f"  Feature registry: Validated {len(feature_names)} features for target {target}")
+        except Exception as e:
+            logger.warning(f"  Feature registry validation failed: {e}. Using provided features as-is.")
     
     return _process_combined_data_pandas(combined_df, target, feature_names)
 
@@ -976,7 +1039,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                            output_dir: str = 'output',
                                            min_cs: int = 10,
                                            max_cs_samples: int = None,
-                                           max_rows_train: int = None) -> Dict[str, Any]:
+                                           max_rows_train: int = None,
+                                           target_features: Dict[str, List[str]] = None) -> Dict[str, Any]:
     """Train models for a specific interval using comprehensive approach (replicates original script)."""
     
     logger.info(f"🎯 Training models for interval: {interval}")
@@ -996,8 +1060,15 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         # Prepare training data with cross-sectional sampling
         print(f"🔄 Preparing training data for target: {target}")  # Debug print
         prep_start = time.time()
+        
+        # Use selected features for this target if provided
+        selected_features = None
+        if target_features and target in target_features:
+            selected_features = target_features[target]
+            logger.info(f"Using {len(selected_features)} selected features for {target}")
+        
         X, y, feature_names, symbols, indices, feat_cols, time_vals, routing_meta = prepare_training_data_cross_sectional(
-            mtf_data, target, min_cs=min_cs, max_cs_samples=max_cs_samples
+            mtf_data, target, feature_names=selected_features, min_cs=min_cs, max_cs_samples=max_cs_samples
         )
         prep_elapsed = time.time() - prep_start
         print(f"✅ Data preparation completed in {prep_elapsed:.2f}s")  # Debug print

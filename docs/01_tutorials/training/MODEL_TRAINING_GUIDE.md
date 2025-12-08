@@ -2,7 +2,29 @@
 
 Complete guide to training machine learning models on labeled data.
 
+> **New**: For automated target ranking and feature selection, see the [Intelligent Training Tutorial](INTELLIGENT_TRAINING_TUTORIAL.md). This guide covers the manual training workflow.
+
 ## Overview
+
+There are two ways to train models:
+
+### 1. Intelligent Training (Recommended)
+
+Automated pipeline that ranks targets, selects features, and trains models:
+
+```bash
+python TRAINING/train.py \
+    --data-dir data/data_labeled/interval=5m \
+    --symbols AAPL MSFT GOOGL \
+    --auto-targets \
+    --auto-features
+```
+
+**See**: [Intelligent Training Tutorial](INTELLIGENT_TRAINING_TUTORIAL.md)
+
+### 2. Manual Training
+
+Manual workflow with explicit target/feature selection:
 
 ```
 Labeled Data
