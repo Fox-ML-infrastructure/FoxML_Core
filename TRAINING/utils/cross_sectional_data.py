@@ -253,8 +253,16 @@ def prepare_cross_sectional_data_for_ranking(
     
     # Check if we have any features left
     if len(feature_names) == 0:
-        logger.error("No features remaining after filtering")
+        logger.error("❌ No features remaining after filtering - cannot train models")
         return (None,) * 5
+    
+    # Warn if very few features (may cause training issues)
+    if len(feature_names) < 5:
+        logger.warning(
+            f"⚠️  Very few features ({len(feature_names)}) remaining after filtering. "
+            f"Model training may fail or produce poor results. "
+            f"Consider relaxing feature filtering rules or adding more features to the registry."
+        )
     
     # Build feature matrix
     X = feature_df.to_numpy(dtype=np.float32, copy=False)

@@ -2209,6 +2209,35 @@ def evaluate_target_predictability(
     excluded_count = len(all_columns) - len(safe_columns) - 1  # -1 for target itself
     logger.info(f"Filtered out {excluded_count} potentially leaking features (kept {len(safe_columns)} safe features)")
     
+    # CRITICAL: Check if we have enough features to train
+    MIN_FEATURES_REQUIRED = 5  # Minimum features needed for meaningful training
+    if len(safe_columns) < MIN_FEATURES_REQUIRED:
+        logger.error(
+            f"❌ INSUFFICIENT FEATURES: Only {len(safe_columns)} features remain after filtering "
+            f"(minimum required: {MIN_FEATURES_REQUIRED}). "
+            f"This target may not be predictable with current feature set. "
+            f"Consider:\n"
+            f"  1. Adding more features to CONFIG/feature_registry.yaml with allowed_horizons including {target_horizon_bars}\n"
+            f"  2. Relaxing feature registry rules for short-horizon targets\n"
+            f"  3. Checking if excluded_features.yaml is too restrictive\n"
+            f"  4. Skipping this target and focusing on targets with longer horizons"
+        )
+        # Return a low score to indicate this target is not predictable
+        return TargetPredictabilityScore(
+            target_name=target_name,
+            target_column=target_column,
+            mean_score=0.0,
+            std_score=0.0,
+            composite_score=0.0,
+            mean_importance=0.0,
+            n_symbols=len(symbols),
+            n_samples=0,
+            task_type=target_config_obj.task_type,
+            model_scores={},
+            feature_importances={},
+            notes=f"INSUFFICIENT_FEATURES: Only {len(safe_columns)} features available (minimum: {MIN_FEATURES_REQUIRED})"
+        )
+    
     # Prepare cross-sectional data (matches training pipeline)
     X, y, feature_names, symbols_array, time_vals = prepare_cross_sectional_data_for_ranking(
         mtf_data, target_column, min_cs=min_cs, max_cs_samples=max_cs_samples, feature_names=safe_columns
