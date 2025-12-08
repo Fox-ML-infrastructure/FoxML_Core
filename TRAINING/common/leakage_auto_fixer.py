@@ -438,7 +438,6 @@ class LeakageAutoFixer:
         }
         
         modified_files = []
-        backup_files = []
         
         if not dry_run:
             self._apply_excluded_features_updates(updates['excluded_features_updates'])
