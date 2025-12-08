@@ -3,6 +3,12 @@ Copyright (c) 2025-2026 Jennifer Lewis
 
 > **Note:** This Commercial License is provided for informational purposes and may be supplemented or modified by a separate signed agreement. Licensor is not providing legal advice; Licensee should consult its own counsel before entering into this License.
 
+---
+
+**Who This License Is For**
+
+This Commercial License is intended for trading firms, hedge funds, financial institutions, and other organizations that wish to use FoxML Core in production or revenue-generating environments without AGPL copyleft obligations.
+
 ## 1. DEFINITIONS
 
 "Software" refers to the FoxML Core codebase, modules, configurations, models, documentation, and all included assets, excluding third-party components governed by their own licenses.
@@ -16,7 +22,11 @@ Copyright (c) 2025-2026 Jennifer Lewis
   (d) is used to provide services to third parties,
   (e) enables, assists, or supports any for-profit activity.
 
-Non-commercial academic or personal research use remains available under AGPL-3.0.
+Non-commercial academic or personal research use of the open-source version remains available under the AGPL-3.0 license. This Commercial License is intended for organizations that wish to:
+  (a) avoid AGPL copyleft obligations in commercial / internal systems, or
+  (b) obtain additional rights or assurances not provided by AGPL-3.0.
+
+Nothing in this Commercial License limits any rights granted under AGPL-3.0 for copies of the Software obtained and used under that license.
 
 ## 2. GRANT OF LICENSE
 
@@ -47,6 +57,7 @@ Unless explicitly permitted in writing by the Licensor, the Licensee may NOT:
 
 - Distribute or sell the Software or derivatives as a standalone product
 - Provide the Software as a hosted service (SaaS/PaaS), including any multi-tenant hosted environment where third parties access functionality primarily provided by the Software
+- Use the Software to offer a product or service whose primary value is substantially identical to the Software itself (including "FoxML-as-a-service" or similar hosted offerings)
 - Publish or disclose source code derived from the commercial version
 - Remove or alter copyright notices
 - Claim authorship of the Software or its architectural design
@@ -62,10 +73,12 @@ The Licensor may terminate this License if:
 - the Licensee fails to pay required fees,
 - the Licensee attempts unauthorized distribution or sublicensing.
 
-Upon termination:
-- all rights revert to the Licensor,
-- the Licensee must cease use and destroy all copies,
-- continued use becomes unlicensed and in violation of copyright law.
+Upon termination of this Commercial License:
+- all rights granted under this Commercial License revert to Licensor,
+- Licensee must cease all Commercial Use and destroy or disable all copies of the Software used under this Commercial License,
+- any continued Commercial Use without a valid license will constitute unlicensed use and violation of Licensor's copyright.
+
+Termination of this Commercial License does not terminate any rights Licensee may have under AGPL-3.0 for copies of the Software obtained and used solely under that license.
 
 ## 6. NO WARRANTY / LIMITATION OF LIABILITY
 
@@ -83,12 +96,11 @@ Licensee agrees to indemnify and hold harmless Licensor from and against any thi
 
 ## 8. SUPPORT AND MAINTENANCE
 
-Support, integration, customization, improvements, or feature development
-require separate consulting agreements or Statements of Work (SOWs).
+Support, integration, customization, improvements, or feature development require separate consulting agreements or Statements of Work (SOWs).
 
-Support is NOT included unless explicitly contracted.
-
-**No Service Level Guarantees.** Licensor provides no uptime guarantee, no obligation of maintenance, and no guaranteed update schedule. The Software is provided "as is" and Licensee assumes all risk of use, including in production environments.
+Unless explicitly set out in a separate written agreement:
+- Support is NOT included in this License.
+- No uptime, response time, or defect resolution Service Level Agreements (SLAs) are provided.
 
 ## 9. UPDATES AND UPGRADES
 
@@ -116,7 +128,7 @@ Licensor reserves the right to audit Licensee's use of the Software to verify co
 - Licensor must provide at least 30 days' written notice
 - Audit scope limited to verification of Software usage and compliance with license restrictions
 - Remote audit methods are permitted (e.g., usage logs, deployment verification)
-- If audit reveals material violation (>5% non-compliance), Licensee must reimburse Licensor's reasonable audit costs
+- If an audit reveals that Licensee underpaid fees by more than five percent (5%) for the audited period or materially violated the license restrictions, Licensee shall reimburse Licensor's reasonable audit costs in addition to paying any unpaid fees
 - Licensee must provide reasonable cooperation and access to relevant records
 
 **Confidentiality:** All audit information shall be treated as confidential and used solely for compliance verification.
