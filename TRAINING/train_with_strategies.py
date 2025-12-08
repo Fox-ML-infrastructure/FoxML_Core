@@ -789,8 +789,8 @@ def _prepare_training_data_polars(mtf_data: Dict[str, pd.DataFrame],
     # Validate features with registry (if enabled)
     if feature_names:
         try:
-            from scripts.utils.leakage_filtering import filter_features_for_target
-            from scripts.utils.data_interval import detect_interval_from_dataframe
+            from TRAINING.utils.leakage_filtering import filter_features_for_target
+            from TRAINING.utils.data_interval import detect_interval_from_dataframe
             
             # Detect data interval for horizon conversion
             first_df = next(iter(mtf_data.values()))
@@ -907,8 +907,8 @@ def _prepare_training_data_pandas(mtf_data: Dict[str, pd.DataFrame],
     # Validate features with registry (if enabled)
     if feature_names:
         try:
-            from scripts.utils.leakage_filtering import filter_features_for_target
-            from scripts.utils.data_interval import detect_interval_from_dataframe
+            from TRAINING.utils.leakage_filtering import filter_features_for_target
+            from TRAINING.utils.data_interval import detect_interval_from_dataframe
             
             # Detect data interval for horizon conversion
             detected_interval = detect_interval_from_dataframe(combined_df, timestamp_column=time_col or 'ts', default=5)

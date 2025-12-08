@@ -36,7 +36,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # Import original functions to preserve leakage-free behavior
-from scripts.multi_model_feature_selection import (
+from TRAINING.ranking.multi_model_feature_selection import (
     ImportanceResult as FeatureImportanceResult,
     process_single_symbol as _process_single_symbol,
     aggregate_multi_model_importance as _aggregate_multi_model_importance,
@@ -161,8 +161,8 @@ def select_features_for_target(
     try:
         from TRAINING.common.importance_diff_detector import ImportanceDiffDetector
         from TRAINING.common.feature_registry import get_registry
-        from scripts.utils.data_interval import detect_interval_from_dataframe
-        from scripts.utils.leakage_filtering import filter_features_for_target, _extract_horizon, _load_leakage_config
+        from TRAINING.utils.data_interval import detect_interval_from_dataframe
+        from TRAINING.utils.leakage_filtering import filter_features_for_target, _extract_horizon, _load_leakage_config
         
         # Check if we should run importance diff detection
         # (This would require training two sets of models - full vs safe)

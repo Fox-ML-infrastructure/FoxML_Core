@@ -18,7 +18,7 @@ echo "----------------------------------------"
 python -c "
 import sys
 sys.path.insert(0, '.')
-from scripts.utils.leakage_filtering import _get_config_path, _load_leakage_config
+from TRAINING.utils.leakage_filtering import _get_config_path, _load_leakage_config
 from TRAINING.common.feature_registry import get_registry
 
 config_path = _get_config_path()
@@ -42,7 +42,7 @@ echo "----------------------------------------"
 python -c "
 import sys
 sys.path.insert(0, '.')
-from scripts.utils.leakage_filtering import filter_features_for_target
+from TRAINING.utils.leakage_filtering import filter_features_for_target
 
 all_cols = ['ts', 'p_up_60m_0.8', 'ret_5', 'rsi_10', 'fwd_ret_5m', 'y_will_peak_60m', 'symbol']
 target = 'y_will_peak_60m_0.8'

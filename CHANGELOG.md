@@ -10,6 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Automated leakage detection and auto-fix system**:
+  - `LeakageAutoFixer` class for automatic detection and remediation of data leakage
+  - Integration with leakage sentinels (shifted-target, symbol-holdout, randomized-time tests)
+  - Automatic config file updates (`excluded_features.yaml`, `feature_registry.yaml`)
+  - Auto-fixer triggers automatically when perfect scores (≥0.99) are detected during target ranking
+- **Leakage sentinels** (`TRAINING/common/leakage_sentinels.py`):
+  - Shifted target test – detects features encoding future information
+  - Symbol holdout test – detects symbol-specific leakage
+  - Randomized time test – detects temporal information leakage
+- **Feature importance diff detector** (`TRAINING/common/importance_diff_detector.py`):
+  - Compares feature importances between full vs. safe feature sets
+  - Identifies suspicious features with high importance in full model but low in safe model
+- **TRAINING module self-contained**:
+  - Moved all utility dependencies from `scripts/` to `TRAINING/utils/`
+  - Moved `rank_target_predictability.py` to `TRAINING/ranking/`
+  - Moved `multi_model_feature_selection.py` to `TRAINING/ranking/`
+  - TRAINING module now has zero dependencies on `scripts/` folder
 - Centralized configuration system with 9 training config YAML files (pipeline, GPU, memory, preprocessing, threading, safety, callbacks, optimizer, system)
 - Config loader with nested access and family-specific overrides
 - Compliance documentation suite:
@@ -29,6 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated company address in Terms of Service (STE B 212 W. Troy St., Dothan, AL 36303)
 
 ### Fixed
+- **Leakage filtering path resolution** — fixed config path lookup in `leakage_filtering.py` when moved to `TRAINING/utils/`
+- **Hardcoded safety net in leakage filtering** — added fallback patterns to exclude known leaky features even when config fails to load
+- **Path resolution in moved files** — corrected `parents[2]` vs `parents[3]` for repo root detection
+- **Import paths after module migration** — all `scripts.utils.*` imports updated to `TRAINING.utils.*`
 - VAE serialization issues — custom Keras layers now properly imported before deserialization
 - Sequential models 3D preprocessing issues — input shape handling corrected
 - XGBoost source-build stability — persistent build directory and non-editable install

@@ -41,8 +41,8 @@ _CONFIG_PATH_CACHE: Optional[Path] = None
 # Robust path resolution: try multiple possible locations
 def _find_config_path() -> Path:
     """Find the excluded_features.yaml config file using multiple strategies."""
-    # Strategy 1: Relative to this file (scripts/utils/leakage_filtering.py -> repo root)
-    # Go up: scripts/utils/ -> scripts/ -> repo_root/
+    # Strategy 1: Relative to this file (TRAINING/utils/leakage_filtering.py -> repo root)
+    # Go up: TRAINING/utils/ -> TRAINING/ -> repo_root/
     script_file = Path(__file__).resolve()
     repo_root_via_script = script_file.parents[2] / "CONFIG" / "excluded_features.yaml"
     if repo_root_via_script.exists():

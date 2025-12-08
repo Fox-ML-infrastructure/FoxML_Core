@@ -56,20 +56,21 @@ from collections import defaultdict
 import warnings
 
 # Add project root FIRST (before any scripts.* imports)
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+# TRAINING/ranking/rank_target_predictability.py -> parents[2] = repo root
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # Import checkpoint utility (after path is set)
-from scripts.utils.checkpoint import CheckpointManager
+from TRAINING.utils.checkpoint import CheckpointManager
 
 # Import unified task type system
-from scripts.utils.task_types import (
+from TRAINING.utils.task_types import (
     TaskType, TargetConfig, ModelConfig, 
     is_compatible, create_model_configs_from_yaml
 )
-from scripts.utils.task_metrics import evaluate_by_task, compute_composite_score
-from scripts.utils.target_validation import validate_target, check_cv_compatibility
+from TRAINING.utils.task_metrics import evaluate_by_task, compute_composite_score
+from TRAINING.utils.target_validation import validate_target, check_cv_compatibility
 
 # Suppress expected warnings (harmless)
 warnings.filterwarnings('ignore', message='X does not have valid feature names')
@@ -79,7 +80,7 @@ warnings.filterwarnings('ignore', message='invalid value encountered in divide')
 warnings.filterwarnings('ignore', message='invalid value encountered in true_divide')
 
 # Setup logging with journald support
-from scripts.utils.logging_setup import setup_logging
+from TRAINING.utils.logging_setup import setup_logging
 logger = setup_logging(
     script_name="rank_target_predictability",
     level=logging.INFO,
@@ -354,8 +355,8 @@ def prepare_features_and_target(
         task_type = target_config.task_type
     
     # LEAKAGE PREVENTION: Filter out leaking features (target-aware, with registry validation)
-    from scripts.utils.leakage_filtering import filter_features_for_target
-    from scripts.utils.data_interval import detect_interval_from_dataframe
+    from TRAINING.utils.leakage_filtering import filter_features_for_target
+    from TRAINING.utils.data_interval import detect_interval_from_dataframe
     
     # Detect data interval for horizon conversion
     detected_interval = detect_interval_from_dataframe(df, timestamp_column='ts', default=5)
@@ -562,9 +563,9 @@ def train_and_evaluate_models(
         from sklearn.model_selection import cross_val_score
         from sklearn.preprocessing import StandardScaler
         import lightgbm as lgb
-        from scripts.utils.purged_time_series_split import PurgedTimeSeriesSplit
-        from scripts.utils.leakage_filtering import _extract_horizon, _load_leakage_config
-        from scripts.utils.feature_pruning import quick_importance_prune
+        from TRAINING.utils.purged_time_series_split import PurgedTimeSeriesSplit
+        from TRAINING.utils.leakage_filtering import _extract_horizon, _load_leakage_config
+        from TRAINING.utils.feature_pruning import quick_importance_prune
     except Exception as e:
         logger.warning(f"Failed to import required libraries: {e}")
         return {}, {}, 0.0, {}, {}, []
@@ -2113,8 +2114,8 @@ def evaluate_target_predictability(
     logger.info(f"{'='*60}")
     
     # Load all symbols at once (cross-sectional data loading)
-    from scripts.utils.cross_sectional_data import load_mtf_data_for_ranking, prepare_cross_sectional_data_for_ranking
-    from scripts.utils.leakage_filtering import filter_features_for_target
+    from TRAINING.utils.cross_sectional_data import load_mtf_data_for_ranking, prepare_cross_sectional_data_for_ranking
+    from TRAINING.utils.leakage_filtering import filter_features_for_target
     
     logger.info(f"Loading data for {len(symbols)} symbols (max {max_rows_per_symbol} rows per symbol)...")
     mtf_data = load_mtf_data_for_ranking(data_dir, symbols, max_rows_per_symbol=max_rows_per_symbol)
@@ -2139,7 +2140,7 @@ def evaluate_target_predictability(
     all_columns = sample_df.columns.tolist()
     
     # Detect data interval for horizon conversion
-    from scripts.utils.data_interval import detect_interval_from_dataframe
+    from TRAINING.utils.data_interval import detect_interval_from_dataframe
     detected_interval = detect_interval_from_dataframe(sample_df, timestamp_column='ts', default=5)
     
     # Use target-aware filtering with registry validation

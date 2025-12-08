@@ -14,7 +14,7 @@ import sys
 sys.path.insert(0, '.')
 
 print('1. Testing config path resolution...')
-from scripts.utils.leakage_filtering import _get_config_path, _load_leakage_config
+from TRAINING.utils.leakage_filtering import _get_config_path, _load_leakage_config
 config_path = _get_config_path()
 config = _load_leakage_config()
 assert config_path.exists(), 'Config path not found!'
@@ -31,7 +31,7 @@ print(f'   ✅ Registry loaded: {len(registry.features)} features')
 
 print()
 print('3. Testing feature filtering...')
-from scripts.utils.leakage_filtering import filter_features_for_target
+from TRAINING.utils.leakage_filtering import filter_features_for_target
 
 all_cols = ['ts', 'p_up_60m_0.8', 'ret_5', 'rsi_10', 'fwd_ret_5m', 'symbol']
 target = 'y_will_peak_60m_0.8'

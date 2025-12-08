@@ -23,7 +23,7 @@ print()
 print("📋 Test 1: Config Path Resolution")
 print("-" * 80)
 try:
-    from scripts.utils.leakage_filtering import _get_config_path, _load_leakage_config
+    from TRAINING.utils.leakage_filtering import _get_config_path, _load_leakage_config
     
     config_path = _get_config_path()
     print(f"✅ Config path: {config_path}")
@@ -65,7 +65,7 @@ print()
 print("📋 Test 3: Horizon Extraction")
 print("-" * 80)
 try:
-    from scripts.utils.leakage_filtering import _extract_horizon, _load_leakage_config
+    from TRAINING.utils.leakage_filtering import _extract_horizon, _load_leakage_config
     
     config = _load_leakage_config()
     test_targets = [
@@ -92,7 +92,7 @@ print()
 print("📋 Test 4: Feature Filtering with Registry")
 print("-" * 80)
 try:
-    from scripts.utils.leakage_filtering import filter_features_for_target
+    from TRAINING.utils.leakage_filtering import filter_features_for_target
     
     all_cols = ['ts', 'p_up_60m_0.8', 'ret_5', 'rsi_10', 'fwd_ret_5m', 'y_will_peak_60m', 'symbol']
     target = 'y_will_peak_60m_0.8'
@@ -126,8 +126,8 @@ print()
 print("📋 Test 5: Registry Filtering Without Horizon (Edge Case)")
 print("-" * 80)
 try:
-    from scripts.utils.leakage_filtering import filter_features_for_target
-    from scripts.utils.leakage_filtering import _load_leakage_config
+    from TRAINING.utils.leakage_filtering import filter_features_for_target
+    from TRAINING.utils.leakage_filtering import _load_leakage_config
     
     # Create a config without horizon patterns (simulate failure)
     config = _load_leakage_config()
@@ -164,7 +164,7 @@ print()
 print("📋 Test 6: Data Interval Detection")
 print("-" * 80)
 try:
-    from scripts.utils.data_interval import detect_interval_from_dataframe
+    from TRAINING.utils.data_interval import detect_interval_from_dataframe
     import pandas as pd
     import numpy as np
     

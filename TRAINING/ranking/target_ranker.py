@@ -35,14 +35,14 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # Import original functions to preserve leakage-free behavior
-from scripts.rank_target_predictability import (
+from TRAINING.ranking.rank_target_predictability import (
     TargetPredictabilityScore,
     evaluate_target_predictability as _evaluate_target_predictability,
     discover_all_targets as _discover_all_targets,
     load_target_configs as _load_target_configs,
     save_rankings as _save_rankings
 )
-from scripts.utils.task_types import TargetConfig, TaskType
+from TRAINING.utils.task_types import TargetConfig, TaskType
 
 # Suppress expected warnings
 warnings.filterwarnings('ignore', message='X does not have valid feature names')
