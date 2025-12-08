@@ -355,3 +355,6 @@ test_*_output/
 # Test output directories
 test_e2e_fresh/
 test_*output*/
+
+# CONFIG backups (ignore contents, keep folder structure)
+CONFIG/backups/**
