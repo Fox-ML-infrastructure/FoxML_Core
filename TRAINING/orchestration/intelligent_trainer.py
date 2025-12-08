@@ -747,6 +747,7 @@ Examples:
         results = trainer.train_with_intelligence(
             auto_targets=args.auto_targets,
             top_n_targets=args.top_n_targets,
+            max_targets_to_evaluate=args.max_targets_to_evaluate,
             auto_features=args.auto_features,
             top_m_features=args.top_m_features,
             targets=args.targets,
