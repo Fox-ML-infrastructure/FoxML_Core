@@ -37,6 +37,8 @@ from typing import List, Dict, Any, Optional, Tuple
 import json
 import hashlib
 import time
+import datetime
+import numpy as np
 
 # Add project root to path
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -100,6 +102,39 @@ try:
     _PANDAS_AVAILABLE = True
 except ImportError:
     _PANDAS_AVAILABLE = False
+
+
+def _json_default(obj: Any) -> Any:
+    """
+    Fallback serializer for json.dump when saving ranking cache.
+    Handles pandas / numpy / datetime objects.
+    """
+    # Datetime-like
+    if isinstance(obj, (datetime.datetime, datetime.date)):
+        # ISO-8601 string is human readable and round-trippable enough for our use
+        return obj.isoformat()
+    
+    # Pandas Timestamp (must check after datetime since pd.Timestamp is a subclass)
+    if _PANDAS_AVAILABLE:
+        try:
+            import pandas as pd
+            if isinstance(obj, pd.Timestamp):
+                return obj.isoformat()
+        except ImportError:
+            pass
+    
+    # Numpy scalars
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating,)):
+        return float(obj)
+    
+    # Numpy arrays
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    
+    # Anything else falls back to string representation
+    return str(obj)
 
 
 class IntelligentTrainer:
@@ -202,7 +237,7 @@ class IntelligentTrainer:
             
             cache_data[cache_key] = rankings
             with open(self.target_ranking_cache, 'w') as f:
-                json.dump(cache_data, f, indent=2)
+                json.dump(cache_data, f, indent=2, default=_json_default)
         except Exception as e:
             logger.warning(f"Failed to save ranking cache: {e}")
     
@@ -415,6 +450,20 @@ class IntelligentTrainer:
         
         # Select features
         feature_output_dir = self.output_dir / "feature_selections" / target
+        
+        # Extract explicit_interval from experiment_config for feature selection
+        explicit_interval = None
+        if self.experiment_config is not None:
+            # Try to get bar_interval from config
+            if hasattr(self.experiment_config, 'data') and hasattr(self.experiment_config.data, 'bar_interval'):
+                explicit_interval = self.experiment_config.data.bar_interval
+            # Also check direct bar_interval property (convenience)
+            elif hasattr(self.experiment_config, 'bar_interval'):
+                explicit_interval = self.experiment_config.bar_interval
+            # Legacy: check interval field
+            elif hasattr(self.experiment_config, 'interval'):
+                explicit_interval = self.experiment_config.interval
+        
         selected_features, _ = select_features_for_target(
             target_column=target,
             symbols=self.symbols,
@@ -424,6 +473,7 @@ class IntelligentTrainer:
             top_n=top_m,
             output_dir=feature_output_dir,
             feature_selection_config=feature_selection_config,  # Pass typed config if available
+            explicit_interval=explicit_interval,  # Pass explicit interval to avoid auto-detection warnings
             experiment_config=self.experiment_config  # Pass experiment config for data.bar_interval
         )
         
