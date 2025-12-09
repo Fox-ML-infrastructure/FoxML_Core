@@ -205,12 +205,15 @@ FoxML Core repository structure:
 ```
 FoxML_Core/
 ├── trading/               (Paper trading integrations, if applicable)
+├── IBKR_trading/          (IBKR trading module - contains C++ code, untested)
 ├── data_processing/       (Pipelines & feature engineering)
 ├── TRAINING/              (Model training & research workflows)
 ├── CONFIG/                (Configuration management system)
 ├── DOCS/                  (Technical documentation)
 └── SCRIPTS/               (Utilities & tools)
 ```
+
+**Note:** C++ code exists only within the `IBKR_trading/cpp_engine/` module and is currently untested. The rest of the codebase is Python-based.
 
 ---------------------------------------------------------------------
 
