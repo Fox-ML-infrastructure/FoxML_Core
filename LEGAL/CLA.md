@@ -92,7 +92,7 @@ Publish or disclose source code publicly.
 
 Publish or disclose performance benchmarks or comparative tests involving the Software to any third party without Licensor's prior written consent (see Section 3.1 below).
 
-Sublicense, rent, lease, or sell the Software.
+Sublicense, rent, lease, sell, share, loan, or otherwise make the Software available to any third party (including but not limited to: clients, partners, vendors, or other entities) unless such third party has its own valid commercial license. Each legal entity that uses the Software must have its own license. Sharing a single license across multiple entities, even if related, is prohibited and constitutes a Material Breach.
 
 Reverse engineer, decompile, disassemble, or otherwise attempt to derive or access the source code, underlying ideas, algorithms, file formats, or non-public APIs of the Software, or any trade secrets embodied therein, except to the extent expressly permitted by applicable law notwithstanding a contractual restriction.
 
