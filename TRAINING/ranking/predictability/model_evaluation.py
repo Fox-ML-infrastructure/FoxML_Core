@@ -120,7 +120,7 @@ logger = setup_logging(
 from TRAINING.ranking.predictability.scoring import TargetPredictabilityScore
 from TRAINING.ranking.predictability.composite_score import calculate_composite_score
 from TRAINING.ranking.predictability.data_loading import load_sample_data, prepare_features_and_target, get_model_config
-from TRAINING.ranking.predictability.leakage_detection import detect_leakage, _save_feature_importances, _log_suspicious_features, find_near_copy_features
+from TRAINING.ranking.predictability.leakage_detection import detect_leakage, _save_feature_importances, _log_suspicious_features, find_near_copy_features, _detect_leaking_features
 
 def train_and_evaluate_models(
     X: np.ndarray,
