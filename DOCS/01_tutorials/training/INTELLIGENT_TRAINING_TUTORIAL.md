@@ -440,11 +440,11 @@ The intelligent training pipeline is **fully backward compatible** with existing
 
 **Old workflow:**
 ```bash
-# Step 1: Rank targets manually
-python SCRIPTS/rank_target_predictability.py ...
+# Step 1: Rank targets manually (deprecated)
+python TRAINING/ranking/rank_target_predictability.py ...
 
-# Step 2: Select features manually
-python SCRIPTS/multi_model_feature_selection.py ...
+# Step 2: Select features manually (deprecated)
+python TRAINING/ranking/multi_model_feature_selection.py ...
 
 # Step 3: Train with results
 python TRAINING/train_with_strategies.py --targets ... --features ...
@@ -452,7 +452,7 @@ python TRAINING/train_with_strategies.py --targets ... --features ...
 
 **New workflow:**
 ```bash
-# All steps automated
+# All steps automated (recommended)
 python TRAINING/train.py --auto-targets --auto-features
 ```
 

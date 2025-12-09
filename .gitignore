@@ -357,6 +357,10 @@ test_*_output/
 # Test output directories
 test_e2e_fresh/
 test_*output*/
+test_e2e_ranking_unified_*/
+test_*_ranking_*/
+*_test_output*/
+*_e2e_*/
 
 # CONFIG backups (ignore contents, keep folder structure)
 CONFIG/backups/**

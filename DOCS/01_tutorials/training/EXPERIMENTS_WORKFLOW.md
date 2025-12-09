@@ -1,5 +1,7 @@
 # EXPERIMENTS - Optimized Training Workflow
 
+> **⚠️ Note**: This 3-phase EXPERIMENTS workflow is a legacy approach. For new projects, consider using the [Intelligent Training Pipeline](INTELLIGENT_TRAINING_TUTORIAL.md) which provides automated target ranking and feature selection with a unified configuration system.
+
 3-phase training workflow that reduces feature dimensionality from 400+ to ~50-60 features.
 
 ## Workflow Overview

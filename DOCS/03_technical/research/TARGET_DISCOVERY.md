@@ -13,7 +13,7 @@ Target discovery identifies which prediction targets are most predictable and su
 Rank targets by their predictability across multiple models:
 
 ```bash
-python SCRIPTS/rank_target_predictability.py \
+python TRAINING/ranking/rank_target_predictability.py \
     --symbols AAPL,MSFT,GOOGL,TSLA,JPM \
     --output-dir results/target_rankings
 ```
@@ -83,6 +83,7 @@ for family in model_families:
 
 ## See Also
 
-- [Target Ranking Script](../../../SCRIPTS/rank_target_predictability.py) - Ranking tool
+- [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Automated target ranking workflow (recommended)
+- [Target Ranking Module](../../../TRAINING/ranking/rank_target_predictability.py) - Ranking implementation (for reference)
 - [Feature Selection Guide](../implementation/FEATURE_SELECTION_GUIDE.md) - Complete feature selection methodology
 

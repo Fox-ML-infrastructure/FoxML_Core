@@ -125,21 +125,45 @@ python SCRIPTS/rank_features_comprehensive.py \
 
 ### Target Predictability Ranking
 
+**Note**: These standalone scripts have been integrated into the intelligent training pipeline. Use the automated workflow instead:
+
 ```bash
-python SCRIPTS/rank_target_predictability.py \
+# Automated target ranking (recommended)
+python TRAINING/train.py \
+    --data-dir data/data_labeled/interval=5m \
+    --symbols AAPL MSFT GOOGL TSLA JPM \
+    --auto-targets \
+    --top-n-targets 10 \
+    --output-dir results/target_rankings
+```
+
+**Legacy standalone script** (deprecated, use intelligent training pipeline):
+```bash
+# OLD WAY - Still works but not recommended
+python TRAINING/ranking/rank_target_predictability.py \
     --symbols AAPL,MSFT,GOOGL,TSLA,JPM \
     --output-dir results/target_rankings
 ```
 
-**Options:**
-- `--symbols`: Comma-separated list of symbols
-- `--model-families`: Model families to test (default: all)
-- `--output-dir`: Output directory
-
 ### Multi-Model Feature Selection
 
+**Note**: Feature selection is now automated in the intelligent training pipeline. Use the automated workflow instead:
+
 ```bash
-python SCRIPTS/multi_model_feature_selection.py \
+# Automated feature selection (recommended)
+python TRAINING/train.py \
+    --data-dir data/data_labeled/interval=5m \
+    --symbols AAPL MSFT \
+    --targets y_will_peak_60m_0.8 \
+    --auto-features \
+    --top-m-features 60 \
+    --output-dir results/feature_selection
+```
+
+**Legacy standalone script** (deprecated, use intelligent training pipeline):
+```bash
+# OLD WAY - Still works but not recommended
+python TRAINING/ranking/multi_model_feature_selection.py \
     --target-column y_will_peak_60m_0.8 \
     --top-n 60 \
     --output-dir results/multi_model_selection
