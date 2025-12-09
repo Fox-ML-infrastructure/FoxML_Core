@@ -196,6 +196,66 @@ def select_features_for_target(
     
     logger.info(f"✅ Selected {len(selected_features)} features")
     
+    # Optional: Cross-sectional ranking (if enabled and enough symbols)
+    cs_importance = None
+    cs_config = aggregation_config.get('cross_sectional_ranking', {})
+    if (cs_config.get('enabled', False) and 
+        len(symbols) >= cs_config.get('min_symbols', 5)):
+        
+        try:
+            from TRAINING.ranking.cross_sectional_feature_ranker import (
+                compute_cross_sectional_importance,
+                tag_features_by_importance
+            )
+            
+            top_k_candidates = cs_config.get('top_k_candidates', 50)
+            candidates = selected_features[:top_k_candidates]
+            
+            logger.info(f"🔍 Computing cross-sectional importance for {len(candidates)} candidate features...")
+            cs_importance = compute_cross_sectional_importance(
+                candidate_features=candidates,
+                target_column=target_column,
+                symbols=symbols,
+                data_dir=data_dir,
+                model_families=cs_config.get('model_families', ['lightgbm']),
+                min_cs=cs_config.get('min_cs', 10),
+                max_cs_samples=cs_config.get('max_cs_samples', 1000),
+                normalization=cs_config.get('normalization'),
+                model_configs=cs_config.get('model_configs')
+            )
+            
+            # Merge CS scores into summary_df
+            summary_df['cs_importance_score'] = summary_df['feature'].map(cs_importance).fillna(0.0)
+            
+            # Tag features
+            symbol_importance = summary_df.set_index('feature')['consensus_score']
+            cs_importance_aligned = cs_importance.reindex(symbol_importance.index, fill_value=0.0)
+            feature_categories = tag_features_by_importance(
+                symbol_importance=symbol_importance,
+                cs_importance=cs_importance_aligned,
+                symbol_threshold=cs_config.get('symbol_threshold', 0.1),
+                cs_threshold=cs_config.get('cs_threshold', 0.1)
+            )
+            # Map categories back to summary_df (preserve original index)
+            summary_df['feature_category'] = summary_df['feature'].map(feature_categories).fillna('UNKNOWN')
+            
+            logger.info(f"   ✅ Cross-sectional ranking complete")
+            category_counts = summary_df['feature_category'].value_counts()
+            for cat, count in category_counts.items():
+                logger.info(f"      {cat}: {count} features")
+                
+        except Exception as e:
+            logger.warning(f"Cross-sectional ranking failed: {e}", exc_info=True)
+            summary_df['cs_importance_score'] = 0.0
+            summary_df['feature_category'] = 'UNKNOWN'
+    else:
+        summary_df['cs_importance_score'] = 0.0
+        summary_df['feature_category'] = 'SYMBOL_ONLY'  # CS ranking not run
+        if len(symbols) < cs_config.get('min_symbols', 5):
+            logger.debug(f"Skipping cross-sectional ranking: only {len(symbols)} symbols (min: {cs_config.get('min_symbols', 5)})")
+        elif not cs_config.get('enabled', False):
+            logger.debug("Cross-sectional ranking disabled in config")
+    
     # Run importance diff detector if enabled (optional diagnostic)
     # This compares models trained with all features vs. safe features only
     try:
