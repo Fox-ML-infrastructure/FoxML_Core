@@ -236,10 +236,18 @@ def _run_family_inproc(family: str, X, y, total_threads: int = 12, trainer_kwarg
         
         # Train (wrapped in family_run_scope for clean threading)
         from common.threads import family_run_scope
-        with family_run_scope(family, total_threads):
-            result = trainer.train(X, y)
-        logger.info(f"[InProc] {family} training completed successfully")
-        return result
+        try:
+            with family_run_scope(family, total_threads):
+                result = trainer.train(X, y)
+            if result is None:
+                logger.warning(f"[InProc] {family} trainer.train() returned None")
+                return None
+            logger.info(f"[InProc] {family} training completed successfully")
+            return result
+        except Exception as e:
+            logger.error(f"[InProc] {family} training failed: {e}")
+            logger.exception(f"Full traceback for {family} in-process training:")
+            raise
 
 def _run_family_isolated(family: str, X, y, timeout_s: int = None,
                          omp_threads: int | None = None, mkl_threads: int | None = None,
@@ -849,12 +857,21 @@ def _prepare_training_data_polars(mtf_data: Dict[str, pd.DataFrame],
         
         # Get feature columns (preserve timestamp for metadata)
         feature_cols = [target] + feature_names + ['symbol'] + ([ts_name] if ts_name else [])
+        
+        # DIAGNOSTIC: Check which feature columns actually exist in polars frame
+        missing_in_polars = [c for c in feature_names if c not in combined_pl.columns]
+        if missing_in_polars:
+            logger.error(f"🔍 Debug [{target}]: {len(missing_in_polars)} selected features missing from polars frame: {missing_in_polars[:10]}")
+        
         data_pl = combined_pl.select(feature_cols)
         
         # Convert to pandas for sklearn compatibility
         combined_df = data_pl.to_pandas()
         
         logger.info(f"Extracted target {target} from polars data")
+        logger.info(f"🔍 Debug [{target}]: After polars→pandas conversion: combined_df shape={combined_df.shape}, "
+                   f"feature_names count={len(feature_names)}, "
+                   f"features in df={len([f for f in feature_names if f in combined_df.columns])}")
         
     except Exception as e:
         logger.error(f"Error extracting target {target}: {e}")
@@ -957,19 +974,89 @@ def _process_combined_data_pandas(combined_df: pd.DataFrame, target: str, featur
         return (None,)*8
     
     # Extract feature matrix - handle non-numeric columns
+    # CRITICAL: Check if feature_names is empty or None
+    if not feature_names:
+        logger.error(f"❌ CRITICAL [{target}]: feature_names is empty or None! Cannot proceed.")
+        return (None,)*8
+    
+    # Check which features actually exist in combined_df
+    existing_features = [f for f in feature_names if f in combined_df.columns]
+    missing_cols = [f for f in feature_names if f not in combined_df.columns]
+    
+    if not existing_features:
+        logger.error(f"❌ CRITICAL [{target}]: NONE of the {len(feature_names)} selected features exist in combined_df!")
+        logger.error(f"❌ [{target}]: Selected features: {feature_names[:20]}")
+        logger.error(f"❌ [{target}]: Sample of combined_df columns: {list(combined_df.columns)[:20]}")
+        return (None,)*8
+    
+    if missing_cols:
+        logger.warning(f"🔍 Debug [{target}]: {len(missing_cols)} selected features missing from combined_df: {missing_cols[:10]}")
+        logger.warning(f"🔍 Debug [{target}]: Using {len(existing_features)} existing features instead of {len(feature_names)}")
+        feature_names = existing_features  # Use only existing features
+    
     feature_df = combined_df[feature_names].copy()
+    
+    # DIAGNOSTIC: Log initial state before coercion
+    logger.info(f"🔍 Debug [{target}]: Initial feature_df shape={feature_df.shape}, "
+               f"feature_names count={len(feature_names)}, "
+               f"columns in df={len([c for c in feature_names if c in feature_df.columns])}")
+    
+    # DIAGNOSTIC: Check NaN ratios BEFORE coercion
+    if len(feature_df.columns) > 0:
+        pre_coerce_nan_ratios = feature_df.isna().mean()
+        all_nan_before = pre_coerce_nan_ratios[pre_coerce_nan_ratios == 1.0]
+        if len(all_nan_before) > 0:
+            logger.warning(f"🔍 Debug [{target}]: {len(all_nan_before)} features are ALL NaN BEFORE coercion: {list(all_nan_before.index)[:10]}")
     
     # Convert to numeric, coerce errors to NaN, and sanitize infinities
     for col in feature_df.columns:
         feature_df.loc[:, col] = pd.to_numeric(feature_df[col], errors='coerce')
     feature_df.replace([np.inf, -np.inf], np.nan, inplace=True)
     
+    # DIAGNOSTIC: Check NaN ratios AFTER coercion
+    if len(feature_df.columns) > 0:
+        post_coerce_nan_ratios = feature_df.isna().mean()
+        all_nan_after = post_coerce_nan_ratios[post_coerce_nan_ratios == 1.0]
+        if len(all_nan_after) > 0:
+            logger.error(f"🔍 Debug [{target}]: {len(all_nan_after)} features became ALL NaN AFTER coercion: {list(all_nan_after.index)[:10]}")
+            # Log sample of what these columns look like in raw data
+            sample_cols = list(all_nan_after.index)[:5]
+            for col in sample_cols:
+                if col in combined_df.columns:
+                    raw_sample = combined_df[col].head(10)
+                    raw_dtype = combined_df[col].dtype
+                    logger.error(f"🔍 Debug [{target}]: Column '{col}' (dtype={raw_dtype}) raw sample: {raw_sample.tolist()}")
+    
     # Drop columns that are entirely NaN after coercion
     before_cols = feature_df.shape[1]
     feature_df = feature_df.dropna(axis=1, how='all')
     dropped_all_nan = before_cols - feature_df.shape[1]
     if dropped_all_nan:
-        logger.info(f"🔧 Dropped {dropped_all_nan} all-NaN feature columns after coercion")
+        logger.warning(f"🔧 Dropped {dropped_all_nan} all-NaN feature columns after coercion")
+        
+        # CRITICAL: If ALL features were dropped, this is fatal
+        if feature_df.shape[1] == 0:
+            logger.error(f"❌ CRITICAL [{target}]: ALL {before_cols} selected features became all-NaN after coercion!")
+            logger.error(f"❌ [{target}]: Selected features: {feature_names[:20]}...")
+            logger.error(f"❌ [{target}]: This indicates a mismatch between feature_names and actual data columns/dtypes")
+            
+            # Write debug file
+            try:
+                import os
+                debug_dir = Path("debug_feature_coercion")
+                debug_dir.mkdir(exist_ok=True)
+                debug_path = debug_dir / f"all_nan_features_{target.replace('/', '_')}.npz"
+                np.savez_compressed(
+                    debug_path,
+                    feature_names=np.array(feature_names, dtype=object),
+                    combined_df_columns=np.array(combined_df.columns.tolist(), dtype=object),
+                    missing_cols=np.array(missing_cols, dtype=object) if missing_cols else np.array([], dtype=object),
+                )
+                logger.error(f"❌ [{target}]: Wrote debug file to {debug_path}")
+            except Exception as e:
+                logger.error(f"❌ [{target}]: Failed to write debug file: {e}")
+            
+            return (None,)*8
     
     # Ensure only numeric dtypes remain (guard against objects/arrays)
     numeric_cols = [c for c in feature_df.columns if pd.api.types.is_numeric_dtype(feature_df[c])]
@@ -981,9 +1068,29 @@ def _process_combined_data_pandas(combined_df: pd.DataFrame, target: str, featur
     # Build float32 matrix safely
     X = feature_df.to_numpy(dtype=np.float32, copy=False)
     
+    # CRITICAL: Guard against empty feature matrix
+    if X.shape[1] == 0:
+        logger.error(f"❌ CRITICAL [{target}]: Feature matrix X has 0 columns after coercion and filtering!")
+        logger.error(f"❌ [{target}]: Cannot proceed with training - no usable features")
+        return (None,)*8
+    
+    # DIAGNOSTIC: Log X shape and feature stats
+    logger.info(f"🔍 Debug [{target}]: X shape={X.shape}, y shape={y.shape}, "
+               f"X NaN count={np.isnan(X).sum()}, y NaN count={np.isnan(y).sum()}")
+    
     # Clean data - be more lenient with NaN values
     target_valid = ~np.isnan(y)
-    feature_nan_ratio = np.isnan(X).mean(axis=1)
+    
+    # Compute feature NaN ratio safely (handle empty X case)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        if X.shape[0] > 0 and X.shape[1] > 0:
+            feature_nan_ratio = np.isnan(X).mean(axis=1)
+        else:
+            feature_nan_ratio = np.ones(X.shape[0])  # All invalid if empty
+            logger.error(f"❌ [{target}]: X has zero columns or rows - cannot compute feature_nan_ratio")
+            return (None,)*8
+    
     feature_valid = feature_nan_ratio <= 0.5  # Allow up to 50% NaN in features
     
     # Treat inf in target as invalid as well
@@ -991,7 +1098,11 @@ def _process_combined_data_pandas(combined_df: pd.DataFrame, target: str, featur
     valid_mask = target_valid & feature_valid & y_is_finite
     
     if not valid_mask.any():
-        logger.error("No valid data after cleaning")
+        logger.error(f"❌ [{target}]: No valid data after cleaning")
+        logger.error(f"❌ [{target}]: Target stats - total={len(y)}, valid={target_valid.sum()}, "
+                    f"NaN={np.isnan(y).sum()}, inf={np.sum(~np.isfinite(y))}")
+        logger.error(f"❌ [{target}]: Feature stats - rows={X.shape[0]}, cols={X.shape[1]}, "
+                    f"valid_rows={feature_valid.sum()}, mean_NaN_ratio={feature_nan_ratio.mean():.2%}")
         return (None,)*8
     
     X_clean = X[valid_mask]
@@ -1051,7 +1162,9 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         'families': families,
         'strategy': strategy,
         'models': {},
-        'metrics': {}
+        'metrics': {},
+        'failed_targets': [],  # Track targets that failed data preparation
+        'failed_reasons': {}   # Track why each target failed
     }
     
     for j, target in enumerate(targets, 1):
@@ -1074,7 +1187,9 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         print(f"✅ Data preparation completed in {prep_elapsed:.2f}s")  # Debug print
         
         if X is None:
-            logger.error(f"Failed to prepare data for target {target}")
+            logger.error(f"❌ Failed to prepare data for target {target}")
+            results['failed_targets'].append(target)
+            results['failed_reasons'][target] = "Data preparation returned None (likely all features became NaN after coercion)"
             continue
         
         # Extract routing info (now in slot 7)
@@ -1157,12 +1272,19 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                 start_time = _now()
                 
                 # Train model using modular system with routing metadata
-                model_result = train_model_comprehensive(
-                    family, X, y, target, strategy, feature_names, caps, routing_meta
-                )
-                
-                elapsed = _now() - start_time
-                logger.info(f"⏱️ [{family}] {family} training completed in {elapsed:.2f} seconds")
+                try:
+                    model_result = train_model_comprehensive(
+                        family, X, y, target, strategy, feature_names, caps, routing_meta
+                    )
+                    elapsed = _now() - start_time
+                    logger.info(f"⏱️ [{family}] {family} training completed in {elapsed:.2f} seconds")
+                    if model_result is None:
+                        logger.warning(f"⚠️ [{family}] train_model_comprehensive returned None")
+                except Exception as train_err:
+                    elapsed = _now() - start_time
+                    logger.error(f"❌ [{family}] Training failed after {elapsed:.2f} seconds: {train_err}")
+                    logger.exception(f"Full traceback for {family}:")
+                    raise  # Re-raise to be caught by outer exception handler
                 
                 if model_result is not None:
                     target_results[family] = model_result

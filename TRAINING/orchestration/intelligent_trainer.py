@@ -660,15 +660,59 @@ class IntelligentTrainer:
         )
         
         logger.info("="*80)
-        logger.info("✅ Training completed successfully")
-        logger.info("="*80)
         
         # Count trained models
         total_models = sum(
             len(target_results) 
             for target_results in training_results.get('models', {}).values()
         )
+        
+        # CRITICAL: Fail loudly if 0 models were trained
+        # training_results is the dict returned from train_models_for_interval_comprehensive
+        # It should have 'models', 'failed_targets', 'failed_reasons' keys
+        failed_targets = training_results.get('failed_targets', [])
+        failed_reasons = training_results.get('failed_reasons', {})
+        
+        # If not found at top level, check if it's nested in a 'results' key
+        if not failed_targets and 'results' in training_results:
+            failed_targets = training_results['results'].get('failed_targets', [])
+            failed_reasons = training_results['results'].get('failed_reasons', {})
+        
+        if total_models == 0:
+            logger.error("="*80)
+            logger.error("❌ TRAINING RUN FAILED: 0 models trained across %d targets", len(targets))
+            logger.error("="*80)
+            logger.error("Failed targets: %d / %d", len(failed_targets), len(targets))
+            if failed_targets:
+                logger.error("Failed target list: %s", failed_targets[:10])
+                # Log most common failure reason
+                if failed_reasons:
+                    reason_counts = {}
+                    for reason in failed_reasons.values():
+                        reason_counts[reason] = reason_counts.get(reason, 0) + 1
+                    most_common = max(reason_counts.items(), key=lambda x: x[1])
+                    logger.error("Most common failure reason: %s (%d targets)", most_common[0], most_common[1])
+            logger.error("="*80)
+            logger.error("This indicates a critical data preparation issue.")
+            logger.error("Check logs above for 'all-NaN feature columns' or 'No valid data after cleaning' messages.")
+            logger.error("="*80)
+            status = 'failed_no_models'
+        else:
+            logger.info("✅ Training completed successfully")
+            logger.info("="*80)
+            status = 'completed'
+        
         logger.info(f"Trained {total_models} models across {len(targets)} targets")
+        if failed_targets:
+            logger.warning(f"⚠️ {len(failed_targets)} targets failed data preparation and were skipped")
+        
+        # Final status summary
+        if status == 'failed_no_models':
+            logger.error("="*80)
+            logger.error("❌ TRAINING PIPELINE FAILED - NO MODELS TRAINED")
+            logger.error("="*80)
+            logger.error("Action required: Check diagnostic logs above to identify why all features became NaN")
+            logger.error("="*80)
         
         # Create run-level confidence summary
         try:
@@ -719,7 +763,9 @@ class IntelligentTrainer:
             'training_results': training_results,
             'total_models': total_models,
             'sentinel_results': sentinel_results,
-            'status': 'completed'
+            'status': status,  # Use status from above (either 'completed' or 'failed_no_models')
+            'failed_targets': failed_targets,
+            'failed_reasons': failed_reasons
         }
 
 

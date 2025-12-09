@@ -116,7 +116,7 @@ class QuantileLightGBMTrainer(BaseModelTrainer):
             "max_depth": self.config["max_depth"],
             "max_bin": self.config["max_bin"],
             "bin_construct_sample_cnt": 200000,
-            "verbosity": -1,
+            "verbosity": 0,  # 0 allows log_evaluation callback output while suppressing other verbose output
             "force_col_wise": True,  # Faster on wide tables
             "feature_pre_filter": True,
             "two_round": True,
@@ -146,6 +146,11 @@ class QuantileLightGBMTrainer(BaseModelTrainer):
         # 1) Preprocess and guard features/targets
         X, y = self.preprocess_data(X, y)
         
+        # Diagnostic: Log feature count (helps diagnose if feature filtering is causing fast convergence)
+        n_features = X.shape[1]
+        logger.info(f"[QuantileLGBM] Training with {n_features} features (if this is much lower than before, "
+                   f"feature filtering may be causing faster convergence)")
+        
         # 2) Split for validation (crucial for quantile + early stopping)
         X_tr, X_va, y_tr, y_va = train_test_split(
             X, y, test_size=0.1, random_state=42, shuffle=False  # Chronological for time series
@@ -174,11 +179,24 @@ class QuantileLightGBMTrainer(BaseModelTrainer):
         esr = self.config["early_stopping_rounds"]
         budget = self.config["time_budget_sec"]
         
-        callbacks = [
-            lgb.early_stopping(stopping_rounds=esr, verbose=False),
-            lgb.log_evaluation(period=200),
-            _time_budget_cb(budget)
-        ]
+        # Allow disabling early stopping for longer training (set early_stopping_rounds to 0 or None)
+        # Track validation metric progression to diagnose early stopping
+        validation_scores = []
+        def _record_validation(env):
+            """Callback to record validation scores for diagnostics"""
+            if env.iteration % 50 == 0 or env.iteration < 10:  # Log first 10 iterations, then every 50
+                if env.evaluation_result_list:
+                    for eval_name, eval_value, _ in env.evaluation_result_list:
+                        if 'valid_0' in eval_name:
+                            validation_scores.append((env.iteration, eval_value))
+                            logger.info(f"[QuantileLGBM] Iter {env.iteration}: {eval_name}={eval_value:.6f}")
+        
+        callbacks = []
+        if esr and esr > 0:
+            callbacks.append(lgb.early_stopping(stopping_rounds=esr, verbose=False))
+        callbacks.append(lgb.log_evaluation(period=200))
+        callbacks.append(_record_validation)  # Add diagnostic callback
+        callbacks.append(_time_budget_cb(budget))
         
         logger.info(f"[QuantileLGBM] Training with alpha={self.config['alpha']}, rounds={rounds}, ESR={esr}, budget={budget}s")
         
@@ -194,6 +212,39 @@ class QuantileLightGBMTrainer(BaseModelTrainer):
             best_iter = booster.best_iteration or rounds
             logger.info(f"✅ QuantileLGBM trained | best_iter={best_iter} | best_score={booster.best_score}")
             
+            # Diagnostic: Analyze validation metric progression
+            if validation_scores:
+                first_score = validation_scores[0][1]
+                last_score = validation_scores[-1][1]
+                best_score_val = min(s[1] for s in validation_scores) if validation_scores else None
+                improvement = first_score - best_score_val if best_score_val else 0
+                logger.info(f"📊 Validation metric progression: started={first_score:.6f}, best={best_score_val:.6f}, "
+                          f"final={last_score:.6f}, improvement={improvement:.6f}")
+                
+                # Check if metric stopped improving early
+                if len(validation_scores) >= 3:
+                    early_scores = [s[1] for s in validation_scores[:3]]
+                    late_scores = [s[1] for s in validation_scores[-3:]] if len(validation_scores) >= 3 else []
+                    if late_scores:
+                        early_improvement = early_scores[0] - min(early_scores)
+                        late_improvement = late_scores[0] - min(late_scores)
+                        if early_improvement > 0 and late_improvement < 1e-6:
+                            logger.warning(f"⚠️ Validation metric improved early (first 3 iters: {early_improvement:.6f}) "
+                                         f"but plateaued later (last 3 iters: {late_improvement:.6f}). "
+                                         f"This suggests model converged quickly, possibly due to fewer features.")
+            
+            # Diagnostic: Log why training stopped early
+            if best_iter < rounds:
+                if best_iter < esr:
+                    logger.warning(f"⚠️ Training stopped very early at iteration {best_iter} (out of {rounds}). "
+                                 f"Validation metric may have stopped improving immediately. "
+                                 f"Consider: increasing early_stopping_rounds (current: {esr}), "
+                                 f"checking data quality, or adjusting learning_rate (current: {self.config['learning_rate']})")
+                else:
+                    logger.info(f"ℹ️ Early stopping triggered at iteration {best_iter} after {esr} rounds without improvement")
+            else:
+                logger.info(f"ℹ️ Training completed all {rounds} rounds (early stopping did not trigger)")
+            
             # Store state
             self.model = booster
             self.is_trained = True
@@ -202,7 +253,9 @@ class QuantileLightGBMTrainer(BaseModelTrainer):
             return self.model
             
         except Exception as e:
-            logger.warning(f"❌ QuantileLGBM failed ({e}) → falling back to Huber LGBM")
+            logger.error(f"❌ QuantileLGBM failed: {e}")
+            logger.exception(f"❌ Full stack trace for QuantileLightGBM failure (too many values to unpack):")
+            logger.warning(f"⚠️ Falling back to Huber LGBM (this is NOT a quantile model!)")
             
             # Fallback: Huber objective (robust regression, much faster)
             from lightgbm import LGBMRegressor
