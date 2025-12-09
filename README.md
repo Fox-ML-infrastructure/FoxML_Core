@@ -98,11 +98,11 @@ Commercial licensing gives your organization the right to:
 
 **Base annual license pricing (by org size):**
 
-- **1–10 employees** — $30,000 / year
-- **11–50 employees** — $75,000 / year
-- **51–250 employees** — $200,000 / year
-- **251–1000 employees** — $350,000 / year
-- **1000+ employees** — starts at $750,000 / year (custom quote)
+- **1–10 employees** — $90,000 / year (boutique quant shops)
+- **11–50 employees** — $250,000 / year (small funds, fintech orgs)
+- **51–250 employees** — $500,000 / year (mid-size funds, trading desks)
+- **251–1000 employees** — $1,000,000 / year (global multi-desk firms)
+- **1000+ employees** — $2,500,000–$10,000,000 / year (banks, asset managers, exchanges — custom quote)
 
 To begin the licensing process, email:
 

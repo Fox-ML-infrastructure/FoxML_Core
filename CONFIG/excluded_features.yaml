@@ -69,9 +69,11 @@ always_exclude:
   - time_in_profit_15m
   - time_in_profit_5m
   - time_in_profit_60m
+  - trading_day_of_month
   - vol_15m
   - vol_60m
   - vol_clustering_15m
+  - vol_clustering_60m
   - vol_over_vol_15m
   - vol_over_vol_60m
   - vol_persistence

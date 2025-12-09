@@ -85,11 +85,11 @@
 
 **Pricing is based on organization size:**
 
-- **1–10 employees** — $30,000 / year
-- **11–50 employees** — $75,000 / year
-- **51–250 employees** — $200,000 / year
-- **251–1000 employees** — $350,000 / year
-- **1000+ employees** — Starts at $750,000 / year (custom quote)
+- **1–10 employees** — $90,000 / year
+- **11–50 employees** — $250,000 / year
+- **51–250 employees** — $500,000 / year
+- **251–1000 employees** — $1,000,000 / year
+- **1000+ employees** — $2,500,000–$10,000,000 / year (custom quote)
 
 **See `LEGAL/SUBSCRIPTIONS.md` for complete pricing information and optional add-ons.**
 
@@ -98,10 +98,11 @@
 Enterprise deployments often require additional services:
 
 - **Dedicated Support Retainer** — $3,500–$12,000/month (SLA-based)
-- **Custom Integration Projects** — $25,000–$150,000 one-time
+- **Custom Integration Projects** — $50,000–$300,000 one-time (includes on-prem installation, GPU optimization, custom strategies)
 - **Onboarding & Deployment** — $15,000–$50,000 one-time
 - **Private Slack / Direct Founder Access** — $18,000–$60,000/year
 - **Additional User Seats** — $500–$2,000 per seat/year
+- **Adaptive Intelligence Layer** — +$1,000,000/year add-on (Tier 5 only: 1000+ employees)
 
 **See `LEGAL/SUBSCRIPTIONS.md` for complete add-on details.**
 

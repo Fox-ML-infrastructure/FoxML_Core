@@ -12,11 +12,11 @@ Please include:
 - Work email  
 - Company website or LinkedIn  
 - Organization size (choose one):
-    • 1–10 employees  — $30,000 / year  
-    • 11–50 employees — $75,000 / year  
-    • 51–250 employees — $200,000 / year  
-    • 251–1000 employees — $350,000 / year  
-    • 1000+ employees — starts at $750,000 / year (custom quote)
+    • 1–10 employees  — $90,000 / year  
+    • 11–50 employees — $250,000 / year  
+    • 51–250 employees — $500,000 / year  
+    • 251–1000 employees — $1,000,000 / year  
+    • 1000+ employees — $2,500,000–$10,000,000 / year (custom quote)
 - Primary use case (1–3 sentences)
 - Desired start timeline
 - Any special requirements (optional)
@@ -35,10 +35,15 @@ Enterprise deployments often require additional services. These are available as
 - Direct access to technical team
 
 ### Custom Integration Projects
-- **$25,000–$150,000 one-time**
+- **$50,000–$300,000 one-time**
 - Custom integrations with existing infrastructure
 - Quant desk-specific workflows and connectors
 - Proprietary data pipeline integrations
+- On-prem cluster installation
+- GPU optimization
+- Custom training strategies
+- Leakage audits
+- Model governance + compliance workflows
 
 ### Onboarding & Deployment
 - **$15,000–$50,000 one-time**
@@ -56,6 +61,13 @@ Enterprise deployments often require additional services. These are available as
 - **$500–$2,000 per seat / year**
 - For internal research teams beyond base license
 - Scales with organization growth
+
+### Adaptive Intelligence Layer (Tier 5 Only)
+- **+$1,000,000 / year add-on**
+- Advanced adaptive learning and continuous intelligence capabilities
+- Self-improving decision-making systems
+- Pattern recognition and meta-learning
+- Available for organizations with 1000+ employees
 
 ---
 
