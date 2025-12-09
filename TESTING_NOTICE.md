@@ -14,8 +14,9 @@
 ## What's Being Tested
 
 - ✅ Target ranking workflows — Working with unified interval handling
-- ✅ Feature selection — Fixed sklearn NaN/dtype issues, CatBoost loss function
+- ✅ Feature selection — Fixed sklearn NaN/dtype issues, CatBoost loss function, Boruta feature count mismatch
 - ✅ Pipeline consistency — Ranking and selection now use same helpers and patterns
+- ✅ Boruta gatekeeper — Fixed feature count mismatch, now functions as statistical gatekeeper without false failures
 - 🔄 End-to-end testing — Full pipeline from target ranking → feature selection → training
 
 ## Recent Fixes
@@ -24,6 +25,7 @@
 - **Sklearn preprocessing**: Replaced ad-hoc imputers with shared `make_sklearn_dense_X()` helper
 - **CatBoost configuration**: Auto-detects classification vs regression and sets appropriate loss function
 - **Shared utilities**: Created `TRAINING/utils/target_utils.py` for consistent target type detection
+- **Boruta feature count mismatch**: Fixed `ValueError: X has N features, but ExtraTreesClassifier is expecting M features` by using `train_score = math.nan` for Boruta (selector, not predictor). Added NaN handling in logging and checkpoint serialization. Boruta gatekeeper now functions properly without false "failed" status.
 
 ## Known Considerations
 
@@ -46,6 +48,8 @@ If you encounter issues during testing:
 - Monitor for any remaining interval detection warnings
 - Verify CatBoost runs successfully for both classification and regression targets
 - Validate sklearn models handle edge cases (sparse data, extreme values, etc.)
+- Verify Boruta gatekeeper produces expected confirmed/rejected/tentative feature labels
+- Confirm Boruta gate effect is visible in `feature_importance_with_boruta_debug.csv` output
 
 ---
 
