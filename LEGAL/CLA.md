@@ -12,7 +12,7 @@ The FoxML Core codebase, modules, pipelines, configurations, documentation, and 
 
 Internal Use
 
-Use of the Software solely within the Licensee’s organization, accessible only to Licensee’s employees or contractors under confidentiality obligations.
+Use of the Software solely within the Licensee's organization, accessible only to Licensee's employees or contractors under confidentiality obligations.
 
 Derivative Works
 
@@ -24,7 +24,15 @@ The earlier of (a) the date payment is received, or (b) the date this Agreement 
 
 Organization Size
 
-Licensee’s total number of employees (not engineers), used to determine the applicable annual license fee.
+Licensee's total number of employees (not engineers), used to determine the applicable annual license fee.
+
+Authorized Users
+
+Employees and individual contractors of Licensee who are permitted by Licensee to use the Software on Licensee's behalf, up to any seat limits specified in the Ordering Documents.
+
+Ordering Documents
+
+One or more Order Forms or Statements of Work executed by the parties that specify fees, term length, payment schedule, seat limits, and other commercial terms.
 
 2. Grant of Rights
 
@@ -38,15 +46,21 @@ Maintain private internal forks or repositories.
 
 Integrate the Software with internal systems, workflows, data layers, and research infrastructure.
 
+Use the Software solely for use by Authorized Users, up to the limits set forth in the applicable Ordering Documents.
+
 This license DOES NOT permit Licensee to:
 
 Redistribute the Software or any Derivative Works.
 
-Host the Software as a commercial service (SaaS/PaaS).
+Provide the Software, or any substantially similar functionality, as a hosted service to third parties (including SaaS, PaaS, or multi-tenant environments) where external users access functionality primarily provided by the Software.
+
+Build or market a product whose primary purpose is to offer FoxML-like ML/quant infrastructure as a general-purpose platform to third parties.
 
 Provide the Software or derivatives to clients or external users.
 
 Publish or disclose source code publicly.
+
+Publish or disclose performance benchmarks or comparative tests involving the Software to any third party without Licensor's prior written consent.
 
 Sublicense, rent, lease, or sell the Software.
 
@@ -74,19 +88,11 @@ Violation constitutes a material breach and may result in immediate termination.
 
 4. Fees & Payment Terms
 
-Annual license fees are based on Organization Size, aligned with the public pricing schedule:
+Commercial licensing fees are based on Licensee's organization size, usage tier, and selected add-ons.
 
-Annual Commercial License Fees
+Specific fees, term length, and payment schedule will be set forth in one or more **Order Forms** or **Statements of Work** executed by the parties (collectively, "Ordering Documents"). If there is any conflict between this Agreement and an Ordering Document regarding fees, the Ordering Document will control.
 
-1–10 employees — $150,000 / year
-
-11–50 employees — $350,000 / year
-
-51–250 employees — $750,000 / year
-
-251–1000 employees — $1,500,000–$2,500,000 / year
-
-1000+ employees — $5,000,000–$12,000,000+ / year (custom enterprise quote)
+Standard pricing tiers are published in `LEGAL/SUBSCRIPTIONS.md` for reference, but actual fees are determined by the Ordering Documents.
 
 Payment is due within 30 days of invoice unless otherwise agreed in writing.
 
@@ -228,7 +234,7 @@ Licensor may continue to develop, market, and provide software, products, or ser
 
 12. Publicity
 
-Unless otherwise agreed in writing, Licensor may not use Licensee's name, logo, or trademarks in any publicity, marketing materials, or customer lists without Licensee's prior written consent.
+Unless Licensee objects in writing, Licensor may use Licensee's name and logo in customary customer lists and marketing materials to identify Licensee as a customer of the Software. Any other publicity will require Licensee's prior written consent.
 
 13. Audit Rights
 

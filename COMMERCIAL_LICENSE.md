@@ -15,6 +15,10 @@ This Commercial License is intended for trading firms, hedge funds, financial in
 
 "Licensee" refers to the individual or organization obtaining rights under this License.
 
+"Authorized Users" means employees and individual contractors of Licensee who are permitted by Licensee to use the Software on Licensee's behalf, up to any seat limits specified in the Ordering Documents.
+
+"Ordering Documents" means one or more Order Forms or Statements of Work executed by the parties that specify fees, term length, payment schedule, seat limits, and other commercial terms.
+
 "Commercial Use" means any use of the Software by a business, organization, institution, or individual that:
   (a) generates revenue directly or indirectly,
   (b) contributes to a commercial product or service,
@@ -36,6 +40,7 @@ Subject to payment of applicable fees and execution of a commercial agreement, t
 - Modify the Software for internal commercial use
 - Deploy the Software internally without AGPL disclosure obligations
 - Integrate the Software into proprietary systems, stacks, or workflows
+- Use the Software solely for use by Authorized Users, up to the limits set forth in the applicable Ordering Documents
 
 No sublicensing rights are granted unless explicitly permitted in a separate SOW.
 
@@ -56,9 +61,11 @@ The Software is licensed, not sold. As between Licensor and Licensee, Licensor r
 Unless explicitly permitted in writing by the Licensor, the Licensee may NOT:
 
 - Distribute or sell the Software or derivatives as a standalone product
-- Provide the Software as a hosted service (SaaS/PaaS), including any multi-tenant hosted environment where third parties access functionality primarily provided by the Software
+- Provide the Software, or any substantially similar functionality, as a hosted service to third parties (including SaaS, PaaS, or multi-tenant environments) where external users access functionality primarily provided by the Software
+- Build or market a product whose primary purpose is to offer FoxML-like ML/quant infrastructure as a general-purpose platform to third parties
 - Use the Software to offer a product or service whose primary value is substantially identical to the Software itself (including "FoxML-as-a-service" or similar hosted offerings)
 - Publish or disclose source code derived from the commercial version
+- Publish or disclose performance benchmarks or comparative tests involving the Software to any third party without Licensor's prior written consent
 - Remove or alter copyright notices
 - Claim authorship of the Software or its architectural design
 - Use the Software in violation of US export controls or applicable law
@@ -116,7 +123,11 @@ Unless explicitly set out in a separate written agreement:
 
 ## 10. FEES
 
-Commercial licensing fees are determined based on organization size, usage tier, integration complexity, required support level, additional deliverables, and criticality of deployment.
+Commercial licensing fees are based on Licensee's organization size, usage tier, and selected add-ons.
+
+Specific fees, term length, and payment schedule will be set forth in one or more **Order Forms** or **Statements of Work** executed by the parties (collectively, "Ordering Documents"). If there is any conflict between this License and an Ordering Document regarding fees, the Ordering Document will control.
+
+Standard pricing tiers are published in `LEGAL/SUBSCRIPTIONS.md` for reference, but actual fees are determined by the Ordering Documents.
 
 ## 11. AUDIT RIGHTS
 
@@ -151,7 +162,7 @@ Licensor may continue to develop, market, and provide software, products, or ser
 
 ## 14. PUBLICITY
 
-Unless otherwise agreed in writing, Licensor may not use Licensee's name, logo, or trademarks in any publicity, marketing materials, or customer lists without Licensee's prior written consent.
+Unless Licensee objects in writing, Licensor may use Licensee's name and logo in customary customer lists and marketing materials to identify Licensee as a customer of the Software. Any other publicity will require Licensee's prior written consent.
 
 ## 15. ASSIGNMENT
 
