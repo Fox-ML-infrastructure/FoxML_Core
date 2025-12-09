@@ -17,6 +17,18 @@ For non-commercial or evaluation use.
 
 Intended for: Students, researchers, hobbyists, internal evaluation prior to purchase.
 
+### Internal Evaluation Use
+
+From time to time, Licensor may permit access to the Software on an internal evaluation basis ("Evaluation Use").
+
+- **Scope.** Evaluation Use is limited to non-production, non-commercial, internal testing and assessment by Licensee. Licensee may not use the Software for live trading, revenue-generating activities, or any production workloads during Evaluation Use.
+
+- **Duration.** Unless otherwise agreed in a signed Ordering Document, any Evaluation Use is limited to thirty (30) days from the date Licensee first receives access to the Software (the "Evaluation Period").
+
+- **Post-Evaluation.** Continued use of the Software after the Evaluation Period requires a valid commercial license and applicable fees. Any use beyond the Evaluation Period without such license constitutes unauthorized use.
+
+- **No SLA / Limited Support.** Evaluation Use is provided "AS IS" with no uptime commitments, SLAs, or guarantees of support. Licensor may suspend or terminate Evaluation Use at any time in its sole discretion.
+
 ⸻
 
 B. Standard Support (Included with Commercial License)

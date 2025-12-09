@@ -34,6 +34,14 @@ Ordering Documents
 
 One or more Order Forms or Statements of Work executed by the parties that specify fees, term length, payment schedule, seat limits, and other commercial terms.
 
+Affiliate
+
+Any entity that directly or indirectly Controls, is Controlled by, or is under common Control with a party, where "Control" means ownership of more than fifty percent (50%) of the voting interests of such entity or the contractual power to direct its management and policies.
+
+Direct Competitor
+
+Any third party whose primary business includes developing, licensing, or providing machine learning or quantitative trading infrastructure products or services that are substantially similar to the Software (for example, commercial platforms primarily marketed as quantitative research, ML pipeline, or trading infrastructure solutions).
+
 2. Grant of Rights
 
 Upon receipt of payment and subject to compliance with this Agreement, Licensor grants Licensee a non-exclusive, non-transferable, revocable license to:
@@ -48,6 +56,24 @@ Integrate the Software with internal systems, workflows, data layers, and resear
 
 Use the Software solely for use by Authorized Users, up to the limits set forth in the applicable Ordering Documents.
 
+**Authorized Users and Seat Limits.**
+
+Use of the Software is limited to the number and type of Authorized Users specified in the applicable Ordering Document ("Seats"). Licensee shall ensure that only Authorized Users use the Software and that such use does not exceed the purchased Seats.
+
+If Licensee exceeds the purchased Seats, Licensor may (without limiting its other rights and remedies) invoice Licensee for the excess usage at Licensor's then-current rates, and Licensee shall pay such invoice within thirty (30) days.
+
+**External Contractors.**
+
+Authorized Users may include Licensee's employees and individual contractors (including individual consultants) who are engaged by Licensee and acting solely for Licensee's benefit ("Contractors"), provided that:
+
+(a) each Contractor is bound by written obligations of confidentiality and use restrictions no less protective of Licensor than those set forth in this Agreement;
+
+(b) Licensee ensures that Contractors use the Software solely for Licensee's internal business purposes and not for the benefit of any other person or entity; and
+
+(c) Licensee remains fully responsible and liable for Contractors' compliance with this Agreement.
+
+For the avoidance of doubt, a Contractor may not use a single instance of the Software, or the same credentials or license, to provide services to multiple clients unless each such client is itself a separately licensed customer of Licensor under its own agreement.
+
 This license DOES NOT permit Licensee to:
 
 Redistribute the Software or any Derivative Works.
@@ -60,11 +86,33 @@ Provide the Software or derivatives to clients or external users.
 
 Publish or disclose source code publicly.
 
-Publish or disclose performance benchmarks or comparative tests involving the Software to any third party without Licensor's prior written consent.
+Publish or disclose performance benchmarks or comparative tests involving the Software to any third party without Licensor's prior written consent (see Section 3.1 below).
 
 Sublicense, rent, lease, or sell the Software.
 
+Reverse engineer, decompile, disassemble, or otherwise attempt to derive or access the source code, underlying ideas, algorithms, file formats, or non-public APIs of the Software, or any trade secrets embodied therein, except to the extent expressly permitted by applicable law notwithstanding a contractual restriction.
+
 Use the Software to build a competing ML/quant infrastructure product.
+
+**No Competing Service.**
+
+Licensee shall not use the Software to develop, host, or provide any software-as-a-service, managed service, platform, or other offering that exposes to third parties functionality that is substantially similar to the Software, including without limitation:
+
+(a) a hosted quantitative research or model-training platform for third parties;
+
+(b) a multi-tenant or shared service that allows third parties to run experiments, training, or feature selection workflows powered by the Software; or
+
+(c) an API, SDK, or other interface that provides third parties with direct or indirect access to the Software's core infrastructure capabilities.
+
+For clarity, Licensee may use the Software to build and operate its own internal trading, research, or analytics systems and to provide outputs (e.g., analytics, reports, trading decisions) to its own clients, provided such clients do not receive direct access to the Software itself.
+
+**3.1 Benchmarking.**
+
+Licensee shall not publish or disclose to any third party any benchmark, performance, or comparison tests of the Software without Licensor's prior written consent.
+
+Any breach of this Section 3.1 shall be deemed a material breach of this Agreement and may cause irreparable harm to Licensor, for which monetary damages may be an insufficient remedy. In addition to any other rights and remedies, Licensor shall be entitled to seek injunctive or other equitable relief to prevent or curtail any actual or threatened breach of this Section 3.1.
+
+A material breach of Section 3.1 (Benchmarking) shall be grounds for immediate termination by Licensor upon written notice, without a cure period.
 
 All rights not expressly granted are reserved by Licensor.
 
@@ -188,6 +236,8 @@ fails to pay fees,
 
 commercializes derivative works,
 
+materially breaches Section 3.1 (Benchmarking), which shall be grounds for immediate termination upon written notice without a cure period,
+
 builds competing infrastructure.
 
 Upon termination:
@@ -236,7 +286,19 @@ Licensor may continue to develop, market, and provide software, products, or ser
 
 Unless Licensee objects in writing, Licensor may use Licensee's name and logo in customary customer lists and marketing materials to identify Licensee as a customer of the Software. Any other publicity will require Licensee's prior written consent.
 
-13. Audit Rights
+13. Use by Affiliates
+
+Subject to the terms of this Agreement and the applicable Ordering Documents, Licensee may permit its Affiliates to use the Software solely for the benefit of Licensee, provided that:
+
+(a) each such Affiliate is expressly identified in an applicable Ordering Document or other written agreement with Licensor;
+
+(b) Licensee remains fully responsible and liable for such Affiliates' compliance with this Agreement; and
+
+(c) use by any Affiliate constitutes use by Licensee for purposes of any user, seat, environment, or usage limitations.
+
+For the avoidance of doubt, each separate legal entity (including each Affiliate) that wishes to use the Software for its own benefit must obtain its own license (typically via a separate Ordering Document), unless expressly stated otherwise in writing by Licensor.
+
+14. Audit Rights
 
 Licensor reserves the right to audit Licensee's use of the Software to verify compliance with this Agreement.
 
@@ -255,20 +317,17 @@ Confidentiality: All audit information shall be treated as confidential and used
 - Audits shall be conducted during normal business hours
 - All other terms remain as stated above
 
-14. Assignment
+15. Assignment
 
 Licensee Assignment:
-Licensee may not assign, transfer, or delegate this Agreement or any rights hereunder without Licensor's prior written consent, except that Licensee may assign this Agreement to an affiliate or in connection with a merger, acquisition, or sale of all or substantially all of Licensee's assets, provided that:
-- The assignee agrees in writing to be bound by all terms of this Agreement
-- The assignee is not a direct competitor of Licensor
-- Licensee provides Licensor with 30 days' prior written notice
+Licensee may not assign this Agreement, by operation of law or otherwise, without Licensor's prior written consent, except that Licensee may assign this Agreement without consent (i) to a successor in interest in connection with a merger, acquisition, corporate reorganization, or sale of all or substantially all of Licensee's assets, or (ii) to an Affiliate that assumes all of Licensee's obligations under this Agreement, provided that in each case the assignee is not a Direct Competitor (as defined in Section 1) and Licensee provides Licensor with written notice of the assignment.
 
 Licensor Assignment:
 Licensor may freely assign this Agreement, including in connection with a merger, acquisition, or sale of all or substantially all of Licensor's assets. Such assignment shall not affect Licensee's rights under this Agreement.
 
 Any attempted assignment in violation of this section is void.
 
-15. Dispute Resolution
+16. Dispute Resolution
 
 Informal Resolution:
 The parties agree to attempt to resolve disputes through good faith negotiation for at least 30 days before initiating formal proceedings.
@@ -282,23 +341,23 @@ For claims of $250,000 or more, disputes shall be resolved in the state or feder
 Class Action Waiver:
 Both parties waive any right to participate in class actions, collective actions, or representative proceedings.
 
-16. Governing Law
+17. Governing Law
 
 This Agreement is governed by the laws of the State of Delaware, United States, without regard to conflicts of law principles. The United Nations Convention on Contracts for the International Sale of Goods does not apply.
 
-17. Force Majeure
+18. Force Majeure
 
 Neither party shall be liable for any failure or delay in performance under this Agreement due to circumstances beyond its reasonable control, including but not limited to: acts of God, war, terrorism, riots, embargoes, acts of civil or military authorities, fire, floods, accidents, network or infrastructure failures, strikes, or shortages of transportation facilities, fuel, energy, labor, or materials.
 
-18. Severability
+19. Severability
 
 If any provision of this Agreement is held to be invalid, illegal, or unenforceable by a court of competent jurisdiction, the remaining provisions shall remain in full force and effect. The invalid, illegal, or unenforceable provision shall be replaced with a valid, legal, and enforceable provision that comes closest to the intent of the original provision.
 
-19. Entire Agreement
+20. Entire Agreement
 
 This Agreement, together with any separate signed commercial agreement or Statement of Work, constitutes the entire agreement between the parties regarding the subject matter hereof and supersedes all prior or contemporaneous agreements, understandings, negotiations, and discussions, whether oral or written, relating to the Software. No modification, amendment, or waiver of any provision of this Agreement shall be effective unless in writing and signed by both parties.
 
-20. Survival
+21. Survival
 
 Sections 3 (Restrictions), 9.1 (No Warranty / Limitation of Liability), 9.2 (Indemnity), 10 (Export Control Compliance), 13 (Audit Rights), 15 (Dispute Resolution), 16 (Governing Law), 8 (Confidentiality), 18 (Severability), 19 (Entire Agreement), and this Section 20 (Survival) will survive termination or expiration of this Agreement.
 
