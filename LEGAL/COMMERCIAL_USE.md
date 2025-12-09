@@ -83,7 +83,7 @@
 
 ### 4.1 Annual License Fees
 
-**Pricing is based on organization size:**
+Commercial license pricing is aligned with enterprise quant infrastructure standards.
 
 - **1–10 employees** — $90,000 / year
 - **11–50 employees** — $250,000 / year
@@ -93,16 +93,14 @@
 
 **See `LEGAL/SUBSCRIPTIONS.md` for complete pricing information and optional add-ons.**
 
-### 4.2 Optional Add-Ons
+### 4.2 Optional Enterprise Add-Ons
 
-Enterprise deployments often require additional services:
-
-- **Dedicated Support Retainer** — $3,500–$12,000/month (SLA-based)
-- **Custom Integration Projects** — $50,000–$300,000 one-time (includes on-prem installation, GPU optimization, custom strategies)
-- **Onboarding & Deployment** — $15,000–$50,000 one-time
-- **Private Slack / Direct Founder Access** — $18,000–$60,000/year
-- **Additional User Seats** — $500–$2,000 per seat/year
-- **Adaptive Intelligence Layer** — +$1,000,000/year add-on (Tier 5 only: 1000+ employees)
+- **Dedicated Support SLA** — $3,500–$12,000 / month  
+- **Custom Integration & On-Prem Deployment** — $50,000–$300,000 one-time  
+- **Onboarding & Implementation** — $15,000–$50,000 one-time  
+- **Private Slack / Direct Founder Access** — $18,000–$60,000 / year  
+- **Additional User Seats** — $500–$2,000 / seat / year  
+- **Adaptive Intelligence Layer** (Tier 5 only) — +$1,000,000 / year
 
 **See `LEGAL/SUBSCRIPTIONS.md` for complete add-on details.**
 

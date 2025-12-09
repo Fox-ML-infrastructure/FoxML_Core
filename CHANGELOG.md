@@ -294,20 +294,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Copyright notice requirements standardized
 
 ### Commercial
-- Commercial license pricing updated to enterprise quant infrastructure pricing tiers:
-  - 1–10 employees: $90,000/year (boutique quant shops)
-  - 11–50 employees: $250,000/year (small funds, fintech orgs)
-  - 51–250 employees: $500,000/year (mid-size funds, trading desks)
-  - 251–1000 employees: $1,000,000/year (global multi-desk firms)
-  - 1000+ employees: $2,500,000–$10,000,000/year (banks, asset managers, exchanges — custom quote)
-- Added optional add-ons for enterprise deployments:
-  - Dedicated Support Retainer: $3,500–$12,000/month (SLA-based)
-  - Custom Integration Projects: $50,000–$300,000 one-time (includes on-prem installation, GPU optimization, custom strategies)
-  - Onboarding & Deployment: $15,000–$50,000 one-time
+- Commercial license pricing updated to enterprise quant infrastructure standards:
+  - 1–10 employees: $90,000/year
+  - 11–50 employees: $250,000/year
+  - 51–250 employees: $500,000/year
+  - 251–1000 employees: $1,000,000/year
+  - 1000+ employees: $2,500,000–$10,000,000/year (custom quote)
+- Optional enterprise add-ons:
+  - Dedicated Support SLA: $3,500–$12,000/month
+  - Custom Integration & On-Prem Deployment: $50,000–$300,000 one-time
+  - Onboarding & Implementation: $15,000–$50,000 one-time
   - Private Slack / Direct Founder Access: $18,000–$60,000/year
   - Additional User Seats: $500–$2,000 per seat/year
-  - Adaptive Intelligence Layer: +$1,000,000/year add-on (Tier 5 only: 1000+ employees)
-- Pricing aligned with industry-standard quant infrastructure tools (SigTech, H2O Driverless AI, Kensho, Bloomberg, S&P, FactSet, Kx) and reflects value of replacing $1M–$3M/year engineering teams with production-ready multi-model research engine
+  - Adaptive Intelligence Layer (Tier 5 only): +$1,000,000/year
 
 ### Documentation
 - **Modular configuration system documentation**:
