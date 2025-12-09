@@ -161,6 +161,14 @@ from TRAINING.training_strategies.data_preparation import prepare_training_data_
 
 # Standard library imports
 from typing import Dict, List, Any, Optional, Tuple
+import logging
+
+# Third-party imports
+import numpy as np
+import pandas as pd
+
+# Setup logger
+logger = logging.getLogger(__name__)
 
 def train_models_for_interval_comprehensive(interval: str, targets: List[str], 
                                            mtf_data: Dict[str, pd.DataFrame],
