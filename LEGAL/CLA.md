@@ -60,7 +60,7 @@ Use the Software solely for use by Authorized Users, up to the limits set forth 
 
 Use of the Software is limited to the number and type of Authorized Users specified in the applicable Ordering Document ("Seats"). Licensee shall ensure that only Authorized Users use the Software and that such use does not exceed the purchased Seats.
 
-If Licensee exceeds the purchased Seats, Licensor may (without limiting its other rights and remedies) invoice Licensee for the excess usage at Licensor's then-current rates, and Licensee shall pay such invoice within thirty (30) days.
+If Licensee exceeds the purchased Seats, Licensor may (without limiting its other rights and remedies) invoice Licensee for the excess usage at Licensor's then-current rates, and Licensee shall pay such invoice within thirty (30) days. Repeated or material excess usage (exceeding purchased Seats by more than ten percent (10%) for more than thirty (30) consecutive days) may constitute a Material Breach and grounds for termination under Section 9.
 
 **External Contractors.**
 
@@ -146,7 +146,7 @@ Payment is due within 30 days of invoice unless otherwise agreed in writing.
 
 Renewal
 
-Licenses renew annually at the then-current pricing unless canceled prior to the renewal date.
+Licenses renew annually at Licensor's then-current pricing (not to exceed a ten percent (10%) increase over the prior term's pricing, unless otherwise agreed in writing) unless canceled prior to the renewal date.
 
 Failure to pay may result in suspension or termination of rights under this Agreement.
 

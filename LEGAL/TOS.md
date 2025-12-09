@@ -43,7 +43,7 @@ You grant us permission to store, process, and operate on Customer Data solely t
 provide the Services.
 
 4.3 Data Security
-We apply industry-standard security measures to protect Customer Data.
+We apply reasonable technical and administrative safeguards (consistent with industry-standard practices for protecting customer data) to protect Customer Data, including but not limited to: access controls, secure storage, encryption in transit and at rest where applicable, and measures to prevent unauthorized access or disclosure.
 
 5. Fees & Billing
 Fees are due at purchase, processed through our payment provider. All charges are
@@ -67,7 +67,7 @@ as expressly provided.
 
 8. Service Availability & Modifications
 We may update, improve, modify, suspend, or discontinue the Services at any
-time. We will make reasonable efforts to notify users of material changes.
+time. We will provide at least thirty (30) days' advance written notice (via email to the address associated with your account) of any material changes that adversely affect your use of the Services, except that we may make changes immediately if required by law or to address security vulnerabilities.
 
 9. Warranties & Disclaimers
 THE SERVICES ARE PROVIDED “AS IS” AND “AS AVAILABLE” WITHOUT WARRANTIES OF ANY
@@ -76,9 +76,9 @@ INFRINGEMENT, OR CONTINUOUS OR ERROR-FREE OPERATION.
 
 10. Limitation of Liability
 To the fullest extent permitted by law, we are not liable for indirect,
-incidental, consequential, or punitive damages. Our total liability for any
+incidental, consequential, special, or punitive damages. Our total liability for any
 claim shall not exceed the amount you paid us in the 12 months preceding the
-claim.
+claim. The foregoing limitation shall not apply to: (i) liability arising from our willful misconduct or gross negligence, (ii) our indemnification obligations (if any), or (iii) breach of confidentiality obligations.
 
 11. Indemnification
 You agree to indemnify and hold harmless Fox ML Infrastructure LLC and its

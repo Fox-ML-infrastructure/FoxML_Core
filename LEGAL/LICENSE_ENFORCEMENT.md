@@ -108,10 +108,10 @@ This document outlines license enforcement procedures, compliance requirements, 
 
 **If you discover non-compliance:**
 
-- Contact jenn.lewis5789@gmail.com immediately
-- Self-reporting may result in reduced penalties
+- Contact jenn.lewis5789@gmail.com immediately (within 24 hours of discovery)
+- Self-reporting within 30 days of the violation may result in reduced penalties (typically limited to payment of retroactive licensing fees plus a compliance fee of up to 25% of the retroactive fees, rather than full enforcement actions)
 - We will work with you to achieve compliance
-- Retroactive licensing may be available
+- Retroactive licensing may be available for the period of non-compliance, subject to payment of applicable fees and execution of a commercial license agreement
 
 ---
 
@@ -131,10 +131,10 @@ This document outlines license enforcement procedures, compliance requirements, 
 
 **If a violation is detected:**
 
-1. **Initial contact** — We will contact you to discuss compliance
-2. **Remediation period** — You will have 30 days to achieve compliance
-3. **License purchase** — You may purchase a commercial license retroactively
-4. **Termination** — Continued non-compliance may result in license termination
+1. **Initial contact** — We will contact you in writing (via email) to discuss compliance within 10 business days of detection
+2. **Remediation period** — You will have 30 days from the date of initial contact to achieve compliance (or such longer period as we may agree in writing)
+3. **License purchase** — You may purchase a commercial license retroactively for the period of non-compliance, subject to payment of applicable fees
+4. **Termination** — Continued non-compliance after the remediation period, or material violations (such as willful infringement, unauthorized distribution, or SaaS hosting without permission), may result in immediate license termination and enforcement action
 
 **We prefer to resolve violations through licensing rather than legal action.**
 
