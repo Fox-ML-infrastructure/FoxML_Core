@@ -38,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Feature engineering** still requires human review and validation (initial feature set was for testing)
 - **Adaptive intelligence layer** in early phase (leakage detection and auto-fixer are production-ready, but adaptive learning over time is planned)
 - **Ranking pipeline** may occasionally log false-positive leakage warnings for tree models (RF overfitting detection is conservative by design)
-- **Phase 2-3 of experiments workflow** (core models and sequential models) require implementation beyond Phase 1
+- **Later phases of the experiments workflow** (core models and sequential models) require implementation beyond Phase 1
 
 ---
 
@@ -46,21 +46,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Intelligent Training & Ranking
 
-- **Unified ranking and selection pipelines** — Consistent interval handling, sklearn preprocessing, and CatBoost configuration across both pipelines. Shared target utilities and preprocessing helpers ensure identical behavior. See [`docs/01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md`](docs/01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md).
+- **Unified ranking and selection pipelines** — Consistent interval handling, sklearn preprocessing, and CatBoost configuration across both pipelines. Shared target utilities and preprocessing helpers ensure identical behavior. See [`DOCS/01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md`](DOCS/01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md).
 - **Boruta statistical gatekeeper** — Refactored from importance scorer to gatekeeper that modifies consensus scores via bonuses/penalties. Tracks base vs final consensus with explicit gate effect. ExtraTrees-based implementation with configurable thresholds. See [`CONFIG/feature_selection/multi_model.yaml`](CONFIG/feature_selection/multi_model.yaml).
 - **LightGBM GPU support** in target ranking with automatic detection and CPU fallback
 - **TRAINING module self-contained** — All utilities migrated from `SCRIPTS/` to `TRAINING/utils/`, zero external dependencies
 
 #### Configuration & Logging
 
-- **Modular configuration system** with typed schemas, experiment configs, and validation. Single YAML file defines data, targets, and module overrides. Backward compatible with legacy configs. See [`docs/02_reference/configuration/MODULAR_CONFIG_SYSTEM.md`](docs/02_reference/configuration/MODULAR_CONFIG_SYSTEM.md).
+- **Modular configuration system** with typed schemas, experiment configs, and validation. Single YAML file defines data, targets, and module overrides. Backward compatible with legacy configs. See [`DOCS/02_reference/configuration/MODULAR_CONFIG_SYSTEM.md`](DOCS/02_reference/configuration/MODULAR_CONFIG_SYSTEM.md).
 - **Structured logging configuration** — Per-module and backend verbosity controls via YAML. Profile support (default, debug_run, quiet). No hardcoded logging flags. See [`CONFIG/logging_config.yaml`](CONFIG/logging_config.yaml).
 - **Centralized training configs** — 9 YAML files for pipeline, GPU, memory, preprocessing, threading, safety, callbacks, optimizer, and system settings
 
 #### Leakage Safety Suite
 
-- **Production-grade backup system for auto-fixer** — Per-target, timestamped backups with manifests and git commit provenance. Atomic restore operations with retention policy and detailed error handling. Config-driven settings documented in safety config. Full behavior documented in [`docs/03_technical/research/LEAKAGE_ANALYSIS.md`](docs/03_technical/research/LEAKAGE_ANALYSIS.md).
-- **Automated leakage detection and auto-fix** — Automatic detection and remediation with configurable thresholds. Pre-training leak scan, auto-rerun after fixes, and integration with leakage sentinels. See [`docs/02_reference/configuration/SAFETY_LEAKAGE_CONFIGS.md`](docs/02_reference/configuration/SAFETY_LEAKAGE_CONFIGS.md).
+- **Production-grade backup system for auto-fixer** — Per-target, timestamped backups with manifests and git commit provenance. Atomic restore operations with retention policy and detailed error handling. Config-driven settings documented in safety config. Full behavior documented in [`DOCS/03_technical/research/LEAKAGE_ANALYSIS.md`](DOCS/03_technical/research/LEAKAGE_ANALYSIS.md).
+- **Automated leakage detection and auto-fix** — Automatic detection and remediation with configurable thresholds. Pre-training leak scan, auto-rerun after fixes, and integration with leakage sentinels. See [`DOCS/02_reference/configuration/SAFETY_LEAKAGE_CONFIGS.md`](DOCS/02_reference/configuration/SAFETY_LEAKAGE_CONFIGS.md).
 - **Feature/target schema system** — Explicit schema for classifying columns with mode-specific rules (ranking vs training). Feature registry with temporal metadata filtering. See [`CONFIG/feature_target_schema.yaml`](CONFIG/feature_target_schema.yaml) and [`CONFIG/feature_registry.yaml`](CONFIG/feature_registry.yaml).
 
 #### GPU & Training Infra
@@ -72,9 +72,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Docs & Legal
 
-- **Documentation restructured** — 4-tier hierarchy with centralized docs in `docs/`. Code directories contain only code and minimal README pointers. See [`docs/INDEX.md`](docs/INDEX.md).
+- **Documentation restructured** — 4-tier hierarchy with centralized docs in `DOCS/`. Code directories contain only code and minimal README pointers. See [`DOCS/INDEX.md`](DOCS/INDEX.md).
 - **Roadmap restructured** — Added "What Works Today" section, reorganized priorities, refined wording for external consumption. See [`ROADMAP.md`](ROADMAP.md).
-- **Legal documentation suite** — Compliance docs, license enforcement procedures, commercial use guides. See [`docs/LEGAL_INDEX.md`](docs/LEGAL_INDEX.md).
+- **Legal documentation suite** — Compliance docs, license enforcement procedures, commercial use guides. See [`DOCS/LEGAL_INDEX.md`](DOCS/LEGAL_INDEX.md).
 - 55+ new documentation files created, 50+ existing files rewritten and standardized
 
 #### Commercial
@@ -96,7 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Feature selection pipeline** — Boruta `X_clean` error, double-counting, feature count mismatches. Interval detection warnings, CatBoost loss function for classification, sklearn NaN/dtype handling. See detailed notes in [`DOCS/internal/DETAILED_RELEASE_NOTES.md`](DOCS/internal/DETAILED_RELEASE_NOTES.md).
+- **Feature selection pipeline** — Boruta `X_clean` error, double-counting, feature count mismatches. Interval detection warnings, CatBoost loss function for classification, sklearn NaN/dtype handling. See [`DOCS/02_reference/CHANGELOG_DETAILED.md`](DOCS/02_reference/CHANGELOG_DETAILED.md) for detailed notes.
 - **Path resolution** — Fixed inconsistent repo root calculations across moved files
 - **Auto-fixer** — Import paths, training accuracy detection, pre-excluded feature checks
 - **GPU and model issues** — VAE serialization, sequential models 3D preprocessing, XGBoost stability, TensorFlow GPU initialization, LSTM timeouts, Transformer OOM errors
@@ -114,8 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- Roadmap restructured for external consumption (see [`ROADMAP.md`](ROADMAP.md))
-- Modular configuration system documentation (see [`docs/02_reference/configuration/MODULAR_CONFIG_SYSTEM.md`](docs/02_reference/configuration/MODULAR_CONFIG_SYSTEM.md))
+- Modular configuration system documentation (see [`DOCS/02_reference/configuration/MODULAR_CONFIG_SYSTEM.md`](DOCS/02_reference/configuration/MODULAR_CONFIG_SYSTEM.md))
 - Documentation cleanup and consolidation — Integrated old folders, fixed cross-references, reorganized structure
 - Comprehensive cross-linking and navigation improvements
 

@@ -217,11 +217,11 @@ See [`docs/03_technical/research/LEAKAGE_ANALYSIS.md`](../03_technical/research/
   - Tier B: Tutorials / Walkthroughs
   - Tier C: Core Reference Docs
   - Tier D: Technical Deep Dives
-- **Documentation centralized** in `docs/` folder:
-  - Moved all CONFIG documentation to `docs/02_reference/configuration/`
-  - Moved all TRAINING documentation to `docs/` folder
+- **Documentation centralized** in `DOCS/` folder:
+  - Moved all CONFIG documentation to `DOCS/02_reference/configuration/`
+  - Moved all TRAINING documentation to `DOCS/` folder
   - Code directories now contain only code and minimal README pointers
-- **Comprehensive legal documentation index** (`docs/LEGAL_INDEX.md`):
+- **Comprehensive legal documentation index** (`DOCS/LEGAL_INDEX.md`):
   - Complete index of all legal, licensing, compliance, and enterprise documentation
   - Organized by category: Licensing, Terms & Policies, Enterprise & Compliance, Security, Legal Agreements, Consulting Services
 - **Cross-linking and navigation** improved throughout all documentation
