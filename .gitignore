@@ -18,6 +18,9 @@ docs/audit/
 DOCS/internal/
 DOCS/audit/
 
+# Enterprise bundle (untracked until legal docs are finalized)
+ENTERPRISE_BUNDLE/
+
 # Personal notes
 NOTES/
 
