@@ -256,7 +256,7 @@ Subject to the terms of this License and the applicable Ordering Documents, Lice
 
 (c) use by any Affiliate constitutes use by Licensee for purposes of any user, seat, environment, or usage limitations.
 
-For the avoidance of doubt, each separate legal entity (including each Affiliate) that wishes to use the Software for its own benefit must obtain its own license (typically via a separate Ordering Document), unless expressly stated otherwise in writing by Licensor.
+For the avoidance of doubt, each separate legal entity (including each Affiliate, subsidiary, parent company, or holding company) that wishes to use the Software for its own benefit must obtain its own license (typically via a separate Ordering Document), unless expressly stated otherwise in writing by Licensor. A parent company's license does not cover its subsidiaries, and a subsidiary's license does not cover its parent company or sister subsidiaries. Each legal entity must pay for its own license regardless of corporate structure or ownership relationships.
 
 ## 16. ASSIGNMENT
 
