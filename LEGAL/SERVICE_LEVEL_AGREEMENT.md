@@ -17,6 +17,12 @@ Fox ML Infrastructure is in the process of finalizing:
 These systems are currently being set up and will be fully active in early 2026.  
 Until then, Enterprise customers will receive direct communication instructions immediately upon purchase.
 
+### 1.1 Pricing
+
+Enterprise Support pricing: $5,000–$20,000/month based on SLA level and requirements.
+
+See `LEGAL/SUBSCRIPTIONS.md` for complete pricing information and optional add-ons.
+
 ---
 
 ## 2. Definitions

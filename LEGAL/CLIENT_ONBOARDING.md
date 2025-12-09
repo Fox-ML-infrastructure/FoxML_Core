@@ -282,18 +282,21 @@ git pull origin main  # Pull any client-specific updates
 **Business Support (Add-on):**
 - 24-hour response time
 - Priority bug-fix handling
+- Pricing: Contact for quote
 
 **Enterprise Support (Add-on):**
 - Same-business-day response
 - Scheduled support calls
 - Priority engineering resources
+- Pricing: $5,000–$20,000/month (see `LEGAL/SUBSCRIPTIONS.md`)
 
 **Premium Support (Add-on):**
 - White-glove service
 - Highest priority engineering
 - Flexible support scheduling
+- Pricing: Custom quote
 
-**See `LEGAL/SUPPORT_POLICY.md` for complete support tier details.**
+**See `LEGAL/SUPPORT_POLICY.md` for complete support tier details and `LEGAL/SUBSCRIPTIONS.md` for pricing.**
 
 ---
 

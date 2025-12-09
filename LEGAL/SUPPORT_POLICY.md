@@ -142,6 +142,17 @@ Optional Add-ons (Negotiated Separately):
 
 ⸻
 
+## 1.5 Support Pricing
+
+- **Standard Support** — Included with commercial license
+- **Business Support** — Available as add-on (contact for pricing)
+- **Enterprise Support** — $5,000–$20,000/month (see `LEGAL/SUBSCRIPTIONS.md`)
+- **Premium Support** — Custom pricing (contact for quote)
+
+See `LEGAL/SUBSCRIPTIONS.md` for complete pricing information and optional add-ons.
+
+⸻
+
 2. Scope of Support
 
 Fox ML Infrastructure support covers:
