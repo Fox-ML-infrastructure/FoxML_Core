@@ -1,7 +1,13 @@
 # Fox ML Infrastructure LLC — Service Level Agreement (SLA)
 Version 1.0 — Effective January 2026
 
-This Service Level Agreement (“SLA”) applies to customers purchasing the Enterprise Support tier from Fox ML Infrastructure LLC.  
+> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` (AGPL-3.0) controls for open-source licensing.
+
+> **Commercial Licensees Only:** This document applies only to customers with a valid commercial license. AGPL-3.0 users are not eligible for the policies, services, or terms described here.
+
+> **SLA Opt-In Only:** SLA applies only if expressly included in a signed Order Form or SOW. This is an internal policy summary provided for informational purposes only and does not create any SLA, guarantee, or obligation unless explicitly included in a signed agreement.
+
+This Service Level Agreement ("SLA") applies to customers purchasing the Enterprise Support tier from Fox ML Infrastructure LLC.  
 This SLA does not apply to Community or Standard Commercial license tiers.
 
 ---

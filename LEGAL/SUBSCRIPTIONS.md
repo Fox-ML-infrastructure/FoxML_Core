@@ -1,3 +1,5 @@
+> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` (AGPL-3.0) controls for open-source licensing.
+
 ## Licensing & Access Requests
 
 FoxML Core is available under annual commercial licensing for organizations.

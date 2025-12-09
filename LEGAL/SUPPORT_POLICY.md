@@ -1,5 +1,11 @@
 Fox ML Infrastructure — Support Policy (2026)
 
+> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` (AGPL-3.0) controls for open-source licensing.
+
+> **Commercial Licensees Only:** This document applies only to customers with a valid commercial license. AGPL-3.0 users are not eligible for the policies, services, or terms described here.
+
+> **Support Not Included by Default:** Support is not included by default. Support is available only through paid support contracts or SOWs. This policy does not grant any license rights. All rights and restrictions are defined solely in `COMMERCIAL_LICENSE.md`.
+
 Fox ML Infrastructure LLC provides support services for licensed users of the Fox ML Infrastructure software.
 This policy outlines the level of support available for each customer type and defines response expectations.
 

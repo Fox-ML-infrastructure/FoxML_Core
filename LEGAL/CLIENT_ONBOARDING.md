@@ -1,5 +1,11 @@
 # Fox ML Infrastructure — Client Onboarding Guide
 
+> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` (AGPL-3.0) controls for open-source licensing.
+
+> **Commercial Licensees Only:** This document applies only to customers with a valid commercial license. AGPL-3.0 users are not eligible for the policies, services, or terms described here.
+
+> **No Rights Granted:** This document does not grant any license rights. All rights and restrictions are defined solely in `COMMERCIAL_LICENSE.md`.
+
 This guide helps commercial licensees get started with Fox ML Infrastructure.  
 It covers setup, configuration, integration, and how to request custom features.
 

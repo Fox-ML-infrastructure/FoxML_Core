@@ -1,5 +1,9 @@
 # Fox ML Infrastructure — License Enforcement & Compliance
 
+> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` (AGPL-3.0) controls for open-source licensing.
+
+> **Enforcement Alignment:** This document describes enforcement procedures that align with remedies set forth in `COMMERCIAL_LICENSE.md`. This document does not introduce new rights, penalties, fines, damages, or obligations beyond those defined in `COMMERCIAL_LICENSE.md`.
+
 This document outlines license enforcement procedures, compliance requirements, and what to expect if you use FoxML Core in production or for commercial purposes.
 
 ---
