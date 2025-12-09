@@ -14,7 +14,8 @@ Complete navigation guide for FoxML Core documentation.
 ### Project Status & Licensing
 
 - [Roadmap](../ROADMAP.md) - Current development focus and upcoming work
-- [Changelog](../CHANGELOG.md) - Recent technical and compliance changes
+- [Changelog](../CHANGELOG.md) - Recent technical and compliance changes (quick overview)
+- [Detailed Changelog](02_reference/CHANGELOG_DETAILED.md) - Comprehensive change details with file paths and config references
 - [Licensing & Subscriptions](../LEGAL/SUBSCRIPTIONS.md) - AGPL vs commercial usage and subscription tiers
 - [Legal Documentation Index](LEGAL_INDEX.md) - Complete legal and compliance documentation
 
@@ -79,6 +80,9 @@ Complete technical reference for daily use.
 - [Intelligent Trainer API](02_reference/api/INTELLIGENT_TRAINER_API.md) - Intelligent training pipeline API reference
 - [CLI Reference](02_reference/api/CLI_REFERENCE.md) - Command-line tools
 - [Config Schema](02_reference/api/CONFIG_SCHEMA.md) - Configuration schema
+
+### Project Reference
+- [Detailed Changelog](02_reference/CHANGELOG_DETAILED.md) - Comprehensive change details with file paths and config references
 
 ### Data Reference
 - [Data Format Spec](02_reference/data/DATA_FORMAT_SPEC.md) - Data formats
