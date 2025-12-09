@@ -113,6 +113,6 @@ Are you using this for any business purpose, client work, or revenue-generating 
 
 ---
 
-**Last Updated:** 2025-01-09  
+**Last Updated:** 2025-12-09  
 **Document Hierarchy:** This matrix is for convenience only. `COMMERCIAL_LICENSE.md` is the authoritative and controlling document.
 

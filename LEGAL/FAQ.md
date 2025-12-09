@@ -172,6 +172,6 @@ For licensing inquiries, contact: jenn.lewis5789@gmail.com
 
 ---
 
-**Last Updated:** 2025-01-09  
+**Last Updated:** 2025-12-09  
 **Document Hierarchy:** This FAQ is for convenience only. `COMMERCIAL_LICENSE.md` is the authoritative and controlling document.
 
