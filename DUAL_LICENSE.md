@@ -101,5 +101,11 @@ For detailed licensing information, see:
 
 - `COMMERCIAL_LICENSE.md` – Full Commercial License terms  
 
+- `LEGAL/FAQ.md` – Common questions and answers about commercial licensing
+
+- `LEGAL/DECISION_MATRIX.md` – Quick reference matrix for license selection
+
+- `LEGAL/SUBSCRIPTIONS.md` – Detailed usage scenarios and definitions
+
 - `LEGAL/LICENSING.md` – Additional licensing information and guidance
 
