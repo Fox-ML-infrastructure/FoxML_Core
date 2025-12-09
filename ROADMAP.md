@@ -17,6 +17,21 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 
 # Current Status — Winter 2025
 
+---
+
+## What Works Today
+
+**You can use these capabilities right now:**
+
+* ✅ **Full TRAINING Pipeline** — Run complete ranking + feature selection + leakage detection workflows
+* ✅ **GPU-Accelerated Model Training** — Train LGBM/XGBoost + sequential models (CNN1D, LSTM, Transformer) with GPU acceleration
+* ✅ **Centralized YAML Configuration** — Use structured configs for experiments, model families, and system parameters
+* ✅ **Complete Documentation & Legal** — Full 4-tier docs hierarchy + enterprise legal package for commercial evaluation
+
+**This is production-ready infrastructure, not a prototype.**
+
+---
+
 ## Core System Status
 
 * **TRAINING Pipeline — Phase 1** ✅ — Functioning properly. The intelligent training framework (target ranking, feature selection, automated leakage detection) is operational. Minor issues are being investigated that likely reside in feature and target engineering. Phase 2 work (centralized configuration & UX modernization) is now underway.
@@ -115,7 +130,7 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 
 ---
 
-# Phase 3.5 — Multi-GPU & NVLink Exploration (Future)
+# Phase 4 — Multi-GPU & NVLink Exploration (Future)
 
 **NVLink Compatibility Research:**
 * Explore NVLink support for multi-GPU training workflows
@@ -134,7 +149,7 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 
 ---
 
-# Phase 4 — Trading Modules (Alpaca & IBKR)
+# Phase 5 — Trading Modules (Alpaca & IBKR)
 
 **Alpaca (Fixes Required):**
 * Resolve current module breakage
@@ -152,7 +167,7 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 
 ---
 
-# Phase 5 — Web Presence & Payments
+# Phase 6 — Web Presence & Payments
 
 **Website + Stripe Checkout:**
 * Public Fox ML Infrastructure homepage
@@ -164,7 +179,7 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 
 ---
 
-# Phase 6 — Production Hardening
+# Phase 7 — Production Hardening
 
 **Tasks:**
 * Full test coverage
@@ -177,7 +192,7 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 
 ---
 
-# Phase 7 — High-Performance Rewrite Track (Long-Term)
+# Phase 8 — High-Performance Rewrite Track (Long-Term)
 
 **Low-Level Rewrites (C/C++/Rust):**
 * Rewrite performance-critical paths
@@ -199,18 +214,31 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 
 ---
 
-# Development Priorities (Live List)
+# Development Priorities
 
-1. **Testing GPU models + ranking system**
-2. **Configuration system validation & logging revamp** (mostly complete, validation in progress)
-3. **Memory batching + Polars optimizations**
-4. **Alpaca module fixes**
-5. **IBKR validation**
-6. **Website + Stripe checkout**
-7. **Production readiness**
-8. **Exploratory modules**
-9. **NVLink & multi-GPU exploration** (research phase)
-10. **High-performance rewrite track**
+## Near-Term Focus
+
+**Active development priorities — commercially leverageable work:**
+
+1. **Configuration system validation & logging revamp** — Complete validation layer, unified logging, naming cleanup (mostly complete, validation in progress)
+2. **Memory batching + Polars optimizations** — Fix unstable batching behavior, enable large-scale training without OOM
+3. **Alpaca module fixes** — Resolve breakage, add paper-trading test suite, improve stability
+4. **IBKR validation** — Complete C++ component verification, live/paper trading tests
+5. **Website + Stripe checkout** — Public homepage, pricing tiers, purchase flow, hosted docs
+
+**Guideline:** These priorities build on the completed Phase 0–2 foundation and represent the next commercially-leverageable deltas. Focus remains on validation, polish, and strategic sequencing rather than new major subsystems.
+
+## Longer-Term / R&D
+
+**Research and future-track work — not blocking near-term goals:**
+
+6. **Testing GPU models + ranking system** — Ongoing validation and edge-case coverage
+7. **Production readiness** — Full test coverage, monitoring, deployment guides, disaster recovery
+8. **Exploratory modules** — Experimental features and research tracks
+9. **NVLink & multi-GPU exploration** — Research phase, performance benchmarking, architecture design
+10. **High-performance rewrite track** — Low-level rewrites (C/C++/Rust), HPC alignment, ROCm support
+
+**Guideline:** These items represent longer-horizon research and infrastructure work. They are valuable but not prerequisites for near-term commercial readiness.
 
 ---
 
@@ -223,6 +251,8 @@ Fox ML Infrastructure is evolving into:
 * A foundation for future HPC and cross-platform ML systems
 
 This roadmap reflects the maturation of FoxML Core from a high-powered solo project into a **commercially viable, enterprise-class ML platform.**
+
+**Development Approach:** Phases 0–2 (documentation, intelligent training, configuration) are complete or substantially complete. Current focus is validation, polish, and strategic sequencing of next-phase work. Priorities emphasize commercially-leverageable improvements over exploratory research.
 
 ---
 
