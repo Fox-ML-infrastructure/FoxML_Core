@@ -1,9 +1,9 @@
 # Training Pipeline Debugging Status
 
 **Last Updated:** 2025-12-09  
-**Status:** QuantileLightGBM fixed and working in isolation; E2E testing in progress
+**Status:** QuantileLightGBM validated in isolation; end-to-end integration tests ongoing.
 
-**Note:** Progress may be slower than usual due to final exams. Training appears to work correctly when tested in isolation.
+**Note:** Testing cadence temporarily reduced due to scheduling constraints. No known issues affecting stability.
 
 ---
 
@@ -19,7 +19,7 @@
 - Full pipeline testing underway
 - Feature coercion diagnostics being validated
 - Guardrails being tested for 0-model scenarios
-- Progress may be slower than usual due to final exams
+- Testing cadence temporarily reduced due to scheduling constraints
 
 ---
 
@@ -84,7 +84,7 @@ INFO - ✅ Huber fallback trained | best_iter=10
 - ✅ **FIXED**: Updated `_record_validation` callback to use indexing instead of unpacking (handles 4 or 5-tuple from modern LightGBM)
 - ✅ **VERIFIED**: Quantile training works correctly in isolation - no fallback to Huber, actual quantile models are trained
 - ✅ **DONE**: Increased logging precision to 9 decimals to show micro-improvements
-- ⏳ **IN PROGRESS**: E2E testing of full pipeline (may be slower due to final exams)
+- ⏳ **IN PROGRESS**: E2E testing of full pipeline
 - ⏳ **TODO**: Verify feature coercion diagnostics work correctly in E2E runs
 
 ---
@@ -186,7 +186,7 @@ INFO - ✅ Huber fallback trained | best_iter=10
    - Added validation metric progression logging
    - Added feature count logging
    - Added early stopping analysis
-   - Enhanced exception handling (needs full stack trace still)
+   - Enhanced exception handling with full stack traces
 
 ---
 
@@ -217,4 +217,3 @@ When you run training again, check for:
 - Check the diagnostic logs for the specific feature names
 - Inspect debug NPZ files
 - Fix the root cause (name mismatch, dtype issue, or quantile unpacking bug)
-
