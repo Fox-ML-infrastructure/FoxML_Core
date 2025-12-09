@@ -1,9 +1,9 @@
 # Training Pipeline Debugging Status
 
 **Last Updated:** 2025-12-09  
-**Status:** QuantileLightGBM validated in isolation; E2E testing shows healthy pipeline behavior.
+**Status:** QuantileLightGBM validated in isolation; debugging integration of ranked targets and features into training pipeline.
 
-**Note:** Testing cadence temporarily reduced due to scheduling constraints. No known issues affecting stability.
+**Note:** Testing cadence temporarily reduced due to scheduling constraints. Currently debugging issues with passing ranked targets and selected features to training pipeline.
 
 ---
 
@@ -15,14 +15,11 @@
 - Validation metrics logged with 9 decimal precision
 - Early stopping working correctly
 
-**E2E Testing:** ✅ **HEALTHY RUN CONFIRMED**
-- Full pipeline end-to-end run completed successfully
-- Leak detection working correctly (caught 100% copy feature, auto-removed)
-- Degenerate targets automatically skipped (60m/0.20 combo with single unique value)
-- Multi-model feature selection producing coherent results (0.62-0.76 scores across tree ensembles)
-- Cross-sectional data build: ~100k rows, ~300 clean features after leakage filtering
-- Target confidence gating working as designed (MEDIUM confidence → candidate bucket, production=False)
-- Timestamp delta warnings addressed with negative-delta guard and debug logging
+**E2E Testing:** 🔧 **DEBUGGING IN PROGRESS**
+- Previous run (without cross-sectional ranking) showed healthy pipeline behavior
+- Cross-sectional ranking feature implemented
+- **Current issue**: Debugging problems with passing ranked targets and selected features to training pipeline
+- Integration between ranking/selection and training steps needs resolution
 
 ---
 
@@ -56,15 +53,21 @@
 - ⚠️ **Boruta gatekeeper disabled**: Expected behavior - Boruta runs per-symbol but aggregator-level gatekeeper is conservative by design (config-controlled)
 
 **New Features:**
-- ✅ **Cross-sectional feature ranking**: Added panel model for universe-level feature importance
+- ⏳ **Cross-sectional feature ranking**: Added panel model for universe-level feature importance
   - Module: `TRAINING/ranking/cross_sectional_feature_ranker.py`
   - Integrated into feature selection pipeline (optional, config-controlled)
   - Tags features: CORE (strong both), SYMBOL_SPECIFIC, CS_SPECIFIC, WEAK
   - Enabled in config with `min_symbols: 2` for testing
-  - Ready for E2E testing with 2+ symbols
+  - **Status**: Implementation complete, ready for E2E testing (not yet tested)
+
+**Current Debugging Focus:**
+- Integration issues between ranking/selection and training pipeline
+- Passing ranked targets from STEP 1 to training
+- Passing selected features from STEP 2 to training
+- Ensuring data format compatibility between selection and training stages
 
 **Bottom Line:**
-The early intelligence layer is functioning as designed. All safety nets (leak detection, degenerate target skipping, confidence gating) are working correctly. The system is producing coherent feature selections with strong cross-model agreement.
+The early intelligence layer (ranking & selection) is functioning as designed. All safety nets (leak detection, degenerate target skipping, confidence gating) are working correctly. The system is producing coherent feature selections with strong cross-model agreement. Currently debugging integration with training pipeline.
 
 ---
 
