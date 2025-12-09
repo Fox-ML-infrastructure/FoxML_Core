@@ -190,18 +190,51 @@ def detect_interval_from_timestamps(
             logger.warning(f"No valid time differences, using default: {default}m")
             return default
         
+        # Check if we have Timedelta objects (pandas datetime diff) or numeric
+        is_timedelta = hasattr(time_diffs.iloc[0], 'total_seconds')
+        
+        # DEBUG: Log delta statistics to diagnose negative/unsorted timestamp issues
+        if is_timedelta:
+            # Timedelta objects - convert to nanoseconds for logging
+            deltas_ns = np.array([td.total_seconds() * 1e9 for td in time_diffs])
+        else:
+            # Numeric deltas - assume already in nanoseconds
+            deltas_ns = time_diffs.values.astype(np.float64)
+        
+        if len(deltas_ns) > 0:
+            logger.debug(
+                f"data_interval debug: n={len(deltas_ns)}, "
+                f"min_delta_ns={deltas_ns.min()}, max_delta_ns={deltas_ns.max()}, "
+                f"median_delta_ns={np.median(deltas_ns)}"
+            )
+        
+        # GUARD: Filter out negative deltas (indicates unsorted timestamps)
+        positive_mask = deltas_ns > 0
+        if not positive_mask.any():
+            logger.error(
+                f"All timestamp deltas are non-positive (min={deltas_ns.min()}, max={deltas_ns.max()}); "
+                f"timestamps appear unsorted. Using default: {default}m"
+            )
+            return default
+        
+        # Filter to only positive deltas
+        if is_timedelta:
+            time_diffs = time_diffs[positive_mask]
+        else:
+            time_diffs = time_diffs[positive_mask]
+        
         # MEDIUM TERM FIX: Proper unit detection
         median_diff_minutes = None
         
         # Check if we have Timedelta objects (pandas datetime diff)
-        if hasattr(time_diffs.iloc[0], 'total_seconds'):
+        if is_timedelta:
             # Already converted to Timedelta - convert to minutes
-            diff_minutes = time_diffs.apply(lambda x: abs(x.total_seconds()) / 60.0)
+            diff_minutes = time_diffs.apply(lambda x: x.total_seconds() / 60.0)
             median_diff_minutes = float(diff_minutes.median())
         else:
             # Numeric deltas - need to detect unit
             raw_median = float(time_diffs.median())
-            # Use absolute value to handle unsorted timestamps or wraparound
+            # Should be positive after filtering, but use abs for safety
             abs_raw_median = abs(raw_median)
             
             # Try to detect unit (using absolute value)
