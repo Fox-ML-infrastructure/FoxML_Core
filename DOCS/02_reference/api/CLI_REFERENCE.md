@@ -58,6 +58,8 @@ python TRAINING/train.py \
 - `--target-ranking-config`: Path to target ranking config YAML [LEGACY]
 - `--multi-model-config`: Path to feature selection config YAML [LEGACY]
 
+**Note**: The training system uses modular components internally (`TRAINING/training_strategies/`, `TRAINING/ranking/predictability/`) but all CLI commands and imports remain backward compatible. The original files are thin wrappers that re-export from the modular structure.
+
 **Examples:**
 
 ```bash
