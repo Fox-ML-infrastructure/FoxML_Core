@@ -1,7 +1,9 @@
 # Training Pipeline Debugging Status
 
 **Last Updated:** 2025-12-09  
-**Status:** Active debugging of feature coercion and QuantileLightGBM fallback issues
+**Status:** QuantileLightGBM fixed and working in isolation; E2E testing in progress
+
+**Note:** Progress may be slower than usual due to final exams. Training appears to work correctly when tested in isolation.
 
 ---
 
@@ -64,8 +66,10 @@ INFO - ✅ Huber fallback trained | best_iter=10
 **Next Steps:**
 - ✅ **DONE**: Added full stack trace logging (`logger.exception`) to identify exact line causing the error
 - ✅ **FIXED**: Updated `_record_validation` callback to use indexing instead of unpacking (handles 4 or 5-tuple from modern LightGBM)
-- ⏳ **TODO**: Test quantile training to verify it works without falling back to Huber
-- ⏳ **TODO**: Consider temporarily disabling Huber fallback to force hard failure if quantile still has issues
+- ✅ **VERIFIED**: Quantile training works correctly in isolation - no fallback to Huber, actual quantile models are trained
+- ✅ **DONE**: Increased logging precision to 9 decimals to show micro-improvements
+- ⏳ **IN PROGRESS**: E2E testing of full pipeline (may be slower due to final exams)
+- ⏳ **TODO**: Verify feature coercion diagnostics work correctly in E2E runs
 
 ---
 
