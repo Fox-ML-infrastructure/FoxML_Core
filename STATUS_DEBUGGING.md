@@ -194,12 +194,13 @@ INFO - ✅ Huber fallback trained | best_iter=10
 
 When you run training again, check for:
 
-- [ ] `🔍 Debug [target]:` messages showing feature diagnostics
-- [ ] `❌ CRITICAL [target]:` messages when all features become NaN
-- [ ] `❌ TRAINING RUN FAILED: 0 models trained` instead of silent success
-- [ ] Debug files in `debug_feature_coercion/` directory
-- [ ] Full stack trace for QuantileLightGBM unpacking error
-- [ ] Validation metric progression logs for QuantileLightGBM
+- [x] Full stack trace for QuantileLightGBM unpacking error - **FIXED**
+- [x] Validation metric progression logs for QuantileLightGBM - **WORKING** (now with 9 decimal precision)
+- [x] QuantileLightGBM trains without falling back to Huber - **VERIFIED IN ISOLATION**
+- [ ] `🔍 Debug [target]:` messages showing feature diagnostics - **E2E TESTING IN PROGRESS**
+- [ ] `❌ CRITICAL [target]:` messages when all features become NaN - **E2E TESTING IN PROGRESS**
+- [ ] `❌ TRAINING RUN FAILED: 0 models trained` instead of silent success - **E2E TESTING IN PROGRESS**
+- [ ] Debug files in `debug_feature_coercion/` directory - **E2E TESTING IN PROGRESS**
 
 ---
 
