@@ -34,9 +34,11 @@ This Commercial License is intended for trading firms, hedge funds, financial in
 "Commercial Use" means any use of the Software by a business, organization, institution, or individual that:
   (a) generates revenue directly or indirectly,
   (b) contributes to a commercial product or service,
-  (c) is deployed internally within a company for operational, analytical, modeling, forecasting, optimization, or research purposes,
+  (c) is deployed internally within a company for operational, analytical, modeling, forecasting, optimization, or research purposes (including but not limited to: development, testing, staging, quality assurance, or production environments),
   (d) is used to provide services to third parties,
-  (e) enables, assists, or supports any for-profit activity.
+  (e) enables, assists, or supports any for-profit activity,
+  (f) is used to train, develop, or create models, algorithms, or systems that are then used commercially, sold, licensed, or provided to third parties,
+  (g) is used in any environment (development, staging, testing, or production) within a business or organizational context, regardless of whether such environment is labeled as "non-production" or "experimental."
 
 **Business / Internal Use:** Any use of the Software within a company, organization, or other legal entity (including internal tools, proofs of concept, evaluations, pilot projects, or use by employees, contractors, interns, or affiliates) requires a commercial license, regardless of whether the use directly generates revenue. See `LEGAL/SUBSCRIPTIONS.md` for complete definitions.
 
@@ -50,6 +52,9 @@ This Commercial License is intended for organizations that wish to:
   (b) obtain additional rights or assurances not provided by AGPL-3.0.
 
 Nothing in this Commercial License limits any rights granted under AGPL-3.0 for copies of the Software obtained and used **solely** for qualifying non-commercial academic or personal research use as defined in `LEGAL/SUBSCRIPTIONS.md`. Any commercial use requires this Commercial License.
+
+**License Scope and Expansion.**
+This License covers the use case(s) and scope specified in the Ordering Documents. If Licensee expands its use of the Software beyond the scope originally licensed (for example: adding new use cases, expanding to additional business units, increasing seat count beyond purchased Seats, or changing deployment model), Licensee must notify Licensor and may be required to pay additional fees or obtain an amended license. Expansion of use without proper licensing constitutes a Material Breach.
 
 ## 2. GRANT OF LICENSE
 
@@ -86,6 +91,12 @@ No sublicensing rights are granted unless explicitly permitted in a separate SOW
 
 Non-commercial use of the Software remains available under the AGPL-3.0 license. This Commercial License does not limit or restrict rights granted under AGPL-3.0 for qualifying non-commercial academic or personal research use.
 
+**IMPORTANT — Open Source Contribution Does Not Exempt Commercial Use:**
+Contributing code, fixes, or improvements to the open-source version of the Software does not exempt Licensee from the requirement to obtain a commercial license for any commercial use. Contributing to open source is separate from and does not affect commercial licensing requirements. Any commercial use (as defined in Section 1) requires a commercial license regardless of whether Licensee has contributed to the open-source version.
+
+**IMPORTANT — Open Source Contribution Does Not Exempt Commercial Use:**
+Contributing code, fixes, or improvements to the open-source version of the Software does not exempt Licensee from the requirement to obtain a commercial license for any commercial use. Contributing to open source is separate from and does not affect commercial licensing requirements. Any commercial use (as defined in Section 1) requires a commercial license regardless of whether Licensee has contributed to the open-source version.
+
 ## 3. OWNERSHIP
 
 The Software is licensed, not sold. As between Licensor and Licensee, Licensor retains all right, title, and interest in and to the Software and all related intellectual property rights, whether registered or unregistered.
@@ -113,7 +124,10 @@ Licensee shall not use the Software to develop, host, or provide any software-as
 
 (c) an API, SDK, or other interface that provides third parties with direct or indirect access to the Software's core infrastructure capabilities.
 
-For clarity, Licensee may use the Software to build and operate its own internal trading, research, or analytics systems and to provide outputs (e.g., analytics, reports, trading decisions) to its own clients, provided such clients do not receive direct or indirect access to the Software itself, including but not limited to: (i) access to the Software's APIs, (ii) ability to execute code or workflows within the Software, (iii) access to the Software's user interface, or (iv) any other means of interacting with or controlling the Software. Licensee may provide data inputs to the Software and receive outputs from the Software for delivery to clients, but clients may not themselves interact with the Software.
+For clarity, Licensee may use the Software to build and operate its own internal trading, research, or analytics systems and to provide outputs (e.g., analytics, reports, trading decisions, predictions, recommendations) to its own clients, provided such clients do not receive direct or indirect access to the Software itself, including but not limited to: (i) access to the Software's APIs, (ii) ability to execute code or workflows within the Software, (iii) access to the Software's user interface, or (iv) any other means of interacting with or controlling the Software. Licensee may provide data inputs to the Software and receive outputs from the Software for delivery to clients, but clients may not themselves interact with the Software.
+
+**Model Training and Resale.**
+Licensee may use the Software to train, develop, or create models, algorithms, or systems for Licensee's own internal commercial use. However, Licensee may NOT: (i) use the Software to train models that are then sold, licensed, or provided to third parties as a standalone product or service, (ii) use the Software to create derivative products or services that compete with or substantially replicate the Software's core functionality, or (iii) resell, license, or distribute any models, algorithms, or systems created using the Software to third parties, unless such distribution is limited to outputs (as defined above) and does not include access to the Software itself.
 - Publish or disclose source code derived from the commercial version
 - Publish or disclose performance benchmarks or comparative tests involving the Software to any third party without Licensor's prior written consent (see Section 4.1 below)
 - Remove or alter copyright notices
@@ -157,6 +171,9 @@ Upon termination of this Commercial License:
 - Licensee must immediately cease all Commercial Use and destroy or permanently disable all copies of the Software used under this Commercial License (including all backups, archives, and derivative works),
 - within thirty (30) days of termination, Licensee must provide Licensor with written certification signed by an authorized officer of Licensee confirming that all copies have been destroyed or disabled,
 - any continued Commercial Use without a valid license will constitute unlicensed use and violation of Licensor's copyright.
+
+**Copyright Infringement.**
+Commercial use of the Software without a valid commercial license constitutes copyright infringement under applicable law. Licensor reserves all rights and remedies available under copyright law, including but not limited to: injunctive relief, monetary damages, statutory damages, and recovery of attorneys' fees and costs. Licensee acknowledges that unauthorized commercial use may result in liability for copyright infringement in addition to breach of contract claims.
 
 Termination of this Commercial License does not terminate any rights Licensee may have under AGPL-3.0 for copies of the Software obtained and used solely under that license.
 
@@ -210,6 +227,9 @@ Unless otherwise specified in the Ordering Documents:
 - Payment is due within thirty (30) days of invoice date
 - Late payments may incur interest at the rate of one and one-half percent (1.5%) per month, or the maximum rate permitted by law, whichever is lower
 - Failure to pay may result in suspension or termination of rights under this License as set forth in Section 5
+- **Payment disputes:** If Licensee disputes any invoice, Licensee must notify Licensor in writing within fifteen (15) days of the invoice date, specifying the nature of the dispute. Licensee must pay all undisputed amounts. Disputed amounts do not excuse payment of undisputed amounts. If the dispute is resolved in Licensor's favor, Licensee shall pay the disputed amount plus interest from the original due date
+- **Collection rights:** Licensor reserves the right to engage collection agencies, attorneys, or other third parties to collect overdue amounts. Licensee shall be responsible for all collection costs, including but not limited to: collection agency fees, attorneys' fees, court costs, and other expenses incurred in connection with collection efforts
+- **No refunds:** All fees paid are non-refundable except as required by law or as explicitly provided in a separate written agreement
 
 ## 11. AUDIT RIGHTS
 
@@ -223,6 +243,7 @@ Licensor reserves the right to audit Licensee's use of the Software to verify co
 - Remote audit methods are permitted (e.g., usage logs, deployment verification)
 - If an audit reveals that Licensee underpaid fees by more than five percent (5%) for the audited period or materially violated the license restrictions (meaning a violation that is significant, substantial, or has a material adverse effect on Licensor's rights or interests), Licensee shall reimburse Licensor's reasonable audit costs (not to exceed the amount of underpaid fees) in addition to paying any unpaid fees
 - Licensee must provide reasonable cooperation (including making relevant personnel available during normal business hours) and access to relevant records, logs, and documentation reasonably necessary to verify compliance
+- **Refusal to cooperate with an audit constitutes a Material Breach** and may result in immediate termination of this License. If Licensee refuses to provide access, documentation, or cooperation required for an audit, Licensor may assume non-compliance and invoice Licensee for maximum potential usage based on available information, and Licensee shall pay such invoice within thirty (30) days or face termination
 
 **Confidentiality:** All audit information shall be treated as confidential and used solely for compliance verification.
 

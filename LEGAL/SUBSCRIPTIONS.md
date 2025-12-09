@@ -32,8 +32,11 @@ Commercial license pricing is aligned with enterprise quant infrastructure stand
 **EXPLICIT EXCLUSIONS FROM NON-COMMERCIAL USE:**
 - **Sole proprietorships, freelancers, and independent contractors** — Any use by a sole proprietor, freelancer, or independent contractor, even if claimed to be "personal," requires a commercial license if the Software is used in connection with any business activity, client work, or revenue-generating activity
 - **For-profit educational institutions** — Any use by for-profit universities, bootcamps, training companies, or corporate training programs requires a commercial license
+- **Corporate training and bootcamps** — Any use for corporate training, professional development, bootcamp instruction, or educational services provided by commercial entities requires a commercial license, regardless of whether the training is provided to employees or external students
 - **Corporate research labs** — Any research conducted by, for, or on behalf of a commercial organization requires a commercial license, regardless of whether the research lab has non-profit status or is operated as a separate entity
 - **University research with commercial ties** — Research funded by, sponsored by, or operationally integrated into commercial organizations requires a commercial license, even if performed at a non-profit institution
+- **Development, testing, and staging environments** — Any use in development, testing, staging, quality assurance, or other non-production environments within a business context requires a commercial license, regardless of whether such environments are labeled as "experimental" or "non-production"
+- **Open source contributions** — Contributing code, fixes, or improvements to the open-source version does not exempt commercial use from licensing requirements
 
 **Academic research that is conducted for, funded by, sponsored by, or operationally integrated into a commercial organization's activities requires a commercial license**, even if the research is performed by students, interns, or contractors.
 
