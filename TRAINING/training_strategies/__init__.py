@@ -64,11 +64,15 @@ from TRAINING.training_strategies.setup import (
     TF_FAMS,
     TORCH_FAMS,
     CPU_FAMS,
-    FAMILY_CAPS,
 )
 from TRAINING.training_strategies.utils import (
     ALL_FAMILIES,
 )
+# FAMILY_CAPS is in models.specialized.constants, not here
+try:
+    from TRAINING.models.specialized.constants import FAMILY_CAPS
+except ImportError:
+    FAMILY_CAPS = {}
 
 __all__ = [
     # Family runners
