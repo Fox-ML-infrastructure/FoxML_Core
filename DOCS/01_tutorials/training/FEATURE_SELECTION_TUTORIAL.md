@@ -17,6 +17,7 @@ Feature selection reduces dimensionality and improves model performance by:
 - Consistent preprocessing (shared `make_sklearn_dense_X()` helper for sklearn models)
 - Unified interval handling (respects `data.bar_interval` from experiment config)
 - **Boruta statistical gatekeeper**: Boruta acts as a gatekeeper (not just another scorer), using ExtraTrees to test feature significance and modifying consensus scores via bonuses/penalties
+- **Cross-sectional ranking** (optional): Panel model trained across all symbols simultaneously to identify universe-core features vs symbol-specific features. Automatically tags features as CORE/SYMBOL_SPECIFIC/CS_SPECIFIC/WEAK. Enabled via `aggregation.cross_sectional_ranking.enabled` in config. Only runs if `len(symbols) >= min_symbols` (default: 5).
 - See [Ranking and Selection Consistency](RANKING_SELECTION_CONSISTENCY.md) for details
 
 ## Quick Start

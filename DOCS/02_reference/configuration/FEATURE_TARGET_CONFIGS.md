@@ -266,6 +266,44 @@ Boruta is implemented as a **statistical gatekeeper**, not just another importan
 - Uses `train_score = math.nan` (not a numeric score) since it's a selector, not a predictor - prevents feature count mismatch errors
 - See [Ranking and Selection Consistency](../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md#boruta-statistical-gatekeeper) for details
 
+**Cross-Sectional Ranking (Panel Model):**
+The feature selection pipeline includes an optional **cross-sectional ranking** step that trains a panel model across all symbols simultaneously. This provides a complementary view to per-symbol selection:
+
+- **Per-symbol selection**: "Does this feature work on AAPL? On MSFT?"
+- **Cross-sectional ranking**: "Does this feature work across the universe?"
+
+**Configuration:**
+```yaml
+aggregation:
+  cross_sectional_ranking:
+    enabled: true  # Enable cross-sectional ranking
+    min_symbols: 5  # Only run if >= this many symbols (default: 5)
+    top_k_candidates: 50  # Use top K from per-symbol selection as candidates
+    model_families: [lightgbm]  # Which models to use for panel model
+    min_cs: 10  # Minimum cross-sectional size per timestamp
+    max_cs_samples: 1000  # Maximum samples per timestamp
+    normalization: null  # Optional: 'zscore' or 'rank' for per-date normalization
+    symbol_threshold: 0.1  # Threshold for "strong" per-symbol importance (0-1)
+    cs_threshold: 0.1  # Threshold for "strong" CS importance (0-1)
+```
+
+**Feature Categories:**
+Features are automatically tagged based on per-symbol vs cross-sectional importance:
+- **CORE**: Strong in both per-symbol AND cross-sectional (highest confidence)
+- **SYMBOL_SPECIFIC**: Strong per-symbol, weak cross-sectional (name-specific edges)
+- **CS_SPECIFIC**: Strong cross-sectional, weak per-symbol (universe-level structure)
+- **WEAK**: Weak in both (candidates for removal)
+
+**Output:**
+The feature selection output includes:
+- `cs_importance_score`: Cross-sectional importance score (0-1, normalized)
+- `feature_category`: Feature category (CORE/SYMBOL_SPECIFIC/CS_SPECIFIC/WEAK)
+
+**When to Use:**
+- **2-4 symbols**: CS ranking adds little value; keep `enabled: false` or `min_symbols: 5`
+- **5+ symbols**: CS ranking becomes valuable for identifying universe-core features
+- **20+ symbols**: CS ranking is highly recommended for filtering symbol-specific quirks
+
 **Example: Adjusting Model Weights**
 
 Edit `CONFIG/feature_selection/multi_model.yaml` (or use experiment config override):
