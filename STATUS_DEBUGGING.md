@@ -55,6 +55,14 @@
 - ⚠️ **Timestamp delta warnings**: Fixed with negative-delta guard and debug logging (harmless, using config default 5m)
 - ⚠️ **Boruta gatekeeper disabled**: Expected behavior - Boruta runs per-symbol but aggregator-level gatekeeper is conservative by design (config-controlled)
 
+**New Features:**
+- ✅ **Cross-sectional feature ranking**: Added panel model for universe-level feature importance
+  - Module: `TRAINING/ranking/cross_sectional_feature_ranker.py`
+  - Integrated into feature selection pipeline (optional, config-controlled)
+  - Tags features: CORE (strong both), SYMBOL_SPECIFIC, CS_SPECIFIC, WEAK
+  - Enabled in config with `min_symbols: 2` for testing
+  - Ready for E2E testing with 2+ symbols
+
 **Bottom Line:**
 The early intelligence layer is functioning as designed. All safety nets (leak detection, degenerate target skipping, confidence gating) are working correctly. The system is producing coherent feature selections with strong cross-model agreement.
 
