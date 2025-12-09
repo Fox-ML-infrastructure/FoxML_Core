@@ -35,13 +35,15 @@ This Commercial License is intended for trading firms, hedge funds, financial in
 
 "Commercial Use" means any use of the Software by or for the benefit of a business, organization, or other legal entity, including:
 
-(a) internal use in any environment (development, testing, staging, or production);
+(a) internal use in any environment (development, testing, staging, or production), including but not limited to: operational tools, dashboards, research pipelines, proofs of concept, evaluations, pilot projects, or experimental use;
 
-(b) use that directly or indirectly supports revenue-generating activities, products, or services; or
+(b) use that directly or indirectly supports revenue-generating activities, products, or services, including but not limited to: trading, investment analysis, financial decision-making, client services, or any for-profit activity; or
 
-(c) use by employees, contractors, interns, or Affiliates in the scope of their work for such entity.
+(c) use by employees, contractors, interns, or Affiliates in the scope of their work for such entity, regardless of whether such use directly generates revenue or is labeled as "non-revenue," "experimental," or "research-only."
 
-Non-commercial academic or personal research use of the AGPL-3.0 version is permitted only as described in `LEGAL/SUBSCRIPTIONS.md`. Any Commercial Use requires this Commercial License, regardless of whether the environment is labeled "non-production," "evaluation," "pilot," or similar.
+**Examples of Commercial Use include (but are not limited to):** internal tools, dashboards, research pipelines, trading systems, investment analysis, forecasting, modeling, optimization, client services, proofs of concept, evaluations, pilot projects, development environments, testing environments, staging environments, production environments, and any use within a business or organizational context.
+
+Non-commercial academic or personal research use of the AGPL-3.0 version is permitted only as described in `LEGAL/SUBSCRIPTIONS.md`. Any Commercial Use requires this Commercial License, regardless of whether the environment is labeled "non-production," "evaluation," "pilot," "experimental," "non-revenue," or similar.
 
 **AGPL-3.0 Commercial Use Prohibition.**
 
