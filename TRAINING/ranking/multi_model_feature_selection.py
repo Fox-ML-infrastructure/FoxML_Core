@@ -1191,6 +1191,212 @@ def aggregate_multi_model_importance(
     return summary_df, selected_features
 
 
+def compute_target_confidence(
+    summary_df: pd.DataFrame,
+    all_results: List[ImportanceResult],
+    model_families_config: Dict[str, Dict[str, Any]],
+    target_name: str,
+    confidence_config: Optional[Dict[str, Any]] = None,
+    top_k: Optional[int] = None
+) -> Dict[str, Any]:
+    """
+    Compute target-level confidence metrics from multi-model feature selection results.
+    
+    Metrics computed:
+    1. Boruta coverage (confirmed/tentative counts)
+    2. Model coverage (successful vs available)
+    3. Score strength (mean/max scores)
+    4. Agreement ratio (features in top-K across multiple models)
+    
+    Args:
+        summary_df: DataFrame with feature importance and Boruta status
+        all_results: List of ImportanceResult from all model runs
+        model_families_config: Config dict with enabled model families
+        target_name: Target column name
+        confidence_config: Optional config dict with confidence thresholds (from multi_model.yaml)
+        top_k: Number of top features to consider for agreement (default: from config or 20)
+    
+    Returns:
+        Dict with confidence metrics and bucket (HIGH/MEDIUM/LOW)
+    """
+    # Extract thresholds from config with defaults
+    if confidence_config is None:
+        confidence_config = {}
+    
+    high_cfg = confidence_config.get('high', {})
+    medium_cfg = confidence_config.get('medium', {})
+    low_reasons_cfg = confidence_config.get('low_reasons', {})
+    agreement_cfg = confidence_config.get('agreement', {})
+    
+    # Default thresholds (matching current hardcoded values)
+    high_boruta_min = high_cfg.get('boruta_confirmed_min', 5)
+    high_agreement_min = high_cfg.get('agreement_ratio_min', 0.4)
+    high_score_min = high_cfg.get('mean_score_min', 0.05)
+    high_coverage_min = high_cfg.get('model_coverage_min', 0.7)
+    
+    medium_boruta_min = medium_cfg.get('boruta_confirmed_min', 1)
+    medium_agreement_min = medium_cfg.get('agreement_ratio_min', 0.25)
+    medium_score_min = medium_cfg.get('mean_score_min', 0.02)
+    
+    # Low reason thresholds
+    boruta_zero_cfg = low_reasons_cfg.get('boruta_zero_confirmed', {})
+    boruta_zero_confirmed_max = boruta_zero_cfg.get('boruta_confirmed_max', 0)
+    boruta_zero_tentative_max = boruta_zero_cfg.get('boruta_tentative_max', 1)
+    boruta_zero_score_max = boruta_zero_cfg.get('mean_score_max', 0.03)
+    
+    low_agreement_max = low_reasons_cfg.get('low_model_agreement', {}).get('agreement_ratio_max', 0.2)
+    low_score_max = low_reasons_cfg.get('low_model_scores', {}).get('mean_score_max', 0.01)
+    low_coverage_max = low_reasons_cfg.get('low_model_coverage', {}).get('model_coverage_max', 0.5)
+    
+    # Agreement top_k from config
+    if top_k is None:
+        top_k = agreement_cfg.get('top_k', 20)
+    
+    metrics = {
+        'target_name': target_name,
+        'boruta_confirmed_count': 0,
+        'boruta_tentative_count': 0,
+        'boruta_rejected_count': 0,
+        'boruta_used': False,
+        'n_models_available': 0,
+        'n_models_successful': 0,
+        'model_coverage_ratio': 0.0,
+        'mean_score': 0.0,
+        'max_score': 0.0,
+        'mean_strong_score': 0.0,  # Tree ensembles + CatBoost + NN
+        'agreement_ratio': 0.0,
+        'score_tier': 'LOW',  # Orthogonal to confidence: signal strength
+        'confidence': 'LOW',
+        'low_confidence_reason': None
+    }
+    
+    # 1. Boruta coverage
+    if 'boruta_confirmed' in summary_df.columns:
+        metrics['boruta_confirmed_count'] = int(summary_df['boruta_confirmed'].sum())
+        metrics['boruta_tentative_count'] = int(summary_df['boruta_tentative'].sum())
+        metrics['boruta_rejected_count'] = int(summary_df['boruta_rejected'].sum())
+        metrics['boruta_used'] = (
+            metrics['boruta_confirmed_count'] > 0 or
+            metrics['boruta_tentative_count'] > 0 or
+            metrics['boruta_rejected_count'] > 0
+        )
+    
+    # 2. Model coverage
+    enabled_families = [
+        name for name, cfg in model_families_config.items()
+        if cfg.get('enabled', False)
+    ]
+    metrics['n_models_available'] = len(enabled_families)
+    
+    # Count successful models (those with valid results)
+    successful_models = set(r.model_family for r in all_results if r.train_score is not None and not (isinstance(r.train_score, float) and (math.isnan(r.train_score) or math.isinf(r.train_score))))
+    metrics['n_models_successful'] = len(successful_models)
+    
+    if metrics['n_models_available'] > 0:
+        metrics['model_coverage_ratio'] = metrics['n_models_successful'] / metrics['n_models_available']
+    
+    # 3. Score strength
+    valid_scores = [
+        r.train_score for r in all_results
+        if r.train_score is not None and not (isinstance(r.train_score, float) and (math.isnan(r.train_score) or math.isinf(r.train_score)))
+    ]
+    
+    if valid_scores:
+        metrics['mean_score'] = float(np.mean(valid_scores))
+        metrics['max_score'] = float(np.max(valid_scores))
+        
+        # Strong models: tree ensembles, CatBoost, neural networks
+        strong_model_families = {'lightgbm', 'xgboost', 'random_forest', 'catboost', 'neural_network'}
+        strong_scores = [
+            r.train_score for r in all_results
+            if r.model_family in strong_model_families
+            and r.train_score is not None
+            and not (isinstance(r.train_score, float) and (math.isnan(r.train_score) or math.isinf(r.train_score)))
+        ]
+        if strong_scores:
+            metrics['mean_strong_score'] = float(np.mean(strong_scores))
+    
+    # 3b. Score tier (orthogonal to confidence: pure signal strength)
+    # Extract thresholds from config
+    score_tier_cfg = confidence_config.get('score_tier', {})
+    high_tier_cfg = score_tier_cfg.get('high', {})
+    medium_tier_cfg = score_tier_cfg.get('medium', {})
+    
+    high_mean_strong_min = high_tier_cfg.get('mean_strong_score_min', 0.08)
+    high_max_min = high_tier_cfg.get('max_score_min', 0.70)
+    medium_mean_strong_min = medium_tier_cfg.get('mean_strong_score_min', 0.03)
+    medium_max_min = medium_tier_cfg.get('max_score_min', 0.55)
+    
+    # HIGH if strong models show high scores OR max is very high
+    if metrics['mean_strong_score'] >= high_mean_strong_min or metrics['max_score'] >= high_max_min:
+        metrics['score_tier'] = 'HIGH'
+    # MEDIUM if moderate scores
+    elif metrics['mean_strong_score'] >= medium_mean_strong_min or metrics['max_score'] >= medium_max_min:
+        metrics['score_tier'] = 'MEDIUM'
+    # LOW otherwise
+    else:
+        metrics['score_tier'] = 'LOW'
+    
+    # 4. Agreement on top features
+    if len(summary_df) > 0 and 'feature' in summary_df.columns:
+        # Get top-K features by consensus score
+        top_k_features = summary_df.nlargest(min(top_k, len(summary_df)), 'consensus_score')['feature'].tolist()
+        
+        # Count how many models have each feature in their top-K
+        feature_model_count = defaultdict(int)
+        
+        for result in all_results:
+            if result.importance_scores is None or len(result.importance_scores) == 0:
+                continue
+            
+            # Get top-K features for this model
+            model_top_k = result.importance_scores.nlargest(min(top_k, len(result.importance_scores))).index.tolist()
+            
+            # Count overlap with overall top-K
+            for feature in top_k_features:
+                if feature in model_top_k:
+                    feature_model_count[feature] += 1
+        
+        # Agreement ratio: fraction of top-K features that appear in >= 2 models
+        features_in_multiple_models = sum(1 for count in feature_model_count.values() if count >= 2)
+        metrics['agreement_ratio'] = features_in_multiple_models / len(top_k_features) if top_k_features else 0.0
+    
+    # 5. Confidence bucket assignment (using config thresholds)
+    # HIGH confidence (all conditions must be met)
+    if (metrics['boruta_confirmed_count'] >= high_boruta_min and
+        metrics['agreement_ratio'] >= high_agreement_min and
+        metrics['mean_score'] >= high_score_min and
+        metrics['model_coverage_ratio'] >= high_coverage_min):
+        metrics['confidence'] = 'HIGH'
+    
+    # MEDIUM confidence (any one condition is sufficient)
+    elif (metrics['boruta_confirmed_count'] >= medium_boruta_min or
+          metrics['agreement_ratio'] >= medium_agreement_min or
+          metrics['mean_score'] >= medium_score_min):
+        metrics['confidence'] = 'MEDIUM'
+    
+    # LOW confidence (fallback)
+    else:
+        metrics['confidence'] = 'LOW'
+        
+        # Determine reason using config thresholds
+        if (metrics['boruta_used'] and
+            metrics['boruta_confirmed_count'] <= boruta_zero_confirmed_max and
+            metrics['boruta_tentative_count'] <= boruta_zero_tentative_max and
+            metrics['mean_score'] < boruta_zero_score_max):
+            metrics['low_confidence_reason'] = 'boruta_zero_confirmed'
+        elif metrics['agreement_ratio'] < low_agreement_max:
+            metrics['low_confidence_reason'] = 'low_model_agreement'
+        elif metrics['mean_score'] < low_score_max:
+            metrics['low_confidence_reason'] = 'low_model_scores'
+        elif metrics['model_coverage_ratio'] < low_coverage_max:
+            metrics['low_confidence_reason'] = 'low_model_coverage'
+        else:
+            metrics['low_confidence_reason'] = 'multiple_weak_signals'
+    
+    return metrics
+
+
 def save_multi_model_results(
     summary_df: pd.DataFrame,
     selected_features: List[str],
@@ -1269,6 +1475,47 @@ def save_multi_model_results(
     with open(output_dir / "multi_model_metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
     logger.info(f"✅ Saved metadata")
+    
+    # 6. Target confidence metrics (if model_families_config available in metadata)
+    try:
+        model_families_config = metadata.get('model_families_config')
+        config = metadata.get('config', {})
+        
+        if model_families_config is None:
+            # Try to extract from metadata config if nested
+            model_families_config = config.get('model_families', {})
+        
+        # Extract confidence config from nested config
+        confidence_config = config.get('confidence', {})
+        
+        if model_families_config:
+            target_name = metadata.get('target_column', 'unknown_target')
+            confidence_metrics = compute_target_confidence(
+                summary_df=summary_df,
+                all_results=all_results,
+                model_families_config=model_families_config,
+                target_name=target_name,
+                confidence_config=confidence_config,
+                top_k=None  # Will use config or default
+            )
+            
+            with open(output_dir / "target_confidence.json", "w") as f:
+                json.dump(confidence_metrics, f, indent=2)
+            
+            # Log confidence summary
+            confidence = confidence_metrics['confidence']
+            reason = confidence_metrics.get('low_confidence_reason', '')
+            if confidence == 'LOW':
+                logger.warning(f"⚠️  Target {target_name}: confidence={confidence} ({reason})")
+            elif confidence == 'MEDIUM':
+                logger.info(f"ℹ️  Target {target_name}: confidence={confidence}")
+            else:
+                logger.info(f"✅ Target {target_name}: confidence={confidence}")
+            
+            logger.info(f"✅ Saved target confidence metrics to target_confidence.json")
+    except Exception as e:
+        logger.warning(f"Failed to compute target confidence metrics: {e}")
+        logger.debug("Confidence computation requires model_families_config in metadata", exc_info=True)
 
 
 def main():
@@ -1365,23 +1612,23 @@ def main():
     all_results = []
     for i, (symbol, path) in enumerate(labeled_files, 1):
         # Check if already completed
-            if symbol in completed:
-                if args.resume:
-                    logger.info(f"\n[{i}/{len(labeled_files)}] Skipping {symbol} (already completed)")
-                    symbol_results = completed[symbol]
-                    if isinstance(symbol_results, list):
-                        # Reconstruct ImportanceResult objects from dicts
-                        for r_dict in symbol_results:
-                            # Convert importance_scores dict back to pd.Series
-                            if isinstance(r_dict.get('importance_scores'), dict):
-                                r_dict['importance_scores'] = pd.Series(r_dict['importance_scores'])
-                            # Convert None back to NaN for train_score (from checkpoint deserialization)
-                            if r_dict.get('train_score') is None:
-                                r_dict['train_score'] = math.nan
-                            all_results.append(ImportanceResult(**r_dict))
-                continue
-            elif not args.resume:
-                continue
+        if symbol in completed:
+            if args.resume:
+                logger.info(f"\n[{i}/{len(labeled_files)}] Skipping {symbol} (already completed)")
+                symbol_results = completed[symbol]
+                if isinstance(symbol_results, list):
+                    # Reconstruct ImportanceResult objects from dicts
+                    for r_dict in symbol_results:
+                        # Convert importance_scores dict back to pd.Series
+                        if isinstance(r_dict.get('importance_scores'), dict):
+                            r_dict['importance_scores'] = pd.Series(r_dict['importance_scores'])
+                        # Convert None back to NaN for train_score (from checkpoint deserialization)
+                        if r_dict.get('train_score') is None:
+                            r_dict['train_score'] = math.nan
+                        all_results.append(ImportanceResult(**r_dict))
+            continue
+        elif not args.resume:
+            continue
         
         logger.info(f"\n[{i}/{len(labeled_files)}] Processing {symbol}...")
         try:
@@ -1437,7 +1684,8 @@ def main():
         'top_n': args.top_n,
         'n_symbols': len(labeled_files),
         'enabled_families': enabled_families,
-        'config': config
+        'config': config,
+        'model_families_config': config.get('model_families', {})  # Explicit for confidence computation
     }
     
     save_multi_model_results(
@@ -1459,7 +1707,10 @@ def main():
     logger.info(f"\n📁 Output files:")
     logger.info(f"  • {args.output_dir}/selected_features.txt")
     logger.info(f"  • {args.output_dir}/feature_importance_multi_model.csv")
+    logger.info(f"  • {args.output_dir}/feature_importance_with_boruta_debug.csv")
     logger.info(f"  • {args.output_dir}/model_agreement_matrix.csv")
+    logger.info(f"  • {args.output_dir}/target_confidence.json")
+    logger.info(f"  • {args.output_dir}/multi_model_metadata.json")
     logger.info(f"  • {args.output_dir}/importance_<family>.csv (per-family)")
     
     return 0

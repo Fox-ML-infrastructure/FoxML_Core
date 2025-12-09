@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Phase 1 intelligent training framework completed and functioning properly
 - Ranking & selection pipelines unified (interval handling, preprocessing, CatBoost)
 - Boruta refactored into a statistical gatekeeper with base vs final consensus tracking
+- **Target confidence & routing system** — Automatic quality assessment with configurable thresholds and operational buckets (core/candidate/experimental)
 - New modular configuration + structured logging system
 - Leakage Safety Suite hardened (auto-fixer + backup system + schema/registry)
 - Documentation and legal reorganized into a 4-tier, enterprise-ready docs hierarchy
@@ -48,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Unified ranking and selection pipelines** — Consistent interval handling, sklearn preprocessing, and CatBoost configuration across both pipelines. Shared target utilities and preprocessing helpers ensure identical behavior. See [`DOCS/01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md`](DOCS/01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md).
 - **Boruta statistical gatekeeper** — Refactored from importance scorer to gatekeeper that modifies consensus scores via bonuses/penalties. Tracks base vs final consensus with explicit gate effect. ExtraTrees-based implementation with configurable thresholds. See [`CONFIG/feature_selection/multi_model.yaml`](CONFIG/feature_selection/multi_model.yaml).
+- **Target confidence & routing system** — Automatic quality assessment for each target with configurable thresholds. Computes Boruta coverage, model coverage, score strength, and agreement ratio. Routes targets into operational buckets (core/candidate/experimental) based on confidence + score_tier. All thresholds and routing rules configurable via YAML. See [`CONFIG/feature_selection/multi_model.yaml`](CONFIG/feature_selection/multi_model.yaml) `confidence` section and [`DOCS/01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md`](DOCS/01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md#target-confidence-and-routing).
 - **LightGBM GPU support** in target ranking with automatic detection and CPU fallback
 - **TRAINING module self-contained** — All utilities migrated from `SCRIPTS/` to `TRAINING/utils/`, zero external dependencies
 
@@ -75,6 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Documentation restructured** — 4-tier hierarchy with centralized docs in `DOCS/`. Code directories contain only code and minimal README pointers. See [`DOCS/INDEX.md`](DOCS/INDEX.md).
 - **Roadmap restructured** — Added "What Works Today" section, reorganized priorities, refined wording for external consumption. See [`ROADMAP.md`](ROADMAP.md).
 - **Legal documentation suite** — Compliance docs, license enforcement procedures, commercial use guides. See [`DOCS/LEGAL_INDEX.md`](DOCS/LEGAL_INDEX.md).
+- **Legal documentation updates** — Enhanced decision matrix, FAQ, and subscription documentation for clarity and completeness. See [`LEGAL/DECISION_MATRIX.md`](LEGAL/DECISION_MATRIX.md), [`LEGAL/FAQ.md`](LEGAL/FAQ.md), [`LEGAL/SUBSCRIPTIONS.md`](LEGAL/SUBSCRIPTIONS.md).
 - 55+ new documentation files created, 50+ existing files rewritten and standardized
 
 #### Commercial
@@ -97,6 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Feature selection pipeline** — Boruta `X_clean` error, double-counting, feature count mismatches. Interval detection warnings, CatBoost loss function for classification, sklearn NaN/dtype handling. See [`DOCS/02_reference/CHANGELOG_DETAILED.md`](DOCS/02_reference/CHANGELOG_DETAILED.md) for detailed notes.
+- **Interval detection** — Fixed negative delta warnings from unsorted timestamps or wraparound. Now uses `abs()` on time deltas before unit detection and conversion. Prevents spurious warnings like "Timestamp delta -789300000000000.0 doesn't map to reasonable interval". See [`TRAINING/utils/data_interval.py`](TRAINING/utils/data_interval.py) and [`TRAINING/ranking/rank_target_predictability.py`](TRAINING/ranking/rank_target_predictability.py).
 - **Path resolution** — Fixed inconsistent repo root calculations across moved files
 - **Auto-fixer** — Import paths, training accuracy detection, pre-excluded feature checks
 - **GPU and model issues** — VAE serialization, sequential models 3D preprocessing, XGBoost stability, TensorFlow GPU initialization, LSTM timeouts, Transformer OOM errors

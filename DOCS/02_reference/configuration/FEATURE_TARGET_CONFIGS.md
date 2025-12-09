@@ -297,6 +297,46 @@ model_families:
     importance_method: "SHAP"  # Use SHAP instead of native
 ```
 
+**Target Confidence & Routing:**
+
+The multi-model config includes automatic target quality assessment and routing:
+
+```yaml
+confidence:
+  # Confidence thresholds (HIGH/MEDIUM/LOW)
+  high:
+    boruta_confirmed_min: 5
+    agreement_ratio_min: 0.4
+    mean_score_min: 0.05
+    model_coverage_min: 0.7
+  
+  # Score tier thresholds (signal strength, orthogonal to confidence)
+  score_tier:
+    high:
+      mean_strong_score_min: 0.08
+      max_score_min: 0.70
+    medium:
+      mean_strong_score_min: 0.03
+      max_score_min: 0.55
+  
+  # Routing rules (confidence + score_tier → operational buckets)
+  routing:
+    experimental:
+      confidence: "LOW"
+      low_confidence_reason: "boruta_zero_confirmed"
+    core:
+      confidence: "HIGH"
+    candidate:
+      confidence: "MEDIUM"
+      score_tier_min: "MEDIUM"
+```
+
+**Output Artifacts:**
+- Per-target: `target_confidence.json`, `target_routing.json`
+- Run-level: `target_confidence_summary.json`, `target_confidence_summary.csv`
+
+See [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md#target-confidence-and-routing) for details.
+
 ---
 
 ### `feature_selection_config.yaml`

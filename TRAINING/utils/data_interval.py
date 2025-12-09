@@ -196,21 +196,23 @@ def detect_interval_from_timestamps(
         # Check if we have Timedelta objects (pandas datetime diff)
         if hasattr(time_diffs.iloc[0], 'total_seconds'):
             # Already converted to Timedelta - convert to minutes
-            diff_minutes = time_diffs.apply(lambda x: x.total_seconds() / 60.0)
+            diff_minutes = time_diffs.apply(lambda x: abs(x.total_seconds()) / 60.0)
             median_diff_minutes = float(diff_minutes.median())
         else:
             # Numeric deltas - need to detect unit
             raw_median = float(time_diffs.median())
+            # Use absolute value to handle unsorted timestamps or wraparound
+            abs_raw_median = abs(raw_median)
             
-            # Try to detect unit
-            detected = _detect_timestamp_unit(raw_median)
+            # Try to detect unit (using absolute value)
+            detected = _detect_timestamp_unit(abs_raw_median)
             if detected:
                 unit_name, minutes = detected
                 median_diff_minutes = minutes
                 logger.debug(f"Detected timestamp unit: {unit_name}, median delta = {raw_median} {unit_name} = {minutes}m")
             else:
                 # Fallback: try assuming nanoseconds (most common for Unix timestamps)
-                minutes_from_ns = raw_median / 1e9 / 60.0
+                minutes_from_ns = abs_raw_median / 1e9 / 60.0
                 if 0.01 <= minutes_from_ns <= 1440:
                     median_diff_minutes = minutes_from_ns
                     logger.debug(f"Assuming nanoseconds, median delta = {raw_median} ns = {minutes_from_ns:.2f}m")

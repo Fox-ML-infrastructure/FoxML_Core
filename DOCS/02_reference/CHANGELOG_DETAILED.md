@@ -33,11 +33,16 @@ Phase 1 functioning properly - Ranking and selection pipelines unified with cons
 **Unified Ranking and Selection Pipelines**
 
 - **Unified interval handling** — `explicit_interval` parameter now wired through entire ranking pipeline (orchestrator → rank_targets → evaluate_target_predictability → train_and_evaluate_models). All interval detection respects `data.bar_interval` from experiment config, eliminating spurious auto-detection warnings. Fixed "Nonem" logging issue in interval detection fallback.
+- **Interval detection negative delta fix** — Fixed warnings from negative timestamp deltas (unsorted timestamps or wraparound). Now uses `abs()` on time deltas before unit detection and conversion in `TRAINING/utils/data_interval.py` and `TRAINING/ranking/rank_target_predictability.py`. Prevents spurious warnings like "Timestamp delta -789300000000000.0 doesn't map to reasonable interval".
 - **Shared sklearn preprocessing** — All sklearn-based models in ranking now use `make_sklearn_dense_X()` helper (same as feature selection) for consistent NaN/dtype/inf handling. Applied to Lasso, Mutual Information, Univariate Selection, Boruta, and Stability Selection.
 - **Unified CatBoost builder** — CatBoost in ranking now uses same target type detection and loss function selection as feature selection. Auto-detects classification vs regression and sets appropriate `loss_function` (`Logloss`/`MultiClass`/`RMSE`) with YAML override support.
 - **Shared target utilities** — New `TRAINING/utils/target_utils.py` module with reusable helpers (`is_classification_target()`, `is_binary_classification_target()`, `is_multiclass_target()`) used consistently across ranking and selection.
 
 See [`DOCS/01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md`](../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) for complete details.
+
+**Interval Detection Fix**
+
+- **Negative delta handling** — Fixed warnings from negative timestamp deltas (unsorted timestamps or wraparound). Now uses `abs()` on time deltas before unit detection and conversion in `TRAINING/utils/data_interval.py` and `TRAINING/ranking/rank_target_predictability.py`. Prevents spurious warnings like "Timestamp delta -789300000000000.0 doesn't map to reasonable interval". Interval detection is fundamentally about magnitude of the typical step, not direction.
 
 **Boruta Statistical Gatekeeper**
 
@@ -52,6 +57,29 @@ See [`DOCS/01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md`](../01_tutori
 - **Ranking impact metric** — Calculates and logs how many features changed in top-K set when comparing base vs final consensus.
 - **Debug output** — New `feature_importance_with_boruta_debug.csv` file with explicit columns for Boruta gatekeeper analysis.
 - **Config migration** — All Boruta hyperparams and gatekeeper settings moved to `CONFIG/feature_selection/multi_model.yaml` (no hardcoded values).
+
+**Target Confidence & Routing System**
+
+- **Automatic target quality assessment** — New `compute_target_confidence()` function in `TRAINING/ranking/multi_model_feature_selection.py` computes per-target metrics:
+  - Boruta coverage (confirmed/tentative/rejected counts, with `boruta_used` guard to prevent false positives when Boruta is disabled)
+  - Model coverage (successful vs available models)
+  - Score strength (mean/max scores, plus mean_strong_score for tree ensembles + CatBoost + NN)
+  - Agreement ratio (fraction of top-K features appearing in ≥2 models, computed per-target across all symbols)
+  - Score tier (orthogonal metric: HIGH/MEDIUM/LOW signal strength based on mean_strong_score and max_score thresholds)
+- **Confidence bucketing** — Targets classified into HIGH/MEDIUM/LOW confidence based on configurable thresholds in `CONFIG/feature_selection/multi_model.yaml`:
+  - HIGH: All of boruta_confirmed ≥ 5, agreement_ratio ≥ 0.4, mean_score ≥ 0.05, model_coverage ≥ 0.7
+  - MEDIUM: Any of boruta_confirmed ≥ 1, agreement_ratio ≥ 0.25, mean_score ≥ 0.02
+  - LOW: Fallback with specific reasons (boruta_zero_confirmed, low_model_agreement, low_model_scores, low_model_coverage, multiple_weak_signals)
+- **Operational routing** — New `TRAINING/orchestration/target_routing.py` module with `classify_target_from_confidence()` routes targets into buckets:
+  - **core**: Production-ready (HIGH confidence, `allowed_in_production: true`)
+  - **candidate**: Worth trying (MEDIUM confidence with decent scores, `allowed_in_production: false`)
+  - **experimental**: Fragile signal (LOW confidence, especially boruta_zero_confirmed, `allowed_in_production: false`)
+- **Configurable thresholds** — All confidence thresholds, score tier thresholds, and routing rules configurable via `CONFIG/feature_selection/multi_model.yaml` `confidence` section. Backward compatible with sensible defaults matching previous hardcoded values.
+- **Run-level summaries** — Automatically generates `target_confidence_summary.json` (list of all targets) and `target_confidence_summary.csv` (human-readable table with all metrics + routing decisions) for easy inspection.
+- **Integration** — Wired into `intelligent_trainer.py` to automatically compute and log confidence/routing decisions per target after feature selection. Creates run-level summary after training completes. See [`TRAINING/orchestration/target_routing.py`](TRAINING/orchestration/target_routing.py) and [`DOCS/01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md`](DOCS/01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md#target-confidence-and-routing).
+- **Output artifacts**:
+  - Per-target: `target_confidence.json`, `target_routing.json`
+  - Run-level: `target_confidence_summary.json`, `target_confidence_summary.csv`
 
 **GPU & Training Infrastructure**
 
@@ -224,6 +252,14 @@ See [`DOCS/03_technical/research/LEAKAGE_ANALYSIS.md`](../03_technical/research/
 - **Comprehensive legal documentation index** (`DOCS/LEGAL_INDEX.md`):
   - Complete index of all legal, licensing, compliance, and enterprise documentation
   - Organized by category: Licensing, Terms & Policies, Enterprise & Compliance, Security, Legal Agreements, Consulting Services
+- **Legal documentation updates**:
+  - Enhanced decision matrix (`LEGAL/DECISION_MATRIX.md`) for clarity on licensing decisions and use case classification
+  - Updated FAQ (`LEGAL/FAQ.md`) with comprehensive answers to common questions about commercial licensing, AGPL usage, and subscription tiers
+  - Refined subscription documentation (`LEGAL/SUBSCRIPTIONS.md`) for better clarity on business use, academic use, and license requirements
+- **Target confidence & routing documentation**:
+  - Added section to `DOCS/02_reference/configuration/FEATURE_TARGET_CONFIGS.md` documenting confidence thresholds and routing rules
+  - Updated `DOCS/01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md` with confidence/routing section and updated output structure
+  - Updated `CONFIG/feature_selection/README.md` with confidence/routing information
 - **Cross-linking and navigation** improved throughout all documentation
 - 55+ new documentation files created, 50+ existing files rewritten and standardized
 
@@ -254,11 +290,15 @@ See [`DOCS/LEGAL_INDEX.md`](../LEGAL_INDEX.md) for complete legal documentation 
   - 1–10 employees: $150,000/year
   - 11–50 employees: $350,000/year
   - 51–250 employees: $750,000/year
-  - 251–1000 employees: $1,500,000–$2,500,000/year
+  - 251–1000 employees: $1,500,000–$2,500,000/year (based on scope, starting at $1,500,000)
   - 1000+ employees: $5,000,000–$12,000,000+ /year (custom enterprise quote)
-- **Optional enterprise add-ons**:
-  - Dedicated Support SLA: $5,000–$20,000/month
-  - Integration & On-Prem Setup: $100,000–$500,000 one-time
+  - **Optional enterprise add-ons** (with defined scope and boundaries):
+    - Dedicated Support SLA: $5,000–$20,000/month (tiered: Business/Enterprise/Premium with defined response times, coverage, channels)
+    - Integration & On-Prem Setup: $100,000–$500,000 one-time (scoped via SOW, depends on infrastructure complexity)
+    - Onboarding: $25,000–$75,000 one-time (Basic: training + architecture review; Custom: tailored workshops)
+    - Private Slack / Direct Founder Access: $30,000–$120,000/year (up to 3–5 named contacts, business hours, strategic discussions only)
+    - Additional User Seats: $500–$2,000/seat/year (beyond included seats per tier)
+    - Adaptive Intelligence Layer (Tier 5 only): +$2,000,000–$5,000,000/year (subject to roadmap, requires separate SOW with milestones)
   - Onboarding: $25,000–$75,000 one-time
   - Private Slack / Direct Founder Access: $30,000–$120,000/year
   - Additional User Seats: $500–$2,000 per seat/year

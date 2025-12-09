@@ -242,11 +242,11 @@
 
 ### Q9.1: How much does a commercial license cost?
 
-**A:** Pricing is based on organization size:
+**A:** Pricing is based on organization size. Tiers are based on total headcount of the legal entity (not just users of the Software):
 - 1–10 employees: $150,000/year
 - 11–50 employees: $350,000/year
 - 51–250 employees: $750,000/year
-- 251–1000 employees: $1,500,000–$2,500,000/year
+- 251–1000 employees: $1,500,000–$2,500,000/year (based on scope, starting at $1,500,000)
 - 1000+ employees: $5,000,000–$12,000,000+ /year (custom enterprise quote)
 
 **See `LEGAL/SUBSCRIPTIONS.md` for complete pricing information.**

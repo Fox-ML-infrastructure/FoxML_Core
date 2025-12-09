@@ -59,6 +59,7 @@ always_exclude:
   - obv_ema
   - parkinson_vol_5
   - price_volume_trend
+  - realized_vol_20
   - ret_ord_5m
   - ret_zscore_10m
   - ret_zscore_15m

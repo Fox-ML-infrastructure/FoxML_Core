@@ -226,7 +226,8 @@ def select_features_for_target(
             'symbols': symbols,
             'n_symbols_processed': len(symbols),
             'n_model_results': len(all_results),
-            'top_n': top_n or len(selected_features)
+            'top_n': top_n or len(selected_features),
+            'model_families_config': model_families_config  # Include for confidence computation
         }
         _save_multi_model_results(
             summary_df=summary_df,

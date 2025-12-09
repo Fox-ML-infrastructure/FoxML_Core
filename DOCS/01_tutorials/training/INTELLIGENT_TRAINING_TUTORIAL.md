@@ -229,6 +229,8 @@ For each selected target, the pipeline automatically selects the best features u
 **Output:**
 - `output_dir/feature_selections/{target}/selected_features.txt` - Feature list
 - `output_dir/feature_selections/{target}/feature_importance_multi_model.csv` - Full rankings
+- `output_dir/feature_selections/{target}/target_confidence.json` - Confidence metrics (HIGH/MEDIUM/LOW)
+- `output_dir/feature_selections/{target}/target_routing.json` - Routing decision (core/candidate/experimental)
 - `output_dir/cache/feature_selections/{target}.json` - Cached results
 
 **Example:**
@@ -331,7 +333,11 @@ output_dir_YYYYMMDD_HHMMSS/
 ├── feature_selections/
 │   └── {target}/
 │       ├── selected_features.txt
-│       └── feature_importance_multi_model.csv
+│       ├── feature_importance_multi_model.csv
+│       ├── target_confidence.json
+│       └── target_routing.json
+├── target_confidence_summary.json  # Run-level summary (all targets)
+├── target_confidence_summary.csv  # Human-readable summary table
 ├── training_results/
 │   └── (model artifacts, metrics, predictions)
 └── cache/
@@ -491,6 +497,34 @@ python TRAINING/train.py --auto-targets --auto-features
 4. **Check features**: Verify selected features make sense for your targets
 5. **Incremental updates**: Re-rank targets periodically (weekly/monthly)
 6. **Production runs**: Use `--no-cache` for production to ensure fresh results
+
+## Target Confidence and Routing
+
+The pipeline automatically assesses target quality and routes targets into operational buckets:
+
+**Confidence Metrics:**
+- **Boruta coverage**: Number of confirmed/tentative/rejected features
+- **Model coverage**: Ratio of successful models to available models
+- **Score strength**: Mean/max scores, plus mean_strong_score (tree ensembles + CatBoost + NN)
+- **Agreement ratio**: Fraction of top-K features appearing in ≥2 models
+- **Score tier**: Orthogonal metric for signal strength (HIGH/MEDIUM/LOW)
+
+**Confidence Buckets:**
+- **HIGH**: Strong, robust signal with good agreement and Boruta support
+- **MEDIUM**: Some signal present but not fully robust
+- **LOW**: Weak signal or structural issues (with specific reason)
+
+**Operational Routing:**
+- **core**: Production-ready (HIGH confidence)
+- **candidate**: Worth trying (MEDIUM confidence with decent scores)
+- **experimental**: Fragile signal (LOW confidence, especially boruta_zero_confirmed)
+
+**Configuration:**
+All thresholds and routing rules are configurable in `CONFIG/feature_selection/multi_model.yaml` under the `confidence` section. See [Feature & Target Configs](../../02_reference/configuration/FEATURE_TARGET_CONFIGS.md#target-confidence--routing) for details.
+
+**Output:**
+- Per-target: `target_confidence.json`, `target_routing.json`
+- Run-level: `target_confidence_summary.json`, `target_confidence_summary.csv` (human-readable table)
 
 ## Related Documentation
 

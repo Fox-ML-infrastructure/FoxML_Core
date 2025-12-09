@@ -99,24 +99,28 @@
 
 Commercial license pricing is aligned with enterprise quant infrastructure standards.
 
+Tiers are based on total headcount of the legal entity (not just users of the Software).
+
 - **1–10 employees** — $150,000 / year
 - **11–50 employees** — $350,000 / year
 - **51–250 employees** — $750,000 / year
-- **251–1000 employees** — $1,500,000–$2,500,000 / year
+- **251–1000 employees** — $1,500,000–$2,500,000 / year (based on scope, starting at $1,500,000)
 - **1000+ employees** — $5,000,000–$12,000,000+ / year (custom enterprise quote)
 
 **See `LEGAL/SUBSCRIPTIONS.md` for complete pricing information and optional add-ons.**
 
 ### 4.2 Optional Enterprise Add-Ons
 
-- **Dedicated Support SLA** — $5,000–$20,000 / month  
-- **Integration & On-Prem Setup** — $100,000–$500,000 one-time  
-- **Onboarding** — $25,000–$75,000 one-time  
-- **Private Slack / Direct Founder Access** — $30,000–$120,000 / year  
-- **Additional User Seats** — $500–$2,000 / seat / year  
-- **Adaptive Intelligence Layer** (Tier 5 only) — +$2,000,000–$5,000,000 / year
+Enterprise add-ons are available with defined scope, boundaries, and pricing tiers:
 
-**See `LEGAL/SUBSCRIPTIONS.md` for complete add-on details.**
+- **Dedicated Support SLA** — $5,000–$20,000 / month (tiered: Business/Enterprise/Premium with defined response times, coverage, and channels)
+- **Integration & On-Prem Setup** — $100,000–$500,000 one-time (scoped via SOW, depends on infrastructure complexity and environment count)
+- **Onboarding** — $25,000–$75,000 one-time (Basic: training + architecture review; Custom: tailored workshops + hands-on pipeline design)
+- **Private Slack / Direct Founder Access** — $30,000–$120,000 / year (up to 3–5 named contacts, business hours, strategic discussions only; not a replacement for support SLA)
+- **Additional User Seats** — $500–$2,000 / seat / year (beyond included seats per tier; each license tier includes a base number of named users)
+- **Adaptive Intelligence Layer** (Tier 5 only) — +$2,000,000–$5,000,000 / year (subject to roadmap availability, requires separate SOW with milestones)
+
+**See `LEGAL/SUBSCRIPTIONS.md` for complete add-on details, scope definitions, and boundaries.**
 
 ### 4.3 What's Included
 

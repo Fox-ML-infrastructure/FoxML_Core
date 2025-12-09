@@ -913,15 +913,15 @@ def train_and_evaluate_models(
             time_diffs = unique_times_sorted.diff().dropna()
             # time_diffs should be TimedeltaIndex when time_series is datetime
             if isinstance(time_diffs, pd.TimedeltaIndex) and len(time_diffs) > 0:
-                median_diff_minutes = time_diffs.median().total_seconds() / 60.0
+                median_diff_minutes = abs(time_diffs.median().total_seconds()) / 60.0
             elif len(time_diffs) > 0:
                 # Fallback: if diff didn't produce Timedeltas, calculate manually
                 median_diff = time_diffs.median()
                 if isinstance(median_diff, pd.Timedelta):
-                    median_diff_minutes = median_diff.total_seconds() / 60.0
+                    median_diff_minutes = abs(median_diff.total_seconds()) / 60.0
                 elif isinstance(median_diff, (int, float, np.integer, np.floating)):
-                    # Assume nanoseconds if numeric
-                    median_diff_minutes = float(median_diff) / 1e9 / 60.0
+                    # Assume nanoseconds if numeric (use abs to handle unsorted timestamps)
+                    median_diff_minutes = abs(float(median_diff)) / 1e9 / 60.0
                 else:
                     raise ValueError(f"Unexpected median_diff type: {type(median_diff)}")
             else:
@@ -2714,7 +2714,7 @@ def evaluate_target_predictability(
                 else:
                     time_series = pd.Series(time_vals)
                 time_diffs = time_series.diff().dropna()
-                median_diff_minutes = time_diffs.median().total_seconds() / 60.0
+                median_diff_minutes = abs(time_diffs.median().total_seconds()) / 60.0
                 common_intervals = [1, 5, 15, 30, 60]
                 detected_interval = min(common_intervals, key=lambda x: abs(x - median_diff_minutes))
                 if abs(median_diff_minutes - detected_interval) / detected_interval >= 0.2:

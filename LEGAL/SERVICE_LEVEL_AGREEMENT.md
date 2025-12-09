@@ -27,7 +27,12 @@ Until then, Enterprise customers will receive direct communication instructions 
 
 Enterprise Support pricing: $5,000–$20,000/month based on SLA level and requirements.
 
-See `LEGAL/SUBSCRIPTIONS.md` for complete pricing information and optional add-ons.
+**Tiered Pricing:**
+- Business Support: $5,000–$8,000/month
+- Enterprise Support: $10,000–$15,000/month  
+- Premium Support: $15,000–$20,000/month
+
+See `LEGAL/SUBSCRIPTIONS.md` for complete pricing information, tier definitions (response times, coverage, channels), and optional add-ons.
 
 ---
 

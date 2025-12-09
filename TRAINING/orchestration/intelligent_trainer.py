@@ -414,6 +414,7 @@ class IntelligentTrainer:
             multi_model_config = load_multi_model_config()
         
         # Select features
+        feature_output_dir = self.output_dir / "feature_selections" / target
         selected_features, _ = select_features_for_target(
             target_column=target,
             symbols=self.symbols,
@@ -421,10 +422,42 @@ class IntelligentTrainer:
             model_families_config=model_families_config,
             multi_model_config=multi_model_config,
             top_n=top_m,
-            output_dir=self.output_dir / "feature_selections" / target,
+            output_dir=feature_output_dir,
             feature_selection_config=feature_selection_config,  # Pass typed config if available
             experiment_config=self.experiment_config  # Pass experiment config for data.bar_interval
         )
+        
+        # Load confidence and apply routing
+        try:
+            from TRAINING.orchestration.target_routing import (
+                load_target_confidence,
+                classify_target_from_confidence,
+                save_target_routing_metadata
+            )
+            
+            # Get routing config from multi_model config
+            routing_config = None
+            if multi_model_config:
+                routing_config = multi_model_config.get('confidence', {}).get('routing', {})
+            elif feature_selection_config and hasattr(feature_selection_config, 'config'):
+                # Try to extract from typed config
+                routing_config = feature_selection_config.config.get('confidence', {}).get('routing', {})
+            
+            conf = load_target_confidence(feature_output_dir, target)
+            if conf:
+                routing = classify_target_from_confidence(conf, routing_config=routing_config)
+                save_target_routing_metadata(feature_output_dir, target, conf, routing)
+                
+                # Log routing decision
+                logger.info(
+                    f"🎯 Target {target}: confidence={conf['confidence']} "
+                    f"(score_tier={conf.get('score_tier', 'LOW')}, "
+                    f"reason={conf.get('low_confidence_reason', 'N/A')}) "
+                    f"→ bucket={routing['bucket']}, "
+                    f"allowed_in_production={routing['allowed_in_production']}"
+                )
+        except Exception as e:
+            logger.debug(f"Failed to load/route confidence for {target}: {e}")
         
         # Save to cache
         if selected_features:
@@ -586,6 +619,34 @@ class IntelligentTrainer:
             for target_results in training_results.get('models', {}).values()
         )
         logger.info(f"Trained {total_models} models across {len(targets)} targets")
+        
+        # Create run-level confidence summary
+        try:
+            from TRAINING.orchestration.target_routing import collect_run_level_confidence_summary
+            from TRAINING.ranking import load_multi_model_config
+            
+            # Get routing config
+            multi_model_config = load_multi_model_config()
+            routing_config = None
+            if multi_model_config:
+                routing_config = multi_model_config.get('confidence', {}).get('routing', {})
+            
+            feature_selections_dir = self.output_dir / "feature_selections"
+            if feature_selections_dir.exists():
+                all_confidence = collect_run_level_confidence_summary(
+                    feature_selections_dir=feature_selections_dir,
+                    output_dir=self.output_dir,
+                    routing_config=routing_config
+                )
+                
+                if all_confidence:
+                    # Log summary stats
+                    high_conf = sum(1 for c in all_confidence if c.get('confidence') == 'HIGH')
+                    medium_conf = sum(1 for c in all_confidence if c.get('confidence') == 'MEDIUM')
+                    low_conf = sum(1 for c in all_confidence if c.get('confidence') == 'LOW')
+                    logger.info(f"📊 Confidence summary: {high_conf} HIGH, {medium_conf} MEDIUM, {low_conf} LOW")
+        except Exception as e:
+            logger.debug(f"Failed to create run-level confidence summary: {e}")
         
         # Run leakage diagnostics if enabled
         sentinel_results = {}

@@ -257,6 +257,74 @@ output:
   save_metadata: true  # Save run metadata JSON
   include_model_scores: true  # Include individual model scores in summary
 
+# Target confidence thresholds (for automatic quality assessment)
+confidence:
+  # HIGH confidence requirements (all must be met)
+  high:
+    boruta_confirmed_min: 5  # Minimum Boruta-confirmed features
+    agreement_ratio_min: 0.4  # Minimum agreement ratio (fraction of top-K in >=2 models)
+    mean_score_min: 0.05  # Minimum mean model score
+    model_coverage_min: 0.7  # Minimum model coverage ratio (successful/available)
+  
+  # MEDIUM confidence requirements (any one is sufficient)
+  medium:
+    boruta_confirmed_min: 1  # OR: at least 1 Boruta-confirmed feature
+    agreement_ratio_min: 0.25  # OR: agreement ratio >= 0.25
+    mean_score_min: 0.02  # OR: mean score >= 0.02
+  
+  # LOW confidence reasons (for diagnostics)
+  low_reasons:
+    boruta_zero_confirmed:
+      boruta_used: true  # Boruta must have run
+      boruta_confirmed_max: 0  # Zero confirmed features
+      boruta_tentative_max: 1  # At most 1 tentative
+      mean_score_max: 0.03  # Low scores
+    low_model_agreement:
+      agreement_ratio_max: 0.2  # Agreement ratio < 0.2
+    low_model_scores:
+      mean_score_max: 0.01  # Mean score < 0.01
+    low_model_coverage:
+      model_coverage_max: 0.5  # Coverage < 0.5
+  
+  # Agreement computation
+  agreement:
+    top_k: 20  # Number of top features to consider for agreement ratio
+  
+  # Score tier thresholds (orthogonal to confidence: pure signal strength)
+  score_tier:
+    high:
+      mean_strong_score_min: 0.08  # OR: mean_strong_score >= this
+      max_score_min: 0.70  # OR: max_score >= this
+    medium:
+      mean_strong_score_min: 0.03  # OR: mean_strong_score >= this
+      max_score_min: 0.55  # OR: max_score >= this
+    # LOW is fallback (below medium thresholds)
+  
+  # Routing rules (how confidence + score_tier map to operational buckets)
+  routing:
+    # Hard experimental: Boruta explicitly rejects
+    experimental:
+      confidence: "LOW"
+      low_confidence_reason: "boruta_zero_confirmed"
+      note: "Boruta used and found zero robust features; fragile signal."
+    
+    # Production-ready: High confidence
+    core:
+      confidence: "HIGH"
+      note: "Strong, robust signal with good agreement and Boruta support."
+    
+    # Candidate: Medium confidence with decent scores
+    candidate:
+      confidence: "MEDIUM"
+      score_tier_min: "MEDIUM"  # Requires at least MEDIUM score_tier
+      note: "Some signal present but not fully robust yet."
+    
+    # Default fallback
+    default:
+      bucket: "candidate"  # If MEDIUM confidence
+      fallback_bucket: "experimental"  # If LOW confidence
+      note: "Signal strength and robustness need validation."
+
 # Computational budgets (for large-scale runs)
 compute:
   max_symbols: null  # Limit symbols (null = all)
