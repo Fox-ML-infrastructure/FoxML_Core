@@ -36,6 +36,7 @@ This avoids model-specific biases and finds truly predictive features.
 
 import argparse
 import logging
+import math
 import sys
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional, Union
@@ -724,10 +725,13 @@ def train_model_and_get_importance(
                     }
             
             model = DummyModel(importance_values)
-            # Fix: Use X_dense and y (not X_clean, y_clean which don't exist)
-            # Note: y is not sanitized separately, but since make_sklearn_dense_X doesn't filter rows,
-            # y matches X_dense in length and alignment
-            train_score = base_estimator.score(X_dense, y) if hasattr(base_estimator, 'score') else 0.0
+            # CRITICAL: Do NOT call base_estimator.score(X_dense, y) for Boruta.
+            # Boruta's internal ExtraTreesClassifier is trained on a transformed subset of features
+            # (confirmed/rejected/tentative selection), not the full X_dense.
+            # Attempting to score on full X_dense causes: "X has N features, but ExtraTreesClassifier is expecting M features"
+            # Boruta's purpose is feature selection (gatekeeper), not prediction scoring.
+            # Use NaN to indicate "not applicable" (not a predictive model, so no score exists)
+            train_score = math.nan
         except ImportError:
             logger.error("Boruta not available (pip install Boruta)")
             return None, pd.Series(0.0, index=feature_names), importance_method, 0.0
@@ -940,7 +944,9 @@ def process_single_symbol(
                         train_score=train_score
                     )
                     results.append(result)
-                    logger.info(f"    {family_name}: score={train_score:.4f}, "
+                    # Handle NaN scores gracefully (e.g., Boruta doesn't have a train score)
+                    score_str = f"{train_score:.4f}" if not math.isnan(train_score) else "N/A"
+                    logger.info(f"    {family_name}: score={score_str}, "
                               f"top feature={importance.idxmax()} ({importance.max():.2f})")
                 
             except Exception as e:
@@ -1359,17 +1365,20 @@ def main():
     all_results = []
     for i, (symbol, path) in enumerate(labeled_files, 1):
         # Check if already completed
-        if symbol in completed:
-            if args.resume:
-                logger.info(f"\n[{i}/{len(labeled_files)}] Skipping {symbol} (already completed)")
-                symbol_results = completed[symbol]
-                if isinstance(symbol_results, list):
-                    # Reconstruct ImportanceResult objects from dicts
-                    for r_dict in symbol_results:
-                        # Convert importance_scores dict back to pd.Series
-                        if isinstance(r_dict.get('importance_scores'), dict):
-                            r_dict['importance_scores'] = pd.Series(r_dict['importance_scores'])
-                        all_results.append(ImportanceResult(**r_dict))
+            if symbol in completed:
+                if args.resume:
+                    logger.info(f"\n[{i}/{len(labeled_files)}] Skipping {symbol} (already completed)")
+                    symbol_results = completed[symbol]
+                    if isinstance(symbol_results, list):
+                        # Reconstruct ImportanceResult objects from dicts
+                        for r_dict in symbol_results:
+                            # Convert importance_scores dict back to pd.Series
+                            if isinstance(r_dict.get('importance_scores'), dict):
+                                r_dict['importance_scores'] = pd.Series(r_dict['importance_scores'])
+                            # Convert None back to NaN for train_score (from checkpoint deserialization)
+                            if r_dict.get('train_score') is None:
+                                r_dict['train_score'] = math.nan
+                            all_results.append(ImportanceResult(**r_dict))
                 continue
             elif not args.resume:
                 continue
@@ -1384,13 +1393,16 @@ def main():
             all_results.extend(results)
             
             # Save checkpoint after each symbol
-            # Convert results to dict for serialization (handle pd.Series)
+            # Convert results to dict for serialization (handle pd.Series and NaN)
             results_dict = []
             for r in results:
                 r_dict = asdict(r)
                 # Convert pd.Series to dict
                 if isinstance(r_dict.get('importance_scores'), pd.Series):
                     r_dict['importance_scores'] = r_dict['importance_scores'].to_dict()
+                # Convert NaN to None for JSON serialization (checkpoint can't serialize NaN)
+                if 'train_score' in r_dict and math.isnan(r_dict['train_score']):
+                    r_dict['train_score'] = None
                 results_dict.append(r_dict)
             checkpoint.save_item(symbol, results_dict)
         except Exception as e:
