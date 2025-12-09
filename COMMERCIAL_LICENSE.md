@@ -117,19 +117,9 @@ For clarity, Licensee Developments do not include: (i) modifications to the Soft
 Unless explicitly permitted in writing by the Licensor, the Licensee may NOT:
 
 - Distribute or sell the Software or derivatives as a standalone product
-- Provide the Software, or any substantially similar functionality, as a hosted service to third parties (including SaaS, PaaS, or multi-tenant environments) where external users access functionality primarily provided by the Software
-- Build or market a product whose primary purpose is to offer FoxML-like ML/quant infrastructure as a general-purpose platform to third parties
-- Use the Software to offer a product or service whose primary value is substantially identical to the Software itself (including "FoxML-as-a-service" or similar hosted offerings)
-
-**No Competing Service.**
-
-Licensee shall not use the Software to develop, host, or provide any software-as-a-service, managed service, platform, or other offering that exposes to third parties functionality that is substantially similar to the Software, including without limitation:
-
-(a) a hosted quantitative research or model-training platform for third parties;
-
-(b) a multi-tenant or shared service that allows third parties to run experiments, training, or feature selection workflows powered by the Software; or
-
-(c) an API, SDK, or other interface that provides third parties with direct or indirect access to the Software's core infrastructure capabilities.
+- Provide the Software, or any Competing Infrastructure Service built using the Software, as a hosted or managed service to third parties (including SaaS, PaaS, or multi-tenant platforms)
+- Build, market, or operate a Competing Infrastructure Service that uses the Software or any derivative of the Software
+- Use the Software to offer a product or service whose primary purpose is to allow third parties to run their own experiments, models, or workflows on infrastructure powered by the Software
 
 For clarity, Licensee may use the Software to build and operate its own internal trading, research, or analytics systems and to provide outputs (e.g., analytics, reports, trading decisions, predictions, recommendations) to its own clients, provided such clients do not receive direct or indirect access to the Software itself, including but not limited to: (i) access to the Software's APIs, (ii) ability to execute code or workflows within the Software, (iii) access to the Software's user interface, or (iv) any other means of interacting with or controlling the Software. Licensee may provide data inputs to the Software and receive outputs from the Software for delivery to clients, but clients may not themselves interact with the Software.
 
@@ -261,7 +251,7 @@ Licensor reserves the right to audit Licensee's use of the Software to verify co
 - Remote audit methods are permitted (e.g., usage logs, deployment verification)
 - If an audit reveals that Licensee underpaid fees by more than five percent (5%) for the audited period or materially violated the license restrictions (meaning a violation that is significant, substantial, or has a material adverse effect on Licensor's rights or interests), Licensee shall reimburse Licensor's reasonable audit costs (not to exceed the amount of underpaid fees) in addition to paying any unpaid fees
 - Licensee must provide reasonable cooperation (including making relevant personnel available during normal business hours) and access to relevant records, logs, and documentation reasonably necessary to verify compliance
-- **Refusal to cooperate with an audit constitutes a Material Breach** and may result in immediate termination of this License. If Licensee refuses to provide access, documentation, or cooperation required for an audit, Licensor may assume non-compliance and invoice Licensee for maximum potential usage based on available information, and Licensee shall pay such invoice within thirty (30) days or face termination
+- If Licensee refuses to provide access, documentation, or cooperation reasonably required for an audit, such refusal constitutes a Material Breach. In that case, Licensor may terminate this License and invoice Licensee for an estimated usage amount based on available information, and Licensee shall pay such invoice within thirty (30) days unless the parties agree in writing to a different resolution
 
 **Confidentiality:** All audit information shall be treated as confidential and used solely for compliance verification.
 
