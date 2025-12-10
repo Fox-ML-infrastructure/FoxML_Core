@@ -51,7 +51,10 @@ Large monolithic files have been split into modular components:
 - **`ranking/rank_target_predictability.py`**: 3,454 → 56 lines (split into `ranking/predictability/`)
 - **`train_with_strategies.py`**: 2,523 → 66 lines (split into `training_strategies/`)
 
-**For detailed refactoring documentation, see:** [DOCS/03_technical/refactoring/](../../DOCS/03_technical/refactoring/)
+**For detailed refactoring documentation, see:**
+- **[Refactoring & Wrappers Guide](../../DOCS/01_tutorials/REFACTORING_AND_WRAPPERS.md)** - User-facing guide explaining wrappers and import patterns
+- **[Refactoring Summary](../../DOCS/03_technical/refactoring/REFACTORING_SUMMARY_INTERNAL.md)** - Internal technical details
+- **[Module-Specific Docs](../../DOCS/03_technical/refactoring/)** - Detailed structure for each refactored module
 
 ### Key Points
 

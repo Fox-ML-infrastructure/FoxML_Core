@@ -105,7 +105,13 @@ When code imports from the wrapper, Python:
 3. Makes all exports available under the old import path
 4. **Result**: Same objects, same behavior, zero changes needed
 
-See **[Refactoring & Wrappers Guide](../../01_tutorials/REFACTORING_AND_WRAPPERS.md)** for detailed explanation and examples.
+**For detailed user-facing explanation:**
+- **[Refactoring & Wrappers Guide](../../01_tutorials/REFACTORING_AND_WRAPPERS.md)** - Complete guide with examples, import patterns, and migration instructions
+
+**For module-specific details:**
+- **[Specialized Models](SPECIALIZED_MODELS.md)** - Specialized models module structure
+- **[Target Predictability Ranking](TARGET_PREDICTABILITY_RANKING.md)** - Ranking module structure  
+- **[Training Strategies](TRAINING_STRATEGIES.md)** - Training strategies module structure
 
 ## Benefits
 

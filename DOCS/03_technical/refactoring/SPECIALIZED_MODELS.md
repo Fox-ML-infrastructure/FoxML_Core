@@ -109,3 +109,8 @@ config = get_cfg("model_config.lightgbm")
 - All modules maintain backward compatibility with the original `specialized_models.py` interface
 - The original file is now a thin wrapper (82 lines) that re-exports everything
 - Original file archived at `TRAINING/archive/original_large_files/specialized_models.py.original`
+
+## Related Documentation
+
+- **[Refactoring & Wrappers Guide](../../01_tutorials/REFACTORING_AND_WRAPPERS.md)** - Complete explanation of how wrappers work and import patterns
+- **[Refactoring Summary](REFACTORING_SUMMARY_INTERNAL.md)** - Overall refactoring details

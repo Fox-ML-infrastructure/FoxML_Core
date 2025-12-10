@@ -152,7 +152,8 @@ Research notes, design rationale, advanced topics.
 - [Adding Proprietary Models](03_technical/implementation/ADDING_PROPRIETARY_MODELS.md) - Using BaseModelTrainer to add custom models
 
 ### Refactoring
-- [Refactoring Summary](03_technical/refactoring/REFACTORING_SUMMARY.md) - **NEW**: Complete overview of large file refactoring (2025-12-09)
+- **[Refactoring & Wrappers](01_tutorials/REFACTORING_AND_WRAPPERS.md)** - **NEW**: User-facing guide explaining wrapper mechanism, import patterns, and backward compatibility
+- [Refactoring Summary](03_technical/refactoring/REFACTORING_SUMMARY_INTERNAL.md) - Internal technical details of large file refactoring (2025-12-09)
 - [Specialized Models Module](03_technical/refactoring/SPECIALIZED_MODELS.md) - Detailed documentation for `models/specialized/` module
 - [Target Predictability Ranking Module](03_technical/refactoring/TARGET_PREDICTABILITY_RANKING.md) - Detailed documentation for `ranking/predictability/` module
 - [Training Strategies Module](03_technical/refactoring/TRAINING_STRATEGIES.md) - Detailed documentation for `training_strategies/` module

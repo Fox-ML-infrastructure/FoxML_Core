@@ -114,3 +114,8 @@ python -m TRAINING.ranking.predictability.main --targets peak_60m,valley_60m
 - The original file is now a thin wrapper (56 lines) that re-exports everything
 - Original file archived at `TRAINING/archive/original_large_files/rank_target_predictability.py.original`
 - Large modules (`model_evaluation.py`, `leakage_detection.py`) are cohesive subsystems with clear responsibilities
+
+## Related Documentation
+
+- **[Refactoring & Wrappers Guide](../../01_tutorials/REFACTORING_AND_WRAPPERS.md)** - Complete explanation of how wrappers work and import patterns
+- **[Refactoring Summary](REFACTORING_SUMMARY_INTERNAL.md)** - Overall refactoring details

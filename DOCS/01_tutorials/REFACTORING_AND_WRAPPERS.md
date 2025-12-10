@@ -379,10 +379,20 @@ from TRAINING.models.specialized_models import train_model
 
 ## Related Documentation
 
-- **[Refactoring Summary](../03_technical/refactoring/REFACTORING_SUMMARY_INTERNAL.md)** - Internal technical details
-- **[Specialized Models](../03_technical/refactoring/SPECIALIZED_MODELS.md)** - Specialized models module structure
-- **[Target Predictability Ranking](../03_technical/refactoring/TARGET_PREDICTABILITY_RANKING.md)** - Ranking module structure
-- **[Training Strategies](../03_technical/refactoring/TRAINING_STRATEGIES.md)** - Training strategies module structure
+### Refactoring Details
+- **[Refactoring Summary](../03_technical/refactoring/REFACTORING_SUMMARY_INTERNAL.md)** - Internal technical details and migration status
+- **[Specialized Models](../03_technical/refactoring/SPECIALIZED_MODELS.md)** - Specialized models module structure and API
+- **[Target Predictability Ranking](../03_technical/refactoring/TARGET_PREDICTABILITY_RANKING.md)** - Ranking module structure and workflow
+- **[Training Strategies](../03_technical/refactoring/TRAINING_STRATEGIES.md)** - Training strategies module structure and usage
+
+### User Guides
+- **[Intelligent Training Tutorial](training/INTELLIGENT_TRAINING_TUTORIAL.md)** - Uses refactored modules internally
+- **[Model Training Guide](training/MODEL_TRAINING_GUIDE.md)** - Training workflows using modular structure
+- **[Config Basics](configuration/CONFIG_BASICS.md)** - Configuration system used by refactored modules
+
+### Code Structure
+- **[TRAINING Module README](../../TRAINING/README.md)** - Overview of the TRAINING module structure
+- **[Architecture Overview](../00_executive/ARCHITECTURE_OVERVIEW.md)** - System architecture including modular design
 
 ---
 
