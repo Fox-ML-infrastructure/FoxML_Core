@@ -236,7 +236,7 @@ from TRAINING.common.determinism import set_global_determinism, stable_seed_from
 if _CONFIG_AVAILABLE:
     base_seed = get_cfg("pipeline.determinism.base_seed", default=42)
 else:
-    base_seed = 42
+    base_seed = 42  # FALLBACK_DEFAULT_OK
 BASE_SEED = set_global_determinism(
     base_seed=base_seed,
     threads=None,  # Auto-detect optimal thread count

@@ -88,9 +88,9 @@ class LightGBMTrainer(BaseModelTrainer):
             # Use deterministic seed from determinism system
             try:
                 from TRAINING.common.determinism import BASE_SEED
-                split_seed = BASE_SEED if BASE_SEED is not None else 42
+                split_seed = BASE_SEED if BASE_SEED is not None else 42  # FALLBACK_DEFAULT_OK
             except:
-                split_seed = 42
+                split_seed = 42  # FALLBACK_DEFAULT_OK
             test_size, random_state = self._get_test_split_params()
             X_tr, X_va, y_tr, y_va = train_test_split(
                 X_tr, y_tr, test_size=test_size, random_state=random_state

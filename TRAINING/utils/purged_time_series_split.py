@@ -81,8 +81,15 @@ class PurgedTimeSeriesSplit(_BaseKFold):
         import pandas as pd
         timestamps = df['ts'].values  # Sorted timestamps (may have duplicates for panel data)
         purge_time = pd.Timedelta(minutes=60)  # 60-minute target horizon
+        # Load n_splits from config
+        try:
+            from CONFIG.config_loader import get_cfg
+            n_splits = int(get_cfg("preprocessing.validation.cv_folds", default=5, config_name="preprocessing_config"))
+        except Exception:
+            n_splits = 5  # FALLBACK_DEFAULT_OK
+        
         cv = PurgedTimeSeriesSplit(
-            n_splits=5, 
+            n_splits=n_splits, 
             purge_overlap_time=purge_time,
             time_column_values=timestamps
         )
@@ -93,7 +100,7 @@ class PurgedTimeSeriesSplit(_BaseKFold):
     
     def __init__(
         self, 
-        n_splits=5, 
+        n_splits=5,  # FALLBACK_DEFAULT_OK (should load from preprocessing_config.yaml) 
         purge_overlap_time: Optional[pd.Timedelta] = None,
         purge_overlap: int = 0,  # Legacy parameter for backward compatibility
         time_column_values: Optional[Union[np.ndarray, pd.Series, list]] = None

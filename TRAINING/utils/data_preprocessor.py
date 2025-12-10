@@ -227,14 +227,14 @@ class DataPreprocessor:
                 from CONFIG.config_loader import get_cfg
                 test_size = float(get_cfg("preprocessing.validation.test_size", default=0.2, config_name="preprocessing_config"))
             except Exception:
-                test_size = 0.2
+                test_size = 0.2  # FALLBACK_DEFAULT_OK
         
         if random_state is None:
             try:
                 from TRAINING.common.determinism import BASE_SEED
-                random_state = BASE_SEED if BASE_SEED is not None else 42
+                random_state = BASE_SEED if BASE_SEED is not None else 42  # FALLBACK_DEFAULT_OK
             except Exception:
-                random_state = 42
+                random_state = 42  # FALLBACK_DEFAULT_OK
         
         from sklearn.model_selection import train_test_split
         

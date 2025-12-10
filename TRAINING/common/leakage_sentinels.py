@@ -324,9 +324,9 @@ class LeakageSentinel:
                 if hasattr(self, 'target_name') and self.target_name:
                     shuffle_seed = stable_seed_from(['leakage_sentinel', self.target_name, 'shuffle'])
                 else:
-                    shuffle_seed = BASE_SEED if BASE_SEED is not None else 42
+                    shuffle_seed = BASE_SEED if BASE_SEED is not None else 42  # FALLBACK_DEFAULT_OK
             except:
-                shuffle_seed = 42
+                shuffle_seed = 42  # FALLBACK_DEFAULT_OK
             np.random.seed(shuffle_seed)
             np.random.shuffle(indices)
             

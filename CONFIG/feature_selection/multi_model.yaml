@@ -213,6 +213,9 @@ aggregation:
   # How to combine across model families
   cross_model_method: "weighted_mean"  # weighted_mean, median, geometric_mean
   
+  # Top-K selection for importance analysis
+  importance_top_fraction: 0.10  # Top fraction of features by importance (default: 10%, can be 0.05, 0.20, etc.)
+  
   # Require feature to be important in at least N models
   require_min_models: 2  # 2 = must appear in at least 2 families
   

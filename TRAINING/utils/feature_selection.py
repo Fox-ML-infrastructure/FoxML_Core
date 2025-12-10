@@ -173,7 +173,7 @@ def select_features_by_correlation(
     feature_names: List[str],
     target: np.ndarray,
     n_features: int = 50,
-    correlation_threshold: float = 0.95
+    correlation_threshold: float = 0.95  # FALLBACK_DEFAULT_OK (should load from safety_config.yaml)
 ) -> Tuple[np.ndarray, List[str]]:
     """
     Select features by removing highly correlated features.

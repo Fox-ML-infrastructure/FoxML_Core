@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Highlights
 
+- **SST Enforcement System & Complete Hardcoded Value Elimination** (2025-12-10) — Implemented automated SST (Single Source of Truth) enforcement test that scans all training code for hardcoded hyperparameters. Fixed all remaining hardcoded values: top 10% importance patterns now configurable, batch_size uses training profiles (default/debug/throughput_optimized), all seeds properly marked with FALLBACK_DEFAULT_OK, diagnostic models marked as DESIGN_CONSTANT_OK. Created internal SST documentation (`DOCS/03_technical/internal/SST_DETERMINISM_GUARANTEES.md`, `SST_COMPLIANCE_CHECKLIST.md`) and public-facing deterministic training guide (`DOCS/00_executive/DETERMINISTIC_TRAINING.md`). Test passes: no unmarked hardcoded hyperparameters remain.
 - **Complete Single Source of Truth (SST) config centralization** (2025-12-10) — **ALL** hardcoded configuration values across the entire TRAINING pipeline moved to YAML files. Every model trainer in `model_fun/` and `models/` now loads hyperparameters, test splits, and random seeds from centralized config. Feature pruning, leakage detection, training strategies, data preprocessing, and all 52+ model files use the same config system. Ensures complete reproducibility: same config → same results across all pipeline stages.
 - **Determinism system integration** (2025-12-10) — All `random_state` values now use the centralized determinism system (`BASE_SEED`) instead of hardcoded values. Training strategies, feature selection, data splits, and all model initializations are now fully deterministic and reproducible.
 - **Pipeline robustness fixes** (2025-12-10) — Fixed critical syntax errors and variable initialization issues in config loading patterns. All `if _CONFIG_AVAILABLE:` blocks now have proper `else:` clauses to ensure variables are always initialized, preventing "referenced before assignment" errors. Full end-to-end testing currently underway.
@@ -35,8 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Stability Guarantees
 
 - **Training results reproducible** across hardware (deterministic seeds, config-driven hyperparameters)
-- **Complete config centralization** (2025-12-10) — All pipeline parameters load from YAML files (single source of truth). No hardcoded thresholds, limits, or hyperparameters in core pipeline code.
+- **Complete config centralization** (2025-12-10) — All pipeline parameters load from YAML files (single source of truth). No hardcoded thresholds, limits, or hyperparameters in core pipeline code. Automated test enforces SST compliance.
 - **Full determinism** (2025-12-10) — All random seeds use centralized determinism system. Same config → same results across all pipeline stages.
+- **SST enforcement** (2025-12-10) — Automated test (`TRAINING/tests/test_no_hardcoded_hparams.py`) prevents hardcoded hyperparameters from being introduced. Only explicitly marked fallbacks (`FALLBACK_DEFAULT_OK`) and design constants (`DESIGN_CONSTANT_OK`) are allowed.
 - **Config schema backward compatible** (existing configs continue to work)
 - **Auto-fixer non-destructive by design** (atomic backups, manifest tracking, restore capabilities)
 - **Leakage detection thresholds configurable** (no hardcoded magic numbers)

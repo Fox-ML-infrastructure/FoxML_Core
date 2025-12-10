@@ -90,16 +90,17 @@ class ComprehensiveTrainer(BaseModelTrainer):
             raise ImportError("LightGBM not available")
         
         # Load hyperparameters from config
-        n_estimators = 100  # Default fallback
-        max_depth = 6  # Default fallback
-        learning_rate = 0.1  # Default fallback
         try:
-            from CONFIG.config_loader import get_cfg
-            n_estimators = int(get_cfg("models.lightgbm.n_estimators", default=100, config_name="model_config"))
-            max_depth = int(get_cfg("models.lightgbm.max_depth", default=6, config_name="model_config"))
-            learning_rate = float(get_cfg("models.lightgbm.learning_rate", default=0.1, config_name="model_config"))
+            from CONFIG.config_loader import load_model_config
+            config = load_model_config("lightgbm")
+            n_estimators = int(config.get("n_estimators", 100))
+            max_depth = int(config.get("max_depth", 6))
+            learning_rate = float(config.get("learning_rate", 0.1))
         except Exception:
-            pass
+            # FALLBACK_DEFAULT_OK: Fallback defaults (should not be reached in normal operation)
+            n_estimators = 100
+            max_depth = 6
+            learning_rate = 0.1
         
         # Create model
         if self.model_type == 'classification':
@@ -148,18 +149,18 @@ class ComprehensiveTrainer(BaseModelTrainer):
         except ImportError:
             raise ImportError("XGBoost not available")
         
-        # Create model
         # Load hyperparameters from config
-        n_estimators = 100  # Default fallback
-        max_depth = 6  # Default fallback
-        learning_rate = 0.1  # Default fallback
         try:
-            from CONFIG.config_loader import get_cfg
-            n_estimators = int(get_cfg("models.xgboost.n_estimators", default=100, config_name="model_config"))
-            max_depth = int(get_cfg("models.xgboost.max_depth", default=6, config_name="model_config"))
-            learning_rate = float(get_cfg("models.xgboost.learning_rate", default=0.1, config_name="model_config"))
+            from CONFIG.config_loader import load_model_config
+            config = load_model_config("xgboost")
+            n_estimators = int(config.get("n_estimators", 100))
+            max_depth = int(config.get("max_depth", 6))
+            learning_rate = float(config.get("learning_rate", 0.1))
         except Exception:
-            pass
+            # FALLBACK_DEFAULT_OK: Fallback defaults (should not be reached in normal operation)
+            n_estimators = 100
+            max_depth = 6
+            learning_rate = 0.1
         
         if self.model_type == 'classification':
             model = xgb.XGBClassifier(
@@ -248,6 +249,16 @@ class ComprehensiveTrainer(BaseModelTrainer):
         import gc
         gc.collect()
         
+        # Load batch_size from training profile
+        try:
+            from CONFIG.config_loader import get_cfg, get_optimizer_config
+            profile = get_cfg("training.active_profile", default="default", config_name="optimizer_config")
+            optimizer_cfg = get_optimizer_config()
+            profile_cfg = optimizer_cfg.get("training_profiles", {}).get(profile, {})
+            batch_size = profile_cfg.get("batch_size", 32)  # FALLBACK_DEFAULT_OK
+        except Exception:
+            batch_size = 32  # FALLBACK_DEFAULT_OK
+        
         # Training callbacks
         callbacks = [
             EarlyStopping(patience=10, restore_best_weights=True),
@@ -258,7 +269,7 @@ class ComprehensiveTrainer(BaseModelTrainer):
         history = model.fit(
             X_scaled, y_tr,
             epochs=100,
-            batch_size=32,
+            batch_size=batch_size,
             validation_split=0.2,
             callbacks=callbacks,
             verbose=0
@@ -334,6 +345,17 @@ class ComprehensiveTrainer(BaseModelTrainer):
         import gc
         gc.collect()
         
+        # Load batch_size from training profile (reuse if already loaded above)
+        if 'batch_size' not in locals():
+            try:
+                from CONFIG.config_loader import get_cfg, get_optimizer_config
+                profile = get_cfg("training.active_profile", default="default", config_name="optimizer_config")
+                optimizer_cfg = get_optimizer_config()
+                profile_cfg = optimizer_cfg.get("training_profiles", {}).get(profile, {})
+                batch_size = profile_cfg.get("batch_size", 32)  # FALLBACK_DEFAULT_OK
+            except Exception:
+                batch_size = 32  # FALLBACK_DEFAULT_OK
+        
         # Training callbacks
         callbacks = [
             EarlyStopping(patience=10, restore_best_weights=True),
@@ -344,7 +366,7 @@ class ComprehensiveTrainer(BaseModelTrainer):
         history = model.fit(
             X_reshaped, y_tr,
             epochs=50,
-            batch_size=32,
+            batch_size=batch_size,
             validation_split=0.2,
             callbacks=callbacks,
             verbose=0

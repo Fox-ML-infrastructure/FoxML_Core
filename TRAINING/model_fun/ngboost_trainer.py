@@ -102,15 +102,17 @@ class NGBoostTrainer(BaseModelTrainer):
         from sklearn.ensemble import HistGradientBoostingRegressor
         
         # Load hyperparameters from config
-        max_depth = 6  # Default fallback
-        learning_rate = 0.1  # Default fallback
-        if _CONFIG_AVAILABLE:
-            try:
-                from CONFIG.config_loader import get_cfg
-                max_depth = int(get_cfg("models.ngboost.max_depth", default=6, config_name="model_config"))
-                learning_rate = float(get_cfg("models.ngboost.learning_rate", default=0.1, config_name="model_config"))
-            except Exception:
-                pass
+        try:
+            from CONFIG.config_loader import load_model_config
+            config = load_model_config("ngboost")
+            # NGBoost has nested base_learner structure
+            base_learner = config.get("base_learner", {})
+            max_depth = int(base_learner.get("max_depth", 5))
+            learning_rate = float(config.get("learning_rate", 0.01))
+        except Exception:
+            # FALLBACK_DEFAULT_OK: Fallback defaults (should not be reached in normal operation)
+            max_depth = 5
+            learning_rate = 0.01
         
         base_learner = HistGradientBoostingRegressor(
             max_iter=1,  # Single tree per boosting round

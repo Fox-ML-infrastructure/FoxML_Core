@@ -41,3 +41,18 @@ optimizers:
     default:
       learning_rate: 1e-3  # Default for most models
 
+# Training profiles for different use cases
+training_profiles:
+  default:
+    batch_size: 256
+    max_epochs: 50
+  debug:
+    batch_size: 32
+    max_epochs: 5
+  throughput_optimized:
+    batch_size: 512
+    max_epochs: 100
+
+# Active training profile (can be overridden via CLI/env)
+active_profile: "default"
+

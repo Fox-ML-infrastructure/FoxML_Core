@@ -77,10 +77,10 @@ class SingleTaskStrategy(BaseTrainingStrategy):
                         from CONFIG.config_loader import get_cfg
                         from TRAINING.common.determinism import BASE_SEED
                         test_size = float(get_cfg("preprocessing.validation.test_size", default=0.2, config_name="preprocessing_config"))
-                        split_seed = BASE_SEED if BASE_SEED is not None else 42
+                        split_seed = BASE_SEED if BASE_SEED is not None else 42  # FALLBACK_DEFAULT_OK
                     except Exception:
-                        test_size = 0.2
-                        split_seed = 42
+                        test_size = 0.2  # FALLBACK_DEFAULT_OK
+                        split_seed = 42  # FALLBACK_DEFAULT_OK
                     X_train, X_val, y_train, y_val = train_test_split(
                         X, y, test_size=test_size, random_state=split_seed
                     )

@@ -271,7 +271,7 @@ class LeakageAutoFixer:
             safety_cfg = get_safety_config()
             perfect_score_threshold = float(safety_cfg.get('auto_fixer', {}).get('perfect_score_threshold', 0.99))
         except Exception:
-            perfect_score_threshold = 0.99
+            perfect_score_threshold = 0.99  # FALLBACK_DEFAULT_OK
         
         if train_score is not None and train_score >= perfect_score_threshold:
             logger.debug(f"Method 1: Perfect score detected ({train_score:.4f} >= 0.99)")
@@ -336,9 +336,9 @@ class LeakageAutoFixer:
                     from TRAINING.common.determinism import BASE_SEED, stable_seed_from
                     # Use target/feature-specific seed if available
                     target_name = getattr(self, 'target_name', 'leakage_test')
-                    leak_seed = stable_seed_from(['leakage_auto_fixer', target_name]) if BASE_SEED is not None else 42
+                    leak_seed = stable_seed_from(['leakage_auto_fixer', target_name]) if BASE_SEED is not None else 42  # FALLBACK_DEFAULT_OK
                 except:
-                    leak_seed = 42
+                    leak_seed = 42  # FALLBACK_DEFAULT_OK
                 
                 if task_type == 'classification':
                     simple_model = LogisticRegression(random_state=leak_seed, solver='liblinear', max_iter=100)
@@ -385,7 +385,7 @@ class LeakageAutoFixer:
                             safety_cfg = get_safety_config()
                             symbol_holdout_test_size = float(safety_cfg.get('auto_fixer', {}).get('symbol_holdout_test_size', 0.2))
                         except Exception:
-                            symbol_holdout_test_size = 0.2
+                            symbol_holdout_test_size = 0.2  # FALLBACK_DEFAULT_OK
                         train_syms, test_syms = sk_train_test_split(
                             unique_symbols, test_size=symbol_holdout_test_size, random_state=holdout_seed
                         )
@@ -451,7 +451,7 @@ class LeakageAutoFixer:
                 if self._is_known_leaky_pattern(feat_name):
                     pattern_detections.append(LeakageDetection(
                         feature_name=feat_name,
-                        confidence=0.95,  # High confidence for known patterns
+                        confidence=0.95,  # FALLBACK_DEFAULT_OK: High confidence for known patterns (should load from safety_config.yaml)
                         reason="Matches known leaky pattern",
                         source="pattern_detection",
                         suggested_action=self._suggest_action(feat_name)

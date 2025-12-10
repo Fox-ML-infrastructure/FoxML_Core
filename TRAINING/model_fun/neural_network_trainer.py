@@ -42,6 +42,23 @@ class NeuralNetworkTrainer(BaseModelTrainer):
     
     def _train_neural_network(self, X_tr, y_tr, X_va=None, y_va=None, cpu_only=False, num_threads=12, feat_cols=None, seed=None, epochs=50, **kwargs):
         """Train Neural Network model."""
+        # Load batch_size and max_epochs from training profile
+        try:
+            from CONFIG.config_loader import get_cfg, get_optimizer_config
+            profile = get_cfg("training.active_profile", default="default", config_name="optimizer_config")
+            optimizer_cfg = get_optimizer_config()
+            profile_cfg = optimizer_cfg.get("training_profiles", {}).get(profile, {})
+            batch_size = profile_cfg.get("batch_size", 256)  # FALLBACK_DEFAULT_OK
+            max_epochs = profile_cfg.get("max_epochs", 50)  # FALLBACK_DEFAULT_OK
+            # Use max_epochs from profile if epochs not explicitly provided
+            if epochs == 50:  # Default value
+                epochs = max_epochs
+        except Exception:
+            batch_size = 256  # FALLBACK_DEFAULT_OK
+            max_epochs = 50  # FALLBACK_DEFAULT_OK
+            if epochs == 50:
+                epochs = max_epochs
+        
         try:
             import tensorflow as tf
             from tensorflow.keras import layers, Model
@@ -100,7 +117,7 @@ class NeuralNetworkTrainer(BaseModelTrainer):
                     X_scaled, y_tr,
                     validation_data=(X_va_scaled, y_va),
                     epochs=epochs,
-                    batch_size=256,
+                    batch_size=batch_size,
                     callbacks=callbacks,
                     verbose=0
                 )
@@ -108,7 +125,7 @@ class NeuralNetworkTrainer(BaseModelTrainer):
                 model.fit(
                     X_scaled, y_tr,
                     epochs=epochs,
-                    batch_size=256,
+                    batch_size=batch_size,
                     callbacks=callbacks,
                     verbose=0
                 )

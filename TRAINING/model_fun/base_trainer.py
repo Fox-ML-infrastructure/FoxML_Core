@@ -69,9 +69,9 @@ def safe_ridge_fit(X, y, alpha=1.0):
     # Get deterministic seed from determinism system
     try:
         from TRAINING.common.determinism import BASE_SEED
-        ridge_seed = BASE_SEED if BASE_SEED is not None else 42
+        ridge_seed = BASE_SEED if BASE_SEED is not None else 42  # FALLBACK_DEFAULT_OK
     except:
-        ridge_seed = 42
+        ridge_seed = 42  # FALLBACK_DEFAULT_OK
     
     solver_pref = os.getenv("SKLEARN_RIDGE_SOLVER", "auto")
     try:
@@ -183,7 +183,7 @@ class BaseModelTrainer(ABC):
         Uses determinism system to ensure consistent seeds across the pipeline.
         """
         # Load test_size from config
-        test_size = 0.2  # Default fallback
+        test_size = 0.2  # FALLBACK_DEFAULT_OK
         if _CONFIG_AVAILABLE:
             try:
                 test_size = float(get_cfg("preprocessing.validation.test_size", default=0.2, config_name="preprocessing_config"))
@@ -191,7 +191,7 @@ class BaseModelTrainer(ABC):
                 logger.debug(f"Failed to load test_size from config: {e}")
         
         # Load random_state from determinism system (preferred) or config
-        random_state = 42  # Default fallback
+        random_state = None
         try:
             from TRAINING.common.determinism import BASE_SEED
             if BASE_SEED is not None:
@@ -200,9 +200,14 @@ class BaseModelTrainer(ABC):
                 try:
                     random_state = int(get_cfg("preprocessing.validation.random_state", default=42, config_name="preprocessing_config"))
                 except Exception:
-                    pass
+                    random_state = 42  # FALLBACK_DEFAULT_OK
         except Exception as e:
             logger.debug(f"Failed to load random_state from determinism system: {e}")
+            random_state = 42  # FALLBACK_DEFAULT_OK
+        
+        # Final fallback if still None
+        if random_state is None:
+            random_state = 42  # FALLBACK_DEFAULT_OK
         
         return float(test_size), int(random_state)
     

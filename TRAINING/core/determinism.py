@@ -77,7 +77,7 @@ def ensure_deterministic_environment() -> None:
 def get_deterministic_params(seed: Optional[int] = None) -> dict:
     """Get deterministic parameters for model training."""
     if seed is None:
-        seed = 42
+        seed = 42  # FALLBACK_DEFAULT_OK
     
     return {
         'random_state': seed,

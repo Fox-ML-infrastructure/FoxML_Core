@@ -74,7 +74,7 @@ try:
     base_seed = get_cfg("pipeline.determinism.base_seed", default=42)
 except ImportError:
     _CONFIG_AVAILABLE = False
-    base_seed = 42
+    base_seed = 42  # FALLBACK_DEFAULT_OK
 
 # Import determinism system FIRST (before any ML libraries)
 from TRAINING.common.determinism import set_global_determinism, seed_for, stable_seed_from

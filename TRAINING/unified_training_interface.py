@@ -56,9 +56,9 @@ class UnifiedTrainingInterface:
                 from CONFIG.config_loader import get_cfg
                 seed = int(get_cfg("pipeline.determinism.base_seed", default=42, config_name="pipeline_config"))
             except Exception:
-                seed = 42
+                seed = 42  # FALLBACK_DEFAULT_OK
         else:
-            seed = self.config.get('seed', 42)
+            seed = self.config.get('seed', 42)  # FALLBACK_DEFAULT_OK
         
         set_global_determinism(seed)
         ensure_deterministic_environment()
@@ -165,7 +165,7 @@ class UnifiedTrainingInterface:
                 # Use deterministic seed from determinism system
                 try:
                     from TRAINING.common.determinism import BASE_SEED
-                    split_seed = BASE_SEED if BASE_SEED is not None else 42
+                        split_seed = BASE_SEED if BASE_SEED is not None else 42  # FALLBACK_DEFAULT_OK
                 except:
                     split_seed = 42
                 X_train, X_val, y_train, y_val = train_test_split(

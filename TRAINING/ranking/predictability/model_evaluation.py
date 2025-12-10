@@ -74,6 +74,17 @@ try:
 except ImportError:
     pass  # Logger not yet initialized, will be set up below
 
+def _get_importance_top_fraction() -> float:
+    """Get the top fraction for importance analysis from config."""
+    if _CONFIG_AVAILABLE:
+        try:
+            # Load from feature_selection/multi_model.yaml
+            fraction = float(get_cfg("aggregation.importance_top_fraction", default=0.10, config_name="multi_model"))
+            return fraction
+        except Exception:
+            return 0.10  # FALLBACK_DEFAULT_OK
+    return 0.10  # FALLBACK_DEFAULT_OK
+
 # Import logging config utilities
 try:
     from CONFIG.logging_config_utils import get_module_logging_config, get_backend_logging_config
@@ -546,8 +557,8 @@ def train_and_evaluate_models(
             _correlation_threshold = float(leakage_cfg.get('auto_fix_thresholds', {}).get('perfect_correlation', 0.999))
             _suspicious_score_threshold = float(leakage_cfg.get('model_alerts', {}).get('suspicious_score', 0.99))
         except Exception:
-            _correlation_threshold = 0.999
-            _suspicious_score_threshold = 0.99
+            _correlation_threshold = 0.999  # FALLBACK_DEFAULT_OK
+            _suspicious_score_threshold = 0.99  # FALLBACK_DEFAULT_OK
     else:
         # Load from safety config
         if _CONFIG_AVAILABLE:
@@ -557,11 +568,11 @@ def train_and_evaluate_models(
                 _correlation_threshold = float(leakage_cfg.get('auto_fix_thresholds', {}).get('perfect_correlation', 0.999))
                 _suspicious_score_threshold = float(leakage_cfg.get('model_alerts', {}).get('suspicious_score', 0.99))
             except Exception:
-                _correlation_threshold = 0.999
-                _suspicious_score_threshold = 0.99
+                _correlation_threshold = 0.999  # FALLBACK_DEFAULT_OK
+                _suspicious_score_threshold = 0.99  # FALLBACK_DEFAULT_OK
         else:
-            _correlation_threshold = 0.999
-            _suspicious_score_threshold = 0.99
+            _correlation_threshold = 0.999  # FALLBACK_DEFAULT_OK
+            _suspicious_score_threshold = 0.99  # FALLBACK_DEFAULT_OK
     
     # NOTE: Removed _critical_leakage_detected flag - training accuracy alone is not
     # a reliable leakage signal for tree-based models. Real defense: schema filters + pre-scan.
@@ -744,6 +755,7 @@ def train_and_evaluate_models(
             gpu_params = {}
             try:
                 # Try CUDA first (fastest)
+                # DESIGN_CONSTANT_OK: n_estimators=1 for diagnostic leakage detection only, not production behavior
                 test_model = lgb.LGBMRegressor(device='cuda', n_estimators=1, verbose=lgbm_backend_cfg.native_verbosity)
                 test_model.fit(np.random.rand(10, 5), np.random.rand(10))
                 gpu_params = {'device': 'cuda', 'gpu_device_id': 0}
@@ -752,6 +764,7 @@ def train_and_evaluate_models(
             except:
                 try:
                     # Try OpenCL
+                    # DESIGN_CONSTANT_OK: n_estimators=1 for diagnostic leakage detection only, not production behavior
                     test_model = lgb.LGBMRegressor(device='gpu', n_estimators=1, verbose=lgbm_backend_cfg.native_verbosity)
                     test_model.fit(np.random.rand(10, 5), np.random.rand(10))
                     gpu_params = {'device': 'gpu', 'gpu_platform_id': 0, 'gpu_device_id': 0}
@@ -905,10 +918,11 @@ def train_and_evaluate_models(
             # Compute and store full task-aware metrics
             _compute_and_store_metrics('lightgbm', model, X, y, primary_score, task_type)
             
-            # Use percentage of total importance in top 10% features (0-1 scale, interpretable)
+            # Use percentage of total importance in top fraction features (0-1 scale, interpretable)
             total_importance = np.sum(importances)
             if total_importance > 0:
-                top_k = max(1, int(len(importances) * 0.1))  # Top 10% of features
+                top_fraction = _get_importance_top_fraction()
+                top_k = max(1, int(len(importances) * top_fraction))
                 top_importance_sum = np.sum(np.sort(importances)[-top_k:])
                 # Normalize to 0-1: what % of total importance is in top 10%?
                 importance_ratio = top_importance_sum / total_importance
@@ -962,10 +976,11 @@ def train_and_evaluate_models(
             # Compute and store full task-aware metrics
             _compute_and_store_metrics('random_forest', model, X, y, primary_score, task_type)
             
-            # Use percentage of total importance in top 10% features (0-1 scale, interpretable)
+            # Use percentage of total importance in top fraction features (0-1 scale, interpretable)
             total_importance = np.sum(importances)
             if total_importance > 0:
-                top_k = max(1, int(len(importances) * 0.1))  # Top 10% of features
+                top_fraction = _get_importance_top_fraction()
+                top_k = max(1, int(len(importances) * top_fraction))
                 top_importance_sum = np.sum(np.sort(importances)[-top_k:])
                 # Normalize to 0-1: what % of total importance is in top 10%?
                 importance_ratio = top_importance_sum / total_importance
@@ -1176,7 +1191,8 @@ def train_and_evaluate_models(
                 importances = model.feature_importances_
                 total_importance = np.sum(importances)
                 if total_importance > 0:
-                    top_k = max(1, int(len(importances) * 0.1))  # Top 10% of features
+                    top_fraction = _get_importance_top_fraction()
+                    top_k = max(1, int(len(importances) * top_fraction))
                     top_importance_sum = np.sum(np.sort(importances)[-top_k:])
                     # Normalize to 0-1: what % of total importance is in top 10%?
                     importance_ratio = top_importance_sum / total_importance
@@ -1240,7 +1256,8 @@ def train_and_evaluate_models(
             if len(importance) > 0:
                 total_importance = np.sum(importance)
                 if total_importance > 0:
-                    top_k = max(1, int(len(importance) * 0.1))
+                    top_fraction = _get_importance_top_fraction()
+                    top_k = max(1, int(len(importance) * top_fraction))
                     top_importance_sum = np.sum(np.sort(importance)[-top_k:])
                     importance_ratio = top_importance_sum / total_importance
                 else:
@@ -1296,7 +1313,8 @@ def train_and_evaluate_models(
             if len(importance) > 0:
                 total_importance = np.sum(importance)
                 if total_importance > 0:
-                    top_k = max(1, int(len(importance) * 0.1))
+                    top_fraction = _get_importance_top_fraction()
+                    top_k = max(1, int(len(importance) * top_fraction))
                     top_importance_sum = np.sum(np.sort(importance)[-top_k:])
                     importance_ratio = top_importance_sum / total_importance
                 else:
@@ -1343,7 +1361,8 @@ def train_and_evaluate_models(
                 importance_normalized = importance / np.max(importance)
                 total_importance = np.sum(importance_normalized)
                 if total_importance > 0:
-                    top_k = max(1, int(len(importance_normalized) * 0.1))
+                    top_fraction = _get_importance_top_fraction()
+                    top_k = max(1, int(len(importance_normalized) * top_fraction))
                     top_importance_sum = np.sum(np.sort(importance_normalized)[-top_k:])
                     importance_ratio = top_importance_sum / total_importance
                 else:
@@ -1387,7 +1406,8 @@ def train_and_evaluate_models(
                 importance = scores / np.max(scores)
                 total_importance = np.sum(importance)
                 if total_importance > 0:
-                    top_k = max(1, int(len(importance) * 0.1))
+                    top_fraction = _get_importance_top_fraction()
+                    top_k = max(1, int(len(importance) * top_fraction))
                     top_importance_sum = np.sum(np.sort(importance)[-top_k:])
                     importance_ratio = top_importance_sum / total_importance
                 else:
@@ -1456,7 +1476,8 @@ def train_and_evaluate_models(
             if len(importance) > 0:
                 total_importance = np.sum(importance)
                 if total_importance > 0:
-                    top_k = max(1, int(len(importance) * 0.1))
+                    top_fraction = _get_importance_top_fraction()
+                    top_k = max(1, int(len(importance) * top_fraction))
                     top_importance_sum = np.sum(np.sort(importance)[-top_k:])
                     importance_ratio = top_importance_sum / total_importance
                 else:
@@ -1525,7 +1546,8 @@ def train_and_evaluate_models(
             if len(importance) > 0:
                 total_importance = np.sum(importance)
                 if total_importance > 0:
-                    top_k = max(1, int(len(importance) * 0.1))
+                    top_fraction = _get_importance_top_fraction()
+                    top_k = max(1, int(len(importance) * top_fraction))
                     top_importance_sum = np.sum(np.sort(importance)[-top_k:])
                     importance_ratio = top_importance_sum / total_importance
                 else:
@@ -1616,7 +1638,8 @@ def train_and_evaluate_models(
             if len(importance) > 0:
                 total_importance = np.sum(importance)
                 if total_importance > 0:
-                    top_k = max(1, int(len(importance) * 0.1))
+                    top_fraction = _get_importance_top_fraction()
+                    top_k = max(1, int(len(importance) * top_fraction))
                     top_importance_sum = np.sum(np.sort(importance)[-top_k:])
                     importance_ratio = top_importance_sum / total_importance
                 else:
@@ -1660,7 +1683,8 @@ def train_and_evaluate_models(
                 importances = model.feature_importances_
                 total_importance = np.sum(importances)
                 if total_importance > 0:
-                    top_k = max(1, int(len(importances) * 0.1))  # Top 10% of features
+                    top_fraction = _get_importance_top_fraction()
+                    top_k = max(1, int(len(importances) * top_fraction))
                     top_importance_sum = np.sum(np.sort(importances)[-top_k:])
                     # Normalize to 0-1: what % of total importance is in top 10%?
                     importance_ratio = top_importance_sum / total_importance
@@ -2356,20 +2380,20 @@ def evaluate_target_predictability(
                 auto_fix_max_features = int(leakage_cfg.get('auto_fix_max_features_per_run', 20))
             except Exception as e:
                 logger.debug(f"Failed to load leakage detection config: {e}, using defaults")
-                cv_threshold = 0.99
-                accuracy_threshold = 0.999
-                r2_threshold = 0.999
-                correlation_threshold = 0.999
-                auto_fix_enabled = True
-                auto_fix_min_confidence = 0.8
-                auto_fix_max_features = 20
+                cv_threshold = 0.99  # FALLBACK_DEFAULT_OK
+                accuracy_threshold = 0.999  # FALLBACK_DEFAULT_OK
+                r2_threshold = 0.999  # FALLBACK_DEFAULT_OK
+                correlation_threshold = 0.999  # FALLBACK_DEFAULT_OK
+                auto_fix_enabled = True  # FALLBACK_DEFAULT_OK
+                auto_fix_min_confidence = 0.8  # FALLBACK_DEFAULT_OK
+                auto_fix_max_features = 20  # FALLBACK_DEFAULT_OK
         else:
-            # Hardcoded defaults
-            cv_threshold = 0.99
-            accuracy_threshold = 0.999
-            r2_threshold = 0.999
-            correlation_threshold = 0.999
-            auto_fix_enabled = True
+            # FALLBACK_DEFAULT_OK: Fallback defaults (config not available)
+            cv_threshold = 0.99  # FALLBACK_DEFAULT_OK
+            accuracy_threshold = 0.999  # FALLBACK_DEFAULT_OK
+            r2_threshold = 0.999  # FALLBACK_DEFAULT_OK
+            correlation_threshold = 0.999  # FALLBACK_DEFAULT_OK
+            auto_fix_enabled = True  # FALLBACK_DEFAULT_OK
             auto_fix_min_confidence = 0.8
         
         # Check if auto-fixer is enabled
