@@ -2,7 +2,7 @@
 ## Jennifer Lewis — ML Systems, Cross-Sectional ML Infrastructure, HPC Engineering
 
 This document provides an overview of the technical capabilities, domains, and service areas offered for consulting engagements.
-It is intended for engineering teams, ML research groups, and organizations requiring specialized machine learning and computational infrastructure expertise.
+It is intended for engineering teams and organizations requiring specialized machine learning and computational infrastructure expertise for any machine learning applications.
 
 ---
 
@@ -16,9 +16,9 @@ It is intended for engineering teams, ML research groups, and organizations requ
 - GPU-accelerated training and inference pipelines  
 - Reproducible research environments and controlled experimentation infrastructure  
 
-### 2. Quantitative Research Architecture
-- Cross-sectional modeling workflows  
-- Multi-asset model design and evaluation  
+### 2. Cross-Sectional ML Research Architecture
+- Cross-sectional modeling workflows
+- Multi-entity model design and evaluation
 - Research tooling for signal generation and model comparison  
 - Custom metric evaluation utilities  
 - Frameworks for rapid prototyping and systematic testing  
@@ -60,7 +60,7 @@ Capable of building or improving internal pipelines regardless of existing stack
 - Enhancement or extension of existing ML pipelines  
 - Custom development of proprietary model research infrastructure  
 - Evaluation and redesign of validation methodologies  
-- Internal tooling for quantitative research groups  
+- Internal tooling for ML research groups  
 - Integration of HPC workloads into ML workflows  
 - Advisory services for system design, architecture, and research direction  
 

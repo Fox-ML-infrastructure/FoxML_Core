@@ -205,7 +205,7 @@ This is essential for ML research organizations, quantitative firms, and enterpr
 
 ### 10.2 Hedge Fund Considerations
 
-**For hedge funds and quantitative firms:**
+**For ML research organizations and quantitative firms:**
 
 - **Strategy protection** — Client strategies remain client-owned and confidential
 - **No cross-contamination** — Work done for one client does not contaminate another client's IP

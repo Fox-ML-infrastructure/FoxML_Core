@@ -42,7 +42,7 @@ Any entity that directly or indirectly Controls, is Controlled by, or is under c
 
 Direct Competitor
 
-Any third party whose primary business (meaning more than fifty percent (50%) of its revenue or business activities) includes developing, licensing, or providing machine learning or quantitative trading infrastructure products or services that are substantially similar to the Software (for example, commercial platforms primarily marketed as quantitative research, ML pipeline, or trading infrastructure solutions). For the avoidance of doubt, a company that uses the Software internally for its own trading or research activities is not a Direct Competitor solely by virtue of such internal use.
+Any third party whose primary business (meaning more than fifty percent (50%) of its revenue or business activities) includes developing, licensing, or providing machine learning or cross-sectional ML infrastructure products or services that are substantially similar to the Software (for example, commercial platforms primarily marketed as cross-sectional ML research, ML pipeline, or ML infrastructure solutions). For the avoidance of doubt, a company that uses the Software internally for its own research activities is not a Direct Competitor solely by virtue of such internal use.
 
 Material Breach
 
@@ -50,7 +50,7 @@ A breach that is significant, substantial, or has a material adverse effect on t
 
 Competing Infrastructure Service
 
-Any software, platform, hosted service, or product whose primary purpose is to allow third parties to design, run, or manage their own machine learning, quantitative research, or trading workflows, including experiment orchestration, feature/target management, model training, evaluation, and related infrastructure.
+Any software, platform, hosted service, or product whose primary purpose is to allow third parties to design, run, or manage their own machine learning, cross-sectional ML research, or ML workflows, including experiment orchestration, feature/target management, model training, evaluation, and related infrastructure.
 
 Commercial Use
 

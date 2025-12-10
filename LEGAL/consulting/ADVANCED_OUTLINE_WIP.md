@@ -59,7 +59,7 @@ This base rate reflects:
 	•	high reliability requirements
 	•	research, design, testing, and validation time
 	•	real-world constraints and vendor differences
-	•	the complexity of quant/HFT-grade systems
+	•	the complexity of high-performance ML systems
 
 The hourly rate is subject to change based on:
 	•	scope increases

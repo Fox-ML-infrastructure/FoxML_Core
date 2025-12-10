@@ -113,12 +113,12 @@ Client-facing documents and forms for consulting engagements:
 
 ## Previous Work Showcase
 
-The repository below demonstrates the structure, quality, and engineering rigor of ML/quant research infrastructure.  
+The repository below demonstrates the structure, quality, and engineering rigor of ML cross-sectional research infrastructure.
 It represents the current evolution of the Fox ML Infrastructure system.
 
 ### FoxML Core
 
-A production-structured ML/quant research infrastructure featuring:
+A production-structured ML cross-sectional research infrastructure featuring:
 
 - pipeline orchestration  
 - leakage-safe validation  
