@@ -6,7 +6,7 @@ This directory contains all legal, licensing, and contracting documentation for 
 
 ## Overview
 
-This directory includes standardized documents, templates, and policies used for machine learning, cross-sectional ML research, and HPC consulting engagements.  
+This directory includes standardized documents, templates, and policies used for machine learning applications, cross-sectional ML infrastructure, and HPC consulting engagements.  
 These materials are provided to help prospective clients evaluate professionalism, workflow, and project structure before initiating a Statement of Work.
 
 ---

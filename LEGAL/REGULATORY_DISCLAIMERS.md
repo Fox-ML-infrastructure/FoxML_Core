@@ -19,7 +19,7 @@
 
 **Fox ML Infrastructure LLC provides:**
 
-- **Software infrastructure** — Machine learning and cross-sectional ML research infrastructure
+- **Software infrastructure** — Machine learning and cross-sectional ML infrastructure for any machine learning applications
 - **Technical tools** — Tools for data processing, model training, and analysis
 - **Architecture and frameworks** — Reference architectures and engineering frameworks
 - **Documentation and support** — Technical documentation and support services

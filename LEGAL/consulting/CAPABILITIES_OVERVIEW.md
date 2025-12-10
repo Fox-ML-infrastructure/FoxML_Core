@@ -60,7 +60,7 @@ Capable of building or improving internal pipelines regardless of existing stack
 - Enhancement or extension of existing ML pipelines  
 - Custom development of proprietary model research infrastructure  
 - Evaluation and redesign of validation methodologies  
-- Internal tooling for ML research groups  
+- Internal tooling for machine learning applications  
 - Integration of HPC workloads into ML workflows  
 - Advisory services for system design, architecture, and research direction  
 

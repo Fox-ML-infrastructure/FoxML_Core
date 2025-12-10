@@ -44,7 +44,7 @@ The AGPL-3.0 version is only permitted for:
 
 ---
 
-### Q: Can our Data Science team use AGPL while our ML Research team uses a commercial license?
+### Q: Can our Data Science team use AGPL while our ML Applications team uses a commercial license?
 
 **A:** No. You may not combine AGPL-3.0 copies with Commercial Use or use both licenses simultaneously within the same organization without a commercial agreement. If any part of your organization uses the Software for Commercial Use, all use within that organization requires a commercial license.
 

@@ -5,7 +5,7 @@
 
 FoxML Core is:
 
-- A leakage-safe ML research and training infrastructure stack for cross-sectional and panel data
+- A leakage-safe ML infrastructure stack for cross-sectional and panel data for any machine learning applications
 - A reference architecture for high-throughput, config-driven ML pipelines
 - Designed for ML infra teams, data scientists, and researchers (architecture, not alpha)
 
@@ -30,7 +30,7 @@ FoxML Core demonstrates:
 - **Multi-model training systems** with 20+ model families (GPU-accelerated)
 - **HPC-compatible orchestration patterns** (single-node optimized; distributed HPC planned/WIP)
 
-This is a **cross-sectional ML research infrastructure system** designed for panel data and time-series workflows.
+This is a **cross-sectional ML infrastructure system** designed for panel data and time-series workflows for any machine learning applications.
 
 ---------------------------------------------------------------------
 
