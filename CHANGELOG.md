@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Highlights
 
+- **Large file refactoring completed** (2025-12-09) — Split 3 large monolithic files (4.5k, 3.4k, 2.5k lines) into modular components while maintaining 100% backward compatibility
+- **Model family status tracking** — Added comprehensive debugging for multi-model feature selection to identify which families succeed/fail and why
+- **Interval detection robustness** — Fixed timestamp gap filtering to ignore outliers (weekends, data gaps) before computing median
+- **Legal compliance enhanced** — Added IP assignment agreement, regulatory disclaimers, and explicit "No Financial Advice" sections
 - Phase 1 intelligent training framework completed and functioning properly
 - Ranking & selection pipelines unified (interval handling, preprocessing, CatBoost)
 - Boruta refactored into a statistical gatekeeper with base vs final consensus tracking
@@ -100,6 +104,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Large file refactoring** (2025-12-09) — Split 3 monolithic files into modular components:
+  - `models/specialized_models.py`: 4,518 → 82 lines (split into `models/specialized/`)
+  - `ranking/rank_target_predictability.py`: 3,454 → 56 lines (split into `ranking/predictability/`)
+  - `train_with_strategies.py`: 2,523 → 66 lines (split into `training_strategies/`)
+  - All imports remain 100% backward compatible. See [`DOCS/03_technical/refactoring/`](DOCS/03_technical/refactoring/) for details.
+- **Missing imports in refactored modules** — Fixed `NameError` and `ImportError` issues:
+  - Added missing `time`, `json`, `datetime`, `pandas`, `numpy`, `logging` imports
+  - Fixed `time.time()` → `_t.time()` usage (time imported as `_t`)
+  - Fixed `feat_cols` to use actual column names after filtering
+  - Corrected path resolution (`parents[1]` → `parents[2]`) for repo root
+- **Model family status tracking** — Added comprehensive debugging for multi-model feature selection:
+  - Tracks success/failure per family per symbol with detailed error info
+  - Logs clear summaries showing which families succeeded/failed
+  - Persists status to `model_family_status.json` for post-run analysis
+  - Logs excluded families during aggregation with error types
+  - See [`DOCS/03_technical/debugging/MODEL_FAMILY_STATUS_TRACKING.md`](DOCS/03_technical/debugging/MODEL_FAMILY_STATUS_TRACKING.md)
+- **Interval detection robustness** — Fixed timestamp gap filtering:
+  - Now filters out insane gaps (> 1 day) before computing median
+  - Prevents outliers (weekends, data gaps, bad rows) from contaminating detection
+  - Warning only fires if ALL gaps are insane, not just one outlier
+  - See [`TRAINING/utils/data_interval.py`](TRAINING/utils/data_interval.py)
 - **Feature selection pipeline** — Boruta `X_clean` error, double-counting, feature count mismatches. Interval detection warnings, CatBoost loss function for classification, sklearn NaN/dtype handling. See [`DOCS/02_reference/CHANGELOG_DETAILED.md`](DOCS/02_reference/CHANGELOG_DETAILED.md) for detailed notes.
 - **Interval detection** — Fixed negative delta warnings from unsorted timestamps or wraparound. Now uses `abs()` on time deltas before unit detection and conversion. Prevents spurious warnings like "Timestamp delta -789300000000000.0 doesn't map to reasonable interval". See [`TRAINING/utils/data_interval.py`](TRAINING/utils/data_interval.py) and [`TRAINING/ranking/rank_target_predictability.py`](TRAINING/ranking/rank_target_predictability.py).
 - **Ranking cache JSON serialization** — Fixed `TypeError: Object of type Timestamp is not JSON serializable` when saving ranking cache. Added `_json_default()` serializer to handle pandas Timestamp, numpy types, and datetime objects. See [`TRAINING/orchestration/intelligent_trainer.py`](TRAINING/orchestration/intelligent_trainer.py).

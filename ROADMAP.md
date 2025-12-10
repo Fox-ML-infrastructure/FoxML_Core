@@ -36,11 +36,14 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 
 ## Core System Status
 
-* **TRAINING Pipeline — Phase 1** ✅ — Functioning properly. The intelligent training framework (target ranking, feature selection, automated leakage detection) is operational. Minor issues are being investigated that likely reside in feature and target engineering. Phase 2 work (centralized configuration & UX modernization) is now underway.
+* **TRAINING Pipeline — Phase 1** ✅ — Functioning properly. The intelligent training framework (target ranking, feature selection, automated leakage detection) is operational. **End-to-end testing currently underway** to validate full pipeline from target ranking → feature selection → model training.
+* **Code Refactoring** ✅ (2025-12-09) — Large monolithic files split into modular components (4.5k → 82 lines, 3.4k → 56 lines, 2.5k → 66 lines) while maintaining 100% backward compatibility. Largest file now: 2,542 lines (cohesive subsystem, not monolithic).
+* **Model Family Status Tracking** ✅ — Comprehensive debugging system added to identify which families succeed/fail in multi-model feature selection. Status persisted to JSON for analysis.
 * **GPU Families** ✅ — Confirmed working. All GPU model families operational and producing artifacts. Expect some noise and warnings during training (harmless, do not affect functionality).
 * **Sequential Models** ✅ — All sequential models (CNN1D, LSTM, Transformer, and LSTM-based variants) working and producing outputs. 3D preprocessing issues resolved.
 * **Target Ranking & Selection** ✅ — Integrated and operational as part of Phase 1 pipeline.
-* **Documentation Overhaul** ✅ — 55 new files created, 50+ rewritten, standardized across all tiers.
+* **Documentation Overhaul** ✅ — 55+ new files created, 50+ rewritten, standardized across all tiers.
+* **Legal Compliance** ✅ — Enhanced with IP assignment agreement, regulatory disclaimers, and explicit "No Financial Advice" sections. Compliance assessment: 95% complete (after IP assignment signing).
 
 ---
 
@@ -60,7 +63,7 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 
 # Phase 1 — Intelligent Training Framework ✅
 
-**Status**: Functioning properly. Minor issues being investigated in feature and target engineering.
+**Status**: Functioning properly. **End-to-end testing underway** (2025-12-10).
 
 **Completed:**
 * ✅ TRAINING pipeline restored and validated
@@ -73,10 +76,19 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 * ✅ Target ranking and selection modules operational
 * ✅ VAE serialization fixed — all models appear to be working correctly
 * ✅ Structured logging configuration system implemented
+* ✅ **Large file refactoring** (2025-12-09) — Split monolithic files into modular components
+* ✅ **Model family status tracking** — Added debugging for multi-model feature selection
+* ✅ **Interval detection robustness** — Fixed timestamp gap filtering
+* ✅ **Import fixes** — Resolved all missing imports in refactored modules
 
-**Current Investigation:**
-* Minor issues in feature and target engineering (temporal alignment, lag structure, leakage validation)
-* Feature engineering review and validation
+**Current Testing:**
+* 🔄 **End-to-end testing underway** — Full pipeline validation from target ranking → feature selection → model training
+* Testing with multiple symbols and model families
+* Validating data flow through Phase 3 (model training)
+* Verifying model family status tracking output
+
+**Planned Investigation:**
+* Feature engineering review and validation (temporal alignment, lag structure, leakage validation)
 
 **Planned Enhancements:**
 * Intelligent training orchestration improvements
