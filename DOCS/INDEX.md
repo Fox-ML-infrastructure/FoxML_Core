@@ -62,9 +62,6 @@ Step-by-step guides for common tasks.
 - [Experiments Operations](01_tutorials/training/EXPERIMENTS_OPERATIONS.md) - Step-by-step operations
 - [Phase 1: Feature Engineering](01_tutorials/training/PHASE1_FEATURE_ENGINEERING.md) - Phase 1 documentation
 
-### Trading
-- [Paper Trading Setup](01_tutorials/trading/PAPER_TRADING_SETUP.md) - Paper trading
-
 ### Configuration
 - [Config Basics](01_tutorials/configuration/CONFIG_BASICS.md) - Configuration fundamentals
 - [Config Examples](01_tutorials/configuration/CONFIG_EXAMPLES.md) - Example configs

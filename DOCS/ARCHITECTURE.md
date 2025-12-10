@@ -39,7 +39,6 @@ This document defines the 4-tier documentation hierarchy for FoxML Core.
   - MODEL_TRAINING_GUIDE.md
   - WALKFORWARD_VALIDATION.md
   - FEATURE_SELECTION_TUTORIAL.md
-- trading/
 - configuration/
   - CONFIG_BASICS.md
   - CONFIG_EXAMPLES.md

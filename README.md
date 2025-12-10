@@ -36,7 +36,7 @@ This is a **research infrastructure system**, not a trading bot or financial pro
 
 ## Domain Focus & Extensibility
 
-FoxML Core is **optimized and tested for financial time series** (cross-sectional trading data, market microstructure, price/volume features). The architecture is designed for financial ML workflows with domain-specific safeguards (leakage detection, temporal validation, feature registry systems).
+FoxML Core is **optimized and tested for financial time series** (cross-sectional data, market microstructure, price/volume features). The architecture is designed for financial ML workflows with domain-specific safeguards (leakage detection, temporal validation, feature registry systems).
 
 **Architecture Property:** While built for finance, the core primitives are domain-agnostic by design:
 - Config-driven orchestration
@@ -89,7 +89,7 @@ FoxML Core is released under the **AGPL-3.0** license. Personal / academic resea
 That means:
 
 - Individual developers, students, and researchers can use FoxML Core under AGPL-3.0 for **personal and academic research, evaluation, and experimentation** (see `LEGAL/SUBSCRIPTIONS.md` for full definition).
-- Organizations that want to use FoxML Core in **production, revenue-generating, or internal trading / research environments** will almost always want a **commercial license** to avoid AGPL copyleft obligations and to get clear commercial terms.
+- Organizations that want to use FoxML Core in **production, revenue-generating, or internal research environments** will almost always want a **commercial license** to avoid AGPL copyleft obligations and to get clear commercial terms.
 
 **If you are using FoxML Core inside any business or organization, assume you need a commercial license.** See `LEGAL/SUBSCRIPTIONS.md` for details.
 
@@ -206,8 +206,7 @@ FoxML Core repository structure:
 
 ```
 FoxML_Core/
-├── trading/               (Paper trading integrations, if applicable)
-├── data_processing/       (Pipelines & feature engineering)
+├── DATA_PROCESSING/       (Pipelines & feature engineering)
 ├── TRAINING/              (Model training & research workflows)
 ├── CONFIG/                (Configuration management system)
 ├── DOCS/                  (Technical documentation)
