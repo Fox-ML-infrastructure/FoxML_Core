@@ -48,6 +48,9 @@ Step-by-step guides for common tasks.
 
 ### Pipelines
 - [First Pipeline Run](01_tutorials/pipelines/FIRST_PIPELINE_RUN.md) - Run your first pipeline
+
+### Development & Architecture
+- [Refactoring & Wrappers](01_tutorials/REFACTORING_AND_WRAPPERS.md) - Understanding the modular structure and backward compatibility wrappers
 - [Data Processing Walkthrough](01_tutorials/pipelines/DATA_PROCESSING_WALKTHROUGH.md) - Data pipeline guide
 - [Feature Engineering Tutorial](01_tutorials/pipelines/FEATURE_ENGINEERING_TUTORIAL.md) - Feature creation
 
