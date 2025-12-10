@@ -210,7 +210,7 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 
 **Low-Level Rewrites (C/C++/Rust):**
 * Rewrite performance-critical paths
-* HPC alignment + low-latency architecture
+* HPC alignment + low-latency architecture (planned/WIP - single-node optimized currently)
 * GPU-first and multi-GPU scaling
 
 **Advanced Features:**

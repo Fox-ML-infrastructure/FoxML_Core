@@ -10,14 +10,15 @@ This document provides comprehensive change details for FoxML Core. For a quick 
 
 ### Status
 
-Phase 1 functioning properly - Ranking and selection pipelines unified with consistent behavior. Boruta refactored as statistical gatekeeper. Complete config centralization and determinism implemented. Config loading patterns hardened. Full end-to-end testing currently underway.
+Phase 1 functioning properly - Ranking and selection pipelines unified with consistent behavior. Boruta refactored as statistical gatekeeper. Complete config centralization and determinism implemented. SST enforcement system added with automated test. All hardcoded values eliminated or properly marked. Full end-to-end testing currently underway.
 
-**Note**: Phase 1 of the pipeline (intelligent training framework) is functioning properly. Ranking and selection pipelines now have unified behavior (interval handling, sklearn preprocessing, CatBoost configuration). Boruta has been refactored from "just another importance scorer" to a statistical gatekeeper that modifies consensus scores via bonuses/penalties. All configuration values are now centralized in YAML files with single source of truth. All random seeds use centralized determinism system. Config loading patterns have been hardened with proper fallbacks to prevent runtime errors. All documentation has been updated with cross-links and references to new config files and utilities. Backward functionality remains fully operational. All existing training workflows continue to function as before, and legacy config locations are still supported with deprecation warnings. **Full end-to-end testing is currently underway** to validate the complete pipeline from target ranking → feature selection → model training.
+**Note**: Phase 1 of the pipeline (intelligent training framework) is functioning properly. Ranking and selection pipelines now have unified behavior (interval handling, sklearn preprocessing, CatBoost configuration). Boruta has been refactored from "just another importance scorer" to a statistical gatekeeper that modifies consensus scores via bonuses/penalties. All configuration values are now centralized in YAML files with single source of truth. All random seeds use centralized determinism system. Config loading patterns have been hardened with proper fallbacks to prevent runtime errors. **SST enforcement system implemented**: automated test (`TRAINING/tests/test_no_hardcoded_hparams.py`) enforces that all hyperparameters load from config, with strict markers (`FALLBACK_DEFAULT_OK`, `DESIGN_CONSTANT_OK`) for allowed exceptions. All remaining hardcoded values have been eliminated or properly marked. All documentation has been updated with cross-links and references to new config files and utilities. Backward functionality remains fully operational. All existing training workflows continue to function as before, and legacy config locations are still supported with deprecation warnings. **Full end-to-end testing is currently underway** to validate the complete pipeline from target ranking → feature selection → model training.
 
 ---
 
 ### Highlights
 
+- **SST Enforcement System** (2025-12-10) — Automated test enforces Single Source of Truth. All hardcoded hyperparameters eliminated or properly marked. Training profiles added for batch_size. Top 10% importance patterns now configurable.
 - Phase 1 intelligent training framework completed and functioning properly
 - Ranking & selection pipelines unified (interval handling, preprocessing, CatBoost)
 - Boruta refactored into a statistical gatekeeper with base vs final consensus tracking
@@ -29,6 +30,36 @@ Phase 1 functioning properly - Ranking and selection pipelines unified with cons
 ---
 
 ### Added
+
+#### SST Enforcement & Configuration Hardening (2025-12-10)
+
+**SST Enforcement Test**
+- **Automated SST compliance test** — `TRAINING/tests/test_no_hardcoded_hparams.py` scans all Python files in TRAINING/ for hardcoded hyperparameters, thresholds, and seeds. Only explicitly marked values (`FALLBACK_DEFAULT_OK`, `DESIGN_CONSTANT_OK`) are allowed. Prevents accidental introduction of hardcoded configuration values.
+
+**Configuration Improvements**
+- **Training profiles** — Added `training_profiles` to `CONFIG/training_config/optimizer_config.yaml` with `default`, `debug`, and `throughput_optimized` profiles. Neural network trainers now load `batch_size` and `max_epochs` from active profile.
+- **Top fraction configurable** — Added `importance_top_fraction: 0.10` to `CONFIG/feature_selection/multi_model.yaml`. All "top 10%" importance patterns in `model_evaluation.py` and `leakage_detection.py` now use configurable fraction instead of hardcoded 0.1.
+
+**Documentation**
+- **Internal SST docs** — `DOCS/03_technical/internal/SST_DETERMINISM_GUARANTEES.md` (policy and guarantees), `SST_COMPLIANCE_CHECKLIST.md` (pre-commit checklist), `SST_REMAINING_WORK.md` (action plan).
+- **Public deterministic training guide** — `DOCS/00_executive/DETERMINISTIC_TRAINING.md` (public-facing guide for buyers/quants).
+
+**Code Changes**
+- **All seed fallbacks marked** — Added `FALLBACK_DEFAULT_OK` markers to all seed fallback defaults throughout codebase.
+- **Diagnostic models marked** — `n_estimators=1` in diagnostic leakage detection models marked with `DESIGN_CONSTANT_OK`.
+- **Batch size configurable** — `neural_network_trainer.py` and `comprehensive_trainer.py` load batch_size from training profiles.
+- **Top fraction helper** — Created `_get_importance_top_fraction()` helper in `model_evaluation.py` and `leakage_detection.py`.
+- **Fixed indentation errors** — Corrected indentation in top fraction pattern updates.
+
+**Files Modified**
+- `CONFIG/feature_selection/multi_model.yaml` — Added `importance_top_fraction`
+- `CONFIG/training_config/optimizer_config.yaml` — Added `training_profiles`
+- `TRAINING/tests/test_no_hardcoded_hparams.py` — New SST enforcement test
+- `TRAINING/model_fun/neural_network_trainer.py` — Load batch_size from config
+- `TRAINING/model_fun/comprehensive_trainer.py` — Load batch_size from config
+- `TRAINING/ranking/predictability/model_evaluation.py` — Top fraction configurable (11 instances)
+- `TRAINING/ranking/predictability/leakage_detection.py` — Top fraction configurable (11 instances)
+- All seed fallbacks marked with `FALLBACK_DEFAULT_OK` across 15+ files
 
 #### Intelligent Training & Ranking
 

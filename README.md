@@ -28,7 +28,7 @@ FoxML Core demonstrates:
 - **Scalable ML workflow design** with complete Single Source of Truth (SST) config system - all 52+ model trainers use config-driven hyperparameters for full reproducibility
 - **High-throughput data processing** with Polars-optimized pipelines
 - **Multi-model training systems** with 20+ model families (GPU-accelerated)
-- **HPC-compatible orchestration patterns** (NVLink-ready architecture planned)
+- **HPC-compatible orchestration patterns** (single-node optimized; distributed HPC planned/WIP)
 
 This is a **research infrastructure system**, not a trading bot or financial product.
 

@@ -11,7 +11,7 @@ FoxML Core is a research infrastructure system for ML pipelines, quantitative wo
 - High-throughput data processing
 - Multi-model training systems
 - Hybrid C++/Python infrastructure
-- HPC-compatible orchestration patterns
+- HPC-compatible orchestration patterns (single-node optimized; distributed HPC planned/WIP)
 
 Infrastructure, not a trading bot. Provides architecture, not alpha.
 
