@@ -17,11 +17,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """Data processing utilities extracted from original 5K line file."""
 
+import os
 import pandas as pd
 import numpy as np
 import logging
+from pathlib import Path
+from typing import Dict, List, Tuple
+import polars as pl
 
 logger = logging.getLogger(__name__)
+
+# Import USE_POLARS - defined from environment variable
+USE_POLARS = os.getenv("USE_POLARS", "1") == "1"
 
 def load_mtf_data(data_dir: str, symbols: List[str], interval: str = "5m", max_rows_per_symbol: int = None) -> Dict[str, pd.DataFrame]:
     """Load MTF data for specified symbols and interval.

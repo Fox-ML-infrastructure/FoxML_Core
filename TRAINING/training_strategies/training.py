@@ -206,7 +206,20 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         selected_features = None
         if target_features and target in target_features:
             selected_features = target_features[target]
-            logger.info(f"Using {len(selected_features)} selected features for {target}")
+            # Validate selected_features is a list/iterable
+            if selected_features is not None:
+                if not isinstance(selected_features, (list, tuple)):
+                    logger.warning(f"selected_features for {target} is not a list/tuple (type: {type(selected_features)}), converting...")
+                    try:
+                        selected_features = list(selected_features)
+                    except Exception as e:
+                        logger.error(f"Failed to convert selected_features to list: {e}")
+                        selected_features = None
+                elif len(selected_features) == 0:
+                    logger.warning(f"selected_features for {target} is empty, will auto-discover features")
+                    selected_features = None
+                else:
+                    logger.info(f"Using {len(selected_features)} selected features for {target}")
         
         X, y, feature_names, symbols, indices, feat_cols, time_vals, routing_meta = prepare_training_data_cross_sectional(
             mtf_data, target, feature_names=selected_features, min_cs=min_cs, max_cs_samples=max_cs_samples

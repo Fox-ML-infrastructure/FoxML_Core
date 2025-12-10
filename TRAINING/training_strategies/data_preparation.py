@@ -160,6 +160,7 @@ from typing import Dict, List, Optional, Tuple, Any
 # Third-party imports
 import numpy as np
 import pandas as pd
+import polars as pl
 
 # Import USE_POLARS - defined in utils.py, but we need it here
 # Use environment variable directly to avoid circular import
