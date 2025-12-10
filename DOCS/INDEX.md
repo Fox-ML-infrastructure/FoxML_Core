@@ -121,9 +121,9 @@ Research notes, design rationale, advanced topics.
 
 ### Design
 - [Architecture Deep Dive](03_technical/design/ARCHITECTURE_DEEP_DIVE.md) - System architecture
-- [Mathematical Foundations](03_technical/design/MATHEMATICAL_FOUNDATIONS.md) - Math background
-- [Optimization Engine](03_technical/design/OPTIMIZATION_ENGINE.md) - Optimization design
-- [C++ Integration](03_technical/design/C++_INTEGRATION.md) - C++ components
+- [Mathematical Foundations](03_technical/internal/MATHEMATICAL_FOUNDATIONS.md) - Math background (internal)
+- [Optimization Engine](03_technical/internal/OPTIMIZATION_ENGINE.md) - Optimization design (internal)
+- [C++ Integration](03_technical/internal/C++_INTEGRATION.md) - C++ components (internal)
 
 ### Benchmarks
 - [Performance Metrics](03_technical/benchmarks/PERFORMANCE_METRICS.md) - Performance data
