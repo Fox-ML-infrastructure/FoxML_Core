@@ -589,6 +589,10 @@ def _process_combined_data_pandas(combined_df: pd.DataFrame, target: str, featur
     y_clean = y[valid_mask]
     symbols_clean = combined_df['symbol'].values[valid_mask]
     
+    # Get final feature column names (after all filtering/dropping)
+    # This should match the columns in X_clean (which comes from feature_df after filtering)
+    final_feature_cols = list(feature_df.columns)  # Actual columns after filtering/dropping
+    
     # Fill remaining NaN values with median (load strategy from config if available)
     from sklearn.impute import SimpleImputer
     if _CONFIG_AVAILABLE:
@@ -621,5 +625,7 @@ def _process_combined_data_pandas(combined_df: pd.DataFrame, target: str, featur
     
     # Return with prepared labels instead of raw labels
     # Note: We return routing_meta in the imputer slot (slot 7) for now - trainer can extract it
-    return X_clean, y_prepared, feature_names, symbols_clean, np.arange(len(X_clean)), feature_names, time_vals, routing_meta
+    # feat_cols should be the actual column names after filtering (numeric_cols), not the input feature_names
+    final_feature_cols = list(feature_df.columns)  # Actual columns after filtering/dropping
+    return X_clean, y_prepared, feature_names, symbols_clean, np.arange(len(X_clean)), final_feature_cols, time_vals, routing_meta
 
