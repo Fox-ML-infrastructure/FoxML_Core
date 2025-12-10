@@ -76,15 +76,9 @@ features:
   rsi_14:
     source: derived
     lag_bars: 14
-    allowed_horizons:
-    - 1
-    - 2
-    - 3
-    - 5
-    - 12
-    - 24
-    - 60
+    allowed_horizons: []
     description: RSI with 14-bar lookback
+    rejected: true
   sma_20:
     source: derived
     lag_bars: 20
@@ -569,6 +563,24 @@ features:
     rejected: true
     description: 'AUTO-REJECTED: Detected as leaky feature'
   realized_vol_20:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  obv:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  rs_vol_20:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  price_impact:
     lag_bars: 0
     allowed_horizons: []
     source: unknown

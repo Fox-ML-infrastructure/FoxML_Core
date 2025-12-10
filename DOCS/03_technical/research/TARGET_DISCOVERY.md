@@ -13,10 +13,18 @@ Target discovery identifies which prediction targets are most predictable and su
 Rank targets by their predictability across multiple models:
 
 ```bash
+# Using the modular main module (recommended)
+python -m TRAINING.ranking.predictability.main \
+    --symbols AAPL,MSFT,GOOGL,TSLA,JPM \
+    --output-dir results/target_rankings
+
+# Or using the backward-compatible wrapper (still works)
 python TRAINING/ranking/rank_target_predictability.py \
     --symbols AAPL,MSFT,GOOGL,TSLA,JPM \
     --output-dir results/target_rankings
 ```
+
+**Note**: The ranking system uses a modular structure (`TRAINING/ranking/predictability/`) but maintains 100% backward compatibility. The original `rank_target_predictability.py` is now a thin wrapper that imports from the modular components.
 
 **Metrics:**
 - Information Coefficient (IC)
@@ -84,6 +92,6 @@ for family in model_families:
 ## See Also
 
 - [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Automated target ranking workflow (recommended)
-- [Target Ranking Module](../../../TRAINING/ranking/rank_target_predictability.py) - Ranking implementation (for reference)
+- [Target Ranking Module](../../../TRAINING/ranking/predictability/) - Ranking implementation (modular structure, see [detailed docs](../refactoring/TARGET_PREDICTABILITY_RANKING.md))
 - [Feature Selection Guide](../implementation/FEATURE_SELECTION_GUIDE.md) - Complete feature selection methodology
 

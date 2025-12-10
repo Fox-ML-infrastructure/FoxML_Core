@@ -25,6 +25,8 @@ Trained Models
 - **Leakage-free**: All existing safeguards preserved
 - **Unified behavior**: Ranking and selection use consistent preprocessing and configuration
 
+**Architecture Note**: The pipeline uses a modular structure internally (`TRAINING/training_strategies/`, `TRAINING/ranking/predictability/`, `TRAINING/models/specialized/`) but maintains 100% backward compatibility. All existing imports and workflows continue to work unchanged - this is purely an internal organization improvement for better maintainability.
+
 **Pipeline Consistency:**
 - **Interval handling**: Both ranking and selection respect `data.bar_interval` from experiment config (no spurious auto-detection warnings)
 - **Sklearn preprocessing**: All sklearn-based models use shared `make_sklearn_dense_X()` helper for consistent NaN/dtype/inf handling
@@ -258,7 +260,8 @@ The pipeline trains all selected model families on the selected targets with the
 
 **Output:**
 - `output_dir/training_results/` - Model artifacts, metrics, predictions
-- Same structure as existing `train_with_strategies.py` output
+- Same structure as existing training pipeline output
+- Uses modular `TRAINING/training_strategies/` components internally
 
 **Example:**
 ```bash
@@ -440,7 +443,7 @@ python TRAINING/train.py \
 The intelligent training pipeline is **fully backward compatible** with existing workflows:
 
 - **Manual targets/features**: Can still provide manual lists
-- **Existing training pipeline**: Uses same `train_with_strategies.py` functions
+- **Existing training pipeline**: Uses same `training_strategies/` module functions (backward compatible with `train_with_strategies.py` imports)
 - **Same output format**: Produces same model artifacts and metrics
 
 ### Migration Path
@@ -448,14 +451,16 @@ The intelligent training pipeline is **fully backward compatible** with existing
 **Old workflow:**
 ```bash
 # Step 1: Rank targets manually (deprecated)
-python TRAINING/ranking/rank_target_predictability.py ...
+python -m TRAINING.ranking.predictability.main ...
 
 # Step 2: Select features manually (deprecated)
 python TRAINING/ranking/multi_model_feature_selection.py ...
 
 # Step 3: Train with results
-python TRAINING/train_with_strategies.py --targets ... --features ...
+python -m TRAINING.training_strategies.main --targets ... --features ...
 ```
+
+**Note**: The training system uses a modular structure internally (`TRAINING/training_strategies/`, `TRAINING/ranking/predictability/`, `TRAINING/models/specialized/`) but maintains 100% backward compatibility. The original files (`rank_target_predictability.py`, `train_with_strategies.py`, `specialized_models.py`) are now thin wrappers that re-export everything from the modular components. All existing imports continue to work unchanged - this is purely an internal organization improvement.
 
 **New workflow:**
 ```bash

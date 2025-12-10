@@ -2,8 +2,8 @@
 
 Complete navigation guide for FoxML Core documentation.
 
-**Last Updated**: 2025-12-08  
-**Recent Updates**: Added unified pipeline consistency guide (including Boruta gatekeeper), structured logging configuration, shared utility modules documentation, and comprehensive Boruta refactor documentation.
+**Last Updated**: 2025-12-09  
+**Recent Updates**: Added refactoring documentation (large file splits), unified pipeline consistency guide (including Boruta gatekeeper), structured logging configuration, shared utility modules documentation, and comprehensive Boruta refactor documentation.
 
 ## Quick Navigation
 
@@ -155,6 +155,15 @@ Research notes, design rationale, advanced topics.
 - [Pressure Test Plan](03_technical/implementation/PRESSURE_TEST_PLAN.md) - Testing plan
 - [Performance Optimization](03_technical/implementation/PERFORMANCE_OPTIMIZATION.md) - Optimization work
 - [Adding Proprietary Models](03_technical/implementation/ADDING_PROPRIETARY_MODELS.md) - Using BaseModelTrainer to add custom models
+
+### Refactoring
+- [Refactoring Summary](03_technical/refactoring/REFACTORING_SUMMARY.md) - **NEW**: Complete overview of large file refactoring (2025-12-09)
+- [Specialized Models Module](03_technical/refactoring/SPECIALIZED_MODELS.md) - Detailed documentation for `models/specialized/` module
+- [Target Predictability Ranking Module](03_technical/refactoring/TARGET_PREDICTABILITY_RANKING.md) - Detailed documentation for `ranking/predictability/` module
+- [Training Strategies Module](03_technical/refactoring/TRAINING_STRATEGIES.md) - Detailed documentation for `training_strategies/` module
+
+### Legal & Compliance (Internal)
+- [Compliance Assessment](03_technical/COMPLIANCE_ASSESSMENT_INTERNAL.md) - **NEW**: Internal compliance audit vs blueprint requirements (2025-12-09)
 
 ### Testing
 - [Testing Plan](03_technical/testing/TESTING_PLAN.md) - Test strategy

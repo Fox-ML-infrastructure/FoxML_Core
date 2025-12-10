@@ -149,6 +149,7 @@ def select_features_for_target(
     
     # Process each symbol
     all_results = []
+    all_family_statuses = []  # Collect status info for all families across all symbols
     for idx, symbol in enumerate(symbols, 1):
         logger.info(f"[{idx}/{len(symbols)}] Processing {symbol}...")
         
@@ -162,7 +163,8 @@ def select_features_for_target(
         
         try:
             # Process symbol (preserves all leakage-free behavior)
-            symbol_results = _process_single_symbol(
+            # Returns tuple: (results, family_statuses)
+            symbol_results, symbol_statuses = _process_single_symbol(
                 symbol=symbol,
                 data_path=data_path,
                 target_column=target_column,
@@ -173,6 +175,7 @@ def select_features_for_target(
             )
             
             all_results.extend(symbol_results)
+            all_family_statuses.extend(symbol_statuses)
             logger.info(f"  ✅ {symbol}: {len(symbol_results)} model results")
         
         except Exception as e:
@@ -191,7 +194,8 @@ def select_features_for_target(
         all_results=all_results,
         model_families_config=model_families_config,
         aggregation_config=aggregation_config,
-        top_n=top_n
+        top_n=top_n,
+        all_family_statuses=all_family_statuses  # Pass status info for logging excluded families
     )
     
     logger.info(f"✅ Selected {len(selected_features)} features")
@@ -287,7 +291,8 @@ def select_features_for_target(
             'n_symbols_processed': len(symbols),
             'n_model_results': len(all_results),
             'top_n': top_n or len(selected_features),
-            'model_families_config': model_families_config  # Include for confidence computation
+            'model_families_config': model_families_config,  # Include for confidence computation
+            'family_statuses': all_family_statuses  # Include family status tracking for debugging
         }
         _save_multi_model_results(
             summary_df=summary_df,

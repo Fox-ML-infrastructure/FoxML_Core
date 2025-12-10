@@ -18,8 +18,11 @@ docs/audit/
 DOCS/internal/
 DOCS/audit/
 
-# Enterprise bundle (untracked until legal docs are finalized)
-ENTERPRISE_BUNDLE/
+# Internal scripts and tools
+SCRIPTS/internal/
+
+# Enterprise bundle - now tracked (PDFs and index)
+# ENTERPRISE_BUNDLE/
 
 # Personal notes
 NOTES/
@@ -32,6 +35,9 @@ config/
 
 # Training artifacts
 catboost_info/
+
+# Archive of original large files (deprecated, split into modules)
+TRAINING/archive/
 
 # Commit message template (not needed)
 COMMIT_MESSAGE.md

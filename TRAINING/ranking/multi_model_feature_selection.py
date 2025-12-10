@@ -859,13 +859,13 @@ def process_single_symbol(
         # Validate target
         if target_column not in df.columns:
             logger.warning(f"Skipping {symbol}: Target '{target_column}' not found")
-            return results
+            return results, family_statuses
         
         # Drop NaN in target
         df = df.dropna(subset=[target_column])
         if df.empty:
             logger.warning(f"Skipping {symbol}: No valid data after dropping NaN")
-            return results
+            return results, family_statuses
         
         # Sample if too large
         if len(df) > max_samples:
@@ -911,7 +911,7 @@ def process_single_symbol(
         
         if not feature_names:
             logger.warning(f"Skipping {symbol}: No features after filtering")
-            return results
+            return results, family_statuses
         
         # Convert to numpy
         X_arr = X.to_numpy()
@@ -922,7 +922,9 @@ def process_single_symbol(
         if detected_interval != 5:
             logger.info(f"  Detected data interval: {detected_interval}m (was assuming 5m)")
         
-        # Train each enabled model family
+        # Train each enabled model family with structured status tracking
+        enabled_families = [f for f, cfg in model_families_config.items() if cfg.get('enabled', False)]
+        
         for family_name, family_config in model_families_config.items():
             if not family_config.get('enabled', False):
                 continue
@@ -946,26 +948,79 @@ def process_single_symbol(
                     results.append(result)
                     # Handle NaN scores gracefully (e.g., Boruta doesn't have a train score)
                     score_str = f"{train_score:.4f}" if not math.isnan(train_score) else "N/A"
-                    logger.info(f"    {family_name}: score={score_str}, "
+                    logger.info(f"    ✅ {family_name}: score={score_str}, "
                               f"top feature={importance.idxmax()} ({importance.max():.2f})")
+                    
+                    family_statuses.append({
+                        "status": "success",
+                        "family": family_name,
+                        "symbol": symbol,
+                        "score": float(train_score) if not math.isnan(train_score) else None,
+                        "top_feature": importance.idxmax(),
+                        "top_feature_score": float(importance.max()),
+                        "error": None,
+                        "error_type": None
+                    })
+                else:
+                    # Model returned but importance is None or all zeros
+                    logger.warning(f"    ⚠️  {family_name}: Model trained but returned invalid importance (None or all zeros)")
+                    family_statuses.append({
+                        "status": "failed",
+                        "family": family_name,
+                        "symbol": symbol,
+                        "score": None,
+                        "top_feature": None,
+                        "top_feature_score": None,
+                        "error": "Invalid importance (None or all zeros)",
+                        "error_type": "InvalidImportance"
+                    })
                 
             except Exception as e:
-                logger.error(f"  {symbol}: {family_name} failed: {e}")
+                # Capture exception details for debugging
+                error_type = type(e).__name__
+                error_msg = str(e)
+                logger.error(f"    ❌ {symbol}: {family_name} FAILED: {error_type}: {error_msg}", exc_info=True)
+                
+                family_statuses.append({
+                    "status": "failed",
+                    "family": family_name,
+                    "symbol": symbol,
+                    "score": None,
+                    "top_feature": None,
+                    "top_feature_score": None,
+                    "error": error_msg,
+                    "error_type": error_type
+                })
                 continue
         
-        logger.info(f"✅ {symbol}: Completed {len(results)}/{len(model_families_config)} models")
+        # Log structured summary per symbol
+        success_families = [s["family"] for s in family_statuses if s["status"] == "success"]
+        failed_families = [s["family"] for s in family_statuses if s["status"] == "failed"]
+        
+        logger.info(f"✅ {symbol}: Completed {len(success_families)}/{len(enabled_families)} model families")
+        if success_families:
+            logger.info(f"   ✅ Success: {', '.join(success_families)}")
+        if failed_families:
+            logger.warning(f"   ❌ Failed: {', '.join(failed_families)}")
+            # Log error types for failed families
+            for status in family_statuses:
+                if status["status"] == "failed":
+                    logger.warning(f"      - {status['family']}: {status['error_type']}: {status['error']}")
         
     except Exception as e:
         logger.error(f"❌ {symbol}: Processing failed: {e}", exc_info=True)
+        # Return empty results but preserve any statuses collected before failure
+        return results, family_statuses
     
-    return results
+    return results, family_statuses
 
 
 def aggregate_multi_model_importance(
     all_results: List[ImportanceResult],
     model_families_config: Dict[str, Dict[str, Any]],
     aggregation_config: Dict[str, Any],
-    top_n: Optional[int] = None
+    top_n: Optional[int] = None,
+    all_family_statuses: Optional[List[Dict[str, Any]]] = None  # Optional: for logging excluded families
 ) -> Tuple[pd.DataFrame, List[str]]:
     """
     Aggregate feature importance across models AND symbols
@@ -985,6 +1040,24 @@ def aggregate_multi_model_importance(
     family_results = defaultdict(list)
     for result in all_results:
         family_results[result.model_family].append(result)
+    
+    # Log which families were excluded due to failures (if status info available)
+    if all_family_statuses:
+        enabled_families = set(f for f, cfg in model_families_config.items() if cfg.get('enabled', False))
+        families_with_results = set(family_results.keys())
+        families_without_results = enabled_families - families_with_results
+        
+        if families_without_results:
+            logger.warning(f"⚠️  {len(families_without_results)} model families excluded from aggregation (no results): {', '.join(sorted(families_without_results))}")
+            # Log per-symbol failure details if available
+            for family in families_without_results:
+                family_failures = [s for s in all_family_statuses if s.get('family') == family and s.get('status') == 'failed']
+                if family_failures:
+                    error_types = set(s.get('error_type') for s in family_failures if s.get('error_type'))
+                    symbols_failed = [s.get('symbol') for s in family_failures]
+                    logger.warning(f"   - {family}: Failed for {len(symbols_failed)} symbol(s) ({', '.join(set(symbols_failed))}) with error types: {', '.join(error_types) if error_types else 'Unknown'}")
+        
+        logger.info(f"✅ Aggregating {len(families_with_results)} model families with results: {', '.join(sorted(families_with_results))}")
     
     # Aggregate within each family
     family_scores = {}
@@ -1471,10 +1544,61 @@ def save_multi_model_results(
     metadata['n_selected_features'] = len(selected_features)
     metadata['n_total_results'] = len(all_results)
     metadata['model_families_used'] = list(set(r.model_family for r in all_results))
-    
+
     with open(output_dir / "multi_model_metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
     logger.info(f"✅ Saved metadata")
+    
+    # 6. Family status tracking JSON (for debugging broken models)
+    if 'family_statuses' in metadata and metadata['family_statuses']:
+        family_statuses = metadata['family_statuses']
+        # Create summary by family
+        status_summary = {}
+        for status in family_statuses:
+            family = status.get('family')
+            if family not in status_summary:
+                status_summary[family] = {
+                    'total_runs': 0,
+                    'success': 0,
+                    'failed': 0,
+                    'symbols_success': [],
+                    'symbols_failed': [],
+                    'error_types': set(),
+                    'errors': []
+                }
+            summary = status_summary[family]
+            summary['total_runs'] += 1
+            if status.get('status') == 'success':
+                summary['success'] += 1
+                summary['symbols_success'].append(status.get('symbol'))
+            else:
+                summary['failed'] += 1
+                summary['symbols_failed'].append(status.get('symbol'))
+                if status.get('error_type'):
+                    summary['error_types'].add(status.get('error_type'))
+                if status.get('error'):
+                    summary['errors'].append({
+                        'symbol': status.get('symbol'),
+                        'error_type': status.get('error_type'),
+                        'error': status.get('error')
+                    })
+        
+        # Convert sets to lists for JSON serialization
+        for family_summary in status_summary.values():
+            family_summary['error_types'] = list(family_summary['error_types'])
+        
+        # Save detailed status file
+        with open(output_dir / "model_family_status.json", "w") as f:
+            json.dump({
+                'summary': status_summary,
+                'detailed': family_statuses
+            }, f, indent=2)
+        logger.info(f"✅ Saved model family status tracking to model_family_status.json")
+        
+        # Log summary
+        failed_families = [f for f, s in status_summary.items() if s['failed'] > 0]
+        if failed_families:
+            logger.warning(f"⚠️  {len(failed_families)} model families had failures: {', '.join(failed_families)}")
     
     # 6. Target confidence metrics (if model_families_config available in metadata)
     try:
@@ -1610,6 +1734,7 @@ def main():
     
     # Process symbols (sequential to avoid GPU/memory conflicts)
     all_results = []
+    all_family_statuses = []  # Collect status info for debugging
     for i, (symbol, path) in enumerate(labeled_files, 1):
         # Check if already completed
         if symbol in completed:
@@ -1632,12 +1757,13 @@ def main():
         
         logger.info(f"\n[{i}/{len(labeled_files)}] Processing {symbol}...")
         try:
-            results = process_single_symbol(
+            results, family_statuses = process_single_symbol(
                 symbol, path, args.target_column,
                 config['model_families'],
                 config['sampling']['max_samples_per_symbol']
             )
             all_results.extend(results)
+            all_family_statuses.extend(family_statuses)
             
             # Save checkpoint after each symbol
             # Convert results to dict for serialization (handle pd.Series and NaN)
@@ -1670,7 +1796,8 @@ def main():
         all_results,
         config['model_families'],
         config['aggregation'],
-        args.top_n
+        args.top_n,
+        all_family_statuses=all_family_statuses  # Pass status info for logging excluded families
     )
     
     if summary_df.empty:
@@ -1681,11 +1808,13 @@ def main():
     metadata = {
         'timestamp': pd.Timestamp.now().isoformat(),
         'target_column': args.target_column,
+        'family_statuses': all_family_statuses,  # Include for debugging
         'top_n': args.top_n,
         'n_symbols': len(labeled_files),
         'enabled_families': enabled_families,
         'config': config,
-        'model_families_config': config.get('model_families', {})  # Explicit for confidence computation
+        'model_families_config': config.get('model_families', {}),  # Explicit for confidence computation
+        'family_statuses': all_family_statuses  # Include for debugging
     }
     
     save_multi_model_results(
@@ -1711,6 +1840,7 @@ def main():
     logger.info(f"  • {args.output_dir}/model_agreement_matrix.csv")
     logger.info(f"  • {args.output_dir}/target_confidence.json")
     logger.info(f"  • {args.output_dir}/multi_model_metadata.json")
+    logger.info(f"  • {args.output_dir}/model_family_status.json (family status tracking)")
     logger.info(f"  • {args.output_dir}/importance_<family>.csv (per-family)")
     
     return 0

@@ -230,8 +230,8 @@ aggregation:
 
   # Cross-sectional ranking (panel model for universe-level feature importance)
   cross_sectional_ranking:
-    enabled: false  # Set to true to enable cross-sectional ranking
-    min_symbols: 5  # Only run if >= this many symbols (with 2 symbols, CS ranking adds little value)
+    enabled: true  # Set to true to enable cross-sectional ranking
+    min_symbols: 2  # Only run if >= this many symbols (lowered to 2 for testing; increase to 5+ for production)
     top_k_candidates: 50  # Use top K features from per-symbol selection as candidates
     model_families: [lightgbm]  # Which model families to use for panel model
     min_cs: 10  # Minimum cross-sectional size per timestamp

@@ -2,6 +2,8 @@
 
 This document provides comprehensive change details for FoxML Core. For a quick overview, see the [root changelog](../../CHANGELOG.md).
 
+**Note (2025-12-09)**: Large monolithic files have been refactored into modular components for better maintainability. References to `specialized_models.py`, `rank_target_predictability.py`, and `train_with_strategies.py` now refer to thin backward-compatibility wrappers that import from the new modular structure. **All existing imports continue to work unchanged** - this is an internal refactoring with no user-facing API changes. For internal refactoring details, see [Refactoring Summary](../03_technical/refactoring/REFACTORING_SUMMARY_INTERNAL.md).
+
 ---
 
 ## [Unreleased]

@@ -2,6 +2,23 @@
 
 This document tracks key cross-references between documentation files to ensure consistency.
 
+## New Files (2025-12-09)
+
+### Refactoring Documentation
+- **Files**: 
+  - `DOCS/03_technical/refactoring/REFACTORING_SUMMARY.md`
+  - `DOCS/03_technical/refactoring/SPECIALIZED_MODELS.md`
+  - `DOCS/03_technical/refactoring/TARGET_PREDICTABILITY_RANKING.md`
+  - `DOCS/03_technical/refactoring/TRAINING_STRATEGIES.md`
+- **References**:
+  - `INDEX.md` - Added to refactoring section
+  - `TRAINING/README.md` - Links to refactoring docs
+  - `CHANGELOG_DETAILED.md` - Refactoring note
+- **Module READMEs**:
+  - `TRAINING/models/specialized/README.md` - Brief, links to detailed docs
+  - `TRAINING/ranking/predictability/README.md` - Brief, links to detailed docs
+  - `TRAINING/training_strategies/README.md` - Brief, links to detailed docs
+
 ## New Files (2025-12-08)
 
 ### Ranking and Selection Consistency

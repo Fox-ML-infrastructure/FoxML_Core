@@ -56,8 +56,10 @@ always_exclude:
   - mass_index
   - month_of_year
   - negative_volume_index
+  - obv
   - obv_ema
   - parkinson_vol_5
+  - price_impact
   - price_volume_trend
   - realized_vol_20
   - ret_ord_5m
@@ -66,6 +68,8 @@ always_exclude:
   - ret_zscore_30m
   - ret_zscore_5m
   - ret_zscore_60m
+  - rs_vol_20
+  - rsi_14
   - rsi_21
   - rsi_30
   - time_in_profit_10m

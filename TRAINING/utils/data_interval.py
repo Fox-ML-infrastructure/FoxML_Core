@@ -223,39 +223,83 @@ def detect_interval_from_timestamps(
         else:
             time_diffs = time_diffs[positive_mask]
         
-        # MEDIUM TERM FIX: Proper unit detection
-        median_diff_minutes = None
+        # CRITICAL: Filter out insane gaps (> 1 day) BEFORE computing median
+        # This prevents outliers (weekends, data gaps, bad rows) from contaminating detection
+        MAX_REASONABLE_MINUTES = 1440.0  # 1 day
         
-        # Check if we have Timedelta objects (pandas datetime diff)
         if is_timedelta:
-            # Already converted to Timedelta - convert to minutes
+            # Convert to minutes first, then filter
             diff_minutes = time_diffs.apply(lambda x: x.total_seconds() / 60.0)
-            median_diff_minutes = float(diff_minutes.median())
+            sane_mask = diff_minutes <= MAX_REASONABLE_MINUTES
+            sane_diff_minutes = diff_minutes[sane_mask]
+            
+            if len(sane_diff_minutes) == 0:
+                # All gaps are insane - log max gap for debugging
+                max_gap_minutes = float(diff_minutes.max())
+                logger.warning(
+                    f"All timestamp deltas are huge (max={max_gap_minutes:.1f}m = {max_gap_minutes/1440:.1f} days); "
+                    f"cannot infer bar size. Using default: {default}m"
+                )
+                return default
+            
+            # Use median of sane deltas only
+            median_diff_minutes = float(sane_diff_minutes.median())
+            
+            # Debug: log if we filtered out any insane gaps
+            n_filtered = len(diff_minutes) - len(sane_diff_minutes)
+            if n_filtered > 0:
+                logger.debug(
+                    f"Filtered out {n_filtered} insane timestamp gaps (>{MAX_REASONABLE_MINUTES}m) "
+                    f"before computing median. Using {len(sane_diff_minutes)} sane deltas."
+                )
         else:
-            # Numeric deltas - need to detect unit
-            raw_median = float(time_diffs.median())
-            # Should be positive after filtering, but use abs for safety
+            # Numeric deltas - need to detect unit first, then filter
+            # Strategy: try to convert all deltas to minutes (assuming nanoseconds), filter, then detect
+            # This is safe because we'll validate the result anyway
+            
+            # Try assuming nanoseconds (most common) and convert to minutes
+            deltas_ns = time_diffs.values.astype(np.float64)
+            deltas_minutes = deltas_ns / 1e9 / 60.0
+            
+            # Filter out insane gaps
+            sane_mask = deltas_minutes <= MAX_REASONABLE_MINUTES
+            sane_deltas_minutes = deltas_minutes[sane_mask]
+            
+            if len(sane_deltas_minutes) == 0:
+                # All gaps are insane - try to give helpful error
+                max_gap_ns = float(deltas_ns.max())
+                max_gap_minutes = max_gap_ns / 1e9 / 60.0
+                logger.warning(
+                    f"All timestamp deltas are huge (max={max_gap_minutes:.1f}m = {max_gap_minutes/1440:.1f} days); "
+                    f"cannot infer bar size. Using default: {default}m"
+                )
+                return default
+            
+            # Now use median of sane deltas for unit detection
+            median_sane_minutes = float(np.median(sane_deltas_minutes))
+            
+            # Debug: log if we filtered out any insane gaps
+            n_filtered = len(deltas_minutes) - len(sane_deltas_minutes)
+            if n_filtered > 0:
+                logger.debug(
+                    f"Filtered out {n_filtered} insane timestamp gaps (>{MAX_REASONABLE_MINUTES}m) "
+                    f"before computing median. Using {len(sane_deltas_minutes)} sane deltas."
+                )
+            
+            # Try to detect unit from the median of sane deltas
+            # Use the raw median value (in original units) for unit detection
+            raw_median = float(time_diffs[sane_mask].median())
             abs_raw_median = abs(raw_median)
             
-            # Try to detect unit (using absolute value)
             detected = _detect_timestamp_unit(abs_raw_median)
             if detected:
                 unit_name, minutes = detected
                 median_diff_minutes = minutes
                 logger.debug(f"Detected timestamp unit: {unit_name}, median delta = {raw_median} {unit_name} = {minutes}m")
             else:
-                # Fallback: try assuming nanoseconds (most common for Unix timestamps)
-                minutes_from_ns = abs_raw_median / 1e9 / 60.0
-                if 0.01 <= minutes_from_ns <= 1440:
-                    median_diff_minutes = minutes_from_ns
-                    logger.debug(f"Assuming nanoseconds, median delta = {raw_median} ns = {minutes_from_ns:.2f}m")
-                else:
-                    # Sanity check failed - this is likely wrong
-                    logger.warning(
-                        f"Timestamp delta {raw_median} doesn't map to reasonable interval "
-                        f"(tried ns: {minutes_from_ns:.1f}m). Using default: {default}m"
-                    )
-                    return default
+                # Use the median we computed from sane deltas (already in minutes, assuming ns)
+                median_diff_minutes = median_sane_minutes
+                logger.debug(f"Using median of sane deltas (assuming nanoseconds): {median_diff_minutes:.2f}m")
         
         # SANITY BOUND: Reject anything > 1 day (1440 minutes)
         if median_diff_minutes is None or median_diff_minutes > 1440:

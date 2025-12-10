@@ -72,7 +72,7 @@ X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
 
 ### Applied To
 
-**In Ranking (`rank_target_predictability.py`):**
+**In Ranking (`ranking/predictability/model_evaluation.py`):**
 - Lasso
 - Mutual Information
 - Univariate Selection

@@ -191,7 +191,7 @@ This indicates target leakage. Check feature selection logic.
 
 - `TRAINING/utils/data_preprocessor.py` - Enhanced `strip_targets()` and new `collapse_identical_duplicate_columns()`
 - `TRAINING/utils/target_resolver.py` - Updated `targets_for_interval()` return format
-- `TRAINING/train_with_strategies.py` - Main loop passes `all_targets` to all functions
+- `TRAINING/training_strategies/training.py` - Main loop passes `all_targets` to all functions (split from original `train_with_strategies.py`)
 - `TRAINING/strategies/single_task.py` - Uses `all_targets` for precise filtering
 
 ## Testing
@@ -205,7 +205,7 @@ python -m pytest tests/test_safe_target_pattern.py
 ### Integration Tests
 ```bash
 # Run full training with validation
-python train_with_strategies.py \
+python -m TRAINING.training_strategies.main \
   --data-dir data/data_labeled/interval=5m \
   --validate-target-separation
 ```

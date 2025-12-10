@@ -211,7 +211,7 @@ TRAINER_MODULE_MAP = {
 
 ### 4. Register in In-Process Runner (Optional)
 
-If you want in-process training (not just isolated), add to `TRAINING/train_with_strategies.py` in the `MODMAP`:
+If you want in-process training (not just isolated), add to `TRAINING/training_strategies/family_runners.py` in the `MODMAP` (split from original `train_with_strategies.py`):
 
 ```python
 MODMAP = {

@@ -165,7 +165,7 @@ INFO - ✅ Huber fallback trained | best_iter=10
 ## Diagnostic Tools Added
 
 ### Feature Coercion Diagnostics
-- **Location**: `TRAINING/train_with_strategies.py` lines 967-1055
+- **Location**: `TRAINING/training_strategies/data_preparation.py` (split from original `train_with_strategies.py`)
 - **What it logs**:
   - Initial feature_df shape and feature counts
   - Missing columns from selected features
@@ -219,7 +219,7 @@ INFO - ✅ Huber fallback trained | best_iter=10
 
 ## Files Modified for Debugging
 
-1. **TRAINING/train_with_strategies.py**
+1. **TRAINING/training_strategies/data_preparation.py** (split from `train_with_strategies.py`)
    - Added feature existence validation
    - Added pre/post-coercion NaN diagnostics
    - Added critical guards for empty feature matrices

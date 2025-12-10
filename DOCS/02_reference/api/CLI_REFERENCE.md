@@ -58,6 +58,8 @@ python TRAINING/train.py \
 - `--target-ranking-config`: Path to target ranking config YAML [LEGACY]
 - `--multi-model-config`: Path to feature selection config YAML [LEGACY]
 
+**Note**: The training system uses modular components internally (`TRAINING/training_strategies/`, `TRAINING/ranking/predictability/`) but all CLI commands and imports remain backward compatible. The original files are thin wrappers that re-export from the modular structure.
+
 **Examples:**
 
 ```bash
@@ -140,7 +142,7 @@ python TRAINING/train.py \
 **Legacy standalone script** (deprecated, use intelligent training pipeline):
 ```bash
 # OLD WAY - Still works but not recommended
-python TRAINING/ranking/rank_target_predictability.py \
+python -m TRAINING.ranking.predictability.main \
     --symbols AAPL,MSFT,GOOGL,TSLA,JPM \
     --output-dir results/target_rankings
 ```
