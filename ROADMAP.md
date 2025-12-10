@@ -163,21 +163,9 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 
 ---
 
-# Phase 5 — Trading Modules (Alpaca & IBKR)
+# Phase 5 — Trading Modules (Removed)
 
-**Alpaca (Fixes Required):**
-* Resolve current module breakage
-* Add paper-trading test suite
-* Improve stability and retry logic
-* Update documentation & examples
-
-**IBKR (Untested):**
-* Complete C++ component verification
-* Live and paper trading tests
-* Performance benchmarking
-* Risk management validation
-
-**Outcome:** Production-ready trading connectivity.
+**Note:** Trading integration modules have been removed from the core repository. The system focuses on ML research infrastructure and model training. Trained models can be integrated with external trading systems through standard interfaces.
 
 ---
 
@@ -224,7 +212,7 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 * TensorFlow/XGBoost/LightGBM support via ROCm
 * Parity with CUDA workflows
 
-**Outcome:** FoxML Core becomes an HPC-aligned, cross-platform ML stack.
+**Outcome:** FoxML Core becomes an HPC-aligned, cross-platform ML stack. (Note: Currently single-node optimized; distributed HPC features are planned/WIP)
 
 ---
 
@@ -236,8 +224,7 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 
 1. **Configuration system validation & logging revamp** — Complete validation layer, unified logging, naming cleanup (mostly complete, validation in progress)
 2. **Memory batching + Polars optimizations** — Fix unstable batching behavior, enable large-scale training without OOM
-3. **Alpaca module fixes** — Resolve breakage, add paper-trading test suite, improve stability
-4. **IBKR validation** — Complete C++ component verification, live/paper trading tests
+3. **Model integration interfaces** — Standard interfaces for integrating trained models with external systems
 5. **Website + Stripe checkout** — Public homepage, pricing tiers, purchase flow, hosted docs
 
 **Guideline:** These priorities build on the completed Phase 0–2 foundation and represent the next commercially-leverageable deltas. Focus remains on validation, polish, and strategic sequencing rather than new major subsystems.
@@ -250,7 +237,7 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 7. **Production readiness** — Full test coverage, monitoring, deployment guides, disaster recovery
 8. **Exploratory modules** — Experimental features and research tracks
 9. **NVLink & multi-GPU exploration** — Research phase, performance benchmarking, architecture design
-10. **High-performance rewrite track** — Low-level rewrites (C/C++/Rust), HPC alignment, ROCm support
+10. **High-performance rewrite track** — Low-level rewrites (C/C++/Rust), HPC alignment (planned/WIP), ROCm support (planned)
 
 **Guideline:** These items represent longer-horizon research and infrastructure work. They are valuable but not prerequisites for near-term commercial readiness.
 
@@ -262,7 +249,7 @@ Fox ML Infrastructure is evolving into:
 * A full-scale enterprise ML & trading infrastructure stack
 * Multi-strategy, multi-model, GPU-accelerated
 * Well-documented, configurable, and production-grade
-* A foundation for future HPC and cross-platform ML systems
+* A foundation for future HPC and cross-platform ML systems (single-node HPC currently implemented; distributed HPC planned/WIP)
 
 This roadmap reflects the maturation of FoxML Core from a high-powered solo project into a **commercially viable, enterprise-class ML platform.**
 
@@ -281,6 +268,5 @@ Some TensorFlow warnings (version compatibility, plugin registration) may appear
 
 ## Module Status
 
-* **Alpaca Trading Module:** Broken due to minor errors — needs fixes
-* **IBKR Trading Module:** Untested — requires comprehensive testing
+* **Trading Integration:** Removed from core repository — focus on ML research infrastructure
 * **Focus:** Training and ranking are stable and under ongoing validation; current active work centers on configuration, memory/polars, and trading connectivity.

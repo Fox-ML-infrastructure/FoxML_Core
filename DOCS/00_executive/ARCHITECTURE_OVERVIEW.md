@@ -45,11 +45,11 @@ Infrastructure, not a trading bot. Provides architecture, not alpha.
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              Trading Integrations (Optional)                │
-│  ┌──────────────┐              ┌──────────────┐           │
-│  │  IBKR System │              │ Alpaca System │           │
-│  │  (Paper/Prod)│              │  (Paper Only) │           │
-│  └──────────────┘              └──────────────┘           │
+│              Model Artifacts & Outputs                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
+│  │   Trained    │  │  Predictions  │  │  Performance  │   │
+│  │    Models    │  │   & Metrics  │  │   Reports     │   │
+│  └──────────────┘  └──────────────┘  └──────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
 

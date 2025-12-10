@@ -25,7 +25,7 @@ Complete navigation guide for FoxML Core documentation.
 - **Execs / PMs / Stakeholders** → README, Quick Start, Architecture Overview, Roadmap, Changelog
 - **Quants / Researchers** → Getting Started → Pipelines & Training tutorials → Intelligence Layer Overview
 - **Infra / MLOps** → Setup tutorials, Configuration Reference, Systems Reference, Operations
-- **Trading / Desk Ops** → Trading tutorials, IBKR/Alpaca System Reference, System Documentation
+- **Model Integration** → Model output interfaces and integration patterns
 - **Legal / Compliance** → [Legal Documentation Index](LEGAL_INDEX.md)
 
 ## Tier A: Executive / High-Level
@@ -64,8 +64,6 @@ Step-by-step guides for common tasks.
 
 ### Trading
 - [Paper Trading Setup](01_tutorials/trading/PAPER_TRADING_SETUP.md) - Paper trading
-- [IBKR Integration](01_tutorials/trading/IBKR_INTEGRATION.md) - IBKR setup
-- [Alpaca Integration](01_tutorials/trading/ALPACA_INTEGRATION.md) - Alpaca setup
 
 ### Configuration
 - [Config Basics](01_tutorials/configuration/CONFIG_BASICS.md) - Configuration fundamentals
@@ -96,8 +94,6 @@ Complete technical reference for daily use.
 - [Training Parameters](02_reference/models/TRAINING_PARAMETERS.md) - Training settings
 
 ### Systems Reference
-- [IBKR System Reference](02_reference/systems/IBKR_SYSTEM_REFERENCE.md) - IBKR integration
-- [Alpaca System Reference](02_reference/systems/ALPACA_SYSTEM_REFERENCE.md) - Alpaca integration
 - [Pipeline Reference](02_reference/systems/PIPELINE_REFERENCE.md) - Data pipelines
 
 ### Configuration Reference
@@ -183,10 +179,7 @@ Research notes, design rationale, advanced topics.
 - See [Feature Selection Implementation](03_technical/implementation/FEATURE_SELECTION_GUIDE.md) for implementation details
 
 ### System Documentation
-- [IBKR Trading](../IBKR_trading/README.md) - IBKR live trading system
-- [IBKR Live Trading Integration](../IBKR_trading/LIVE_TRADING_INTEGRATION.md) - IBKR integration guide
-- [Alpaca Trading](../ALPACA_trading/README.md) - Alpaca paper trading system
-- [IBKR C++ Engine](../IBKR_trading/cpp_engine/README.md) - C++ performance components
+- Trading integration modules have been removed from the core repository. The system focuses on ML research infrastructure and model training.
 
 ## Documentation Architecture
 

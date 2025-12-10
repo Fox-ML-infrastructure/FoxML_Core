@@ -173,8 +173,7 @@ strategy.train(X, {
 ### Alpaca
 
 ```python
-from ALPACA_trading.core.paper import PaperTradingEngine
-from ALPACA_trading.brokers.paper import PaperBroker
+# Trading integration modules removed from core repository
 
 broker = PaperBroker()
 engine = PaperTradingEngine(broker)
@@ -184,7 +183,7 @@ engine.run()
 ### IBKR
 
 ```python
-from IBKR_trading.live_trading import LiveTradingSystem
+# Trading integration modules removed from core repository
 
 system = LiveTradingSystem(config)
 system.run()

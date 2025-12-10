@@ -3,6 +3,8 @@
 **Assessment Date**: 2025-12-10  
 **Status**: ⚠️ **WORK IN PROGRESS** - Single-node optimized, distributed HPC not yet implemented
 
+**⚠️ IMPORTANT**: This document describes the current state of HPC optimizations. **Distributed/multi-node HPC features are planned but not yet implemented**. The system is currently optimized for single-node workloads (workstation/desktop HPC). Claims about "HPC optimization" refer to single-node optimizations only, not distributed cluster computing.
+
 This document evaluates the current HPC (High Performance Computing) optimizations in the codebase. **This is a work in progress** - the system is optimized for single-node workloads but does not yet support distributed/multi-node HPC clusters.
 
 ---

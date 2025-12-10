@@ -202,36 +202,31 @@ Final Configuration (validated, applied)
 
 ---
 
-### 3.4 Trading Integration Layer (Optional)
+### 3.4 Model Output & Artifacts Layer
 
-**Purpose:** Integration with trading brokers for paper and live trading.
+**Purpose:** Generation and storage of trained models, predictions, and performance metrics.
 
 **Components:**
 
 ```
-IBKR_trading/                     # Interactive Brokers (Production)
-├── live_trading/
-│   ├── MultiHorizonBlender       # 5m, 10m, 15m, 30m, 60m blending
-│   ├── SafetyGuards              # Margin, short-sale, rate limiting
-│   ├── CostAwareArbitration      # Cost-aware decision making
-│   └── C++InferenceEngine        # High-performance inference
-└── paper_trading/
-    └── PaperTradingSimulator     # Paper trading simulation
-
-ALPACA_trading/                   # Alpaca (Paper Only)
-├── paper/
-│   ├── RegimeAwareEnsemble      # Regime-aware strategies
-│   ├── RiskManagement           # Risk management
-│   └── PerformanceTracking      # Performance tracking
-└── ml/
-    └── ModelIntegration          # ML model integration
+outputs/                          # Model artifacts and outputs
+├── models/                       # Serialized trained models
+│   ├── lightgbm/                # LightGBM model artifacts
+│   ├── xgboost/                 # XGBoost model artifacts
+│   └── [other model families]   # Additional model types
+├── predictions/                 # Model predictions
+│   ├── validation/              # Validation set predictions
+│   └── test/                    # Test set predictions
+└── reports/                     # Performance reports
+    ├── metrics/                 # Performance metrics
+    └── diagnostics/             # Model diagnostics
 ```
 
-**Trading Flow:**
+**Output Flow:**
 ```
 Trained Models
     ↓
-Model Inference (real-time predictions)
+Model Serialization (standard formats)
     ↓
 Signal Generation (trading signals)
     ↓

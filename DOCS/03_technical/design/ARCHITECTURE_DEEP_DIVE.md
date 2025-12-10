@@ -4,12 +4,12 @@ Detailed system architecture and design decisions.
 
 ## System Overview
 
-FoxML Core is a multi-layered trading infrastructure with:
+FoxML Core is a multi-layered ML research infrastructure with:
 
 1. **Data Processing Layer**: Raw data → Features → Targets
 2. **Model Training Layer**: 17+ model types with centralized configs
-3. **Trading Layer**: IBKR (production) and Alpaca (paper) integration
-4. **Performance Layer**: C++ kernels for hot path operations
+3. **Model Output Layer**: Trained models, predictions, and performance metrics
+4. **Performance Layer**: Optimized pipelines for high-throughput processing
 
 ## Data Flow
 
@@ -28,7 +28,7 @@ Model Training (17+ models, walk-forward validation)
     ↓
 Trained Models
     ↓
-Live Trading (multi-horizon blending, cost-aware arbitration)
+Model Artifacts & Performance Reports
 ```
 
 ## Component Architecture
@@ -68,6 +68,5 @@ Live Trading (multi-horizon blending, cost-aware arbitration)
 ## See Also
 
 - [Architecture Overview](../../00_executive/ARCHITECTURE_OVERVIEW.md) - High-level overview
-- [IBKR System Reference](../../02_reference/systems/IBKR_SYSTEM_REFERENCE.md) - IBKR architecture
-- [Alpaca System Reference](../../02_reference/systems/ALPACA_SYSTEM_REFERENCE.md) - Alpaca architecture
+- [Module Reference](../../02_reference/api/MODULE_REFERENCE.md) - API documentation
 
