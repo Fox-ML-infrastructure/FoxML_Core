@@ -182,27 +182,61 @@ class BaseModelTrainer(ABC):
         
         Uses determinism system to ensure consistent seeds across the pipeline.
         """
+        # Load test_size from config
+        test_size = 0.2  # Default fallback
         if _CONFIG_AVAILABLE:
             try:
-                test_size = get_cfg("preprocessing.validation.test_size", default=0.2, config_name="preprocessing_config")
-                # Use determinism system for random_state
-                from TRAINING.common.determinism import BASE_SEED
-                if BASE_SEED is not None:
-                    random_state = BASE_SEED
-                else:
-                    random_state = get_cfg("preprocessing.validation.random_state", default=42, config_name="preprocessing_config")
-                return float(test_size), int(random_state)
+                test_size = float(get_cfg("preprocessing.validation.test_size", default=0.2, config_name="preprocessing_config"))
             except Exception as e:
-                logger.debug(f"Failed to load test split params from config: {e}")
+                logger.debug(f"Failed to load test_size from config: {e}")
         
-        # Fallback: use BASE_SEED from determinism system if available
+        # Load random_state from determinism system (preferred) or config
+        random_state = 42  # Default fallback
         try:
             from TRAINING.common.determinism import BASE_SEED
             if BASE_SEED is not None:
-                return 0.2, BASE_SEED
-        except:
+                random_state = BASE_SEED
+            elif _CONFIG_AVAILABLE:
+                try:
+                    random_state = int(get_cfg("preprocessing.validation.random_state", default=42, config_name="preprocessing_config"))
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.debug(f"Failed to load random_state from determinism system: {e}")
+        
+        return float(test_size), int(random_state)
+    
+    def _get_random_state(self) -> int:
+        """Get random_state from determinism system, with fallback to config or default."""
+        try:
+            from TRAINING.common.determinism import BASE_SEED
+            if BASE_SEED is not None:
+                return BASE_SEED
+        except Exception:
             pass
-        return 0.2, 42  # Final fallback
+        
+        # Fallback to config
+        if _CONFIG_AVAILABLE:
+            try:
+                return int(get_cfg("preprocessing.validation.random_state", default=42, config_name="preprocessing_config"))
+            except Exception:
+                pass
+        
+        return 42  # Final fallback
+    
+    def _get_learning_rate(self, default: float = 0.001) -> float:
+        """Get learning_rate from config, with fallback to default."""
+        if _CONFIG_AVAILABLE:
+            try:
+                # Try to get from model-specific config first
+                family_lr = get_cfg(f"models.{self.family_name.lower()}.learning_rate", default=None, config_name="model_config")
+                if family_lr is not None:
+                    return float(family_lr)
+                # Fallback to general optimizer config
+                return float(get_cfg("optimizer.learning_rate", default=default, config_name="optimizer_config"))
+            except Exception as e:
+                logger.debug(f"Failed to load learning_rate from config: {e}")
+        return default  # Final fallback
     
     def _get_imputation_strategy(self) -> str:
         """Get imputation strategy from config, with fallback to default."""

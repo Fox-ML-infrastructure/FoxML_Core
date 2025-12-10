@@ -89,21 +89,33 @@ class ComprehensiveTrainer(BaseModelTrainer):
         except ImportError:
             raise ImportError("LightGBM not available")
         
+        # Load hyperparameters from config
+        n_estimators = 100  # Default fallback
+        max_depth = 6  # Default fallback
+        learning_rate = 0.1  # Default fallback
+        try:
+            from CONFIG.config_loader import get_cfg
+            n_estimators = int(get_cfg("models.lightgbm.n_estimators", default=100, config_name="model_config"))
+            max_depth = int(get_cfg("models.lightgbm.max_depth", default=6, config_name="model_config"))
+            learning_rate = float(get_cfg("models.lightgbm.learning_rate", default=0.1, config_name="model_config"))
+        except Exception:
+            pass
+        
         # Create model
         if self.model_type == 'classification':
             model = lgb.LGBMClassifier(
-                n_estimators=100,
-                max_depth=6,
-                learning_rate=0.1,
-                random_state=42,
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                learning_rate=learning_rate,
+                random_state=self._get_random_state(),
                 verbose=-1
             )
         else:
             model = lgb.LGBMRegressor(
-                n_estimators=100,
-                max_depth=6,
-                learning_rate=0.1,
-                random_state=42,
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                learning_rate=learning_rate,
+                random_state=self._get_random_state(),
                 verbose=-1
             )
         
@@ -137,20 +149,32 @@ class ComprehensiveTrainer(BaseModelTrainer):
             raise ImportError("XGBoost not available")
         
         # Create model
+        # Load hyperparameters from config
+        n_estimators = 100  # Default fallback
+        max_depth = 6  # Default fallback
+        learning_rate = 0.1  # Default fallback
+        try:
+            from CONFIG.config_loader import get_cfg
+            n_estimators = int(get_cfg("models.xgboost.n_estimators", default=100, config_name="model_config"))
+            max_depth = int(get_cfg("models.xgboost.max_depth", default=6, config_name="model_config"))
+            learning_rate = float(get_cfg("models.xgboost.learning_rate", default=0.1, config_name="model_config"))
+        except Exception:
+            pass
+        
         if self.model_type == 'classification':
             model = xgb.XGBClassifier(
-                n_estimators=100,
-                max_depth=6,
-                learning_rate=0.1,
-                random_state=42,
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                learning_rate=learning_rate,
+                random_state=self._get_random_state(),
                 verbosity=0
             )
         else:
             model = xgb.XGBRegressor(
-                n_estimators=100,
-                max_depth=6,
-                learning_rate=0.1,
-                random_state=42,
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                learning_rate=learning_rate,
+                random_state=self._get_random_state(),
                 verbosity=0
             )
         
@@ -214,7 +238,7 @@ class ComprehensiveTrainer(BaseModelTrainer):
             model = Model(inputs, outputs)
             model.compile(
 
-                optimizer=Adam(learning_rate=0.001),
+                optimizer=Adam(learning_rate=self._get_learning_rate()),
                 loss='mse' if self.model_type == 'regression' else 'binary_crossentropy',
                 metrics=['mae'] if self.model_type == 'regression' else ['accuracy']
             )
@@ -300,7 +324,7 @@ class ComprehensiveTrainer(BaseModelTrainer):
             model = Model(inputs, outputs)
             model.compile(
 
-                optimizer=Adam(learning_rate=0.001),
+                optimizer=Adam(learning_rate=self._get_learning_rate()),
                 loss='mse' if self.model_type == 'regression' else 'binary_crossentropy',
                 metrics=['mae'] if self.model_type == 'regression' else ['accuracy']
             )

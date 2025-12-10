@@ -224,7 +224,13 @@ class SingleTaskStrategy(BaseTrainingStrategy):
         elif model_type == 'ridge':
             return Ridge(alpha=model_config.get('alpha', 1.0))
         else:
-            return RandomForestRegressor(n_estimators=100, random_state=random_state)
+            # Fallback: try to load default from config
+            try:
+                from CONFIG.config_loader import get_cfg
+                default_n_estimators = int(get_cfg("models.random_forest.n_estimators", default=100, config_name="training_config"))
+            except Exception:
+                default_n_estimators = 100
+            return RandomForestRegressor(n_estimators=default_n_estimators, random_state=random_state)
     
     def _create_classification_model(self, target_name: str):
         """Create classification model"""
@@ -249,7 +255,13 @@ class SingleTaskStrategy(BaseTrainingStrategy):
                 random_state=random_state
             )
         else:
-            return RandomForestClassifier(n_estimators=100, random_state=random_state)
+            # Fallback: try to load default from config
+            try:
+                from CONFIG.config_loader import get_cfg
+                default_n_estimators = int(get_cfg("models.random_forest.n_estimators", default=100, config_name="training_config"))
+            except Exception:
+                default_n_estimators = 100
+            return RandomForestClassifier(n_estimators=default_n_estimators, random_state=random_state)
     
     def _create_model_by_type(self, model_type: str, target_type: str, target_name: str):
         """Create model by specific type"""

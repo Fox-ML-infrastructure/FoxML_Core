@@ -90,8 +90,9 @@ class MLPTrainer(BaseModelTrainer):
         
         # 6) Split only if no external validation provided
         if X_va is None or y_va is None:
+            test_size, random_state = self._get_test_split_params()
             X_tr, X_va, y_tr, y_va = train_test_split(
-                X_tr, y_tr, test_size=0.2, random_state=42
+                X_tr, y_tr, test_size=test_size, random_state=random_state
             )
         
         # 7) Build model with safe defaults

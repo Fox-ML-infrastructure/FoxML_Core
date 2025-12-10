@@ -78,8 +78,9 @@ class XGBoostTrainer(BaseModelTrainer):
         
         # 2) Split only if no external validation provided
         if X_va is None or y_va is None:
+            test_size, random_state = self._get_test_split_params()
             X_tr, X_va, y_tr, y_va = train_test_split(
-                X_tr, y_tr, test_size=0.2, random_state=42
+                X_tr, y_tr, test_size=test_size, random_state=random_state
             )
         
         # 3) Determine if GPU is available
@@ -327,7 +328,7 @@ class XGBoostTrainer(BaseModelTrainer):
             eta=self.config["eta"],
             n_estimators=self.config["n_estimators"],
             n_jobs=self.num_threads,
-            random_state=42,
+            random_state=self._get_random_state(),
             **extra_params,
             **self.config.get("xgb_params", {})
         )

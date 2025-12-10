@@ -25,9 +25,26 @@ ChangePoint trainer matching mega script implementation exactly.
 import numpy as np
 import time
 import logging
+import sys
+from pathlib import Path
 from typing import Dict, Any, Optional
+from sklearn.model_selection import train_test_split
 
 logger = logging.getLogger(__name__)
+
+# Add CONFIG directory to path for centralized config loading
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_CONFIG_DIR = _REPO_ROOT / "CONFIG"
+if str(_CONFIG_DIR) not in sys.path:
+    sys.path.insert(0, str(_CONFIG_DIR))
+
+# Try to import config loader
+_CONFIG_AVAILABLE = False
+try:
+    from config_loader import get_cfg
+    _CONFIG_AVAILABLE = True
+except ImportError:
+    logger.debug("Config loader not available; using hardcoded defaults")
 
 class OnlineChangeHeuristic:
     """Online change point heuristic - exact copy from mega script."""
@@ -156,7 +173,24 @@ class ChangePointTrainer:
             prev_vol = np.roll(np.std(X_clean, axis=1), 1)
             
             X_with_changes = np.column_stack([X_clean, cp_indicator, prev_cp, prev_vol])
-            X_train, X_val, y_train, y_val = train_test_split(X_with_changes, y_clean, test_size=0.2, random_state=42)
+            
+            # Load test_size and random_state from config
+            test_size = 0.2  # Default fallback
+            if _CONFIG_AVAILABLE:
+                try:
+                    test_size = float(get_cfg("preprocessing.validation.test_size", default=0.2, config_name="preprocessing_config"))
+                except Exception:
+                    pass
+            
+            random_state = 42  # Default fallback
+            try:
+                from TRAINING.common.determinism import BASE_SEED
+                if BASE_SEED is not None:
+                    random_state = BASE_SEED
+            except Exception:
+                pass
+            
+            X_train, X_val, y_train, y_val = train_test_split(X_with_changes, y_clean, test_size=test_size, random_state=random_state)
 
             # Final regressor on BOCPD features (exact mega script approach)
             model = LinearRegression()

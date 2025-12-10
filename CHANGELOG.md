@@ -14,8 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Highlights
 
-- **Complete config centralization** (2025-12-10) — All hardcoded configuration values moved to YAML files for single source of truth. Feature pruning, leakage detection, training strategies, and data preprocessing now load all parameters from config. Ensures complete reproducibility and determinism across the entire pipeline.
-- **Determinism system integration** (2025-12-10) — All `random_state` values now use the centralized determinism system (`BASE_SEED`) instead of hardcoded values. Training strategies, feature selection, and data splits are now fully deterministic and reproducible.
+- **Complete Single Source of Truth (SST) config centralization** (2025-12-10) — **ALL** hardcoded configuration values across the entire TRAINING pipeline moved to YAML files. Every model trainer in `model_fun/` and `models/` now loads hyperparameters, test splits, and random seeds from centralized config. Feature pruning, leakage detection, training strategies, data preprocessing, and all 52+ model files use the same config system. Ensures complete reproducibility: same config → same results across all pipeline stages.
+- **Determinism system integration** (2025-12-10) — All `random_state` values now use the centralized determinism system (`BASE_SEED`) instead of hardcoded values. Training strategies, feature selection, data splits, and all model initializations are now fully deterministic and reproducible.
 - **Pipeline robustness fixes** (2025-12-10) — Fixed critical syntax errors and variable initialization issues in config loading patterns. All `if _CONFIG_AVAILABLE:` blocks now have proper `else:` clauses to ensure variables are always initialized, preventing "referenced before assignment" errors. Full end-to-end testing currently underway.
 - **Large file refactoring completed** (2025-12-09) — Split 3 large monolithic files (4.5k, 3.4k, 2.5k lines) into modular components while maintaining 100% backward compatibility
 - **Model family status tracking** — Added comprehensive debugging for multi-model feature selection to identify which families succeed/fail and why
@@ -55,6 +55,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Complete Single Source of Truth config system** (2025-12-10) — All 52+ model files now use centralized config:
+  - **Base trainer helpers**: `_get_test_split_params()`, `_get_random_state()`, `_get_learning_rate()` methods for consistent config access
+  - **Model hyperparameters**: All `n_estimators`, `max_depth`, `learning_rate`, `alpha`, `C` values load from `models.{family}.{param}` config paths
+  - **Train/test splits**: All use `preprocessing.validation.test_size` from config
+  - **Random seeds**: All use `BASE_SEED` from determinism system (with config fallback)
+  - **Neural network optimizers**: All Adam/optimizer learning rates load from `optimizer.learning_rate` config
 - **Config centralization** (2025-12-10) — New config sections in `safety_config.yaml`:
   - `leakage_sentinels.*` — All leakage detection thresholds (shifted target, symbol holdout, randomized time)
   - `auto_fixer.*` — Auto-fixer settings (perfect score threshold, min confidence, backup limits, test size)
@@ -64,10 +70,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `feature_pruning.n_estimators` — Number of trees for quick pruning
   - `feature_pruning.max_depth` — Tree depth for pruning model
   - `feature_pruning.learning_rate` — Learning rate for pruning model
-- **Determinism integration** (2025-12-10) — All training strategies and data preprocessing now use `BASE_SEED` from determinism system instead of hardcoded `random_state=42`
+- **Determinism integration** (2025-12-10) — All training strategies, data preprocessing, and model initializations now use `BASE_SEED` from determinism system instead of hardcoded `random_state=42`
 
 ### Fixed
 
+- **Complete Single Source of Truth implementation** (2025-12-10) — Replaced ALL hardcoded values across entire TRAINING pipeline:
+  - **Model trainers** (`model_fun/` - 34 files): All `test_size`, `random_state`, `n_estimators`, `max_depth`, `learning_rate`, `alpha` now load from config
+  - **Specialized models** (`models/` - 18 files): All hardcoded hyperparameters and splits now use config
+  - **Base trainer helpers**: Added `_get_random_state()`, `_get_learning_rate()` methods for consistent config access
+  - **Strategies**: RandomForest fallback `n_estimators` now loads from config
+  - All model initializations (XGBoost, LightGBM, Neural Networks, Ridge, SGD, etc.) use config-driven hyperparameters
+  - All train/test splits use `preprocessing.validation.test_size` from config
+  - All random seeds use `BASE_SEED` from determinism system
 - **Config loading pattern robustness** (2025-12-10) — Fixed critical syntax errors and variable initialization issues:
   - Fixed `SyntaxError` in `data_loading.py` where `if _CONFIG_AVAILABLE:` was incorrectly placed in function parameter list
   - Fixed `SyntaxError` in `leakage_detection.py` where config loading was incorrectly embedded in function call parameters

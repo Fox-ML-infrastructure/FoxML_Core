@@ -7,8 +7,8 @@
 
 **Full end-to-end testing is currently underway** to validate the complete pipeline from target ranking → feature selection → model training. Recent improvements include:
 
-- ✅ **Complete config centralization** (2025-12-10) — All hardcoded configuration values moved to YAML files for single source of truth. Feature pruning, leakage detection, training strategies, and data preprocessing now load all parameters from config. Ensures complete reproducibility.
-- ✅ **Full determinism** (2025-12-10) — All `random_state` values now use centralized determinism system (`BASE_SEED`) instead of hardcoded values. Training strategies, feature selection, and data splits are now fully deterministic.
+- ✅ **Complete Single Source of Truth (SST) config centralization** (2025-12-10) — **ALL** hardcoded configuration values across the entire TRAINING pipeline moved to YAML files. Every model trainer (52+ files in `model_fun/` and `models/`) now loads hyperparameters, test splits, and random seeds from centralized config. Same config → same results across all pipeline stages.
+- ✅ **Full determinism** (2025-12-10) — All `random_state` values now use centralized determinism system (`BASE_SEED`) instead of hardcoded values. Training strategies, feature selection, data splits, and all model initializations are now fully deterministic.
 - ✅ **Pipeline robustness fixes** (2025-12-10) — Fixed critical syntax errors and variable initialization issues in config loading patterns. All config loading blocks now have proper fallbacks, preventing runtime errors.
 - ✅ **Large file refactoring** (2025-12-09) — Split 3 monolithic files into modular components while maintaining 100% backward compatibility
 - ✅ **Model family status tracking** — Added comprehensive debugging to identify which families succeed/fail and why
@@ -45,11 +45,14 @@
   - Fixed `UnboundLocalError` in `model_evaluation.py` - added missing `else:` clauses for `MIN_FEATURES_FOR_MODEL` and `MIN_FEATURES_AFTER_LEAK_REMOVAL`
   - Comprehensive audit confirmed all `if _CONFIG_AVAILABLE:` blocks now have proper `else:` clauses
   - All variables are guaranteed to be initialized before use, preventing runtime errors
-- **Config centralization** (2025-12-10): All hardcoded configuration values moved to YAML files:
+- **Complete Single Source of Truth (SST) config centralization** (2025-12-10): **ALL** hardcoded values across entire pipeline moved to YAML files:
+  - **All model trainers** (52+ files): `test_size`, `random_state`, `n_estimators`, `max_depth`, `learning_rate`, `alpha` now load from config
   - Feature pruning thresholds and hyperparameters → `preprocessing_config.yaml`
   - Leakage detection thresholds → `safety_config.yaml` (`leakage_sentinels.*`)
   - Auto-fixer settings → `safety_config.yaml` (`auto_fixer.*`)
   - Training strategy parameters (test_size, random_state) → load from config
+  - Model hyperparameters → `models.{family}.{param}` config paths
+  - Neural network optimizers → `optimizer.learning_rate` config
   - All function defaults now use `Optional[Type] = None` and load from config when `None`
 - **Determinism system** (2025-12-10): All `random_state=42` hardcoded values replaced with `BASE_SEED`:
   - Training strategies (`single_task.py`, `cascade.py`)

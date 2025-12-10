@@ -372,7 +372,14 @@ class EnsembleTrainer(BaseModelTrainer):
             
             # Stack predictions and learn optimal weights via Ridge
             P = np.column_stack([y_hgb_val, y_rf_val, y_rg_val])
-            meta = Ridge(alpha=1.0, fit_intercept=False, positive=True)
+            # Load alpha from config
+            alpha = 1.0  # Default fallback
+            try:
+                from CONFIG.config_loader import get_cfg
+                alpha = float(get_cfg("models.ridge.alpha", default=1.0, config_name="model_config"))
+            except Exception:
+                pass
+            meta = Ridge(alpha=alpha, fit_intercept=False, positive=True, random_state=self._get_random_state())
             with blas_threads(1):  # Meta-learning is tiny, 1 thread is fine
                 meta.fit(P, y_val)
             weights = meta.coef_

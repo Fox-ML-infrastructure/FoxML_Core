@@ -78,8 +78,9 @@ class GMMRegimeTrainer(BaseModelTrainer):
         
         # 2) Split only if no external validation provided
         if X_va is None or y_va is None:
+            test_size, random_state = self._get_test_split_params()
             X_tr, X_va, y_tr, y_va = train_test_split(
-                X_tr, y_tr, test_size=0.2, random_state=42
+                X_tr, y_tr, test_size=test_size, random_state=random_state
             )
         
         logger.info(f"[GMMRegime] Input data: {X_tr.shape}, dtype={X_tr.dtype}")
@@ -100,7 +101,8 @@ class GMMRegimeTrainer(BaseModelTrainer):
         
         # 5) PCA dimensionality reduction (makes GMM tractable + fast)
         n_pca = min(64, X_tr_scaled.shape[1], X_tr_scaled.shape[0] // 10)
-        pca = PCA(n_components=n_pca, svd_solver="randomized", whiten=True, random_state=42)
+        random_state = self._get_random_state()
+        pca = PCA(n_components=n_pca, svd_solver="randomized", whiten=True, random_state=random_state)
         X_red = pca.fit_transform(X_tr_scaled)
         logger.info(f"[GMMRegime] PCA reduced to {n_pca} components (from {X_tr_filtered.shape[1]})")
         
@@ -127,7 +129,8 @@ class GMMRegimeTrainer(BaseModelTrainer):
         n_sample = min(200_000, X_red.shape[0])
         idx = np.random.choice(X_red.shape[0], size=n_sample, replace=False)
         logger.info(f"[GMMRegime] KMeans init on {n_sample} samples for {k} components")
-        km = MiniBatchKMeans(n_clusters=k, batch_size=10_000, n_init=3, random_state=42)
+        random_state = self._get_random_state()
+        km = MiniBatchKMeans(n_clusters=k, batch_size=10_000, n_init=3, random_state=random_state)
         km.fit(X_red[idx])
         means_init = km.cluster_centers_
         
@@ -153,7 +156,7 @@ class GMMRegimeTrainer(BaseModelTrainer):
                     means_init=means_init,
                     max_iter=self.config["max_iter"],
                     tol=1e-3,
-                    random_state=42,
+                    random_state=self._get_random_state(),
                     verbose=0
                 )
                 gmm.fit(X_red)
@@ -170,7 +173,7 @@ class GMMRegimeTrainer(BaseModelTrainer):
                     means_init=means_init,
                     max_iter=self.config["max_iter"],
                     tol=1e-3,
-                    random_state=42,
+                    random_state=self._get_random_state(),
                     verbose=0
                 )
                 gmm.fit(X_red)

@@ -83,7 +83,7 @@ class NeuralNetworkTrainer(BaseModelTrainer):
                 
                 model = Model(inputs, outputs)
                 model.compile(
-                    optimizer=Adam(learning_rate=0.001),
+                    optimizer=Adam(learning_rate=self._get_learning_rate()),
                     loss='mse',
                     metrics=['mae']
                 )

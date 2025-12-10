@@ -100,10 +100,22 @@ class NGBoostTrainer(BaseModelTrainer):
 
         # Use histogram single-tree base learner (much faster)
         from sklearn.ensemble import HistGradientBoostingRegressor
+        
+        # Load hyperparameters from config
+        max_depth = 6  # Default fallback
+        learning_rate = 0.1  # Default fallback
+        if _CONFIG_AVAILABLE:
+            try:
+                from CONFIG.config_loader import get_cfg
+                max_depth = int(get_cfg("models.ngboost.max_depth", default=6, config_name="model_config"))
+                learning_rate = float(get_cfg("models.ngboost.learning_rate", default=0.1, config_name="model_config"))
+            except Exception:
+                pass
+        
         base_learner = HistGradientBoostingRegressor(
             max_iter=1,  # Single tree per boosting round
-            max_depth=6,
-            learning_rate=0.1,
+            max_depth=max_depth,
+            learning_rate=learning_rate,
             random_state=random_state
         )
         

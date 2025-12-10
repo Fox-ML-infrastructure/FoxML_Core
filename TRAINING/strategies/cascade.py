@@ -197,7 +197,13 @@ class CascadeStrategy(BaseTrainingStrategy):
                 random_state=random_state
             )
         else:
-            return RandomForestClassifier(n_estimators=100, random_state=random_state)
+            # Fallback: try to load default from config
+            try:
+                from CONFIG.config_loader import get_cfg
+                default_n_estimators = int(get_cfg("models.random_forest.n_estimators", default=100, config_name="training_config"))
+            except Exception:
+                default_n_estimators = 100
+            return RandomForestClassifier(n_estimators=default_n_estimators, random_state=random_state)
     
     def _create_regression_model(self, target_name: str):
         """Create regression model"""
@@ -215,7 +221,13 @@ class CascadeStrategy(BaseTrainingStrategy):
                 random_state=random_state
             )
         else:
-            return RandomForestRegressor(n_estimators=100, random_state=random_state)
+            # Fallback: try to load default from config
+            try:
+                from CONFIG.config_loader import get_cfg
+                default_n_estimators = int(get_cfg("models.random_forest.n_estimators", default=100, config_name="training_config"))
+            except Exception:
+                default_n_estimators = 100
+            return RandomForestRegressor(n_estimators=default_n_estimators, random_state=random_state)
     
     def _create_calibrator(self, model, X: np.ndarray, y: np.ndarray):
         """Create probability calibrator"""
