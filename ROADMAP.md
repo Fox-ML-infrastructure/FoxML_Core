@@ -43,7 +43,7 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 * **Sequential Models** ✅ — All sequential models (CNN1D, LSTM, Transformer, and LSTM-based variants) working and producing outputs. 3D preprocessing issues resolved.
 * **Target Ranking & Selection** ✅ — Integrated and operational as part of Phase 1 pipeline.
 * **Documentation Overhaul** ✅ — 55+ new files created, 50+ rewritten, standardized across all tiers.
-* **Legal Compliance** ✅ — Enhanced with IP assignment agreement, regulatory disclaimers, and explicit "No Financial Advice" sections. Compliance assessment: 95% complete (after IP assignment signing).
+* **Legal Compliance** ✅ — Enhanced with IP assignment agreement, regulatory disclaimers, and compliance documentation. Compliance assessment: 95% complete (after IP assignment signing).
 
 ---
 
@@ -163,9 +163,11 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 
 ---
 
-# Phase 5 — Trading Modules (Removed)
+# Phase 5 — Model Integration Interfaces
 
-**Note:** Trading integration modules have been removed from the core repository. The system focuses on ML research infrastructure and model training. Trained models can be integrated with external trading systems through standard interfaces.
+**Status:** Planned
+
+**Focus:** Standard interfaces for integrating trained models with external systems and applications. The system focuses on ML research infrastructure and model training.
 
 ---
 
@@ -246,7 +248,7 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 # Vision
 
 Fox ML Infrastructure is evolving into:
-* A full-scale enterprise ML & trading infrastructure stack
+* A full-scale enterprise ML cross-sectional infrastructure stack
 * Multi-strategy, multi-model, GPU-accelerated
 * Well-documented, configurable, and production-grade
 * A foundation for future HPC and cross-platform ML systems (single-node HPC currently implemented; distributed HPC planned/WIP)
@@ -268,5 +270,4 @@ Some TensorFlow warnings (version compatibility, plugin registration) may appear
 
 ## Module Status
 
-* **Trading Integration:** Removed from core repository — focus on ML research infrastructure
-* **Focus:** Training and ranking are stable and under ongoing validation; current active work centers on configuration, memory/polars, and trading connectivity.
+* **Focus:** Training and ranking are stable and under ongoing validation; current active work centers on configuration, memory/polars, and model integration interfaces.

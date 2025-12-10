@@ -36,24 +36,26 @@ This is a **research infrastructure system**, not a trading bot or financial pro
 
 ## Domain Focus & Extensibility
 
-FoxML Core is **optimized and tested for financial time series** (cross-sectional data, market microstructure, price/volume features). The architecture is designed for financial ML workflows with domain-specific safeguards (leakage detection, temporal validation, feature registry systems).
+FoxML Core is **general-purpose ML cross-sectional infrastructure** optimized for panel data and time-series workflows. The architecture provides domain-agnostic primitives with built-in safeguards (leakage detection, temporal validation, feature registry systems).
 
-**Architecture Property:** While built for finance, the core primitives are domain-agnostic by design:
+**Core Capabilities:**
 - Config-driven orchestration
 - Automated target ranking and feature selection
 - Leakage-safe validation frameworks
 - Multi-model training systems
 - Time-series-aware cross-validation
+- Cross-sectional data processing
 
-**Non-Financial Workloads:** Other time-series or panel data domains (IoT, healthcare, clickstreams, etc.) are architecturally possible but require:
-- Custom data loaders and feature engineering blocks
-- Domain-specific target definitions and metrics
-- Appropriate leakage rules and validation patterns
-- Domain expertise for proper configuration
+**Domain Applications:** The system is designed for cross-sectional and panel data across multiple domains:
+- **Financial time series** (market data, price/volume features)
+- **IoT sensor data** (device metrics, time-series sensors)
+- **Healthcare** (patient records, longitudinal studies)
+- **Clickstream analytics** (user behavior, event sequences)
+- **Any panel data** with temporal structure
 
-**Official Support:** Official support, reference implementations, and tested workflows currently focus on financial data. Non-financial use cases are not officially supported, though the architecture enables such extensions with appropriate domain adaptation.
+**Extensibility:** Custom data loaders, feature engineering blocks, domain-specific target definitions, and appropriate leakage rules can be configured for any domain. The architecture is domain-agnostic by design.
 
-This positions FoxML Core as **serious infrastructure** (not a one-off HFT tool) while maintaining clear boundaries about current support scope.
+**Official Support:** Reference implementations and tested workflows are available for financial time series. Other domains require domain-specific configuration and feature engineering, but the core infrastructure supports them.
 
 ---------------------------------------------------------------------
 

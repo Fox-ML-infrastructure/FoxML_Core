@@ -185,7 +185,7 @@ Trains and validates ML models.
 - Easy to extend
 
 ### 4. Performance-Optimized
-- C++ inference for trading
+- C++ inference for high-performance operations
 - Streaming builders for large datasets
 - GPU support for training
 

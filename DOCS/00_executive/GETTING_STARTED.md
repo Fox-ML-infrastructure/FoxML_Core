@@ -33,7 +33,6 @@ FoxML Core provides:
 - ML pipeline infrastructure
 - Multi-model training systems
 - Walk-forward validation
-- Optional paper trading integration
 
 **Complete Single Source of Truth (SST)**: All parameters in YAML configs - zero hardcoded values. Same config → same results across all pipeline stages. Full reproducibility guaranteed.
 
@@ -67,7 +66,7 @@ data/data_labeled/interval=5m/
 Each parquet file contains:
 - `ts`: Timestamp (UTC)
 - `open`, `high`, `low`, `close`: OHLC prices
-- `volume`: Trading volume
+- `volume`: Trading volume (market data)
 
 ### Verify Data
 

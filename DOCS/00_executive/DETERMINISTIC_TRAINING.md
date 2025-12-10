@@ -2,7 +2,7 @@
 
 **Enterprise-Grade ML Infrastructure**
 
-This trading system guarantees **deterministic, reproducible training** through a Single Source of Truth (SST) configuration architecture.
+This ML research infrastructure system guarantees **deterministic, reproducible training** through a Single Source of Truth (SST) configuration architecture.
 
 ---
 
