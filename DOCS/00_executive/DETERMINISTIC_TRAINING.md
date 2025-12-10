@@ -19,6 +19,31 @@ Every training run with identical configuration files produces identical model o
 
 ---
 
+## For Existing Users: No Action Required
+
+**✅ Your existing code and configuration files continue to work unchanged.**
+
+The SST and determinism improvements (completed 2025-12-10) were **internal changes** that enhance reproducibility without requiring any user migration:
+
+- **Same API** - All function calls and CLI commands work exactly as before
+- **Same configs** - Your existing YAML configuration files are fully compatible
+- **Automatic** - SST enforcement and deterministic seeds are applied automatically
+- **Backward compatible** - Legacy config locations and patterns still work (with deprecation warnings)
+
+**What changed internally:**
+- Removed hardcoded hyperparameters from source code (now all load from config)
+- Replaced hardcoded `random_state=42` with centralized `BASE_SEED` system
+- Added automated enforcement test to prevent future hardcoded values
+
+**What didn't change:**
+- Your code - no modifications needed
+- Your configs - existing YAML files work as-is
+- Your workflow - same commands, same results (just more reproducible)
+
+If you want to take advantage of new features (like experiment configs or modular configs), see the [Migration Guide](DOCS/02_reference/configuration/MODULAR_CONFIG_SYSTEM.md#migration-guide), but this is **optional** - your current setup works fine.
+
+---
+
 ## How It Works
 
 ### 1. Centralized Configuration
