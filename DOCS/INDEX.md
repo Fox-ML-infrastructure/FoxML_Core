@@ -162,6 +162,9 @@ Research notes, design rationale, advanced topics.
 - [Target Predictability Ranking Module](03_technical/refactoring/TARGET_PREDICTABILITY_RANKING.md) - Detailed documentation for `ranking/predictability/` module
 - [Training Strategies Module](03_technical/refactoring/TRAINING_STRATEGIES.md) - Detailed documentation for `training_strategies/` module
 
+### Legal & Compliance (Internal)
+- [Compliance Assessment](03_technical/COMPLIANCE_ASSESSMENT_INTERNAL.md) - **NEW**: Internal compliance audit vs blueprint requirements (2025-12-09)
+
 ### Testing
 - [Testing Plan](03_technical/testing/TESTING_PLAN.md) - Test strategy
 - [Testing Summary](03_technical/testing/TESTING_SUMMARY.md) - Test results

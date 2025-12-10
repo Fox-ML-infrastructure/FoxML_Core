@@ -43,6 +43,7 @@ Complete index of all legal, licensing, compliance, and enterprise documentation
 - [Production Use Notification](../LEGAL/PRODUCTION_USE_NOTIFICATION.md) - Production use notification requirements
 
 ### Compliance
+- [Regulatory Disclaimers](../LEGAL/REGULATORY_DISCLAIMERS.md) - **NEW**: Explicit regulatory non-affiliation statements
 - [Compliance FAQ](../LEGAL/COMPLIANCE_FAQ.md) - Frequently asked compliance questions
 - [Export Compliance](../LEGAL/EXPORT_COMPLIANCE.md) - Export control compliance
 - [Release Policy](../LEGAL/RELEASE_POLICY.md) - Software release policy
@@ -66,6 +67,7 @@ Complete index of all legal, licensing, compliance, and enterprise documentation
 ### Liability & Indemnification
 - [Warranty & Liability Addendum](../LEGAL/WARRANTY_LIABILITY_ADDENDUM.md) - Warranty and liability terms
 - [Indemnification](../LEGAL/INDEMNIFICATION.md) - Indemnification terms
+- [IP Assignment Agreement](../LEGAL/IP_ASSIGNMENT_AGREEMENT.md) - **NEW**: IP assignment from individual to LLC (protects personal liability)
 
 ### Risk Assessment
 - [Risk Assessment Matrix](../LEGAL/RISK_ASSESSMENT_MATRIX.md) - Risk assessment framework

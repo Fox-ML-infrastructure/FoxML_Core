@@ -175,10 +175,24 @@ It covers key areas that enterprise buyers, legal departments, and CTOs typicall
 ## 10. Legal & Compliance
 
 ### Legal Documentation
+- [x] **Commercial License Agreement** — Complete commercial license terms (`COMMERCIAL_LICENSE.md`)
+- [x] **Terms of Service** — Comprehensive TOS with explicit "No Financial Advice" section (`LEGAL/TOS.md`)
+- [x] **IP Assignment Agreement** — IP assignment from individual to LLC (`LEGAL/IP_ASSIGNMENT_AGREEMENT.md`) — **URGENT: Must be signed**
+- [x] **Regulatory Disclaimers** — Explicit regulatory non-affiliation statements (`LEGAL/REGULATORY_DISCLAIMERS.md`)
+- [x] **Compliance Assessment** — Internal compliance audit (see `DOCS/03_technical/COMPLIANCE_ASSESSMENT_INTERNAL.md` - internal docs only)
+
+### Legal Documentation
 - [x] **Commercial license** — Enterprise-grade commercial license terms
 - [x] **Dual license model** — AGPL-3.0 and Commercial License options
 - [x] **Terms of service** — TOS for hosted services (if applicable)
 - [x] **IP terms** — Clear IP ownership and licensing terms
+
+### Compliance Documentation
+- [x] **Compliance Assessment** — Complete audit of legal documents vs blueprint requirements
+- [x] **Regulatory Disclaimers** — Explicit statements: NOT a broker, NOT an investment advisor, NOT providing regulated financial services
+- [x] **No Financial Advice** — Clear disclaimers in TOS and Commercial License
+- [x] **Trading Risk Statements** — Explicit risk disclaimers for trading and investment use
+- [x] **Customer Compliance Responsibility** — Clear statements that customers are responsible for SEC/CFTC compliance
 
 ### Compliance Support
 - [x] **NDA support** — Non-Disclosure Agreement support
