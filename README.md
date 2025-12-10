@@ -10,7 +10,7 @@ FoxML Core is:
 - Designed for quant desks, infra teams, and researchers (architecture, not alpha)
 
 FoxML Core is a high-performance research and machine learning infrastructure stack.  
-It provides a reference-grade architecture for ML pipelines, quantitative workflows, reproducible experiments, and HPC-optimized engineering without exposing proprietary signals or production-ready trading systems.
+It provides a reference-grade architecture for ML pipelines, quantitative workflows, reproducible experiments, and performance-optimized engineering (single-node HPC optimized; distributed HPC planned) without exposing proprietary signals or production-ready trading systems.
 
 > **Note:** Personal / academic use is AGPL-3.0. **Company / production use requires a commercial license.**
 
