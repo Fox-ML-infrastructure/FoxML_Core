@@ -199,7 +199,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         
         # Prepare training data with cross-sectional sampling
         print(f"🔄 Preparing training data for target: {target}")  # Debug print
-        prep_start = time.time()
+        prep_start = _t.time()
         
         # Use selected features for this target if provided
         selected_features = None
