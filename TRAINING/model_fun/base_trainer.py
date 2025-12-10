@@ -66,14 +66,21 @@ def safe_ridge_fit(X, y, alpha=1.0):
     Returns:
         Fitted Ridge model
     """
+    # Get deterministic seed from determinism system
+    try:
+        from TRAINING.common.determinism import BASE_SEED
+        ridge_seed = BASE_SEED if BASE_SEED is not None else 42
+    except:
+        ridge_seed = 42
+    
     solver_pref = os.getenv("SKLEARN_RIDGE_SOLVER", "auto")
     try:
-        model = Ridge(alpha=alpha, solver=solver_pref, random_state=42)
+        model = Ridge(alpha=alpha, solver=solver_pref, random_state=ridge_seed)
         return model.fit(X, y)
     except Exception as e:
         # Fall back to lsqr solver (bypasses Cholesky/MKL path)
         logger.warning("⚠️  Ridge(solver='%s') failed: %s. Falling back to 'lsqr' solver.", solver_pref, e)
-        model = Ridge(alpha=alpha, solver="lsqr", random_state=42)
+        model = Ridge(alpha=alpha, solver="lsqr", random_state=ridge_seed)
         return model.fit(X, y)
 
 class BaseModelTrainer(ABC):
@@ -171,15 +178,31 @@ class BaseModelTrainer(ABC):
         return 1.0  # Default fallback
     
     def _get_test_split_params(self) -> tuple[float, int]:
-        """Get test_size and random_state from config, with fallback to defaults."""
+        """Get test_size and random_state from config, with fallback to defaults.
+        
+        Uses determinism system to ensure consistent seeds across the pipeline.
+        """
         if _CONFIG_AVAILABLE:
             try:
                 test_size = get_cfg("preprocessing.validation.test_size", default=0.2, config_name="preprocessing_config")
-                random_state = get_cfg("preprocessing.validation.random_state", default=42, config_name="preprocessing_config")
+                # Use determinism system for random_state
+                from TRAINING.common.determinism import BASE_SEED
+                if BASE_SEED is not None:
+                    random_state = BASE_SEED
+                else:
+                    random_state = get_cfg("preprocessing.validation.random_state", default=42, config_name="preprocessing_config")
                 return float(test_size), int(random_state)
             except Exception as e:
                 logger.debug(f"Failed to load test split params from config: {e}")
-        return 0.2, 42  # Default fallback
+        
+        # Fallback: use BASE_SEED from determinism system if available
+        try:
+            from TRAINING.common.determinism import BASE_SEED
+            if BASE_SEED is not None:
+                return 0.2, BASE_SEED
+        except:
+            pass
+        return 0.2, 42  # Final fallback
     
     def _get_imputation_strategy(self) -> str:
         """Get imputation strategy from config, with fallback to default."""

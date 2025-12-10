@@ -256,7 +256,17 @@ def discover_all_targets(symbol: str, data_dir: Path) -> Dict[str, TargetConfig]
 def load_sample_data(
     symbol: str,
     data_dir: Path,
-    max_samples: int = 10000
+    # Load default max_samples from config
+    if _CONFIG_AVAILABLE:
+        try:
+            from config_loader import get_cfg
+            default_max_samples = int(get_cfg("pipeline.data_limits.default_max_samples_ranking", default=10000, config_name="pipeline_config"))
+        except Exception:
+            default_max_samples = 10000
+    else:
+        default_max_samples = 10000
+    
+    max_samples: int = default_max_samples
 ) -> pd.DataFrame:
     """Load sample data for a symbol"""
     symbol_dir = data_dir / f"symbol={symbol}"
@@ -268,9 +278,12 @@ def load_sample_data(
     
     df = pd.read_parquet(parquet_file)
     
-    # Sample if too large
+    # Sample if too large - use deterministic seed based on symbol
     if len(df) > max_samples:
-        df = df.sample(n=max_samples, random_state=42)
+        # Generate stable seed from symbol name for deterministic sampling
+        from TRAINING.common.determinism import stable_seed_from
+        sample_seed = stable_seed_from([symbol, "data_sampling"])
+        df = df.sample(n=max_samples, random_state=sample_seed)
     
     return df
 

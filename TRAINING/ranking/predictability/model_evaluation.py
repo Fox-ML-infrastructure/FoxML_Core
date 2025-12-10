@@ -185,7 +185,16 @@ def train_and_evaluate_models(
         return {}, {}, 0.0, {}, {}, []
     
     # Helper function for CV with early stopping (for gradient boosting models)
-    def cross_val_score_with_early_stopping(model, X, y, cv, scoring, early_stopping_rounds=50, n_jobs=1):
+    def cross_val_score_with_early_stopping(model, X, y, cv, scoring, early_stopping_rounds=None, n_jobs=1):
+        # Load default early stopping rounds from config
+        if early_stopping_rounds is None:
+            if _CONFIG_AVAILABLE:
+                try:
+                    early_stopping_rounds = int(get_cfg("preprocessing.validation.early_stopping_rounds", default=50, config_name="preprocessing_config"))
+                except Exception:
+                    early_stopping_rounds = 50
+            else:
+                early_stopping_rounds = 50
         """
         Cross-validation with early stopping support for gradient boosting models.
         
@@ -280,13 +289,33 @@ def train_and_evaluate_models(
             task_str = 'classification'
         
         try:
+            # Generate deterministic seed for feature pruning based on target
+            from TRAINING.common.determinism import stable_seed_from
+            target_name_for_seed = target_name if 'target_name' in locals() else 'pruning'
+            prune_seed = stable_seed_from([target_name_for_seed, 'feature_pruning'])
+            
+            # Load feature pruning config
+            if _CONFIG_AVAILABLE:
+                try:
+                    cumulative_threshold = get_cfg("preprocessing.feature_pruning.cumulative_threshold", default=0.0001, config_name="preprocessing_config")
+                    min_features = get_cfg("preprocessing.feature_pruning.min_features", default=50, config_name="preprocessing_config")
+                    n_estimators = get_cfg("preprocessing.feature_pruning.n_estimators", default=50, config_name="preprocessing_config")
+                except Exception:
+                    cumulative_threshold = 0.0001
+                    min_features = 50
+                    n_estimators = 50
+            else:
+                cumulative_threshold = 0.0001
+                min_features = 50
+                n_estimators = 50
+            
             X_pruned, feature_names_pruned, pruning_stats = quick_importance_prune(
                 X, y, feature_names,
-                cumulative_threshold=0.0001,  # 0.01% cumulative importance
-                min_features=50,  # Always keep at least 50
+                cumulative_threshold=cumulative_threshold,
+                min_features=min_features,
                 task_type=task_str,
-                n_estimators=50,  # Fast model for quick pruning
-                random_state=42
+                n_estimators=n_estimators,
+                random_state=prune_seed
             )
             
             if pruning_stats.get('dropped_count', 0) > 0:
@@ -377,7 +406,14 @@ def train_and_evaluate_models(
         logger.info(f"  Using data interval from parameter: {data_interval_minutes}m")
     
     # Convert horizon from minutes to number of bars
-    purge_buffer_bars = 5  # Safety buffer (5 bars = 25 minutes)
+    # Load purge settings from config
+    if _CONFIG_AVAILABLE:
+        try:
+            purge_buffer_bars = int(get_cfg("pipeline.leakage.purge_buffer_bars", default=5, config_name="pipeline_config"))
+        except Exception:
+            purge_buffer_bars = 5
+    else:
+        purge_buffer_bars = 5  # Safety buffer (5 bars = 25 minutes)
     
     # ARCHITECTURAL FIX: Use time-based purging instead of row-count based
     # This prevents leakage when data interval doesn't match assumptions
@@ -387,8 +423,15 @@ def train_and_evaluate_models(
         purge_time = pd.Timedelta(minutes=target_horizon_minutes + purge_buffer_minutes)
         logger.info(f"  Target horizon: {target_horizon_minutes}m, purge_time: {purge_time}")
     else:
-        # Fallback: use a conservative default (60m + 25m buffer = 85m)
-        purge_time = pd.Timedelta(minutes=85)
+        # Fallback: use config value or conservative default (60m + 25m buffer = 85m)
+        if _CONFIG_AVAILABLE:
+            try:
+                purge_time_minutes = int(get_cfg("pipeline.leakage.purge_time_minutes", default=85, config_name="pipeline_config"))
+                purge_time = pd.Timedelta(minutes=purge_time_minutes)
+            except Exception:
+                purge_time = pd.Timedelta(minutes=85)
+        else:
+            purge_time = pd.Timedelta(minutes=85)
         logger.warning(f"  Could not extract target horizon from '{target_column}', using default purge_time={purge_time}")
     
     # Create purged time series split with time-based purging
@@ -495,8 +538,19 @@ def train_and_evaluate_models(
             _correlation_threshold = 0.999
             _suspicious_score_threshold = 0.99
     else:
-        _correlation_threshold = 0.999
-        _suspicious_score_threshold = 0.99
+        # Load from safety config
+        if _CONFIG_AVAILABLE:
+            try:
+                safety_cfg = get_safety_config()
+                leakage_cfg = safety_cfg.get('leakage_detection', {})
+                _correlation_threshold = float(leakage_cfg.get('auto_fix_thresholds', {}).get('perfect_correlation', 0.999))
+                _suspicious_score_threshold = float(leakage_cfg.get('model_alerts', {}).get('suspicious_score', 0.99))
+            except Exception:
+                _correlation_threshold = 0.999
+                _suspicious_score_threshold = 0.99
+        else:
+            _correlation_threshold = 0.999
+            _suspicious_score_threshold = 0.99
     
     # NOTE: Removed _critical_leakage_detected flag - training accuracy alone is not
     # a reliable leakage signal for tree-based models. Real defense: schema filters + pre-scan.
@@ -802,7 +856,16 @@ def train_and_evaluate_models(
             importances = model.feature_importances_
             suspicious_features = _detect_leaking_features(
                 feature_names, importances, model_name='lightgbm',
-                threshold=0.50,  # Flag if single feature has >50% importance
+                # Load importance threshold from config
+                if _CONFIG_AVAILABLE:
+                    try:
+                        safety_cfg = get_safety_config()
+                        importance_threshold = float(safety_cfg.get('leakage_detection', {}).get('importance', {}).get('single_feature_threshold', 0.50))
+                    except Exception:
+                        importance_threshold = 0.50
+                else:
+                    importance_threshold = 0.50
+                threshold=importance_threshold,
                 force_report=has_leak  # Always report top features if score indicates leak
             )
             if suspicious_features:
@@ -956,6 +1019,10 @@ def train_and_evaluate_models(
             perm_scores = []
             for i in range(min(10, X.shape[1])):  # Sample 10 features
                 X_perm = X.copy()
+                # Use deterministic seed for permutation
+                from TRAINING.common.determinism import stable_seed_from
+                perm_seed = stable_seed_from(['permutation', target_column if 'target_column' in locals() else 'default', f'feature_{i}'])
+                np.random.seed(perm_seed)
                 np.random.shuffle(X_perm[:, i])
                 perm_score = model.score(X_perm, y_for_training)
                 perm_scores.append(abs(baseline_score - perm_score))
@@ -1462,6 +1529,10 @@ def train_and_evaluate_models(
             lasso_config = get_model_config('lasso', multi_model_config)
             
             for _ in range(n_bootstrap):
+                # Use deterministic seed for bootstrap sampling
+                from TRAINING.common.determinism import stable_seed_from
+                bootstrap_seed = stable_seed_from(['bootstrap', target_column if 'target_column' in locals() else 'default', f'iter_{i}'])
+                np.random.seed(bootstrap_seed)
                 indices = np.random.choice(len(X_dense), size=len(X_dense), replace=True)
                 X_boot, y_boot = X_dense[indices], y[indices]
                 
@@ -1842,7 +1913,16 @@ def evaluate_target_predictability(
     output_dir: Path = None,
     min_cs: int = 10,
     max_cs_samples: Optional[int] = None,
-    max_rows_per_symbol: int = 50000,
+    # Load default max_rows_per_symbol from config
+    if _CONFIG_AVAILABLE:
+        try:
+            default_max_rows = int(get_cfg("pipeline.data_limits.default_max_rows_per_symbol_ranking", default=50000, config_name="pipeline_config"))
+        except Exception:
+            default_max_rows = 50000
+    else:
+        default_max_rows = 50000
+    
+    max_rows_per_symbol: int = default_max_rows,
     explicit_interval: Optional[Union[int, str]] = None,  # Explicit interval from config (e.g., "5m")
     experiment_config: Optional[Any] = None  # Optional ExperimentConfig (for data.bar_interval)
 ) -> TargetPredictabilityScore:
@@ -2014,16 +2094,7 @@ def evaluate_target_predictability(
         logger.info(f"  After leak removal: {X.shape[1]} features remaining")
         
         # If we removed too many features, mark as insufficient
-        # Load from config
-        if _CONFIG_AVAILABLE:
-            try:
-                safety_cfg = get_safety_config()
-                ranking_cfg = safety_cfg.get('leakage_detection', {}).get('ranking', {})
-                MIN_FEATURES_AFTER_LEAK_REMOVAL = int(ranking_cfg.get('min_features_after_leak_removal', 2))
-            except Exception:
-                MIN_FEATURES_AFTER_LEAK_REMOVAL = 2
-        else:
-            MIN_FEATURES_AFTER_LEAK_REMOVAL = 2
+        # MIN_FEATURES_AFTER_LEAK_REMOVAL already loaded above
         
         if X.shape[1] < MIN_FEATURES_AFTER_LEAK_REMOVAL:
             logger.error(
@@ -2054,9 +2125,9 @@ def evaluate_target_predictability(
             ranking_cfg = safety_cfg.get('leakage_detection', {}).get('ranking', {})
             MIN_FEATURES_FOR_MODEL = int(ranking_cfg.get('min_features_for_model', 3))
         except Exception:
-            MIN_FEATURES_FOR_MODEL = 3
-    else:
-        MIN_FEATURES_FOR_MODEL = 3
+            # MIN_FEATURES_FOR_MODEL already loaded above
+        else:
+            # MIN_FEATURES_FOR_MODEL already loaded above
     
     if X.shape[1] < MIN_FEATURES_FOR_MODEL:
         logger.warning(

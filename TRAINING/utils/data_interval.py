@@ -225,7 +225,12 @@ def detect_interval_from_timestamps(
         
         # CRITICAL: Filter out insane gaps (> 1 day) BEFORE computing median
         # This prevents outliers (weekends, data gaps, bad rows) from contaminating detection
-        MAX_REASONABLE_MINUTES = 1440.0  # 1 day
+        # Load max reasonable minutes from config
+        try:
+            from CONFIG.config_loader import get_cfg
+            MAX_REASONABLE_MINUTES = float(get_cfg("pipeline.data_interval.max_reasonable_minutes", default=1440.0, config_name="pipeline_config"))
+        except Exception:
+            MAX_REASONABLE_MINUTES = 1440.0  # 1 day (fallback)
         
         if is_timedelta:
             # Convert to minutes first, then filter

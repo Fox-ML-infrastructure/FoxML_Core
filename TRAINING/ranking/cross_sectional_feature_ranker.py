@@ -92,7 +92,8 @@ def train_panel_model(
     y: np.ndarray,
     feature_names: List[str],
     model_family: str = 'lightgbm',
-    model_config: Optional[Dict] = None
+    model_config: Optional[Dict] = None,
+    target_column: Optional[str] = None  # For deterministic seed generation
 ) -> Tuple[Any, pd.Series]:
     """
     Train a single panel model and extract feature importance.
@@ -110,24 +111,76 @@ def train_panel_model(
     if model_config is None:
         model_config = {}
     
-    # Default configs
-    default_configs = {
-        'lightgbm': {
-            'n_estimators': 100,
-            'max_depth': 6,
-            'learning_rate': 0.05,
-            'random_state': 42,
-            'verbosity': -1,
-            'n_jobs': 1
-        },
-        'xgboost': {
-            'n_estimators': 100,
-            'max_depth': 6,
-            'learning_rate': 0.05,
-            'random_state': 42,
-            'n_jobs': 1
+    # Generate deterministic seed for cross-sectional panel model
+    from TRAINING.common.determinism import stable_seed_from
+    seed_parts = ['cross_sectional', model_family]
+    if target_column:
+        seed_parts.append(target_column)
+    cs_seed = stable_seed_from(seed_parts)
+    
+    # Load model configs from YAML files (single source of truth)
+    default_configs = {}
+    try:
+        from CONFIG.config_loader import load_model_config
+        
+        # Load LightGBM config
+        try:
+            lgb_config = load_model_config('lightgbm')
+            default_configs['lightgbm'] = {
+                'n_estimators': lgb_config.get('n_estimators', 100),
+                'max_depth': lgb_config.get('max_depth', 6),
+                'learning_rate': lgb_config.get('learning_rate', 0.05),
+                'random_state': cs_seed,
+                'verbosity': -1,
+                'n_jobs': 1
+            }
+        except Exception:
+            default_configs['lightgbm'] = {
+                'n_estimators': 100,
+                'max_depth': 6,
+                'learning_rate': 0.05,
+                'random_state': cs_seed,
+                'verbosity': -1,
+                'n_jobs': 1
+            }
+        
+        # Load XGBoost config
+        try:
+            xgb_config = load_model_config('xgboost')
+            default_configs['xgboost'] = {
+                'n_estimators': xgb_config.get('n_estimators', 100),
+                'max_depth': xgb_config.get('max_depth', 6),
+                'learning_rate': xgb_config.get('learning_rate', 0.05),
+                'random_state': cs_seed,
+                'n_jobs': 1
+            }
+        except Exception:
+            default_configs['xgboost'] = {
+                'n_estimators': 100,
+                'max_depth': 6,
+                'learning_rate': 0.05,
+                'random_state': cs_seed,
+                'n_jobs': 1
+            }
+    except Exception:
+        # Fallback to hardcoded defaults
+        default_configs = {
+            'lightgbm': {
+                'n_estimators': 100,
+                'max_depth': 6,
+                'learning_rate': 0.05,
+                'random_state': cs_seed,
+                'verbosity': -1,
+                'n_jobs': 1
+            },
+            'xgboost': {
+                'n_estimators': 100,
+                'max_depth': 6,
+                'learning_rate': 0.05,
+                'random_state': cs_seed,
+                'n_jobs': 1
+            }
         }
-    }
     
     # Merge with defaults
     config = {**default_configs.get(model_family, {}), **model_config}
@@ -197,9 +250,18 @@ def compute_cross_sectional_importance(
     target_column: str,
     symbols: List[str],
     data_dir: Path,
+    # Load defaults from config
+    try:
+        from CONFIG.config_loader import get_cfg
+        default_min_cs = int(get_cfg("pipeline.data_limits.min_cross_sectional_samples", default=10, config_name="pipeline_config"))
+        default_max_cs_samples = int(get_cfg("pipeline.data_limits.max_cs_samples", default=1000, config_name="pipeline_config"))
+    except Exception:
+        default_min_cs = 10
+        default_max_cs_samples = 1000
+    
     model_families: List[str] = ['lightgbm'],
-    min_cs: int = 10,
-    max_cs_samples: int = 1000,
+    min_cs: int = default_min_cs,
+    max_cs_samples: int = default_max_cs_samples,
     normalization: Optional[str] = None,
     model_configs: Optional[Dict[str, Dict]] = None
 ) -> pd.Series:
@@ -264,7 +326,8 @@ def compute_cross_sectional_importance(
         logger.debug(f"   Training {model_family} panel model...")
         model_config = (model_configs or {}).get(model_family, {})
         model, importance = train_panel_model(
-            X, y, feature_names, model_family, model_config
+            X, y, feature_names, model_family, model_config,
+            target_column=target_column  # Pass target for deterministic seed
         )
         
         if model is not None:

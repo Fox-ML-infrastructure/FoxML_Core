@@ -56,6 +56,27 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+# CRITICAL: Set up determinism BEFORE importing any ML libraries
+# This ensures reproducible results across runs
+try:
+    from CONFIG.config_loader import get_cfg
+    base_seed = get_cfg("pipeline.determinism.base_seed", default=42)
+except ImportError:
+    base_seed = 42
+
+# Import determinism system FIRST (before any ML libraries)
+from TRAINING.common.determinism import set_global_determinism, seed_for, stable_seed_from
+
+# Set global determinism immediately
+BASE_SEED = set_global_determinism(
+    base_seed=base_seed,
+    threads=None,  # Auto-detect optimal thread count
+    deterministic_algorithms=False,  # Allow parallel algorithms for performance
+    prefer_cpu_tree_train=False,  # Use GPU when available
+    tf_on=False,  # TensorFlow not needed for feature selection
+    strict_mode=False  # Allow optimizations
+)
+
 from CONFIG.config_loader import load_model_config
 import yaml
 
@@ -190,7 +211,13 @@ def get_default_config() -> Dict[str, Any]:
             'consensus_threshold': 0.5
         },
         'sampling': {
-            'max_samples_per_symbol': 50000,
+            # Load default from config
+            try:
+                from CONFIG.config_loader import get_cfg
+                default_max_samples = int(get_cfg("pipeline.data_limits.default_max_samples_feature_selection", default=50000, config_name="pipeline_config"))
+            except Exception:
+                default_max_samples = 50000
+            'max_samples_per_symbol': default_max_samples,
             'validation_split': 0.2
         }
     }
@@ -242,16 +269,31 @@ def extract_native_importance(model, feature_names: List[str]) -> pd.Series:
 
 
 def extract_shap_importance(model, X: np.ndarray, feature_names: List[str],
-                           max_samples: int = 1000) -> pd.Series:
+                           # Load default max_samples for SHAP from config
+                           try:
+                               from CONFIG.config_loader import get_cfg
+                               default_shap_samples = int(get_cfg("pipeline.data_limits.max_cs_samples", default=1000, config_name="pipeline_config"))
+                           except Exception:
+                               default_shap_samples = 1000
+                           max_samples: int = default_shap_samples,
+                           model_family: Optional[str] = None,
+                           target_column: Optional[str] = None,
+                           symbol: Optional[str] = None) -> pd.Series:
     """Extract SHAP-based feature importance"""
     try:
         import shap
     except ImportError:
         logger.warning("SHAP not available, falling back to permutation importance")
-        return extract_permutation_importance(model, X, None, feature_names)
+        return extract_permutation_importance(model, X, None, feature_names,
+                                             model_family=model_family,
+                                             target_column=target_column,
+                                             symbol=symbol)
     
-    # Sample for computational efficiency
+    # Sample for computational efficiency - use deterministic sampling
     if len(X) > max_samples:
+        # Generate deterministic seed for SHAP sampling
+        shap_sample_seed = stable_seed_from(['shap', 'sampling'])
+        np.random.seed(shap_sample_seed)
         indices = np.random.choice(len(X), max_samples, replace=False)
         X_sample = X[indices]
     else:
@@ -278,12 +320,18 @@ def extract_shap_importance(model, X: np.ndarray, feature_names: List[str],
     
     except Exception as e:
         logger.warning(f"SHAP extraction failed: {e}, falling back to permutation")
-        return extract_permutation_importance(model, X, None, feature_names)
+        return extract_permutation_importance(model, X, None, feature_names, 
+                                               model_family=model_family if 'model_family' in locals() else None,
+                                               target_column=target_column if 'target_column' in locals() else None,
+                                               symbol=symbol if 'symbol' in locals() else None)
 
 
 def extract_permutation_importance(model, X: np.ndarray, y: np.ndarray,
                                    feature_names: List[str],
-                                   n_repeats: int = 5) -> pd.Series:
+                                   n_repeats: int = 5,
+                                   model_family: Optional[str] = None,
+                                   target_column: Optional[str] = None,
+                                   symbol: Optional[str] = None) -> pd.Series:
     """Extract permutation importance"""
     try:
         from sklearn.inspection import permutation_importance
@@ -293,10 +341,20 @@ def extract_permutation_importance(model, X: np.ndarray, y: np.ndarray,
             logger.warning("No y provided for permutation importance, returning zeros")
             return pd.Series(0.0, index=feature_names)
         
+        # Generate deterministic seed for permutation importance
+        seed_parts = ['perm']
+        if model_family:
+            seed_parts.append(model_family)
+        if symbol:
+            seed_parts.append(symbol)
+        if target_column:
+            seed_parts.append(target_column)
+        perm_seed = stable_seed_from(seed_parts)
+        
         result = permutation_importance(
             model, X, y,
             n_repeats=n_repeats,
-            random_state=42,
+            random_state=perm_seed,
             n_jobs=1
         )
         
@@ -314,9 +372,18 @@ def train_model_and_get_importance(
     y: np.ndarray,
     feature_names: List[str],
     data_interval_minutes: int = 5,  # Data bar interval (default: 5 minutes)
-    target_column: Optional[str] = None  # Target column name for horizon extraction
+    target_column: Optional[str] = None,  # Target column name for horizon extraction
+    symbol: Optional[str] = None  # Symbol name for deterministic seed generation
 ) -> Tuple[Any, pd.Series, str]:
     """Train a single model family and extract importance"""
+    
+    # Generate deterministic seed for this model/symbol/target combination
+    seed_parts = [model_family]
+    if symbol:
+        seed_parts.append(symbol)
+    if target_column:
+        seed_parts.append(target_column)
+    model_seed = stable_seed_from(seed_parts)
     
     # Validate target before training
     sys.path.insert(0, str(_REPO_ROOT / "scripts" / "utils"))
@@ -409,7 +476,7 @@ def train_model_and_get_importance(
         from sklearn.ensemble import RandomForestRegressor
         # Avoid duplicate random_state if already in config
         rf_config = {k: v for k, v in model_config.items() if k != 'random_state'}
-        model = RandomForestRegressor(**rf_config, random_state=42)
+        model = RandomForestRegressor(**rf_config, random_state=model_seed)
         model.fit(X, y)
         train_score = model.score(X, y)
     
@@ -428,7 +495,7 @@ def train_model_and_get_importance(
         
         # Avoid duplicate random_state if already in config
         nn_config = {k: v for k, v in model_config.items() if k != 'random_state'}
-        model = MLPRegressor(**nn_config, random_state=42)
+        model = MLPRegressor(**nn_config, random_state=model_seed)
         try:
             model.fit(X_scaled, y)
             train_score = model.score(X_scaled, y)
@@ -488,7 +555,7 @@ def train_model_and_get_importance(
         
         # Avoid duplicate random_state if already in config
         lasso_config = {k: v for k, v in model_config.items() if k != 'random_state'}
-        model = Lasso(**lasso_config, random_state=42)
+        model = Lasso(**lasso_config, random_state=model_seed)
         model.fit(X_dense, y)
         train_score = model.score(X_dense, y)
         
@@ -512,9 +579,9 @@ def train_model_and_get_importance(
         )
         
         if is_binary or is_multiclass:
-            importance_values = mutual_info_classif(X_dense, y, random_state=42, discrete_features='auto')
+            importance_values = mutual_info_classif(X_dense, y, random_state=model_seed, discrete_features='auto')
         else:
-            importance_values = mutual_info_regression(X_dense, y, random_state=42, discrete_features='auto')
+            importance_values = mutual_info_regression(X_dense, y, random_state=model_seed, discrete_features='auto')
         
         # Update feature_names to match dense array
         feature_names = feature_names_dense
@@ -829,9 +896,15 @@ def train_model_and_get_importance(
     if importance_method == 'native':
         importance = extract_native_importance(model, feature_names)
     elif importance_method == 'shap':
-        importance = extract_shap_importance(model, X, feature_names)
+        importance = extract_shap_importance(model, X, feature_names,
+                                            model_family=model_family,
+                                            target_column=target_column,
+                                            symbol=symbol)
     elif importance_method == 'permutation':
-        importance = extract_permutation_importance(model, X, y, feature_names)
+        importance = extract_permutation_importance(model, X, y, feature_names,
+                                                    model_family=model_family,
+                                                    target_column=target_column,
+                                                    symbol=symbol)
     else:
         logger.error(f"Unknown importance method: {importance_method}")
         importance = pd.Series(0.0, index=feature_names)
@@ -844,13 +917,24 @@ def process_single_symbol(
     data_path: Path,
     target_column: str,
     model_families_config: Dict[str, Dict[str, Any]],
-    max_samples: int = 50000,
+    # Load default from config
+    if _CONFIG_AVAILABLE:
+        try:
+            from CONFIG.config_loader import get_cfg
+            default_max_samples = int(get_cfg("pipeline.data_limits.default_max_samples_feature_selection", default=50000, config_name="pipeline_config"))
+        except Exception:
+            default_max_samples = 50000
+    else:
+        default_max_samples = 50000
+    
+    max_samples: int = default_max_samples,
     explicit_interval: Optional[Union[int, str]] = None,  # Optional explicit interval from config
     experiment_config: Optional[Any] = None  # Optional ExperimentConfig (for data.bar_interval)
-) -> List[ImportanceResult]:
+) -> Tuple[List[ImportanceResult], List[Dict[str, Any]]]:
     """Process a single symbol with multiple model families"""
     
     results = []
+    family_statuses = []  # Initialize family_statuses list
     
     try:
         # Load data
@@ -867,9 +951,11 @@ def process_single_symbol(
             logger.warning(f"Skipping {symbol}: No valid data after dropping NaN")
             return results, family_statuses
         
-        # Sample if too large
+        # Sample if too large - use deterministic seed based on symbol
         if len(df) > max_samples:
-            df = df.sample(n=max_samples, random_state=42)
+            # Generate stable seed from symbol name for deterministic sampling
+            sample_seed = stable_seed_from([symbol, "data_sampling"])
+            df = df.sample(n=max_samples, random_state=sample_seed)
         
         # LEAKAGE PREVENTION: Filter out leaking features (with registry validation)
         from TRAINING.utils.leakage_filtering import filter_features_for_target
@@ -934,7 +1020,8 @@ def process_single_symbol(
                 model, importance, method, train_score = train_model_and_get_importance(
                     family_name, family_config, X_arr, y_arr, feature_names,
                     data_interval_minutes=detected_interval,
-                    target_column=target_column
+                    target_column=target_column,
+                    symbol=symbol  # Pass symbol for deterministic seed generation
                 )
                 
                 if importance is not None and importance.sum() > 0:

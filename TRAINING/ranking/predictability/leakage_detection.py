@@ -462,13 +462,33 @@ def train_and_evaluate_models(
             task_str = 'classification'
         
         try:
+            # Generate deterministic seed for feature pruning based on target
+            from TRAINING.common.determinism import stable_seed_from
+            target_name_for_seed = target_name if 'target_name' in locals() else target_column if 'target_column' in locals() else 'pruning'
+            prune_seed = stable_seed_from([target_name_for_seed, 'feature_pruning'])
+            
+            # Load feature pruning config
+            if _CONFIG_AVAILABLE:
+                try:
+                    cumulative_threshold = get_cfg("preprocessing.feature_pruning.cumulative_threshold", default=0.0001, config_name="preprocessing_config")
+                    min_features = get_cfg("preprocessing.feature_pruning.min_features", default=50, config_name="preprocessing_config")
+                    n_estimators = get_cfg("preprocessing.feature_pruning.n_estimators", default=50, config_name="preprocessing_config")
+                except Exception:
+                    cumulative_threshold = 0.0001
+                    min_features = 50
+                    n_estimators = 50
+            else:
+                cumulative_threshold = 0.0001
+                min_features = 50
+                n_estimators = 50
+            
             X_pruned, feature_names_pruned, pruning_stats = quick_importance_prune(
                 X, y, feature_names,
-                cumulative_threshold=0.0001,  # 0.01% cumulative importance
-                min_features=50,  # Always keep at least 50
+                cumulative_threshold=cumulative_threshold,
+                min_features=min_features,
                 task_type=task_str,
-                n_estimators=50,  # Fast model for quick pruning
-                random_state=42
+                n_estimators=n_estimators,
+                random_state=prune_seed
             )
             
             if pruning_stats.get('dropped_count', 0) > 0:
@@ -559,7 +579,14 @@ def train_and_evaluate_models(
         logger.info(f"  Using data interval from parameter: {data_interval_minutes}m")
     
     # Convert horizon from minutes to number of bars
-    purge_buffer_bars = 5  # Safety buffer (5 bars = 25 minutes)
+    # Load purge settings from config
+    if _CONFIG_AVAILABLE:
+        try:
+            purge_buffer_bars = int(get_cfg("pipeline.leakage.purge_buffer_bars", default=5, config_name="pipeline_config"))
+        except Exception:
+            purge_buffer_bars = 5
+    else:
+        purge_buffer_bars = 5  # Safety buffer (5 bars = 25 minutes)
     
     # ARCHITECTURAL FIX: Use time-based purging instead of row-count based
     # This prevents leakage when data interval doesn't match assumptions
@@ -569,8 +596,15 @@ def train_and_evaluate_models(
         purge_time = pd.Timedelta(minutes=target_horizon_minutes + purge_buffer_minutes)
         logger.info(f"  Target horizon: {target_horizon_minutes}m, purge_time: {purge_time}")
     else:
-        # Fallback: use a conservative default (60m + 25m buffer = 85m)
-        purge_time = pd.Timedelta(minutes=85)
+        # Fallback: use config value or conservative default (60m + 25m buffer = 85m)
+        if _CONFIG_AVAILABLE:
+            try:
+                purge_time_minutes = int(get_cfg("pipeline.leakage.purge_time_minutes", default=85, config_name="pipeline_config"))
+                purge_time = pd.Timedelta(minutes=purge_time_minutes)
+            except Exception:
+                purge_time = pd.Timedelta(minutes=85)
+        else:
+            purge_time = pd.Timedelta(minutes=85)
         logger.warning(f"  Could not extract target horizon from '{target_column}', using default purge_time={purge_time}")
     
     # Create purged time series split with time-based purging
@@ -677,8 +711,19 @@ def train_and_evaluate_models(
             _correlation_threshold = 0.999
             _suspicious_score_threshold = 0.99
     else:
-        _correlation_threshold = 0.999
-        _suspicious_score_threshold = 0.99
+        # Load from safety config
+        if _CONFIG_AVAILABLE:
+            try:
+                safety_cfg = get_safety_config()
+                leakage_cfg = safety_cfg.get('leakage_detection', {})
+                _correlation_threshold = float(leakage_cfg.get('auto_fix_thresholds', {}).get('perfect_correlation', 0.999))
+                _suspicious_score_threshold = float(leakage_cfg.get('model_alerts', {}).get('suspicious_score', 0.99))
+            except Exception:
+                _correlation_threshold = 0.999
+                _suspicious_score_threshold = 0.99
+        else:
+            _correlation_threshold = 0.999
+            _suspicious_score_threshold = 0.99
     
     # NOTE: Removed _critical_leakage_detected flag - training accuracy alone is not
     # a reliable leakage signal for tree-based models. Real defense: schema filters + pre-scan.
@@ -984,7 +1029,16 @@ def train_and_evaluate_models(
             importances = model.feature_importances_
             suspicious_features = _detect_leaking_features(
                 feature_names, importances, model_name='lightgbm',
-                threshold=0.50,  # Flag if single feature has >50% importance
+                # Load importance threshold from config
+                if _CONFIG_AVAILABLE:
+                    try:
+                        safety_cfg = get_safety_config()
+                        importance_threshold = float(safety_cfg.get('leakage_detection', {}).get('importance', {}).get('single_feature_threshold', 0.50))
+                    except Exception:
+                        importance_threshold = 0.50
+                else:
+                    importance_threshold = 0.50
+                threshold=importance_threshold,
                 force_report=has_leak  # Always report top features if score indicates leak
             )
             if suspicious_features:

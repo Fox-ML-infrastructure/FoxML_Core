@@ -101,8 +101,17 @@ def quick_importance_prune(
     if task_type == 'regression':
         model = lgb.LGBMRegressor(
             n_estimators=n_estimators,
-            max_depth=5,  # Shallow for speed
-            learning_rate=0.1,
+            # Load pruning model params from config
+            try:
+                from CONFIG.config_loader import get_cfg
+                pruning_max_depth = int(get_cfg("preprocessing.feature_pruning.max_depth", default=5, config_name="preprocessing_config"))
+                pruning_learning_rate = float(get_cfg("preprocessing.feature_pruning.learning_rate", default=0.1, config_name="preprocessing_config"))
+            except Exception:
+                pruning_max_depth = 5
+                pruning_learning_rate = 0.1
+            
+            max_depth=pruning_max_depth,  # Shallow for speed
+            learning_rate=pruning_learning_rate,
             verbosity=-1,
             random_state=random_state,
             n_jobs=1  # Single thread for quick pruning

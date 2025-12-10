@@ -66,13 +66,35 @@ _CONFIG_DIR = _REPO_ROOT / "CONFIG"
 if str(_CONFIG_DIR) not in sys.path:
     sys.path.insert(0, str(_CONFIG_DIR))
 
-# Try to import config loader
-_CONFIG_AVAILABLE = False
+# CRITICAL: Set up determinism BEFORE importing any ML libraries
+# This ensures reproducible results across runs
+try:
+    from config_loader import get_cfg
+    _CONFIG_AVAILABLE = True
+    base_seed = get_cfg("pipeline.determinism.base_seed", default=42)
+except ImportError:
+    _CONFIG_AVAILABLE = False
+    base_seed = 42
+
+# Import determinism system FIRST (before any ML libraries)
+from TRAINING.common.determinism import set_global_determinism, seed_for, stable_seed_from
+
+# Set global determinism immediately
+BASE_SEED = set_global_determinism(
+    base_seed=base_seed,
+    threads=None,  # Auto-detect optimal thread count
+    deterministic_algorithms=False,  # Allow parallel algorithms for performance
+    prefer_cpu_tree_train=False,  # Use GPU when available
+    tf_on=False,  # TensorFlow not needed for ranking
+    strict_mode=False  # Allow optimizations
+)
+
+# Try to import config loader (for other config access)
 try:
     from config_loader import get_cfg, get_safety_config
     _CONFIG_AVAILABLE = True
 except ImportError:
-    pass  # Logger not yet initialized, will be set up below
+    pass  # Already handled above
 
 # Import logging config utilities
 try:

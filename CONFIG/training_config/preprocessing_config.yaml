@@ -29,6 +29,7 @@ preprocessing:
     test_ratio: 0.15  # 15% test ratio (for sequential datasets)
     random_state: 42  # Random state for splits
     shuffle: true  # Shuffle data before splitting
+    early_stopping_rounds: 50  # Default early stopping rounds
   
   # NaN Handling
   nan_handling:
@@ -49,4 +50,12 @@ preprocessing:
     create_interactions: false  # Create feature interactions
     polynomial_features: false  # Create polynomial features
     degree: 2  # Polynomial degree (if enabled)
+  
+  # Feature Pruning
+  feature_pruning:
+    n_estimators: 50  # Number of estimators for quick pruning models
+    max_depth: 5  # Maximum depth for pruning models (shallow for speed)
+    learning_rate: 0.1  # Learning rate for pruning models
+    cumulative_threshold: 0.0001  # Cumulative importance threshold (0.01%)
+    min_features: 50  # Minimum features to keep after pruning
 

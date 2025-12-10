@@ -146,7 +146,13 @@ class UnifiedTrainingInterface:
                 # Fallback to random split
                 from sklearn.model_selection import train_test_split
                 X_train, X_val, y_train, y_val = train_test_split(
-                    X_processed, y_processed, test_size=test_size, random_state=42
+                    # Use deterministic seed from determinism system
+                    try:
+                        from TRAINING.common.determinism import BASE_SEED
+                        split_seed = BASE_SEED if BASE_SEED is not None else 42
+                    except:
+                        split_seed = 42
+                    X_processed, y_processed, test_size=test_size, random_state=split_seed
                 )
             
             # 3. Train model

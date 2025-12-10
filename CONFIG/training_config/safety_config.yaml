@@ -97,4 +97,9 @@ safety:
     # Model-specific leakage alert thresholds
     model_alerts:
       suspicious_score: 0.99  # Score >= 0.99 triggers leakage alert (for LightGBM, RF, etc.)
+    
+    # Importance thresholds
+    importance:
+      single_feature_threshold: 0.50  # Flag if single feature has >50% importance
+      high_importance_threshold: 0.30  # Threshold for high importance detection
 

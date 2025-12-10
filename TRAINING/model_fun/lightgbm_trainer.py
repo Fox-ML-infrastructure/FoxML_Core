@@ -68,6 +68,14 @@ class LightGBMTrainer(BaseModelTrainer):
         import os
         self.num_threads = int(self.config.get("num_threads", os.getenv("OMP_NUM_THREADS", "4")))
         self.config.setdefault("threads", self.num_threads)
+    
+    def _get_random_state(self) -> int:
+        """Get deterministic random state from determinism system."""
+        try:
+            from TRAINING.common.determinism import BASE_SEED
+            return BASE_SEED if BASE_SEED is not None else 42
+        except:
+            return 42
 
     def train(self, X_tr: np.ndarray, y_tr: np.ndarray, 
               X_va=None, y_va=None, feature_names: List[str] = None, **kwargs) -> Any:
@@ -77,8 +85,15 @@ class LightGBMTrainer(BaseModelTrainer):
         
         # 2) Split only if no external validation provided
         if X_va is None or y_va is None:
+            # Use deterministic seed from determinism system
+            try:
+                from TRAINING.common.determinism import BASE_SEED
+                split_seed = BASE_SEED if BASE_SEED is not None else 42
+            except:
+                split_seed = 42
+            test_size, random_state = self._get_test_split_params()
             X_tr, X_va, y_tr, y_va = train_test_split(
-                X_tr, y_tr, test_size=0.2, random_state=42
+                X_tr, y_tr, test_size=test_size, random_state=random_state
             )
         
         # 3) Build model with safe defaults
@@ -145,7 +160,7 @@ class LightGBMTrainer(BaseModelTrainer):
             n_estimators=self.config["n_estimators"],
             n_jobs=threads,          # sklearn alias
             num_threads=threads,     # LightGBM native (belt and suspenders)
-            random_state=42,
+            random_state=self._get_random_state(),
             verbose=verbose_level,
             # Speed optimizations (don't change model quality)
             feature_pre_filter=True,

@@ -19,11 +19,25 @@ pipeline:
     max_cross_sectional_samples: null  # None = no limit, falls back to 1000 if not specified
     max_rows_train: null  # Maximum training rows (None = no limit)
     min_cs: 1  # Minimum cross-sectional samples
+    default_max_samples_ranking: 10000  # Default max samples for ranking pipeline
+    default_max_samples_feature_selection: 50000  # Default max samples for feature selection
+    max_cs_samples: 1000  # Maximum cross-sectional samples per timestamp
+    default_max_rows_per_symbol_ranking: 50000  # Default max rows per symbol for ranking
   
   # Sequential Model Settings
   sequential:
     default_lookback: 64  # Default lookback window for sequential models
     backend: "torch"  # "torch" or "tf" for sequential models
+  
+  # Leakage Detection Settings
+  leakage:
+    purge_buffer_bars: 5  # Safety buffer for purging (bars)
+    purge_time_minutes: 85  # Fallback purge time (minutes)
+    data_interval_default: 5  # Default data interval (minutes)
+  
+  # Data Interval Detection
+  data_interval:
+    max_reasonable_minutes: 1440.0  # Maximum reasonable interval (1 day in minutes)
   
   # Test Configuration
   test:

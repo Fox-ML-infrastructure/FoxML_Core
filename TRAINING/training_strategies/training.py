@@ -234,7 +234,11 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         
         # Apply row cap to prevent OOM
         if max_rows_train and len(X) > max_rows_train:
-            rng = np.random.RandomState(42)
+            # Use deterministic seed from determinism system
+            from TRAINING.common.determinism import BASE_SEED, stable_seed_from
+            # Generate seed based on target for deterministic downsampling
+            downsample_seed = stable_seed_from([target, 'downsample']) if target else (BASE_SEED if BASE_SEED is not None else 42)
+            rng = np.random.RandomState(downsample_seed)
             idx = rng.choice(len(X), max_rows_train, replace=False)
             X, y = X[idx], y[idx]
             if time_vals is not None: time_vals = time_vals[idx]

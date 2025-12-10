@@ -323,14 +323,23 @@ class LeakageAutoFixer:
                 from sklearn.linear_model import LogisticRegression, LinearRegression
                 from sklearn.model_selection import train_test_split
                 
+                # Get deterministic seed for leakage testing
+                try:
+                    from TRAINING.common.determinism import BASE_SEED, stable_seed_from
+                    # Use target/feature-specific seed if available
+                    target_name = getattr(self, 'target_name', 'leakage_test')
+                    leak_seed = stable_seed_from(['leakage_auto_fixer', target_name]) if BASE_SEED is not None else 42
+                except:
+                    leak_seed = 42
+                
                 if task_type == 'classification':
-                    simple_model = LogisticRegression(random_state=42, solver='liblinear', max_iter=100)
+                    simple_model = LogisticRegression(random_state=leak_seed, solver='liblinear', max_iter=100)
                 else:
                     simple_model = LinearRegression()
                 
                 # Train on subset for speed
                 if len(X_df) > 10000:
-                    X_sample, _, y_sample, _ = train_test_split(X_df, y_series, train_size=10000, random_state=42, stratify=y_series if task_type == 'classification' else None)
+                    X_sample, _, y_sample, _ = train_test_split(X_df, y_series, train_size=10000, random_state=leak_seed, stratify=y_series if task_type == 'classification' else None)
                 else:
                     X_sample, y_sample = X_df, y_series
                 
@@ -360,8 +369,10 @@ class LeakageAutoFixer:
                     try:
                         from sklearn.model_selection import train_test_split as sk_train_test_split
                         unique_symbols = symbols.unique()
+                        # Use symbol-specific seed for holdout test
+                        holdout_seed = stable_seed_from(['leakage_holdout', target_name]) if BASE_SEED is not None else leak_seed
                         train_syms, test_syms = sk_train_test_split(
-                            unique_symbols, test_size=0.2, random_state=42
+                            unique_symbols, test_size=0.2, random_state=holdout_seed
                         )
                         X_train_sym = X_df[symbols.isin(train_syms)]
                         y_train_sym = y_series[symbols.isin(train_syms)]
@@ -369,7 +380,7 @@ class LeakageAutoFixer:
                         y_test_sym = y_series[symbols.isin(test_syms)]
                         
                         if len(X_train_sym) > 100 and len(X_test_sym) > 100:
-                            holdout_model = LogisticRegression(random_state=42, solver='liblinear', max_iter=100) if task_type == 'classification' else LinearRegression()
+                            holdout_model = LogisticRegression(random_state=holdout_seed, solver='liblinear', max_iter=100) if task_type == 'classification' else LinearRegression()
                             holdout_model.fit(X_train_sym, y_train_sym)
                             
                             holdout_result = sentinel.symbol_holdout_test(

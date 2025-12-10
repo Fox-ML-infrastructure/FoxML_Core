@@ -292,7 +292,17 @@ class LeakageSentinel:
         try:
             # Shuffle time index but keep feature-target pairs
             indices = np.arange(len(X))
-            np.random.seed(42)  # Deterministic shuffle
+            # Use deterministic seed from determinism system
+            try:
+                from TRAINING.common.determinism import BASE_SEED, stable_seed_from
+                # Generate seed based on target name if available
+                if hasattr(self, 'target_name') and self.target_name:
+                    shuffle_seed = stable_seed_from(['leakage_sentinel', self.target_name, 'shuffle'])
+                else:
+                    shuffle_seed = BASE_SEED if BASE_SEED is not None else 42
+            except:
+                shuffle_seed = 42
+            np.random.seed(shuffle_seed)
             np.random.shuffle(indices)
             
             X_shuffled = X[indices]
