@@ -77,6 +77,36 @@ from TRAINING.train_with_strategies import train_models_for_interval_comprehensi
 
 The original files are thin wrappers that re-export everything from the new modules.
 
+### How Wrappers Work
+
+Each wrapper file:
+1. Uses wildcard import: `from TRAINING.models.specialized import *`
+2. Explicitly declares exports in `__all__` list
+3. Re-exports specific items (like `main`) for script execution
+4. Makes the refactoring completely transparent to users
+
+**Example wrapper structure:**
+```python
+# specialized_models.py (wrapper)
+from TRAINING.models.specialized import *  # Import everything
+from TRAINING.models.specialized.core import main  # Direct import for scripts
+
+__all__ = [
+    'TFSeriesRegressor',  # From wrappers.py
+    'train_model',        # From core.py
+    'main',               # From core.py
+    # ... all other exports
+]
+```
+
+When code imports from the wrapper, Python:
+1. Loads the wrapper file
+2. Executes the imports (which load from new modules)
+3. Makes all exports available under the old import path
+4. **Result**: Same objects, same behavior, zero changes needed
+
+See **[Refactoring & Wrappers Guide](../../01_tutorials/REFACTORING_AND_WRAPPERS.md)** for detailed explanation and examples.
+
 ## Benefits
 
 1. **Maintainability**: Each module has a clear, single responsibility
