@@ -8,6 +8,8 @@ FoxML Core uses centralized YAML configuration files for all models and training
 
 **✅ Complete Single Source of Truth (SST)**: As of 2025-12-10, **ALL** hardcoded configuration values have been removed from the TRAINING pipeline. Every hyperparameter, test split size, and random seed now loads from centralized config files, ensuring complete reproducibility: same config → same results across all pipeline stages.
 
+> **Note:** These SST improvements were internal changes. Your existing code and configs continue to work unchanged - no migration required. The system automatically uses config-driven parameters and deterministic seeds.
+
 **NEW: Modular Configuration System** - For the intelligent training pipeline, we recommend using **experiment configs** which group all settings in one file and prevent config "crossing" between modules. See [Modular Config System](../../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md) for details.
 
 > **📚 For complete configuration documentation, see the [Configuration Reference](../../02_reference/configuration/README.md).**
