@@ -29,6 +29,14 @@ from typing import Dict, List, Any, Optional
 import logging
 from .base import BaseTrainingStrategy
 
+# Import determinism system for consistent random_state
+try:
+    from TRAINING.common.determinism import BASE_SEED
+    _DETERMINISM_AVAILABLE = True
+except ImportError:
+    _DETERMINISM_AVAILABLE = False
+    BASE_SEED = 42
+
 logger = logging.getLogger(__name__)
 
 class SingleTaskStrategy(BaseTrainingStrategy):
@@ -64,8 +72,17 @@ class SingleTaskStrategy(BaseTrainingStrategy):
                                               'X_valid' in model.fit.__code__.co_varnames):
                     # Split for validation
                     from sklearn.model_selection import train_test_split
+                    # Load test_size and random_state from config
+                    try:
+                        from CONFIG.config_loader import get_cfg
+                        from TRAINING.common.determinism import BASE_SEED
+                        test_size = float(get_cfg("preprocessing.validation.test_size", default=0.2, config_name="preprocessing_config"))
+                        split_seed = BASE_SEED if BASE_SEED is not None else 42
+                    except Exception:
+                        test_size = 0.2
+                        split_seed = 42
                     X_train, X_val, y_train, y_val = train_test_split(
-                        X, y, test_size=0.2, random_state=42
+                        X, y, test_size=test_size, random_state=split_seed
                     )
                     
                     # Fit with early stopping
@@ -195,16 +212,19 @@ class SingleTaskStrategy(BaseTrainingStrategy):
         model_config = self.config.get('models', {}).get('regression', {})
         model_type = model_config.get('type', 'random_forest')
         
+        # Get random_state from determinism system
+        random_state = BASE_SEED if BASE_SEED is not None else 42
+        
         if model_type == 'random_forest':
             return RandomForestRegressor(
                 n_estimators=model_config.get('n_estimators', 100),
                 max_depth=model_config.get('max_depth', None),
-                random_state=42
+                random_state=random_state
             )
         elif model_type == 'ridge':
             return Ridge(alpha=model_config.get('alpha', 1.0))
         else:
-            return RandomForestRegressor(n_estimators=100, random_state=42)
+            return RandomForestRegressor(n_estimators=100, random_state=random_state)
     
     def _create_classification_model(self, target_name: str):
         """Create classification model"""
@@ -214,19 +234,22 @@ class SingleTaskStrategy(BaseTrainingStrategy):
         model_config = self.config.get('models', {}).get('classification', {})
         model_type = model_config.get('type', 'random_forest')
         
+        # Get random_state from determinism system
+        random_state = BASE_SEED if BASE_SEED is not None else 42
+        
         if model_type == 'random_forest':
             return RandomForestClassifier(
                 n_estimators=model_config.get('n_estimators', 100),
                 max_depth=model_config.get('max_depth', None),
-                random_state=42
+                random_state=random_state
             )
         elif model_type == 'logistic':
             return LogisticRegression(
                 C=model_config.get('C', 1.0),
-                random_state=42
+                random_state=random_state
             )
         else:
-            return RandomForestClassifier(n_estimators=100, random_state=42)
+            return RandomForestClassifier(n_estimators=100, random_state=random_state)
     
     def _create_model_by_type(self, model_type: str, target_type: str, target_name: str):
         """Create model by specific type"""
@@ -268,7 +291,7 @@ class SingleTaskStrategy(BaseTrainingStrategy):
                 'subsample_freq': 1,
                 'reg_alpha': model_config.get('lambda_l1', 0.1),
                 'reg_lambda': model_config.get('lambda_l2', 0.1),
-                'random_state': 42,
+                'random_state': BASE_SEED if BASE_SEED is not None else 42,
                 'verbose': -1,
             }
             
@@ -303,7 +326,7 @@ class SingleTaskStrategy(BaseTrainingStrategy):
                 'colsample_bytree': model_config.get('colsample_bytree', 0.75),
                 'reg_alpha': model_config.get('reg_alpha', 0.1),
                 'reg_lambda': model_config.get('reg_lambda', 0.1),
-                'random_state': 42,
+                'random_state': BASE_SEED if BASE_SEED is not None else 42,
                 'verbosity': 0,
             }
             
@@ -324,16 +347,19 @@ class SingleTaskStrategy(BaseTrainingStrategy):
         try:
             from sklearn.neural_network import MLPRegressor, MLPClassifier
             
+            # Get random_state from determinism system
+            random_state = BASE_SEED if BASE_SEED is not None else 42
+            
             if target_type == 'classification':
                 return MLPClassifier(
                     hidden_layer_sizes=(100, 50),
-                    random_state=42,
+                    random_state=random_state,
                     max_iter=500
                 )
             else:
                 return MLPRegressor(
                     hidden_layer_sizes=(100, 50),
-                    random_state=42,
+                    random_state=random_state,
                     max_iter=500
                 )
         except ImportError:

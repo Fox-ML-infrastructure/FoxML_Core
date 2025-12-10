@@ -256,18 +256,29 @@ def discover_all_targets(symbol: str, data_dir: Path) -> Dict[str, TargetConfig]
 def load_sample_data(
     symbol: str,
     data_dir: Path,
-    # Load default max_samples from config
-    if _CONFIG_AVAILABLE:
-        try:
-            from config_loader import get_cfg
-            default_max_samples = int(get_cfg("pipeline.data_limits.default_max_samples_ranking", default=10000, config_name="pipeline_config"))
-        except Exception:
-            default_max_samples = 10000
-    else:
-        default_max_samples = 10000
-    
-    max_samples: int = default_max_samples
+    max_samples: Optional[int] = None  # Load from config if None
 ) -> pd.DataFrame:
+    """
+    Load sample data for a symbol.
+    
+    Args:
+        symbol: Symbol to load data for
+        data_dir: Directory containing data files
+        max_samples: Maximum number of samples to load (loads from config if None)
+    
+    Returns:
+        DataFrame with loaded data
+    """
+    # Load from config if not provided
+    if max_samples is None:
+        if _CONFIG_AVAILABLE:
+            try:
+                from config_loader import get_cfg
+                max_samples = int(get_cfg("pipeline.data_limits.default_max_samples_ranking", default=10000, config_name="pipeline_config"))
+            except Exception:
+                max_samples = 10000
+        else:
+            max_samples = 10000
     """Load sample data for a symbol"""
     symbol_dir = data_dir / f"symbol={symbol}"
     parquet_file = symbol_dir / f"{symbol}.parquet"

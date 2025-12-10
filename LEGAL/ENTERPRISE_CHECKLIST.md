@@ -179,7 +179,7 @@ It covers key areas that enterprise buyers, legal departments, and CTOs typicall
 - [x] **Terms of Service** — Comprehensive TOS with explicit "No Financial Advice" section (`LEGAL/TOS.md`)
 - [x] **IP Assignment Agreement** — IP assignment from individual to LLC (`LEGAL/IP_ASSIGNMENT_AGREEMENT.md`) — **URGENT: Must be signed**
 - [x] **Regulatory Disclaimers** — Explicit regulatory non-affiliation statements (`LEGAL/REGULATORY_DISCLAIMERS.md`)
-- [x] **Compliance Assessment** — Internal compliance audit (see `DOCS/03_technical/COMPLIANCE_ASSESSMENT_INTERNAL.md` - internal docs only)
+- [x] **Compliance Assessment** — Internal compliance audit (internal docs only)
 
 ### Legal Documentation
 - [x] **Commercial license** — Enterprise-grade commercial license terms

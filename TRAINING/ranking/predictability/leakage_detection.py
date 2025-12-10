@@ -1027,17 +1027,17 @@ def train_and_evaluate_models(
             
             # LEAK DETECTION: Analyze feature importance for suspicious patterns
             importances = model.feature_importances_
+            # Load importance threshold from config
+            if _CONFIG_AVAILABLE:
+                try:
+                    safety_cfg = get_safety_config()
+                    importance_threshold = float(safety_cfg.get('leakage_detection', {}).get('importance', {}).get('single_feature_threshold', 0.50))
+                except Exception:
+                    importance_threshold = 0.50
+            else:
+                importance_threshold = 0.50
             suspicious_features = _detect_leaking_features(
                 feature_names, importances, model_name='lightgbm',
-                # Load importance threshold from config
-                if _CONFIG_AVAILABLE:
-                    try:
-                        safety_cfg = get_safety_config()
-                        importance_threshold = float(safety_cfg.get('leakage_detection', {}).get('importance', {}).get('single_feature_threshold', 0.50))
-                    except Exception:
-                        importance_threshold = 0.50
-                else:
-                    importance_threshold = 0.50
                 threshold=importance_threshold,
                 force_report=has_leak  # Always report top features if score indicates leak
             )

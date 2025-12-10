@@ -217,8 +217,24 @@ class DataPreprocessor:
         return summary
     
     def create_train_test_split(self, X: np.ndarray, y_dict: Dict[str, np.ndarray], 
-                               test_size: float = 0.2, random_state: int = 42) -> Dict[str, Any]:
+                               test_size: Optional[float] = None,  # Load from config if None
+                               random_state: Optional[int] = None  # Load from determinism system if None
+                               ) -> Dict[str, Any]:
         """Create train/test split"""
+        # Load from config if not provided
+        if test_size is None:
+            try:
+                from CONFIG.config_loader import get_cfg
+                test_size = float(get_cfg("preprocessing.validation.test_size", default=0.2, config_name="preprocessing_config"))
+            except Exception:
+                test_size = 0.2
+        
+        if random_state is None:
+            try:
+                from TRAINING.common.determinism import BASE_SEED
+                random_state = BASE_SEED if BASE_SEED is not None else 42
+            except Exception:
+                random_state = 42
         
         from sklearn.model_selection import train_test_split
         

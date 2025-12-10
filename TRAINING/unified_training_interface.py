@@ -50,8 +50,17 @@ class UnifiedTrainingInterface:
         
     def _setup_environment(self):
         """Set up the training environment."""
-        # Set global determinism
-        set_global_determinism(self.config.get('seed', 42))
+        # Set global determinism - load seed from config if not in self.config
+        if 'seed' not in self.config:
+            try:
+                from CONFIG.config_loader import get_cfg
+                seed = int(get_cfg("pipeline.determinism.base_seed", default=42, config_name="pipeline_config"))
+            except Exception:
+                seed = 42
+        else:
+            seed = self.config.get('seed', 42)
+        
+        set_global_determinism(seed)
         ensure_deterministic_environment()
         
         # Setup training environment
@@ -123,9 +132,17 @@ class UnifiedTrainingInterface:
     def train_with_validation(self, trainer, X: np.ndarray, y: np.ndarray,
                              timestamps: Optional[np.ndarray] = None,
                              symbols: Optional[np.ndarray] = None,
-                             test_size: float = 0.2,
+                             test_size: Optional[float] = None,  # Load from config if None
                              **kwargs) -> Tuple[Any, Dict[str, float]]:
         """Train model with cross-sectional validation."""
+        
+        # Load test_size from config if not provided
+        if test_size is None:
+            try:
+                from CONFIG.config_loader import get_cfg
+                test_size = float(get_cfg("preprocessing.validation.test_size", default=0.2, config_name="preprocessing_config"))
+            except Exception:
+                test_size = 0.2
         
         logger.info(f"🚀 Starting unified training with validation: {len(X)} samples")
         
@@ -145,13 +162,13 @@ class UnifiedTrainingInterface:
             else:
                 # Fallback to random split
                 from sklearn.model_selection import train_test_split
+                # Use deterministic seed from determinism system
+                try:
+                    from TRAINING.common.determinism import BASE_SEED
+                    split_seed = BASE_SEED if BASE_SEED is not None else 42
+                except:
+                    split_seed = 42
                 X_train, X_val, y_train, y_val = train_test_split(
-                    # Use deterministic seed from determinism system
-                    try:
-                        from TRAINING.common.determinism import BASE_SEED
-                        split_seed = BASE_SEED if BASE_SEED is not None else 42
-                    except:
-                        split_seed = 42
                     X_processed, y_processed, test_size=test_size, random_state=split_seed
                 )
             

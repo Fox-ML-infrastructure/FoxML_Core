@@ -277,7 +277,13 @@ def train_and_evaluate_models(
     # This reduces noise and prevents "Curse of Dimensionality" issues
     # Drop features with < 0.01% cumulative importance using a fast LightGBM model
     original_feature_count = len(feature_names)
-    if original_feature_count > 100:  # Only prune if we have many features
+    # Load feature count threshold from config
+    try:
+        from CONFIG.config_loader import get_cfg
+        feature_count_threshold = int(get_cfg("safety.leakage_detection.model_evaluation.feature_count_pruning_threshold", default=100, config_name="safety_config"))
+    except Exception:
+        feature_count_threshold = 100
+    if original_feature_count > feature_count_threshold:  # Only prune if we have many features
         logger.info(f"  Pre-pruning features: {original_feature_count} features")
         
         # Determine task type string for pruning
@@ -392,8 +398,13 @@ def train_and_evaluate_models(
             common_intervals = [1, 5, 15, 30, 60]
             detected_interval = min(common_intervals, key=lambda x: abs(x - median_diff_minutes))
             
-            # Only use auto-detection if it's close to a common interval (within 20% tolerance)
-            if abs(median_diff_minutes - detected_interval) / detected_interval < 0.2:
+            # Only use auto-detection if it's close to a common interval (load tolerance from config)
+            try:
+                from CONFIG.config_loader import get_cfg
+                tolerance = float(get_cfg("safety.leakage_detection.model_evaluation.interval_detection_tolerance", default=0.2, config_name="safety_config"))
+            except Exception:
+                tolerance = 0.2
+            if abs(median_diff_minutes - detected_interval) / detected_interval < tolerance:
                 data_interval_minutes = detected_interval
                 logger.info(f"  Auto-detected data interval: {median_diff_minutes:.1f}m → {data_interval_minutes}m (from timestamps)")
             else:
@@ -666,7 +677,13 @@ def train_and_evaluate_models(
             elif task_type == TaskType.BINARY_CLASSIFICATION:
                 if hasattr(model, 'predict_proba'):
                     y_proba = model.predict_proba(X)[:, 1]  # Probability of class 1
-                    y_pred = (y_proba >= 0.5).astype(int)
+                    # Load binary classification threshold from config
+                    try:
+                        from CONFIG.config_loader import get_cfg
+                        binary_threshold = float(get_cfg("safety.leakage_detection.model_evaluation.binary_classification_threshold", default=0.5, config_name="safety_config"))
+                    except Exception:
+                        binary_threshold = 0.5
+                    y_pred = (y_proba >= binary_threshold).astype(int)
                 else:
                     # Fallback for models without predict_proba
                     y_pred = model.predict(X)
@@ -794,13 +811,21 @@ def train_and_evaluate_models(
             primary_score = valid_scores.mean() if len(valid_scores) > 0 else np.nan
             
             # Train once on full data (with early stopping on a validation split) to get importance
-            # CRITICAL: Use time-aware split (last 20% as validation) - don't shuffle time series data
+            # CRITICAL: Use time-aware split (load ratio from config) - don't shuffle time series data
             # Guard against empty arrays
-            if len(X) < 10:
+            try:
+                from CONFIG.config_loader import get_cfg
+                time_split_ratio = float(get_cfg("preprocessing.validation.time_aware_split_ratio", default=0.8, config_name="preprocessing_config"))
+                min_samples_for_split = int(get_cfg("preprocessing.validation.min_samples_for_split", default=10, config_name="preprocessing_config"))
+            except Exception:
+                time_split_ratio = 0.8
+                min_samples_for_split = 10
+            
+            if len(X) < min_samples_for_split:
                 logger.warning(f"  ⚠️  Too few samples ({len(X)}) for train/val split, fitting on all data")
                 split_idx = len(X)
             else:
-                split_idx = int(len(X) * 0.8)
+                split_idx = int(len(X) * time_split_ratio)
                 split_idx = max(1, split_idx)  # Ensure at least 1 sample in validation
             
             if split_idx < len(X):
@@ -854,17 +879,18 @@ def train_and_evaluate_models(
             
             # LEAK DETECTION: Analyze feature importance for suspicious patterns
             importances = model.feature_importances_
+            # Load importance threshold from config
+            if _CONFIG_AVAILABLE:
+                try:
+                    safety_cfg = get_safety_config()
+                    importance_threshold = float(safety_cfg.get('leakage_detection', {}).get('importance', {}).get('single_feature_threshold', 0.50))
+                except Exception:
+                    importance_threshold = 0.50
+            else:
+                importance_threshold = 0.50
+            
             suspicious_features = _detect_leaking_features(
                 feature_names, importances, model_name='lightgbm',
-                # Load importance threshold from config
-                if _CONFIG_AVAILABLE:
-                    try:
-                        safety_cfg = get_safety_config()
-                        importance_threshold = float(safety_cfg.get('leakage_detection', {}).get('importance', {}).get('single_feature_threshold', 0.50))
-                    except Exception:
-                        importance_threshold = 0.50
-                else:
-                    importance_threshold = 0.50
                 threshold=importance_threshold,
                 force_report=has_leak  # Always report top features if score indicates leak
             )
@@ -1101,7 +1127,13 @@ def train_and_evaluate_models(
                     logger.warning(f"  ⚠️  Too few samples ({len(X)}) for train/val split, fitting on all data")
                     split_idx = len(X)
                 else:
-                    split_idx = int(len(X) * 0.8)
+                    # Load time-aware split ratio from config
+                    try:
+                        from CONFIG.config_loader import get_cfg
+                        time_split_ratio = float(get_cfg("preprocessing.validation.time_aware_split_ratio", default=0.8, config_name="preprocessing_config"))
+                    except Exception:
+                        time_split_ratio = 0.8
+                    split_idx = int(len(X) * time_split_ratio)
                     split_idx = max(1, split_idx)  # Ensure at least 1 sample in validation
                 
                 if split_idx < len(X):
@@ -1825,9 +1857,19 @@ def detect_leakage(
             )
     
     # Check 3: Composite score inconsistent with mean score
-    # If composite is very high (> 0.5) but score is low (< 0.2 for regression, < 0.6 for classification), something's wrong
-    score_low_threshold = 0.2 if task_type == TaskType.REGRESSION else 0.6
-    if composite_score > 0.5 and mean_score < score_low_threshold:
+    # Load thresholds from config
+    try:
+        from CONFIG.config_loader import get_cfg
+        composite_high_threshold = float(get_cfg("safety.leakage_detection.model_evaluation.composite_score_high_threshold", default=0.5, config_name="safety_config"))
+        regression_score_low = float(get_cfg("safety.leakage_detection.model_evaluation.regression_score_low_threshold", default=0.2, config_name="safety_config"))
+        classification_score_low = float(get_cfg("safety.leakage_detection.model_evaluation.classification_score_low_threshold", default=0.6, config_name="safety_config"))
+    except Exception:
+        composite_high_threshold = 0.5
+        regression_score_low = 0.2
+        classification_score_low = 0.6
+    
+    score_low_threshold = regression_score_low if task_type == TaskType.REGRESSION else classification_score_low
+    if composite_score > composite_high_threshold and mean_score < score_low_threshold:
         flags.append("INCONSISTENT")
         logger.warning(
             f"LEAKAGE WARNING: Composite={composite_score:.3f} but {metric_name}={mean_score:.3f} "
@@ -1835,8 +1877,19 @@ def detect_leakage(
         )
     
     # Check 4: Very high importance with low score (might indicate leaked features)
-    score_very_low_threshold = 0.1 if task_type == TaskType.REGRESSION else 0.5
-    if mean_importance > 0.7 and mean_score < score_very_low_threshold:
+    # Load thresholds from config
+    try:
+        from CONFIG.config_loader import get_cfg
+        importance_high_threshold = float(get_cfg("safety.leakage_detection.model_evaluation.importance_high_threshold", default=0.7, config_name="safety_config"))
+        regression_score_very_low = float(get_cfg("safety.leakage_detection.model_evaluation.regression_score_very_low_threshold", default=0.1, config_name="safety_config"))
+        classification_score_very_low = float(get_cfg("safety.leakage_detection.model_evaluation.classification_score_very_low_threshold", default=0.5, config_name="safety_config"))
+    except Exception:
+        importance_high_threshold = 0.7
+        regression_score_very_low = 0.1
+        classification_score_very_low = 0.5
+    
+    score_very_low_threshold = regression_score_very_low if task_type == TaskType.REGRESSION else classification_score_very_low
+    if mean_importance > importance_high_threshold and mean_score < score_very_low_threshold:
         flags.append("INCONSISTENT")
         logger.warning(
             f"LEAKAGE WARNING: Importance={mean_importance:.2f} but {metric_name}={mean_score:.3f} "
@@ -1913,20 +1966,21 @@ def evaluate_target_predictability(
     output_dir: Path = None,
     min_cs: int = 10,
     max_cs_samples: Optional[int] = None,
-    # Load default max_rows_per_symbol from config
-    if _CONFIG_AVAILABLE:
-        try:
-            default_max_rows = int(get_cfg("pipeline.data_limits.default_max_rows_per_symbol_ranking", default=50000, config_name="pipeline_config"))
-        except Exception:
-            default_max_rows = 50000
-    else:
-        default_max_rows = 50000
-    
-    max_rows_per_symbol: int = default_max_rows,
+    max_rows_per_symbol: int = None,
     explicit_interval: Optional[Union[int, str]] = None,  # Explicit interval from config (e.g., "5m")
     experiment_config: Optional[Any] = None  # Optional ExperimentConfig (for data.bar_interval)
 ) -> TargetPredictabilityScore:
     """Evaluate predictability of a single target across symbols"""
+    
+    # Load default max_rows_per_symbol from config if not provided
+    if max_rows_per_symbol is None:
+        if _CONFIG_AVAILABLE:
+            try:
+                max_rows_per_symbol = int(get_cfg("pipeline.data_limits.default_max_rows_per_symbol_ranking", default=50000, config_name="pipeline_config"))
+            except Exception:
+                max_rows_per_symbol = 50000
+        else:
+            max_rows_per_symbol = 50000
     
     # Convert dict config to TargetConfig if needed
     if isinstance(target_config, dict):
@@ -2094,7 +2148,16 @@ def evaluate_target_predictability(
         logger.info(f"  After leak removal: {X.shape[1]} features remaining")
         
         # If we removed too many features, mark as insufficient
-        # MIN_FEATURES_AFTER_LEAK_REMOVAL already loaded above
+        # Load from config
+        if _CONFIG_AVAILABLE:
+            try:
+                safety_cfg = get_safety_config()
+                ranking_cfg = safety_cfg.get('leakage_detection', {}).get('ranking', {})
+                MIN_FEATURES_AFTER_LEAK_REMOVAL = int(ranking_cfg.get('min_features_after_leak_removal', 2))
+            except Exception:
+                MIN_FEATURES_AFTER_LEAK_REMOVAL = 2
+        else:
+            MIN_FEATURES_AFTER_LEAK_REMOVAL = 2
         
         if X.shape[1] < MIN_FEATURES_AFTER_LEAK_REMOVAL:
             logger.error(
@@ -2125,9 +2188,9 @@ def evaluate_target_predictability(
             ranking_cfg = safety_cfg.get('leakage_detection', {}).get('ranking', {})
             MIN_FEATURES_FOR_MODEL = int(ranking_cfg.get('min_features_for_model', 3))
         except Exception:
-            # MIN_FEATURES_FOR_MODEL already loaded above
-        else:
-            # MIN_FEATURES_FOR_MODEL already loaded above
+            MIN_FEATURES_FOR_MODEL = 3
+    else:
+        MIN_FEATURES_FOR_MODEL = 3
     
     if X.shape[1] < MIN_FEATURES_FOR_MODEL:
         logger.warning(
@@ -2219,7 +2282,13 @@ def evaluate_target_predictability(
                 median_diff_minutes = abs(time_diffs.median().total_seconds()) / 60.0
                 common_intervals = [1, 5, 15, 30, 60]
                 detected_interval = min(common_intervals, key=lambda x: abs(x - median_diff_minutes))
-                if abs(median_diff_minutes - detected_interval) / detected_interval >= 0.2:
+                # Load tolerance from config
+                try:
+                    from CONFIG.config_loader import get_cfg
+                    tolerance = float(get_cfg("safety.leakage_detection.model_evaluation.interval_detection_tolerance", default=0.2, config_name="safety_config"))
+                except Exception:
+                    tolerance = 0.2
+                if abs(median_diff_minutes - detected_interval) / detected_interval >= tolerance:
                     detected_interval = 5  # Fallback if unclear
             except Exception:
                 pass  # Use default

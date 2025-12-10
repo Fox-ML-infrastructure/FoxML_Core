@@ -42,11 +42,11 @@ def quick_importance_prune(
     X: np.ndarray,
     y: np.ndarray,
     feature_names: List[str],
-    cumulative_threshold: float = 0.0001,  # 0.01% cumulative importance
-    min_features: int = 50,  # Always keep at least this many
+    cumulative_threshold: Optional[float] = None,  # Load from config if None
+    min_features: Optional[int] = None,  # Load from config if None
     task_type: str = 'regression',
-    n_estimators: int = 50,  # Fast model for quick pruning
-    random_state: int = 42
+    n_estimators: Optional[int] = None,  # Load from config if None
+    random_state: Optional[int] = None  # Load from determinism system if None
 ) -> Tuple[np.ndarray, List[str], Dict[str, Any]]:
     """
     Prune features with very low cumulative importance using a fast LightGBM model.
@@ -58,17 +58,46 @@ def quick_importance_prune(
         X: Feature matrix (N, F)
         y: Target array (N,)
         feature_names: List of feature names (F,)
-        cumulative_threshold: Drop features below this cumulative importance (default: 0.01%)
-        min_features: Always keep at least this many features (default: 50)
+        cumulative_threshold: Drop features below this cumulative importance (loads from config if None)
+        min_features: Always keep at least this many features (loads from config if None)
         task_type: 'regression' or 'classification'
-        n_estimators: Number of trees for quick importance (default: 50, fast)
-        random_state: Random seed
+        n_estimators: Number of trees for quick importance (loads from config if None)
+        random_state: Random seed (loads from determinism system if None)
     
     Returns:
         X_pruned: Pruned feature matrix (N, F_pruned)
         pruned_names: Names of kept features
         pruning_stats: Dict with statistics about pruning
     """
+    # Load from config if not provided
+    if cumulative_threshold is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            cumulative_threshold = float(get_cfg("preprocessing.feature_pruning.cumulative_threshold", default=0.0001, config_name="preprocessing_config"))
+        except Exception:
+            cumulative_threshold = 0.0001
+    
+    if min_features is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            min_features = int(get_cfg("preprocessing.feature_pruning.min_features", default=50, config_name="preprocessing_config"))
+        except Exception:
+            min_features = 50
+    
+    if n_estimators is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            n_estimators = int(get_cfg("preprocessing.feature_pruning.n_estimators", default=50, config_name="preprocessing_config"))
+        except Exception:
+            n_estimators = 50
+    
+    if random_state is None:
+        try:
+            from TRAINING.common.determinism import BASE_SEED
+            random_state = BASE_SEED if BASE_SEED is not None else 42
+        except Exception:
+            random_state = 42
+    
     if len(feature_names) != X.shape[1]:
         raise ValueError(f"Feature names length ({len(feature_names)}) doesn't match X columns ({X.shape[1]})")
     
@@ -97,19 +126,19 @@ def quick_importance_prune(
     
     logger.info(f"  Quick importance pruning: {original_count} features → target: {min_features}+")
     
+    # Load pruning model params from config
+    try:
+        from CONFIG.config_loader import get_cfg
+        pruning_max_depth = int(get_cfg("preprocessing.feature_pruning.max_depth", default=5, config_name="preprocessing_config"))
+        pruning_learning_rate = float(get_cfg("preprocessing.feature_pruning.learning_rate", default=0.1, config_name="preprocessing_config"))
+    except Exception:
+        pruning_max_depth = 5
+        pruning_learning_rate = 0.1
+    
     # Train a fast LightGBM model to get importance
     if task_type == 'regression':
         model = lgb.LGBMRegressor(
             n_estimators=n_estimators,
-            # Load pruning model params from config
-            try:
-                from CONFIG.config_loader import get_cfg
-                pruning_max_depth = int(get_cfg("preprocessing.feature_pruning.max_depth", default=5, config_name="preprocessing_config"))
-                pruning_learning_rate = float(get_cfg("preprocessing.feature_pruning.learning_rate", default=0.1, config_name="preprocessing_config"))
-            except Exception:
-                pruning_max_depth = 5
-                pruning_learning_rate = 0.1
-            
             max_depth=pruning_max_depth,  # Shallow for speed
             learning_rate=pruning_learning_rate,
             verbosity=-1,
@@ -124,10 +153,19 @@ def quick_importance_prune(
         else:
             objective = 'multiclass'
         
+        # Load pruning model params from config (for classification too)
+        try:
+            from CONFIG.config_loader import get_cfg
+            pruning_max_depth = int(get_cfg("preprocessing.feature_pruning.max_depth", default=5, config_name="preprocessing_config"))
+            pruning_learning_rate = float(get_cfg("preprocessing.feature_pruning.learning_rate", default=0.1, config_name="preprocessing_config"))
+        except Exception:
+            pruning_max_depth = 5
+            pruning_learning_rate = 0.1
+        
         model = lgb.LGBMClassifier(
             n_estimators=n_estimators,
-            max_depth=5,
-            learning_rate=0.1,
+            max_depth=pruning_max_depth,
+            learning_rate=pruning_learning_rate,
             objective=objective,
             verbosity=-1,
             random_state=random_state,
@@ -208,8 +246,8 @@ def quick_importance_prune(
 def prune_features_by_importance_csv(
     importance_csv_path: str,
     feature_names: List[str],
-    cumulative_threshold: float = 0.0001,
-    min_features: int = 50
+    cumulative_threshold: Optional[float] = None,  # Load from config if None
+    min_features: Optional[int] = None  # Load from config if None
 ) -> Tuple[List[str], Dict[str, Any]]:
     """
     Prune features based on pre-computed importance from CSV file.
@@ -219,13 +257,28 @@ def prune_features_by_importance_csv(
     Args:
         importance_csv_path: Path to CSV with columns: feature_name, importance
         feature_names: List of all feature names to filter
-        cumulative_threshold: Drop features below this cumulative importance
-        min_features: Always keep at least this many
+        cumulative_threshold: Drop features below this cumulative importance (loads from config if None)
+        min_features: Always keep at least this many (loads from config if None)
     
     Returns:
         pruned_names: List of kept feature names
         pruning_stats: Dict with statistics
     """
+    # Load from config if not provided
+    if cumulative_threshold is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            cumulative_threshold = float(get_cfg("preprocessing.feature_pruning.cumulative_threshold", default=0.0001, config_name="preprocessing_config"))
+        except Exception:
+            cumulative_threshold = 0.0001
+    
+    if min_features is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            min_features = int(get_cfg("preprocessing.feature_pruning.min_features", default=50, config_name="preprocessing_config"))
+        except Exception:
+            min_features = 50
+    
     try:
         df_importance = pd.read_csv(importance_csv_path)
         

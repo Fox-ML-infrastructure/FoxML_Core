@@ -265,7 +265,15 @@ class LeakageAutoFixer:
         detections = []
         
         # Method 1: Perfect scores indicate leakage
-        if train_score is not None and train_score >= 0.99:
+        # Load threshold from config
+        try:
+            from CONFIG.config_loader import get_safety_config
+            safety_cfg = get_safety_config()
+            perfect_score_threshold = float(safety_cfg.get('auto_fixer', {}).get('perfect_score_threshold', 0.99))
+        except Exception:
+            perfect_score_threshold = 0.99
+        
+        if train_score is not None and train_score >= perfect_score_threshold:
             logger.debug(f"Method 1: Perfect score detected ({train_score:.4f} >= 0.99)")
             # High importance features in perfect-score models are suspicious
             if model_importance and len(model_importance) > 0:
@@ -371,8 +379,15 @@ class LeakageAutoFixer:
                         unique_symbols = symbols.unique()
                         # Use symbol-specific seed for holdout test
                         holdout_seed = stable_seed_from(['leakage_holdout', target_name]) if BASE_SEED is not None else leak_seed
+                        # Load test_size from config
+                        try:
+                            from CONFIG.config_loader import get_safety_config
+                            safety_cfg = get_safety_config()
+                            symbol_holdout_test_size = float(safety_cfg.get('auto_fixer', {}).get('symbol_holdout_test_size', 0.2))
+                        except Exception:
+                            symbol_holdout_test_size = 0.2
                         train_syms, test_syms = sk_train_test_split(
-                            unique_symbols, test_size=0.2, random_state=holdout_seed
+                            unique_symbols, test_size=symbol_holdout_test_size, random_state=holdout_seed
                         )
                         X_train_sym = X_df[symbols.isin(train_syms)]
                         y_train_sym = y_series[symbols.isin(train_syms)]
@@ -505,11 +520,11 @@ class LeakageAutoFixer:
     def apply_fixes(
         self,
         detections: List[LeakageDetection],
-        min_confidence: float = 0.7,
+        min_confidence: Optional[float] = None,  # Load from config if None
         max_features: Optional[int] = None,
         dry_run: bool = False,
         target_name: Optional[str] = None,
-        max_backups_per_target: int = 20
+        max_backups_per_target: Optional[int] = None  # Load from config if None
     ) -> Tuple[Dict[str, Any], AutoFixInfo]:
         """
         Apply detected fixes to config files.
@@ -525,6 +540,18 @@ class LeakageAutoFixer:
             - updates_dict: Dict with 'excluded_features_updates' and 'feature_registry_updates'
             - AutoFixInfo: Information about what was modified
         """
+        # Load from config if not provided
+        if min_confidence is None:
+            try:
+                from CONFIG.config_loader import get_safety_config
+                safety_cfg = get_safety_config()
+                min_confidence = float(safety_cfg.get('auto_fixer', {}).get('min_confidence', 0.7))
+            except Exception:
+                min_confidence = 0.7
+        
+        if max_backups_per_target is None:
+            max_backups_per_target = self.max_backups_per_target
+        
         # Filter by confidence
         high_confidence = [d for d in detections if d.confidence >= min_confidence]
         
@@ -630,16 +657,24 @@ class LeakageAutoFixer:
         return updates, autofix_info
     
     def _load_backup_config(self) -> int:
-        """Load backup configuration from system_config.yaml."""
+        """Load backup configuration from safety_config.yaml."""
         default_max_backups = 20
-        if _CONFIG_AVAILABLE:
-            try:
-                system_cfg = get_system_config()
-                backup_cfg = system_cfg.get('system', {}).get('backup', {})
-                max_backups = backup_cfg.get('max_backups_per_target', default_max_backups)
-                return int(max_backups) if max_backups is not None else default_max_backups
-            except Exception as e:
-                logger.debug(f"Could not load backup config: {e}, using default {default_max_backups}")
+        try:
+            from CONFIG.config_loader import get_safety_config
+            safety_cfg = get_safety_config()
+            max_backups = safety_cfg.get('auto_fixer', {}).get('max_backups_per_target', default_max_backups)
+            return int(max_backups) if max_backups is not None else default_max_backups
+        except Exception as e:
+            logger.debug(f"Could not load backup config: {e}, using default {default_max_backups}")
+            # Fallback to system_config if available
+            if _CONFIG_AVAILABLE:
+                try:
+                    system_cfg = get_system_config()
+                    backup_cfg = system_cfg.get('system', {}).get('backup', {})
+                    max_backups = backup_cfg.get('max_backups_per_target', default_max_backups)
+                    return int(max_backups) if max_backups is not None else default_max_backups
+                except Exception:
+                    pass
         return default_max_backups
     
     def _get_git_commit_hash(self) -> Optional[str]:
@@ -879,7 +914,7 @@ class LeakageAutoFixer:
         self,
         training_function,  # Function that runs training and returns (X, y, feature_names, model_importance, scores)
         max_iterations: int = 5,
-        min_confidence: float = 0.7,
+        min_confidence: Optional[float] = None,  # Load from config if None
         target_column: str = None,
         **training_kwargs
     ) -> Dict[str, Any]:
@@ -889,13 +924,22 @@ class LeakageAutoFixer:
         Args:
             training_function: Function that runs training and returns results
             max_iterations: Maximum number of fix iterations
-            min_confidence: Minimum confidence to auto-fix
+            min_confidence: Minimum confidence to auto-fix (loads from config if None)
             target_column: Target column name
             **training_kwargs: Additional arguments to pass to training function
         
         Returns:
             Dict with final results and fix history
         """
+        # Load min_confidence from config if not provided
+        if min_confidence is None:
+            try:
+                from CONFIG.config_loader import get_safety_config
+                safety_cfg = get_safety_config()
+                min_confidence = float(safety_cfg.get('auto_fixer', {}).get('min_confidence', 0.7))
+            except Exception:
+                min_confidence = 0.7
+        
         self.iteration_count = 0
         fix_history = []
         
@@ -958,7 +1002,7 @@ class LeakageAutoFixer:
                 min_confidence=min_confidence, 
                 dry_run=False,
                 target_name=target_column,  # Use target_column from training_kwargs if available
-                max_backups_per_target=20
+                max_backups_per_target=None  # Use instance config
             )
             
             fix_history.append({

@@ -79,9 +79,9 @@ def evaluate_target_predictability(
     model_families: List[str],
     multi_model_config: Dict[str, Any] = None,
     output_dir: Path = None,
-    min_cs: int = 10,
-    max_cs_samples: Optional[int] = None,
-    max_rows_per_symbol: int = 50000,
+    min_cs: Optional[int] = None,  # Load from config if None
+    max_cs_samples: Optional[int] = None,  # Load from config if None
+    max_rows_per_symbol: Optional[int] = None,  # Load from config if None
     explicit_interval: Optional[Union[int, str]] = None,  # Explicit interval from config
     experiment_config: Optional[Any] = None  # Optional ExperimentConfig (for data.bar_interval)
 ) -> TargetPredictabilityScore:
@@ -99,13 +99,35 @@ def evaluate_target_predictability(
         model_families: List of model family names to use
         multi_model_config: Multi-model config dict
         output_dir: Optional output directory for results
-        min_cs: Minimum cross-sectional size per timestamp
-        max_cs_samples: Maximum samples per timestamp for cross-sectional sampling
-        max_rows_per_symbol: Maximum rows to load per symbol
+        min_cs: Minimum cross-sectional size per timestamp (loads from config if None)
+        max_cs_samples: Maximum samples per timestamp for cross-sectional sampling (loads from config if None)
+        max_rows_per_symbol: Maximum rows to load per symbol (loads from config if None)
     
     Returns:
         TargetPredictabilityScore object with predictability metrics
     """
+    # Load from config if not provided
+    if min_cs is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            min_cs = int(get_cfg("pipeline.data_limits.min_cross_sectional_samples", default=10, config_name="pipeline_config"))
+        except Exception:
+            min_cs = 10
+    
+    if max_cs_samples is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            max_cs_samples = int(get_cfg("pipeline.data_limits.max_cs_samples", default=1000, config_name="pipeline_config"))
+        except Exception:
+            max_cs_samples = 1000
+    
+    if max_rows_per_symbol is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            max_rows_per_symbol = int(get_cfg("pipeline.data_limits.default_max_rows_per_symbol_ranking", default=50000, config_name="pipeline_config"))
+        except Exception:
+            max_rows_per_symbol = 50000
+    
     return _evaluate_target_predictability(
         target_name=target_name,
         target_config=target_config,
@@ -158,9 +180,9 @@ def rank_targets(
     model_families: List[str],
     multi_model_config: Dict[str, Any] = None,
     output_dir: Path = None,
-    min_cs: int = 10,
-    max_cs_samples: Optional[int] = None,
-    max_rows_per_symbol: int = 50000,
+    min_cs: Optional[int] = None,  # Load from config if None
+    max_cs_samples: Optional[int] = None,  # Load from config if None
+    max_rows_per_symbol: Optional[int] = None,  # Load from config if None
     top_n: Optional[int] = None,
     max_targets_to_evaluate: Optional[int] = None,  # Limit number of targets to evaluate (for faster testing)
     target_ranking_config: Optional['TargetRankingConfig'] = None,  # New typed config (optional)
@@ -180,9 +202,9 @@ def rank_targets(
         model_families: List of model family names to use
         multi_model_config: Multi-model config dict [LEGACY]
         output_dir: Optional output directory for results
-        min_cs: Minimum cross-sectional size per timestamp
-        max_cs_samples: Maximum samples per timestamp for cross-sectional sampling
-        max_rows_per_symbol: Maximum rows to load per symbol
+        min_cs: Minimum cross-sectional size per timestamp (loads from config if None)
+        max_cs_samples: Maximum samples per timestamp for cross-sectional sampling (loads from config if None)
+        max_rows_per_symbol: Maximum rows to load per symbol (loads from config if None)
         top_n: Optional limit on number of top targets to return (after ranking)
         max_targets_to_evaluate: Optional limit on number of targets to evaluate (for faster testing)
         target_ranking_config: Optional TargetRankingConfig object [NEW - preferred]
@@ -190,6 +212,28 @@ def rank_targets(
     Returns:
         List of TargetPredictabilityScore objects, sorted by composite_score (descending)
     """
+    # Load from config if not provided
+    if min_cs is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            min_cs = int(get_cfg("pipeline.data_limits.min_cross_sectional_samples", default=10, config_name="pipeline_config"))
+        except Exception:
+            min_cs = 10
+    
+    if max_cs_samples is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            max_cs_samples = int(get_cfg("pipeline.data_limits.max_cs_samples", default=1000, config_name="pipeline_config"))
+        except Exception:
+            max_cs_samples = 1000
+    
+    if max_rows_per_symbol is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            max_rows_per_symbol = int(get_cfg("pipeline.data_limits.default_max_rows_per_symbol_ranking", default=50000, config_name="pipeline_config"))
+        except Exception:
+            max_rows_per_symbol = 50000
+    
     results = []
     
     # NEW: Use typed config if provided

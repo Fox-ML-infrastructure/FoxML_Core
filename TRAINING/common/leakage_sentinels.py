@@ -53,20 +53,45 @@ class LeakageSentinel:
     
     def __init__(
         self,
-        shifted_target_threshold: float = 0.5,
-        symbol_holdout_train_threshold: float = 0.9,
-        symbol_holdout_test_threshold: float = 0.3,
-        randomized_time_threshold: float = 0.5
+        shifted_target_threshold: Optional[float] = None,  # Load from config if None
+        symbol_holdout_train_threshold: Optional[float] = None,  # Load from config if None
+        symbol_holdout_test_threshold: Optional[float] = None,  # Load from config if None
+        randomized_time_threshold: Optional[float] = None  # Load from config if None
     ):
         """
         Initialize leakage sentinel with thresholds.
         
         Args:
-            shifted_target_threshold: If model score > this on shifted target, flag as leaky
-            symbol_holdout_train_threshold: If train score > this, flag for investigation
-            symbol_holdout_test_threshold: If test score < this (with high train), flag as leaky
-            randomized_time_threshold: If model score > this on time-shuffled data, flag as leaky
+            shifted_target_threshold: If model score > this on shifted target, flag as leaky (loads from config if None)
+            symbol_holdout_train_threshold: If train score > this, flag for investigation (loads from config if None)
+            symbol_holdout_test_threshold: If test score < this (with high train), flag as leaky (loads from config if None)
+            randomized_time_threshold: If model score > this on time-shuffled data, flag as leaky (loads from config if None)
         """
+        # Load thresholds from config if not provided
+        try:
+            from CONFIG.config_loader import get_safety_config
+            safety_cfg = get_safety_config()
+            sentinel_cfg = safety_cfg.get('leakage_sentinels', {})
+            
+            if shifted_target_threshold is None:
+                shifted_target_threshold = float(sentinel_cfg.get('shifted_target_threshold', 0.5))
+            if symbol_holdout_train_threshold is None:
+                symbol_holdout_train_threshold = float(sentinel_cfg.get('symbol_holdout_train_threshold', 0.9))
+            if symbol_holdout_test_threshold is None:
+                symbol_holdout_test_threshold = float(sentinel_cfg.get('symbol_holdout_test_threshold', 0.3))
+            if randomized_time_threshold is None:
+                randomized_time_threshold = float(sentinel_cfg.get('randomized_time_threshold', 0.5))
+        except Exception:
+            # Fallback to defaults
+            if shifted_target_threshold is None:
+                shifted_target_threshold = 0.5
+            if symbol_holdout_train_threshold is None:
+                symbol_holdout_train_threshold = 0.9
+            if symbol_holdout_test_threshold is None:
+                symbol_holdout_test_threshold = 0.3
+            if randomized_time_threshold is None:
+                randomized_time_threshold = 0.5
+        
         self.shifted_target_threshold = shifted_target_threshold
         self.symbol_holdout_train_threshold = symbol_holdout_train_threshold
         self.symbol_holdout_test_threshold = symbol_holdout_test_threshold

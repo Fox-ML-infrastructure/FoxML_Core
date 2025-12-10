@@ -102,4 +102,34 @@ safety:
     importance:
       single_feature_threshold: 0.50  # Flag if single feature has >50% importance
       high_importance_threshold: 0.30  # Threshold for high importance detection
+    
+    # Model evaluation thresholds
+    model_evaluation:
+      # Binary classification threshold
+      binary_classification_threshold: 0.5  # Probability threshold for binary classification
+      # Consistency check thresholds
+      composite_score_high_threshold: 0.5  # High composite score threshold
+      regression_score_low_threshold: 0.2  # Low score threshold for regression
+      classification_score_low_threshold: 0.6  # Low score threshold for classification
+      importance_high_threshold: 0.7  # High importance threshold
+      regression_score_very_low_threshold: 0.1  # Very low score threshold for regression
+      classification_score_very_low_threshold: 0.5  # Very low score threshold for classification
+      # Feature pruning threshold
+      feature_count_pruning_threshold: 100  # Only prune if feature count exceeds this
+      # Interval detection tolerance
+      interval_detection_tolerance: 0.2  # 20% tolerance for interval detection
+    
+    # Leakage Sentinel Thresholds
+    leakage_sentinels:
+      shifted_target_threshold: 0.5  # If model score > this on shifted target, flag as leaky
+      symbol_holdout_train_threshold: 0.9  # If train score > this, flag for investigation
+      symbol_holdout_test_threshold: 0.3  # If test score < this (with high train), flag as leaky
+      randomized_time_threshold: 0.5  # If model score > this on time-shuffled data, flag as leaky
+    
+    # Auto-Fixer Settings
+    auto_fixer:
+      perfect_score_threshold: 0.99  # Train score >= this indicates leakage
+      min_confidence: 0.7  # Minimum confidence to auto-fix (0.0 to 1.0)
+      max_backups_per_target: 20  # Maximum backups to keep per target
+      symbol_holdout_test_size: 0.2  # Test size for symbol holdout split
 

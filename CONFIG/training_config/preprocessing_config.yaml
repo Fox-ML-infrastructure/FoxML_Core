@@ -30,6 +30,9 @@ preprocessing:
     random_state: 42  # Random state for splits
     shuffle: true  # Shuffle data before splitting
     early_stopping_rounds: 50  # Default early stopping rounds
+    # Time-aware split settings (for feature importance evaluation)
+    time_aware_split_ratio: 0.8  # 80% train, 20% validation (for time series)
+    min_samples_for_split: 10  # Minimum samples required for train/val split
   
   # NaN Handling
   nan_handling:
@@ -58,4 +61,61 @@ preprocessing:
     learning_rate: 0.1  # Learning rate for pruning models
     cumulative_threshold: 0.0001  # Cumulative importance threshold (0.01%)
     min_features: 50  # Minimum features to keep after pruning
+  
+  # Multi-Model Feature Selection
+  multi_model_feature_selection:
+    # Aggregation settings
+    aggregation:
+      per_symbol_method: "mean"  # "mean", "median", "geometric_mean"
+      cross_model_method: "weighted_mean"  # "mean", "median", "weighted_mean", "geometric_mean"
+      require_min_models: 2  # Minimum models required for consensus
+      consensus_threshold: 0.5  # Threshold for consensus (0.0 to 1.0)
+      # Boruta gatekeeper settings
+      boruta_confirm_bonus: 0.2  # Bonus for Boruta-confirmed features
+      boruta_reject_penalty: -0.3  # Penalty for Boruta-rejected features
+      boruta_confirmed_threshold: 0.9  # Threshold for confirmed features
+      boruta_tentative_threshold: 0.0  # Threshold for tentative features
+      boruta_magnitude_warning_threshold: 0.5  # Warning threshold for magnitude ratio
+    # Model weights (for weighted_mean aggregation)
+    model_weights:
+      lightgbm: 1.0
+      xgboost: 1.0
+      random_forest: 0.8
+      neural_network: 1.2
+    # RFE settings
+    rfe:
+      n_features_to_select: 50  # Default number of features to select
+      step: 5  # Step size for RFE
+      estimator_n_estimators: 100  # Estimator n_estimators for RFE
+      estimator_max_depth: 10  # Estimator max_depth for RFE
+      estimator_n_jobs: 1  # Estimator n_jobs for RFE
+    # Boruta settings
+    boruta:
+      n_estimators: 500  # More trees for stability
+      max_depth: 6  # Shallower to avoid overfitting
+      max_iter: 100  # Maximum iterations
+      n_jobs: 1  # Parallel jobs
+      verbose: 0  # Verbosity level
+    # SHAP sampling
+    shap:
+      kernel_explainer_sample_size: 100  # Sample size for KernelExplainer
+    # Random Forest settings (no model_config file yet)
+    random_forest:
+      n_estimators: 200
+      max_depth: 15
+      max_features: "sqrt"
+      n_jobs: 4
+    # Neural Network additional settings
+    neural_network:
+      validation_fraction: 0.1  # Validation fraction for early stopping
+    # Cross-sectional ranking settings
+    cross_sectional_ranking:
+      enabled: false  # Enable cross-sectional ranking
+      min_symbols: 5  # Minimum symbols required for cross-sectional ranking
+      top_k_candidates: 50  # Number of top features to evaluate cross-sectionally
+      symbol_threshold: 0.1  # Threshold for symbol-specific importance
+      cs_threshold: 0.1  # Threshold for cross-sectional importance
+      model_families: ["lightgbm"]  # Model families to use for cross-sectional ranking
+      min_cs: 10  # Minimum cross-sectional samples per timestamp
+      max_cs_samples: 1000  # Maximum cross-sectional samples per timestamp
 

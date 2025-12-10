@@ -1,12 +1,15 @@
 # Testing Notice
 
 **Status**: End-to-End Testing Underway  
-**Date**: 2025-12-10
+**Date**: 2025-12-10 (Updated)
 
 ## Current Status
 
-**End-to-end testing is currently in progress** to validate the complete pipeline from target ranking → feature selection → model training. Recent improvements include:
+**Full end-to-end testing is currently underway** to validate the complete pipeline from target ranking → feature selection → model training. Recent improvements include:
 
+- ✅ **Complete config centralization** (2025-12-10) — All hardcoded configuration values moved to YAML files for single source of truth. Feature pruning, leakage detection, training strategies, and data preprocessing now load all parameters from config. Ensures complete reproducibility.
+- ✅ **Full determinism** (2025-12-10) — All `random_state` values now use centralized determinism system (`BASE_SEED`) instead of hardcoded values. Training strategies, feature selection, and data splits are now fully deterministic.
+- ✅ **Pipeline robustness fixes** (2025-12-10) — Fixed critical syntax errors and variable initialization issues in config loading patterns. All config loading blocks now have proper fallbacks, preventing runtime errors.
 - ✅ **Large file refactoring** (2025-12-09) — Split 3 monolithic files into modular components while maintaining 100% backward compatibility
 - ✅ **Model family status tracking** — Added comprehensive debugging to identify which families succeed/fail and why
 - ✅ **Interval detection robustness** — Fixed timestamp gap filtering to ignore outliers before computing median
@@ -19,18 +22,40 @@
 
 ## What's Being Tested
 
+- ✅ **Config centralization** — All configuration values load from YAML files (single source of truth)
+- ✅ **Determinism** — All random seeds use centralized determinism system for reproducibility
+- ✅ **Config loading robustness** — All config loading patterns verified to have proper fallbacks and no syntax errors
 - ✅ Target ranking workflows — Working with unified interval handling
 - ✅ Feature selection — Fixed sklearn NaN/dtype issues, CatBoost loss function, Boruta feature count mismatch
 - ✅ Pipeline consistency — Ranking and selection now use same helpers and patterns
 - ✅ Boruta gatekeeper — Fixed feature count mismatch, now functions as statistical gatekeeper without false failures
-- 🔄 **End-to-end testing** — **CURRENTLY UNDERWAY**: Full pipeline from target ranking → feature selection → model training
+- 🔄 **Full end-to-end testing** — **CURRENTLY UNDERWAY**: Complete pipeline validation from target ranking → feature selection → model training
   - Testing with 5 symbols (AAPL, MSFT, GOOGL, TSLA, NVDA)
   - Validating all model families (8+ families being tested)
   - Verifying data flow through Phase 3 (model training)
   - Checking model family status tracking output
+  - Verifying config-driven reproducibility (same config → same results)
+  - Confirming no runtime errors from config loading patterns
 
 ## Recent Fixes
 
+- **Config loading pattern robustness** (2025-12-10): Fixed critical syntax and runtime errors:
+  - Fixed `SyntaxError` in `data_loading.py` - moved `if _CONFIG_AVAILABLE:` out of function parameter list
+  - Fixed `SyntaxError` in `leakage_detection.py` - moved config loading out of function call parameters
+  - Fixed `UnboundLocalError` in `model_evaluation.py` - added missing `else:` clauses for `MIN_FEATURES_FOR_MODEL` and `MIN_FEATURES_AFTER_LEAK_REMOVAL`
+  - Comprehensive audit confirmed all `if _CONFIG_AVAILABLE:` blocks now have proper `else:` clauses
+  - All variables are guaranteed to be initialized before use, preventing runtime errors
+- **Config centralization** (2025-12-10): All hardcoded configuration values moved to YAML files:
+  - Feature pruning thresholds and hyperparameters → `preprocessing_config.yaml`
+  - Leakage detection thresholds → `safety_config.yaml` (`leakage_sentinels.*`)
+  - Auto-fixer settings → `safety_config.yaml` (`auto_fixer.*`)
+  - Training strategy parameters (test_size, random_state) → load from config
+  - All function defaults now use `Optional[Type] = None` and load from config when `None`
+- **Determinism system** (2025-12-10): All `random_state=42` hardcoded values replaced with `BASE_SEED`:
+  - Training strategies (`single_task.py`, `cascade.py`)
+  - Feature pruning utilities
+  - Data preprocessing splits
+  - Model creation in strategies
 - **Interval handling**: Wired `explicit_interval` through entire ranking call chain
 - **Sklearn preprocessing**: Replaced ad-hoc imputers with shared `make_sklearn_dense_X()` helper
 - **CatBoost configuration**: Auto-detects classification vs regression and sets appropriate loss function

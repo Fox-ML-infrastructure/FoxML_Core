@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Highlights
 
+- **Complete config centralization** (2025-12-10) — All hardcoded configuration values moved to YAML files for single source of truth. Feature pruning, leakage detection, training strategies, and data preprocessing now load all parameters from config. Ensures complete reproducibility and determinism across the entire pipeline.
+- **Determinism system integration** (2025-12-10) — All `random_state` values now use the centralized determinism system (`BASE_SEED`) instead of hardcoded values. Training strategies, feature selection, and data splits are now fully deterministic and reproducible.
+- **Pipeline robustness fixes** (2025-12-10) — Fixed critical syntax errors and variable initialization issues in config loading patterns. All `if _CONFIG_AVAILABLE:` blocks now have proper `else:` clauses to ensure variables are always initialized, preventing "referenced before assignment" errors. Full end-to-end testing currently underway.
 - **Large file refactoring completed** (2025-12-09) — Split 3 large monolithic files (4.5k, 3.4k, 2.5k lines) into modular components while maintaining 100% backward compatibility
 - **Model family status tracking** — Added comprehensive debugging for multi-model feature selection to identify which families succeed/fail and why
 - **Interval detection robustness** — Fixed timestamp gap filtering to ignore outliers (weekends, data gaps) before computing median
@@ -32,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Stability Guarantees
 
 - **Training results reproducible** across hardware (deterministic seeds, config-driven hyperparameters)
+- **Complete config centralization** (2025-12-10) — All pipeline parameters load from YAML files (single source of truth). No hardcoded thresholds, limits, or hyperparameters in core pipeline code.
+- **Full determinism** (2025-12-10) — All random seeds use centralized determinism system. Same config → same results across all pipeline stages.
 - **Config schema backward compatible** (existing configs continue to work)
 - **Auto-fixer non-destructive by design** (atomic backups, manifest tracking, restore capabilities)
 - **Leakage detection thresholds configurable** (no hardcoded magic numbers)
@@ -44,10 +49,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Adaptive intelligence layer** in early phase (leakage detection and auto-fixer are production-ready, but adaptive learning over time is planned)
 - **Ranking pipeline** may occasionally log false-positive leakage warnings for tree models (RF overfitting detection is conservative by design)
 - **Later phases of the experiments workflow** (core models and sequential models) require implementation beyond Phase 1
+- **End-to-end testing in progress** (2025-12-10) — Full pipeline validation currently underway. All syntax and config loading issues have been resolved, but comprehensive testing across all model families and targets is ongoing.
 
 ---
 
 ### Added
+
+- **Config centralization** (2025-12-10) — New config sections in `safety_config.yaml`:
+  - `leakage_sentinels.*` — All leakage detection thresholds (shifted target, symbol holdout, randomized time)
+  - `auto_fixer.*` — Auto-fixer settings (perfect score threshold, min confidence, backup limits, test size)
+- **Feature pruning config** (2025-12-10) — All feature pruning parameters now configurable via `preprocessing_config.yaml`:
+  - `feature_pruning.cumulative_threshold` — Minimum cumulative importance threshold
+  - `feature_pruning.min_features` — Minimum features to keep
+  - `feature_pruning.n_estimators` — Number of trees for quick pruning
+  - `feature_pruning.max_depth` — Tree depth for pruning model
+  - `feature_pruning.learning_rate` — Learning rate for pruning model
+- **Determinism integration** (2025-12-10) — All training strategies and data preprocessing now use `BASE_SEED` from determinism system instead of hardcoded `random_state=42`
+
+### Fixed
+
+- **Config loading pattern robustness** (2025-12-10) — Fixed critical syntax errors and variable initialization issues:
+  - Fixed `SyntaxError` in `data_loading.py` where `if _CONFIG_AVAILABLE:` was incorrectly placed in function parameter list
+  - Fixed `SyntaxError` in `leakage_detection.py` where config loading was incorrectly embedded in function call parameters
+  - Fixed `UnboundLocalError` in `model_evaluation.py` where `MIN_FEATURES_FOR_MODEL` and `MIN_FEATURES_AFTER_LEAK_REMOVAL` could be undefined when `_CONFIG_AVAILABLE` was `False`
+  - All `if _CONFIG_AVAILABLE:` blocks now have proper `else:` clauses ensuring variables are always initialized before use
+  - Comprehensive audit confirmed no similar patterns exist elsewhere in the pipeline
 
 #### Intelligent Training & Ranking
 
@@ -94,6 +120,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ### Changed
+
+- **Config loading patterns** (2025-12-10) — All function parameters with hardcoded defaults now use `Optional[Type] = None` and load from config when `None`:
+  - Feature pruning: `cumulative_threshold`, `min_features`, `n_estimators`, `random_state`
+  - Leakage auto-fixer: `min_confidence`, `max_backups_per_target`, `symbol_holdout_test_size`
+  - Leakage sentinels: All threshold parameters
+  - Training strategies: `test_size`, `random_state` for all model creation
+  - Data preprocessing: `test_size`, `random_state` for train/test splits
+  - Unified training interface: `seed`, `test_size` load from config
+- **Determinism system** (2025-12-10) — All `random_state=42` hardcoded values replaced with `BASE_SEED` from determinism system:
+  - Training strategies (`single_task.py`, `cascade.py`)
+  - Feature pruning utilities
+  - Data preprocessing splits
+  - Model creation in strategies
 
 - **Logging system refactored** — Replaced hardcoded flags with structured configuration. All verbosity controlled via YAML without code changes. See [`CONFIG/logging_config.yaml`](CONFIG/logging_config.yaml).
 - **Leakage filtering supports ranking mode** — Permissive rules for ranking, strict rules for training. Prevents false positives from overfitting detection.

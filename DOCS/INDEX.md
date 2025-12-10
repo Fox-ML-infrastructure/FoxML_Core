@@ -163,11 +163,6 @@ Research notes, design rationale, advanced topics.
 - [Training Strategies Module](03_technical/refactoring/TRAINING_STRATEGIES.md) - Detailed documentation for `training_strategies/` module
 
 ### Legal & Compliance (Internal)
-- [Compliance Assessment](03_technical/COMPLIANCE_ASSESSMENT_INTERNAL.md) - **NEW**: Internal compliance audit vs blueprint requirements (2025-12-09)
-
-### Technical Audits (Internal)
-- [Configuration Audit](03_technical/audit/CONFIG_AUDIT.md) - **NEW**: Audit of hardcoded values moved to config (2025-12-10)
-- [Determinism Audit](03_technical/audit/DETERMINISM_AUDIT.md) - **NEW**: Audit of determinism implementation across pipeline (2025-12-10)
 
 ### Testing
 - [Testing Plan](03_technical/testing/TESTING_PLAN.md) - Test strategy

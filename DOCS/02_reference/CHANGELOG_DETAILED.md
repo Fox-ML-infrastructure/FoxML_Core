@@ -10,9 +10,9 @@ This document provides comprehensive change details for FoxML Core. For a quick 
 
 ### Status
 
-Phase 1 functioning properly - Ranking and selection pipelines unified with consistent behavior. Boruta refactored as statistical gatekeeper. All documentation updated and cross-linked.
+Phase 1 functioning properly - Ranking and selection pipelines unified with consistent behavior. Boruta refactored as statistical gatekeeper. Complete config centralization and determinism implemented. Config loading patterns hardened. Full end-to-end testing currently underway.
 
-**Note**: Phase 1 of the pipeline (intelligent training framework) is functioning properly. Ranking and selection pipelines now have unified behavior (interval handling, sklearn preprocessing, CatBoost configuration). Boruta has been refactored from "just another importance scorer" to a statistical gatekeeper that modifies consensus scores via bonuses/penalties. All documentation has been updated with cross-links and references to new config files and utilities. Backward functionality remains fully operational. All existing training workflows continue to function as before, and legacy config locations are still supported with deprecation warnings.
+**Note**: Phase 1 of the pipeline (intelligent training framework) is functioning properly. Ranking and selection pipelines now have unified behavior (interval handling, sklearn preprocessing, CatBoost configuration). Boruta has been refactored from "just another importance scorer" to a statistical gatekeeper that modifies consensus scores via bonuses/penalties. All configuration values are now centralized in YAML files with single source of truth. All random seeds use centralized determinism system. Config loading patterns have been hardened with proper fallbacks to prevent runtime errors. All documentation has been updated with cross-links and references to new config files and utilities. Backward functionality remains fully operational. All existing training workflows continue to function as before, and legacy config locations are still supported with deprecation warnings. **Full end-to-end testing is currently underway** to validate the complete pipeline from target ranking → feature selection → model training.
 
 ---
 

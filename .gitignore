@@ -17,6 +17,8 @@ docs/internal/
 docs/audit/
 DOCS/internal/
 DOCS/audit/
+.internal/
+.internal/**
 
 # Internal scripts and tools
 SCRIPTS/internal/

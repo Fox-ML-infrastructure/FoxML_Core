@@ -123,60 +123,60 @@ def train_panel_model(
     try:
         from CONFIG.config_loader import load_model_config
         
-        # Load LightGBM config
+        # Load LightGBM config (load_model_config returns hyperparameters directly, like Phase 3)
         try:
-            lgb_config = load_model_config('lightgbm')
+            lgb_hyperparams = load_model_config('lightgbm')
             default_configs['lightgbm'] = {
-                'n_estimators': lgb_config.get('n_estimators', 100),
-                'max_depth': lgb_config.get('max_depth', 6),
-                'learning_rate': lgb_config.get('learning_rate', 0.05),
+                'n_estimators': lgb_hyperparams.get('n_estimators', 1000),  # Match Phase 3 default
+                'max_depth': lgb_hyperparams.get('max_depth', 8),  # Match Phase 3 default
+                'learning_rate': lgb_hyperparams.get('learning_rate', 0.03),  # Match Phase 3 default
                 'random_state': cs_seed,
                 'verbosity': -1,
                 'n_jobs': 1
             }
         except Exception:
             default_configs['lightgbm'] = {
-                'n_estimators': 100,
-                'max_depth': 6,
-                'learning_rate': 0.05,
+                'n_estimators': 1000,  # Match Phase 3 default
+                'max_depth': 8,  # Match Phase 3 default
+                'learning_rate': 0.03,  # Match Phase 3 default
                 'random_state': cs_seed,
                 'verbosity': -1,
                 'n_jobs': 1
             }
         
-        # Load XGBoost config
+        # Load XGBoost config (load_model_config returns hyperparameters directly, like Phase 3)
         try:
-            xgb_config = load_model_config('xgboost')
+            xgb_hyperparams = load_model_config('xgboost')
             default_configs['xgboost'] = {
-                'n_estimators': xgb_config.get('n_estimators', 100),
-                'max_depth': xgb_config.get('max_depth', 6),
-                'learning_rate': xgb_config.get('learning_rate', 0.05),
+                'n_estimators': xgb_hyperparams.get('n_estimators', 1000),  # Match Phase 3 default
+                'max_depth': xgb_hyperparams.get('max_depth', 7),  # Match Phase 3 default
+                'learning_rate': xgb_hyperparams.get('eta', xgb_hyperparams.get('learning_rate', 0.03)),  # Match Phase 3 default (eta is XGBoost's learning_rate)
                 'random_state': cs_seed,
                 'n_jobs': 1
             }
         except Exception:
             default_configs['xgboost'] = {
-                'n_estimators': 100,
-                'max_depth': 6,
-                'learning_rate': 0.05,
+                'n_estimators': 1000,  # Match Phase 3 default
+                'max_depth': 7,  # Match Phase 3 default
+                'learning_rate': 0.03,  # Match Phase 3 default
                 'random_state': cs_seed,
                 'n_jobs': 1
             }
     except Exception:
-        # Fallback to hardcoded defaults
+        # Fallback to hardcoded defaults (matching Phase 3 defaults)
         default_configs = {
             'lightgbm': {
-                'n_estimators': 100,
-                'max_depth': 6,
-                'learning_rate': 0.05,
+                'n_estimators': 1000,  # Match Phase 3 default
+                'max_depth': 8,  # Match Phase 3 default
+                'learning_rate': 0.03,  # Match Phase 3 default
                 'random_state': cs_seed,
                 'verbosity': -1,
                 'n_jobs': 1
             },
             'xgboost': {
-                'n_estimators': 100,
-                'max_depth': 6,
-                'learning_rate': 0.05,
+                'n_estimators': 1000,  # Match Phase 3 default
+                'max_depth': 7,  # Match Phase 3 default
+                'learning_rate': 0.03,  # Match Phase 3 default
                 'random_state': cs_seed,
                 'n_jobs': 1
             }
@@ -250,22 +250,32 @@ def compute_cross_sectional_importance(
     target_column: str,
     symbols: List[str],
     data_dir: Path,
-    # Load defaults from config
-    try:
-        from CONFIG.config_loader import get_cfg
-        default_min_cs = int(get_cfg("pipeline.data_limits.min_cross_sectional_samples", default=10, config_name="pipeline_config"))
-        default_max_cs_samples = int(get_cfg("pipeline.data_limits.max_cs_samples", default=1000, config_name="pipeline_config"))
-    except Exception:
-        default_min_cs = 10
-        default_max_cs_samples = 1000
-    
-    model_families: List[str] = ['lightgbm'],
-    min_cs: int = default_min_cs,
-    max_cs_samples: int = default_max_cs_samples,
+    model_families: List[str] = None,
+    min_cs: int = None,
+    max_cs_samples: int = None,
     normalization: Optional[str] = None,
     model_configs: Optional[Dict[str, Dict]] = None
 ) -> pd.Series:
     """
+    Compute cross-sectional feature importance using panel models.
+    
+    # Load defaults from config if not provided
+    if model_families is None:
+        model_families = ['lightgbm']
+    
+    if min_cs is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            min_cs = int(get_cfg("pipeline.data_limits.min_cross_sectional_samples", default=10, config_name="pipeline_config"))
+        except Exception:
+            min_cs = 10
+    
+    if max_cs_samples is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            max_cs_samples = int(get_cfg("pipeline.data_limits.max_cs_samples", default=1000, config_name="pipeline_config"))
+        except Exception:
+            max_cs_samples = 1000
     Compute cross-sectional feature importance using panel model.
     
     This trains a single model across all symbols simultaneously (panel data)

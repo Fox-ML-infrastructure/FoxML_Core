@@ -156,70 +156,109 @@ def get_default_config() -> Dict[str, Any]:
     """Default configuration if file doesn't exist"""
     # Load default max_samples from config
     try:
-        from CONFIG.config_loader import get_cfg
+        from CONFIG.config_loader import get_cfg, load_model_config
         default_max_samples = int(get_cfg("pipeline.data_limits.default_max_samples_feature_selection", default=50000, config_name="pipeline_config"))
+        validation_split = float(get_cfg("preprocessing.validation.test_size", default=0.2, config_name="preprocessing_config"))
+        
+        # Load aggregation settings from config
+        agg_cfg = get_cfg("preprocessing.multi_model_feature_selection.aggregation", default={}, config_name="preprocessing_config")
+        model_weights_cfg = get_cfg("preprocessing.multi_model_feature_selection.model_weights", default={}, config_name="preprocessing_config")
+        rf_cfg = get_cfg("preprocessing.multi_model_feature_selection.random_forest", default={}, config_name="preprocessing_config")
+        nn_cfg = get_cfg("preprocessing.multi_model_feature_selection.neural_network", default={}, config_name="preprocessing_config")
+        
+        # Load model configs (load_model_config returns hyperparameters directly, like Phase 3)
+        try:
+            lgb_hyperparams = load_model_config('lightgbm')
+        except Exception:
+            lgb_hyperparams = {}
+        
+        try:
+            xgb_hyperparams = load_model_config('xgboost')
+        except Exception:
+            xgb_hyperparams = {}
+        
+        try:
+            mlp_hyperparams = load_model_config('mlp')
+        except Exception:
+            mlp_hyperparams = {}
     except Exception:
         default_max_samples = 50000
+        validation_split = 0.2
+        agg_cfg = {}
+        model_weights_cfg = {}
+        rf_cfg = {}
+        nn_cfg = {}
+        lgb_hyperparams = {}
+        xgb_hyperparams = {}
+        mlp_hyperparams = {}
     
+    # Build model families config with defaults and config overrides
     return {
         'model_families': {
             'lightgbm': {
                 'enabled': True,
                 'importance_method': 'native',
-                'weight': 1.0,
+                'weight': model_weights_cfg.get('lightgbm', 1.0),
                 'config': {
                     'objective': 'regression_l1',
                     'metric': 'mae',
-                    'n_estimators': 300,
-                    'learning_rate': 0.05,
-                    'num_leaves': 31,
+                    'n_estimators': lgb_hyperparams.get('n_estimators', 1000),  # Match Phase 3 default
+                    'learning_rate': lgb_hyperparams.get('learning_rate', 0.03),  # Match Phase 3 default
+                    'num_leaves': lgb_hyperparams.get('num_leaves', 96),  # Match Phase 3 default
+                    'max_depth': lgb_hyperparams.get('max_depth', 8),  # Match Phase 3 default
                     'verbose': -1
                 }
             },
             'xgboost': {
                 'enabled': True,
                 'importance_method': 'native',
-                'weight': 1.0,
+                'weight': model_weights_cfg.get('xgboost', 1.0),
                 'config': {
                     'objective': 'reg:squarederror',
-                    'n_estimators': 300,
-                    'learning_rate': 0.05,
-                    'max_depth': 6,
+                    'n_estimators': xgb_hyperparams.get('n_estimators', 1000),  # Match Phase 3 default
+                    'learning_rate': xgb_hyperparams.get('eta', xgb_hyperparams.get('learning_rate', 0.03)),  # Match Phase 3 default (eta is XGBoost's learning_rate)
+                    'max_depth': xgb_hyperparams.get('max_depth', 7),  # Match Phase 3 default
                     'verbosity': 0
                 }
             },
             'random_forest': {
                 'enabled': True,
                 'importance_method': 'native',
-                'weight': 0.8,
+                'weight': model_weights_cfg.get('random_forest', 0.8),
                 'config': {
-                    'n_estimators': 200,
-                    'max_depth': 15,
-                    'max_features': 'sqrt',
-                    'n_jobs': 4
+                    # Load from preprocessing config (no model_config file yet)
+                    'n_estimators': rf_cfg.get('n_estimators', 200),
+                    'max_depth': rf_cfg.get('max_depth', 15),
+                    'max_features': rf_cfg.get('max_features', 'sqrt'),
+                    'n_jobs': rf_cfg.get('n_jobs', 4)
                 }
             },
             'neural_network': {
                 'enabled': True,
                 'importance_method': 'permutation',
-                'weight': 1.2,
+                'weight': model_weights_cfg.get('neural_network', 1.2),
                 'config': {
-                    'hidden_layer_sizes': (128, 64),
-                    'max_iter': 300,
+                    'hidden_layer_sizes': tuple(mlp_hyperparams.get('hidden_layers', [256, 128, 64])),  # Match Phase 3 default
+                    'max_iter': mlp_hyperparams.get('epochs', mlp_hyperparams.get('max_iter', 50)),  # Match Phase 3 default
                     'early_stopping': True,
-                    'validation_fraction': 0.1
+                    'validation_fraction': nn_cfg.get('validation_fraction', 0.1)  # Load from config
                 }
             }
         },
         'aggregation': {
-            'per_symbol_method': 'mean',
-            'cross_model_method': 'weighted_mean',
-            'require_min_models': 2,
-            'consensus_threshold': 0.5
+            'per_symbol_method': agg_cfg.get('per_symbol_method', 'mean'),
+            'cross_model_method': agg_cfg.get('cross_model_method', 'weighted_mean'),
+            'require_min_models': agg_cfg.get('require_min_models', 2),
+            'consensus_threshold': agg_cfg.get('consensus_threshold', 0.5),
+            'boruta_confirm_bonus': agg_cfg.get('boruta_confirm_bonus', 0.2),
+            'boruta_reject_penalty': agg_cfg.get('boruta_reject_penalty', -0.3),
+            'boruta_confirmed_threshold': agg_cfg.get('boruta_confirmed_threshold', 0.9),
+            'boruta_tentative_threshold': agg_cfg.get('boruta_tentative_threshold', 0.0),
+            'boruta_magnitude_warning_threshold': agg_cfg.get('boruta_magnitude_warning_threshold', 0.5)
         },
         'sampling': {
             'max_samples_per_symbol': default_max_samples,
-            'validation_split': 0.2
+            'validation_split': validation_split
         }
     }
 
@@ -308,7 +347,13 @@ def extract_shap_importance(model, X: np.ndarray, feature_names: List[str],
             explainer = shap.TreeExplainer(model)
         else:
             # KernelExplainer for other models (slower)
-            explainer = shap.KernelExplainer(model.predict, X_sample[:100])
+            # Load sample size from config
+            try:
+                from CONFIG.config_loader import get_cfg
+                kernel_sample_size = int(get_cfg("preprocessing.multi_model_feature_selection.shap.kernel_explainer_sample_size", default=100, config_name="preprocessing_config"))
+            except Exception:
+                kernel_sample_size = 100
+            explainer = shap.KernelExplainer(model.predict, X_sample[:kernel_sample_size])
         
         shap_values = explainer.shap_values(X_sample)
         
@@ -652,11 +697,19 @@ def train_model_and_get_importance(
         n_features_to_select = min(model_config.get('n_features_to_select', 50), len(feature_names))
         step = model_config.get('step', 5)
         
-        # Use config for RFE's internal estimator (or defaults)
-        estimator_n_estimators = model_config.get('estimator_n_estimators', 100)
-        estimator_max_depth = model_config.get('estimator_max_depth', 10)
-        estimator_n_jobs = model_config.get('estimator_n_jobs', 1)
-        estimator_random_state = model_config.get('random_state', 42)
+        # Use config for RFE's internal estimator (load from preprocessing config if not in model_config)
+        try:
+            from CONFIG.config_loader import get_cfg
+            rfe_cfg = get_cfg("preprocessing.multi_model_feature_selection.rfe", default={}, config_name="preprocessing_config")
+            estimator_n_estimators = model_config.get('estimator_n_estimators', rfe_cfg.get('estimator_n_estimators', 100))
+            estimator_max_depth = model_config.get('estimator_max_depth', rfe_cfg.get('estimator_max_depth', 10))
+            estimator_n_jobs = model_config.get('estimator_n_jobs', rfe_cfg.get('estimator_n_jobs', 1))
+            estimator_random_state = model_config.get('random_state', 42)  # Use model_config random_state if available
+        except Exception:
+            estimator_n_estimators = model_config.get('estimator_n_estimators', 100)
+            estimator_max_depth = model_config.get('estimator_max_depth', 10)
+            estimator_n_jobs = model_config.get('estimator_n_jobs', 1)
+            estimator_random_state = model_config.get('random_state', 42)
         
         if is_binary or is_multiclass:
             estimator = RandomForestClassifier(
@@ -715,12 +768,23 @@ def train_model_and_get_importance(
             
             # Use ExtraTrees (more random, better for stability testing) with Boruta-optimized hyperparams
             # More trees + shallower depth = stable importance signals, not best predictive performance
-            boruta_n_estimators = model_config.get('n_estimators', 500)  # More trees for stability
-            boruta_max_depth = model_config.get('max_depth', 6)  # Shallower to avoid overfitting to interactions
-            boruta_random_state = model_config.get('random_state', 42)
-            boruta_max_iter = model_config.get('max_iter', 100)
-            boruta_n_jobs = model_config.get('n_jobs', 1)
-            boruta_verbose = model_config.get('verbose', 0)
+            # Load from preprocessing config if not in model_config
+            try:
+                from CONFIG.config_loader import get_cfg
+                boruta_cfg = get_cfg("preprocessing.multi_model_feature_selection.boruta", default={}, config_name="preprocessing_config")
+                boruta_n_estimators = model_config.get('n_estimators', boruta_cfg.get('n_estimators', 500))
+                boruta_max_depth = model_config.get('max_depth', boruta_cfg.get('max_depth', 6))
+                boruta_random_state = model_config.get('random_state', 42)
+                boruta_max_iter = model_config.get('max_iter', boruta_cfg.get('max_iter', 100))
+                boruta_n_jobs = model_config.get('n_jobs', boruta_cfg.get('n_jobs', 1))
+                boruta_verbose = model_config.get('verbose', boruta_cfg.get('verbose', 0))
+            except Exception:
+                boruta_n_estimators = model_config.get('n_estimators', 500)
+                boruta_max_depth = model_config.get('max_depth', 6)
+                boruta_random_state = model_config.get('random_state', 42)
+                boruta_max_iter = model_config.get('max_iter', 100)
+                boruta_n_jobs = model_config.get('n_jobs', 1)
+                boruta_verbose = model_config.get('verbose', 0)
             boruta_class_weight = model_config.get('class_weight', 'auto')
             
             # Handle class_weight config

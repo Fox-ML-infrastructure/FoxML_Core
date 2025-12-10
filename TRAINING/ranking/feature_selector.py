@@ -81,7 +81,7 @@ def select_features_for_target(
     data_dir: Path,
     model_families_config: Dict[str, Dict[str, Any]] = None,
     multi_model_config: Dict[str, Any] = None,
-    max_samples_per_symbol: int = 50000,
+    max_samples_per_symbol: Optional[int] = None,  # Load from config if None
     top_n: Optional[int] = None,
     output_dir: Path = None,
     feature_selection_config: Optional['FeatureSelectionConfig'] = None,  # New typed config (optional)
@@ -109,6 +109,14 @@ def select_features_for_target(
     Returns:
         Tuple of (selected_feature_names, importance_dataframe)
     """
+    # Load max_samples_per_symbol from config if not provided
+    if max_samples_per_symbol is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            max_samples_per_symbol = int(get_cfg("pipeline.data_limits.default_max_samples_feature_selection", default=50000, config_name="pipeline_config"))
+        except Exception:
+            max_samples_per_symbol = 50000
+    
     # NEW: Use typed config if provided
     # Note: explicit_interval can be passed directly or extracted from experiment config
     if feature_selection_config is not None and _NEW_CONFIG_AVAILABLE:
@@ -117,7 +125,7 @@ def select_features_for_target(
         aggregation_config = feature_selection_config.aggregation
         if top_n is None:
             top_n = feature_selection_config.top_n
-        if max_samples_per_symbol == 50000 and feature_selection_config.max_samples_per_symbol:
+        if feature_selection_config.max_samples_per_symbol:
             max_samples_per_symbol = feature_selection_config.max_samples_per_symbol
         # Use target/symbols/data_dir from config if available
         if feature_selection_config.target:
@@ -202,7 +210,15 @@ def select_features_for_target(
     
     # Optional: Cross-sectional ranking (if enabled and enough symbols)
     cs_importance = None
-    cs_config = aggregation_config.get('cross_sectional_ranking', {})
+    # Load cross-sectional ranking config from preprocessing_config.yaml
+    try:
+        from CONFIG.config_loader import get_cfg
+        cs_config_base = get_cfg("preprocessing.multi_model_feature_selection.cross_sectional_ranking", default={}, config_name="preprocessing_config")
+        # Merge with aggregation_config (aggregation_config takes precedence if both exist)
+        cs_config = {**cs_config_base, **aggregation_config.get('cross_sectional_ranking', {})}
+    except Exception:
+        cs_config = aggregation_config.get('cross_sectional_ranking', {})
+    
     if (cs_config.get('enabled', False) and 
         len(symbols) >= cs_config.get('min_symbols', 5)):
         
@@ -311,7 +327,7 @@ def rank_features_multi_model(
     data_dir: Path,
     model_families_config: Dict[str, Dict[str, Any]] = None,
     multi_model_config: Dict[str, Any] = None,
-    max_samples_per_symbol: int = 50000,
+    max_samples_per_symbol: Optional[int] = None,  # Load from config if None
     output_dir: Path = None
 ) -> pd.DataFrame:
     """
@@ -332,6 +348,14 @@ def rank_features_multi_model(
     Returns:
         DataFrame with features ranked by consensus score
     """
+    # Load max_samples_per_symbol from config if not provided
+    if max_samples_per_symbol is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            max_samples_per_symbol = int(get_cfg("pipeline.data_limits.default_max_samples_feature_selection", default=50000, config_name="pipeline_config"))
+        except Exception:
+            max_samples_per_symbol = 50000
+    
     selected_features, summary_df = select_features_for_target(
         target_column=target_column,
         symbols=symbols,

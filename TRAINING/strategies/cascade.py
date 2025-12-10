@@ -29,6 +29,14 @@ from typing import Dict, List, Any, Optional, Tuple
 import logging
 from .base import BaseTrainingStrategy
 
+# Import determinism system for consistent random_state
+try:
+    from TRAINING.common.determinism import BASE_SEED
+    _DETERMINISM_AVAILABLE = True
+except ImportError:
+    _DETERMINISM_AVAILABLE = False
+    BASE_SEED = 42
+
 logger = logging.getLogger(__name__)
 
 class CascadeStrategy(BaseTrainingStrategy):
@@ -181,13 +189,15 @@ class CascadeStrategy(BaseTrainingStrategy):
         model_type = model_config.get('type', 'random_forest')
         
         if model_type == 'random_forest':
+            # Get random_state from determinism system
+            random_state = BASE_SEED if BASE_SEED is not None else 42
             return RandomForestClassifier(
                 n_estimators=model_config.get('n_estimators', 100),
                 max_depth=model_config.get('max_depth', None),
-                random_state=42
+                random_state=random_state
             )
         else:
-            return RandomForestClassifier(n_estimators=100, random_state=42)
+            return RandomForestClassifier(n_estimators=100, random_state=random_state)
     
     def _create_regression_model(self, target_name: str):
         """Create regression model"""
@@ -197,13 +207,15 @@ class CascadeStrategy(BaseTrainingStrategy):
         model_type = model_config.get('type', 'random_forest')
         
         if model_type == 'random_forest':
+            # Get random_state from determinism system
+            random_state = BASE_SEED if BASE_SEED is not None else 42
             return RandomForestRegressor(
                 n_estimators=model_config.get('n_estimators', 100),
                 max_depth=model_config.get('max_depth', None),
-                random_state=42
+                random_state=random_state
             )
         else:
-            return RandomForestRegressor(n_estimators=100, random_state=42)
+            return RandomForestRegressor(n_estimators=100, random_state=random_state)
     
     def _create_calibrator(self, model, X: np.ndarray, y: np.ndarray):
         """Create probability calibrator"""
@@ -338,18 +350,20 @@ class CascadeStrategy(BaseTrainingStrategy):
         model_type = model_config.get('type', 'RandomForest')
         
         if model_type == 'RandomForest':
+            # Get random_state from determinism system
+            random_state = BASE_SEED if BASE_SEED is not None else 42
             return RandomForestClassifier(
                 n_estimators=model_config.get('n_estimators', 100),
                 max_depth=model_config.get('max_depth', 10),
-                random_state=42
+                random_state=random_state
             )
         elif model_type == 'LogisticRegression':
             return LogisticRegression(
                 C=model_config.get('C', 1.0),
-                random_state=42
+                random_state=random_state
             )
         else:
-            return RandomForestClassifier(random_state=42)
+            return RandomForestClassifier(random_state=random_state)
     
     def _create_regression_model(self, target_name: str):
         """Create regression model"""
@@ -360,17 +374,19 @@ class CascadeStrategy(BaseTrainingStrategy):
         model_type = model_config.get('type', 'RandomForest')
         
         if model_type == 'RandomForest':
+            # Get random_state from determinism system
+            random_state = BASE_SEED if BASE_SEED is not None else 42
             return RandomForestRegressor(
                 n_estimators=model_config.get('n_estimators', 100),
                 max_depth=model_config.get('max_depth', 10),
-                random_state=42
+                random_state=random_state
             )
         elif model_type == 'Ridge':
             return Ridge(
                 alpha=model_config.get('alpha', 1.0)
             )
         else:
-            return RandomForestRegressor(random_state=42)
+            return RandomForestRegressor(random_state=random_state)
     
     def _create_calibrator(self, model, X: np.ndarray, y: np.ndarray):
         """Create calibrator for classification model"""
