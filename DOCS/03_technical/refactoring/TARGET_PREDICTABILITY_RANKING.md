@@ -118,4 +118,4 @@ python -m TRAINING.ranking.predictability.main --targets peak_60m,valley_60m
 ## Related Documentation
 
 - **[Refactoring & Wrappers Guide](../../01_tutorials/REFACTORING_AND_WRAPPERS.md)** - Complete explanation of how wrappers work and import patterns
-- **[Refactoring Summary](REFACTORING_SUMMARY_INTERNAL.md)** - Overall refactoring details
+- **[Refactoring Summary](../../INTERNAL/REFACTORING_SUMMARY_INTERNAL.md)** - Overall refactoring details

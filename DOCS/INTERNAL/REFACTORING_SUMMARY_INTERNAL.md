@@ -106,7 +106,7 @@ When code imports from the wrapper, Python:
 4. **Result**: Same objects, same behavior, zero changes needed
 
 **For detailed user-facing explanation:**
-- **[Refactoring & Wrappers Guide](../01_tutorials/REFACTORING_AND_WRAPPERS.md)** - Complete guide with examples, import patterns, and migration instructions
+- **[Refactoring & Wrappers Guide](../../01_tutorials/REFACTORING_AND_WRAPPERS.md)** - Complete guide with examples, import patterns, and migration instructions
 
 **For module-specific details:**
 - **[Specialized Models](SPECIALIZED_MODELS.md)** - Specialized models module structure

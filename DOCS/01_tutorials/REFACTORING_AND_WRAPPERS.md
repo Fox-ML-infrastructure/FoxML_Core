@@ -380,7 +380,7 @@ from TRAINING.models.specialized_models import train_model
 ## Related Documentation
 
 ### Refactoring Details
-- **[Refactoring Summary](../03_technical/refactoring/REFACTORING_SUMMARY_INTERNAL.md)** - Internal technical details and migration status
+- **[Refactoring Summary](../INTERNAL/REFACTORING_SUMMARY_INTERNAL.md)** - Internal technical details and migration status
 - **[Specialized Models](../03_technical/refactoring/SPECIALIZED_MODELS.md)** - Specialized models module structure and API
 - **[Target Predictability Ranking](../03_technical/refactoring/TARGET_PREDICTABILITY_RANKING.md)** - Ranking module structure and workflow
 - **[Training Strategies](../03_technical/refactoring/TRAINING_STRATEGIES.md)** - Training strategies module structure and usage
