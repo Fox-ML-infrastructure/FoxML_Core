@@ -95,12 +95,11 @@ pip install pybind11 numpy
 ### Build
 
 ```bash
-cd IBKR_trading/cpp_engine/python_bindings
-./build_kernels.sh
+# C++ integration components have been removed from the core repository
+# See external documentation for C++ integration patterns
 ```
 
 ## See Also
 
-- [C++ Integration Summary](../../../IBKR_trading/live_trading/C++_INTEGRATION_SUMMARY.md) - Detailed summary
-- [C++ Engine README](../../../IBKR_trading/cpp_engine/README.md) - Complete reference
+- [Performance Optimization](../implementation/PERFORMANCE_OPTIMIZATION.md) - Optimization strategies
 

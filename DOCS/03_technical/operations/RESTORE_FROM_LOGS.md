@@ -12,10 +12,10 @@ Logs contain sufficient information to restore system state after failures or fo
 
 ```bash
 # Find last successful operation
-journalctl -u ibkr_trading | grep "SUCCESS"
+journalctl -u your-service | grep "SUCCESS"
 
 # Find last position update
-journalctl -u ibkr_trading | grep "position"
+journalctl -u your-service | grep "position"
 ```
 
 ### 2. Extract State Information

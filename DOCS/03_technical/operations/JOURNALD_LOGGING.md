@@ -34,26 +34,26 @@ logger = systemd.journal.JournalHandler()
 
 ```bash
 # All logs
-journalctl -u ibkr_trading
+journalctl -u your-service
 
 # Recent logs
-journalctl -u ibkr_trading -n 100
+journalctl -u your-service -n 100
 
 # Follow logs
-journalctl -u ibkr_trading -f
+journalctl -u your-service -f
 
 # Filter by level
-journalctl -u ibkr_trading -p err
+journalctl -u your-service -p err
 ```
 
 ### Search Logs
 
 ```bash
 # Search by text
-journalctl -u ibkr_trading | grep "ERROR"
+journalctl -u your-service | grep "ERROR"
 
 # Search by time
-journalctl -u ibkr_trading --since "2025-12-05 10:00:00"
+journalctl -u your-service --since "2025-12-05 10:00:00"
 ```
 
 ## Best Practices

@@ -287,7 +287,7 @@ Performance Tracking (PnL, metrics)
 │  │   Model      │ →  │    Signal    │ →  │    Order     │  │
 │  │  Inference   │    │  Generation  │    │  Execution   │  │
 │  │              │    │              │    │              │  │
-│  │ • Real-time  │    │ • Blending   │    │ • IBKR/Alpaca│  │
+│  │ • Real-time  │    │ • Blending   │    │ • External   │  │
 │  │ • C++ engine │    │ • Risk mgmt  │    │ • Monitoring │  │
 │  └──────────────┘    └──────────────┘    └──────────────┘  │
 └─────────────────────────────────────────────────────────────┘
@@ -316,7 +316,7 @@ CONFIG (Model Configs)
     ↑
     │ (optional)
     │
-IBKR_trading / ALPACA_trading (Trading Integration)
+External Trading Systems (Optional Integration)
 ```
 
 ### 5.2 External Dependencies
@@ -461,14 +461,14 @@ IBKR_trading / ALPACA_trading (Trading Integration)
 
 **Model deployment:**
 - **Serialized models** — Pickle, joblib, PyTorch formats
-- **C++ inference** — High-performance C++ inference engine (IBKR)
 - **REST API** — Model serving via REST API (if configured)
 
-### 9.3 Trading Integration
+### 9.3 Model Integration
 
-**Broker integrations:**
-- **Interactive Brokers** — Production trading (multi-horizon, C++ engine)
-- **Alpaca** — Paper trading (regime-aware ensemble)
+**Integration points:**
+- Models can be integrated with external trading systems
+- Standard formats for model serialization
+- Performance tracking and monitoring interfaces
 
 ---
 

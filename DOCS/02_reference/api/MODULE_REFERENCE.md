@@ -168,26 +168,9 @@ strategy.train(X, {
 }, feature_names)
 ```
 
-## Trading
+## Model Integration
 
-### Alpaca
-
-```python
-# Trading integration modules removed from core repository
-
-broker = PaperBroker()
-engine = PaperTradingEngine(broker)
-engine.run()
-```
-
-### IBKR
-
-```python
-# Trading integration modules removed from core repository
-
-system = LiveTradingSystem(config)
-system.run()
-```
+**Note:** Trading integration modules have been removed from the core repository. The system focuses on ML research infrastructure and model training. Trained models can be integrated with external trading systems through standard interfaces.
 
 ## See Also
 

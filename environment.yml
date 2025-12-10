@@ -102,9 +102,7 @@ dependencies:
   
   # Pip-only packages
   - pip:
-    # Trading Libraries
-    - ib_insync>=0.9.86  # Interactive Brokers
-    - alpaca-trade-api>=3.0.0
+    # Trading Libraries (removed - trading modules moved out of core repository)
     
     # Additional ML Libraries
     - ngboost>=0.4.0

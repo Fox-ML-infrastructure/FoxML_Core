@@ -32,7 +32,7 @@ CLASS_FIX = {
 # CAREFUL: Only blacklist symbols you actually can't trade
 # Removing SQ, GOLD, X as they are tradable - only add if truly non-tradable
 CONFIRMED_BLACKLIST = {
-    # Add only symbols that are genuinely non-tradable on Alpaca
+    # Add only symbols that are genuinely non-tradable on common exchanges
     # "DELISTED_SYMBOL",  # Example - only use if actually delisted
 }
 

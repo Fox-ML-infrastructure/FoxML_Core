@@ -12,18 +12,20 @@ Systemd service provides:
 
 ## Service File
 
-Create `/etc/systemd/system/ibkr-trading.service`:
+**Note:** Trading integration modules have been removed from the core repository. This section is for reference only.
+
+Example service file structure:
 
 ```ini
 [Unit]
-Description=IBKR Trading System
+Description=ML Training System
 After=network.target
 
 [Service]
 Type=simple
 User=trading
-WorkingDirectory=/home/trading/trader/IBKR_trading
-ExecStart=/usr/bin/python3 run_trading_system.py
+WorkingDirectory=/home/trading/trader
+ExecStart=/usr/bin/python3 training_script.py
 Restart=always
 RestartSec=10
 
@@ -36,26 +38,26 @@ WantedBy=multi-user.target
 ### 1. Install Service
 
 ```bash
-sudo cp IBKR_trading/systemd/ibkr-trading.service /etc/systemd/system/
+sudo cp systemd/your-service.service /etc/systemd/system/
 sudo systemctl daemon-reload
 ```
 
 ### 2. Enable Service
 
 ```bash
-sudo systemctl enable ibkr-trading
+sudo systemctl enable your-service
 ```
 
 ### 3. Start Service
 
 ```bash
-sudo systemctl start ibkr-trading
+sudo systemctl start your-service
 ```
 
 ### 4. Check Status
 
 ```bash
-sudo systemctl status ibkr-trading
+sudo systemctl status your-service
 ```
 
 ## Management
@@ -63,19 +65,18 @@ sudo systemctl status ibkr-trading
 ### Start/Stop/Restart
 
 ```bash
-sudo systemctl start ibkr-trading
-sudo systemctl stop ibkr-trading
-sudo systemctl restart ibkr-trading
+sudo systemctl start your-service
+sudo systemctl stop your-service
+sudo systemctl restart your-service
 ```
 
 ### View Logs
 
 ```bash
-sudo journalctl -u ibkr-trading -f
+sudo journalctl -u your-service -f
 ```
 
 ## See Also
 
-- [Systemd Deployment Plan](../../../IBKR_trading/systemd/) - Service files
 - [Journald Logging](JOURNALD_LOGGING.md) - Logging setup
 

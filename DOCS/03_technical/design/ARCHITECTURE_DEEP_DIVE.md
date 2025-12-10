@@ -45,17 +45,17 @@ Model Artifacts & Performance Reports
 - **Validation**: Walk-forward validation
 - **Configuration**: Centralized YAML configs with variants
 
-### Trading Systems
+### Model Output & Artifacts
 
-**IBKR (Production)**:
-- Multi-horizon model blending (5m, 10m, 15m, 30m, 60m)
-- Safety guards and risk management
-- C++ performance optimization
+**Trained Models**:
+- Serialized model artifacts
+- Performance metrics and validation reports
+- Feature importance and model diagnostics
 
-**Alpaca (Paper)**:
-- Regime-aware ensemble strategies
-- Risk management and guardrails
-- Performance tracking
+**Integration Points**:
+- Models can be integrated with external trading systems
+- Standard formats for model serialization
+- Performance tracking and monitoring interfaces
 
 ## Design Principles
 

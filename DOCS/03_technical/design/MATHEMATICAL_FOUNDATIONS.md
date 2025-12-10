@@ -101,6 +101,5 @@ size = (vol_target × equity) / (σ × √(h/252))
 
 ## See Also
 
-- [Mathematical Foundations](../../../IBKR_trading/MATHEMATICAL_FOUNDATIONS.md) - Complete reference
 - [C++ Integration](C++_INTEGRATION.md) - Performance implementation
 

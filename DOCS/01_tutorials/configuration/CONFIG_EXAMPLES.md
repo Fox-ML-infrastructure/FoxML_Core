@@ -138,37 +138,6 @@ training:
   early_stopping_rounds: 50
 ```
 
-## IBKR Trading Config
-
-```yaml
-# IBKR_trading/config/ibkr_enhanced.yaml
-ibkr:
-  host: "127.0.0.1"
-  port: 7497
-  client_id: 1
-
-trading:
-  symbols: ["AAPL", "MSFT", "GOOGL"]
-  horizons: ["5m", "10m", "15m", "30m", "60m"]
-  max_position_size: 100
-
-safety:
-  max_portfolio_risk: 0.02
-  stop_loss: 0.05
-  take_profit: 0.10
-```
-
-## Alpaca Paper Trading Config
-
-```yaml
-# ALPACA_trading/config/base.yaml
-alpaca:
-  api_key: "${ALPACA_API_KEY}"
-  secret_key: "${ALPACA_SECRET_KEY}"
-  base_url: "https://paper-api.alpaca.markets"
-
-trading:
-  symbols: ["AAPL", "MSFT", "GOOGL"]
   max_position_size: 1000
 
 risk:

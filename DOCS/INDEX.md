@@ -147,7 +147,6 @@ Research notes, design rationale, advanced topics.
 - [First Batch Specs](03_technical/implementation/FIRST_BATCH_SPECS_IMPLEMENTATION.md) - First batch specifications
 - [Strategy Updates](03_technical/implementation/STRATEGY_UPDATES.md) - Training strategy updates
 - [Experiments Implementation](03_technical/implementation/EXPERIMENTS_IMPLEMENTATION.md) - Experiments implementation summary
-- [IBKR Status](03_technical/implementation/IBKR_STATUS.md) - IBKR implementation
 - [Pressure Test Plan](03_technical/implementation/PRESSURE_TEST_PLAN.md) - Testing plan
 - [Performance Optimization](03_technical/implementation/PERFORMANCE_OPTIMIZATION.md) - Optimization work
 - [Adding Proprietary Models](03_technical/implementation/ADDING_PROPRIETARY_MODELS.md) - Using BaseModelTrainer to add custom models

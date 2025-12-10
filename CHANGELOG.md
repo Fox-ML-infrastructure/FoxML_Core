@@ -46,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Known Issues & Limitations
 
-- **Trading execution modules** (IBKR/Alpaca live trading) are not currently operational and require additional development
+- **Trading execution modules** have been removed from the core repository; the system focuses on ML research infrastructure
 - **Feature engineering** still requires human review and validation (initial feature set was for testing)
 - **Adaptive intelligence layer** in early phase (leakage detection and auto-fixer are production-ready, but adaptive learning over time is planned)
 - **Ranking pipeline** may occasionally log false-positive leakage warnings for tree models (RF overfitting detection is conservative by design)

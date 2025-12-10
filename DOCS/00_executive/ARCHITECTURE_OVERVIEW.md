@@ -116,18 +116,17 @@ Trains and validates ML models.
 
 **Validation:** Walk-forward analysis for realistic performance estimation.
 
-### 4. Trading Integrations (Optional)
+### 4. Model Output & Integration
 
-**IBKR System**:
-- Multi-horizon trading (5m, 10m, 15m, 30m, 60m)
-- Safety guards (margin, short-sale, rate limiting)
-- Cost-aware decision making
-- C++ inference engine for performance
+**Model Artifacts**:
+- Serialized trained models
+- Performance metrics and validation reports
+- Feature importance and model diagnostics
 
-**Alpaca System**:
-- Paper trading only
-- Simplified integration
-- Research-focused
+**Integration Points**:
+- Models can be integrated with external trading systems
+- Standard formats for model serialization
+- Performance tracking and monitoring interfaces
 
 ## Data Flow
 
@@ -219,8 +218,6 @@ trader/
 ├── CONFIG/              # Centralized configurations (see [Configuration Reference](../02_reference/configuration/README.md))
 ├── DATA_PROCESSING/     # ETL pipelines
 ├── TRAINING/            # Model training
-├── IBKR_trading/        # IBKR integration (optional)
-├── ALPACA_trading/      # Alpaca integration (optional)
 ├── data/                # Data storage
 ├── models/              # Trained models
 ├── results/             # Results and metrics
