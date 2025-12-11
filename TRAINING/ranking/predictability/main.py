@@ -289,6 +289,40 @@ def main():
             # Save checkpoint after each target
             checkpoint.save_item(target_name, result.to_dict())
             
+            # Track reproducibility: compare to previous target ranking run
+            if args.output_dir and result.mean_score != -999.0:
+                try:
+                    from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+                    tracker = ReproducibilityTracker(output_dir=args.output_dir)
+                    
+                    # Determine metric name based on task type
+                    if result.task_type == TaskType.REGRESSION:
+                        metric_name = "R²"
+                    elif result.task_type == TaskType.BINARY_CLASSIFICATION:
+                        metric_name = "ROC-AUC"
+                    else:
+                        metric_name = "Accuracy"
+                    
+                    # Log comparison with previous run
+                    tracker.log_comparison(
+                        stage="target_ranking",
+                        item_name=target_name,
+                        metrics={
+                            "metric_name": metric_name,
+                            "mean_score": result.mean_score,
+                            "std_score": result.std_score,
+                            "mean_importance": result.mean_importance,
+                            "composite_score": result.composite_score
+                        },
+                        additional_data={
+                            "n_models": result.n_models,
+                            "leakage_flag": result.leakage_flag,
+                            "task_type": result.task_type.name
+                        }
+                    )
+                except Exception as e:
+                    logger.debug(f"Reproducibility tracking failed for {target_name}: {e}")
+            
             # Skip degenerate targets (marked with mean_score = -999)
             if result.mean_score != -999.0:
                 results.append(result)

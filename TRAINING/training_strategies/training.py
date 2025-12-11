@@ -345,6 +345,39 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                 if model_result is not None:
                     target_results[family] = model_result
                     
+                    # Track reproducibility: compare to previous training run
+                    if output_dir and model_result.get('success', False):
+                        try:
+                            from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+                            tracker = ReproducibilityTracker(output_dir=output_dir)
+                            
+                            # Extract metrics from strategy_manager if available
+                            strategy_manager = model_result.get('strategy_manager')
+                            metrics = {}
+                            if strategy_manager and hasattr(strategy_manager, 'cv_scores'):
+                                cv_scores = strategy_manager.cv_scores
+                                if cv_scores and len(cv_scores) > 0:
+                                    metrics = {
+                                        "metric_name": "CV Score",
+                                        "mean_score": float(np.mean(cv_scores)),
+                                        "std_score": float(np.std(cv_scores)),
+                                        "composite_score": float(np.mean(cv_scores))
+                                    }
+                            
+                            # If we have metrics, log comparison
+                            if metrics:
+                                tracker.log_comparison(
+                                    stage="model_training",
+                                    item_name=f"{target}:{family}",
+                                    metrics=metrics,
+                                    additional_data={
+                                        "strategy": strategy,
+                                        "n_features": len(feature_names) if feature_names else 0
+                                    }
+                                )
+                        except Exception as e:
+                            logger.debug(f"Reproducibility tracking failed for {family}:{target}: {e}")
+                    
                     # Save model using original structure: FamilyName/target_name/model_files
                     family_dir = Path(output_dir) / family
                     target_dir = family_dir / target
