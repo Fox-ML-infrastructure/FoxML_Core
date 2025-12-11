@@ -104,7 +104,9 @@ def clean_config_for_estimator(
                 config.pop(k, None)
                 dropped_unknown.append(k)
     
-    # Special handling for known parameter conflicts
+    # Special handling for known parameter conflicts and invalid values
+    # These need to be checked AFTER unknown param removal because they might be valid params with invalid values
+    
     # CatBoost: depth and max_depth are synonyms - only one should be used
     if 'catboost' in (family_name or '').lower():
         if 'depth' in config and 'max_depth' in config:
@@ -113,7 +115,7 @@ def clean_config_for_estimator(
             dropped_duplicates.append('max_depth')
             logger.debug(f"[{family_name}] Removed max_depth (duplicate of depth for CatBoost)")
     
-    # RandomForest: verbose must be >= 0, not -1
+    # RandomForest: verbose must be >= 0, not -1 (even though verbose is a valid param)
     if 'random_forest' in (family_name or '').lower() and 'verbose' in config:
         verbose_val = config.get('verbose')
         if verbose_val == -1 or (isinstance(verbose_val, (int, float)) and verbose_val < 0):
@@ -121,7 +123,7 @@ def clean_config_for_estimator(
             dropped_unknown.append('verbose')
             logger.debug(f"[{family_name}] Removed invalid verbose={verbose_val} (must be >= 0 for RandomForest)")
     
-    # MLPRegressor: learning_rate must be string, not float
+    # MLPRegressor: learning_rate must be string, not float (even though learning_rate is a valid param)
     if 'neural_network' in (family_name or '').lower() and 'learning_rate' in config:
         lr_val = config.get('learning_rate')
         if isinstance(lr_val, (int, float)):
