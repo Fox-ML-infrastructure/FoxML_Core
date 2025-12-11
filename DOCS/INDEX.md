@@ -2,8 +2,8 @@
 
 Complete navigation guide for FoxML Core documentation.
 
-**Last Updated**: 2025-12-10  
-**Recent Updates**: Feature Importance Stability Tracking System - Automated snapshot capture and stability analysis for feature importances across runs. Complete Single Source of Truth (SST) config centralization - ALL model trainers now use config-driven hyperparameters for full reproducibility. Added refactoring documentation (large file splits), unified pipeline consistency guide (including Boruta gatekeeper), structured logging configuration, shared utility modules documentation, and comprehensive Boruta refactor documentation.
+**Last Updated**: 2025-12-11  
+**Recent Updates**: Config Parameter Validation System - New `config_cleaner.py` utility prevents parameter passing errors using `inspect.signature()`. Reproducibility Tracking Module - Enhanced with visibility fixes ensuring logs appear in main script output. Silent Error Visibility - Comprehensive logging added to all previously silent failure paths. Feature Importance Stability Tracking System - Automated snapshot capture and stability analysis. Complete Single Source of Truth (SST) config centralization - ALL model trainers now use config-driven hyperparameters for full reproducibility.
 
 ## Quick Navigation
 
@@ -112,6 +112,7 @@ Complete technical reference for daily use.
 - [Model Configuration](02_reference/configuration/MODEL_CONFIGURATION.md) - Model hyperparameters and variants
 - [Usage Examples](02_reference/configuration/USAGE_EXAMPLES.md) - Practical configuration examples (includes interval config and CatBoost examples)
 - [Config Loader API](02_reference/configuration/CONFIG_LOADER_API.md) - Programmatic config loading (includes logging config utilities)
+- [Config Cleaner API](02_reference/configuration/CONFIG_CLEANER_API.md) - **NEW**: Systematic parameter validation to prevent duplicate/unknown parameter errors
 - [Config Overlays](02_reference/configuration/CONFIG_OVERLAYS.md) - Overlay system for environment-specific configs
 - [Environment Variables](02_reference/configuration/ENVIRONMENT_VARIABLES.md) - Environment-based configuration
 

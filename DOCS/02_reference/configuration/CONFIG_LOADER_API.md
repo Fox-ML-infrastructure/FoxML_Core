@@ -180,9 +180,32 @@ variants = get_config_variants("lightgbm")
 print(f"LightGBM variants: {variants}")
 ```
 
+## Config Cleaner Utility
+
+When passing configs to model constructors, use the config cleaner to prevent parameter passing errors:
+
+```python
+from TRAINING.utils.config_cleaner import clean_config_for_estimator
+from lightgbm import LGBMRegressor
+
+# Load config (may have duplicates or invalid params from inject_defaults)
+config = load_model_config("lightgbm")
+config = inject_defaults(config, model_family="lightgbm")
+
+# Clean before passing to constructor
+extra = {'random_seed': 42}
+clean_config = clean_config_for_estimator(LGBMRegressor, config, extra, 'lightgbm')
+
+# Safe to instantiate
+model = LGBMRegressor(**clean_config, **extra)
+```
+
+See [Config Cleaner API](CONFIG_CLEANER_API.md) for complete documentation.
+
 ## See Also
 
 - [Config Basics](../../01_tutorials/configuration/CONFIG_BASICS.md) - Configuration tutorial
 - [Config Schema](../api/CONFIG_SCHEMA.md) - Schema reference
 - [Config Overlays](CONFIG_OVERLAYS.md) - Overlay system
+- [Config Cleaner API](CONFIG_CLEANER_API.md) - Parameter validation utility
 

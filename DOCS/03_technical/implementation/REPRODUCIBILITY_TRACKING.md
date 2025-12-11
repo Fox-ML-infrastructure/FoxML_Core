@@ -404,6 +404,16 @@ if output_dir is not None:
         logger.warning(f"Could not track reproducibility: {e}")
 ```
 
+## Visibility & Logging
+
+The reproducibility tracker ensures its logs are visible in the main script output:
+
+- **Logger propagation**: The tracker's internal logger has `propagate = True` to ensure messages reach parent loggers
+- **Main logger fallback**: The tracker attempts to find and use the main script's logger (e.g., 'rank_target_predictability') if available, ensuring comparison messages appear in the main output stream
+- **Dual logging**: Critical comparison messages are logged to both the tracker's logger and the main logger for maximum visibility
+
+This ensures that reproducibility comparisons (✅/⚠️ indicators) are always visible in your script output, not just in log files.
+
 ## Current Integrations
 
 The reproducibility tracker is currently integrated into:
