@@ -424,8 +424,24 @@ def get_threading_config() -> Dict[str, Any]:
 
 
 def get_safety_config() -> Dict[str, Any]:
-    """Load safety configuration"""
-    return load_training_config("safety_config")
+    """Load safety configuration with optional schema validation"""
+    cfg = load_training_config("safety_config")
+    
+    # Optional: Validate schema if available (prevents silent failures)
+    try:
+        from CONFIG.config_schemas import validate_safety_config
+        import os
+        # Use strict mode if FOXML_STRICT_MODE=1, otherwise graceful degradation
+        strict_mode = os.getenv("FOXML_STRICT_MODE", "0") == "1"
+        validate_safety_config(cfg, strict=strict_mode)
+    except ImportError:
+        pass  # Schema validation not available, skip
+    except ValueError as e:
+        # Validation failed - behavior depends on strict mode
+        # (validate_safety_config already handles strict vs non-strict)
+        raise  # Re-raise if strict, or already logged if non-strict
+    
+    return cfg
 
 
 def get_callbacks_config() -> Dict[str, Any]:

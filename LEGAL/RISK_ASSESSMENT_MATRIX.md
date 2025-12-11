@@ -130,20 +130,6 @@ This matrix is essential for enterprise procurement reviews and risk management.
 - **Residual Risk:** Low
 - **Owner:** Jennifer Lewis
 
-#### **Risk 8: Consulting Data Breach**
-
-- **Description:** Unauthorized access to consulting engagement data
-- **Likelihood:** Low (Strong security practices, NDA requirements)
-- **Impact:** Critical (Client data exposure, regulatory implications)
-- **Risk Level:** High
-- **Mitigation:**
-  - NDA requirements for all consulting engagements
-  - Client-approved secure storage
-  - Limited data access (minimum required)
-  - Data deletion upon project completion
-  - Incident response plan
-- **Residual Risk:** Medium
-- **Owner:** Jennifer Lewis
 
 ---
 
@@ -173,7 +159,7 @@ This matrix is essential for enterprise procurement reviews and risk management.
   - Diversified client portfolio
   - Long-term contracts where possible
   - Strong client relationships
-  - Multiple revenue streams (licensing + consulting)
+  - Multiple revenue streams (licensing + enterprise services)
 - **Residual Risk:** Medium
 - **Owner:** Jennifer Lewis
 
@@ -224,19 +210,6 @@ This matrix is essential for enterprise procurement reviews and risk management.
 - **Residual Risk:** Low
 - **Owner:** Jennifer Lewis
 
-#### **Risk 14: Data Loss (Client Data)**
-
-- **Description:** Loss of client data (for consulting engagements)
-- **Likelihood:** Low (Strong data handling practices)
-- **Impact:** Critical (Client data loss, regulatory implications)
-- **Risk Level:** High
-- **Mitigation:**
-  - Client-approved secure storage
-  - Regular backups (if applicable)
-  - Data deletion upon completion (reduces risk)
-  - Incident response plan
-- **Residual Risk:** Low
-- **Owner:** Jennifer Lewis
 
 ---
 
@@ -247,7 +220,6 @@ This matrix is essential for enterprise procurement reviews and risk management.
 **High-priority risks (Risk Level: High or Critical):**
 
 1. **Code Repository Compromise** — Mitigated through strong access controls and monitoring
-2. **Consulting Data Breach** — Mitigated through NDA requirements and secure practices
 3. **Key Person Dependency** — Mitigated through documentation and business continuity planning
 4. **Software Vulnerabilities** — Mitigated through security best practices and regular updates
 

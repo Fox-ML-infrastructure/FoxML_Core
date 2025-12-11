@@ -71,7 +71,10 @@ class LeakageSentinel:
         try:
             from CONFIG.config_loader import get_safety_config
             safety_cfg = get_safety_config()
-            sentinel_cfg = safety_cfg.get('leakage_sentinels', {})
+            # safety_config.yaml has a top-level 'safety' key
+            safety_section = safety_cfg.get('safety', {})
+            leakage_cfg = safety_section.get('leakage_detection', {})
+            sentinel_cfg = leakage_cfg.get('leakage_sentinels', {})
             
             if shifted_target_threshold is None:
                 shifted_target_threshold = float(sentinel_cfg.get('shifted_target_threshold', 0.5))

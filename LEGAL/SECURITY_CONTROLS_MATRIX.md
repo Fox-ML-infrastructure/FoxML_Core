@@ -135,7 +135,6 @@ This matrix is designed for enterprise security reviews and SOC2-adjacent compli
 - ✅ **Secure transmission** — Secrets transmitted securely (encrypted channels)
 - ✅ **No logging** — Secrets never logged
 - ✅ **Client responsibility** — Clients responsible for their own secret management
-- ✅ **Consulting secrets** — Consulting secrets handled per security policy
 
 ---
 

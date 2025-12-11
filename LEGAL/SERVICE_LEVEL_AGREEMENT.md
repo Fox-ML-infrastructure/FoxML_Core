@@ -101,14 +101,14 @@ Covered under this SLA:
 This SLA does not cover:
 
 - Custom development  
-- Trading strategy design or modeling consulting  
+- Trading strategy design or modeling services  
 - Performance optimization of customer environments  
 - Issues caused by unsupported OS/hardware  
 - Failures originating from third-party libraries  
 - Customer-modified source code  
 - Operational uptime (this is packaged software, not a hosted SaaS)
 
-These may be available under a separate consulting agreement.
+Custom development and professional services may be available via separate Statements of Work (SOWs) for enterprise licensees.
 
 ---
 

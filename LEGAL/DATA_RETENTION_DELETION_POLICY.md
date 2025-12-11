@@ -18,7 +18,6 @@ This policy is essential for enterprise compliance and data governance requireme
 However, we do retain limited information for:
 - **Licensing management** — Commercial license records and communications
 - **Support services** — Support communications and issue history
-- **Consulting engagements** — Project-related information (deleted upon completion)
 
 **This policy explains retention periods and deletion procedures.**
 
@@ -33,7 +32,6 @@ However, we do retain limited information for:
 - **Minimal retention** — Retain only information necessary for business operations
 - **Purpose-limited** — Retain information only for the purpose for which it was collected
 - **Legal compliance** — Retain information as required by law or legal obligations
-- **Client-controlled** — For consulting engagements, data retention is client-controlled
 
 ### 2.2 No Client Data Storage
 
@@ -77,16 +75,6 @@ However, we do retain limited information for:
 - **Purpose:** Website operation, security monitoring
 - **Deletion:** Automatically deleted after 90 days
 
-### 3.4 Consulting Engagement Data
-
-**Consulting Project Data:**
-
-- **Retention period:** Deleted upon project completion (unless written authorization provided)
-- **Includes:** Client data, datasets, credentials, project artifacts, deliverables
-- **Purpose:** Project execution only
-- **Deletion:** All data deleted upon delivery unless client provides written authorization for retention
-
-**See `LEGAL/consulting/SECURITY_AND_ACCESS_POLICY.md` for detailed consulting data handling.**
 
 ### 3.5 Email Communications
 
@@ -128,7 +116,6 @@ However, we do retain limited information for:
 
 - **Website logs** — Automatically deleted after 90 days
 - **Expired retention periods** — Information deleted after retention period expires
-- **Consulting data** — Automatically deleted upon project completion (unless authorized)
 
 ### 5.2 Request-Based Deletion
 
@@ -205,13 +192,6 @@ However, we do retain limited information for:
 - **Notification** — We will notify you if a legal hold prevents deletion
 - **Release** — Information deleted after legal hold is released
 
-### 7.3 Consulting Project Data
-
-**For consulting engagements:**
-
-- **Immediate deletion** — Client data deleted upon project completion
-- **Written authorization** — Data retained only with written client authorization
-- **Scope** — Authorization specifies what data is retained and for how long
 
 ---
 
@@ -230,7 +210,6 @@ However, we do retain limited information for:
 
 **Clients may request:**
 
-- **Deletion of consulting data** — Request deletion of consulting project data
 - **Deletion of support records** — Request deletion of support communications (subject to retention requirements)
 - **Information about retention** — Request information about what information we retain
 
@@ -287,7 +266,6 @@ Subject: *Data Retention/Deletion Request — Fox ML Infrastructure*
 
 - `LEGAL/PRIVACY_POLICY.md` — Privacy Policy (data collection and use)
 - `LEGAL/DATA_PROCESSING_ADDENDUM.md` — Data Processing Addendum (zero data processing)
-- `LEGAL/consulting/SECURITY_AND_ACCESS_POLICY.md` — Security and access policy for consulting
 
 ---
 

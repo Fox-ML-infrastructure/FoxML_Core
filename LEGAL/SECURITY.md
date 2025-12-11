@@ -33,7 +33,6 @@ The platform runs entirely within the client's infrastructure and environment.
 This policy reflects our current practices and applies to:
 - All software usage data (which we do not collect)
 - All licensing and support communications
-- All consulting engagement data
 - Any information collected through website interactions
 
 While we intend to maintain this policy, this statement is provided for informational purposes only and does not create any binding obligation, warranty, or guarantee. This is a core privacy principle that we follow to protect our clients' confidentiality and trust.
@@ -56,16 +55,6 @@ While we intend to maintain this policy, this statement is provided for informat
 - No vendor access to production systems or keys
 - Client data is never transferred to vendor systems
 
-### 2.3 Consulting Engagements
-
-For consulting engagements (separate from licensing):
-
-- **NDA required** — All consulting engagements require a Non-Disclosure Agreement
-- **Limited access** — Access is limited to the minimum required for the engagement
-- **No retention** — Client data is deleted upon project completion unless written authorization is provided
-- **Secure channels** — All data access uses client-approved secure methods
-
-See `LEGAL/consulting/SECURITY_AND_ACCESS_POLICY.md` for detailed consulting security practices.
 
 ---
 
@@ -110,14 +99,6 @@ See `LEGAL/consulting/SECURITY_AND_ACCESS_POLICY.md` for detailed consulting sec
 - No vendor access to trading accounts or financial systems
 - All deployment and operations are client-controlled
 
-### 4.2 Credential Handling
-
-**For consulting engagements only:**
-
-- Credentials are stored only in client-approved secure methods (environment variables, Vault, encrypted key stores)
-- Credentials are never hardcoded, logged, or included in source repositories
-- Access is limited to the minimum required for the engagement
-- Temporary or scoped credentials are preferred when possible
 
 ---
 
@@ -231,7 +212,6 @@ Subject: *Security Inquiry — Fox ML Infrastructure*
 
 ## Related Documents
 
-- `LEGAL/consulting/SECURITY_AND_ACCESS_POLICY.md` — Detailed security practices for consulting engagements
 - `LEGAL/ENTERPRISE_DELIVERY.md` — Repository structure and delivery model
 - `LEGAL/SUPPORT_POLICY.md` — Support tiers and response times
 - `LEGAL/SERVICE_LEVEL_AGREEMENT.md` — SLA terms for Enterprise support

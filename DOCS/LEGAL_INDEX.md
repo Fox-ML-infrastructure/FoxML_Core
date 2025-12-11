@@ -72,16 +72,6 @@ Complete index of all legal, licensing, compliance, and enterprise documentation
 ### Risk Assessment
 - [Risk Assessment Matrix](../LEGAL/RISK_ASSESSMENT_MATRIX.md) - Risk assessment framework
 
-## Consulting Services
-
-### Consulting Documentation
-- [Consulting Overview](../LEGAL/consulting/CONSULTING_OVERVIEW.md) - Consulting services overview
-- [Consulting Policy](../LEGAL/consulting/CONSULTING_POLICY.md) - Consulting policy
-- [Consulting Pricing](../LEGAL/consulting/CONSULTING_PRICING.md) - Consulting pricing
-- [Master Consulting Agreement](../LEGAL/consulting/MASTER_CONSULTING_AGREEMENT.md) - Master consulting agreement template
-- [Statement of Work Template](../LEGAL/consulting/STATEMENT_OF_WORK_TEMPLATE.md) - SOW template
-- [IP Terms Addendum](../LEGAL/consulting/IP_TERMS_ADDENDUM.md) - IP terms for consulting
-- [Consulting Services](../LEGAL/consulting/CONSULTING.md) - Complete consulting documentation
 
 ## Contributor Agreements
 

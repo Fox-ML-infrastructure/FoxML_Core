@@ -121,7 +121,7 @@ This pre-empts common enterprise security review questions and accelerates procu
 
 - ✅ **No network connections** — Vendor does not establish network connections to client systems
 - ✅ **No remote access** — No vendor remote access capability
-- ✅ **No VPN access** — No vendor VPN or network access (except for consulting engagements, if applicable)
+- ✅ **No VPN access** — No vendor VPN or network access
 - ✅ **No data exfiltration** — No capability to exfiltrate data from client systems
 
 ### 6.2 Client-Controlled Networking
@@ -244,18 +244,6 @@ This pre-empts common enterprise security review questions and accelerates procu
 
 ---
 
-## 12. Consulting Engagements
-
-### 12.1 Limited Data Access (Consulting Only)
-
-**For consulting engagements only (separate from licensing):**
-
-- ✅ **NDA required** — All consulting engagements require a Non-Disclosure Agreement
-- ✅ **Limited scope** — Data access is limited to the minimum required for the engagement
-- ✅ **Client-controlled** — All data access uses client-approved secure methods
-- ✅ **No retention** — Client data is deleted upon project completion unless written authorization is provided
-
-**See `LEGAL/consulting/SECURITY_AND_ACCESS_POLICY.md` for detailed consulting security practices.**
 
 ---
 
@@ -276,7 +264,6 @@ This pre-empts common enterprise security review questions and accelerates procu
 
 - ✅ **Security statement** — Public-facing security statement (`LEGAL/SECURITY.md`)
 - ✅ **Data handling** — Data processing addendum (`LEGAL/DATA_PROCESSING_ADDENDUM.md`)
-- ✅ **Access policy** — Security and access policy for consulting (`LEGAL/consulting/SECURITY_AND_ACCESS_POLICY.md`)
 - ✅ **Compliance** — Export compliance and other compliance documents
 
 ---
@@ -312,7 +299,6 @@ Subject: *InfoSec Self-Assessment Inquiry — Fox ML Infrastructure*
 
 - `LEGAL/SECURITY.md` — Security statement and data handling practices
 - `LEGAL/DATA_PROCESSING_ADDENDUM.md` — Data processing addendum (zero data processing)
-- `LEGAL/consulting/SECURITY_AND_ACCESS_POLICY.md` — Security and access policy for consulting
 - `LEGAL/EXPORT_COMPLIANCE.md` — Export control compliance
 - `LEGAL/ENTERPRISE_CHECKLIST.md` — Enterprise readiness checklist
 

@@ -277,7 +277,11 @@ class LeakageAutoFixer:
         try:
             from CONFIG.config_loader import get_safety_config
             safety_cfg = get_safety_config()
-            perfect_score_threshold = float(safety_cfg.get('auto_fixer', {}).get('perfect_score_threshold', 0.99))
+            # safety_config.yaml has a top-level 'safety' key
+            safety_section = safety_cfg.get('safety', {})
+            leakage_cfg = safety_section.get('leakage_detection', {})
+            auto_fixer_cfg = leakage_cfg.get('auto_fixer', {})
+            perfect_score_threshold = float(auto_fixer_cfg.get('perfect_score_threshold', 0.99))
         except Exception:
             perfect_score_threshold = 0.99  # FALLBACK_DEFAULT_OK
         
@@ -397,7 +401,11 @@ class LeakageAutoFixer:
                         try:
                             from CONFIG.config_loader import get_safety_config
                             safety_cfg = get_safety_config()
-                            symbol_holdout_test_size = float(safety_cfg.get('auto_fixer', {}).get('symbol_holdout_test_size', 0.2))
+                            # safety_config.yaml has a top-level 'safety' key
+                            safety_section = safety_cfg.get('safety', {})
+                            leakage_cfg = safety_section.get('leakage_detection', {})
+                            auto_fixer_cfg = leakage_cfg.get('auto_fixer', {})
+                            symbol_holdout_test_size = float(auto_fixer_cfg.get('symbol_holdout_test_size', 0.2))
                         except Exception:
                             symbol_holdout_test_size = 0.2  # FALLBACK_DEFAULT_OK
                         train_syms, test_syms = sk_train_test_split(
@@ -564,7 +572,11 @@ class LeakageAutoFixer:
             try:
                 from CONFIG.config_loader import get_safety_config
                 safety_cfg = get_safety_config()
-                min_confidence = float(safety_cfg.get('auto_fixer', {}).get('min_confidence', 0.7))
+                # safety_config.yaml has a top-level 'safety' key
+                safety_section = safety_cfg.get('safety', {})
+                leakage_cfg = safety_section.get('leakage_detection', {})
+                auto_fixer_cfg = leakage_cfg.get('auto_fixer', {})
+                min_confidence = float(auto_fixer_cfg.get('min_confidence', 0.7))
             except Exception:
                 min_confidence = 0.7
         
@@ -681,7 +693,11 @@ class LeakageAutoFixer:
         try:
             from CONFIG.config_loader import get_safety_config
             safety_cfg = get_safety_config()
-            max_backups = safety_cfg.get('auto_fixer', {}).get('max_backups_per_target', default_max_backups)
+            # safety_config.yaml has a top-level 'safety' key
+            safety_section = safety_cfg.get('safety', {})
+            leakage_cfg = safety_section.get('leakage_detection', {})
+            auto_fixer_cfg = leakage_cfg.get('auto_fixer', {})
+            max_backups = auto_fixer_cfg.get('max_backups_per_target', default_max_backups)
             return int(max_backups) if max_backups is not None else default_max_backups
         except Exception as e:
             logger.debug(f"Could not load backup config: {e}, using default {default_max_backups}")
@@ -955,7 +971,11 @@ class LeakageAutoFixer:
             try:
                 from CONFIG.config_loader import get_safety_config
                 safety_cfg = get_safety_config()
-                min_confidence = float(safety_cfg.get('auto_fixer', {}).get('min_confidence', 0.7))
+                # safety_config.yaml has a top-level 'safety' key
+                safety_section = safety_cfg.get('safety', {})
+                leakage_cfg = safety_section.get('leakage_detection', {})
+                auto_fixer_cfg = leakage_cfg.get('auto_fixer', {})
+                min_confidence = float(auto_fixer_cfg.get('min_confidence', 0.7))
             except Exception:
                 min_confidence = 0.7
         

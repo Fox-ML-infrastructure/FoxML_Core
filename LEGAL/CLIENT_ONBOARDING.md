@@ -217,11 +217,11 @@ python -m TRAINING.train \
 **Process:**
 1. **Contact support** — Email jenn.lewis5789@gmail.com with feature request
 2. **Scoping** — Feature request is evaluated and scoped
-3. **Statement of Work (SOW)** — Custom features require a separate SOW (see `LEGAL/consulting/STATEMENT_OF_WORK_TEMPLATE.md`)
+3. **Statement of Work (SOW)** — Custom features require a separate SOW for enterprise licensees
 4. **Development** — Feature is developed in client-specific repository
 5. **Delivery** — Feature is delivered via client repository update
 
-**See `LEGAL/consulting/CONSULTING_PRICING.md` for pricing information.**
+**Contact jenn.lewis5789@gmail.com for custom development pricing.**
 
 ### 7.2 Integration with Existing Systems
 

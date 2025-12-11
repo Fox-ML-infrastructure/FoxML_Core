@@ -261,7 +261,7 @@
 - Updates and patches (as released)
 - Email support for licensing questions
 
-**Support and consulting are available separately. See `LEGAL/SUPPORT_POLICY.md`.**
+**Support and custom development are available separately. See `LEGAL/SUPPORT_POLICY.md`.**
 
 ---
 

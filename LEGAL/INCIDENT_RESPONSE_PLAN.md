@@ -18,7 +18,7 @@ This plan is essential for enterprise security reviews and compliance requiremen
 **Key characteristics:**
 - **No vendor-hosted infrastructure** — No servers, databases, or cloud services operated by vendor
 - **No client data processing** — Vendor does not process, store, or transmit client data
-- **Limited incident surface** — Incidents are limited to code delivery, support communications, and consulting engagements
+- **Limited incident surface** — Incidents are limited to code delivery and support communications
 
 **This plan covers incident detection, response, and notification procedures.**
 
@@ -271,7 +271,6 @@ This plan is essential for enterprise security reviews and compliance requiremen
 
 - **Code delivery** — Code delivery continues via private repositories
 - **Support services** — Support services continue (may be temporarily limited during incident)
-- **Consulting engagements** — Consulting engagements continue (may be temporarily limited during incident)
 
 **Note:** Since software is client-hosted, client operations are not affected by vendor incidents.
 

@@ -13,5 +13,5 @@ FoxML Core is dual-licensed:
      optimization, operational analytics, or integration into proprietary systems.
    - Allows internal modification and deployment without AGPL disclosure.
 
-For licensing inquiries or SOW-based consulting, contact:
+For licensing inquiries or enterprise partnerships, contact:
 jenn.lewis5789@gmail.com

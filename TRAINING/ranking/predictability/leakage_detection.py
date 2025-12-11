@@ -158,7 +158,10 @@ def find_near_copy_features(
         if _CONFIG_AVAILABLE:
             try:
                 safety_cfg = get_safety_config()
-                pre_scan_cfg = safety_cfg.get('leakage_detection', {}).get('pre_scan', {})
+                # safety_config.yaml has a top-level 'safety' key
+                safety_section = safety_cfg.get('safety', {})
+                leakage_cfg = safety_section.get('leakage_detection', {})
+                pre_scan_cfg = leakage_cfg.get('pre_scan', {})
                 if min_match is None:
                     min_match = float(pre_scan_cfg.get('min_match', 0.999))
                 if min_corr is None:
@@ -717,7 +720,9 @@ def train_and_evaluate_models(
     if _CONFIG_AVAILABLE:
         try:
             safety_cfg = get_safety_config()
-            leakage_cfg = safety_cfg.get('leakage_detection', {})
+            # safety_config.yaml has a top-level 'safety' key
+            safety_section = safety_cfg.get('safety', {})
+            leakage_cfg = safety_section.get('leakage_detection', {})
             _correlation_threshold = float(leakage_cfg.get('auto_fix_thresholds', {}).get('perfect_correlation', 0.999))
             _suspicious_score_threshold = float(leakage_cfg.get('model_alerts', {}).get('suspicious_score', 0.99))
         except Exception:
@@ -728,7 +733,9 @@ def train_and_evaluate_models(
         if _CONFIG_AVAILABLE:
             try:
                 safety_cfg = get_safety_config()
-                leakage_cfg = safety_cfg.get('leakage_detection', {})
+                # safety_config.yaml has a top-level 'safety' key
+                safety_section = safety_cfg.get('safety', {})
+                leakage_cfg = safety_section.get('leakage_detection', {})
                 _correlation_threshold = float(leakage_cfg.get('auto_fix_thresholds', {}).get('perfect_correlation', 0.999))
                 _suspicious_score_threshold = float(leakage_cfg.get('model_alerts', {}).get('suspicious_score', 0.99))
             except Exception:
@@ -1080,7 +1087,10 @@ def train_and_evaluate_models(
             if _CONFIG_AVAILABLE:
                 try:
                     safety_cfg = get_safety_config()
-                    importance_threshold = float(safety_cfg.get('leakage_detection', {}).get('importance', {}).get('single_feature_threshold', 0.50))
+                    # safety_config.yaml has a top-level 'safety' key
+                    safety_section = safety_cfg.get('safety', {})
+                    leakage_cfg = safety_section.get('leakage_detection', {})
+                    importance_threshold = float(leakage_cfg.get('importance', {}).get('single_feature_threshold', 0.50))
                 except Exception:
                     importance_threshold = 0.50
             else:
@@ -1984,7 +1994,10 @@ def detect_leakage(
     if _CONFIG_AVAILABLE:
         try:
             safety_cfg = get_safety_config()
-            warning_cfg = safety_cfg.get('leakage_detection', {}).get('warning_thresholds', {})
+            # safety_config.yaml has a top-level 'safety' key
+            safety_section = safety_cfg.get('safety', {})
+            leakage_cfg = safety_section.get('leakage_detection', {})
+            warning_cfg = leakage_cfg.get('warning_thresholds', {})
         except Exception:
             warning_cfg = {}
     else:

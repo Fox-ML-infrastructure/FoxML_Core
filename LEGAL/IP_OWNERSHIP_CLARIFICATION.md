@@ -59,7 +59,7 @@ This is essential for ML research organizations, quantitative firms, and enterpr
 **Work created exclusively for the client under a Statement of Work (SOW):**
 
 - **Client-owned deliverables** — If the SOW specifies client ownership, deliverables become client-owned IP
-- **Consultant-owned deliverables** — If the SOW does not specify client ownership, deliverables may remain consultant-owned (see Section 4)
+- **Licensor-owned deliverables** — If the SOW does not specify client ownership, deliverables may remain licensor-owned (see Section 4)
 - **Custom features** — Ownership of custom features is determined by the SOW terms
 
 ---
@@ -90,7 +90,7 @@ This is essential for ML research organizations, quantitative firms, and enterpr
 - **Exclusivity premium** — Additional fee required for exclusive rights
 - **SOW terms** — Exclusivity terms are defined in the Statement of Work
 
-**See `LEGAL/consulting/IP_TERMS_ADDENDUM.md` for detailed IP terms for consulting engagements.**
+**IP terms are defined in individual Statements of Work (SOWs) for enterprise licensees.**
 
 ---
 
@@ -267,5 +267,4 @@ Subject: *IP Ownership Inquiry — Fox ML Infrastructure*
 - `LEGAL/consulting/IP_TERMS_ADDENDUM.md` — Detailed IP terms for consulting engagements
 - `LEGAL/ENTERPRISE_DELIVERY.md` — Repository structure and IP isolation
 - `COMMERCIAL_LICENSE.md` — Commercial license terms (Section 3: Ownership)
-- `LEGAL/consulting/STATEMENT_OF_WORK_TEMPLATE.md` — SOW template for custom IP terms
 

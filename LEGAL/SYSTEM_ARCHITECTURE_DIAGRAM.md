@@ -396,7 +396,6 @@ External Trading Systems (Optional Integration)
 │                                                               │
 │  • Code repositories (GitHub)                                │
 │  • Support communications (Email)                            │
-│  • Consulting data (Client-approved storage)                 │
 └─────────────────────────────────────────────────────────────┘
                               │
                               │ (Code Delivery)

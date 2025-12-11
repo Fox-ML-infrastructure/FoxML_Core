@@ -158,7 +158,7 @@ This standalone document provides clear protection for both parties and is essen
 - **E&O Insurance** — Will obtain Errors & Omissions (E&O) insurance if required by client
 - **Per-engagement basis** — Insurance obtained on a per-engagement basis if required
 
-**See `LEGAL/consulting/NOTICE_IMPORTANT.md` for current insurance status.**
+**Insurance is obtained as required by enterprise procurement or compliance requirements.**
 
 ### 8.2 Licensee Insurance
 
@@ -200,5 +200,4 @@ Subject: *Indemnification Inquiry — Fox ML Infrastructure*
 - `COMMERCIAL_LICENSE.md` — Commercial license terms (Section 7: Indemnity)
 - `LEGAL/CLA.md` — Commercial License Agreement (Section 9.2: Indemnity)
 - `LEGAL/WARRANTY_LIABILITY_ADDENDUM.md` — Warranty and liability terms
-- `LEGAL/consulting/NOTICE_IMPORTANT.md` — Insurance status and business formation
 

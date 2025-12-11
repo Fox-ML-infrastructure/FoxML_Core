@@ -208,7 +208,7 @@ Licensee agrees to indemnify and hold harmless Licensor from and against any thi
 
 ## 8. SUPPORT AND MAINTENANCE
 
-Support, integration, customization, improvements, or feature development require separate consulting agreements or Statements of Work (SOWs).
+Support, integration, customization, improvements, or feature development require separate Statements of Work (SOWs) for enterprise licensees.
 
 Unless explicitly set out in a separate written agreement:
 - Support is NOT included in this License.

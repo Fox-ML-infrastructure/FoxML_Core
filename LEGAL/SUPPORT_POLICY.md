@@ -193,7 +193,7 @@ Support does not cover:
 	•	Unsupported OS/hardware environments
 	•	Modifications to the core source code by the customer
 
-Custom services may be available via a separate consulting agreement.
+Custom services may be available via separate Statements of Work (SOWs) for enterprise licensees.
 
 ⸻
 

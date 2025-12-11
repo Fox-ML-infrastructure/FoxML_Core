@@ -289,7 +289,10 @@ def rank_targets(
     if _CONFIG_AVAILABLE:
         try:
             safety_cfg = get_safety_config()
-            auto_rerun_cfg = safety_cfg.get('leakage_detection', {}).get('auto_rerun', {})
+            # safety_config.yaml has a top-level 'safety' key
+            safety_section = safety_cfg.get('safety', {})
+            leakage_cfg = safety_section.get('leakage_detection', {})
+            auto_rerun_cfg = leakage_cfg.get('auto_rerun', {})
             auto_rerun_enabled = auto_rerun_cfg.get('enabled', False)
             max_reruns = int(auto_rerun_cfg.get('max_reruns', 3))
             rerun_on_perfect_train_acc = auto_rerun_cfg.get('rerun_on_perfect_train_acc', True)

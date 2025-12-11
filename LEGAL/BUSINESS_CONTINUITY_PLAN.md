@@ -34,7 +34,6 @@ This plan is essential for enterprise risk management and procurement reviews.
 1. **Code delivery** — Delivery of software code via private repositories
 2. **Support services** — Technical support and issue resolution
 3. **Licensing management** — Commercial license management and renewals
-4. **Consulting services** — Consulting engagements (if applicable)
 
 ### 2.2 Dependencies
 
@@ -52,7 +51,6 @@ This plan is essential for enterprise risk management and procurement reviews.
 - **Code delivery disruption** — Clients cannot access new code or updates
 - **Support disruption** — Clients cannot receive support or issue resolution
 - **Licensing disruption** — New licenses cannot be processed
-- **Consulting disruption** — Consulting engagements may be delayed
 
 **Note:** Since software is client-hosted, client operations continue even if vendor services are disrupted.
 

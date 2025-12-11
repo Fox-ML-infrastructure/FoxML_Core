@@ -6,8 +6,7 @@ This directory contains all legal, licensing, and contracting documentation for 
 
 ## Overview
 
-This directory includes standardized documents, templates, and policies used for machine learning applications, cross-sectional ML infrastructure, and HPC consulting engagements.  
-These materials are provided to help prospective clients evaluate professionalism, workflow, and project structure before initiating a Statement of Work.
+This directory includes standardized documents, templates, and policies used for machine learning applications, cross-sectional ML infrastructure, and enterprise licensing.
 
 ---
 
@@ -21,7 +20,7 @@ As of now:
 - **Business bank account is open and active.** ✓  
 - **Business insurance (General Liability + E&O)** — Will be obtained if a client requires it. Until then, it is not feasible to maintain insurance without active client requirements.
 
-Work can proceed once the Master Consulting Agreement (MCA) and Statement of Work (SOW) are approved. Insurance will be obtained if a client's procurement or compliance requirements mandate it.
+Work can proceed once commercial licensing agreements are executed. Insurance will be obtained if required by enterprise procurement or compliance requirements.
 
 ---
 
@@ -83,31 +82,6 @@ Enterprise-ready documentation for buyers, legal departments, and CTOs:
 - **`TRADEMARK_POLICY.md`** — Trademark and branding policy: permitted uses, prohibited uses, and brand protection
 - **`SYSTEM_ARCHITECTURE_DIAGRAM.md`** — System architecture diagram: component architecture, data flow, and deployment model
 
-### 📁 `consulting/` — Consulting & Custom Development Documents
-
-Core documents for consulting engagements:
-
-- **`MASTER_CONSULTING_AGREEMENT.md`** — Framework agreement covering payment terms, IP rights, confidentiality, warranties, and termination clauses
-- **`STATEMENT_OF_WORK_TEMPLATE.md`** — Template outlining scope, deliverables, milestones, and timelines (customized for each project)
-- **`IP_TERMS_ADDENDUM.md`** — Defines IP boundaries between pre-existing tools (FoxML Core stack) and client-specific deliverables
-- **`CONSULTING_POLICY.md`** — Defines expectations, communication protocols, client responsibilities, and confidentiality standards
-- **`CONSULTING_PRICING.md`** — Details pricing tiers, deliverable-based rates, and engagement structures
-- **`CONSULTING_OVERVIEW.md`** — High-level overview of consulting methodology, engagement format, and workflow
-- **`CONSULTING.md`** — Detailed services description
-- **`ADVANCED_OUTLINE_WIP.md`** — Working outline for multi-phase ML or HPC engagements
-
-*Note: Licensing documents (LICENSING.md, COMMERCIAL_LICENSE.md, CLA.md, SUBSCRIPTIONS.md, TOS.md) are located in the root of this directory.*
-
-### 📁 `consulting/` — Client-Facing Policies & Forms
-
-Client-facing documents and forms for consulting engagements:
-
-- **`SECURITY_AND_ACCESS_POLICY.md`** — Data handling, credential rules, infrastructure access, and compliance practices
-- **`INTAKE_FORM.md`** — Structured form for clients to submit project details and initial scoping information
-- **`CURRENT_AVAILABILITY.md`** — Current availability status and readiness information
-- **`NOTICE_IMPORTANT.md`** — Important business formation and insurance status
-- **`COMMUNICATION_POLICY.md`** — Written communication requirements
-- **`CAPABILITIES_OVERVIEW.md`** — Core competencies across ML engineering, cross-sectional ML infrastructure, HPC systems, and performance-critical workflows
 
 ---
 
@@ -146,19 +120,16 @@ These demonstrate engineering style, architectural decisions, and domain experti
 
 ## How to Use These Documents
 
-1. **Review this directory** to understand the consulting structure and capabilities.  
-2. **Review relevant documents** in the `consulting/` folder for engagement terms and policies.  
-3. **For licensing inquiries**, see `SUBSCRIPTIONS.md` in the root of this directory.  
-4. **If the project appears aligned**, schedule an introductory meeting to discuss goals and constraints.  
-5. **A customized Statement of Work (SOW)** will be drafted based on project requirements.  
-6. **Work begins** once the SOW and Master Consulting Agreement (MCA) are approved. Business insurance will be obtained if required by the client.
+1. **Review this directory** to understand the licensing structure and enterprise capabilities.  
+2. **For licensing inquiries**, see `SUBSCRIPTIONS.md` in the root of this directory.  
+3. **For enterprise partnerships**, contact jenn.lewis5789@gmail.com to discuss integration and deployment requirements.  
+4. **Custom development** may be available via separate Statements of Work (SOWs) for enterprise licensees.
 
 ---
 
 ## Contact
 
-For inquiries or scoping discussions, please refer to the contact information on the GitHub profile.  
-Clients are encouraged to use the **Intake Form** (`consulting/INTAKE_FORM.md`) when submitting initial project details.
+For licensing inquiries or enterprise partnerships, please refer to the contact information on the GitHub profile.
 
 **Email:** jenn.lewis5789@gmail.com
 

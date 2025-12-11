@@ -23,7 +23,6 @@ Our software is **client-hosted**, meaning it runs entirely on your infrastructu
 This Privacy Policy covers:
 - **Website usage** (if applicable)
 - **Software licensing** (no data collection)
-- **Consulting engagements** (limited data access, NDA-protected)
 - **Support communications** (email only)
 
 ---
@@ -94,27 +93,6 @@ This Privacy Policy covers:
 
 ---
 
-## 4. Consulting Engagements
-
-### 4.1 Limited Data Access
-
-**For consulting engagements only (separate from software licensing):**
-
-- **NDA required** — All consulting engagements require a Non-Disclosure Agreement
-- **Limited scope** — Data access is limited to the minimum required for the engagement
-- **Client-controlled** — All data access uses client-approved secure methods
-- **No retention** — Client data is deleted upon project completion unless written authorization is provided
-
-**See `LEGAL/consulting/SECURITY_AND_ACCESS_POLICY.md` for detailed consulting data handling practices.**
-
-### 4.2 Consulting Data Handling
-
-**When consulting engagements require data access:**
-
-- **Purpose-limited** — Data is accessed only for the duration and scope of the project
-- **Client-approved storage** — Data is stored only in client-approved environments
-- **No external transfer** — Data is never transferred to personal cloud storage or external services
-- **Deletion upon completion** — All datasets, credentials, and artifacts are deleted upon delivery
 
 ---
 
@@ -144,7 +122,6 @@ This Privacy Policy covers:
 **This commitment applies to:**
 - All software usage data (which we do not collect)
 - All licensing and support communications
-- All consulting engagement data (NDA-protected)
 - Any information collected through website interactions
 
 **This policy will not change.** Even if our business model evolves, we will never sell user data. This is a core privacy principle that protects our clients' confidentiality and trust.
@@ -182,7 +159,6 @@ This Privacy Policy covers:
 - **Licensing records** — Duration of commercial relationship and as required by law
 - **Support communications** — Support history and as required by law
 - **Website logs** — Up to 90 days (standard server log retention)
-- **Consulting data** — Deleted upon project completion unless written authorization is provided
 
 ### 7.2 Deletion
 
@@ -246,7 +222,6 @@ This Privacy Policy covers:
 - **No storage** — No data is stored in international locations
 - **Client-controlled** — All data remains in client-controlled infrastructure
 
-**For consulting engagements, data location is determined by the client.**
 
 ---
 
@@ -293,7 +268,6 @@ Subject: *Privacy Inquiry — Fox ML Infrastructure*
 
 - `LEGAL/DATA_PROCESSING_ADDENDUM.md` — Data Processing Addendum (DPA) for commercial licensees
 - `LEGAL/SECURITY.md` — Security statement and data handling practices
-- `LEGAL/consulting/SECURITY_AND_ACCESS_POLICY.md` — Security and access policy for consulting engagements
 
 ---
 

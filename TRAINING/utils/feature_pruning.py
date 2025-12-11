@@ -223,13 +223,20 @@ def quick_importance_prune(
             if len(dropped_features) > 10:
                 logger.info(f"    ... and {len(dropped_features) - 10} more")
         
+        # Build full importance dict for snapshot (all features, not just kept ones)
+        full_importance_dict = {
+            feature_names[i]: float(normalized_importance[i])
+            for i in range(len(feature_names))
+        }
+        
         return X_pruned, pruned_names, {
             'original_count': original_count,
             'pruned_count': len(pruned_names),
             'dropped_count': dropped_count,
             'dropped_features': dropped_features,
             'top_10_features': [feature_names[sorted_indices[i]] for i in range(min(10, len(sorted_indices)))],
-            'top_10_importance': top_10_importance.tolist()
+            'top_10_importance': top_10_importance.tolist(),
+            'full_importance_dict': full_importance_dict  # For stability tracking
         }
         
     except Exception as e:

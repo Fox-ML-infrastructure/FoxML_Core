@@ -144,7 +144,8 @@ def train_and_evaluate_models(
     data_interval_minutes: int = 5,  # Data bar interval (default: 5-minute bars)
     time_vals: Optional[np.ndarray] = None,  # Timestamps for each sample (for fold timestamp tracking)
     explicit_interval: Optional[Union[int, str]] = None,  # Explicit interval from config (for consistency)
-    experiment_config: Optional[Any] = None  # Optional ExperimentConfig (for data.bar_interval)
+    experiment_config: Optional[Any] = None,  # Optional ExperimentConfig (for data.bar_interval)
+    output_dir: Optional[Path] = None  # Optional output directory for stability snapshots
 ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, float], float, Dict[str, List[Tuple[str, float]]], Dict[str, Dict[str, float]], List[Dict[str, Any]]]:
     """
     Train multiple models and return task-aware metrics + importance magnitude
@@ -345,7 +346,8 @@ def train_and_evaluate_models(
                 logger.info(f"  No features pruned (all above threshold)")
             
             # Save stability snapshot for quick pruning (non-invasive hook)
-            if 'full_importance_dict' in pruning_stats:
+            # Only save if output_dir is available (optional feature)
+            if 'full_importance_dict' in pruning_stats and output_dir is not None:
                 try:
                     from TRAINING.stability.feature_importance import save_snapshot_hook
                     save_snapshot_hook(
@@ -571,7 +573,9 @@ def train_and_evaluate_models(
     if _CONFIG_AVAILABLE:
         try:
             safety_cfg = get_safety_config()
-            leakage_cfg = safety_cfg.get('leakage_detection', {})
+            # safety_config.yaml has a top-level 'safety' key
+            safety_section = safety_cfg.get('safety', {})
+            leakage_cfg = safety_section.get('leakage_detection', {})
             _correlation_threshold = float(leakage_cfg.get('auto_fix_thresholds', {}).get('perfect_correlation', 0.999))
             _suspicious_score_threshold = float(leakage_cfg.get('model_alerts', {}).get('suspicious_score', 0.99))
         except Exception:
@@ -582,7 +586,9 @@ def train_and_evaluate_models(
         if _CONFIG_AVAILABLE:
             try:
                 safety_cfg = get_safety_config()
-                leakage_cfg = safety_cfg.get('leakage_detection', {})
+                # safety_config.yaml has a top-level 'safety' key
+                safety_section = safety_cfg.get('safety', {})
+                leakage_cfg = safety_section.get('leakage_detection', {})
                 _correlation_threshold = float(leakage_cfg.get('auto_fix_thresholds', {}).get('perfect_correlation', 0.999))
                 _suspicious_score_threshold = float(leakage_cfg.get('model_alerts', {}).get('suspicious_score', 0.99))
             except Exception:
@@ -953,7 +959,10 @@ def train_and_evaluate_models(
             if _CONFIG_AVAILABLE:
                 try:
                     safety_cfg = get_safety_config()
-                    importance_threshold = float(safety_cfg.get('leakage_detection', {}).get('importance', {}).get('single_feature_threshold', 0.50))
+                    # safety_config.yaml has a top-level 'safety' key
+                    safety_section = safety_cfg.get('safety', {})
+                    leakage_cfg = safety_section.get('leakage_detection', {})
+                    importance_threshold = float(leakage_cfg.get('importance', {}).get('single_feature_threshold', 0.50))
                 except Exception:
                     importance_threshold = 0.50
             else:
@@ -1894,7 +1903,10 @@ def detect_leakage(
     if _CONFIG_AVAILABLE:
         try:
             safety_cfg = get_safety_config()
-            warning_cfg = safety_cfg.get('leakage_detection', {}).get('warning_thresholds', {})
+            # safety_config.yaml has a top-level 'safety' key
+            safety_section = safety_cfg.get('safety', {})
+            leakage_cfg = safety_section.get('leakage_detection', {})
+            warning_cfg = leakage_cfg.get('warning_thresholds', {})
         except Exception:
             warning_cfg = {}
     else:
@@ -2163,7 +2175,10 @@ def evaluate_target_predictability(
     if _CONFIG_AVAILABLE:
         try:
             safety_cfg = get_safety_config()
-            ranking_cfg = safety_cfg.get('leakage_detection', {}).get('ranking', {})
+            # safety_config.yaml has a top-level 'safety' key
+            safety_section = safety_cfg.get('safety', {})
+            leakage_cfg = safety_section.get('leakage_detection', {})
+            ranking_cfg = leakage_cfg.get('ranking', {})
             MIN_FEATURES_REQUIRED = int(ranking_cfg.get('min_features_required', 2))
         except Exception:
             MIN_FEATURES_REQUIRED = 2
@@ -2249,7 +2264,10 @@ def evaluate_target_predictability(
         if _CONFIG_AVAILABLE:
             try:
                 safety_cfg = get_safety_config()
-                ranking_cfg = safety_cfg.get('leakage_detection', {}).get('ranking', {})
+                # safety_config.yaml has a top-level 'safety' key
+                safety_section = safety_cfg.get('safety', {})
+                leakage_cfg = safety_section.get('leakage_detection', {})
+                ranking_cfg = leakage_cfg.get('ranking', {})
                 MIN_FEATURES_AFTER_LEAK_REMOVAL = int(ranking_cfg.get('min_features_after_leak_removal', 2))
             except Exception:
                 MIN_FEATURES_AFTER_LEAK_REMOVAL = 2
@@ -2282,7 +2300,10 @@ def evaluate_target_predictability(
     if _CONFIG_AVAILABLE:
         try:
             safety_cfg = get_safety_config()
-            ranking_cfg = safety_cfg.get('leakage_detection', {}).get('ranking', {})
+            # safety_config.yaml has a top-level 'safety' key
+            safety_section = safety_cfg.get('safety', {})
+            leakage_cfg = safety_section.get('leakage_detection', {})
+            ranking_cfg = leakage_cfg.get('ranking', {})
             MIN_FEATURES_FOR_MODEL = int(ranking_cfg.get('min_features_for_model', 3))
         except Exception:
             MIN_FEATURES_FOR_MODEL = 3
@@ -2396,7 +2417,8 @@ def evaluate_target_predictability(
             data_interval_minutes=detected_interval,  # Auto-detected or default
             time_vals=time_vals,  # Pass timestamps for fold tracking
             explicit_interval=explicit_interval,  # Pass explicit interval for consistency
-            experiment_config=experiment_config  # Pass experiment config
+            experiment_config=experiment_config,  # Pass experiment config
+            output_dir=output_dir  # Pass output directory for stability snapshots
         )
         
         if result is None or len(result) != 7:
@@ -2442,7 +2464,9 @@ def evaluate_target_predictability(
         if _CONFIG_AVAILABLE:
             try:
                 safety_cfg = get_safety_config()
-                leakage_cfg = safety_cfg.get('leakage_detection', {})
+                # safety_config.yaml has a top-level 'safety' key
+                safety_section = safety_cfg.get('safety', {})
+                leakage_cfg = safety_section.get('leakage_detection', {})
                 auto_fix_cfg = leakage_cfg.get('auto_fix_thresholds', {})
                 cv_threshold = float(auto_fix_cfg.get('cv_score', 0.99))
                 accuracy_threshold = float(auto_fix_cfg.get('training_accuracy', 0.999))
@@ -2468,6 +2492,7 @@ def evaluate_target_predictability(
             correlation_threshold = 0.999  # FALLBACK_DEFAULT_OK
             auto_fix_enabled = True  # FALLBACK_DEFAULT_OK
             auto_fix_min_confidence = 0.8
+            auto_fix_max_features = 20  # FALLBACK_DEFAULT_OK
         
         # Check if auto-fixer is enabled
         if not auto_fix_enabled:

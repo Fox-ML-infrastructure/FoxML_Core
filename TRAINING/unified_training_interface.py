@@ -165,7 +165,7 @@ class UnifiedTrainingInterface:
                 # Use deterministic seed from determinism system
                 try:
                     from TRAINING.common.determinism import BASE_SEED
-                        split_seed = BASE_SEED if BASE_SEED is not None else 42  # FALLBACK_DEFAULT_OK
+                    split_seed = BASE_SEED if BASE_SEED is not None else 42  # FALLBACK_DEFAULT_OK
                 except:
                     split_seed = 42
                 X_train, X_val, y_train, y_val = train_test_split(

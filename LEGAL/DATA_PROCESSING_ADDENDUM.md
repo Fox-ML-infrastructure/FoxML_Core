@@ -59,27 +59,6 @@ The platform is **client-hosted software** that runs entirely within the client'
 
 ---
 
-## 4. Consulting Engagements
-
-### 4.1 Limited Data Access
-
-**For consulting engagements only (separate from licensing):**
-
-- **NDA required** — All consulting engagements require a Non-Disclosure Agreement
-- **Limited scope** — Data access is limited to the minimum required for the engagement
-- **Client-controlled** — All data access uses client-approved secure methods
-- **No retention** — Client data is deleted upon project completion unless written authorization is provided
-
-**See `LEGAL/consulting/SECURITY_AND_ACCESS_POLICY.md` for detailed consulting security practices.**
-
-### 4.2 Data Handling for Consulting
-
-**When consulting engagements require data access:**
-
-- Data is accessed only for the duration of the project
-- Data is stored only in client-approved environments
-- No data is transferred to personal cloud storage or external services
-- All datasets, credentials, and artifacts are deleted upon delivery
 
 ---
 
@@ -268,7 +247,6 @@ Subject: *Data Processing Addendum Inquiry — Fox ML Infrastructure*
 ## Related Documents
 
 - `LEGAL/SECURITY.md` — Security statement and data handling practices
-- `LEGAL/consulting/SECURITY_AND_ACCESS_POLICY.md` — Detailed security practices for consulting engagements
 - `LEGAL/ENTERPRISE_DELIVERY.md` — Repository structure and delivery model
 - `COMMERCIAL_LICENSE.md` — Commercial license terms
 

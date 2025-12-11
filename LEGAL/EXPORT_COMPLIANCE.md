@@ -123,16 +123,6 @@ This statement is essential for organizations with international operations or c
 
 ---
 
-## 6. Consulting Engagements
-
-### 6.1 International Consulting
-
-**For international consulting engagements:**
-
-- **Compliance required** — Compliance with export control laws is required
-- **Client location** — Client location may affect export control requirements
-- **Technology transfer** — Technology transfer may be subject to export controls
-- **NDA and compliance** — Non-Disclosure Agreements include export control compliance obligations
 
 ---
 
@@ -152,7 +142,7 @@ This statement is essential for organizations with international operations or c
 **Fox ML Infrastructure does not provide:**
 
 - **Legal advice** — Legal advice on export control compliance
-- **Compliance services** — Compliance services or compliance consulting
+- **Compliance services** — Compliance services or compliance guidance
 - **License applications** — Assistance with export license applications
 
 **Licensee should consult with export control counsel for specific compliance questions.**

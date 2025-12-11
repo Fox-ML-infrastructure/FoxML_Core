@@ -40,12 +40,10 @@ This bundle includes the following documents (available as Markdown, ready for P
 - **Subscriptions** — `../LEGAL/SUBSCRIPTIONS.md`
 - **Licensing Overview** — `../LEGAL/LICENSING.md`
 
-### Consulting Documents (If Applicable)
+### Custom Development (If Applicable)
 
-- **Master Consulting Agreement** — `../LEGAL/consulting/MASTER_CONSULTING_AGREEMENT.md`
-- **Statement of Work Template** — `../LEGAL/consulting/STATEMENT_OF_WORK_TEMPLATE.md`
-- **Consulting Pricing** — `../LEGAL/consulting/CONSULTING_PRICING.md`
-- **IP Terms Addendum** — `../LEGAL/consulting/IP_TERMS_ADDENDUM.md`
+- **Statement of Work (SOW)** — Custom development terms are defined in individual SOWs for enterprise licensees
+- **IP Terms** — IP ownership terms are defined in Commercial License Agreement and individual SOWs
 
 ---
 

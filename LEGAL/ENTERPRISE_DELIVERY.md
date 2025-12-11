@@ -102,7 +102,7 @@ This model enables:
 
 ### 2.1 Core Platform IP
 
-**Ownership:** Fox ML Infrastructure (Consultant)
+**Ownership:** Fox ML Infrastructure LLC
 
 **Includes:**
 - Core platform code and architecture
@@ -111,8 +111,8 @@ This model enables:
 - Public OSS core repository contents
 
 **Rights:**
-- Consultant may reuse core platform IP across all clients
-- Consultant may generalize client-specific work and roll into core (unless exclusivity is purchased)
+- Licensor may reuse core platform IP across all licensees
+- Licensor may generalize client-specific work and roll into core (unless exclusivity is purchased)
 - Core platform improvements benefit all licensees
 
 ---
@@ -124,15 +124,15 @@ This model enables:
 **Options:**
 1. **Client-Owned** — Client receives full ownership of custom code, configs, and strategies
 2. **Exclusive License** — Client receives exclusive license (requires premium pricing)
-3. **Non-Exclusive License** — Client receives internal-use license; Consultant may reuse generalized elements
+3. **Non-Exclusive License** — Client receives internal-use license; Licensor may reuse generalized elements
 
 **Default (unless specified otherwise):**
 - Client-specific logic, configs, and strategy code → Client-owned
 - Generic patterns and improvements → May be generalized into core platform
-- Custom work may be generalized and rolled into core product at Consultant's discretion (unless exclusivity premium is paid)
+- Custom work may be generalized and rolled into core product at Licensor's discretion (unless exclusivity premium is paid)
 
 **Critical Clause:**
-> "Custom work may be generalized and rolled into the core product at Consultant's discretion, unless Client has purchased exclusivity rights."
+> "Custom work may be generalized and rolled into the core product at Licensor's discretion, unless Client has purchased exclusivity rights."
 
 This prevents future clients from claiming:
 > "We paid for that feature, you can't give it to others."
@@ -148,9 +148,8 @@ This prevents future clients from claiming:
 
 **Documentation:**
 - IP terms are defined in:
-  - `LEGAL/consulting/IP_TERMS_ADDENDUM.md`
   - Individual Statement of Work (SOW) documents
-  - Master Consulting Agreement (MCA)
+  - Commercial License Agreement (CLA)
 
 ---
 
@@ -255,7 +254,7 @@ Pricing tiers (see `LEGAL/SUBSCRIPTIONS.md`) align with:
 
 ## 5. Benefits of This Model
 
-### 5.1 For Consultant
+### 5.1 For Licensor
 
 - **Scalable maintenance** — Fix bugs once, propagate to all clients
 - **Clear IP boundaries** — Prevents ownership disputes
@@ -282,7 +281,7 @@ Pricing tiers (see `LEGAL/SUBSCRIPTIONS.md`) align with:
 All contracts (SOW/MCA) should include:
 
 - **IP ownership definitions** — What is core platform vs. client-specific
-- **Generalization rights** — Consultant's right to generalize client work (unless exclusivity purchased)
+- **Generalization rights** — Licensor's right to generalize client work (unless exclusivity purchased)
 - **Repository access terms** — Who has access to which repos
 - **Version update terms** — How and when clients receive updates
 - **Exclusivity terms** — If client purchases exclusive rights to features
@@ -292,8 +291,7 @@ All contracts (SOW/MCA) should include:
 ### 6.2 Documentation
 
 IP and delivery terms are documented in:
-- `LEGAL/consulting/IP_TERMS_ADDENDUM.md` — General IP framework
-- `LEGAL/consulting/MASTER_CONSULTING_AGREEMENT.md` — Framework agreement
+- Commercial License Agreement (CLA) — Framework agreement
 - Individual SOW documents — Project-specific terms
 
 ---

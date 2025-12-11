@@ -132,4 +132,16 @@ safety:
       min_confidence: 0.7  # Minimum confidence to auto-fix (0.0 to 1.0)
       max_backups_per_target: 20  # Maximum backups to keep per target
       symbol_holdout_test_size: 0.2  # Test size for symbol holdout split
+    
+    # Feature Importance Stability Tracking
+    feature_importance:
+      # Automatically analyze stability after saving snapshots
+      auto_analyze_stability: true  # Set to false to disable automatic analysis
+      
+      # Stability thresholds for warnings
+      stability_thresholds:
+        min_top_k_overlap: 0.7  # Warn if top-K overlap < 0.7 (Jaccard similarity)
+        min_kendall_tau: 0.6     # Warn if Kendall tau < 0.6 (rank correlation)
+        top_k: 20                # Number of top features to analyze (default: 20)
+        min_snapshots: 2         # Minimum snapshots required for analysis (default: 2)
 

@@ -123,7 +123,7 @@ Tiered support with defined response times, coverage, and channels. Pricing alig
   - Channels: Dedicated premium support email, scheduled support calls (flexible scheduling), direct access to engineering resources and founder-adjacent consultation
   - Includes: Highest priority bug fixes, deployment guidance, architecture review, direct engineering consultation, flexible support call scheduling, strategic infrastructure guidance
 
-**Note:** Support SLAs do not include custom feature development, which requires separate consulting agreements or Statements of Work (SOWs). See `LEGAL/SUPPORT_POLICY.md` and `LEGAL/SERVICE_LEVEL_AGREEMENT.md` for complete details.
+**Note:** Support SLAs do not include custom feature development, which requires separate Statements of Work (SOWs). See `LEGAL/SUPPORT_POLICY.md` and `LEGAL/SERVICE_LEVEL_AGREEMENT.md` for complete details.
 
 ---
 
@@ -139,7 +139,7 @@ One-time professional services for integration and on-premises deployment setup.
 - Initial integration with client infrastructure
 
 **Excludes:**
-- Ongoing feature development (separate consulting)
+- Ongoing feature development (separate SOW)
 - Ongoing maintenance (covered by support SLA or separate agreement)
 - Custom feature development (separate SOW)
 
@@ -170,7 +170,7 @@ One-time onboarding services to accelerate adoption. Pricing reflects the value 
 
 ### Private Slack / Direct Founder Access — $300,000–$1,000,000 / year
 
-Direct communication channel with founder for strategic discussions and high-level guidance. This is **not hourly consulting** — it is rare, non-replicable strategic access to the architect of the entire system. Comparable to CTO-level advisory fees for enterprise infrastructure. **Not a replacement for paid support SLA** (these are separate services).
+Direct communication channel with founder for strategic discussions and high-level guidance. This is strategic access to the architect of the entire system. Comparable to CTO-level advisory fees for enterprise infrastructure. **Not a replacement for paid support SLA** (these are separate services).
 
 **Included:**
 - Up to 3–5 named contacts (depending on tier)
@@ -180,7 +180,7 @@ Direct communication channel with founder for strategic discussions and high-lev
 - Access to the only person who knows the system end-to-end
 
 **Excludes:**
-- Feature development requests (requires separate consulting/SOW)
+- Feature development requests (requires separate SOW)
 - Technical support (covered by support SLA)
 - Emergency response (covered by support SLA)
 - Non-business-hours availability
@@ -188,7 +188,7 @@ Direct communication channel with founder for strategic discussions and high-lev
 **Boundaries:**
 - This is a communication channel for strategic alignment, not a 24/7 hotline
 - Technical issues should go through the support SLA channels
-- Custom development requests require separate consulting agreements
+- Custom development requests require separate Statements of Work (SOWs)
 
 ---
 

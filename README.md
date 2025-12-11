@@ -135,9 +135,9 @@ See:
 
 ---------------------------------------------------------------------
 
-## Consulting Services
+## Enterprise Partnerships
 
-I provide advanced engineering and research infrastructure consulting for organizations requiring specialized ML, quantitative, or HPC systems.
+FoxML Core is available for enterprise licensing and custom development partnerships for organizations requiring specialized ML, quantitative, or HPC systems.
 
 For full policies and contracting information, see the [`LEGAL/`](LEGAL/) directory in this repository. 
 
@@ -230,5 +230,5 @@ FoxML_Core/
 ## Contact
 linkedin: https://www.linkedin.com/in/jennifer-lewis-3434b3315/
 
-For consulting, enterprise licensing, or organizational engagements:  
+For enterprise licensing or organizational engagements:  
 **jenn.lewis5789@gmail.com**

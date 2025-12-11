@@ -74,22 +74,6 @@ This directory contains PDF versions of all enterprise-ready legal and operation
 
 ---
 
-## Consulting Services Documentation
-
-38. **consulting_CONSULTING_OVERVIEW.pdf** — Consulting services overview
-39. **consulting_CONSULTING.pdf** — Complete consulting documentation
-40. **consulting_CONSULTING_POLICY.pdf** — Consulting policy
-41. **consulting_CONSULTING_PRICING.pdf** — Consulting pricing
-42. **consulting_MASTER_CONSULTING_AGREEMENT.pdf** — Master consulting agreement template
-43. **consulting_STATEMENT_OF_WORK_TEMPLATE.pdf** — Statement of Work (SOW) template
-44. **consulting_IP_TERMS_ADDENDUM.pdf** — IP terms addendum for consulting
-45. **consulting_CAPABILITIES_OVERVIEW.pdf** — Consulting capabilities overview
-46. **consulting_COMMUNICATION_POLICY.pdf** — Communication policy for consulting engagements
-47. **consulting_SECURITY_AND_ACCESS_POLICY.pdf** — Security and access policy for consulting
-48. **consulting_INTAKE_FORM.pdf** — Consulting intake form
-49. **consulting_CURRENT_AVAILABILITY.pdf** — Current consulting availability
-50. **consulting_NOTICE_IMPORTANT.pdf** — Important notices for consulting services
-51. **consulting_ADVANCED_OUTLINE_WIP.pdf** — Advanced consulting outline (work in progress)
 
 ---
 
@@ -170,7 +154,6 @@ Subject: *Enterprise Bundle Inquiry — Fox ML Infrastructure*
 - **Policies & Standards**: 2 documents
 - **Architecture & Technical**: 1 document
 - **Reference & FAQ**: 4 documents
-- **Consulting Services**: 14 documents
 
 ---
 

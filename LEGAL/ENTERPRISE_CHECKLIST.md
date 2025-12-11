@@ -216,7 +216,7 @@ It covers key areas that enterprise buyers, legal departments, and CTOs typicall
 ### Enterprise Documentation
 - [x] **Delivery model** — Repository structure and IP ownership
 - [x] **Onboarding guide** — Client onboarding and integration guide
-- [x] **Custom development** — SOW template and consulting process
+- [x] **Custom development** — SOW process for enterprise licensees
 
 **Status:** ✅ Complete — Enterprise features and documentation
 

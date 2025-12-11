@@ -231,3 +231,66 @@ class SystemConfig:
     defaults: Dict[str, Any] = field(default_factory=dict)
     backup: Dict[str, Any] = field(default_factory=dict)
 
+
+# ============================================================================
+# Config Validation Functions (for catching silent failures)
+# ============================================================================
+
+def validate_safety_config(cfg: Dict[str, Any], strict: bool = True) -> None:
+    """
+    Validate safety_config structure.
+    
+    This prevents silent failures where config values fall back to defaults
+    due to incorrect key paths (e.g., missing 'safety.' prefix).
+    
+    Args:
+        cfg: Safety config dictionary (from get_safety_config())
+        strict: If True, raise ValueError on validation failure.
+                If False, log warning and continue (graceful degradation).
+    
+    Raises:
+        ValueError: If strict=True and validation fails
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if not isinstance(cfg, dict):
+        msg = f"safety_config must be a dict, got {type(cfg)}"
+        if strict:
+            raise ValueError(msg)
+        logger.warning(f"[CONFIG VALIDATION] {msg}")
+        return
+    
+    safety_section = cfg.get('safety', {})
+    if not isinstance(safety_section, dict):
+        msg = f"safety_config.safety must be a dict, got {type(safety_section)}"
+        if strict:
+            raise ValueError(msg)
+        logger.warning(f"[CONFIG VALIDATION] {msg}")
+        return
+    
+    leakage_detection = safety_section.get('leakage_detection', {})
+    if not isinstance(leakage_detection, dict):
+        msg = f"safety_config.safety.leakage_detection must be a dict, got {type(leakage_detection)}"
+        if strict:
+            raise ValueError(msg)
+        logger.warning(f"[CONFIG VALIDATION] {msg}")
+        return
+    
+    # Validate critical keys exist
+    required_keys = [
+        'auto_fix_max_features_per_run',
+        'auto_fix_min_confidence',
+        'auto_fix_enabled'
+    ]
+    
+    missing = [k for k in required_keys if k not in leakage_detection]
+    if missing:
+        msg = (
+            f"safety_config.safety.leakage_detection missing required keys: {missing}. "
+            f"Available keys: {list(leakage_detection.keys())}"
+        )
+        if strict:
+            raise ValueError(msg)
+        logger.warning(f"[CONFIG VALIDATION] {msg}")
+
