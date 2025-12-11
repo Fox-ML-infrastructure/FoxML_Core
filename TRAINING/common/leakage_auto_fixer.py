@@ -667,6 +667,20 @@ class LeakageAutoFixer:
         
         # Filter by confidence
         high_confidence = [d for d in detections if d.confidence >= min_confidence]
+        low_confidence = [d for d in detections if d.confidence < min_confidence]
+        
+        # Log confidence distribution for visibility
+        if detections:
+            logger.info(f"📊 Detection confidence distribution:")
+            logger.info(f"   Total detections: {len(detections)}")
+            logger.info(f"   High confidence (>= {min_confidence}): {len(high_confidence)}")
+            if low_confidence:
+                top_low = sorted(low_confidence, key=lambda x: x.confidence, reverse=True)[:3]
+                logger.warning(f"   Low confidence (< {min_confidence}): {len(low_confidence)}")
+                logger.warning(f"   Top low-confidence (not fixed): {', '.join([f'{d.feature_name} (conf={d.confidence:.2f})' for d in top_low])}")
+            if high_confidence:
+                top_high = sorted(high_confidence, key=lambda x: x.confidence, reverse=True)[:3]
+                logger.info(f"   Top high-confidence (will fix): {', '.join([f'{d.feature_name} (conf={d.confidence:.2f})' for d in top_high])}")
         
         # Backup configs BEFORE checking if there are leaks to fix
         # This ensures we have a backup even when auto-fix mode is enabled but no leaks detected
@@ -685,7 +699,11 @@ class LeakageAutoFixer:
                 )
         
         if not high_confidence:
-            logger.info(f"No leaks detected with confidence >= {min_confidence}")
+            if detections:
+                logger.warning(f"⚠️  {len(detections)} leaks detected but ALL below confidence threshold ({min_confidence})")
+                logger.warning(f"   Consider lowering min_confidence or investigating why confidence is low")
+            else:
+                logger.info(f"No leaks detected with confidence >= {min_confidence}")
             empty_autofix_info = AutoFixInfo(
                 modified_configs=False,
                 modified_files=[],
