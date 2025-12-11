@@ -1049,7 +1049,8 @@ def train_model_and_get_importance(
         try:
             X_transformed = selector.transform(X)
             train_score = selector.estimator_.score(X_transformed, y) if hasattr(selector, 'estimator_') else 0.0
-        except:
+        except Exception as e:
+            logger.debug(f"    rfe: Failed to compute train score: {e}")
             train_score = 0.0
     
     elif model_family == 'boruta':
