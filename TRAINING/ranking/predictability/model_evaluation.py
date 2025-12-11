@@ -2840,6 +2840,34 @@ def evaluate_target_predictability(
     # Store suspicious features in result for summary report
     result.suspicious_features = all_suspicious_features if all_suspicious_features else None
     
+    # Track reproducibility: compare to previous target ranking run
+    # This runs regardless of which entry point calls this function
+    if output_dir and result.mean_score != -999.0:
+        try:
+            from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+            
+            tracker = ReproducibilityTracker(output_dir=output_dir)
+            
+            # Log comparison with previous run
+            tracker.log_comparison(
+                stage="target_ranking",
+                item_name=target_name,
+                metrics={
+                    "metric_name": metric_name,
+                    "mean_score": result.mean_score,
+                    "std_score": result.std_score,
+                    "mean_importance": result.mean_importance,
+                    "composite_score": result.composite_score
+                },
+                additional_data={
+                    "n_models": result.n_models,
+                    "leakage_flag": result.leakage_flag,
+                    "task_type": result.task_type.name if hasattr(result.task_type, 'name') else str(result.task_type)
+                }
+            )
+        except Exception as e:
+            logger.debug(f"Reproducibility tracking failed for {target_name}: {e}")
+    
     return result
 
 

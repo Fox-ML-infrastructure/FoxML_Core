@@ -340,41 +340,6 @@ def rank_targets(
                     experiment_config=experiment_config
                 )
             
-            # Track reproducibility: compare to previous target ranking run
-            if output_dir and result.mean_score != -999.0:
-                try:
-                    from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
-                    
-                    tracker = ReproducibilityTracker(output_dir=output_dir)
-                    
-                    # Determine metric name based on task type
-                    if result.task_type == TaskType.REGRESSION:
-                        metric_name = "R²"
-                    elif result.task_type == TaskType.BINARY_CLASSIFICATION:
-                        metric_name = "ROC-AUC"
-                    else:
-                        metric_name = "Accuracy"
-                    
-                    # Log comparison with previous run
-                    tracker.log_comparison(
-                        stage="target_ranking",
-                        item_name=target_name,
-                        metrics={
-                            "metric_name": metric_name,
-                            "mean_score": result.mean_score,
-                            "std_score": result.std_score,
-                            "mean_importance": result.mean_importance,
-                            "composite_score": result.composite_score
-                        },
-                        additional_data={
-                            "n_models": result.n_models,
-                            "leakage_flag": result.leakage_flag,
-                            "task_type": result.task_type.name if hasattr(result.task_type, 'name') else str(result.task_type)
-                        }
-                    )
-                except Exception as e:
-                    logger.debug(f"Reproducibility tracking failed for {target_name}: {e}")
-            
             # Skip degenerate/failed targets (marked with mean_score = -999)
             # Also skip targets with unresolved leakage or suspicious scores
             # SUSPICIOUS/SUSPICIOUS_STRONG targets are excluded - they likely have structural leakage
