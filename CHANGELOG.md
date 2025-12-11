@@ -51,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CLI/Config separation policy** (2025-12-11) — New policy document defining CLI vs Config separation. CLI should only provide inputs, config overrides, and operational flags. All configuration values come from config files (SST compliant). See [CLI vs Config Separation](DOCS/03_technical/design/CLI_CONFIG_SEPARATION.md).
+- **Intelligent training config section** (2025-12-11) — Added `intelligent_training` section to `pipeline_config.yaml` with all settings (auto_targets, top_n_targets, top_m_features, strategy, data limits, etc.). All settings now configurable via YAML instead of CLI.
 - **Config cleaner utility** (2025-12-11) — New `TRAINING/utils/config_cleaner.py` module providing systematic parameter validation using `inspect.signature()` to prevent parameter passing errors. Integrated into all model instantiation paths. See [Detailed Changelog](DOCS/02_reference/CHANGELOG_DETAILED.md) for full details.
 - **Reproducibility tracking module** (2025-12-11) — Reusable `ReproducibilityTracker` class for automatic reproducibility verification across pipeline stages. Compares runs with tolerance-based verification and flags reproducible vs different runs. See [Detailed Changelog](DOCS/02_reference/CHANGELOG_DETAILED.md) for full details.
 - **Feature Importance Stability Tracking System** (2025-12-10) — Comprehensive system for tracking and analyzing feature importance stability across pipeline runs with automatic snapshot capture and config-driven automation.
@@ -63,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **CLI/Config separation** (2025-12-11) — Enforced SST compliance by moving CLI settings to config files. Removed 15+ config-related CLI arguments from `intelligent_trainer.py`. CLI now only provides: required inputs (data-dir, symbols), config overrides (experiment-config), and operational flags (resume, force-refresh). All settings load from config files. See [CLI vs Config Separation](DOCS/03_technical/design/CLI_CONFIG_SEPARATION.md) for policy.
 - **Silent error visibility** (2025-12-11) — Added comprehensive logging to all previously silent failure paths: ImportError fallbacks, importance extraction validation (None/type/length checks), bare except clauses, config loading failures, and empty results aggregation. All failures now have appropriate logging levels. See [Detailed Changelog](DOCS/02_reference/CHANGELOG_DETAILED.md) for full details.
 - **Parameter passing errors** (2025-12-11) — Systematic fix using shared config cleaner utility prevents "got multiple values" and "unexpected keyword argument" errors across all model families. All model constructors now validate parameters against estimator signatures. See [Detailed Changelog](DOCS/02_reference/CHANGELOG_DETAILED.md) for full details.
 - **Model config sanitization** (2025-12-11) — Fixed TypeError/ValueError errors when global defaults were injected. All models now sanitize configs before instantiation, removing incompatible parameters while preserving determinism.
