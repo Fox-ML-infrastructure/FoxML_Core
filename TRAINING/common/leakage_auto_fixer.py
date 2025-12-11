@@ -281,7 +281,8 @@ class LeakageAutoFixer:
         except Exception:
             perfect_score_threshold = 0.99  # FALLBACK_DEFAULT_OK
         
-        logger.debug(f"Leakage detection: train_score={train_score:.4f if train_score is not None else None}, "
+        train_score_str = f"{train_score:.4f}" if train_score is not None else "None"
+        logger.debug(f"Leakage detection: train_score={train_score_str}, "
                     f"threshold={perfect_score_threshold:.4f}, "
                     f"features={len(feature_names)}, "
                     f"importance_keys={len(model_importance) if model_importance else 0}")
