@@ -35,6 +35,10 @@ tracker.log_comparison(
 - **Tolerance-based verification**: Configurable tolerances for floating-point differences
 - **Multi-stage support**: Track different pipeline stages separately (target_ranking, feature_selection, model_training, etc.)
 - **Comprehensive coverage**: Integrated into all deterministic pipeline stages (target ranking, feature selection, model training)
+- **Architectural design**: Tracking is integrated into computation modules, not entry points
+  - Works regardless of which entry point calls the computation functions
+  - Single source of tracking logic (no duplication)
+  - Computation functions handle their own tracking
 - **Run history**: Keeps last N runs per item (configurable, default: 10)
 - **Structured logging**: Clear ✅/⚠️ indicators for reproducible vs different runs
 - **JSON storage**: Human-readable JSON format for easy analysis
@@ -114,40 +118,49 @@ Save a run without comparison (useful for first runs or manual tracking).
 
 ## Integration Examples
 
+**Note**: These examples show how tracking is integrated into computation functions. The actual integration is already done in the codebase - these examples are for reference if you need to add tracking to new computation functions.
+
 ### Target Ranking
 
+Tracking is integrated into `evaluate_target_predictability()` in `TRAINING/ranking/predictability/model_evaluation.py`:
+
 ```python
-from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
-
-# After evaluating a target
-result = evaluate_target_predictability(...)
-
-# Determine metric name based on task type
-if result.task_type == TaskType.REGRESSION:
-    metric_name = "R²"
-elif result.task_type == TaskType.BINARY_CLASSIFICATION:
-    metric_name = "ROC-AUC"
-else:
-    metric_name = "Accuracy"
-
-# Track reproducibility
-if output_dir is not None:
-    tracker = ReproducibilityTracker(output_dir=output_dir)
-    tracker.log_comparison(
-        stage="target_ranking",
-        item_name=target_name,
-        metrics={
-            "metric_name": metric_name,
-            "mean_score": result.mean_score,
-            "std_score": result.std_score,
-            "mean_importance": result.mean_importance,
-            "composite_score": result.composite_score,
-            "n_models": result.n_models,
-            "model_scores": result.model_scores,
-            "leakage_flag": result.leakage_flag
-        }
-    )
+# Inside evaluate_target_predictability() function, after result is created
+if output_dir and result.mean_score != -999.0:
+    try:
+        from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+        
+        tracker = ReproducibilityTracker(output_dir=output_dir)
+        
+        # Determine metric name based on task type
+        if result.task_type == TaskType.REGRESSION:
+            metric_name = "R²"
+        elif result.task_type == TaskType.BINARY_CLASSIFICATION:
+            metric_name = "ROC-AUC"
+        else:
+            metric_name = "Accuracy"
+        
+        tracker.log_comparison(
+            stage="target_ranking",
+            item_name=target_name,
+            metrics={
+                "metric_name": metric_name,
+                "mean_score": result.mean_score,
+                "std_score": result.std_score,
+                "mean_importance": result.mean_importance,
+                "composite_score": result.composite_score
+            },
+            additional_data={
+                "n_models": result.n_models,
+                "leakage_flag": result.leakage_flag,
+                "task_type": result.task_type.name
+            }
+        )
+    except Exception as e:
+        logger.debug(f"Reproducibility tracking failed for {target_name}: {e}")
 ```
+
+**Why in computation module**: This ensures tracking works whether called from `intelligent_trainer`, standalone scripts, or programmatic calls.
 
 ### Model Training
 
@@ -183,10 +196,88 @@ if model_result and model_result.get('success', False):
 
 ### Feature Selection
 
-```python
-from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+Tracking is integrated into `select_features_for_target()` in `TRAINING/ranking/feature_selector.py`:
 
-# After aggregating feature selection results
+```python
+# Inside select_features_for_target() function, after results are computed
+if output_dir and summary_df is not None and len(summary_df) > 0:
+    try:
+        from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+        
+        tracker = ReproducibilityTracker(output_dir=output_dir)
+        
+        # Calculate summary metrics
+        top_feature_score = summary_df.iloc[0]['consensus_score'] if not summary_df.empty else 0.0
+        mean_consensus = summary_df['consensus_score'].mean()
+        std_consensus = summary_df['consensus_score'].std()
+        n_features_selected = len(selected_features)
+        n_successful_families = len([s for s in all_family_statuses if s.get('status') == 'success'])
+        
+        tracker.log_comparison(
+            stage="feature_selection",
+            item_name=target_column,
+            metrics={
+                "metric_name": "Consensus Score",
+                "mean_score": mean_consensus,
+                "std_score": std_consensus,
+                "mean_importance": top_feature_score,
+                "composite_score": mean_consensus,
+                "n_features_selected": n_features_selected,
+                "n_successful_families": n_successful_families
+            },
+            additional_data={
+                "top_feature": summary_df.iloc[0]['feature'] if not summary_df.empty else None,
+                "top_n": top_n or len(selected_features),
+                "n_symbols": len(symbols)
+            }
+        )
+    except Exception as e:
+        logger.debug(f"Reproducibility tracking failed for {target_column}: {e}")
+```
+
+**Why in computation module**: This ensures tracking works whether called from `intelligent_trainer`, standalone scripts, or programmatic calls.
+
+### Model Training
+
+Tracking is integrated into the training loop in `TRAINING/training_strategies/training.py`:
+
+```python
+# Inside training loop, after successful model training
+if output_dir and model_result.get('success', False):
+    try:
+        from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+        tracker = ReproducibilityTracker(output_dir=output_dir)
+        
+        # Extract metrics from strategy_manager if available
+        strategy_manager = model_result.get('strategy_manager')
+        metrics = {}
+        if strategy_manager and hasattr(strategy_manager, 'cv_scores'):
+            cv_scores = strategy_manager.cv_scores
+            if cv_scores and len(cv_scores) > 0:
+                metrics = {
+                    "metric_name": "CV Score",
+                    "mean_score": float(np.mean(cv_scores)),
+                    "std_score": float(np.std(cv_scores)),
+                    "composite_score": float(np.mean(cv_scores))
+                }
+        
+        if metrics:
+            tracker.log_comparison(
+                stage="model_training",
+                item_name=f"{target}:{family}",
+                metrics=metrics,
+                additional_data={
+                    "strategy": strategy,
+                    "n_features": len(feature_names) if feature_names else 0
+                }
+            )
+    except Exception as e:
+        logger.debug(f"Reproducibility tracking failed for {family}:{target}: {e}")
+```
+
+### Custom Pipeline Stage (Example for New Code)
+
+If you're adding tracking to a new computation function:
 summary_df, selected_features = aggregate_multi_model_importance(...)
 
 # Calculate summary metrics
@@ -467,23 +558,25 @@ The reproducibility tracker is currently integrated into:
 
 ## Extending to New Stages
 
-To add reproducibility tracking to a new pipeline stage:
+**Architecture Principle**: Add tracking to computation functions, not entry points. This ensures tracking works regardless of how the function is called.
 
-1. **Import the tracker:**
+To add reproducibility tracking to a new computation function:
+
+1. **Identify the computation function** where results are computed (not the entry point)
+
+2. **Import the tracker** inside the function (lazy import to avoid circular dependencies):
    ```python
    from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
    ```
 
-2. **Initialize after computing results:**
+3. **Add tracking after results are computed**, before returning:
    ```python
-   if output_dir is not None:
-       tracker = ReproducibilityTracker(output_dir=output_dir)
-   ```
-
-3. **Call `log_comparison()` with your metrics:**
-   ```python
-       tracker.log_comparison(
-           stage="your_stage_name",
+   # After computing final results
+   if output_dir and results_are_valid:
+       try:
+           tracker = ReproducibilityTracker(output_dir=output_dir)
+           tracker.log_comparison(
+               stage="your_stage_name",
            item_name=unique_item_identifier,
            metrics={
                "metric_name": "Your Metric",

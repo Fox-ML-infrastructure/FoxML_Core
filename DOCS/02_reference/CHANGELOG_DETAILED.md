@@ -51,13 +51,23 @@ Phase 1 functioning properly - Ranking and selection pipelines unified with cons
 
 **Comprehensive Reproducibility Tracking**
 - **Enhancement**: Added reproducibility tracking to all deterministic pipeline stages
-- **Target Ranking**: Tracks mean_score, std_score, mean_importance, composite_score after each target evaluation
-- **Model Training**: Tracks CV scores (mean/std) after each successful model training
-- **Feature Selection**: Already existed, now comprehensive across all stages
+- **Architectural Improvement**: Moved tracking from entry points to computation modules
+  - **Target Ranking**: Tracking in `evaluate_target_predictability()` in `model_evaluation.py` (computation module)
+  - **Feature Selection**: Tracking in `select_features_for_target()` in `feature_selector.py` (computation module)
+  - **Model Training**: Tracking in training loop in `training.py` (computation module)
+- **Benefits**:
+  - Works regardless of entry point (intelligent_trainer, standalone scripts, programmatic calls)
+  - Single source of tracking logic (no duplication)
+  - Better architecture: computation functions handle their own tracking
+  - Easier maintenance: update tracking in one place
 - **Visibility**: Fixed issue where logs weren't appearing - now logs to both internal and main loggers
-- **Files**: 
-  - `TRAINING/ranking/predictability/main.py` - Added tracking after target evaluation
+- **Files Modified**: 
+  - `TRAINING/ranking/predictability/model_evaluation.py` - Added tracking to `evaluate_target_predictability()`
+  - `TRAINING/ranking/feature_selector.py` - Added tracking to `select_features_for_target()`
   - `TRAINING/training_strategies/training.py` - Added tracking after model training
+  - `TRAINING/ranking/target_ranker.py` - Removed duplicate tracking (now in computation module)
+  - `TRAINING/ranking/predictability/main.py` - Removed duplicate tracking (now in computation module)
+  - `TRAINING/ranking/multi_model_feature_selection.py` - Removed duplicate tracking (now in computation module)
   - `TRAINING/utils/reproducibility_tracker.py` - Enhanced with visibility fixes
 
 #### Config Parameter Validation & Silent Error Visibility (2025-12-11)
