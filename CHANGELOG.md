@@ -100,6 +100,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Silent error visibility improvements** (2025-12-11) — Enhanced observability by adding logging to all previously silent failure paths:
+  - **ImportError fallback in target validation**: Added DEBUG logging when `validate_target` module is unavailable and fallback validation is used
+  - **Importance extraction validation**: Added comprehensive validation and logging for importance extraction failures:
+    - Validates importance is not None before use
+    - Validates importance is correct type (pd.Series) and converts if needed
+    - Validates importance length matches feature count and pads/truncates with warnings
+    - Wraps entire extraction in try/except with ERROR-level logging on failures
+  - **Bare except clauses**: Replaced all bare `except:` clauses with `except Exception as e:` and added DEBUG-level logging:
+    - Stability selection bootstrap loop now logs when iterations fail
+    - RFE score computation now logs when scoring fails
+  - **Reproducibility tracker visibility**: Fixed issue where reproducibility comparison logs were not visible in main script output by ensuring logger propagation and fallback to main logger
+  - **Config loading failures**: Added DEBUG-level logging to all config loading exception handlers (SHAP config, RFE config, Boruta config, max_samples, etc.) that previously silently fell back to defaults
+  - **Empty results aggregation**: Added WARNING-level log when all model families fail and empty results are returned
+  - All silent failures now have appropriate logging levels (DEBUG for expected fallbacks, WARNING for unexpected conditions, ERROR for actual failures)
 - **Systematic parameter passing error prevention** (2025-12-11) — Implemented systematic fix for parameter passing errors using shared config cleaner utility:
   - **All model families in multi_model_feature_selection.py**: LightGBM, XGBoost, RandomForest, MLPRegressor, CatBoost, Lasso now use `clean_config_for_estimator()` helper
   - **All model constructors in task_types.py**: Fixed with proper closure handling (explicit copies in lambda closures to prevent reference issues)
