@@ -565,7 +565,7 @@ The pipeline automatically assesses target quality and routes targets into opera
 - **experimental**: Fragile signal (LOW confidence, especially boruta_zero_confirmed)
 
 **Configuration:**
-All thresholds and routing rules are configurable in `CONFIG/feature_selection/multi_model.yaml` under the `confidence` section. See [Feature & Target Configs](../../02_reference/configuration/FEATURE_TARGET_CONFIGS.md#target-confidence--routing) for details.
+All thresholds and routing rules are configurable in `CONFIG/feature_selection/multi_model.yaml` under the `confidence` section. See [Feature & Target Configs](../02_reference/configuration/FEATURE_TARGET_CONFIGS.md#target-confidence--routing) for details.
 
 **Output:**
 - Per-target: `target_confidence.json`, `target_routing.json`

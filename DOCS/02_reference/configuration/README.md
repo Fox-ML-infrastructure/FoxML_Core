@@ -218,7 +218,7 @@ lgbm_params['verbose'] = lgbm_cfg.native_verbosity
 
 **Location:** `CONFIG/logging_config.yaml`
 
-See [Structured Logging Configuration](../../../CHANGELOG.md#structured-logging-configuration-system) for complete details.
+See [CHANGELOG](../../../CHANGELOG.md) for logging configuration details.
 
 ### 2. Training Configuration (`training_config/`)
 
@@ -855,14 +855,14 @@ For configuration questions or issues, refer to:
 - `config_loader.py` - Implementation details
 - Individual config files - Inline documentation
 - Training pipeline code - Usage examples
-- [Config Loader API](../docs/02_reference/configuration/CONFIG_LOADER_API.md) - Complete API reference
+- [Config Loader API](CONFIG_LOADER_API.md) - Complete API reference
 
 ## Related Documentation
 
 - **[Modular Config System](MODULAR_CONFIG_SYSTEM.md)** - Complete guide to modular configs (includes `logging_config.yaml`)
-- [Config Basics](../01_tutorials/configuration/CONFIG_BASICS.md) - Configuration fundamentals tutorial (includes `logging_config.yaml` example)
-- [Config Examples](../01_tutorials/configuration/CONFIG_EXAMPLES.md) - Example configurations
-- [Advanced Config](../01_tutorials/configuration/ADVANCED_CONFIG.md) - Advanced configuration guide
+- [Config Basics](../../01_tutorials/configuration/CONFIG_BASICS.md) - Configuration fundamentals tutorial (includes `logging_config.yaml` example)
+- [Config Examples](../../01_tutorials/configuration/CONFIG_EXAMPLES.md) - Example configurations
+- [Advanced Config](../../01_tutorials/configuration/ADVANCED_CONFIG.md) - Advanced configuration guide
 - [Config Loader API](CONFIG_LOADER_API.md) - Complete API reference (includes logging config utilities)
 - [Usage Examples](USAGE_EXAMPLES.md) - Practical examples (includes interval config and CatBoost examples)
 - [Ranking and Selection Consistency](../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior guide
@@ -870,5 +870,5 @@ For configuration questions or issues, refer to:
 - [Config Schema](../api/CONFIG_SCHEMA.md) - Configuration schema documentation
 - [Environment Variables](ENVIRONMENT_VARIABLES.md) - Environment variable overrides
 - [Model Config Reference](../models/MODEL_CONFIG_REFERENCE.md) - Model-specific configurations
-- [Intelligence Layer Overview](../03_technical/research/INTELLIGENCE_LAYER.md) - How configs are used in intelligent training
-- [Leakage Analysis](../03_technical/research/LEAKAGE_ANALYSIS.md) - Leakage detection configuration details
+- [Intelligence Layer Overview](../../03_technical/research/INTELLIGENCE_LAYER.md) - How configs are used in intelligent training
+- [Leakage Analysis](../../03_technical/research/LEAKAGE_ANALYSIS.md) - Leakage detection configuration details

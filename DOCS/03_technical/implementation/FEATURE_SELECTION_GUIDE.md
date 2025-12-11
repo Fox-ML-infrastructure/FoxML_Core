@@ -294,10 +294,8 @@ print(model.encoder.training)  # Should be False
 
 ## Related Documentation
 
-- [Ranking and Selection Consistency](../../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior (includes sklearn preprocessing)
-- [Intelligent Training Tutorial](../../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Automated feature selection workflow
-- [Feature Selection Tutorial](../../../01_tutorials/training/FEATURE_SELECTION_TUTORIAL.md) - Manual feature selection tutorial
+- [Ranking and Selection Consistency](../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior (includes sklearn preprocessing)
+- [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Automated feature selection workflow
+- [Feature Selection Tutorial](../../01_tutorials/training/FEATURE_SELECTION_TUTORIAL.md) - Manual feature selection tutorial
 - [Training Optimization Guide](TRAINING_OPTIMIZATION_GUIDE.md) - Optimization guide
-- [First Batch Specs Implementation](FIRST_BATCH_SPECS_IMPLEMENTATION.md) - Trainer-level changes
-- [Strategy Updates](STRATEGY_UPDATES.md) - Strategy-level changes
-- [Modular Config System](../../../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md) - Config system guide
+- [Modular Config System](../../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md) - Config system guide

@@ -65,6 +65,6 @@ journalctl -u your-service --since "2025-12-05 10:00:00"
 
 ## See Also
 
-- [Journald Logging](../../JOURNALD_LOGGING.md) - Complete guide
+- [Journald Logging](JOURNALD_LOGGING.md) - This document
 - [Restore from Logs](RESTORE_FROM_LOGS.md) - Recovery procedures
 

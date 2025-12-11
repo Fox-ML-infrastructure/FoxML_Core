@@ -125,7 +125,7 @@ X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
 
 **Used by:** Lasso, Mutual Information, Univariate Selection, Boruta, Stability Selection (ranking and selection)
 
-**Note:** Boruta uses this for preprocessing but acts as a statistical gatekeeper (not just another importance scorer). See [Ranking and Selection Consistency](../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md#boruta-statistical-gatekeeper) for details.
+**Note:** Boruta uses this for preprocessing but acts as a statistical gatekeeper (not just another importance scorer). See [Ranking and Selection Consistency](../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md#boruta-statistical-gatekeeper) for details.
 
 ## Training
 

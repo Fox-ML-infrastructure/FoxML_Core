@@ -49,7 +49,7 @@ lgbm_params['verbose'] = lgbm_cfg.native_verbosity
 
 **Configuration File:** `CONFIG/logging_config.yaml`
 
-See [Structured Logging Configuration](../../../CHANGELOG.md#structured-logging-configuration-system) for complete details.
+See [CHANGELOG](../../../CHANGELOG.md) for logging configuration details.
 
 ## Functions
 

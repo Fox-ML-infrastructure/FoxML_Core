@@ -171,7 +171,7 @@ lgbm_cfg = get_backend_logging_config('lightgbm')
 lgbm_params['verbose'] = lgbm_cfg.native_verbosity
 ```
 
-See [Structured Logging Configuration](../../../CHANGELOG.md#structured-logging-configuration-system) for complete details.
+See [CHANGELOG](../../../CHANGELOG.md) for logging configuration details.
 
 ## Typed Config Classes
 
@@ -411,5 +411,5 @@ ValueError: ExperimentConfig.name cannot be empty
 - [Config Loader API](CONFIG_LOADER_API.md) - Programmatic config loading (includes logging config utilities)
 - [Ranking and Selection Consistency](../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior guide
 - [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Complete tutorial
-- [CLI Reference](../../api/CLI_REFERENCE.md) - Command-line options
+- [CLI Reference](../api/CLI_REFERENCE.md) - Command-line options
 

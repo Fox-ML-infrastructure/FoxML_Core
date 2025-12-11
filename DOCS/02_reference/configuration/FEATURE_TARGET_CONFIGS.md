@@ -264,7 +264,7 @@ Boruta is implemented as a **statistical gatekeeper**, not just another importan
 - Modifies final consensus via bonuses/penalties (confirmed: +0.2, rejected: -0.3, tentative: neutral)
 - Provides separate columns in output: `consensus_score_base`, `consensus_score` (final), `boruta_gate_effect`
 - Uses `train_score = math.nan` (not a numeric score) since it's a selector, not a predictor - prevents feature count mismatch errors
-- See [Ranking and Selection Consistency](../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md#boruta-statistical-gatekeeper) for details
+- See [Ranking and Selection Consistency](../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md#boruta-statistical-gatekeeper) for details
 
 **Cross-Sectional Ranking (Panel Model):**
 The feature selection pipeline includes an optional **cross-sectional ranking** step that trains a panel model across all symbols simultaneously. This provides a complementary view to per-symbol selection:
@@ -373,7 +373,7 @@ confidence:
 - Per-target: `target_confidence.json`, `target_routing.json`
 - Run-level: `target_confidence_summary.json`, `target_confidence_summary.csv`
 
-See [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md#target-confidence-and-routing) for details.
+See [Intelligent Training Tutorial](../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md#target-confidence-and-routing) for details.
 
 ---
 
@@ -486,9 +486,9 @@ model_families:
 - **[Modular Config System](MODULAR_CONFIG_SYSTEM.md)** - Complete guide to modular configs (includes `logging_config.yaml`)
 - [Configuration System Overview](README.md) - Main configuration overview (includes `logging_config.yaml` documentation)
 - [Usage Examples](USAGE_EXAMPLES.md) - Practical configuration examples (includes interval config and CatBoost examples)
-- [Ranking and Selection Consistency](../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior guide
+- [Ranking and Selection Consistency](../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior guide
 - [Training Pipeline Configs](TRAINING_PIPELINE_CONFIGS.md) - Training configuration
 - [Safety & Leakage Configs](SAFETY_LEAKAGE_CONFIGS.md) - Leakage detection settings
 - [Leakage Analysis](../../03_technical/research/LEAKAGE_ANALYSIS.md) - Detailed leakage documentation
-- [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Complete pipeline guide
+- [Intelligent Training Tutorial](../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Complete pipeline guide
 

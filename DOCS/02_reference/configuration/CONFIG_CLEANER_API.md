@@ -231,5 +231,5 @@ logging.basicConfig(level=logging.DEBUG)
 ## See Also
 
 - [Config Loader API](CONFIG_LOADER_API.md) - How configs are loaded and injected
-- [Reproducibility Tracking Guide](../03_technical/implementation/REPRODUCIBILITY_TRACKING.md) - Tracking run reproducibility
+- [Reproducibility Tracking Guide](../../03_technical/implementation/REPRODUCIBILITY_TRACKING.md) - Tracking run reproducibility
 - [Feature Selection Tutorial](../../01_tutorials/training/FEATURE_SELECTION_TUTORIAL.md) - How feature selection uses config cleaner

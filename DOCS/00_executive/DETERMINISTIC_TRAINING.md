@@ -40,7 +40,7 @@ The SST and determinism improvements (completed 2025-12-10) were **internal chan
 - Your configs - existing YAML files work as-is
 - Your workflow - same commands, same results (just more reproducible)
 
-If you want to take advantage of new features (like experiment configs or modular configs), see the [Migration Guide](DOCS/02_reference/configuration/MODULAR_CONFIG_SYSTEM.md#migration-guide), but this is **optional** - your current setup works fine.
+If you want to take advantage of new features (like experiment configs or modular configs), see the [Modular Config System](../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md), but this is **optional** - your current setup works fine.
 
 ---
 

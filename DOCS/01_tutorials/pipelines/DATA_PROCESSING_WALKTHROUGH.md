@@ -158,7 +158,7 @@ for parquet_file in data_dir.glob("*.parquet"):
 ## Module Documentation
 
 For complete API reference and module details, see:
-- **[DATA_PROCESSING README](../../DATA_PROCESSING/README.md)** - Complete module documentation with API reference
+- **[DATA_PROCESSING README](../../../DATA_PROCESSING/README.md)** - Complete module documentation with API reference
 - **[Feature Engineering Tutorial](FEATURE_ENGINEERING_TUTORIAL.md)** - Advanced feature creation
 - **[Column Reference](../../02_reference/data/COLUMN_REFERENCE.md)** - Complete column documentation (if available)
 - **[Data Format Spec](../../02_reference/data/DATA_FORMAT_SPEC.md)** - Data format details (if available)
@@ -176,5 +176,5 @@ DATA_PROCESSING/
 └── README.md          # Complete module documentation
 ```
 
-See `DATA_PROCESSING/README.md` for detailed API documentation and usage examples.
+See `DATA_PROCESSING/README.md` (in repository root) for detailed API documentation and usage examples.
 

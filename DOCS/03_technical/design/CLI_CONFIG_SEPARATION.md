@@ -201,4 +201,4 @@ For each CLI script:
 
 - [Config Basics](../../01_tutorials/configuration/CONFIG_BASICS.md)
 - [Modular Config System](../../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md)
-- [Experiment Configs](../../02_reference/configuration/EXPERIMENT_CONFIGS.md)
+- [Modular Config System](../../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md) - Includes experiment configs

@@ -36,7 +36,7 @@ FoxML Core provides:
 
 **Complete Single Source of Truth (SST)**: All parameters in YAML configs - zero hardcoded values. Same config → same results across all pipeline stages. Full reproducibility guaranteed.
 
-> **Note for existing users:** SST and determinism improvements (2025-12-10) were internal changes. Your existing code and configs continue to work unchanged - no migration required. See [Deterministic Training](DETERMINISTIC_TRAINING.md#for-existing-users-no-action-required) for details.
+> **Note for existing users:** SST and determinism improvements (2025-12-10) were internal changes. Your existing code and configs continue to work unchanged - no migration required. See [Deterministic Training](DETERMINISTIC_TRAINING.md) for details.
 
 ### System Flow
 

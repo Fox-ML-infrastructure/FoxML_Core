@@ -74,5 +74,5 @@ state = restore_state(log_file="logs/ibkr_trading.log")
 ## See Also
 
 - [Journald Logging](JOURNALD_LOGGING.md) - Logging setup
-- [Restore from Logs](../../RESTORE_FROM_LOGS.md) - Complete guide
+- [Restore from Logs](RESTORE_FROM_LOGS.md) - This document
 
