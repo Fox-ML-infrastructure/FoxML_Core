@@ -875,8 +875,21 @@ Examples:
         logger.warning("Config loader not available, using hardcoded defaults")
     
     if _CONFIG_AVAILABLE:
-        # Load from config (SST)
-        intel_cfg = get_cfg("intelligent_training", default={}, config_name="pipeline_config")
+        # Check for test mode override (for E2E testing)
+        use_test_config = args.output_dir and 'test' in str(args.output_dir).lower()
+        
+        if use_test_config:
+            # Load test config if available (for E2E testing)
+            test_cfg = get_cfg("test.intelligent_training", default={}, config_name="pipeline_config")
+            if test_cfg:
+                logger.info("📋 Using test configuration (detected 'test' in output-dir)")
+                intel_cfg = test_cfg
+            else:
+                intel_cfg = get_cfg("intelligent_training", default={}, config_name="pipeline_config")
+        else:
+            # Load from config (SST)
+            intel_cfg = get_cfg("intelligent_training", default={}, config_name="pipeline_config")
+        
         auto_targets = intel_cfg.get('auto_targets', True)
         top_n_targets = intel_cfg.get('top_n_targets', 5)
         max_targets_to_evaluate = intel_cfg.get('max_targets_to_evaluate', None)

@@ -126,3 +126,14 @@ intelligent_training:
   # Diagnostics
   run_leakage_diagnostics: false  # Run leakage sentinel tests after training
 
+# Test Configuration (for E2E testing)
+# Override intelligent_training settings for faster testing
+test:
+  intelligent_training:
+    top_n_targets: 23
+    max_targets_to_evaluate: 23
+    top_m_features: 50
+    min_cs: 3
+    max_rows_per_symbol: 5000
+    max_rows_train: 10000
+

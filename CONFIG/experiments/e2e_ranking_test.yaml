@@ -1,0 +1,49 @@
+# E2E Ranking Test Configuration
+# Quick test configuration for end-to-end ranking pipeline
+
+experiment:
+  name: e2e_ranking_test
+  description: "E2E test: 5 symbols, 23 targets, 50 features, reduced data limits"
+
+data:
+  data_dir: data/data_labeled/interval=5m
+  symbols: [AAPL, MSFT, GOOGL, TSLA, NVDA]
+  interval: 5m
+  max_samples_per_symbol: 5000  # Reduced for faster testing
+  max_rows_per_symbol: 5000  # Reduced for faster testing
+  max_rows_train: 10000  # Reduced for faster testing
+  min_cs: 3  # Reduced for faster testing
+
+# Intelligent training settings
+intelligent_training:
+  auto_targets: true
+  top_n_targets: 23
+  max_targets_to_evaluate: 23  # Limit evaluation for faster testing
+  auto_features: true
+  top_m_features: 50
+  strategy: single_task
+  run_leakage_diagnostics: false
+
+# Feature selection model families
+feature_selection:
+  model_families:
+    - lightgbm
+    - xgboost
+    - random_forest
+    - catboost
+    - neural_network
+    - lasso
+    - mutual_information
+    - univariate_selection
+
+# Training model families (same as feature selection for consistency)
+training:
+  model_families:
+    - lightgbm
+    - xgboost
+    - random_forest
+    - catboost
+    - neural_network
+    - lasso
+    - mutual_information
+    - univariate_selection
