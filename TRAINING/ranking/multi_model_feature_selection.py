@@ -1230,13 +1230,21 @@ def train_model_and_get_importance(
         # Handle NaN/inf in scores (from zero-variance features)
         scores = np.nan_to_num(scores, nan=0.0, posinf=0.0, neginf=0.0)
         
+        # CRITICAL: F-statistics can be negative (e.g., negative correlations)
+        # We need to handle signed scores properly instead of falling back to uniform
+        # Strategy: Use absolute values for ranking, but preserve sign information if needed
+        
+        # Option 1: Use absolute values (recommended for feature selection)
+        # This treats negative correlations as potentially useful (just weaker signal)
+        abs_scores = np.abs(scores)
+        
         # Normalize scores (F-statistics can be very large)
         # Use normalize_importance for robust handling of edge cases (all zeros, etc.)
-        raw_importance = scores.copy()
-        max_score = np.max(scores)
+        raw_importance = abs_scores.copy()
+        max_score = np.max(abs_scores)
         if max_score > 0:
             # Normalize by max for initial scaling
-            raw_importance = scores / max_score
+            raw_importance = abs_scores / max_score
         # else: raw_importance stays as all zeros, normalize_importance will handle fallback
         
         # Use normalize_importance to handle edge cases (all zeros, NaN, etc.) consistently
@@ -1246,6 +1254,11 @@ def train_model_and_get_importance(
             family="univariate_selection",
             feature_names=feature_names
         )
+        
+        # Log if we had to use absolute values (indicates negative scores)
+        if np.any(scores < 0):
+            n_negative = np.sum(scores < 0)
+            logger.debug(f"    univariate_selection: {n_negative}/{len(scores)} features had negative F-statistics, using absolute values for ranking")
         
         if fallback_reason:
             logger.debug(f"    univariate_selection: {fallback_reason}")

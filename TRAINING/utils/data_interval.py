@@ -229,12 +229,15 @@ def detect_interval_from_timestamps(
         try:
             from CONFIG.config_loader import get_cfg
             MAX_REASONABLE_MINUTES = float(get_cfg("pipeline.data_interval.max_reasonable_minutes", default=1440.0, config_name="pipeline_config"))
+            MAX_GAP_FACTOR = float(get_cfg("pipeline.data_interval.max_gap_factor", default=10.0, config_name="pipeline_config"))
         except Exception:
             MAX_REASONABLE_MINUTES = 1440.0  # 1 day (fallback)
+            MAX_GAP_FACTOR = 10.0  # Ignore gaps > 10x median (fallback)
         
         if is_timedelta:
             # Convert to minutes first, then filter
             diff_minutes = time_diffs.apply(lambda x: x.total_seconds() / 60.0)
+            # Step 1: Filter out gaps > 1 day
             sane_mask = diff_minutes <= MAX_REASONABLE_MINUTES
             sane_diff_minutes = diff_minutes[sane_mask]
             
@@ -247,8 +250,31 @@ def detect_interval_from_timestamps(
                 )
                 return default
             
-            # Use median of sane deltas only
-            median_diff_minutes = float(sane_diff_minutes.median())
+            # Step 2: Compute rough median to identify base cadence
+            rough_median = float(sane_diff_minutes.median())
+            
+            # Step 3: Filter out large gaps relative to median (overnight/weekend gaps)
+            # This prevents 270m or 1210m gaps from contaminating detection when base cadence is 5m
+            gap_threshold = rough_median * MAX_GAP_FACTOR
+            small_gaps_mask = sane_diff_minutes <= gap_threshold
+            small_gaps_minutes = sane_diff_minutes[small_gaps_mask]
+            
+            if len(small_gaps_minutes) == 0:
+                # All gaps are large relative to median - use rough median anyway
+                logger.debug(f"All gaps are large relative to median ({rough_median:.1f}m), using rough median")
+                median_diff_minutes = rough_median
+            else:
+                # Use median of small gaps only (the actual bar cadence)
+                median_diff_minutes = float(small_gaps_minutes.median())
+                
+                # Log if we filtered out large gaps
+                n_filtered = len(sane_diff_minutes) - len(small_gaps_minutes)
+                if n_filtered > 0:
+                    logger.debug(
+                        f"Filtered out {n_filtered} large gaps (>{gap_threshold:.1f}m = {MAX_GAP_FACTOR}x median) "
+                        f"before computing final median. Using {len(small_gaps_minutes)} small gaps. "
+                        f"Rough median: {rough_median:.1f}m → Final median: {median_diff_minutes:.1f}m"
+                    )
             
             # Debug: log if we filtered out any insane gaps
             n_filtered = len(diff_minutes) - len(sane_diff_minutes)
@@ -266,7 +292,7 @@ def detect_interval_from_timestamps(
             deltas_ns = time_diffs.values.astype(np.float64)
             deltas_minutes = deltas_ns / 1e9 / 60.0
             
-            # Filter out insane gaps
+            # Step 1: Filter out insane gaps (> 1 day)
             sane_mask = deltas_minutes <= MAX_REASONABLE_MINUTES
             sane_deltas_minutes = deltas_minutes[sane_mask]
             
@@ -280,14 +306,36 @@ def detect_interval_from_timestamps(
                 )
                 return default
             
-            # Now use median of sane deltas for unit detection
-            median_sane_minutes = float(np.median(sane_deltas_minutes))
+            # Step 2: Compute rough median to identify base cadence
+            rough_median = float(np.median(sane_deltas_minutes))
             
-            # Debug: log if we filtered out any insane gaps
-            n_filtered = len(deltas_minutes) - len(sane_deltas_minutes)
-            if n_filtered > 0:
+            # Step 3: Filter out large gaps relative to median (overnight/weekend gaps)
+            gap_threshold = rough_median * MAX_GAP_FACTOR
+            small_gaps_mask = sane_deltas_minutes <= gap_threshold
+            small_gaps_minutes = sane_deltas_minutes[small_gaps_mask]
+            
+            if len(small_gaps_minutes) == 0:
+                # All gaps are large relative to median - use rough median anyway
+                logger.debug(f"All gaps are large relative to median ({rough_median:.1f}m), using rough median")
+                median_sane_minutes = rough_median
+            else:
+                # Use median of small gaps only (the actual bar cadence)
+                median_sane_minutes = float(np.median(small_gaps_minutes))
+                
+                # Log if we filtered out large gaps
+                n_filtered_large = len(sane_deltas_minutes) - len(small_gaps_minutes)
+                if n_filtered_large > 0:
+                    logger.debug(
+                        f"Filtered out {n_filtered_large} large gaps (>{gap_threshold:.1f}m = {MAX_GAP_FACTOR}x median) "
+                        f"before computing final median. Using {len(small_gaps_minutes)} small gaps. "
+                        f"Rough median: {rough_median:.1f}m → Final median: {median_sane_minutes:.1f}m"
+                    )
+            
+            # Debug: log if we filtered out any insane gaps (> 1 day)
+            n_filtered_insane = len(deltas_minutes) - len(sane_deltas_minutes)
+            if n_filtered_insane > 0:
                 logger.debug(
-                    f"Filtered out {n_filtered} insane timestamp gaps (>{MAX_REASONABLE_MINUTES}m) "
+                    f"Filtered out {n_filtered_insane} insane timestamp gaps (>{MAX_REASONABLE_MINUTES}m) "
                     f"before computing median. Using {len(sane_deltas_minutes)} sane deltas."
                 )
             
