@@ -49,8 +49,8 @@ class ReproducibilityTracker:
     """
     Tracks run results and compares them to previous runs for reproducibility verification.
     
-    Stores run summaries in JSON format and provides comparison logging with tolerance-based
-    verification. Helps verify deterministic behavior across pipeline stages.
+    Uses tolerance bands with STABLE/DRIFTING/DIVERGED classification instead of binary
+    SAME/DIFFERENT. Only escalates to warnings for meaningful differences.
     """
     
     def __init__(
@@ -58,9 +58,11 @@ class ReproducibilityTracker:
         output_dir: Path,
         log_file_name: str = "reproducibility_log.json",
         max_runs_per_item: int = 10,
-        score_tolerance: float = 0.001,  # 0.1% tolerance
-        importance_tolerance: float = 0.01,  # 1% tolerance
-        search_previous_runs: bool = False  # If True, search parent directories for previous runs
+        score_tolerance: float = 0.001,  # Legacy: kept for backward compat, but thresholds loaded from config
+        importance_tolerance: float = 0.01,  # Legacy: kept for backward compat
+        search_previous_runs: bool = False,  # If True, search parent directories for previous runs
+        thresholds: Optional[Dict[str, Dict[str, float]]] = None,  # Override config thresholds
+        use_z_score: Optional[bool] = None  # Override config use_z_score
     ):
         """
         Initialize reproducibility tracker.
@@ -69,18 +71,72 @@ class ReproducibilityTracker:
             output_dir: Directory where reproducibility logs are stored (module-specific)
             log_file_name: Name of the JSON log file
             max_runs_per_item: Maximum number of runs to keep per item (prevents log bloat)
-            score_tolerance: Tolerance for score differences (default: 0.1%)
-            importance_tolerance: Tolerance for importance differences (default: 1%)
+            score_tolerance: Legacy tolerance (kept for backward compat, but config thresholds used)
+            importance_tolerance: Legacy tolerance (kept for backward compat, but config thresholds used)
             search_previous_runs: If True, search parent directories for previous runs from same module
+            thresholds: Optional override for config thresholds (dict with 'roc_auc', 'composite', 'importance' keys)
+            use_z_score: Optional override for config use_z_score setting
         """
         self.output_dir = Path(output_dir)
         # Store log file in module-specific directory: output_dir/reproducibility_log.json
         # This ensures each module (target_rankings, feature_selections, training_results) has its own log
         self.log_file = self.output_dir / log_file_name
         self.max_runs_per_item = max_runs_per_item
-        self.score_tolerance = score_tolerance
-        self.importance_tolerance = importance_tolerance
         self.search_previous_runs = search_previous_runs
+        
+        # Load thresholds from config
+        self.thresholds = self._load_thresholds(thresholds)
+        self.use_z_score = self._load_use_z_score(use_z_score)
+    
+    def _load_thresholds(self, override: Optional[Dict[str, Dict[str, float]]] = None) -> Dict[str, Dict[str, float]]:
+        """Load reproducibility thresholds from config."""
+        if override:
+            return override
+        
+        try:
+            from CONFIG.config_loader import get_safety_config
+            safety_cfg = get_safety_config()
+            safety_section = safety_cfg.get('safety', {})
+            repro_cfg = safety_section.get('reproducibility', {})
+            thresholds_cfg = repro_cfg.get('thresholds', {})
+            
+            # Default thresholds if config missing
+            defaults = {
+                'roc_auc': {'abs': 0.005, 'rel': 0.02, 'z_score': 1.0},
+                'composite': {'abs': 0.02, 'rel': 0.05, 'z_score': 1.5},
+                'importance': {'abs': 0.05, 'rel': 0.20, 'z_score': 2.0}
+            }
+            
+            # Merge config with defaults
+            thresholds = {}
+            for metric in ['roc_auc', 'composite', 'importance']:
+                thresholds[metric] = defaults[metric].copy()
+                if metric in thresholds_cfg:
+                    thresholds[metric].update(thresholds_cfg[metric])
+            
+            return thresholds
+        except Exception as e:
+            logger.debug(f"Could not load reproducibility thresholds from config: {e}, using defaults")
+            # Return defaults
+            return {
+                'roc_auc': {'abs': 0.005, 'rel': 0.02, 'z_score': 1.0},
+                'composite': {'abs': 0.02, 'rel': 0.05, 'z_score': 1.5},
+                'importance': {'abs': 0.05, 'rel': 0.20, 'z_score': 2.0}
+            }
+    
+    def _load_use_z_score(self, override: Optional[bool] = None) -> bool:
+        """Load use_z_score setting from config."""
+        if override is not None:
+            return override
+        
+        try:
+            from CONFIG.config_loader import get_safety_config
+            safety_cfg = get_safety_config()
+            safety_section = safety_cfg.get('safety', {})
+            repro_cfg = safety_section.get('reproducibility', {})
+            return repro_cfg.get('use_z_score', True)
+        except Exception:
+            return True  # Default: use z-score
     
     def _find_previous_log_files(self) -> List[Path]:
         """Find all previous reproducibility log files in parent directories (for same module)."""
@@ -242,6 +298,66 @@ class ReproducibilityTracker:
         except IOError as e:
             logger.warning(f"Could not save reproducibility log: {e}")
     
+    def _classify_diff(
+        self,
+        prev_value: float,
+        curr_value: float,
+        prev_std: Optional[float],
+        metric_type: str  # 'roc_auc', 'composite', or 'importance'
+    ) -> tuple[str, float, float, Optional[float]]:
+        """
+        Classify difference into STABLE/DRIFTING/DIVERGED tiers.
+        
+        Args:
+            prev_value: Previous run value
+            curr_value: Current run value
+            prev_std: Previous run standard deviation (for z-score calculation)
+            metric_type: Type of metric ('roc_auc', 'composite', 'importance')
+        
+        Returns:
+            Tuple of (classification, abs_diff, rel_diff, z_score)
+            classification: 'STABLE', 'DRIFTING', or 'DIVERGED'
+        """
+        diff = curr_value - prev_value
+        abs_diff = abs(diff)
+        
+        # Calculate relative difference
+        rel_diff = (abs_diff / max(abs(prev_value), 1e-8)) * 100 if prev_value != 0 else 0.0
+        
+        # Calculate z-score if std available and use_z_score enabled
+        z_score = None
+        if self.use_z_score and prev_std is not None and prev_std > 0:
+            # Pooled std: use average of previous and current if available
+            # For now, use previous std
+            z_score = abs_diff / prev_std
+        
+        # Get thresholds for this metric type
+        thresholds = self.thresholds.get(metric_type, self.thresholds.get('roc_auc'))
+        abs_thr = thresholds.get('abs', 0.005)
+        rel_thr = thresholds.get('rel', 0.02)
+        z_thr = thresholds.get('z_score', 1.0)
+        
+        # Classification logic: must pass BOTH abs AND rel thresholds for STABLE
+        # Use z-score if available, otherwise use abs/rel
+        if z_score is not None:
+            # Use z-score as primary criterion
+            if z_score < z_thr and abs_diff < abs_thr and rel_diff < rel_thr:
+                classification = 'STABLE'
+            elif z_score < 2 * z_thr and abs_diff < 2 * abs_thr and rel_diff < 2 * rel_thr:
+                classification = 'DRIFTING'
+            else:
+                classification = 'DIVERGED'
+        else:
+            # Fallback to abs/rel thresholds
+            if abs_diff < abs_thr and rel_diff < rel_thr:
+                classification = 'STABLE'
+            elif abs_diff < 2 * abs_thr and rel_diff < 2 * rel_thr:
+                classification = 'DRIFTING'
+            else:
+                classification = 'DIVERGED'
+        
+        return classification, abs_diff, rel_diff, z_score
+    
     def log_comparison(
         self,
         stage: str,
@@ -251,6 +367,9 @@ class ReproducibilityTracker:
     ) -> None:
         """
         Compare current run to previous run and log the comparison for reproducibility verification.
+        
+        Uses tolerance bands with STABLE/DRIFTING/DIVERGED classification. Only escalates to
+        warnings for meaningful differences (DIVERGED).
         
         Args:
             stage: Pipeline stage name (e.g., "target_ranking", "feature_selection")
@@ -273,44 +392,78 @@ class ReproducibilityTracker:
         metric_name = metrics.get("metric_name", "Score")
         current_mean = float(metrics.get("mean_score", 0.0))
         previous_mean = float(previous.get("mean_score", 0.0))
-        mean_diff = current_mean - previous_mean
         
         current_std = float(metrics.get("std_score", 0.0))
         previous_std = float(previous.get("std_score", 0.0))
-        std_diff = current_std - previous_std
         
         # Compare importance if present
         current_importance = float(metrics.get("mean_importance", 0.0))
         previous_importance = float(previous.get("mean_importance", 0.0))
-        importance_diff = current_importance - previous_importance
         
         # Compare composite score if present
         current_composite = float(metrics.get("composite_score", current_mean))
         previous_composite = float(previous.get("composite_score", previous_mean))
-        composite_diff = current_composite - previous_composite
         
-        # Calculate relative differences (for percentage change)
-        mean_pct = (mean_diff / abs(previous_mean)) * 100 if previous_mean != 0 else 0.0
-        composite_pct = (composite_diff / abs(previous_composite)) * 100 if previous_composite != 0 else 0.0
-        
-        # Determine if results are reproducible (within tolerance)
-        is_reproducible = (
-            abs(mean_diff) < self.score_tolerance and
-            abs(composite_diff) < self.score_tolerance and
-            abs(importance_diff) < self.importance_tolerance
+        # Classify differences
+        mean_class, mean_abs, mean_rel, mean_z = self._classify_diff(
+            previous_mean, current_mean, previous_std, 'roc_auc'
+        )
+        composite_class, composite_abs, composite_rel, composite_z = self._classify_diff(
+            previous_composite, current_composite, None, 'composite'
+        )
+        importance_class, importance_abs, importance_rel, importance_z = self._classify_diff(
+            previous_importance, current_importance, None, 'importance'
         )
         
-        status_emoji = "✅" if is_reproducible else "⚠️"
-        status_text = "REPRODUCIBLE" if is_reproducible else "DIFFERENT"
+        # Overall classification: use worst case
+        if 'DIVERGED' in [mean_class, composite_class, importance_class]:
+            overall_class = 'DIVERGED'
+        elif 'DRIFTING' in [mean_class, composite_class, importance_class]:
+            overall_class = 'DRIFTING'
+        else:
+            overall_class = 'STABLE'
+        
+        # Determine log level and emoji based on classification
+        if overall_class == 'STABLE':
+            log_level = logger.info
+            emoji = "ℹ️"
+        elif overall_class == 'DRIFTING':
+            log_level = logger.info
+            emoji = "ℹ️"
+        else:  # DIVERGED
+            log_level = logger.warning
+            emoji = "⚠️"
         
         # Use main logger if available for better visibility
         main_logger = _get_main_logger()
         
-        # Build comparison log message - log to both loggers for visibility
-        log_msg = f"{status_emoji} Reproducibility ({status_text}):"
-        main_logger.info(log_msg)
-        logger.info(log_msg)
+        # Build comparison log message
+        mean_diff = current_mean - previous_mean
+        composite_diff = current_composite - previous_composite
+        importance_diff = current_importance - previous_importance
         
+        # Format z-score if available
+        z_info = ""
+        if mean_z is not None:
+            z_info = f", z={mean_z:.2f}"
+        
+        # Main status line
+        status_msg = f"{emoji} Reproducibility: {overall_class}"
+        if overall_class == 'STABLE':
+            status_msg += f" (Δ {metric_name}={mean_diff:+.4f} ({mean_rel:+.2f}%{z_info}); within tolerance)"
+        elif overall_class == 'DRIFTING':
+            status_msg += f" (Δ {metric_name}={mean_diff:+.4f} ({mean_rel:+.2f}%{z_info}); small drift detected)"
+        else:  # DIVERGED
+            status_msg += f" (Δ {metric_name}={mean_diff:+.4f} ({mean_rel:+.2f}%{z_info}); exceeds tolerance)"
+        
+        log_level(status_msg)
+        if main_logger != logger:
+            if overall_class == 'DIVERGED':
+                main_logger.warning(status_msg)
+            else:
+                main_logger.info(status_msg)
+        
+        # Detailed comparison (always log for traceability)
         prev_msg = f"   Previous: {metric_name}={previous_mean:.3f}±{previous_std:.3f}, " \
                    f"importance={previous_importance:.2f}, composite={previous_composite:.3f}"
         main_logger.info(prev_msg)
@@ -321,14 +474,17 @@ class ReproducibilityTracker:
         main_logger.info(curr_msg)
         logger.info(curr_msg)
         
-        diff_msg = f"   Diff:     {metric_name}={mean_diff:+.4f} ({mean_pct:+.2f}%), " \
-                   f"composite={composite_diff:+.4f} ({composite_pct:+.2f}%), " \
-                   f"importance={importance_diff:+.2f}"
+        # Diff line with classifications
+        diff_parts = [f"{metric_name}={mean_diff:+.4f} ({mean_rel:+.2f}%{', z=' + f'{mean_z:.2f}' if mean_z else ''}) [{mean_class}]"]
+        diff_parts.append(f"composite={composite_diff:+.4f} ({composite_rel:+.2f}%) [{composite_class}]")
+        diff_parts.append(f"importance={importance_diff:+.2f} ({importance_rel:+.2f}%) [{importance_class}]")
+        diff_msg = f"   Diff:     {', '.join(diff_parts)}"
         main_logger.info(diff_msg)
         logger.info(diff_msg)
         
-        if not is_reproducible:
-            warn_msg = f"   ⚠️  Results differ from previous run - check for non-deterministic behavior"
+        # Warning only for DIVERGED
+        if overall_class == 'DIVERGED':
+            warn_msg = f"   ⚠️  Results differ significantly from previous run - check for non-deterministic behavior, config changes, or data differences"
             main_logger.warning(warn_msg)
             logger.warning(warn_msg)
         
