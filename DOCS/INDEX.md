@@ -130,6 +130,7 @@ Research notes, design rationale, advanced topics.
 
 ### Design
 - [Architecture Deep Dive](03_technical/design/ARCHITECTURE_DEEP_DIVE.md) - System architecture
+- [CLI vs Config Separation](03_technical/design/CLI_CONFIG_SEPARATION.md) - **NEW**: Policy for CLI/Config separation, SST compliance
 - [Mathematical Foundations](03_technical/internal/MATHEMATICAL_FOUNDATIONS.md) - Math background (internal)
 - [Optimization Engine](03_technical/internal/OPTIMIZATION_ENGINE.md) - Optimization design (internal)
 - [C++ Integration](03_technical/internal/C++_INTEGRATION.md) - C++ components (internal)
