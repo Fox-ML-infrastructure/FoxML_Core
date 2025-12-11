@@ -88,26 +88,38 @@ class ReproducibilityTracker:
             return []
         
         previous_logs = []
-        current_dir = self.output_dir
-        
-        # Search up to 3 levels up for previous runs
-        for _ in range(3):
-            parent = current_dir.parent
-            if not parent or parent == current_dir:
-                break
+        try:
+            current_dir = self.output_dir
+            module_name = self.output_dir.name
             
-            # Look for timestamped directories (format: *_YYYYMMDD_HHMMSS or similar)
-            if parent.exists():
-                # Check if parent contains module subdirectories (target_rankings, feature_selections, etc.)
-                module_name = self.output_dir.name
-                for sibling_dir in parent.iterdir():
-                    if sibling_dir.is_dir() and sibling_dir != self.output_dir:
-                        # Check if this sibling has the same module subdirectory
-                        module_log = sibling_dir / module_name / self.log_file.name
-                        if module_log.exists():
-                            previous_logs.append(module_log)
-            
-            current_dir = parent
+            # Search up to 3 levels up for previous runs
+            for _ in range(3):
+                parent = current_dir.parent
+                if not parent or parent == current_dir:
+                    break
+                
+                # Look for timestamped directories (format: *_YYYYMMDD_HHMMSS or similar)
+                if parent.exists():
+                    try:
+                        # Check if parent contains module subdirectories (target_rankings, feature_selections, etc.)
+                        for sibling_dir in parent.iterdir():
+                            try:
+                                if sibling_dir.is_dir() and sibling_dir != self.output_dir:
+                                    # Check if this sibling has the same module subdirectory
+                                    module_log = sibling_dir / module_name / self.log_file.name
+                                    if module_log.exists():
+                                        previous_logs.append(module_log)
+                            except (PermissionError, OSError) as e:
+                                logger.debug(f"Could not access sibling directory {sibling_dir}: {e}")
+                                continue
+                    except (PermissionError, OSError) as e:
+                        logger.debug(f"Could not iterate parent directory {parent} for previous logs: {e}")
+                        continue
+                
+                current_dir = parent
+        except Exception as e:
+            logger.warning(f"Error searching for previous log files: {e}")
+            # Don't fail completely, just return empty list
         
         return previous_logs
     
