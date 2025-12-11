@@ -317,6 +317,16 @@ def main():
     # Save rankings
     save_rankings(all_results, args.output_dir)
     
+    # Analyze stability for all targets/methods (non-invasive hook)
+    try:
+        from TRAINING.stability.feature_importance import analyze_all_stability_hook
+        logger.info("\n" + "="*60)
+        logger.info("Feature Importance Stability Analysis")
+        logger.info("="*60)
+        analyze_all_stability_hook(output_dir=args.output_dir)
+    except Exception as e:
+        logger.debug(f"Stability analysis failed (non-critical): {e}")
+    
     # Print summary
     logger.info("="*80)
     logger.info("TARGET PREDICTABILITY RANKINGS")

@@ -343,6 +343,21 @@ def train_and_evaluate_models(
                 feature_names = feature_names_pruned
             else:
                 logger.info(f"  No features pruned (all above threshold)")
+            
+            # Save stability snapshot for quick pruning (non-invasive hook)
+            if 'full_importance_dict' in pruning_stats:
+                try:
+                    from TRAINING.stability.feature_importance import save_snapshot_hook
+                    save_snapshot_hook(
+                        target_name=target_column if target_column else 'unknown',
+                        method="quick_pruner",
+                        importance_dict=pruning_stats['full_importance_dict'],
+                        universe_id="CROSS_SECTIONAL",
+                        output_dir=output_dir,
+                        auto_analyze=True,
+                    )
+                except Exception as e:
+                    logger.debug(f"Stability snapshot save failed for quick_pruner (non-critical): {e}")
         except Exception as e:
             logger.warning(f"  Feature pruning failed: {e}, using all features")
             # Continue with original features
@@ -1806,6 +1821,20 @@ def _save_feature_importances(
         # Save to CSV
         csv_file = importances_dir / f"{model_name}_importances.csv"
         df.to_csv(csv_file, index=False)
+        
+        # Save stability snapshot (non-invasive hook)
+        try:
+            from TRAINING.stability.feature_importance import save_snapshot_hook
+            save_snapshot_hook(
+                target_name=target_column,
+                method=model_name,
+                importance_dict=importances,
+                universe_id="CROSS_SECTIONAL",  # Cross-sectional ranking uses all symbols
+                output_dir=output_dir,
+                auto_analyze=None,  # Load from config
+            )
+        except Exception as e:
+            logger.debug(f"Stability snapshot save failed (non-critical): {e}")
     
     logger.info(f"  💾 Saved feature importances to: {importances_dir}")
 

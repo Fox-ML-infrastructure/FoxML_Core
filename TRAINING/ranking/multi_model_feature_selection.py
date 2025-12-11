@@ -1367,6 +1367,21 @@ def process_single_symbol(
                     logger.info(f"    ✅ {family_name}: score={score_str}, "
                               f"top feature={importance.idxmax()} ({importance.max():.2f})")
                     
+                    # Save stability snapshot for this method (non-invasive hook)
+                    try:
+                        from TRAINING.stability.feature_importance import save_snapshot_from_series_hook
+                        universe_id = symbol if symbol else "ALL"
+                        save_snapshot_from_series_hook(
+                            target_name=target_column if target_column else 'unknown',
+                            method=method,  # "rfe", "boruta", "stability_selection", etc.
+                            importance_series=importance,
+                            universe_id=universe_id,
+                            output_dir=output_dir,
+                            auto_analyze=None,  # Load from config
+                        )
+                    except Exception as e:
+                        logger.debug(f"Stability snapshot save failed for {method} (non-critical): {e}")
+                    
                     # Check if model used a fallback (soft no-signal case)
                     fallback_reason = getattr(model, '_fallback_reason', None)
                     if fallback_reason:

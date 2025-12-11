@@ -209,6 +209,24 @@ def select_features_for_target(
     
     logger.info(f"✅ Selected {len(selected_features)} features")
     
+    # Save stability snapshot for aggregated feature selection (non-invasive hook)
+    try:
+        from TRAINING.stability.feature_importance import save_snapshot_hook
+        # Convert summary_df to importance dict (consensus_score as importance)
+        if summary_df is not None and len(summary_df) > 0:
+            importance_dict = summary_df.set_index('feature')['consensus_score'].to_dict()
+            universe_id = ",".join(sorted(symbols)) if len(symbols) <= 10 else "ALL"
+            save_snapshot_hook(
+                target_name=target_column,
+                method="multi_model_aggregated",
+                importance_dict=importance_dict,
+                universe_id=universe_id,
+                output_dir=output_dir,
+                auto_analyze=None,  # Load from config
+            )
+    except Exception as e:
+        logger.debug(f"Stability snapshot save failed for aggregated selection (non-critical): {e}")
+    
     # Optional: Cross-sectional ranking (if enabled and enough symbols)
     cs_importance = None
     # Load cross-sectional ranking config from preprocessing_config.yaml
