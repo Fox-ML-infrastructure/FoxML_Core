@@ -6,9 +6,61 @@ Example configurations for common use cases.
 
 > **📚 For comprehensive configuration documentation, see the [Configuration Reference](../../02_reference/configuration/README.md).**
 
-## Using Experiment Configs (Recommended for Intelligent Training)
+## Intelligent Training Configuration
 
-The **preferred way** to configure the intelligent training pipeline is with experiment configs. This keeps all settings in one file:
+### Method 1: Test Config Auto-Detection (Easiest for Testing)
+
+The system automatically detects test mode when your `--output-dir` contains "test" (case-insensitive) and uses test-friendly settings.
+
+**1. Edit test config** (`CONFIG/training_config/pipeline_config.yaml`):
+```yaml
+# Test Configuration (for E2E testing)
+test:
+  intelligent_training:
+    top_n_targets: 23
+    max_targets_to_evaluate: 23
+    top_m_features: 50
+    min_cs: 3
+    max_rows_per_symbol: 5000
+    max_rows_train: 10000
+```
+
+**2. Run with test output directory:**
+```bash
+python -m TRAINING.orchestration.intelligent_trainer \
+    --data-dir "data/data_labeled/interval=5m" \
+    --symbols AAPL MSFT GOOGL TSLA NVDA \
+    --output-dir "test_e2e_ranking_unified" \
+    --families lightgbm xgboost random_forest
+```
+
+**What happens:**
+- System detects "test" in output-dir → automatically uses `test.intelligent_training` config
+- No CLI arguments needed for these settings - all from config!
+
+### Method 2: Default Config (Production)
+
+Edit the default config for production settings:
+
+**1. Edit default config** (`CONFIG/training_config/pipeline_config.yaml`):
+```yaml
+intelligent_training:
+  auto_targets: true
+  top_n_targets: 5
+  top_m_features: 100
+  min_cs: 10
+  strategy: single_task
+  # ... other settings
+```
+
+**2. Run with minimal CLI:**
+```bash
+python -m TRAINING.orchestration.intelligent_trainer \
+    --data-dir "data/data_labeled/interval=5m" \
+    --symbols AAPL MSFT GOOGL
+```
+
+### Method 3: Experiment Configs (For Complex Experiments)
 
 **1. Create experiment config** (`CONFIG/experiments/my_experiment.yaml`):
 ```yaml
@@ -23,13 +75,10 @@ data:
   max_samples_per_symbol: 3000
 
 targets:
-  primary: fwd_ret_60m
-  candidate_targets:
-    - fwd_ret_60m
-    - fwd_ret_30m
+  primary: fwd_ret_60m  # Required for experiment configs
 
 feature_selection:
-  top_n_features: 30
+  top_n: 30
   model_families: [lightgbm, xgboost]
 
 training:
@@ -39,8 +88,12 @@ training:
 
 **2. Use in CLI:**
 ```bash
-python TRAINING/train.py --experiment-config my_experiment --auto-targets
+python -m TRAINING.orchestration.intelligent_trainer \
+    --experiment-config my_experiment \
+    --output-dir "my_experiment_results"
 ```
+
+**Note**: Experiment configs require a `targets.primary` field. For auto-target selection, use Method 1 or 2 instead.
 
 **3. Or use programmatically:**
 ```python
@@ -50,7 +103,7 @@ exp_cfg = load_experiment_config("my_experiment")
 # exp_cfg is a typed ExperimentConfig object with validation
 ```
 
-See [Modular Config System](../../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md) for complete details.
+See [Modular Config System](../../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md) and [CLI vs Config Separation](../../03_technical/design/CLI_CONFIG_SEPARATION.md) for complete details.
 
 ---
 

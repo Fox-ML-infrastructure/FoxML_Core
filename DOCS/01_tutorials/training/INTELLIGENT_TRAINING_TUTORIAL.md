@@ -35,23 +35,94 @@ Trained Models
 
 ## Quick Start
 
-### Using Experiment Configs (Recommended)
+> **Important**: FoxML Core follows **Single Source of Truth (SST)** principles. Most settings come from config files, not CLI arguments. See [CLI vs Config Separation](../../03_technical/design/CLI_CONFIG_SEPARATION.md) for the complete policy.
 
-The **preferred way** to use the intelligent training pipeline is with experiment configs. This keeps all settings in one file and prevents config "crossing" between modules:
+### Config-Driven Approach (Recommended)
 
-**1. Create an experiment config** (`CONFIG/experiments/my_experiment.yaml`):
+All settings are now in config files. CLI only provides:
+- **Required inputs**: `--data-dir`, `--symbols`
+- **Config selection**: `--experiment-config` (preferred)
+- **Operational flags**: `--force-refresh`, `--no-cache`
+- **Manual overrides**: `--targets`, `--features`, `--families` (explicit choices)
+
+### Method 1: Using Default Config (Simplest)
+
+Just provide data and symbols - all other settings come from `CONFIG/training_config/pipeline_config.yaml`:
+
+```bash
+python -m TRAINING.orchestration.intelligent_trainer \
+    --data-dir "data/data_labeled/interval=5m" \
+    --symbols AAPL MSFT GOOGL \
+    --output-dir "my_training_run"
+```
+
+**Default settings** (from `pipeline_config.yaml`):
+- `top_n_targets: 5`
+- `top_m_features: 100`
+- `min_cs: 10`
+- `auto_targets: true`
+- `auto_features: true`
+- `strategy: single_task`
+
+### Method 2: Test Config Auto-Detection (For Testing)
+
+If your `--output-dir` contains "test" (case-insensitive), the system automatically uses test-friendly settings from `pipeline_config.yaml` → `test.intelligent_training`:
+
+```bash
+python -m TRAINING.orchestration.intelligent_trainer \
+    --data-dir "data/data_labeled/interval=5m" \
+    --symbols AAPL MSFT GOOGL TSLA NVDA \
+    --output-dir "test_e2e_ranking_unified" \
+    --families lightgbm xgboost random_forest catboost neural_network lasso mutual_information univariate_selection
+```
+
+**Test config settings** (automatically applied):
+- `top_n_targets: 23`
+- `max_targets_to_evaluate: 23`
+- `top_m_features: 50`
+- `min_cs: 3`
+- `max_rows_per_symbol: 5000`
+- `max_rows_train: 10000`
+
+**Note**: The system detects "test" in the output directory name and automatically switches to test config. No CLI arguments needed for these settings!
+
+### Method 3: Customize Config File
+
+Edit `CONFIG/training_config/pipeline_config.yaml` to change defaults:
+
+```yaml
+intelligent_training:
+  top_n_targets: 10  # Change default
+  top_m_features: 50  # Change default
+  min_cs: 5  # Change default
+  # ... other settings
+```
+
+Then run with minimal CLI:
+```bash
+python -m TRAINING.orchestration.intelligent_trainer \
+    --data-dir "data/data_labeled/interval=5m" \
+    --symbols AAPL MSFT GOOGL
+```
+
+### Method 4: Using Experiment Configs (For Complex Experiments)
+
+For experiments with many custom settings, create an experiment config:
+
+**1. Create experiment config** (`CONFIG/experiments/my_experiment.yaml`):
 ```yaml
 experiment:
   name: my_experiment
+  description: "Custom experiment with specific settings"
 
 data:
   data_dir: data/data_labeled/interval=5m
   symbols: [AAPL, MSFT, GOOGL]
   max_samples_per_symbol: 5000
-  bar_interval: "5m"  # Explicit interval (prevents auto-detection warnings)
+  bar_interval: "5m"
 
 targets:
-  primary: fwd_ret_60m
+  primary: fwd_ret_60m  # Required for experiment configs
 
 feature_selection:
   top_n: 100
@@ -61,100 +132,64 @@ training:
   model_families: [lightgbm, xgboost]
 ```
 
-**Note on `bar_interval`**: Setting `data.bar_interval` explicitly prevents interval auto-detection warnings in both ranking and selection pipelines. The interval is used for horizon conversion and leakage filtering. Supported formats: `"5m"`, `"15m"`, `"1h"`, `"1d"`, or integer minutes (e.g., `5`).
-
 **2. Run with experiment config:**
 ```bash
-python TRAINING/train.py \
+python -m TRAINING.orchestration.intelligent_trainer \
     --experiment-config my_experiment \
-    --auto-targets \
-    --top-n-targets 5 \
-    --auto-features
+    --output-dir "my_experiment_results"
 ```
 
-**Benefits:**
-- All settings in one file
-- Type-safe configs with validation
-- No config "crossing" between modules
-- Easy to version and share
+**Note**: Experiment configs require a `targets.primary` field. For auto-target selection, use Method 1, 2, or 3 instead.
 
-See [Modular Config System](../../02_reference/configuration/MODULAR_CONFIG_SYSTEM.md) for complete details.
+### Manual Overrides (Allowed)
 
-### Basic Usage (Fully Automatic with CLI Args)
-
-You can also use CLI arguments directly:
+You can still override specific choices via CLI (these are explicit decisions, not config values):
 
 ```bash
-python TRAINING/train.py \
-    --data-dir data/data_labeled/interval=5m \
+# Override model families
+python -m TRAINING.orchestration.intelligent_trainer \
+    --data-dir "data/data_labeled/interval=5m" \
     --symbols AAPL MSFT GOOGL \
-    --auto-targets \
-    --top-n-targets 5 \
-    --auto-features \
-    --top-m-features 100
-```
+    --families lightgbm xgboost random_forest
 
-This will:
-1. Rank all available targets and select top 5
-2. Select top 100 features for each target
-3. Train all model families on the selected targets/features
-
-### With Custom Model Families
-
-```bash
-python TRAINING/train.py \
-    --data-dir data/data_labeled/interval=5m \
-    --symbols AAPL MSFT GOOGL \
-    --auto-targets \
-    --top-n-targets 5 \
-    --auto-features \
-    --top-m-features 50 \
-    --families LightGBM XGBoost MLP
-```
-
-### Manual Targets, Auto Features
-
-```bash
-python TRAINING/train.py \
-    --data-dir data/data_labeled/interval=5m \
+# Override targets (manual selection)
+python -m TRAINING.orchestration.intelligent_trainer \
+    --data-dir "data/data_labeled/interval=5m" \
     --symbols AAPL MSFT \
-    --targets fwd_ret_5m fwd_ret_15m \
-    --auto-features \
-    --top-m-features 50
-```
+    --targets fwd_ret_5m fwd_ret_15m
 
-### Faster E2E Testing
-
-For faster end-to-end testing, use `--max-targets-to-evaluate` to limit the number of targets evaluated during ranking (this is different from `--top-n-targets`, which limits the final selection):
-
-```bash
-python TRAINING/train.py \
-    --data-dir data/data_labeled/interval=5m \
+# Override features (manual selection)
+python -m TRAINING.orchestration.intelligent_trainer \
+    --data-dir "data/data_labeled/interval=5m" \
     --symbols AAPL MSFT \
-    --auto-targets \
-    --top-n-targets 3 \
-    --max-targets-to-evaluate 23 \
-    --auto-features \
-    --top-m-features 50
+    --features feature1 feature2 feature3
 ```
 
-This will:
-- Evaluate only 23 targets (instead of all discovered targets)
-- Select top 3 from those evaluated
-- Much faster for testing without running full ranking
+### Configuration File Locations
+
+All settings are in config files:
+
+- **Pipeline settings**: `CONFIG/training_config/pipeline_config.yaml`
+  - `intelligent_training.*` - Intelligent trainer settings
+  - `test.intelligent_training.*` - Test-friendly defaults (auto-detected)
+  - `pipeline.data_limits.*` - Data sampling limits
+- **Experiment configs**: `CONFIG/experiments/*.yaml` (for complex experiments)
+- **Model configs**: `CONFIG/model_config/*.yaml` (model hyperparameters)
+- **Feature selection**: `CONFIG/feature_selection/multi_model.yaml`
+
+See [Config Basics](../configuration/CONFIG_BASICS.md) and [CLI vs Config Separation](../../03_technical/design/CLI_CONFIG_SEPARATION.md) for details.
 
 ### Using Cached Rankings (Faster)
 
 ```bash
-python TRAINING/train.py \
-    --data-dir data/data_labeled/interval=5m \
+python -m TRAINING.orchestration.intelligent_trainer \
+    --data-dir "data/data_labeled/interval=5m" \
     --symbols AAPL MSFT GOOGL \
-    --auto-targets \
-    --top-n-targets 5 \
-    --auto-features \
-    --top-m-features 100 \
+    --output-dir "my_training_run" \
     --no-refresh-cache
 ```
+
+**Note**: All settings (top_n_targets, top_m_features, etc.) come from config. The `--no-refresh-cache` flag prevents re-running ranking/selection if cached results exist.
 
 ## Step-by-Step Workflow
 
@@ -267,61 +302,65 @@ The pipeline trains all selected model families on the selected targets with the
 **Example:**
 ```bash
 # Full pipeline: ranking → selection → training
-python TRAINING/train.py \
-    --data-dir data/data_labeled/interval=5m \
+# All settings from config (SST compliant)
+python -m TRAINING.orchestration.intelligent_trainer \
+    --data-dir "data/data_labeled/interval=5m" \
     --symbols AAPL MSFT GOOGL \
-    --auto-targets \
-    --top-n-targets 5 \
-    --auto-features \
-    --top-m-features 100 \
-    --families LightGBM XGBoost MLP
+    --output-dir "full_pipeline_run" \
+    --families lightgbm xgboost mlp
 ```
+
+**Note**: `top_n_targets`, `top_m_features`, `min_cs`, etc. all come from config. Only `--families` is specified as a manual override (explicit choice).
 
 ## Command-Line Arguments
 
+> **Note**: Most settings are now in config files. CLI only provides inputs, config selection, and operational flags. See [CLI vs Config Separation](../../03_technical/design/CLI_CONFIG_SEPARATION.md) for details.
+
 ### Required Arguments
 
-- `--data-dir`: Data directory containing symbol data
-- `--symbols`: List of symbols to train on
+- `--data-dir`: Data directory containing symbol data (required unless `--experiment-config` provided)
+- `--symbols`: List of symbols to train on (required unless `--experiment-config` provided)
 
-### Target Selection
+### Config File Selection (PREFERRED)
 
-- `--auto-targets`: Enable automatic target ranking (default: True)
-- `--no-auto-targets`: Disable automatic target ranking
-- `--top-n-targets`: Number of top targets to select (default: 5)
-- `--max-targets-to-evaluate`: Limit number of targets to evaluate during ranking (default: evaluate all). Useful for faster E2E testing.
-- `--targets`: Manual target list (overrides --auto-targets if provided)
+- `--experiment-config`: Experiment config name (without .yaml) from `CONFIG/experiments/` [PREFERRED - all settings from config]
+- `--target-ranking-config`: Path to target ranking config YAML [LEGACY]
+- `--multi-model-config`: Path to feature selection config YAML [LEGACY]
 
-### Feature Selection
+### Manual Overrides (Allowed - Explicit Choices)
 
-- `--auto-features`: Enable automatic feature selection (default: True)
-- `--no-auto-features`: Disable automatic feature selection
-- `--top-m-features`: Number of top features per target (default: 100)
-- `--features`: Manual feature list (overrides --auto-features if provided)
+- `--targets`: Manual target list (overrides config `auto_targets`)
+- `--features`: Manual feature list (overrides config `auto_features`)
+- `--families`: Model families to train (overrides config)
 
-### Training
+### Operational Flags
 
-- `--families`: Model families to train (default: all enabled)
-- `--strategy`: Training strategy - single_task, multi_task, cascade (default: single_task)
-- `--output-dir`: Output directory (default: intelligent_output)
-
-### Cache Control
-
+- `--output-dir`: Output directory (default: `intelligent_output`). Automatically timestamped by default.
+- `--cache-dir`: Cache directory for rankings/selections (default: `output_dir/cache`)
 - `--force-refresh`: Force refresh of cached rankings/selections
 - `--no-refresh-cache`: Never refresh cache (use existing only)
 - `--no-cache`: Disable caching entirely
 
-### Data Limits (for testing)
+### Testing Overrides (Not SST Compliant - Use Only for Testing)
 
-- `--min-cs`: Minimum cross-sectional samples required (default: 10)
-- `--max-rows-per-symbol`: Maximum rows to load per symbol
-- `--max-rows-train`: Maximum training rows
-- `--max-cs-samples`: Maximum cross-sectional samples per timestamp
+- `--override-max-samples`: Override max samples per symbol (testing only, logs warning)
+- `--override-max-rows`: Override max rows per symbol (testing only, logs warning)
 
-### Config Files
+### Configuration Settings (All in Config Files)
 
-- `--target-ranking-config`: Path to target ranking config YAML
-- `--multi-model-config`: Path to feature selection config YAML
+All of these settings are now in config files, not CLI:
+
+- **Target Selection**: `intelligent_training.auto_targets`, `intelligent_training.top_n_targets`, `intelligent_training.max_targets_to_evaluate` (in `pipeline_config.yaml`)
+- **Feature Selection**: `intelligent_training.auto_features`, `intelligent_training.top_m_features` (in `pipeline_config.yaml`)
+- **Training Strategy**: `intelligent_training.strategy` (in `pipeline_config.yaml`)
+- **Data Limits**: `pipeline.data_limits.*` or `intelligent_training.*` (in `pipeline_config.yaml`)
+  - `max_rows_per_symbol`
+  - `max_rows_train`
+  - `min_cs`
+  - `max_cs_samples`
+- **Test Config**: `test.intelligent_training.*` (auto-detected when output-dir contains "test")
+
+See [Config Basics](../configuration/CONFIG_BASICS.md) for how to modify these settings.
 
 ## Output Structure
 

@@ -48,6 +48,32 @@ python DATA_PROCESSING/pipeline/barrier_pipeline.py \
 
 ## Model Training
 
+### Intelligent Training Pipeline (Recommended)
+
+The intelligent training pipeline automates target ranking, feature selection, and model training:
+
+```bash
+# Simple usage - all settings from config
+python -m TRAINING.orchestration.intelligent_trainer \
+    --data-dir "data/data_labeled/interval=5m" \
+    --symbols AAPL MSFT GOOGL \
+    --output-dir "my_training_run"
+
+# For testing - auto-detects test config when output-dir contains "test"
+python -m TRAINING.orchestration.intelligent_trainer \
+    --data-dir "data/data_labeled/interval=5m" \
+    --symbols AAPL MSFT GOOGL TSLA NVDA \
+    --output-dir "test_e2e_run" \
+    --families lightgbm xgboost random_forest
+```
+
+**Configuration:**
+- All settings come from `CONFIG/training_config/pipeline_config.yaml`
+- Test config auto-detected when output-dir contains "test"
+- See [Intelligent Training Tutorial](../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) for details
+
+### Manual Training (Programmatic)
+
 ```python
 from TRAINING.model_fun import LightGBMTrainer
 from CONFIG.config_loader import load_model_config
