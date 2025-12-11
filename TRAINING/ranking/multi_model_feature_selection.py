@@ -652,16 +652,21 @@ def train_model_and_get_importance(
             )
             
             # Clean config: remove params that don't apply to sklearn wrapper
-            lgb_config = {k: v for k, v in model_config.items() 
-                         if k not in ['boosting_type', 'device']}  # device -> n_jobs handled separately
-            # Map n_estimators if present
-            if 'n_estimators' in lgb_config:
-                lgb_config['n_estimators'] = lgb_config['n_estimators']
+            # Remove early stopping (requires eval_set), unknown params, and global defaults
+            lgb_config = model_config.copy()
+            lgb_config.pop('boosting_type', None)
+            lgb_config.pop('device', None)
+            lgb_config.pop('early_stopping_rounds', None)
+            lgb_config.pop('early_stopping_round', None)
+            lgb_config.pop('callbacks', None)
+            lgb_config.pop('threads', None)
+            lgb_config.pop('min_samples_split', None)
             
+            # Explicitly set random_seed for determinism (overrides any injected global value)
             if is_binary or is_multiclass:
-                model = LGBMClassifier(**lgb_config)
+                model = LGBMClassifier(**lgb_config, random_seed=model_seed)
             else:
-                model = LGBMRegressor(**lgb_config)
+                model = LGBMRegressor(**lgb_config, random_seed=model_seed)
             
             model.fit(X, y)
             train_score = model.score(X, y)  # R² for regression, accuracy for classification
@@ -685,12 +690,24 @@ def train_model_and_get_importance(
                 for v in unique_vals
             )
             
+            # Remove early stopping params (requires eval_set) - feature selection doesn't need it
+            # XGBoost 2.x requires eval_set if early_stopping_rounds is set, so we must remove it
+            xgb_config = model_config.copy()
+            xgb_config.pop('early_stopping_rounds', None)
+            xgb_config.pop('early_stopping_round', None)  # Alternative name
+            xgb_config.pop('callbacks', None)
+            xgb_config.pop('eval_set', None)  # Remove if present
+            xgb_config.pop('eval_metric', None)  # Often paired with early stopping
+            
+            # Explicitly set random_state for determinism (overrides any injected global value)
+            # XGBoost accepts both random_state and random_seed (random_seed is alias)
             if is_binary or is_multiclass:
-                model = xgb.XGBClassifier(**model_config)
+                model = xgb.XGBClassifier(**xgb_config, random_state=model_seed)
             else:
-                model = xgb.XGBRegressor(**model_config)
+                model = xgb.XGBRegressor(**xgb_config, random_state=model_seed)
             
             try:
+                # No eval_set needed - early stopping params already removed from config
                 model.fit(X, y)
                 train_score = model.score(X, y)  # R² for regression, accuracy for classification
                 
@@ -710,8 +727,10 @@ def train_model_and_get_importance(
     
     elif model_family == 'random_forest':
         from sklearn.ensemble import RandomForestRegressor
-        # Avoid duplicate random_state if already in config
-        rf_config = {k: v for k, v in model_config.items() if k != 'random_state'}
+        # Remove random_seed (sklearn uses random_state) and avoid duplicate random_state
+        rf_config = model_config.copy()
+        rf_config.pop('random_state', None)
+        rf_config.pop('random_seed', None)
         model = RandomForestRegressor(**rf_config, random_state=model_seed)
         model.fit(X, y)
         train_score = model.score(X, y)
@@ -729,8 +748,10 @@ def train_model_and_get_importance(
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X_imputed)
         
-        # Avoid duplicate random_state if already in config
-        nn_config = {k: v for k, v in model_config.items() if k != 'random_state'}
+        # Remove random_seed (sklearn uses random_state) and avoid duplicate random_state
+        nn_config = model_config.copy()
+        nn_config.pop('random_state', None)
+        nn_config.pop('random_seed', None)
         model = MLPRegressor(**nn_config, random_state=model_seed)
         try:
             model.fit(X_scaled, y)
@@ -756,18 +777,22 @@ def train_model_and_get_importance(
                 for v in unique_vals
             )
             
-            # Remove task-specific params from config (we set these based on task type)
-            cb_config = {k: v for k, v in model_config.items() if k not in ['verbose', 'loss_function']}
+            # Remove task-specific params and n_jobs (CatBoost uses thread_count)
+            cb_config = model_config.copy()
+            cb_config.pop('verbose', None)
+            cb_config.pop('loss_function', None)
+            cb_config.pop('n_jobs', None)
             
+            # Explicitly set random_seed for determinism (overrides any injected global value)
             if is_binary:
                 # Binary classification: use Logloss (default for CatBoostClassifier)
-                model = cb.CatBoostClassifier(**cb_config, verbose=False, loss_function='Logloss')
+                model = cb.CatBoostClassifier(**cb_config, verbose=False, loss_function='Logloss', random_seed=model_seed)
             elif is_multiclass:
                 # Multiclass: use MultiClass (default for CatBoostClassifier)
-                model = cb.CatBoostClassifier(**cb_config, verbose=False, loss_function='MultiClass')
+                model = cb.CatBoostClassifier(**cb_config, verbose=False, loss_function='MultiClass', random_seed=model_seed)
             else:
                 # Regression: use RMSE (default for CatBoostRegressor)
-                model = cb.CatBoostRegressor(**cb_config, verbose=False, loss_function='RMSE')
+                model = cb.CatBoostRegressor(**cb_config, verbose=False, loss_function='RMSE', random_seed=model_seed)
             
             try:
                 model.fit(X, y)
@@ -789,8 +814,12 @@ def train_model_and_get_importance(
         # Lasso doesn't handle NaNs - use sklearn-safe conversion
         X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
         
-        # Avoid duplicate random_state if already in config
-        lasso_config = {k: v for k, v in model_config.items() if k != 'random_state'}
+        # Remove random_seed (sklearn uses random_state) and avoid duplicate random_state
+        # Note: Lasso's random_state only applies to 'saga' solver, but sklearn ignores it for others
+        # We set it explicitly for determinism consistency (matches RandomForest/MLP pattern)
+        lasso_config = model_config.copy()
+        lasso_config.pop('random_state', None)
+        lasso_config.pop('random_seed', None)
         model = Lasso(**lasso_config, random_state=model_seed)
         model.fit(X_dense, y)
         train_score = model.score(X_dense, y)
@@ -1241,7 +1270,8 @@ def process_single_symbol(
     model_families_config: Dict[str, Dict[str, Any]],
     max_samples: int = None,
     explicit_interval: Optional[Union[int, str]] = None,  # Optional explicit interval from config
-    experiment_config: Optional[Any] = None  # Optional ExperimentConfig (for data.bar_interval)
+    experiment_config: Optional[Any] = None,  # Optional ExperimentConfig (for data.bar_interval)
+    output_dir: Optional[Path] = None  # Optional output directory for stability snapshots
 ) -> Tuple[List[ImportanceResult], List[Dict[str, Any]]]:
     """Process a single symbol with multiple model families"""
     
@@ -1368,19 +1398,21 @@ def process_single_symbol(
                               f"top feature={importance.idxmax()} ({importance.max():.2f})")
                     
                     # Save stability snapshot for this method (non-invasive hook)
-                    try:
-                        from TRAINING.stability.feature_importance import save_snapshot_from_series_hook
-                        universe_id = symbol if symbol else "ALL"
-                        save_snapshot_from_series_hook(
-                            target_name=target_column if target_column else 'unknown',
-                            method=method,  # "rfe", "boruta", "stability_selection", etc.
-                            importance_series=importance,
-                            universe_id=universe_id,
-                            output_dir=output_dir,
-                            auto_analyze=None,  # Load from config
-                        )
-                    except Exception as e:
-                        logger.debug(f"Stability snapshot save failed for {method} (non-critical): {e}")
+                    # Only save if output_dir is available (optional feature)
+                    if output_dir is not None:
+                        try:
+                            from TRAINING.stability.feature_importance import save_snapshot_from_series_hook
+                            universe_id = symbol if symbol else "ALL"
+                            save_snapshot_from_series_hook(
+                                target_name=target_column if target_column else 'unknown',
+                                method=method,  # "rfe", "boruta", "stability_selection", etc.
+                                importance_series=importance,
+                                universe_id=universe_id,
+                                output_dir=output_dir,
+                                auto_analyze=None,  # Load from config
+                            )
+                        except Exception as e:
+                            logger.debug(f"Stability snapshot save failed for {method} (non-critical): {e}")
                     
                     # Check if model used a fallback (soft no-signal case)
                     fallback_reason = getattr(model, '_fallback_reason', None)
