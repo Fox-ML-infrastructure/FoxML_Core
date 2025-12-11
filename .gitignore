@@ -58,7 +58,8 @@ tmp/
 temp/
 
 # Data processing (users generate their own features)
-DATA_PROCESSING/
+# Track code, ignore data directories
+DATA_PROCESSING/data/
 
 # Data files (large binary formats)
 *.parquet

@@ -155,9 +155,26 @@ for parquet_file in data_dir.glob("*.parquet"):
     # Process each symbol...
 ```
 
-## Next Steps
+## Module Documentation
 
-- [Feature Engineering Tutorial](FEATURE_ENGINEERING_TUTORIAL.md) - Advanced feature creation
-- [Column Reference](../../02_reference/data/COLUMN_REFERENCE.md) - Complete column documentation
-- [Data Format Spec](../../02_reference/data/DATA_FORMAT_SPEC.md) - Data format details
+For complete API reference and module details, see:
+- **[DATA_PROCESSING README](../../DATA_PROCESSING/README.md)** - Complete module documentation with API reference
+- **[Feature Engineering Tutorial](FEATURE_ENGINEERING_TUTORIAL.md)** - Advanced feature creation
+- **[Column Reference](../../02_reference/data/COLUMN_REFERENCE.md)** - Complete column documentation (if available)
+- **[Data Format Spec](../../02_reference/data/DATA_FORMAT_SPEC.md)** - Data format details (if available)
+
+## Module Structure
+
+The `DATA_PROCESSING/` module is organized as follows:
+
+```
+DATA_PROCESSING/
+├── features/          # Feature engineering (200+ features)
+├── targets/           # Target/label generation
+├── pipeline/          # Processing pipelines
+├── utils/             # Shared utilities
+└── README.md          # Complete module documentation
+```
+
+See `DATA_PROCESSING/README.md` for detailed API documentation and usage examples.
 

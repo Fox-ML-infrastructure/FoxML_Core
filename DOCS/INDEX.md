@@ -96,6 +96,12 @@ Complete technical reference for daily use.
 ### Systems Reference
 - [Pipeline Reference](02_reference/systems/PIPELINE_REFERENCE.md) - Data pipelines
 
+### API Reference
+- [Module Reference](02_reference/api/MODULE_REFERENCE.md) - Python API for all modules
+- [DATA_PROCESSING API](02_reference/api/DATA_PROCESSING_API.md) - Complete DATA_PROCESSING module API reference
+- [Intelligent Trainer API](02_reference/api/INTELLIGENT_TRAINER_API.md) - Intelligent training pipeline API
+- [CLI Reference](02_reference/api/CLI_REFERENCE.md) - Command-line interface reference
+
 ### Configuration Reference
 - **[Modular Config System](02_reference/configuration/MODULAR_CONFIG_SYSTEM.md)** - Complete guide to modular configs, experiment configs, typed configs, migration (includes `logging_config.yaml`)
 - [Configuration System Overview](02_reference/configuration/README.md) - Centralized configuration system overview (includes `logging_config.yaml` documentation)
