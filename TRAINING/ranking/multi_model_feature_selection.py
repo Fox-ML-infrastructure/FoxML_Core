@@ -48,6 +48,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import multiprocessing as mp
 import json
 from collections import defaultdict
+from scipy.stats import spearmanr
 from dataclasses import dataclass, asdict
 import warnings
 
@@ -239,6 +240,236 @@ def normalize_importance(
         f"Importance sum should be positive and finite after normalization (family={family}, sum={final_sum}, n_features={n_features})"
     
     return importance, fallback_reason
+
+
+def compute_per_model_reproducibility(
+    symbol: str,
+    target_column: str,
+    model_family: str,
+    current_score: float,
+    current_importance: pd.Series,
+    previous_data: Optional[Dict[str, Any]] = None,
+    top_k: int = 50
+) -> Dict[str, Any]:
+    """
+    Compute per-model reproducibility statistics.
+    
+    Args:
+        symbol: Symbol name
+        target_column: Target column name
+        model_family: Model family name
+        current_score: Current validation score
+        current_importance: Current importance Series
+        previous_data: Previous run data (dict with 'score' and 'importance' keys)
+        top_k: Number of top features for Jaccard calculation
+    
+    Returns:
+        Dict with reproducibility stats: delta_score, jaccard_top_k, importance_corr, status
+    """
+    if previous_data is None:
+        return {
+            "delta_score": None,
+            "jaccard_top_k": None,
+            "importance_corr": None,
+            "status": "no_previous_run"
+        }
+    
+    prev_score = previous_data.get('score')
+    prev_importance = previous_data.get('importance')
+    
+    # Compute delta_score
+    delta_score = None
+    if prev_score is not None and not math.isnan(current_score) and not math.isnan(prev_score):
+        delta_score = abs(current_score - prev_score)
+    
+    # Compute Jaccard@K
+    jaccard_top_k = None
+    if prev_importance is not None and isinstance(prev_importance, pd.Series):
+        try:
+            # Get top K features from both runs
+            current_top_k = set(current_importance.nlargest(top_k).index)
+            prev_top_k = set(prev_importance.nlargest(top_k).index)
+            
+            if current_top_k or prev_top_k:
+                intersection = len(current_top_k & prev_top_k)
+                union = len(current_top_k | prev_top_k)
+                jaccard_top_k = intersection / union if union > 0 else 0.0
+        except Exception as e:
+            logger.debug(f"    {symbol}:{model_family}: Jaccard calculation failed: {e}")
+    
+    # Compute importance correlation (Spearman)
+    importance_corr = None
+    if prev_importance is not None and isinstance(prev_importance, pd.Series):
+        try:
+            # Align features (use union of features from both runs)
+            all_features = set(current_importance.index) | set(prev_importance.index)
+            if len(all_features) > 1:
+                current_aligned = current_importance.reindex(all_features, fill_value=0.0)
+                prev_aligned = prev_importance.reindex(all_features, fill_value=0.0)
+                
+                # Compute Spearman correlation
+                corr, p_value = spearmanr(current_aligned.values, prev_aligned.values)
+                if not math.isnan(corr):
+                    importance_corr = float(corr)
+        except Exception as e:
+            logger.debug(f"    {symbol}:{model_family}: Correlation calculation failed: {e}")
+    
+    # Determine status based on thresholds
+    # Model family priorities: high-variance families get stricter thresholds
+    high_variance_families = {'neural_network', 'lasso', 'stability_selection', 'boruta', 'rfe', 'xgboost'}
+    
+    if model_family in high_variance_families:
+        delta_score_threshold = 0.01
+        min_jaccard = 0.7
+        min_corr = 0.7
+    else:
+        # More stable families (random_forest, lightgbm, catboost)
+        delta_score_threshold = 0.01
+        min_jaccard = 0.7
+        min_corr = 0.7
+    
+    # Filter/scoring methods (mutual_information, univariate_selection) use same thresholds
+    # but we'll be more lenient in logging
+    
+    status = "stable"
+    if delta_score is not None and delta_score > delta_score_threshold:
+        status = "unstable"
+    elif jaccard_top_k is not None and jaccard_top_k < min_jaccard:
+        status = "unstable"
+    elif importance_corr is not None and importance_corr < min_corr:
+        status = "unstable"
+    elif (delta_score is not None and delta_score > delta_score_threshold * 0.7) or \
+         (jaccard_top_k is not None and jaccard_top_k < min_jaccard * 1.1) or \
+         (importance_corr is not None and importance_corr < min_corr * 1.1):
+        status = "borderline"
+    
+    return {
+        "delta_score": delta_score,
+        "jaccard_top_k": jaccard_top_k,
+        "importance_corr": importance_corr,
+        "status": status
+    }
+
+
+def load_previous_model_results(
+    output_dir: Optional[Path],
+    symbol: str,
+    target_column: str,
+    model_family: str
+) -> Optional[Dict[str, Any]]:
+    """
+    Load previous run results for a specific model family.
+    
+    Args:
+        output_dir: Output directory (may contain previous run metadata)
+        symbol: Symbol name
+        target_column: Target column name
+        model_family: Model family name
+    
+    Returns:
+        Dict with 'score' and 'importance' keys, or None if not found
+    """
+    if output_dir is None:
+        return None
+    
+    try:
+        # Look for metadata JSON in output_dir (feature_selections/{target}/model_metadata.json)
+        # output_dir might be feature_selections/{target}/ or a parent
+        if output_dir.name == target_column or (output_dir.parent / target_column).exists():
+            if output_dir.name != target_column:
+                metadata_dir = output_dir.parent / target_column
+            else:
+                metadata_dir = output_dir
+        else:
+            metadata_dir = output_dir
+        
+        metadata_file = metadata_dir / "model_metadata.json"
+        
+        # Try current location first
+        if not metadata_file.exists():
+            # Try parent directories (for previous runs)
+            for parent in [metadata_dir.parent, metadata_dir.parent.parent]:
+                if parent.exists():
+                    prev_metadata = parent / "model_metadata.json"
+                    if prev_metadata.exists():
+                        metadata_file = prev_metadata
+                        break
+        
+        if metadata_file.exists():
+            with open(metadata_file, 'r') as f:
+                metadata = json.load(f)
+            
+            # Look for this symbol/target/model combination
+            key = f"{symbol}:{target_column}:{model_family}"
+            if key in metadata:
+                prev_data = metadata[key]
+                # Convert importance back to Series if needed
+                if 'importance' in prev_data and isinstance(prev_data['importance'], dict):
+                    prev_data['importance'] = pd.Series(prev_data['importance'])
+                return prev_data
+    except Exception as e:
+        logger.debug(f"Could not load previous model results for {symbol}:{model_family}: {e}")
+    
+    return None
+
+
+def save_model_metadata(
+    output_dir: Optional[Path],
+    symbol: str,
+    target_column: str,
+    model_family: str,
+    score: float,
+    importance: pd.Series,
+    reproducibility: Dict[str, Any]
+):
+    """
+    Save model metadata including reproducibility stats.
+    
+    Args:
+        output_dir: Output directory
+        symbol: Symbol name
+        target_column: Target column name
+        model_family: Model family name
+        score: Validation score
+        importance: Importance Series
+        reproducibility: Reproducibility stats dict
+    """
+    if output_dir is None:
+        return
+    
+    try:
+        # Determine metadata directory (feature_selections/{target}/)
+        if output_dir.name == target_column or (output_dir.parent / target_column).exists():
+            if output_dir.name != target_column:
+                metadata_dir = output_dir.parent / target_column
+            else:
+                metadata_dir = output_dir
+        else:
+            metadata_dir = output_dir
+        
+        metadata_file = metadata_dir / "model_metadata.json"
+        
+        # Load existing metadata
+        if metadata_file.exists():
+            with open(metadata_file, 'r') as f:
+                metadata = json.load(f)
+        else:
+            metadata = {}
+        
+        # Store this model's data
+        key = f"{symbol}:{target_column}:{model_family}"
+        metadata[key] = {
+            "score": float(score) if not math.isnan(score) else None,
+            "importance": importance.to_dict(),  # Convert Series to dict for JSON
+            "reproducibility": reproducibility
+        }
+        
+        # Save metadata
+        metadata_dir.mkdir(parents=True, exist_ok=True)
+        with open(metadata_file, 'w') as f:
+            json.dump(metadata, f, indent=2)
+    except Exception as e:
+        logger.debug(f"Could not save model metadata for {symbol}:{model_family}: {e}")
 
 
 def boruta_to_importance(
@@ -1521,6 +1752,9 @@ def process_single_symbol(
         except Exception:
             logger.debug(f"  {symbol}: Reproducibility - base_seed=N/A (determinism system unavailable)")
         
+        # Track per-model reproducibility
+        per_model_reproducibility = []
+        
         for family_name, family_config in model_families_config.items():
             if not family_config.get('enabled', False):
                 continue
@@ -1547,6 +1781,61 @@ def process_single_symbol(
                     score_str = f"{train_score:.4f}" if not math.isnan(train_score) else "N/A"
                     logger.info(f"    ✅ {family_name}: score={score_str}, "
                               f"top feature={importance.idxmax()} ({importance.max():.2f})")
+                    
+                    # Compute per-model reproducibility
+                    previous_data = load_previous_model_results(output_dir, symbol, target_column, family_name)
+                    repro_stats = compute_per_model_reproducibility(
+                        symbol=symbol,
+                        target_column=target_column,
+                        model_family=family_name,
+                        current_score=train_score,
+                        current_importance=importance,
+                        previous_data=previous_data,
+                        top_k=50
+                    )
+                    
+                    # Store reproducibility in metadata
+                    save_model_metadata(
+                        output_dir=output_dir,
+                        symbol=symbol,
+                        target_column=target_column,
+                        model_family=family_name,
+                        score=train_score,
+                        importance=importance,
+                        reproducibility=repro_stats
+                    )
+                    
+                    # Compact logging based on status
+                    if repro_stats['status'] == 'no_previous_run':
+                        # First run - no comparison
+                        pass
+                    elif repro_stats['status'] == 'stable':
+                        # OK/stable - one compact line
+                        delta_str = f"Δscore={repro_stats['delta_score']:.3f}" if repro_stats['delta_score'] is not None else "Δscore=N/A"
+                        jaccard_str = f"Jaccard@50={repro_stats['jaccard_top_k']:.2f}" if repro_stats['jaccard_top_k'] is not None else "Jaccard@50=N/A"
+                        corr_str = f"corr={repro_stats['importance_corr']:.2f}" if repro_stats['importance_corr'] is not None else "corr=N/A"
+                        logger.info(f"  {symbol}: {family_name} reproducibility: {delta_str}, {jaccard_str}, {corr_str} [OK]")
+                    elif repro_stats['status'] == 'borderline':
+                        # Borderline - info level
+                        delta_str = f"Δscore={repro_stats['delta_score']:.3f}" if repro_stats['delta_score'] is not None else "Δscore=N/A"
+                        jaccard_str = f"Jaccard@50={repro_stats['jaccard_top_k']:.2f}" if repro_stats['jaccard_top_k'] is not None else "Jaccard@50=N/A"
+                        corr_str = f"corr={repro_stats['importance_corr']:.2f}" if repro_stats['importance_corr'] is not None else "corr=N/A"
+                        logger.info(f"  {symbol}: {family_name} reproducibility: {delta_str}, {jaccard_str}, {corr_str} [BORDERLINE]")
+                    else:  # unstable
+                        # Unstable - WARNING level
+                        delta_str = f"Δscore={repro_stats['delta_score']:.3f}" if repro_stats['delta_score'] is not None else "Δscore=N/A"
+                        jaccard_str = f"Jaccard@50={repro_stats['jaccard_top_k']:.2f}" if repro_stats['jaccard_top_k'] is not None else "Jaccard@50=N/A"
+                        corr_str = f"corr={repro_stats['importance_corr']:.2f}" if repro_stats['importance_corr'] is not None else "corr=N/A"
+                        logger.warning(f"  {symbol}: {family_name} reproducibility: {delta_str}, {jaccard_str}, {corr_str} [UNSTABLE]")
+                    
+                    # Store for symbol-level summary
+                    per_model_reproducibility.append({
+                        "family": family_name,
+                        "status": repro_stats['status'],
+                        "delta_score": repro_stats['delta_score'],
+                        "jaccard_top_k": repro_stats['jaccard_top_k'],
+                        "importance_corr": repro_stats['importance_corr']
+                    })
                     
                     # Save stability snapshot for this method (non-invasive hook)
                     # Only save if output_dir is available (optional feature)
@@ -1637,6 +1926,34 @@ def process_single_symbol(
             for status in family_statuses:
                 if status["status"] == "failed":
                     logger.warning(f"      - {status['family']}: {status['error_type']}: {status['error']}")
+        
+        # Log reproducibility summary per symbol
+        if per_model_reproducibility:
+            stable_count = sum(1 for r in per_model_reproducibility if r['status'] == 'stable')
+            borderline_count = sum(1 for r in per_model_reproducibility if r['status'] == 'borderline')
+            unstable_count = sum(1 for r in per_model_reproducibility if r['status'] == 'unstable')
+            no_prev_count = sum(1 for r in per_model_reproducibility if r['status'] == 'no_previous_run')
+            
+            if unstable_count > 0 or borderline_count > 0:
+                unstable_families = [r['family'] for r in per_model_reproducibility if r['status'] == 'unstable']
+                borderline_families = [r['family'] for r in per_model_reproducibility if r['status'] == 'borderline']
+                
+                summary_parts = []
+                if stable_count > 0:
+                    summary_parts.append(f"{stable_count} stable")
+                if borderline_count > 0:
+                    summary_parts.append(f"{borderline_count} borderline")
+                if unstable_count > 0:
+                    summary_parts.append(f"{unstable_count} unstable")
+                if no_prev_count > 0:
+                    summary_parts.append(f"{no_prev_count} no_previous_run")
+                
+                summary_str = ", ".join(summary_parts)
+                
+                if unstable_count > 0:
+                    logger.warning(f"  {symbol}: reproducibility summary: {summary_str} -> ⚠️ check model_families: {', '.join(unstable_families)}")
+                else:
+                    logger.info(f"  {symbol}: reproducibility summary: {summary_str}")
         
     except Exception as e:
         logger.error(f"❌ {symbol}: Processing failed: {e}", exc_info=True)

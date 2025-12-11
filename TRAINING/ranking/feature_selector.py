@@ -180,7 +180,8 @@ def select_features_for_target(
                 model_families_config=model_families_config,
                 max_samples=max_samples_per_symbol,
                 explicit_interval=explicit_interval,
-                experiment_config=experiment_config
+                experiment_config=experiment_config,
+                output_dir=output_dir  # Pass output_dir for reproducibility tracking
             )
             
             all_results.extend(symbol_results)
