@@ -26,6 +26,8 @@ INTERNAL_DOCS/**
 
 # Scripts (users implement their own tooling)
 SCRIPTS/
+# Lowercase scripts folder (use SCRIPTS/ instead)
+scripts/
 
 # Enterprise bundle - now tracked (PDFs and index)
 # ENTERPRISE_BUNDLE/
@@ -335,11 +337,10 @@ config/secrets.yaml
 !CONFIG/**/*.json
 !CONFIG/**/*.txt
 
+# Lowercase docs folder (use DOCS/ instead)
+docs/
 # Documentation (needed, except internal and meta files)
-!docs/**/*.md
-# Re-exclude internal docs (override the !docs/**/*.md above)
-docs/internal/
-docs/internal/**/*
+# Note: DOCS/ is tracked, docs/ is not
 # Exclude meta/documentation management files (not needed for users)
 docs/STYLE_GUIDE.md
 docs/MIGRATION_PLAN.md
