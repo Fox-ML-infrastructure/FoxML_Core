@@ -1269,8 +1269,10 @@ def train_model_and_get_importance(
                 
                 model.fit(X_boot, y_boot)
                 stability_scores += (np.abs(model.coef_[0] if len(model.coef_.shape) > 1 else model.coef_) > 1e-6).astype(int)
-            except:
-                continue  # Skip failed bootstrap iterations
+            except Exception as e:
+                # Skip failed bootstrap iterations (expected for some degenerate cases)
+                logger.debug(f"    stability_selection: Bootstrap iteration failed: {e}")
+                continue
         
         # Normalize to 0-1 (fraction of times selected)
         raw_importance = stability_scores / n_bootstrap
