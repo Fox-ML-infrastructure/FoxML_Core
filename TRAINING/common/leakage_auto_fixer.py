@@ -301,9 +301,15 @@ class LeakageAutoFixer:
                 
                 for feat_name, importance in top_features:
                     if feat_name in candidate_features:
+                        # CRITICAL FIX: Confidence should reflect perfect score context, not just raw importance
+                        # Even low-importance features in perfect-score models are highly suspicious
+                        # Base confidence of 0.85 (perfect score = high suspicion), scaled by importance
+                        base_confidence = 0.85  # High base confidence for perfect score context
+                        importance_boost = min(0.1, importance * 2)  # Boost up to 0.1 based on importance
+                        detection_confidence = min(0.95, base_confidence + importance_boost)
                         detections.append(LeakageDetection(
                             feature_name=feat_name,
-                            confidence=min(0.9, importance),  # Scale importance to confidence
+                            confidence=detection_confidence,
                             reason=f"High importance ({importance:.2%}) in perfect-score model (train_score={train_score:.4f})",
                             source="perfect_score_importance",
                             suggested_action=self._suggest_action(feat_name)
@@ -370,9 +376,15 @@ class LeakageAutoFixer:
                     
                     for feat_name, importance in top_features:
                         if feat_name in candidate_features:
+                            # CRITICAL FIX: Confidence should reflect perfect score context, not just raw importance
+                            # Even low-importance features in perfect-score models are highly suspicious
+                            # Base confidence of 0.85 (perfect score = high suspicion), scaled by importance
+                            base_confidence = 0.85  # High base confidence for perfect score context
+                            importance_boost = min(0.1, importance * 2)  # Boost up to 0.1 based on importance
+                            detection_confidence = min(0.95, base_confidence + importance_boost)
                             detections.append(LeakageDetection(
                                 feature_name=feat_name,
-                                confidence=min(0.9, importance),  # Scale importance to confidence
+                                confidence=detection_confidence,
                                 reason=f"High importance ({importance:.2%}) in perfect-score model (train_score={train_score:.4f}, computed on-the-fly)",
                                 source="perfect_score_computed_importance",
                                 suggested_action=self._suggest_action(feat_name)

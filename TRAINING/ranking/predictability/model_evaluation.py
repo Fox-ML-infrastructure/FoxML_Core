@@ -2656,7 +2656,9 @@ def evaluate_target_predictability(
                                   f"{len(updates.get('excluded_features_updates', {}).get('prefix_patterns', []))} prefix patterns")
                         logger.info(f"   Rejected: {len(updates.get('feature_registry_updates', {}).get('rejected_features', []))} features in registry")
                     else:
-                        logger.info("🔍 Auto-fix detected leaks but no configs were modified")
+                        logger.warning("⚠️  Auto-fix detected leaks but no configs were modified")
+                        logger.warning("   This usually means all detections were below confidence threshold")
+                        logger.warning(f"   Check logs above for confidence distribution details")
                     # Log backup info if available
                     if autofix_info.backup_files:
                         logger.info(f"📦 Backup created: {len(autofix_info.backup_files)} backup file(s)")
