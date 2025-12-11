@@ -31,6 +31,59 @@ Phase 1 functioning properly - Ranking and selection pipelines unified with cons
 
 ### Added
 
+#### Config Parameter Validation & Silent Error Visibility (2025-12-11)
+
+**Config Cleaner Utility**
+- **New module**: `TRAINING/utils/config_cleaner.py` providing systematic parameter validation
+- **Function**: `clean_config_for_estimator()` uses `inspect.signature()` to validate parameters against actual estimator constructors
+- **Features**:
+  - Automatically removes duplicate parameters (if also passed explicitly via `extra_kwargs`)
+  - Automatically removes unknown parameters (not in estimator's `__init__` signature)
+  - Logs what was stripped for visibility (DEBUG level, can be raised to WARNING for auditing)
+  - Handles edge cases: None configs, non-dict configs, None extra_kwargs
+  - Maintains SST (Single Source of Truth) - values still come from config/defaults, but only valid keys are passed
+  - Prevents entire class of parameter passing errors that would occur with config drift
+- **Integration**: Applied to `multi_model_feature_selection.py`, `task_types.py`, `cross_sectional_feature_ranker.py`
+- **Future-proof**: Makes codebase resilient to future changes in `inject_defaults` or model library updates
+
+**Reproducibility Tracking Module**
+- **New module**: `TRAINING/utils/reproducibility_tracker.py` - reusable `ReproducibilityTracker` class
+- **Features**:
+  - Generic module usable across all pipeline stages
+  - Integrated into target ranking and feature selection pipelines
+  - Compares current run to previous runs with configurable tolerances (0.1% for scores, 1% for importance)
+  - Stores run history in JSON format (keeps last 10 runs per item by default)
+  - Logs differences with percentage changes and absolute deltas
+  - Flags reproducible runs (✅) vs different runs (⚠️)
+- **Documentation**: `DOCS/03_technical/implementation/REPRODUCIBILITY_TRACKING.md` with API reference, integration examples, best practices, and troubleshooting guide
+- **Reproducibility comparison logging**: Automatic comparison of target ranking results to previous runs
+  - Stores run summaries in `reproducibility_log.json` (keeps last 10 runs per target)
+  - Compares current vs previous: mean score, std score, importance, composite score
+  - Integrated into `rank_target_predictability.py` - logs after each target evaluation summary
+
+**Silent Error Visibility Improvements**
+- **ImportError fallback in target validation**: Added DEBUG logging when `validate_target` module is unavailable and fallback validation is used
+- **Importance extraction validation**: Added comprehensive validation and logging:
+  - Validates importance is not None before use
+  - Validates importance is correct type (pd.Series) and converts if needed
+  - Validates importance length matches feature count and pads/truncates with warnings
+  - Wraps entire extraction in try/except with ERROR-level logging on failures
+- **Bare except clauses**: Replaced all bare `except:` clauses with `except Exception as e:` and added DEBUG-level logging:
+  - Stability selection bootstrap loop now logs when iterations fail
+  - RFE score computation now logs when scoring fails
+- **Reproducibility tracker visibility**: Fixed issue where reproducibility comparison logs were not visible in main script output by ensuring logger propagation and fallback to main logger
+- **Config loading failures**: Added DEBUG-level logging to all config loading exception handlers (SHAP config, RFE config, Boruta config, max_samples, etc.) that previously silently fell back to defaults
+- **Empty results aggregation**: Added WARNING-level log when all model families fail and empty results are returned
+- **Logging levels**: All silent failures now have appropriate logging levels (DEBUG for expected fallbacks, WARNING for unexpected conditions, ERROR for actual failures)
+
+**Files Modified**
+- `TRAINING/utils/config_cleaner.py` — New module
+- `TRAINING/utils/reproducibility_tracker.py` — Enhanced with visibility fixes
+- `TRAINING/ranking/multi_model_feature_selection.py` — Integrated config cleaner, added importance validation, fixed bare excepts
+- `TRAINING/utils/task_types.py` — Integrated config cleaner with proper closure handling
+- `TRAINING/ranking/cross_sectional_feature_ranker.py` — Integrated config cleaner
+- `CONFIG/config_loader.py` — Hardened `inject_defaults` to handle None configs
+
 #### SST Enforcement & Configuration Hardening (2025-12-10)
 
 **SST Enforcement Test**
@@ -374,7 +427,52 @@ See [`COMMERCIAL_LICENSE.md`](../../COMMERCIAL_LICENSE.md) for complete pricing 
 
 ### Fixed
 
-- **Complete Single Source of Truth (SST) implementation** (2025-12-10) — Replaced ALL hardcoded values across entire TRAINING pipeline for full reproducibility:
+#### Parameter Passing Errors & Silent Failures (2025-12-11)
+
+**Systematic Parameter Passing Error Prevention**
+- **Root cause**: `inject_defaults` was injecting parameters (like `random_seed`, `random_state`, `n_jobs`, `num_threads`, `threads`) into model configs, but model instantiation code was also passing these (or renamed versions) explicitly, leading to duplicate arguments or unknown parameters.
+- **Solution**: Implemented systematic fix using shared `clean_config_for_estimator()` utility from `TRAINING/utils/config_cleaner.py`:
+  - **All model families in multi_model_feature_selection.py**: LightGBM, XGBoost, RandomForest, MLPRegressor, CatBoost, Lasso now use `clean_config_for_estimator()` helper
+  - **All model constructors in task_types.py**: Fixed with proper closure handling (explicit copies in lambda closures to prevent reference issues)
+  - **Cross-sectional feature ranker**: LightGBM and XGBoost now use config cleaner
+  - **inject_defaults hardening**: Now handles None configs gracefully, prevents "argument of type 'NoneType' is not iterable" errors
+  - Prevents "got multiple values for keyword argument" errors (e.g., `random_seed` passed both in config and explicitly)
+  - Prevents "unexpected keyword argument" errors (e.g., `num_threads` for RandomForest, `n_jobs` for MLPRegressor/Lasso)
+  - Lambda closure fix: All lambda functions in `task_types.py` now capture explicit copies (`config_final`, `extra_final`) to prevent reference issues
+  - Future-proof: Any new parameters added by `inject_defaults` will be automatically filtered if they're duplicates or unknown
+
+**Model Config Parameter Sanitization**
+- **Fixed**: Critical TypeError and ValueError errors when global config defaults (`random_seed`, `n_jobs`, `early_stopping_rounds`) were injected into model constructors
+- **sklearn models** (RandomForest, MLPRegressor, Lasso): Remove `random_seed` (use `random_state` instead)
+- **CatBoost**: Remove `n_jobs` (uses `thread_count` instead)
+- **XGBoost/LightGBM**: Remove all early stopping params (`early_stopping_rounds`, `callbacks`, `eval_set`, `eval_metric`) in feature selection mode (requires `eval_set` which isn't available)
+- Determinism preserved: All models explicitly set `random_state`/`random_seed` using deterministic `model_seed` per symbol/target combination
+- Uses `.copy()` and `.pop()` for explicit parameter sanitization to prevent incompatible parameters from reaching model constructors
+
+**Silent Error Visibility Improvements**
+- **ImportError fallback in target validation**: Added DEBUG logging when `validate_target` module is unavailable and fallback validation is used
+- **Importance extraction validation**: Added comprehensive validation and logging:
+  - Validates importance is not None before use
+  - Validates importance is correct type (pd.Series) and converts if needed
+  - Validates importance length matches feature count and pads/truncates with warnings
+  - Wraps entire extraction in try/except with ERROR-level logging on failures
+- **Bare except clauses**: Replaced all bare `except:` clauses with `except Exception as e:` and added DEBUG-level logging:
+  - Stability selection bootstrap loop now logs when iterations fail
+  - RFE score computation now logs when scoring fails
+- **Reproducibility tracker visibility**: Fixed issue where reproducibility comparison logs were not visible in main script output by ensuring logger propagation and fallback to main logger
+- **Config loading failures**: Added DEBUG-level logging to all config loading exception handlers (SHAP config, RFE config, Boruta config, max_samples, etc.) that previously silently fell back to defaults
+- **Empty results aggregation**: Added WARNING-level log when all model families fail and empty results are returned
+- **Logging levels**: All silent failures now have appropriate logging levels (DEBUG for expected fallbacks, WARNING for unexpected conditions, ERROR for actual failures)
+
+**Files Modified**
+- `TRAINING/utils/config_cleaner.py` — New module
+- `TRAINING/ranking/multi_model_feature_selection.py` — Integrated config cleaner, added importance validation, fixed bare excepts
+- `TRAINING/utils/task_types.py` — Integrated config cleaner with proper closure handling
+- `TRAINING/ranking/cross_sectional_feature_ranker.py` — Integrated config cleaner
+- `CONFIG/config_loader.py` — Hardened `inject_defaults` to handle None configs
+- `TRAINING/utils/reproducibility_tracker.py` — Enhanced with visibility fixes
+
+#### Complete Single Source of Truth (SST) implementation (2025-12-10) — Replaced ALL hardcoded values across entire TRAINING pipeline for full reproducibility:
   - **Model trainers** (`TRAINING/model_fun/` - 34 files): All hardcoded hyperparameters replaced with config loading:
     - `comprehensive_trainer.py`: LightGBM/XGBoost `n_estimators`, `max_depth`, `learning_rate` now load from `models.{family}.{param}` config paths
     - `neural_network_trainer.py`: Adam `learning_rate` now uses `_get_learning_rate()` helper method
