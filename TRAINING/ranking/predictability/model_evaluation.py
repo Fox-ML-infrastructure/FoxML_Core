@@ -2617,10 +2617,16 @@ def evaluate_target_predictability(
                     actual_train_score = max(primary_scores.values()) if primary_scores else None
                     logger.debug(f"Using CV score {actual_train_score:.4f} as fallback for auto-fixer")
                 
-                # Log what we're passing to auto-fixer
-                logger.debug(f"Auto-fixer inputs: train_score={actual_train_score:.4f}, "
+                # Log what we're passing to auto-fixer (enhanced visibility)
+                logger.info(f"🔧 Auto-fixer inputs: train_score={actual_train_score:.4f if actual_train_score else None}, "
                            f"model_importance keys={len(avg_importance)}, "
-                           f"feature_names={len(feature_names)}")
+                           f"feature_names={len(feature_names)}, "
+                           f"feature_importances provided={feature_importances is not None and len(feature_importances) > 0}")
+                if avg_importance:
+                    top_5 = sorted(avg_importance.items(), key=lambda x: x[1], reverse=True)[:5]
+                    logger.debug(f"   Top 5 features by importance: {', '.join([f'{f}={imp:.4f}' for f, imp in top_5])}")
+                else:
+                    logger.warning(f"   ⚠️  No aggregated importance available! feature_importances keys: {list(feature_importances.keys()) if feature_importances else 'None'}")
                 
                 # Detect leaks
                 detections = fixer.detect_leaking_features(
