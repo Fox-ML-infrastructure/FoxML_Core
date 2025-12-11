@@ -24,7 +24,7 @@ Usage:
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 
 # Use root logger to ensure messages are visible regardless of calling script's logger setup
@@ -304,7 +304,7 @@ class ReproducibilityTracker:
         curr_value: float,
         prev_std: Optional[float],
         metric_type: str  # 'roc_auc', 'composite', or 'importance'
-    ) -> tuple[str, float, float, Optional[float]]:
+    ) -> Tuple[str, float, float, Optional[float]]:
         """
         Classify difference into STABLE/DRIFTING/DIVERGED tiers.
         
