@@ -104,6 +104,32 @@ def clean_config_for_estimator(
                 config.pop(k, None)
                 dropped_unknown.append(k)
     
+    # Special handling for known parameter conflicts
+    # CatBoost: depth and max_depth are synonyms - only one should be used
+    if 'catboost' in (family_name or '').lower():
+        if 'depth' in config and 'max_depth' in config:
+            # Prefer depth (CatBoost's native param), remove max_depth
+            config.pop('max_depth', None)
+            dropped_duplicates.append('max_depth')
+            logger.debug(f"[{family_name}] Removed max_depth (duplicate of depth for CatBoost)")
+    
+    # RandomForest: verbose must be >= 0, not -1
+    if 'random_forest' in (family_name or '').lower() and 'verbose' in config:
+        verbose_val = config.get('verbose')
+        if verbose_val == -1 or (isinstance(verbose_val, (int, float)) and verbose_val < 0):
+            config.pop('verbose', None)
+            dropped_unknown.append('verbose')
+            logger.debug(f"[{family_name}] Removed invalid verbose={verbose_val} (must be >= 0 for RandomForest)")
+    
+    # MLPRegressor: learning_rate must be string, not float
+    if 'neural_network' in (family_name or '').lower() and 'learning_rate' in config:
+        lr_val = config.get('learning_rate')
+        if isinstance(lr_val, (int, float)):
+            # MLPRegressor expects 'constant', 'adaptive', or 'invscaling'
+            config.pop('learning_rate', None)
+            dropped_unknown.append('learning_rate')
+            logger.debug(f"[{family_name}] Removed invalid learning_rate={lr_val} (MLPRegressor expects string: 'constant', 'adaptive', or 'invscaling')")
+    
     # Log what was stripped (use WARNING temporarily to surface issues, then drop to DEBUG)
     if dropped_unknown or dropped_duplicates:
         logger.debug(
