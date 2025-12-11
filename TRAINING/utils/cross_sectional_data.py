@@ -171,13 +171,6 @@ def prepare_cross_sectional_data_for_ranking(
         if len(combined_df) == 0:
             logger.warning(f"No data after min_cs filter - all timestamps have < {effective_min_cs} symbols")
             return (None,) * 5
-    else:
-        # CRITICAL: Panel data REQUIRES timestamps for time-based purging
-        # Without timestamps, row-count purging causes catastrophic leakage (1 bar = N rows, not 1 row)
-        logger.error("CRITICAL: No time column found in panel data. Time-based purging is REQUIRED.")
-        logger.error("  Panel data structure: multiple symbols per timestamp means row-count purging is invalid.")
-        logger.error("  Example: With 50 symbols, 1 bar = 50 rows. Purging 17 rows = ~20 seconds, not 60 minutes!")
-        return (None,) * 5
         
         # Apply cross-sectional sampling per timestamp
         # CRITICAL: Shuffle symbols within each timestamp to avoid bias
@@ -208,6 +201,13 @@ def prepare_cross_sectional_data_for_ranking(
                            .drop(columns=["_shuffle_key"]))
             logger.info(f"After max_cs_samples={max_cs_samples} filter (shuffled per timestamp): {combined_df.shape}")
             # Data is already sorted by [time_col, _shuffle_key], so it's sorted by time_col
+    else:
+        # CRITICAL: Panel data REQUIRES timestamps for time-based purging
+        # Without timestamps, row-count purging causes catastrophic leakage (1 bar = N rows, not 1 row)
+        logger.error("CRITICAL: No time column found in panel data. Time-based purging is REQUIRED.")
+        logger.error("  Panel data structure: multiple symbols per timestamp means row-count purging is invalid.")
+        logger.error("  Example: With 50 symbols, 1 bar = 50 rows. Purging 17 rows = ~20 seconds, not 60 minutes!")
+        return (None,) * 5
     
     # Auto-discover features if not provided
     if feature_names is None:
