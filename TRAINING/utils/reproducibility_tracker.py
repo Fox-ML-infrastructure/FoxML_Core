@@ -72,6 +72,8 @@ class ReproducibilityTracker:
             importance_tolerance: Tolerance for importance differences (default: 1%)
         """
         self.output_dir = Path(output_dir)
+        # Store log file in a consistent location: output_dir/reproducibility_log.json
+        # This ensures all runs for the same output_dir use the same log file
         self.log_file = self.output_dir / log_file_name
         self.max_runs_per_item = max_runs_per_item
         self.score_tolerance = score_tolerance
@@ -93,6 +95,7 @@ class ReproducibilityTracker:
             Dictionary with previous run results, or None if no previous run exists
         """
         if not self.log_file.exists():
+            logger.debug(f"Reproducibility log file does not exist: {self.log_file}")
             return None
         
         try:
@@ -103,12 +106,15 @@ class ReproducibilityTracker:
             key = f"{stage}:{item_name}"
             item_runs = all_runs.get(key, [])
             if not item_runs:
+                logger.debug(f"No previous runs found for {key} in {self.log_file}")
+                logger.debug(f"Available keys in log: {list(all_runs.keys())[:10]}")  # Show first 10 keys
                 return None
             
             # Return the most recent (last) entry
+            logger.debug(f"Found {len(item_runs)} previous run(s) for {key}, using most recent")
             return item_runs[-1]
         except (json.JSONDecodeError, KeyError, IndexError, IOError) as e:
-            logger.debug(f"Could not load previous run for {stage}:{item_name}: {e}")
+            logger.warning(f"Could not load previous run for {stage}:{item_name} from {self.log_file}: {e}")
             return None
     
     def save_run(

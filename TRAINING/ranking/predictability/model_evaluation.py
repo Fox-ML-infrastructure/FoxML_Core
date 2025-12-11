@@ -2618,7 +2618,8 @@ def evaluate_target_predictability(
                     logger.debug(f"Using CV score {actual_train_score:.4f} as fallback for auto-fixer")
                 
                 # Log what we're passing to auto-fixer (enhanced visibility)
-                logger.info(f"🔧 Auto-fixer inputs: train_score={actual_train_score:.4f if actual_train_score else None}, "
+                train_score_str = f"{actual_train_score:.4f}" if actual_train_score is not None else "None"
+                logger.info(f"🔧 Auto-fixer inputs: train_score={train_score_str}, "
                            f"model_importance keys={len(avg_importance)}, "
                            f"feature_names={len(feature_names)}, "
                            f"feature_importances provided={feature_importances is not None and len(feature_importances) > 0}")
@@ -2854,7 +2855,15 @@ def evaluate_target_predictability(
         try:
             from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
             
-            tracker = ReproducibilityTracker(output_dir=output_dir)
+            # Use parent directory (or results/) for shared reproducibility log across runs
+            # This allows comparing runs even when output_dir is run-specific
+            if output_dir.parent.name in ['target_rankings', 'results']:
+                # output_dir is like results/target_rankings/run_20251211, use results/
+                shared_output_dir = output_dir.parent.parent if output_dir.parent.name == 'target_rankings' else output_dir.parent
+            else:
+                # output_dir is like test_e2e_ranking_unified_20251211_133358, use parent
+                shared_output_dir = output_dir.parent
+            tracker = ReproducibilityTracker(output_dir=shared_output_dir)
             
             # Log comparison with previous run
             tracker.log_comparison(
