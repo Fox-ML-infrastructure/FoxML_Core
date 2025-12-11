@@ -646,9 +646,11 @@ def train_model_and_get_importance(
             logger.debug(f"    {model_family}: {error_msg}")
             return None, pd.Series(0.0, index=feature_names), family_config['importance_method'], 0.0
     except ImportError:
-        # Fallback
+        # Fallback: validate_target not available, use simple check
+        logger.debug(f"    {model_family}: validate_target not available, using simple validation")
         unique_vals = np.unique(y[~np.isnan(y)])
         if len(unique_vals) < 2:
+            logger.debug(f"    {model_family}: Target has only {len(unique_vals)} unique value(s)")
             return None, pd.Series(0.0, index=feature_names), family_config['importance_method'], 0.0
     
     importance_method = family_config['importance_method']
@@ -1297,20 +1299,39 @@ def train_model_and_get_importance(
         return None, pd.Series(0.0, index=feature_names), importance_method, 0.0
     
     # Extract importance based on method
-    if importance_method == 'native':
-        importance = extract_native_importance(model, feature_names)
-    elif importance_method == 'shap':
-        importance = extract_shap_importance(model, X, feature_names,
-                                            model_family=model_family,
-                                            target_column=target_column,
-                                            symbol=symbol)
-    elif importance_method == 'permutation':
-        importance = extract_permutation_importance(model, X, y, feature_names,
-                                                    model_family=model_family,
-                                                    target_column=target_column,
-                                                    symbol=symbol)
-    else:
-        logger.error(f"Unknown importance method: {importance_method}")
+    try:
+        if importance_method == 'native':
+            importance = extract_native_importance(model, feature_names)
+        elif importance_method == 'shap':
+            importance = extract_shap_importance(model, X, feature_names,
+                                                model_family=model_family,
+                                                target_column=target_column,
+                                                symbol=symbol)
+        elif importance_method == 'permutation':
+            importance = extract_permutation_importance(model, X, y, feature_names,
+                                                        model_family=model_family,
+                                                        target_column=target_column,
+                                                        symbol=symbol)
+        else:
+            logger.error(f"Unknown importance method: {importance_method}")
+            importance = pd.Series(0.0, index=feature_names)
+        
+        # Validate importance was extracted successfully
+        if importance is None:
+            logger.warning(f"    {model_family}: Importance extraction returned None, using zeros")
+            importance = pd.Series(0.0, index=feature_names)
+        elif not isinstance(importance, pd.Series):
+            logger.warning(f"    {model_family}: Importance extraction returned {type(importance)}, converting to Series")
+            importance = pd.Series(importance, index=feature_names) if hasattr(importance, '__len__') else pd.Series(0.0, index=feature_names)
+        elif len(importance) != len(feature_names):
+            logger.warning(f"    {model_family}: Importance length ({len(importance)}) != features ({len(feature_names)}), padding/truncating")
+            if len(importance) < len(feature_names):
+                importance = pd.concat([importance, pd.Series(0.0, index=feature_names[len(importance):])])
+            else:
+                importance = importance.iloc[:len(feature_names)]
+        
+    except Exception as e:
+        logger.error(f"    {model_family}: Importance extraction failed: {e}")
         importance = pd.Series(0.0, index=feature_names)
     
     return model, importance, importance_method, train_score
@@ -1568,6 +1589,7 @@ def aggregate_multi_model_importance(
     """
     
     if not all_results:
+        logger.warning("⚠️  No results to aggregate - all model families may have failed or returned empty importance")
         return pd.DataFrame(), []
     
     # Group results by model family
