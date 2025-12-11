@@ -354,7 +354,7 @@ def train_and_evaluate_models(
                         importance_dict=pruning_stats['full_importance_dict'],
                         universe_id="CROSS_SECTIONAL",
                         output_dir=output_dir,
-                        auto_analyze=True,
+                        auto_analyze=None,  # Load from config
                     )
                 except Exception as e:
                     logger.debug(f"Stability snapshot save failed for quick_pruner (non-critical): {e}")
