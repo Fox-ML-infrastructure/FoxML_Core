@@ -3,8 +3,6 @@ Copyright (c) 2025-2026 Jennifer Lewis
 
 > **Note:** This Commercial License is provided for informational purposes and may be supplemented or modified by a separate signed agreement. Licensor is not providing legal advice; Licensee should consult its own counsel before entering into this License.
 
-**Single Source of Truth:** This Commercial License (`COMMERCIAL_LICENSE.md`) is the authoritative and controlling document for all commercial licensing terms, definitions, and obligations. In the event of any conflict, contradiction, or inconsistency between this Commercial License and any other document (including but not limited to: `LEGAL/CLA.md`, `DUAL_LICENSE.md`, `LEGAL/SUBSCRIPTIONS.md`, `LEGAL/COMMERCIAL_USE.md`, or any other documentation), the terms of this Commercial License shall control and prevail. All definitions, restrictions, and obligations set forth in this Commercial License are binding, and any conflicting statements in other documents are superseded by this License.
-
 ---
 
 **Who This License Is For**
@@ -73,6 +71,8 @@ Subject to payment of applicable fees and execution of a commercial agreement, t
 **IMPORTANT — No Source Code Access Rights:**
 This License does NOT grant Licensee any right to access, view, or receive the source code of the Software. Licensee receives only object code, compiled binaries, or executable versions of the Software. Source code access is not included in this License and is not granted by this License. Any source code access, if provided at all, is provided separately under a separate agreement and subject to additional terms and restrictions. Licensee has no right to demand, request, or require source code access as part of this License.
 
+For clarity: this section applies only to the commercial, non-open-source distribution of the Software. It does not limit any rights you already have to source code made publicly available under AGPL-3.0.
+
 **Authorized Users and Seat Limits.**
 
 Use of the Software is limited to the number and type of Authorized Users specified in the applicable Ordering Document ("Seats"). Licensee shall ensure that only Authorized Users use the Software and that such use does not exceed the purchased Seats.
@@ -97,9 +97,6 @@ No sublicensing rights are granted unless explicitly permitted in a separate SOW
 **Open-Source Use Unaffected.**
 
 Non-commercial use of the Software remains available under the AGPL-3.0 license. This Commercial License does not limit or restrict rights granted under AGPL-3.0 for qualifying non-commercial academic or personal research use.
-
-**IMPORTANT — Open Source Contribution Does Not Exempt Commercial Use:**
-Contributing code, fixes, or improvements to the open-source version of the Software does not exempt Licensee from the requirement to obtain a commercial license for any commercial use. Contributing to open source is separate from and does not affect commercial licensing requirements. Any commercial use (as defined in Section 1) requires a commercial license regardless of whether Licensee has contributed to the open-source version.
 
 **IMPORTANT — Open Source Contribution Does Not Exempt Commercial Use:**
 Contributing code, fixes, or improvements to the open-source version of the Software does not exempt Licensee from the requirement to obtain a commercial license for any commercial use. Contributing to open source is separate from and does not affect commercial licensing requirements. Any commercial use (as defined in Section 1) requires a commercial license regardless of whether Licensee has contributed to the open-source version.
