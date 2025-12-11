@@ -73,13 +73,13 @@ artifacts/feature_importance/
 artifacts/feature_importance/
   peak_60m_0.8/
     lightgbm/
-      20250110_143022_abc123.json
-      20250110_150045_def456.json
+      20251210_143022_abc123.json
+      20251210_150045_def456.json
     quick_pruner/
-      20250110_143022_abc123.json
+      20251210_143022_abc123.json
   valley_60m_0.8/
     rfe/
-      20250110_143022_abc123.json
+      20251210_143022_abc123.json
 ```
 
 ### SNAPSHOT JSON FORMAT
@@ -89,8 +89,8 @@ artifacts/feature_importance/
   "target_name": "peak_60m_0.8",
   "method": "lightgbm",
   "universe_id": "CROSS_SECTIONAL",
-  "run_id": "20250110_143022_abc123",
-  "created_at": "2025-01-10T14:30:22.123456",
+  "run_id": "20251210_143022_abc123",
+  "created_at": "2025-12-10T14:30:22.123456",
   "features": ["feature_1", "feature_2", "feature_3", ...],
   "importances": [0.45, 0.32, 0.18, ...]
 }
@@ -261,7 +261,7 @@ python scripts/analyze_importance_stability.py \
 python scripts/analyze_importance_stability.py \
     --target peak_60m_0.8 \
     --method rfe \
-    --output-dir results/run_20250110
+    --output-dir results/run_20251210
 ```
 
 #### FULL OPTIONS
@@ -595,7 +595,7 @@ snapshot_path = save_snapshot_hook(
     method="lightgbm",
     importance_dict=importance_dict,
     universe_id="CROSS_SECTIONAL",
-    output_dir=Path("results/run_20250110"),
+    output_dir=Path("results/run_20251210"),
     auto_analyze=None,  # LOAD FROM CONFIG
 )
 
@@ -686,5 +686,5 @@ for feat, p in sorted(freq.items(), key=lambda x: -x[1])[:10]:
 
 ---
 
-**LAST UPDATED:** 2025-01-10  
+**LAST UPDATED:** 2025-12-10  
 **VERSION:** 1.0.0
