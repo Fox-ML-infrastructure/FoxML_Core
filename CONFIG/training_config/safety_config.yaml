@@ -80,8 +80,32 @@ safety:
       min_features_required: 2  # Minimum features needed after filtering (for ranking)
       min_features_for_model: 3  # Minimum features needed for meaningful model training
       min_features_after_leak_removal: 2  # Minimum features after removing leaky features
-    
-    # Leakage warning thresholds (for detect_leakage function)
+  
+  # Reproducibility Tracking Thresholds
+  reproducibility:
+    enabled: true
+    # Tolerance bands: STABLE (within noise) / DRIFTING (small changes) / DIVERGED (real issues)
+    thresholds:
+      # ROC-AUC / R² / primary score thresholds
+      roc_auc:
+        abs: 0.005      # 0.5 AUC points absolute difference
+        rel: 0.02       # 2% relative difference
+        z_score: 1.0    # z-score threshold (uses reported σ)
+      # Composite score thresholds
+      composite:
+        abs: 0.02       # 0.02 in composite space
+        rel: 0.05       # 5% relative difference
+        z_score: 1.5    # z-score threshold
+      # Importance thresholds
+      importance:
+        abs: 0.05       # 0.05 absolute difference
+        rel: 0.20       # 20% relative difference (importance is more variable)
+        z_score: 2.0    # z-score threshold
+    # Classification rules: differences must be within BOTH abs AND rel thresholds for STABLE
+    # DRIFTING: within 2x thresholds, DIVERGED: exceeds 2x thresholds
+    use_z_score: true   # If true, use z-score (|Δ| / σ) when std_score is available
+  
+  # Leakage warning thresholds (for detect_leakage function)
     warning_thresholds:
       classification:
         high: 0.90  # ROC-AUC/Accuracy > 0.90 is suspicious
