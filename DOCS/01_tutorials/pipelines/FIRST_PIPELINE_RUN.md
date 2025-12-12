@@ -60,8 +60,12 @@ features.to_parquet("data/features/AAPL_features.parquet")
 from DATA_PROCESSING.targets import add_barrier_targets_to_dataframe
 
 # Functions, not classes
+# NOTE: interval_minutes is REQUIRED for correct horizon conversion
 df_with_targets = add_barrier_targets_to_dataframe(
-    df_clean, horizon_minutes=15, barrier_size=0.5
+    df_clean, 
+    horizon_minutes=15, 
+    barrier_size=0.5,
+    interval_minutes=5.0  # REQUIRED: Bar interval in minutes
 )
 
 # Save targets (targets are added as columns to the dataframe)
@@ -93,8 +97,12 @@ feature_computer = SimpleFeatureComputer()
 features = feature_computer.compute(df_clean)
 
 # Generate targets (functions add columns to dataframe)
+# NOTE: interval_minutes is REQUIRED for correct horizon conversion
 df_with_targets = add_barrier_targets_to_dataframe(
-    df_clean, horizon_minutes=15, barrier_size=0.5
+    df_clean, 
+    horizon_minutes=15, 
+    barrier_size=0.5,
+    interval_minutes=5.0  # REQUIRED: Bar interval in minutes
 )
 
 # Combine features and targets

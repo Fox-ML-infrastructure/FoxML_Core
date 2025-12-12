@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Highlights
 
+- **Critical Horizon Unit Fix & Versioned Labels** (2025-12-12) – **FIXED**: Critical bug in barrier target generation where `horizon_minutes` was incorrectly used as `horizon_bars`:
+  - **Root cause**: Target computation functions used `horizon_minutes` directly in array slicing (e.g., `prices.iloc[i+1:i+horizon_minutes+1]`), causing incorrect lookahead windows. For 60m horizon on 5m data, old code used 60 bars instead of 12 bars (5x error).
+  - **Fix**: All target functions now convert `horizon_minutes` to `horizon_bars` using `interval_minutes` before any array indexing. Added `interval_minutes` parameter to all `compute_*_targets` and `add_*_targets_to_dataframe` functions.
+  - **Time contract enforcement**: Added `TimeContract` dataclass and `enforce_t_plus_one_boundary()` validation to ensure labels start at `t+1` (never same bar).
+  - **Versioned dataset generation**: New `generate_versioned_labels.py` script creates `data/data_labeled_v2/` with corrected targets, metadata tracking (barrier_version, commit_hash, generation_date), and validation tools.
+  - **Config integration**: `intelligent_training_config.yaml` updated to use versioned labels by default. Scripts can read `data_dir` from config.
+  - **Impact**: Class balance and target distributions will change. Users should regenerate labeled datasets and re-run target ranking/validation.
+  - **Files affected**: `DATA_PROCESSING/targets/barrier.py`, `DATA_PROCESSING/targets/hft_forward.py`, `DATA_PROCESSING/features/comprehensive_builder.py`, `DATA_PROCESSING/features/simple_features.py`
+  - See commit `dd7e836` for horizon unit fix, `ed56f72` for additional horizon mismatches, `a7600a4` for config integration
+
 - **Dual-View Target Ranking** (2025-12-12) – **NEW**: Target ranking now supports both cross-sectional and symbol-specific evaluation views:
   - **CROSS_SECTIONAL view**: Pooled cross-sectional samples (existing behavior)
   - **SYMBOL_SPECIFIC view**: Evaluate each target separately on each symbol's own time series
@@ -39,6 +49,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Feature count chain**: Logs now show complete chain: `safe=307 → drop_all_nan=3 → final=304` instead of scattered messages
   - **Reproducibility integration**: ResolvedConfig values stored in metadata.json ensuring CV splitter and reproducibility tracker use same purge/embargo values
   - See [Resolved Config Fix Guide](DOCS/03_technical/implementation/RESOLVED_CONFIG_FIX.md)
+- **Critical Horizon Unit Bug Fix** (2025-12-12) – **FIXED**: Critical bug where `horizon_minutes` was incorrectly used as `horizon_bars` in target computation:
+  - **Barrier targets**: All `compute_*_targets` functions now convert `horizon_minutes` to `horizon_bars` using `interval_minutes`
+  - **HFT forward returns**: `hft_forward.py` generalized to accept `interval_minutes` parameter (no longer hardcoded to 5m)
+  - **Forward return leaks**: Fixed `pct_change(-1)` leak in `comprehensive_builder.py` (changed to `shift(-1)` then compute return)
+  - **Unit tests**: Added comprehensive tests for horizon conversion and `t+1` boundary enforcement
+  - **Impact**: All existing labeled datasets generated before this fix are incorrect and should be regenerated
+
+- **Resolved Config Initialization Fix** (2025-12-12) – **FIXED**: `resolved_config referenced before assignment` error:
+  - **Root cause**: `resolved_config` was only created after pruning, but some code paths referenced it before assignment
+  - **Fix**: Initialize baseline `resolved_config` early (without feature lookback), then override post-prune (with feature lookback)
+  - **Error logging**: Improved error logging with `logger.exception()` for full tracebacks
+  - **Graceful fallback**: If pruning fails, baseline config is kept (already assigned)
+
 - **Reproducibility Tracking Bug Fixes** (2025-12-12) – **FIXED**: Critical bugs in reproducibility tracking system:
   - **Fixed `ctx` NameError**: Resolved `NameError: name 'ctx' is not defined` that prevented `metadata.json` and `metrics.json` from being written (86 failures). Metadata files now write correctly for all runs.
   - **Fixed feature importances path**: Feature importances now saved under correct view directory (`target_rankings/feature_importances/{target}/{view}/{symbol?}/`) instead of always using `CROSS_SECTIONAL`.
@@ -93,6 +116,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ### Added
+
+- **Versioned Labeled Dataset Generation** (2025-12-12)
+  - `DATA_PROCESSING/pipeline/generate_versioned_labels.py` – Script to generate versioned labeled datasets with corrected barrier targets
+  - `DATA_PROCESSING/pipeline/validate_label_changes.py` – Validation script to compare old vs new labels
+  - Metadata tracking: `barrier_version`, `horizon_units`, `interval_minutes`, `commit_hash`, `generation_date`
+  - Config integration: Scripts can read `data_dir` from `system_config.yaml` or `pipeline_config.yaml`
+  - See [Versioned Labels Guide](DOCS/01_tutorials/pipelines/VERSIONED_LABELS.md)
+
+- **Time Contract Enforcement** (2025-12-12)
+  - `DATA_PROCESSING/targets/time_contract.py` – `TimeContract` dataclass and enforcement utilities
+  - `enforce_t_plus_one_boundary()` – Validates labels start at `t+1` (never same bar)
+  - `validate_feature_as_of_safety()` – Detects negative shifts, centered rolling windows, and other lookahead violations
+  - Unit tests in `DATA_PROCESSING/targets/test_time_contract.py` – Validates `t+1` boundary and horizon conversion
 
 - **Dual-View Target Ranking System** (2025-12-12)
   - `TargetRankingView` enum (CROSS_SECTIONAL, SYMBOL_SPECIFIC, LOSO) for view specification

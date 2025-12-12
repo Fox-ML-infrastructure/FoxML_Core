@@ -86,10 +86,16 @@ features = builder.build_features(input_paths, output_dir, universe_config)
 from DATA_PROCESSING.targets import add_barrier_targets_to_dataframe
 
 # Functions, not classes
+# NOTE: interval_minutes is REQUIRED for correct horizon conversion
 df_clean = add_barrier_targets_to_dataframe(
-    df_clean, horizon_minutes=15, barrier_size=0.5
+    df_clean, 
+    horizon_minutes=15, 
+    barrier_size=0.5,
+    interval_minutes=5.0  # REQUIRED: Bar interval in minutes (for horizon conversion)
 )
 ```
+
+**Important**: All barrier target functions now require `interval_minutes` to correctly convert `horizon_minutes` to `horizon_bars`. Without this, targets will use incorrect lookahead windows (e.g., 60 bars instead of 12 bars for 60m horizon on 5m data).
 
 ### Excess Returns
 
