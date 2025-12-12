@@ -3530,7 +3530,7 @@ def evaluate_target_predictability(
                 if 'symbol' in locals() and symbol:
                     ctx.symbol = symbol
                 
-                # Build metrics dict
+                # Build metrics dict with regression features
                 metrics_dict = {
                     "metric_name": metric_name,
                     "mean_score": result.mean_score,
@@ -3539,8 +3539,25 @@ def evaluate_target_predictability(
                     "composite_score": result.composite_score,
                     "n_models": result.n_models,
                     "leakage_flag": result.leakage_flag,
-                    "task_type": result.task_type.name if hasattr(result.task_type, 'name') else str(result.task_type)
+                    "task_type": result.task_type.name if hasattr(result.task_type, 'name') else str(result.task_type),
+                    # Regression features: feature counts
+                    "n_features_pre": features_safe if 'features_safe' in locals() else None,
+                    "n_features_post_prune": len(feature_names) if 'feature_names' in locals() and feature_names else None,
+                    "features_safe": features_safe if 'features_safe' in locals() else None,
+                    "features_final": len(feature_names) if 'feature_names' in locals() and feature_names else None,
                 }
+                
+                # Add pos_rate if available (from y)
+                if 'y' in locals() and y is not None:
+                    try:
+                        import numpy as np
+                        if len(y) > 0:
+                            pos_count = np.sum(y == 1) if hasattr(y, '__iter__') else 0
+                            pos_rate = pos_count / len(y) if len(y) > 0 else None
+                            if pos_rate is not None:
+                                metrics_dict["pos_rate"] = float(pos_rate)
+                    except Exception:
+                        pass
                 
                 # Add view and symbol to RunContext if available (for dual-view target ranking)
                 if 'view' in locals():
@@ -3602,8 +3619,25 @@ def evaluate_target_predictability(
                     "std_score": result.std_score,
                     "mean_importance": result.mean_importance,
                     "composite_score": result.composite_score,
+                    # Regression features: feature counts
+                    "n_features_pre": features_safe if 'features_safe' in locals() else None,
+                    "n_features_post_prune": len(feature_names) if 'feature_names' in locals() and feature_names else None,
+                    "features_safe": features_safe if 'features_safe' in locals() else None,
+                    "features_final": len(feature_names) if 'feature_names' in locals() and feature_names else None,
                     **cohort_metrics
                 }
+                
+                # Add pos_rate if available (from y)
+                if 'y' in locals() and y is not None:
+                    try:
+                        import numpy as np
+                        if len(y) > 0:
+                            pos_count = np.sum(y == 1) if hasattr(y, '__iter__') else 0
+                            pos_rate = pos_count / len(y) if len(y) > 0 else None
+                            if pos_rate is not None:
+                                metrics_with_cohort["pos_rate"] = float(pos_rate)
+                    except Exception:
+                        pass
                 additional_data_with_cohort = {
                     "n_models": result.n_models,
                     "leakage_flag": result.leakage_flag,

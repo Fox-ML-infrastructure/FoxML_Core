@@ -1172,8 +1172,87 @@ class ReproducibilityTracker:
         
         # For TARGET_RANKING, mode is the view (already handled in _get_cohort_dir)
         
-        # Create new row
+        # Extract CV details from metadata
+        cv_details = metadata.get("cv_details", {})
+        
+        # Extract regression features for cohort-based tracking
+        # Target ranking metrics
+        cs_auc = metrics.get("mean_score") or metrics.get("auc") or metrics.get("cs_auc")
+        cs_logloss = metrics.get("logloss") or metrics.get("cs_logloss")
+        cs_pr_auc = metrics.get("pr_auc") or metrics.get("cs_pr_auc")
+        
+        # Symbol-specific metrics (from per_symbol_stats or metrics)
+        per_symbol_stats = metadata.get("per_symbol_stats", {})
+        sym_aucs = None
+        if per_symbol_stats and isinstance(per_symbol_stats, dict):
+            # Extract AUCs from per_symbol_stats
+            sym_aucs = [stats.get("auc") for stats in per_symbol_stats.values() if isinstance(stats, dict) and "auc" in stats]
+        elif "sym_aucs" in metrics:
+            sym_aucs = metrics.get("sym_aucs")
+        
+        sym_auc_mean = None
+        sym_auc_median = None
+        sym_auc_iqr = None
+        sym_auc_min = None
+        sym_auc_max = None
+        if sym_aucs and len(sym_aucs) > 0:
+            import numpy as np
+            sym_aucs_clean = [a for a in sym_aucs if a is not None and not np.isnan(a)]
+            if len(sym_aucs_clean) > 0:
+                sym_auc_mean = float(np.mean(sym_aucs_clean))
+                sym_auc_median = float(np.median(sym_aucs_clean))
+                q75, q25 = np.percentile(sym_aucs_clean, [75, 25])
+                sym_auc_iqr = float(q75 - q25)
+                sym_auc_min = float(np.min(sym_aucs_clean))
+                sym_auc_max = float(np.max(sym_aucs_clean))
+        
+        # Fraction of symbols with good AUC (threshold from config or default 0.65)
+        frac_symbols_good = None
+        if sym_aucs and len(sym_aucs) > 0:
+            try:
+                from CONFIG.config_loader import get_cfg
+                threshold = float(get_cfg("training.target_routing.cs_auc_threshold", default=0.65, config_name="training_config"))
+            except Exception:
+                threshold = 0.65
+            good_count = sum(1 for a in sym_aucs if a is not None and a >= threshold)
+            frac_symbols_good = good_count / len(sym_aucs) if len(sym_aucs) > 0 else None
+        
+        # Route information (for stability tracking)
+        route = metadata.get("route_type") or metadata.get("view") or mode
+        route_changed = None  # Will be computed when comparing runs
+        route_entropy = None  # Will be computed from route history
+        
+        # Class balance (pos_rate)
+        pos_rate = metrics.get("pos_rate") or metrics.get("positive_rate") or metrics.get("class_balance")
+        
+        # Feature counts
+        n_features_pre = metrics.get("n_features_pre") or metrics.get("features_safe") or metadata.get("features_safe")
+        n_features_post_prune = metrics.get("n_features_post_prune") or metrics.get("features_final") or metadata.get("features_final")
+        n_features_selected = metrics.get("n_features_selected") or metrics.get("n_selected") or n_features_post_prune
+        
+        # Temporal safety (purge/embargo)
+        purge_minutes_used = cv_details.get("purge_minutes") or metadata.get("purge_minutes")
+        embargo_minutes_used = cv_details.get("embargo_minutes") or metadata.get("embargo_minutes")
+        
+        # Feature stability metrics (if available)
+        jaccard_topK = metrics.get("jaccard_top_k") or metrics.get("jaccard_topK")
+        rank_corr_spearman = metrics.get("rank_corr") or metrics.get("rank_correlation") or metrics.get("spearman_corr")
+        importance_concentration = metrics.get("importance_concentration") or metrics.get("top10_importance_share")
+        
+        # Operational metrics
+        runtime_sec = metrics.get("runtime_sec") or metrics.get("train_time_sec") or metrics.get("wall_clock_time")
+        peak_ram_mb = metrics.get("peak_ram_mb") or metrics.get("peak_memory_mb")
+        cv_folds_executed = cv_details.get("folds") or cv_details.get("cv_folds") or metadata.get("cv_folds")
+        
+        # Identity fields (categorical, not regressed)
+        data_fingerprint = metadata.get("data_fingerprint")
+        featureset_fingerprint = metadata.get("featureset_fingerprint") or metrics.get("featureset_fingerprint")
+        config_hash = metadata.get("cs_config_hash") or metadata.get("config_hash")
+        git_commit = metadata.get("git_commit")
+        
+        # Create new row with all regression features
         new_row = {
+            # Identity (categorical)
             "phase": phase,
             "mode": mode,
             "target": item_name,
@@ -1181,10 +1260,62 @@ class ReproducibilityTracker:
             "model_family": model_family,
             "cohort_id": cohort_id,
             "run_id": run_id,
+            "data_fingerprint": data_fingerprint,
+            "featureset_fingerprint": featureset_fingerprint,
+            "config_hash": config_hash,
+            "git_commit": git_commit,
+            
+            # Sample size
             "N_effective": metadata.get("N_effective", 0),
-            "auc": metrics.get("mean_score") or metrics.get("auc"),
+            "n_symbols": metadata.get("n_symbols", 0),
+            
+            # Target ranking metrics (Y variables for regression)
+            "auc": cs_auc,
+            "cs_auc": cs_auc,
+            "cs_logloss": cs_logloss,
+            "cs_pr_auc": cs_pr_auc,
+            "sym_auc_mean": sym_auc_mean,
+            "sym_auc_median": sym_auc_median,
+            "sym_auc_iqr": sym_auc_iqr,
+            "sym_auc_min": sym_auc_min,
+            "sym_auc_max": sym_auc_max,
+            "frac_symbols_good": frac_symbols_good,
+            "composite_score": metrics.get("composite_score"),
+            "mean_importance": metrics.get("mean_importance"),
+            
+            # Route stability
+            "route": route,
+            "route_changed": route_changed,  # Will be computed when comparing
+            "route_entropy": route_entropy,  # Will be computed from history
+            
+            # Class balance
+            "pos_rate": pos_rate,
+            
+            # Feature counts (X variables for regression)
+            "n_features_pre": n_features_pre,
+            "n_features_post_prune": n_features_post_prune,
+            "n_features_selected": n_features_selected,
+            
+            # Temporal safety (X variables)
+            "purge_minutes_used": purge_minutes_used,
+            "embargo_minutes_used": embargo_minutes_used,
+            "horizon_minutes": cv_details.get("horizon_minutes") or metadata.get("horizon_minutes"),
+            
+            # Feature stability (X variables)
+            "jaccard_topK": jaccard_topK,
+            "rank_corr_spearman": rank_corr_spearman,
+            "importance_concentration": importance_concentration,
+            
+            # Operational metrics (Y variables)
+            "runtime_sec": runtime_sec,
+            "peak_ram_mb": peak_ram_mb,
+            "cv_folds_executed": cv_folds_executed,
+            
+            # Timestamps
             "date": metadata.get("date_start"),
             "created_at": metadata.get("created_at", datetime.now().isoformat()),
+            
+            # Path
             "path": str(cohort_dir.relative_to(repro_dir))
         }
         
