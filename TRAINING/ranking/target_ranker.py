@@ -543,9 +543,7 @@ def rank_targets(
                         results_loso[target_name][symbol] = result_loso_sym
         
         except Exception as e:
-            logger.error(f"  Failed to evaluate {target_name}: {e}")
-            import traceback
-            logger.debug(f"Traceback: {traceback.format_exc()}")
+            logger.exception(f"  Failed to evaluate {target_name}: {e}")  # Better error logging with traceback
             # Continue with next target
     
     # Compute routing decisions and aggregate symbol-specific results
