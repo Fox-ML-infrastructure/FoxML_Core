@@ -1,0 +1,54 @@
+Fix reproducibility tracking bugs and documentation links
+
+## Bug Fixes
+
+### Reproducibility Tracking
+- Fixed `ctx` NameError in reproducibility_tracker.py (line 862)
+  - Changed from `getattr(ctx, 'view', None)` to `additional_data.get('view')`
+  - Resolves 86 UNKNOWN_ERROR failures that prevented metadata.json/metrics.json from being written
+  - All new runs will now have complete metadata files
+
+- Fixed feature importances save path
+  - Added `view` parameter to `_save_feature_importances()`
+  - Feature importances now saved under correct view directory structure
+  - Path: `target_rankings/feature_importances/{target}/{view}/{symbol?}/`
+
+- Fixed perfect CV detection false positive
+  - Changed to use `primary_scores` (actual CV scores) instead of training scores
+  - Explicitly overwrite training metrics with CV scores in `_compute_and_store_metrics()`
+  - No longer triggers on training scores (was 0.9999, actual CV was 0.687)
+
+- Added missing metadata diagnostic
+  - Warns when metadata.json/metrics.json missing but audit_report.json exists
+  - Detects partial writes from previous bugs
+
+## Documentation
+
+### Changelog Updates
+- Updated CHANGELOG.md with reproducibility bug fixes section
+- Updated DOCS/02_reference/changelog/2025-12-12.md with detailed fix documentation
+- Added METADATA_MISSING_README.md explaining the issue and impact
+
+### Fixed Broken Links
+- Fixed FEATURE_IMPORTANCE_STABILITY.md link in FEATURE_SELECTION_TUTORIAL.md
+  - Changed from `../../03_technical/implementation/` to `../../../TRAINING/stability/`
+- Fixed STYLE_GUIDE.md link in README.md (removed, file doesn't exist)
+- Fixed DUAL_VIEW_TARGET_RANKING.md and SIMPLE_PIPELINE_USAGE.md links in target_ranking/README.md
+  - Changed from absolute `DOCS/` paths to relative paths
+
+## Files Modified
+- TRAINING/utils/reproducibility_tracker.py
+- TRAINING/ranking/predictability/model_evaluation.py
+- CHANGELOG.md
+- DOCS/02_reference/changelog/2025-12-12.md
+- DOCS/01_tutorials/training/FEATURE_SELECTION_TUTORIAL.md
+- DOCS/02_reference/target_ranking/README.md
+- README.md
+- RESULTS/sample_500k-1M/e2e_test_all_families_20251212_032226/METADATA_MISSING_README.md (new)
+
+## Impact
+- All new runs will have complete metadata files
+- Feature importances saved under correct view directories
+- Perfect CV detection now accurate (no false positives)
+- Existing runs from before fix are missing metadata (documented)
+- Documentation links fixed (no more 404s)

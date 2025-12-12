@@ -359,6 +359,108 @@ def raw_ohlcv_only_test(
     }
 
 
+def time_shift_label_test(
+    X: np.ndarray,
+    y: np.ndarray,
+    feature_names: List[str],
+    cv_splitter,
+    task_type: str = 'classification',
+    shift_bars: int = 288,  # Default: 1 day for 5m bars
+    random_seed: int = 42
+) -> Dict[str, Any]:
+    """
+    Time-shift label test: Shift labels forward/back by a day.
+    
+    If AUC stays high after shifting → leak (timing/alignment issue).
+    Expected: AUC should drop significantly when labels are shifted.
+    
+    Args:
+        X: Feature matrix
+        y: Labels
+        feature_names: Feature names
+        cv_splitter: CV splitter
+        task_type: 'classification' or 'regression'
+        shift_bars: Number of bars to shift (default: 288 = 1 day for 5m bars)
+        random_seed: Random seed
+    
+    Returns:
+        Dict with 'auc_original', 'auc_shifted', 'passed' (True if auc drops), 'diagnosis'
+    """
+    from sklearn.metrics import roc_auc_score, mean_squared_error
+    from sklearn.linear_model import LogisticRegression, Ridge
+    
+    # Run CV with original labels
+    scores_original = []
+    scores_shifted = []
+    
+    for train_idx, val_idx in cv_splitter.split(X, y):
+        # Original labels
+        if task_type == 'classification':
+            model = LogisticRegression(random_state=random_seed, max_iter=100, solver='liblinear')
+            model.fit(X[train_idx], y[train_idx])
+            y_pred_proba_orig = model.predict_proba(X[val_idx])[:, 1]
+            if len(np.unique(y[val_idx])) == 2:
+                auc_orig = roc_auc_score(y[val_idx], y_pred_proba_orig)
+                scores_original.append(auc_orig)
+        else:
+            model = Ridge(random_state=random_seed)
+            model.fit(X[train_idx], y[train_idx])
+            y_pred_orig = model.predict(X[val_idx])
+            mse_orig = mean_squared_error(y[val_idx], y_pred_orig)
+            scores_original.append(-mse_orig)  # Negative MSE for consistency
+        
+        # Shifted labels (shift forward by shift_bars)
+        y_shifted = np.roll(y, shift_bars)
+        
+        if task_type == 'classification':
+            model_shift = LogisticRegression(random_state=random_seed, max_iter=100, solver='liblinear')
+            model_shift.fit(X[train_idx], y_shifted[train_idx])
+            y_pred_proba_shift = model_shift.predict_proba(X[val_idx])[:, 1]
+            if len(np.unique(y_shifted[val_idx])) == 2:
+                auc_shift = roc_auc_score(y_shifted[val_idx], y_pred_proba_shift)
+                scores_shifted.append(auc_shift)
+        else:
+            model_shift = Ridge(random_state=random_seed)
+            model_shift.fit(X[train_idx], y_shifted[train_idx])
+            y_pred_shift = model_shift.predict(X[val_idx])
+            mse_shift = mean_squared_error(y_shifted[val_idx], y_pred_shift)
+            scores_shifted.append(-mse_shift)
+    
+    if not scores_original or not scores_shifted:
+        return {
+            'auc_original': None,
+            'auc_shifted': None,
+            'passed': False,
+            'diagnosis': 'INSUFFICIENT_DATA: Could not compute scores'
+        }
+    
+    mean_orig = np.mean(scores_original)
+    mean_shift = np.mean(scores_shifted)
+    
+    # Pass if shifted AUC drops significantly (by at least 0.10 for classification, or MSE increases for regression)
+    if task_type == 'classification':
+        passed = mean_shift < (mean_orig - 0.10)
+        diagnosis = (
+            f"PASS: Shifted AUC ({mean_shift:.3f}) dropped significantly from original ({mean_orig:.3f})"
+            if passed else
+            f"FAIL: Shifted AUC ({mean_shift:.3f}) stayed high (original: {mean_orig:.3f}) - TIMING LEAKAGE SUSPECTED"
+        )
+    else:
+        passed = mean_shift < mean_orig  # Negative MSE, so lower is worse
+        diagnosis = (
+            f"PASS: Shifted MSE increased (worse performance) from original"
+            if passed else
+            f"FAIL: Shifted performance stayed similar - TIMING LEAKAGE SUSPECTED"
+        )
+    
+    return {
+        'auc_original': mean_orig,
+        'auc_shifted': mean_shift,
+        'passed': passed,
+        'diagnosis': diagnosis
+    }
+
+
 def run_all_diagnostics(
     X: np.ndarray,
     y: np.ndarray,
@@ -411,6 +513,11 @@ def run_all_diagnostics(
     logger.info("Test 5: Raw OHLCV only test...")
     results['raw_ohlcv'] = raw_ohlcv_only_test(X, y, feature_names, cv_splitter, task_type)
     logger.info(f"  {results['raw_ohlcv']['diagnosis']}")
+    
+    # Test 6: Time-shift label test (sanity kill test)
+    logger.info("Test 6: Time-shift label test...")
+    results['time_shift'] = time_shift_label_test(X, y, feature_names, cv_splitter, task_type)
+    logger.info(f"  {results['time_shift']['diagnosis']}")
     
     logger.info("=" * 60)
     

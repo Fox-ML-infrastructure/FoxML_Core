@@ -39,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Feature count chain**: Logs now show complete chain: `safe=307 → drop_all_nan=3 → final=304` instead of scattered messages
   - **Reproducibility integration**: ResolvedConfig values stored in metadata.json ensuring CV splitter and reproducibility tracker use same purge/embargo values
   - See [Resolved Config Fix Guide](DOCS/03_technical/implementation/RESOLVED_CONFIG_FIX.md)
+- **Reproducibility Tracking Bug Fixes** (2025-12-12) – **FIXED**: Critical bugs in reproducibility tracking system:
+  - **Fixed `ctx` NameError**: Resolved `NameError: name 'ctx' is not defined` that prevented `metadata.json` and `metrics.json` from being written (86 failures). Metadata files now write correctly for all runs.
+  - **Fixed feature importances path**: Feature importances now saved under correct view directory (`target_rankings/feature_importances/{target}/{view}/{symbol?}/`) instead of always using `CROSS_SECTIONAL`.
+  - **Fixed perfect CV detection**: Changed to use actual validation CV scores instead of training scores, eliminating false positives (was triggering on 0.9999 training score when actual CV was 0.687).
+  - **Added metadata diagnostic**: Warns when metadata files are missing but `audit_report.json` exists, detecting partial writes from previous bugs.
 
 - **Trend Analysis System** (2025-12-12) – **NEW**: Automated trend analysis across all pipeline stages with exponential decay weighting and regression detection:
   - **Trend tracking**: Automatically computes performance trends (slope, EWMA) across runs within comparable series using exponential decay weighting

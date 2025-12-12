@@ -70,6 +70,7 @@ always_exclude:
   - negative_volume_index
   - obv
   - obv_ema
+  - parkinson_vol_10
   - parkinson_vol_5
   - price_impact
   - price_momentum_60d
@@ -88,8 +89,10 @@ always_exclude:
   - rsi_14
   - rsi_21
   - rsi_30
+  - rsi_7
   - sma_200
   - stoch_d_21
+  - stoch_k_5
   - time_in_profit_10m
   - time_in_profit_15m
   - time_in_profit_5m

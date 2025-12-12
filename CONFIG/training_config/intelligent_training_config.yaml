@@ -98,6 +98,6 @@ advanced:
 # Test mode configuration (auto-detected if 'test' in output_dir name)
 test:
   # Override settings for test runs
-  max_targets_to_evaluate: 3  # Limit targets for faster testing
-  top_n_targets: 3
+  max_targets_to_evaluate: 23  # Limit targets for faster testing
+  top_n_targets: 23
   top_m_features: 50

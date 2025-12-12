@@ -694,6 +694,24 @@ features:
     source: unknown
     rejected: true
     description: 'AUTO-REJECTED: Detected as leaky feature'
+  rsi_7:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  parkinson_vol_10:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  stoch_k_5:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
 feature_families:
   lagged_returns:
     pattern: ^ret_\d+$

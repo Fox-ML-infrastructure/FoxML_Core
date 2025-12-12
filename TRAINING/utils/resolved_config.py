@@ -207,6 +207,17 @@ def create_resolved_config(
         default_purge_minutes=default_purge_minutes
     )
     
+    # AUDIT VIOLATION FIX: If feature lookback > purge, increase purge to satisfy audit rule
+    # This prevents "ROLLING WINDOW LEAKAGE RISK" violations
+    # Note: This is a conservative fix - ideally we'd filter features, but we don't have per-feature lookback metadata
+    if feature_lookback_max_minutes is not None and purge_minutes < feature_lookback_max_minutes:
+        logger.warning(
+            f"⚠️  Audit violation prevention: purge ({purge_minutes:.1f}m) < feature_lookback_max ({feature_lookback_max_minutes:.1f}m). "
+            f"Increasing purge to {feature_lookback_max_minutes:.1f}m to satisfy audit rule."
+        )
+        purge_minutes = feature_lookback_max_minutes
+        embargo_minutes = feature_lookback_max_minutes
+    
     # Compute buffer minutes
     if interval_minutes is not None:
         purge_buffer_minutes = purge_buffer_bars * interval_minutes

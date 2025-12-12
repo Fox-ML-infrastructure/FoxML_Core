@@ -810,27 +810,27 @@ class ReproducibilityTracker:
             stage_normalized = stage.upper().replace("MODEL_TRAINING", "TRAINING")
         
         # Normalize route_type (accept both string and RouteType enum)
-        # For TARGET_RANKING, use view from RunContext if available
-        if stage_normalized == "TARGET_RANKING" and hasattr(ctx, 'view') and ctx.view:
-            route_type = ctx.view  # Use view as route_type for TARGET_RANKING
+        # For TARGET_RANKING, use view from additional_data if available
+        if stage_normalized == "TARGET_RANKING" and not route_type:
+            if additional_data and 'view' in additional_data:
+                route_type = additional_data['view']  # Use view as route_type for TARGET_RANKING
         elif route_type and isinstance(route_type, RouteType):
             route_type = route_type.value
         
-        # Extract symbols list from cohort_metadata, additional_data, or RunContext
+        # Extract symbols list from cohort_metadata, additional_data
         # Try multiple sources to get the actual symbol list
         symbols_list = None
-        if hasattr(ctx, 'symbols') and ctx.symbols is not None:
-            symbols_list = ctx.symbols
-        elif additional_data and 'symbols' in additional_data:
+        if additional_data and 'symbols' in additional_data:
             symbols_list = additional_data['symbols']
         elif cohort_metadata and 'symbols' in cohort_metadata:
             symbols_list = cohort_metadata['symbols']
         elif additional_data and 'symbol_list' in additional_data:
             symbols_list = additional_data['symbol_list']
         
-        # For TARGET_RANKING with SYMBOL_SPECIFIC/LOSO view, use ctx.symbol if available
-        if stage_normalized == "TARGET_RANKING" and hasattr(ctx, 'symbol') and ctx.symbol:
-            symbol = ctx.symbol  # Override symbol from RunContext
+        # For TARGET_RANKING with SYMBOL_SPECIFIC/LOSO view, use symbol from additional_data if available
+        if stage_normalized == "TARGET_RANKING" and not symbol:
+            if additional_data and 'symbol' in additional_data:
+                symbol = additional_data['symbol']  # Override symbol from additional_data
         
         # Normalize symbols: convert to list, remove duplicates, sort for stable diffs
         if symbols_list is not None:
@@ -859,7 +859,7 @@ class ReproducibilityTracker:
             "run_id": run_id_clean,
             "stage": stage_normalized,  # Already normalized to uppercase
             "route_type": route_type.upper() if route_type else None,
-            "view": getattr(ctx, 'view', None) if stage_normalized == "TARGET_RANKING" else None,  # Add view for TARGET_RANKING
+            "view": (additional_data.get('view') if additional_data else None) if stage_normalized == "TARGET_RANKING" else None,  # Add view for TARGET_RANKING
             "target": item_name,
             "symbol": symbol,
             "model_family": model_family,
@@ -2276,6 +2276,17 @@ class ReproducibilityTracker:
                 ctx.model_family
             )
             if cohort_dir.exists():
+                # Verify metadata files exist (should have been written by _save_to_cohort)
+                metadata_file = cohort_dir / "metadata.json"
+                metrics_file = cohort_dir / "metrics.json"
+                if not metadata_file.exists() or not metrics_file.exists():
+                    logger.warning(
+                        f"⚠️  Metadata files missing in {cohort_dir.name}/: "
+                        f"metadata.json={'missing' if not metadata_file.exists() else 'exists'}, "
+                        f"metrics.json={'missing' if not metrics_file.exists() else 'exists'}. "
+                        f"This may indicate a previous bug (fixed 2025-12-12). New runs should have complete metadata."
+                    )
+                
                 audit_report_path = cohort_dir / "audit_report.json"
                 with open(audit_report_path, 'w') as f:
                     json.dump(audit_report, f, indent=2)

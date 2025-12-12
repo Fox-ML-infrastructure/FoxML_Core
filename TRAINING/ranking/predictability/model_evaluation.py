@@ -899,19 +899,24 @@ def train_and_evaluate_models(
                 _check_for_perfect_correlation(y, y_pred, model_name)
                 full_metrics = evaluate_by_task(task_type, y, y_proba)
             
-            # Store full metrics
+            # Store full metrics (training metrics from evaluate_by_task)
             model_metrics[model_name] = full_metrics
+            
+            # CRITICAL: Overwrite training metrics with CV scores (primary_score is from CV)
+            # This ensures model_metrics contains CV scores, not training scores
+            if task_type == TaskType.REGRESSION:
+                model_metrics[model_name]['r2'] = primary_score  # CV R²
+            elif task_type == TaskType.BINARY_CLASSIFICATION:
+                model_metrics[model_name]['roc_auc'] = primary_score  # CV AUC
+            else:  # MULTICLASS_CLASSIFICATION
+                model_metrics[model_name]['accuracy'] = primary_score  # CV accuracy
             
             # Also store training accuracy/correlation for auto-fixer detection
             # This is the in-sample training score (not CV), which is what triggers leakage warnings
             if training_accuracy is not None:
                 if task_type == TaskType.REGRESSION:
-                    # For regression, store as 'r2' (even though it's correlation, auto-fixer checks 'r2')
-                    # The actual CV R² is already in full_metrics['r2']
                     model_metrics[model_name]['training_r2'] = training_accuracy
                 else:
-                    # For classification, store as 'accuracy' (auto-fixer checks 'accuracy')
-                    # The actual CV accuracy is already in full_metrics['accuracy']
                     model_metrics[model_name]['training_accuracy'] = training_accuracy
         except Exception as e:
             logger.warning(f"Failed to compute full metrics for {model_name}: {e}")
@@ -1906,7 +1911,8 @@ def _save_feature_importances(
     target_column: str,
     symbol: str,
     feature_importances: Dict[str, Dict[str, float]],
-    output_dir: Path = None
+    output_dir: Path = None,
+    view: str = "CROSS_SECTIONAL"
 ) -> None:
     """
     Save detailed per-model, per-feature importance scores to CSV files.
@@ -1929,9 +1935,13 @@ def _save_feature_importances(
     if output_dir is None:
         output_dir = _REPO_ROOT / "results"
     
-    # Create directory structure
+    # Create directory structure that respects view (SYMBOL_SPECIFIC vs CROSS_SECTIONAL)
     target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-    importances_dir = output_dir / "feature_importances" / target_name_clean / symbol
+    # Include view in path for SYMBOL_SPECIFIC to avoid collisions
+    if view == "SYMBOL_SPECIFIC":
+        importances_dir = output_dir / "target_rankings" / "feature_importances" / target_name_clean / view / symbol
+    else:
+        importances_dir = output_dir / "target_rankings" / "feature_importances" / target_name_clean / view
     importances_dir.mkdir(parents=True, exist_ok=True)
     
     # Save per-model CSV files
@@ -1971,7 +1981,7 @@ def _save_feature_importances(
                 target_name=target_column,
                 method=model_name,
                 importance_dict=importances,
-                universe_id="CROSS_SECTIONAL",  # Cross-sectional ranking uses all symbols
+                universe_id=view,  # Use view parameter (CROSS_SECTIONAL or SYMBOL_SPECIFIC)
                 output_dir=output_dir,
                 auto_analyze=None,  # Load from config
             )
@@ -2705,14 +2715,18 @@ def evaluate_target_predictability(
                 f"Check CV metrics to assess real predictive power."
             )
         
-        # Save aggregated feature importances (cross-sectional, not per-symbol)
+        # Save aggregated feature importances (respect view: CROSS_SECTIONAL vs SYMBOL_SPECIFIC)
         if feature_importances and output_dir:
-            _save_feature_importances(target_column, "CROSS_SECTIONAL", feature_importances, output_dir)
+            # Use view parameter if available, otherwise default to CROSS_SECTIONAL
+            view_for_importances = view if 'view' in locals() else "CROSS_SECTIONAL"
+            symbol_for_importances = symbol if ('symbol' in locals() and symbol) else view_for_importances
+            _save_feature_importances(target_column, symbol_for_importances, feature_importances, output_dir, view=view_for_importances)
         
         # Store suspicious features
         if suspicious_features:
             all_suspicious_features = suspicious_features
-            _log_suspicious_features(target_column, "CROSS_SECTIONAL", suspicious_features)
+            symbol_for_log = symbol if ('symbol' in locals() and symbol) else (view if 'view' in locals() else "CROSS_SECTIONAL")
+            _log_suspicious_features(target_column, symbol_for_log, suspicious_features)
         
         # AUTO-FIX LEAKAGE: If leakage detected, automatically fix and re-run
         # Initialize autofix_info to None (will be set if auto-fixer runs)
@@ -2760,20 +2774,29 @@ def evaluate_target_predictability(
             should_auto_fix = False
             
             # Check 1: Perfect CV scores (cross-validation)
-            # CRITICAL: Use actual CV scores from model_metrics, not primary_scores which may be aggregated
+            # CRITICAL: Use actual CV scores from model_scores (primary_scores), not model_metrics
+            # model_metrics may contain training scores, but model_scores contains CV scores
             max_cv_score = None
-            if model_metrics:
+            if primary_scores:
+                # primary_scores contains CV scores from cross_val_score
+                valid_cv_scores = [s for s in primary_scores.values() if s is not None and not np.isnan(s)]
+                if valid_cv_scores:
+                    max_cv_score = max(valid_cv_scores)
+            
+            # Fallback: try to extract from model_metrics if primary_scores unavailable
+            # But be careful - model_metrics['accuracy'] etc. should now contain CV scores after our fix above
+            if max_cv_score is None and model_metrics:
                 for model_name, metrics in model_metrics.items():
                     if isinstance(metrics, dict):
-                        # Get CV score (not training score)
-                        cv_score_val = metrics.get('accuracy') or metrics.get('roc_auc') or metrics.get('r2')
+                        # Get CV score (should be CV after our fix, but double-check it's not training_accuracy)
+                        cv_score_val = metrics.get('roc_auc') or metrics.get('r2') or metrics.get('accuracy')
+                        # Exclude training scores explicitly
                         if cv_score_val is not None and not np.isnan(cv_score_val):
+                            # Skip if this looks like a training score (training_accuracy exists and matches)
+                            if 'training_accuracy' in metrics and abs(cv_score_val - metrics['training_accuracy']) < 0.001:
+                                continue  # This is likely a training score, skip it
                             if max_cv_score is None or cv_score_val > max_cv_score:
                                 max_cv_score = cv_score_val
-            
-            # Fallback to primary_scores if model_metrics doesn't have CV scores
-            if max_cv_score is None:
-                max_cv_score = max(primary_scores.values()) if primary_scores else None
             
             if max_cv_score is not None and max_cv_score >= cv_threshold:
                 should_auto_fix = True
@@ -3315,6 +3338,12 @@ def evaluate_target_predictability(
                     "task_type": result.task_type.name if hasattr(result.task_type, 'name') else str(result.task_type)
                 }
                 
+                # Add view and symbol to RunContext if available (for dual-view target ranking)
+                if 'view' in locals():
+                    ctx.view = view
+                if 'symbol' in locals() and symbol:
+                    ctx.symbol = symbol
+                
                 # Use automated log_run API
                 audit_result = tracker.log_run(ctx, metrics_dict)
                 
@@ -3377,6 +3406,12 @@ def evaluate_target_predictability(
                     "task_type": result.task_type.name if hasattr(result.task_type, 'name') else str(result.task_type),
                     **cohort_additional_data
                 }
+                
+                # Add view and symbol for dual-view target ranking
+                if 'view' in locals():
+                    additional_data_with_cohort['view'] = view
+                if 'symbol' in locals() and symbol:
+                    additional_data_with_cohort['symbol'] = symbol
                 
                 # Add CV details manually (legacy path)
                 if 'target_horizon_minutes' in locals() and target_horizon_minutes is not None:

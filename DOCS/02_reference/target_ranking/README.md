@@ -96,5 +96,5 @@ features = select_features_for_target(
 
 ## See Also
 
-- [Dual-View Target Ranking Implementation](DOCS/03_technical/implementation/DUAL_VIEW_TARGET_RANKING.md)
-- [Simple Pipeline Usage](DOCS/01_tutorials/SIMPLE_PIPELINE_USAGE.md)
+- [Dual-View Target Ranking Implementation](../../03_technical/implementation/DUAL_VIEW_TARGET_RANKING.md)
+- [Simple Pipeline Usage](../../01_tutorials/SIMPLE_PIPELINE_USAGE.md)

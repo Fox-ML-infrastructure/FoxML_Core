@@ -204,7 +204,7 @@ For full policies and contracting information, see the [`LEGAL/`](LEGAL/) direct
 
 **Documentation structure:**
 - **[Architecture](DOCS/ARCHITECTURE.md)** - Documentation organization
-- **[Style Guide](DOCS/STYLE_GUIDE.md)** - Writing guidelines
+- **Style Guide** - Writing guidelines (see [Documentation Architecture](DOCS/ARCHITECTURE.md) for documentation structure)
 - **[Migration Plan](DOCS/MIGRATION_PLAN.md)** - Migration status  
 
 ---------------------------------------------------------------------
