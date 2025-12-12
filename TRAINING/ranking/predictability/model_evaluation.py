@@ -2569,10 +2569,6 @@ def evaluate_target_predictability(
         logger.info(f"  After leak removal: {X.shape[1]} features remaining")
         from TRAINING.utils.cross_sectional_data import _log_feature_set
         _log_feature_set("AFTER_LEAK_REMOVAL", feature_names, previous_names=feature_names_before_leak_scan, logger_instance=logger)
-    else:
-        logger.info("  ✅ No obvious leaky features detected in pre-training scan")
-        from TRAINING.utils.cross_sectional_data import _log_feature_set
-        _log_feature_set("AFTER_LEAK_REMOVAL", feature_names, previous_names=feature_names_before_leak_scan, logger_instance=logger)
         
         # If we removed too many features, mark as insufficient
         # Load from config
@@ -2609,6 +2605,8 @@ def evaluate_target_predictability(
             )
     else:
         logger.info("  ✅ No obvious leaky features detected in pre-training scan")
+        from TRAINING.utils.cross_sectional_data import _log_feature_set
+        _log_feature_set("AFTER_LEAK_REMOVAL", feature_names, previous_names=feature_names_before_leak_scan, logger_instance=logger)
     
     # CRITICAL: Early exit if too few features (before wasting time training models)
     # Load from config
