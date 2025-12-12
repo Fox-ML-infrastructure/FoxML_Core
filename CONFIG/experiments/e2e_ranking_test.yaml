@@ -77,3 +77,26 @@ decisions:
     level_1_threshold: 0.4    # P(improve) for warning (level 1)
     # Baseline window size (number of recent runs for baseline computation)
     baseline_window: 10
+
+# Parallel execution configuration (for faster testing)
+# These settings override defaults in target_configs.yaml and multi_model_feature_selection.yaml
+multi_target:
+  parallel_targets: true  # Enable parallel target evaluation (ProcessPoolExecutor)
+  skip_on_error: true     # Continue to next target if one fails
+  save_summary: true      # Save multi_target_summary.json
+
+# Feature selection parallel execution
+multi_model_feature_selection:
+  parallel_symbols: true  # Enable parallel symbol processing (ProcessPoolExecutor)
+
+# Threading/parallel worker configuration
+# These override threading_config.yaml settings
+threading:
+  parallel:
+    # Max workers for ProcessPoolExecutor (CPU-bound tasks like target evaluation)
+    # Set to 4 for testing to balance speed vs system load
+    max_workers_process: 4  # Conservative for testing (null = auto-detect)
+    # Max workers for ThreadPoolExecutor (I/O-bound tasks)
+    max_workers_thread: 4   # Conservative for testing (null = auto-detect)
+    # Master switch for parallel execution
+    enabled: true
