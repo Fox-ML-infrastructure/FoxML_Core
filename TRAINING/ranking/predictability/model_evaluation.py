@@ -529,9 +529,19 @@ def train_and_evaluate_models(
         # Get n_symbols_available from cohort_context
         n_symbols_available = len(mtf_data) if 'mtf_data' in locals() else 1
         
+        # Load ranking mode cap from config
+        max_lookback_cap = None
+        try:
+            from CONFIG.config_loader import get_cfg
+            max_lookback_cap = get_cfg("safety.leakage_detection.ranking_mode_max_lookback_minutes", default=None, config_name="safety_config")
+            if max_lookback_cap is not None:
+                max_lookback_cap = float(max_lookback_cap)
+        except Exception:
+            pass
+        
         # Compute feature lookback from actual features (pruned or unpruned)
         computed_lookback, top_offenders = compute_feature_lookback_max(
-            feature_names, data_interval_minutes, max_lookback_cap_minutes=None  # No cap for now
+            feature_names, data_interval_minutes, max_lookback_cap_minutes=max_lookback_cap
         )
         
         if computed_lookback is not None:
@@ -2785,9 +2795,19 @@ def evaluate_target_predictability(
                 except Exception:
                     pass
         
+        # Load ranking mode cap from config
+        max_lookback_cap = None
+        try:
+            from CONFIG.config_loader import get_cfg
+            max_lookback_cap = get_cfg("safety.leakage_detection.ranking_mode_max_lookback_minutes", default=None, config_name="safety_config")
+            if max_lookback_cap is not None:
+                max_lookback_cap = float(max_lookback_cap)
+        except Exception:
+            pass
+        
         # Compute feature lookback from actual features (pruned or unpruned)
         computed_lookback, top_offenders = compute_feature_lookback_max(
-            feature_names, detected_interval, max_lookback_cap_minutes=None  # No cap for now
+            feature_names, detected_interval, max_lookback_cap_minutes=max_lookback_cap
         )
         
         if computed_lookback is not None:
