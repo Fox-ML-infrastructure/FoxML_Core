@@ -4,7 +4,10 @@
 # Data configuration
 data:
   # Default data directory (can be overridden via --data-dir)
-  data_dir: "data/data_labeled/interval=5m"
+  # NOTE: Updated to use versioned labels (v2) with corrected horizon unit conversion
+  # Old: data/data_labeled/interval=5m (had horizon unit bug)
+  # New: data/data_labeled_v2/interval=5m (fixed: horizon_minutes correctly converted to bars)
+  data_dir: "data/data_labeled_v2/interval=5m"
   
   # Default symbols (can be overridden via --symbols)
   symbols:
