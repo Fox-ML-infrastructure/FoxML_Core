@@ -2417,6 +2417,12 @@ def evaluate_target_predictability(
 ) -> TargetPredictabilityScore:
     """Evaluate predictability of a single target across symbols"""
     
+    # Get logging config for this module (at function start)
+    if _LOGGING_CONFIG_AVAILABLE:
+        log_cfg = get_module_logging_config('rank_target_predictability')
+    else:
+        log_cfg = _DummyLoggingConfig()
+    
     # Load default max_rows_per_symbol from config if not provided
     if max_rows_per_symbol is None:
         if _CONFIG_AVAILABLE:
