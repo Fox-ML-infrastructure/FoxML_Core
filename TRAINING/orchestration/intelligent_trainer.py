@@ -228,6 +228,8 @@ class IntelligentTrainer:
         Returns:
             Estimated N_effective or None if cannot be determined
         """
+        logger.debug("🔍 Attempting early N_effective estimation...")
+        
         # Method 1: Check if there's existing metadata from a previous run with same symbols/data
         # (This handles the case where you're re-running with same data)
         try:
@@ -236,6 +238,7 @@ class IntelligentTrainer:
             
             # Look for existing runs with same symbols (quick check)
             if results_dir.exists():
+                logger.debug(f"Checking existing runs in {results_dir} for matching symbols: {self.symbols}")
                 for n_dir in results_dir.iterdir():
                     if n_dir.is_dir() and n_dir.name.isdigit():
                         # Check if there's a recent run with similar structure
@@ -254,7 +257,8 @@ class IntelligentTrainer:
                                             if n_effective and n_effective > 0:
                                                 logger.info(f"🔍 Found matching N_effective={n_effective} from previous run with same symbols")
                                                 return int(n_effective)
-                                    except Exception:
+                                    except Exception as e:
+                                        logger.debug(f"Failed to read {metadata_file}: {e}")
                                         continue
         except Exception as e:
             logger.debug(f"Could not check existing metadata for N_effective: {e}")
@@ -266,38 +270,54 @@ class IntelligentTrainer:
             
             # Sample first few symbols to estimate
             sample_symbols = self.symbols[:3] if len(self.symbols) > 3 else self.symbols
+            logger.debug(f"Sampling {len(sample_symbols)} symbols from {self.data_dir} to estimate N_effective")
             
             for symbol in sample_symbols:
                 symbol_dir = self.data_dir / f"symbol={symbol}"
                 data_path = symbol_dir / f"{symbol}.parquet"
                 
-                if data_path.exists():
+                if not data_path.exists():
+                    logger.debug(f"Data file not found: {data_path}")
+                    continue
+                
+                try:
+                    # Use parquet metadata if available (faster - no data load)
                     try:
-                        # Quick row count without loading full data
-                        df_sample = pd.read_parquet(data_path, nrows=0)  # Just get schema
-                        # Use parquet metadata if available (faster)
-                        try:
-                            import pyarrow.parquet as pq
-                            parquet_file = pq.ParquetFile(data_path)
-                            symbol_rows = parquet_file.metadata.num_rows
-                            total_rows += symbol_rows
-                        except Exception:
-                            # Fallback: actually count rows (slower but works)
-                            symbol_rows = len(pd.read_parquet(data_path))
-                            total_rows += symbol_rows
+                        import pyarrow.parquet as pq
+                        parquet_file = pq.ParquetFile(data_path)
+                        symbol_rows = parquet_file.metadata.num_rows
+                        total_rows += symbol_rows
+                        logger.debug(f"  {symbol}: {symbol_rows} rows (from parquet metadata)")
+                    except ImportError:
+                        # pyarrow not available, try pandas
+                        logger.debug(f"  pyarrow not available, using pandas for {symbol}")
+                        symbol_rows = len(pd.read_parquet(data_path))
+                        total_rows += symbol_rows
+                        logger.debug(f"  {symbol}: {symbol_rows} rows (from pandas)")
                     except Exception as e:
-                        logger.debug(f"Could not read {data_path} for sample size estimation: {e}")
-                        continue
+                        logger.debug(f"  Could not read parquet metadata for {symbol}: {e}, trying pandas")
+                        # Fallback: actually count rows (slower but works)
+                        symbol_rows = len(pd.read_parquet(data_path))
+                        total_rows += symbol_rows
+                        logger.debug(f"  {symbol}: {symbol_rows} rows (from pandas fallback)")
+                except Exception as e:
+                    logger.debug(f"Could not read {data_path} for sample size estimation: {e}")
+                    continue
             
             # Extrapolate to all symbols
             if total_rows > 0 and len(sample_symbols) > 0:
                 avg_per_symbol = total_rows / len(sample_symbols)
                 estimated_total = int(avg_per_symbol * len(self.symbols))
-                logger.info(f"🔍 Estimated N_effective={estimated_total} from data file sampling ({len(sample_symbols)} symbols sampled)")
+                logger.info(f"🔍 Estimated N_effective={estimated_total} from data file sampling ({len(sample_symbols)} symbols sampled, {total_rows} total rows)")
                 return estimated_total
+            else:
+                logger.debug(f"Could not estimate N_effective: total_rows={total_rows}, sample_symbols={len(sample_symbols)}")
         except Exception as e:
-            logger.debug(f"Could not estimate N_effective from data files: {e}")
+            logger.warning(f"Could not estimate N_effective from data files: {e}")
+            import traceback
+            logger.debug(f"Traceback: {traceback.format_exc()}")
         
+        logger.debug("Could not determine N_effective early, will use _pending/ and organize after first target")
         return None
     
     def _organize_by_cohort(self):
