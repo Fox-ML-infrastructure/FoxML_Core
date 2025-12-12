@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Highlights
 
-- **Dual-View Target Ranking** (2025-01-XX) – **NEW**: Target ranking now supports both cross-sectional and symbol-specific evaluation views:
+- **Dual-View Target Ranking** (2025-12-12) – **NEW**: Target ranking now supports both cross-sectional and symbol-specific evaluation views:
   - **CROSS_SECTIONAL view**: Pooled cross-sectional samples (existing behavior)
   - **SYMBOL_SPECIFIC view**: Evaluate each target separately on each symbol's own time series
   - **LOSO view** (optional): Leave-One-Symbol-Out evaluation for generalization testing
@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Backward compatible**: Default behavior unchanged (CROSS_SECTIONAL only), existing code works without changes
   - See [Dual-View Target Ranking Guide](DOCS/03_technical/implementation/DUAL_VIEW_TARGET_RANKING.md)
 
-- **Simplified Config-Based Pipeline** (2025-01-XX) – **NEW**: Intelligent training pipeline now supports minimal command-line usage via configuration files:
+- **Simplified Config-Based Pipeline** (2025-12-12) – **NEW**: Intelligent training pipeline now supports minimal command-line usage via configuration files:
   - **Config-driven defaults**: All settings (data, targets, features, model families) can be configured in `CONFIG/training_config/intelligent_training_config.yaml`
   - **Simple commands**: Run full pipeline with just `--output-dir` argument
   - **Quick test mode**: `--quick` flag for fast iteration (3 targets, 50 features)
