@@ -600,15 +600,55 @@ def rank_targets(
         
         # Evaluate each target in dual views
         for idx, (target_name, target_config) in enumerate(targets_to_evaluate.items(), 1):
-        logger.info(f"[{idx}/{total_to_evaluate}] Evaluating {target_name}...")
-        
-        try:
-            # View A: Cross-sectional evaluation (always run)
-            logger.info(f"  View A: CROSS_SECTIONAL")
-            if auto_rerun_enabled and _AUTOFIX_AVAILABLE:
-                # Try with view/symbol, fallback to without if not supported
-                try:
-                    result_cs = evaluate_target_with_autofix(
+            logger.info(f"[{idx}/{total_to_evaluate}] Evaluating {target_name}...")
+            
+            try:
+                # View A: Cross-sectional evaluation (always run)
+                logger.info(f"  View A: CROSS_SECTIONAL")
+                if auto_rerun_enabled and _AUTOFIX_AVAILABLE:
+                    # Try with view/symbol, fallback to without if not supported
+                    try:
+                        result_cs = evaluate_target_with_autofix(
+                            target_name=target_name,
+                            target_config=target_config,
+                            symbols=symbols,
+                            data_dir=data_dir,
+                            model_families=model_families,
+                            multi_model_config=multi_model_config,
+                            output_dir=output_dir,
+                            min_cs=min_cs,
+                            max_cs_samples=max_cs_samples,
+                            max_rows_per_symbol=max_rows_per_symbol,
+                            max_reruns=max_reruns,
+                            rerun_on_perfect_train_acc=rerun_on_perfect_train_acc,
+                            rerun_on_high_auc_only=rerun_on_high_auc_only,
+                            explicit_interval=explicit_interval,
+                            experiment_config=experiment_config,
+                            view="CROSS_SECTIONAL",
+                            symbol=None
+                        )
+                    except TypeError:
+                        # Fallback: autofix doesn't support view/symbol yet
+                        logger.debug("evaluate_target_with_autofix doesn't support view/symbol, using without")
+                        result_cs = evaluate_target_with_autofix(
+                            target_name=target_name,
+                            target_config=target_config,
+                            symbols=symbols,
+                            data_dir=data_dir,
+                            model_families=model_families,
+                            multi_model_config=multi_model_config,
+                            output_dir=output_dir,
+                            min_cs=min_cs,
+                            max_cs_samples=max_cs_samples,
+                            max_rows_per_symbol=max_rows_per_symbol,
+                            max_reruns=max_reruns,
+                            rerun_on_perfect_train_acc=rerun_on_perfect_train_acc,
+                            rerun_on_high_auc_only=rerun_on_high_auc_only,
+                            explicit_interval=explicit_interval,
+                            experiment_config=experiment_config
+                        )
+                else:
+                    result_cs = evaluate_target_predictability(
                         target_name=target_name,
                         target_config=target_config,
                         symbols=symbols,
@@ -619,80 +659,40 @@ def rank_targets(
                         min_cs=min_cs,
                         max_cs_samples=max_cs_samples,
                         max_rows_per_symbol=max_rows_per_symbol,
-                        max_reruns=max_reruns,
-                        rerun_on_perfect_train_acc=rerun_on_perfect_train_acc,
-                        rerun_on_high_auc_only=rerun_on_high_auc_only,
                         explicit_interval=explicit_interval,
                         experiment_config=experiment_config,
                         view="CROSS_SECTIONAL",
                         symbol=None
                     )
-                except TypeError:
-                    # Fallback: autofix doesn't support view/symbol yet
-                    logger.debug("evaluate_target_with_autofix doesn't support view/symbol, using without")
-                    result_cs = evaluate_target_with_autofix(
-                        target_name=target_name,
-                        target_config=target_config,
-                        symbols=symbols,
-                        data_dir=data_dir,
-                        model_families=model_families,
-                        multi_model_config=multi_model_config,
-                        output_dir=output_dir,
-                        min_cs=min_cs,
-                        max_cs_samples=max_cs_samples,
-                        max_rows_per_symbol=max_rows_per_symbol,
-                        max_reruns=max_reruns,
-                        rerun_on_perfect_train_acc=rerun_on_perfect_train_acc,
-                        rerun_on_high_auc_only=rerun_on_high_auc_only,
-                        explicit_interval=explicit_interval,
-                        experiment_config=experiment_config
-                    )
-            else:
-                result_cs = evaluate_target_predictability(
-                    target_name=target_name,
-                    target_config=target_config,
-                    symbols=symbols,
-                    data_dir=data_dir,
-                    model_families=model_families,
-                    multi_model_config=multi_model_config,
-                    output_dir=output_dir,
-                    min_cs=min_cs,
-                    max_cs_samples=max_cs_samples,
-                    max_rows_per_symbol=max_rows_per_symbol,
-                    explicit_interval=explicit_interval,
-                    experiment_config=experiment_config,
-                    view="CROSS_SECTIONAL",
-                    symbol=None
-                )
-            
-            # Store cross-sectional result FIRST (needed for gating symbol-specific)
-            skip_statuses = [
-                "LEAKAGE_UNRESOLVED", 
-                "LEAKAGE_UNRESOLVED_MAX_RETRIES",
-                "SUSPICIOUS",
-                "SUSPICIOUS_STRONG"
-            ]
-            
-            cs_succeeded = result_cs.mean_score != -999.0 and result_cs.status not in skip_statuses
-            if cs_succeeded:
-                results_cs.append(result_cs)
-                results.append(result_cs)  # Backward compatibility
-            else:
-                reason = result_cs.status if result_cs.status in skip_statuses else (result_cs.leakage_flag if result_cs.leakage_flag != "OK" else "degenerate/failed")
-                if result_cs.status in ["SUSPICIOUS", "SUSPICIOUS_STRONG"]:
-                    logger.warning(f"  ⚠️  Excluded {target_name} CROSS_SECTIONAL ({reason}) - High score suggests structural leakage")
-                else:
-                    logger.info(f"  Skipped {target_name} CROSS_SECTIONAL ({reason})")
-            
-            # View B: Symbol-specific evaluation (if enabled)
-            result_sym_dict = {}
-            if enable_symbol_specific:
-                logger.info(f"  View B: SYMBOL_SPECIFIC (evaluating {len(symbols)} symbols)")
                 
-                # Gate: Only evaluate if cross-sectional succeeded (no point without baseline)
-                if not cs_succeeded:
-                    logger.debug(f"  Skipping symbol-specific evaluation for {target_name} (cross-sectional failed)")
+                # Store cross-sectional result FIRST (needed for gating symbol-specific)
+                skip_statuses = [
+                    "LEAKAGE_UNRESOLVED", 
+                    "LEAKAGE_UNRESOLVED_MAX_RETRIES",
+                    "SUSPICIOUS",
+                    "SUSPICIOUS_STRONG"
+                ]
+                
+                cs_succeeded = result_cs.mean_score != -999.0 and result_cs.status not in skip_statuses
+                if cs_succeeded:
+                    results_cs.append(result_cs)
+                    results.append(result_cs)  # Backward compatibility
                 else:
+                    reason = result_cs.status if result_cs.status in skip_statuses else (result_cs.leakage_flag if result_cs.leakage_flag != "OK" else "degenerate/failed")
+                    if result_cs.status in ["SUSPICIOUS", "SUSPICIOUS_STRONG"]:
+                        logger.warning(f"  ⚠️  Excluded {target_name} CROSS_SECTIONAL ({reason}) - High score suggests structural leakage")
+                    else:
+                        logger.info(f"  Skipped {target_name} CROSS_SECTIONAL ({reason})")
+                
+                # View B: Symbol-specific evaluation (if enabled)
+                result_sym_dict = {}
+                if enable_symbol_specific:
+                    logger.info(f"  View B: SYMBOL_SPECIFIC (evaluating {len(symbols)} symbols)")
+                    
+                    # Gate: Only evaluate if cross-sectional succeeded (no point without baseline)
+                    if not cs_succeeded:
+                        logger.debug(f"  Skipping symbol-specific evaluation for {target_name} (cross-sectional failed)")
+                    else:
                     for symbol in symbols:
                         try:
                             if auto_rerun_enabled and _AUTOFIX_AVAILABLE:
@@ -764,54 +764,54 @@ def rank_targets(
                         except Exception as e:
                             logger.warning(f"    Failed to evaluate {target_name} for symbol {symbol}: {e}")
                             continue
+                
+                # View C: LOSO evaluation (optional, if enabled)
+                result_loso_dict = {}
+                if enable_loso:
+                    logger.info(f"  View C: LOSO (evaluating {len(symbols)} symbols)")
+                    for symbol in symbols:
+                        try:
+                            result_loso_sym = evaluate_target_predictability(
+                                target_name=target_name,
+                                target_config=target_config,
+                                symbols=symbols,  # All symbols for training
+                                data_dir=data_dir,
+                                model_families=model_families,
+                                multi_model_config=multi_model_config,
+                                output_dir=output_dir,
+                                min_cs=min_cs,
+                                max_cs_samples=max_cs_samples,
+                                max_rows_per_symbol=max_rows_per_symbol,
+                                explicit_interval=explicit_interval,
+                                experiment_config=experiment_config,
+                                view="LOSO",
+                                symbol=symbol
+                            )
+                            result_loso_dict[symbol] = result_loso_sym
+                        except Exception as e:
+                            logger.warning(f"    Failed LOSO evaluation for {target_name} on symbol {symbol}: {e}")
+                            continue
+                
+                # Store symbol-specific results
+                if enable_symbol_specific:
+                    if target_name not in results_sym:
+                        results_sym[target_name] = {}
+                    for symbol, result_sym in result_sym_dict.items():
+                        if result_sym.mean_score != -999.0 and result_sym.status not in skip_statuses:
+                            results_sym[target_name][symbol] = result_sym
+                        else:
+                            reason = result_sym.status if result_sym.status in skip_statuses else "degenerate/failed"
+                            logger.debug(f"    Skipped {target_name} SYMBOL_SPECIFIC ({symbol}): {reason}")
+                
+                # Store LOSO results
+                if enable_loso:
+                    if target_name not in results_loso:
+                        results_loso[target_name] = {}
+                    for symbol, result_loso_sym in result_loso_dict.items():
+                        if result_loso_sym.mean_score != -999.0 and result_loso_sym.status not in skip_statuses:
+                            results_loso[target_name][symbol] = result_loso_sym
             
-            # View C: LOSO evaluation (optional, if enabled)
-            result_loso_dict = {}
-            if enable_loso:
-                logger.info(f"  View C: LOSO (evaluating {len(symbols)} symbols)")
-                for symbol in symbols:
-                    try:
-                        result_loso_sym = evaluate_target_predictability(
-                            target_name=target_name,
-                            target_config=target_config,
-                            symbols=symbols,  # All symbols for training
-                            data_dir=data_dir,
-                            model_families=model_families,
-                            multi_model_config=multi_model_config,
-                            output_dir=output_dir,
-                            min_cs=min_cs,
-                            max_cs_samples=max_cs_samples,
-                            max_rows_per_symbol=max_rows_per_symbol,
-                            explicit_interval=explicit_interval,
-                            experiment_config=experiment_config,
-                            view="LOSO",
-                            symbol=symbol
-                        )
-                        result_loso_dict[symbol] = result_loso_sym
-                    except Exception as e:
-                        logger.warning(f"    Failed LOSO evaluation for {target_name} on symbol {symbol}: {e}")
-                        continue
-            
-            # Store symbol-specific results
-            if enable_symbol_specific:
-                if target_name not in results_sym:
-                    results_sym[target_name] = {}
-                for symbol, result_sym in result_sym_dict.items():
-                    if result_sym.mean_score != -999.0 and result_sym.status not in skip_statuses:
-                        results_sym[target_name][symbol] = result_sym
-                    else:
-                        reason = result_sym.status if result_sym.status in skip_statuses else "degenerate/failed"
-                        logger.debug(f"    Skipped {target_name} SYMBOL_SPECIFIC ({symbol}): {reason}")
-            
-            # Store LOSO results
-            if enable_loso:
-                if target_name not in results_loso:
-                    results_loso[target_name] = {}
-                for symbol, result_loso_sym in result_loso_dict.items():
-                    if result_loso_sym.mean_score != -999.0 and result_loso_sym.status not in skip_statuses:
-                        results_loso[target_name][symbol] = result_loso_sym
-        
-        except Exception as e:
+            except Exception as e:
             logger.exception(f"  Failed to evaluate {target_name}: {e}")  # Better error logging with traceback
             # Continue with next target
     
