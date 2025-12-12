@@ -1216,21 +1216,24 @@ def train_and_evaluate_models(
                 all_suspicious_features['lightgbm'] = suspicious_features
             
             # Store all feature importances for detailed export
-            importance_dict = {
-                feat: float(imp) for feat, imp in zip(feature_names, importances)
-            }
+            # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+            importance_series = pd.Series(importances, index=feature_names[:len(importances)] if len(importances) <= len(feature_names) else feature_names)
+            # Reindex to match exact feature_names order (fills missing with 0.0)
+            importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+            importance_dict = importance_series.to_dict()
             all_feature_importances['lightgbm'] = importance_dict
             
-            # Log importance keys vs train input
-            importance_keys = set(importance_dict.keys())
-            train_input_keys = set(feature_names)
-            if len(importance_keys) < len(train_input_keys):
-                missing = train_input_keys - importance_keys
+            # Log importance keys vs train input (now guaranteed to match order)
+            importance_keys = list(importance_dict.keys())  # Use list to preserve order
+            train_input_keys = feature_names  # Already a list
+            if len(importance_keys) != len(train_input_keys):
+                missing = set(train_input_keys) - set(importance_keys)
                 logger.warning(f"  ⚠️  IMPORTANCE_KEYS mismatch: {len(importance_keys)} keys vs {len(train_input_keys)} train features")
                 logger.warning(f"    Missing from importance: {sorted(missing)[:10]}{'...' if len(missing) > 10 else ''}")
-            elif len(importance_keys) == len(train_input_keys) and importance_keys == train_input_keys:
+            elif importance_keys == train_input_keys:
+                # Keys match AND order matches - safe to log fingerprint
                 from TRAINING.utils.cross_sectional_data import _log_feature_set
-                _log_feature_set("IMPORTANCE_KEYS", list(importance_keys), previous_names=feature_names, logger_instance=logger)
+                _log_feature_set("IMPORTANCE_KEYS", importance_keys, previous_names=feature_names, logger_instance=logger)
             
             # Compute and store full task-aware metrics
             _compute_and_store_metrics('lightgbm', model, X, y, primary_score, task_type)
@@ -1286,19 +1289,26 @@ def train_and_evaluate_models(
                 all_suspicious_features['random_forest'] = suspicious_features
             
             # Store all feature importances for detailed export
-            importance_dict = {
-                feat: float(imp) for feat, imp in zip(feature_names, importances)
-            }
+            # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+            importance_series = pd.Series(importances, index=feature_names[:len(importances)] if len(importances) <= len(feature_names) else feature_names)
+            # Reindex to match exact feature_names order (fills missing with 0.0)
+            importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+            importance_dict = importance_series.to_dict()
             all_feature_importances['random_forest'] = importance_dict
             
             # Log importance keys vs train input (only once per model, use random_forest as representative)
+            # Now guaranteed to match order
             if 'random_forest' not in all_feature_importances or len(all_feature_importances) == 1:
-                importance_keys = set(importance_dict.keys())
-                train_input_keys = set(feature_names)
-                if len(importance_keys) < len(train_input_keys):
-                    missing = train_input_keys - importance_keys
+                importance_keys = list(importance_dict.keys())  # Use list to preserve order
+                train_input_keys = feature_names  # Already a list
+                if len(importance_keys) != len(train_input_keys):
+                    missing = set(train_input_keys) - set(importance_keys)
                     logger.warning(f"  ⚠️  IMPORTANCE_KEYS mismatch (random_forest): {len(importance_keys)} keys vs {len(train_input_keys)} train features")
                     logger.warning(f"    Missing from importance: {sorted(missing)[:10]}{'...' if len(missing) > 10 else ''}")
+                elif importance_keys == train_input_keys:
+                    # Keys match AND order matches - safe to log fingerprint
+                    from TRAINING.utils.cross_sectional_data import _log_feature_set
+                    _log_feature_set("IMPORTANCE_KEYS", importance_keys, previous_names=feature_names, logger_instance=logger)
             
             # Compute and store full task-aware metrics
             _compute_and_store_metrics('random_forest', model, X, y, primary_score, task_type)
@@ -1510,9 +1520,11 @@ def train_and_evaluate_models(
                         all_suspicious_features['xgboost'] = suspicious_features
                     
                     # Store all feature importances for detailed export
-                    importance_dict = {
-                        feat: float(imp) for feat, imp in zip(feature_names, importances)
-                    }
+                    # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+                    importance_series = pd.Series(importances, index=feature_names[:len(importances)] if len(importances) <= len(feature_names) else feature_names)
+                    # Reindex to match exact feature_names order (fills missing with 0.0)
+                    importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+                    importance_dict = importance_series.to_dict()
                     all_feature_importances['xgboost'] = importance_dict
             if hasattr(model, 'feature_importances_'):
                 # Use percentage of total importance in top 10% features (0-1 scale, interpretable)

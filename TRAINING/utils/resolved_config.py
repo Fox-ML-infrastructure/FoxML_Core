@@ -325,7 +325,15 @@ def create_resolved_config(
     # AUDIT VIOLATION FIX: If feature lookback > purge, increase purge to satisfy audit rule
     # This prevents "ROLLING WINDOW LEAKAGE RISK" violations
     # NOTE: Only purge is affected, NOT embargo
-    if feature_lookback_max_minutes is not None and purge_minutes < feature_lookback_max_minutes:
+    # Can be disabled via config if features are strictly causal (only use past data)
+    purge_include_feature_lookback = True  # Default: conservative (include feature lookback)
+    try:
+        from CONFIG.config_loader import get_cfg
+        purge_include_feature_lookback = get_cfg("safety.leakage_detection.purge_include_feature_lookback", default=True, config_name="safety_config")
+    except Exception:
+        pass
+    
+    if purge_include_feature_lookback and feature_lookback_max_minutes is not None and purge_minutes < feature_lookback_max_minutes:
         logger.warning(
             f"⚠️  Audit violation prevention: purge ({purge_minutes:.1f}m) < feature_lookback_max ({feature_lookback_max_minutes:.1f}m). "
             f"Increasing purge to {feature_lookback_max_minutes:.1f}m to satisfy audit rule. "
@@ -333,6 +341,12 @@ def create_resolved_config(
         )
         purge_minutes = feature_lookback_max_minutes
         # embargo_minutes stays at embargo_base (NOT increased)
+    elif not purge_include_feature_lookback and feature_lookback_max_minutes is not None:
+        logger.info(
+            f"ℹ️  Feature lookback ({feature_lookback_max_minutes:.1f}m) detected, but purge_include_feature_lookback=false. "
+            f"Using horizon-based purge only ({purge_minutes:.1f}m). "
+            f"Note: This assumes features are strictly causal (only use past data)."
+        )
     
     # Compute buffer minutes
     if interval_minutes is not None:

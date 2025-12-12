@@ -84,6 +84,11 @@ safety:
       # Set to null to disable cap (use actual feature lookback)
       # Set to number (e.g., 240) to cap lookback at 4 hours (excludes 1D+ lookback features)
       ranking_mode_max_lookback_minutes: null  # null = no cap, or set to e.g., 240 for 4-hour cap
+    
+    # Purge/embargo configuration
+    purge_include_feature_lookback: true  # If true, purge = max(horizon+buffer, feature_lookback_max)
+    # If false, purge = horizon+buffer only (assumes features are strictly causal, only use past data)
+    # Set to false if feature lookback is killing sample efficiency and you're confident features are causal
   
   # Reproducibility Tracking Thresholds
   reproducibility:
