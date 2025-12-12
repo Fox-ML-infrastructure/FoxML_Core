@@ -14,10 +14,15 @@ This ensures consistent results and eliminates configuration drift between ranki
 ## Interval Handling
 
 ### Problem
-Previously, interval detection could produce warnings when auto-detecting from timestamps, especially when `data.bar_interval` was already specified in config.
+Previously, interval detection could produce warnings when auto-detecting from timestamps, especially when `data.bar_interval` was already specified in config. Large gaps (overnight/weekend) were contaminating detection, causing false warnings.
 
 ### Solution
-The `explicit_interval` parameter is now wired through the entire call chain:
+The `explicit_interval` parameter is now wired through the entire call chain. Additionally, interval detection has been improved with:
+1. **Median-based gap filtering**: Ignores gaps > 10x median (configurable via `pipeline.data_interval.max_gap_factor`)
+2. **Fixed interval mode**: Skip auto-detection entirely when interval is known (`interval_detection.mode=fixed`)
+3. **Reduced noise**: Warnings downgraded to INFO level when default is used correctly
+
+The call chain:
 
 ```
 orchestrator (extracts from experiment_config.data.bar_interval)
@@ -35,18 +40,31 @@ detect_interval_from_dataframe(explicit_interval=...)
 
 ### Usage
 
-**With experiment config (recommended):**
+**With experiment config (recommended - fixed mode):**
 ```yaml
 # CONFIG/experiments/my_experiment.yaml
 data:
   bar_interval: "5m"  # Explicit interval
+  interval_detection:
+    mode: fixed  # Skip auto-detection, use bar_interval directly
 ```
 
 ```bash
 python TRAINING/train.py --experiment-config my_experiment --auto-targets --auto-features
 ```
 
-**Result:** No interval auto-detection warnings in logs.
+**Result:** No interval auto-detection warnings in logs. Interval is used directly from config.
+
+**With auto-detection (improved):**
+```yaml
+# CONFIG/experiments/my_experiment.yaml
+data:
+  # bar_interval not set - will auto-detect
+  interval_detection:
+    mode: auto  # Default: auto-detect with gap filtering
+```
+
+**Result:** Auto-detection runs with improved gap filtering. Large gaps (overnight/weekend) are ignored. Warnings downgraded to INFO level when default is used correctly.
 
 ### Benefits
 - ✅ No spurious warnings when interval is known

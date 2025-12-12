@@ -80,7 +80,10 @@ python TRAINING/train.py \
 - Proper horizon conversion for leakage filtering
 - Supports formats: `"5m"`, `"15m"`, `"1h"`, `"1d"`, or integer minutes
 
-**Note:** If `bar_interval` is not specified, the pipeline will auto-detect from timestamps, but may log warnings if detection is unclear.
+**Note:** 
+- **Fixed mode** (`interval_detection.mode=fixed`): Use when interval is known. Skips auto-detection entirely, no warnings.
+- **Auto mode** (default): Auto-detects from timestamps with improved gap filtering. Large gaps (overnight/weekend) are automatically ignored. Warnings downgraded to INFO level when default is used correctly.
+- If `bar_interval` is not specified, the pipeline will auto-detect from timestamps. With improved filtering, warnings are rare and only at INFO level.
 
 ---
 
