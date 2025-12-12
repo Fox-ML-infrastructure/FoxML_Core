@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Highlights
 
+- **Active Sanitization (Ghost Buster)** (2025-12-12) – **NEW**: Proactive feature quarantine system that automatically removes problematic features before training starts:
+  - **Prevents "ghost feature" discrepancies**: Eliminates conflicts where audit and auto-fix see different lookback values (e.g., audit sees 1440m from daily features, auto-fix sees 1000m from sma_200)
+  - **Automatic quarantine**: Features with lookback > `max_safe_lookback_minutes` (default: 240m = 4 hours) are automatically quarantined before lookback computation
+  - **Config-driven**: Fully configurable via `safety_config.yaml` (`active_sanitization.enabled`, `max_safe_lookback_minutes`)
+  - **Integration**: Integrated into `filter_features_for_target()` in `leakage_filtering.py`, runs after all other filtering
+  - **Pattern-based quarantine**: Optional pattern-based quarantine for known problematic feature types (disabled by default)
+  - **Files**: `TRAINING/utils/feature_sanitizer.py` (new), `TRAINING/utils/leakage_filtering.py` (integration), `CONFIG/training_config/safety_config.yaml` (config)
+  - See [Active Sanitization Guide](DOCS/03_technical/implementation/ACTIVE_SANITIZATION.md)
+
 - **Complete Config-Driven Decision System** (2025-12-12) – **NEW**: All decision-making and stability analysis thresholds are now fully config-driven:
   - **Decision Policies Config** (`decision_policies.yaml`): All thresholds for feature instability, route instability, feature explosion decline, and class balance drift are now configurable. Previously hardcoded values (jaccard_threshold: 0.5, route_entropy_threshold: 1.5, etc.) now load from config.
   - **Stability Config** (`stability_config.yaml`): Importance difference thresholds (diff_threshold, relative_diff_threshold, min_importance_full) are now configurable.

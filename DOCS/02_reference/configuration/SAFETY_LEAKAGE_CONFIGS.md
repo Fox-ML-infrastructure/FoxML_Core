@@ -258,6 +258,68 @@ leakage_detection:
     enabled: false  # Disable automatic rerun
 ```
 
+### Active Sanitization (Ghost Buster)
+
+**Purpose:** Proactively quarantine features with excessive lookback before training starts.
+
+**Settings:**
+```yaml
+active_sanitization:
+  enabled: true  # Enable active sanitization
+  max_safe_lookback_minutes: 240.0  # Maximum safe lookback in minutes (default: 4 hours)
+  pattern_quarantine:
+    enabled: false  # Optional pattern-based quarantine (more aggressive)
+    patterns: []  # List of regex patterns to match
+```
+
+**How It Works:**
+- Scans features after all other filtering (registry, patterns, etc.)
+- Computes lookback for each feature using same logic as auto-fix
+- Quarantines features with lookback > `max_safe_lookback_minutes`
+- Prevents "ghost feature" discrepancies where audit and auto-fix see different lookback values
+
+**Example: Default Configuration (Recommended)**
+
+```yaml
+active_sanitization:
+  enabled: true
+  max_safe_lookback_minutes: 240.0  # 4 hours
+  pattern_quarantine:
+    enabled: false
+```
+
+**Example: More Permissive (Allow Longer Lookback)**
+
+```yaml
+active_sanitization:
+  enabled: true
+  max_safe_lookback_minutes: 480.0  # 8 hours
+```
+
+**Example: Pattern-Based Quarantine (Aggressive)**
+
+```yaml
+active_sanitization:
+  enabled: true
+  max_safe_lookback_minutes: 240.0
+  pattern_quarantine:
+    enabled: true
+    patterns:
+      - ".*_1d$"      # Ends in _1d
+      - ".*_24h$"     # Ends in _24h
+      - ".*daily.*"   # Contains "daily"
+```
+
+**Example: Disabling Active Sanitization**
+
+```yaml
+active_sanitization:
+  enabled: false
+```
+
+**See Also:**
+- [Active Sanitization Guide](../../03_technical/implementation/ACTIVE_SANITIZATION.md) - Complete documentation
+
 ---
 
 ## Common Scenarios

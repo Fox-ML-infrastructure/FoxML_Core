@@ -36,8 +36,9 @@ The system uses multiple layers to prevent data leakage:
 
 1. **Feature Registry** (`CONFIG/feature_registry.yaml`) - Structural rules based on temporal metadata
 2. **Excluded Features Config** (`CONFIG/excluded_features.yaml`) - Pattern-based exclusions
-3. **Automated Leakage Detection** - Real-time detection during training
-4. **Auto-Fixer** - Automatic detection and exclusion of leaking features
+3. **Active Sanitization (Ghost Buster)** - Proactive quarantine of features with excessive lookback before training starts
+4. **Automated Leakage Detection** - Real-time detection during training
+5. **Auto-Fixer** - Automatic detection and exclusion of leaking features
 
 ### Feature Registry
 
@@ -47,6 +48,29 @@ The system uses multiple layers to prevent data leakage:
 - `source`: Where the feature comes from (price, volume, derived, etc.)
 
 Features are automatically filtered based on target horizon to prevent leakage.
+
+### Active Sanitization (Ghost Buster)
+
+**Purpose:** Proactively quarantine features with excessive lookback before training starts.
+
+**How It Works:**
+- Scans features after all other filtering (registry, patterns, etc.)
+- Computes lookback for each feature using same logic as auto-fix
+- Quarantines features with lookback > `max_safe_lookback_minutes` (default: 240m = 4 hours)
+- Prevents "ghost feature" discrepancies where audit and auto-fix see different lookback values
+
+**Configuration:**
+```yaml
+active_sanitization:
+  enabled: true
+  max_safe_lookback_minutes: 240.0  # 4 hours
+  pattern_quarantine:
+    enabled: false
+    patterns: []
+```
+
+**See Also:**
+- [Active Sanitization Guide](../implementation/ACTIVE_SANITIZATION.md) - Complete documentation
 
 ### Feature/Target Schema
 
