@@ -13,7 +13,7 @@ This document tracks key cross-references between documentation files to ensure 
 - **References**:
   - `INDEX.md` - Added to refactoring section
   - `TRAINING/README.md` - Links to refactoring docs
-  - `CHANGELOG_DETAILED.md` - Refactoring note
+  - `changelog/README.md` - Changelog index (refactoring note in general.md)
 - **Module READMEs**:
   - `TRAINING/models/specialized/README.md` - Brief, links to detailed docs
   - `TRAINING/ranking/predictability/README.md` - Brief, links to detailed docs

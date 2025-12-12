@@ -16,7 +16,7 @@ Complete navigation guide for FoxML Core documentation.
 - [Roadmap](../ROADMAP.md) - Current development focus and upcoming work
 - [Deterministic Training](00_executive/DETERMINISTIC_TRAINING.md) - SST config system and reproducibility guarantees
 - [Changelog](../CHANGELOG.md) - Recent technical and compliance changes (quick overview)
-- [Detailed Changelog](02_reference/CHANGELOG_DETAILED.md) - Comprehensive change details with file paths and config references
+- [Changelog Index](02_reference/changelog/README.md) - Per-day detailed changelogs with file paths and config references
 - [Licensing & Subscriptions](../LEGAL/SUBSCRIPTIONS.md) - AGPL vs commercial usage and subscription tiers
 - [Legal Documentation Index](LEGAL_INDEX.md) - Complete legal and compliance documentation
 
@@ -81,7 +81,7 @@ Complete technical reference for daily use.
 - [Config Schema](02_reference/api/CONFIG_SCHEMA.md) - Configuration schema
 
 ### Project Reference
-- [Detailed Changelog](02_reference/CHANGELOG_DETAILED.md) - Comprehensive change details with file paths and config references
+- [Changelog Index](02_reference/changelog/README.md) - Per-day detailed changelogs with file paths and config references
 
 ### Data Reference
 - [Data Format Spec](02_reference/data/DATA_FORMAT_SPEC.md) - Data formats

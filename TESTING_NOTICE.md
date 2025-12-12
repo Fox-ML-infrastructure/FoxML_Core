@@ -24,9 +24,9 @@ Recent improvements:
 
 If you encounter issues:
 1. Check `CHANGELOG.md` for recent changes
-2. Review detailed changelog: `DOCS/02_reference/CHANGELOG_DETAILED.md`
+2. Review detailed changelog: `DOCS/02_reference/changelog/README.md`
 3. Report with sufficient detail (config, error messages, environment)
 
 ---
 
-**Note**: This notice will be updated once testing is complete. For detailed change history, see `CHANGELOG.md` and `DOCS/02_reference/CHANGELOG_DETAILED.md`.
+**Note**: This notice will be updated once testing is complete. For detailed change history, see `CHANGELOG.md` and `DOCS/02_reference/changelog/README.md`.
