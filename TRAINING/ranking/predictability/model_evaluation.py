@@ -2814,6 +2814,8 @@ def evaluate_target_predictability(
         )
     
     # Check if target is degenerate
+    # Ensure numpy is available (import at top of file)
+    import numpy as np
     unique_vals = np.unique(y[~np.isnan(y)])
     if len(unique_vals) < 2:
         logger.warning(f"Skipping: Target has only {len(unique_vals)} unique value(s)")
