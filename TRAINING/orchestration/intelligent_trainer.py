@@ -238,52 +238,74 @@ class IntelligentTrainer:
                     break
             
             if target_ranking_dir is None:
-                logger.debug(f"TARGET_RANKING directory not found, waiting for first target (checked: {[str(d / 'TARGET_RANKING') for d in possible_repro_dirs]})")
-                return
-            
-            # Find first target's cohort directory
-            for target_dir in target_ranking_dir.iterdir():
-                if not target_dir.is_dir():
-                    continue
-                
-                # Look for cohort= directories
-                for cohort_dir in target_dir.iterdir():
-                    if cohort_dir.is_dir() and cohort_dir.name.startswith("cohort="):
-                        cohort_id = cohort_dir.name.replace("cohort=", "")
+                logger.info(f"TARGET_RANKING directory not found at expected paths (checked: {[str(d / 'TARGET_RANKING') for d in possible_repro_dirs]})")
+                # Try recursive search as fallback
+                logger.info(f"Trying recursive search in {self._initial_output_dir}")
+                for repro_candidate in self._initial_output_dir.rglob("REPRODUCIBILITY/TARGET_RANKING/*/cohort=*"):
+                    if repro_candidate.is_dir():
+                        cohort_id = repro_candidate.name.replace("cohort=", "")
                         self._cohort_id = cohort_id
-                        
-                        # Move the entire run directory to cohort-organized location
-                        repo_root = Path(__file__).parent.parent.parent
-                        results_dir = repo_root / "RESULTS"
-                        new_output_dir = results_dir / cohort_id / self._run_name
-                        
-                        if new_output_dir.exists():
-                            logger.warning(f"Cohort directory {new_output_dir} already exists, not moving")
-                            # Still update paths to point to existing directory
-                            self.output_dir = new_output_dir
-                            self.cache_dir = self.output_dir / "cache"
-                            self.target_ranking_cache = self.cache_dir / "target_rankings.json"
-                            self.feature_selection_cache = self.cache_dir / "feature_selections"
-                            logger.info(f"📁 Using existing cohort directory: {self.output_dir}")
-                            return
-                        
-                        # Move the directory
-                        import shutil
-                        new_output_dir.parent.mkdir(parents=True, exist_ok=True)
-                        
-                        logger.info(f"📁 Moving run from {self._initial_output_dir} to {new_output_dir}")
-                        shutil.move(str(self._initial_output_dir), str(new_output_dir))
-                        self.output_dir = new_output_dir
-                        
-                        # Update cache_dir path and cache file paths
-                        self.cache_dir = self.output_dir / "cache"
-                        self.target_ranking_cache = self.cache_dir / "target_rankings.json"
-                        self.feature_selection_cache = self.cache_dir / "feature_selections"
-                        
-                        logger.info(f"✅ Organized run by cohort: {self.output_dir}")
-                        return
+                        logger.info(f"🔍 Found cohort via recursive search: {cohort_id} at {repro_candidate}")
+                        break
+                if self._cohort_id is None:
+                    logger.warning(f"Could not find cohort directory via recursive search in {self._initial_output_dir}")
+                    return
+            else:
+                # Find first target's cohort directory
+                for target_dir in target_ranking_dir.iterdir():
+                    if not target_dir.is_dir():
+                        continue
+                    
+                    # Look for cohort= directories
+                    for cohort_dir in target_dir.iterdir():
+                        if cohort_dir.is_dir() and cohort_dir.name.startswith("cohort="):
+                            cohort_id = cohort_dir.name.replace("cohort=", "")
+                            self._cohort_id = cohort_id
+                            logger.info(f"🔍 Found cohort: {cohort_id}")
+                            break
+                    if self._cohort_id is not None:
+                        break
             
-            logger.debug(f"No cohort directories found in {target_ranking_dir}, waiting for first target")
+            # If we found a cohort_id, move the directory
+            if self._cohort_id is not None:
+                # Move the entire run directory to cohort-organized location
+                repo_root = Path(__file__).parent.parent.parent
+                results_dir = repo_root / "RESULTS"
+                new_output_dir = results_dir / self._cohort_id / self._run_name
+                
+                if new_output_dir.exists():
+                    logger.warning(f"Cohort directory {new_output_dir} already exists, not moving")
+                    # Still update paths to point to existing directory
+                    self.output_dir = new_output_dir
+                    self.cache_dir = self.output_dir / "cache"
+                    self.target_ranking_cache = self.cache_dir / "target_rankings.json"
+                    self.feature_selection_cache = self.cache_dir / "feature_selections"
+                    logger.info(f"📁 Using existing cohort directory: {self.output_dir}")
+                    return
+                
+                # Move the directory
+                import shutil
+                new_output_dir.parent.mkdir(parents=True, exist_ok=True)
+                
+                logger.info(f"📁 Moving run from {self._initial_output_dir} to {new_output_dir}")
+                try:
+                    shutil.move(str(self._initial_output_dir), str(new_output_dir))
+                    self.output_dir = new_output_dir
+                    
+                    # Update cache_dir path and cache file paths
+                    self.cache_dir = self.output_dir / "cache"
+                    self.target_ranking_cache = self.cache_dir / "target_rankings.json"
+                    self.feature_selection_cache = self.cache_dir / "feature_selections"
+                    
+                    logger.info(f"✅ Organized run by cohort: {self.output_dir}")
+                    return
+                except Exception as move_error:
+                    logger.error(f"Failed to move directory: {move_error}")
+                    logger.debug(f"Move error traceback: {traceback.format_exc()}")
+                    # Stay in _pending/ if move fails
+                    return
+            
+            logger.debug(f"No cohort directories found, waiting for first target")
         except Exception as e:
             logger.warning(f"Could not organize by cohort (will stay in _pending/): {e}")
             import traceback
@@ -530,11 +552,22 @@ class IntelligentTrainer:
         # This moves the entire directory (including all REPRODUCIBILITY data) to RESULTS/{cohort_id}/{run_name}/
         if self._cohort_id is None and rankings:
             logger.info("🔍 Attempting to organize run by cohort...")
+            logger.info(f"   Current output_dir: {self.output_dir}")
+            logger.info(f"   Initial output_dir: {self._initial_output_dir}")
             self._organize_by_cohort()
             if self._cohort_id is not None:
                 logger.info(f"✅ Successfully organized run by cohort: {self.output_dir}")
+                logger.info(f"   Moved from: {self._initial_output_dir}")
+                logger.info(f"   Moved to: {self.output_dir}")
             else:
                 logger.warning("⚠️  Could not determine cohort_id, run will stay in _pending/")
+                logger.warning(f"   Run directory: {self._initial_output_dir}")
+                # Try to help debug - check if REPRODUCIBILITY exists
+                repro_check = self._initial_output_dir / "target_rankings" / "REPRODUCIBILITY"
+                if repro_check.exists():
+                    logger.warning(f"   REPRODUCIBILITY found at: {repro_check}")
+                else:
+                    logger.warning(f"   REPRODUCIBILITY not found at: {repro_check}")
         
         # Save to cache
         if use_cache:
