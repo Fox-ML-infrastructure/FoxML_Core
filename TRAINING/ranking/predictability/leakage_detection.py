@@ -1104,9 +1104,11 @@ def train_and_evaluate_models(
                 all_suspicious_features['lightgbm'] = suspicious_features
             
             # Store all feature importances for detailed export
-            all_feature_importances['lightgbm'] = {
-                feat: float(imp) for feat, imp in zip(feature_names, importances)
-            }
+            # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+            importance_series = pd.Series(importances, index=feature_names[:len(importances)] if len(importances) <= len(feature_names) else feature_names)
+            # Reindex to match exact feature_names order (fills missing with 0.0)
+            importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+            all_feature_importances['lightgbm'] = importance_series.to_dict()
             
             # Compute and store full task-aware metrics
             _compute_and_store_metrics('lightgbm', model, X, y, primary_score, task_type)
@@ -1162,9 +1164,11 @@ def train_and_evaluate_models(
                 all_suspicious_features['random_forest'] = suspicious_features
             
             # Store all feature importances for detailed export
-            all_feature_importances['random_forest'] = {
-                feat: float(imp) for feat, imp in zip(feature_names, importances)
-            }
+            # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+            importance_series = pd.Series(importances, index=feature_names[:len(importances)] if len(importances) <= len(feature_names) else feature_names)
+            # Reindex to match exact feature_names order (fills missing with 0.0)
+            importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+            all_feature_importances['random_forest'] = importance_series.to_dict()
             
             # Compute and store full task-aware metrics
             _compute_and_store_metrics('random_forest', model, X, y, primary_score, task_type)
@@ -1366,9 +1370,11 @@ def train_and_evaluate_models(
                         all_suspicious_features['xgboost'] = suspicious_features
                     
                     # Store all feature importances for detailed export
-                    all_feature_importances['xgboost'] = {
-                        feat: float(imp) for feat, imp in zip(feature_names, importances)
-                    }
+                    # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+                    importance_series = pd.Series(importances, index=feature_names[:len(importances)] if len(importances) <= len(feature_names) else feature_names)
+                    # Reindex to match exact feature_names order (fills missing with 0.0)
+                    importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+                    all_feature_importances['xgboost'] = importance_series.to_dict()
             if hasattr(model, 'feature_importances_'):
                 # Use percentage of total importance in top 10% features (0-1 scale, interpretable)
                 importances = model.feature_importances_
