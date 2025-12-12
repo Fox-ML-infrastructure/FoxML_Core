@@ -330,9 +330,15 @@ def load_target_exclusion_list(
     """
     Load previously generated exclusion list for a target.
     
+    This function checks for existing exclusion lists in the RESULTS directory structure:
+    RESULTS/{cohort}/{run}/feature_exclusions/{target}_exclusions.yaml
+    
+    If found, returns the excluded features list. This allows reusing exclusion lists
+    across runs for the same target, improving consistency and performance.
+    
     Args:
         target_name: Target column name
-        exclusion_dir: Directory containing exclusion lists
+        exclusion_dir: Directory containing exclusion lists (typically RESULTS/{cohort}/{run}/feature_exclusions/)
     
     Returns:
         List of excluded feature names, or None if not found
@@ -342,12 +348,19 @@ def load_target_exclusion_list(
     exclusion_file = exclusion_dir / f"{safe_target_name}_exclusions.yaml"
     
     if not exclusion_file.exists():
+        logger.debug(f"Exclusion list not found at {exclusion_file} - will generate new one")
         return None
     
     try:
         with open(exclusion_file, 'r') as f:
             data = yaml.safe_load(f)
-            return data.get('excluded_features', [])
+            excluded_features = data.get('excluded_features', [])
+            if excluded_features:
+                logger.debug(
+                    f"✅ Loaded exclusion list from {exclusion_file}: "
+                    f"{len(excluded_features)} features excluded"
+                )
+            return excluded_features
     except Exception as e:
         logger.warning(f"Failed to load exclusion list from {exclusion_file}: {e}")
         return None

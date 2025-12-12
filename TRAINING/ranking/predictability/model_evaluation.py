@@ -2521,11 +2521,16 @@ def evaluate_target_predictability(
         target_exclusion_dir = Path(output_dir) / "feature_exclusions"
         target_exclusion_dir.mkdir(parents=True, exist_ok=True)
         
-        # Try to load existing exclusion list first
+        # Try to load existing exclusion list first (from RESULTS/{cohort}/{run}/feature_exclusions/)
+        # This allows reusing exclusion lists across runs for consistency
         existing_exclusions = load_target_exclusion_list(target_name, target_exclusion_dir)
         if existing_exclusions is not None:
             target_conditional_exclusions = existing_exclusions
-            logger.info(f"📋 Loaded existing target-conditional exclusions for {target_name}: {len(target_conditional_exclusions)} features")
+            logger.info(
+                f"📋 Loaded existing target-conditional exclusions for {target_name}: "
+                f"{len(target_conditional_exclusions)} features "
+                f"(from {target_exclusion_dir})"
+            )
         else:
             # Generate new exclusion list
             try:
