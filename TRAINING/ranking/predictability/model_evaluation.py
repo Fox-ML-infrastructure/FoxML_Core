@@ -43,6 +43,7 @@ Usage:
 
 
 import argparse
+import json
 import logging
 import sys
 from pathlib import Path
@@ -2221,6 +2222,7 @@ def evaluate_target_predictability(
     # These will be used to extract cohort metadata at the end of the function
     cohort_context = {
         'X': X,
+        'y': y,  # Label vector for data fingerprint
         'time_vals': time_vals,
         'symbols_array': symbols_array,
         'mtf_data': mtf_data,
@@ -2569,9 +2571,9 @@ def evaluate_target_predictability(
                 from TRAINING.common.leakage_auto_fixer import LeakageAutoFixer
                 
                 logger.info("🔧 Auto-fixing detected leaks...")
-                logger.info(f"   Initializing LeakageAutoFixer (backup_configs=True)...")
-                # Pass output_dir if available so backups are stored in run directory (will be organized by cohort)
-                fixer = LeakageAutoFixer(backup_configs=True, output_dir=output_dir)
+                logger.info(f"   Initializing LeakageAutoFixer (backups disabled)...")
+                # Backups are disabled by default - no backup directory will be created
+                fixer = LeakageAutoFixer(backup_configs=False, output_dir=output_dir)
                 
                 # Convert X to DataFrame if needed (auto-fixer expects DataFrame)
                 if not isinstance(X, pd.DataFrame):
@@ -2886,61 +2888,161 @@ def evaluate_target_predictability(
                 search_previous_runs=True  # Search for previous runs in parent directories
             )
             
-            # Log comparison with previous run
-            # Extract cohort metadata using unified extractor
-            from TRAINING.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
-            
-            # Extract cohort metadata from stored context (X, time_vals, symbols_array from prepare_cross_sectional_data_for_ranking)
-            # cohort_context is defined earlier in the function after prepare_cross_sectional_data_for_ranking
-            if 'cohort_context' in locals() and cohort_context:
-                # Prefer symbols_array (from prepare_cross_sectional_data_for_ranking) over symbols list
-                symbols_for_extraction = cohort_context.get('symbols_array')
-                if symbols_for_extraction is None:
-                    symbols_for_extraction = cohort_context.get('symbols')
+            # Automated audit-grade reproducibility tracking using RunContext
+            try:
+                from TRAINING.utils.run_context import RunContext
                 
-                cohort_metadata = extract_cohort_metadata(
-                    X=cohort_context.get('X'),
-                    symbols=symbols_for_extraction,
-                    time_vals=cohort_context.get('time_vals'),
-                    mtf_data=cohort_context.get('mtf_data'),
-                    min_cs=cohort_context.get('min_cs'),
-                    max_cs_samples=cohort_context.get('max_cs_samples')
+                # Build RunContext from available data
+                # Prefer symbols_array (from prepare_cross_sectional_data_for_ranking) over symbols list
+                symbols_for_ctx = None
+                if 'cohort_context' in locals() and cohort_context:
+                    symbols_for_ctx = cohort_context.get('symbols_array')
+                    if symbols_for_ctx is None:
+                        symbols_for_ctx = cohort_context.get('symbols')
+                elif 'symbols_array' in locals():
+                    symbols_for_ctx = symbols_array
+                elif 'symbols' in locals():
+                    symbols_for_ctx = symbols
+                
+                # Get purge_minutes from purge_time if available
+                purge_minutes_val = None
+                if 'purge_time' in locals() and purge_time is not None:
+                    try:
+                        if hasattr(purge_time, 'total_seconds'):
+                            purge_minutes_val = purge_time.total_seconds() / 60.0
+                    except Exception:
+                        pass
+                
+                # Estimate feature lookback (conservative: 1 day = 288 bars for 5m data)
+                feature_lookback_max = None
+                if 'data_interval_minutes' in locals() and data_interval_minutes is not None:
+                    max_lookback_bars = 288  # 1 day of 5m bars
+                    feature_lookback_max = max_lookback_bars * data_interval_minutes
+                
+                # Build RunContext
+                ctx = RunContext(
+                    X=cohort_context.get('X') if 'cohort_context' in locals() and cohort_context else None,
+                    y=cohort_context.get('y') if 'cohort_context' in locals() and cohort_context else None,
+                    feature_names=feature_names if 'feature_names' in locals() else None,
+                    symbols=symbols_for_ctx,
+                    time_vals=cohort_context.get('time_vals') if 'cohort_context' in locals() and cohort_context else None,
+                    target_column=target_column,
+                    target_name=target_name,
+                    min_cs=cohort_context.get('min_cs') if 'cohort_context' in locals() and cohort_context else (min_cs if 'min_cs' in locals() else None),
+                    max_cs_samples=cohort_context.get('max_cs_samples') if 'cohort_context' in locals() and cohort_context else (max_cs_samples if 'max_cs_samples' in locals() else None),
+                    mtf_data=cohort_context.get('mtf_data') if 'cohort_context' in locals() and cohort_context else None,
+                    cv_method="purged_kfold",
+                    cv_folds=cv_folds if 'cv_folds' in locals() else None,
+                    horizon_minutes=target_horizon_minutes if 'target_horizon_minutes' in locals() else None,
+                    purge_minutes=purge_minutes_val,
+                    fold_timestamps=fold_timestamps if 'fold_timestamps' in locals() else None,
+                    feature_lookback_max_minutes=feature_lookback_max,
+                    data_interval_minutes=data_interval_minutes if 'data_interval_minutes' in locals() else None,
+                    stage="target_ranking",
+                    output_dir=output_dir
                 )
-            else:
-                # Fallback: try to extract from function variables (shouldn't happen if cohort_context is set)
-                cohort_metadata = extract_cohort_metadata(
-                    symbols=symbols,
-                    mtf_data=mtf_data if 'mtf_data' in locals() else None,
-                    min_cs=min_cs if 'min_cs' in locals() else None,
-                    max_cs_samples=max_cs_samples if 'max_cs_samples' in locals() else None
+                
+                # Build metrics dict
+                metrics_dict = {
+                    "metric_name": metric_name,
+                    "mean_score": result.mean_score,
+                    "std_score": result.std_score,
+                    "mean_importance": result.mean_importance,
+                    "composite_score": result.composite_score,
+                    "n_models": result.n_models,
+                    "leakage_flag": result.leakage_flag,
+                    "task_type": result.task_type.name if hasattr(result.task_type, 'name') else str(result.task_type)
+                }
+                
+                # Use automated log_run API
+                audit_result = tracker.log_run(ctx, metrics_dict)
+                
+                # Log audit report summary if available
+                if audit_result.get("audit_report"):
+                    audit_report = audit_result["audit_report"]
+                    if audit_report.get("violations"):
+                        logger.warning(f"🚨 Audit violations detected: {len(audit_report['violations'])}")
+                        for violation in audit_report['violations']:
+                            logger.warning(f"  - {violation['message']}")
+                    if audit_report.get("warnings"):
+                        logger.info(f"⚠️  Audit warnings: {len(audit_report['warnings'])}")
+                        for warning in audit_report['warnings']:
+                            logger.info(f"  - {warning['message']}")
+                
+                # Log trend summary if available (already logged by log_run, but include in result)
+                if audit_result.get("trend_summary"):
+                    trend = audit_result["trend_summary"]
+                    # Trend summary is already logged by log_run, but we can add additional context here if needed
+                    pass
+                
+            except ImportError:
+                # Fallback to legacy API if RunContext not available
+                logger.warning("RunContext not available, falling back to legacy reproducibility tracking")
+                from TRAINING.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
+                
+                if 'cohort_context' in locals() and cohort_context:
+                    symbols_for_extraction = cohort_context.get('symbols_array') or cohort_context.get('symbols')
+                    cohort_metadata = extract_cohort_metadata(
+                        X=cohort_context.get('X'),
+                        symbols=symbols_for_extraction,
+                        time_vals=cohort_context.get('time_vals'),
+                        y=cohort_context.get('y'),
+                        mtf_data=cohort_context.get('mtf_data'),
+                        min_cs=cohort_context.get('min_cs'),
+                        max_cs_samples=cohort_context.get('max_cs_samples'),
+                        compute_data_fingerprint=True,
+                        compute_per_symbol_stats=True
+                    )
+                else:
+                    cohort_metadata = extract_cohort_metadata(
+                        symbols=symbols if 'symbols' in locals() else None,
+                        mtf_data=mtf_data if 'mtf_data' in locals() else None,
+                        min_cs=min_cs if 'min_cs' in locals() else None,
+                        max_cs_samples=max_cs_samples if 'max_cs_samples' in locals() else None
+                    )
+                
+                cohort_metrics, cohort_additional_data = format_for_reproducibility_tracker(cohort_metadata)
+                metrics_with_cohort = {
+                    "metric_name": metric_name,
+                    "mean_score": result.mean_score,
+                    "std_score": result.std_score,
+                    "mean_importance": result.mean_importance,
+                    "composite_score": result.composite_score,
+                    **cohort_metrics
+                }
+                additional_data_with_cohort = {
+                    "n_models": result.n_models,
+                    "leakage_flag": result.leakage_flag,
+                    "task_type": result.task_type.name if hasattr(result.task_type, 'name') else str(result.task_type),
+                    **cohort_additional_data
+                }
+                
+                # Add CV details manually (legacy path)
+                if 'target_horizon_minutes' in locals() and target_horizon_minutes is not None:
+                    additional_data_with_cohort['horizon_minutes'] = target_horizon_minutes
+                if 'purge_time' in locals() and purge_time is not None:
+                    try:
+                        if hasattr(purge_time, 'total_seconds'):
+                            additional_data_with_cohort['purge_minutes'] = purge_time.total_seconds() / 60.0
+                    except Exception:
+                        pass
+                if 'cv_folds' in locals() and cv_folds is not None:
+                    additional_data_with_cohort['cv_folds'] = cv_folds
+                if 'fold_timestamps' in locals() and fold_timestamps:
+                    additional_data_with_cohort['fold_timestamps'] = fold_timestamps
+                if 'feature_names' in locals() and feature_names:
+                    additional_data_with_cohort['feature_names'] = feature_names
+                if 'data_interval_minutes' in locals() and data_interval_minutes is not None:
+                    additional_data_with_cohort['data_interval_minutes'] = data_interval_minutes
+                    max_lookback_bars = 288
+                    additional_data_with_cohort['feature_lookback_max_minutes'] = max_lookback_bars * data_interval_minutes
+                
+                tracker.log_comparison(
+                    stage="target_ranking",
+                    item_name=target_name,
+                    metrics=metrics_with_cohort,
+                    additional_data=additional_data_with_cohort
                 )
-            
-            # Format for reproducibility tracker
-            cohort_metrics, cohort_additional_data = format_for_reproducibility_tracker(cohort_metadata)
-            
-            # Merge with existing metrics and additional_data
-            metrics_with_cohort = {
-                "metric_name": metric_name,
-                "mean_score": result.mean_score,
-                "std_score": result.std_score,
-                "mean_importance": result.mean_importance,
-                "composite_score": result.composite_score,
-                **cohort_metrics  # Adds N_effective_cs if available
-            }
-            
-            additional_data_with_cohort = {
-                "n_models": result.n_models,
-                "leakage_flag": result.leakage_flag,
-                "task_type": result.task_type.name if hasattr(result.task_type, 'name') else str(result.task_type),
-                **cohort_additional_data  # Adds n_symbols, date_range, cs_config if available
-            }
-            
-            tracker.log_comparison(
-                stage="target_ranking",
-                item_name=target_name,
-                metrics=metrics_with_cohort,
-                additional_data=additional_data_with_cohort
-            )
         except Exception as e:
             logger.warning(f"Reproducibility tracking failed for {target_name}: {e}")
             import traceback

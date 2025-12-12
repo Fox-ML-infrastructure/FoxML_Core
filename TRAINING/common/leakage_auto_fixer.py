@@ -90,7 +90,7 @@ class LeakageAutoFixer:
         self,
         excluded_features_path: Optional[Path] = None,
         feature_registry_path: Optional[Path] = None,
-        backup_configs: bool = True,
+        backup_configs: bool = False,  # Disabled by default - backups are not needed
         output_dir: Optional[Path] = None  # Optional: if provided, backups go to output_dir/backups/ instead of CONFIG/backups/
     ):
         """
@@ -99,7 +99,8 @@ class LeakageAutoFixer:
         Args:
             excluded_features_path: Path to excluded_features.yaml (default: CONFIG/excluded_features.yaml)
             feature_registry_path: Path to feature_registry.yaml (default: CONFIG/feature_registry.yaml)
-            backup_configs: If True, backup configs before modifying
+            backup_configs: If True, backup configs before modifying (default: False - backups disabled)
+            output_dir: Optional output directory. If provided and backup_configs=True, backups go to output_dir/backups/
         """
         # Load paths from config if available, otherwise use defaults
         if excluded_features_path is None:
@@ -190,9 +191,12 @@ class LeakageAutoFixer:
         logger.info(f"🔧 LeakageAutoFixer initialized:")
         logger.info(f"   - Excluded features: {self.excluded_features_path} (exists: {self.excluded_features_path.exists()})")
         logger.info(f"   - Feature registry: {self.feature_registry_path} (exists: {self.feature_registry_path.exists()})")
-        logger.info(f"   - Backup directory: {self.backup_dir} (exists: {self.backup_dir.exists()})")
-        logger.info(f"   - Backup enabled: {self.backup_configs}")
-        logger.info(f"   - Max backups per target: {self.max_backups_per_target}")
+        if self.backup_configs:
+            logger.info(f"   - Backup directory: {self.backup_dir} (exists: {self.backup_dir.exists()})")
+            logger.info(f"   - Backup enabled: {self.backup_configs}")
+            logger.info(f"   - Max backups per target: {self.max_backups_per_target}")
+        else:
+            logger.debug(f"   - Backups disabled (backup_configs=False)")
     
     def _load_excluded_features(self) -> Tuple[Set[str], Set[str]]:
         """Load already-excluded features from config files."""

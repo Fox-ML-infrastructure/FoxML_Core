@@ -6,7 +6,7 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
-- **2025-12-12** — Cohort-Aware Reproducibility System, RESULTS Directory Organization, Integrated Backups, Enhanced Metadata  
+- **2025-12-12** — Trend Analysis System Extension (Feature Selection), Cohort-Aware Reproducibility System, RESULTS Directory Organization, Integrated Backups, Enhanced Metadata  
   → [View](2025-12-12.md)
 
 - **2025-12-11** — Training Routing System, Reproducibility Tracking, Leakage Fixes, Interval Detection, Param Sanitization, Cross-Sectional Stability  

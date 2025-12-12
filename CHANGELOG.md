@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Highlights
 
+- **Trend Analysis System** (2025-12-12) – **NEW**: Automated trend analysis across all pipeline stages with exponential decay weighting and regression detection:
+  - **Trend tracking**: Automatically computes performance trends (slope, EWMA) across runs within comparable series using exponential decay weighting
+  - **Multi-stage support**: Trend analysis now integrated into target ranking, feature selection (single symbol + aggregated), and cross-sectional feature ranking
+  - **Audit-grade metadata**: Trend metadata (slope, current estimate, alerts) stored in `metadata.json` for post-hoc verification
+  - **Explicit skip logging**: All skip conditions log explicit reasons (insufficient_runs, missing_metric, no_variance) - no silent no-ops
+  - **Series key verification**: Series grouping uses stable identity fields only (cohort_id, stage, target, data_fingerprint) - no poisoned fields like run_id or timestamps
+  - **Verification tools**: `verify_trend_analyzer.py` script provides comprehensive verification checklist
+  - See [Trend Analyzer Verification Guide](DOCS/03_technical/implementation/TREND_ANALYZER_VERIFICATION.md)
 - **Cohort-Aware Reproducibility & RESULTS Organization** (2025-12-11) – **NEW**: Complete overhaul of reproducibility tracking and output organization:
   - **Cohort-aware reproducibility**: Runs organized by data cohort (sample size, symbols, date range, config) with sample-adjusted drift detection. Only compares runs within the same cohort for statistically meaningful comparisons.
   - **RESULTS directory structure**: All runs (test and production) organized in `RESULTS/` directory, automatically sorted by cohort after first target is processed: `RESULTS/{cohort_id}/{run_name}/`
@@ -49,6 +57,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ### Added
+
+- **Trend Analysis System**
+  - `TrendAnalyzer` class for analyzing performance trends across runs within comparable series
+  - Exponential decay weighting (configurable half-life, default: 7 days) for time-weighted regression
+  - Two series views: `STRICT` (all comparability keys must match) and `PROGRESS` (allows feature hash changes, marks breakpoints)
+  - Automatic trend computation integrated into:
+    - Target ranking (`TRAINING/ranking/predictability/model_evaluation.py`)
+    - Feature selection - single symbol + aggregated (`TRAINING/ranking/feature_selector.py`)
+    - Cross-sectional feature ranking (`TRAINING/ranking/cross_sectional_feature_ranker.py`)
+  - Trend metadata stored in `metadata.json` with slope, EWMA, alerts, and status
+  - `TREND_REPORT.json` artifact with comprehensive trend analysis across all series
+  - `verify_trend_analyzer.py` verification script for validation and debugging
+  - Explicit skip logging with reasons (insufficient_runs, missing_metric, no_variance)
+  - Artifact index corruption handling (automatic rebuild on read error)
 
 - **Training Routing & Planning System**
   - Config-driven routing decisions for each `(target, symbol)` pair based on metrics (scores, stability, leakage, sample sizes).

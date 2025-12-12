@@ -288,7 +288,8 @@ def select_features_for_target(
                 min_cs=cs_config.get('min_cs', 10),
                 max_cs_samples=cs_config.get('max_cs_samples', 1000),
                 normalization=cs_config.get('normalization'),
-                model_configs=cs_config.get('model_configs')
+                model_configs=cs_config.get('model_configs'),
+                output_dir=output_dir  # Pass output_dir for reproducibility tracking
             )
             
             # Merge CS scores into summary_df
@@ -438,7 +439,7 @@ def select_features_for_target(
             except Exception as e:
                 logger.debug(f"Failed to save CS stability metadata: {e}")
     
-    # Track reproducibility: compare to previous feature selection run
+    # Track reproducibility: compare to previous feature selection run with trend analysis
     # This runs regardless of which entry point calls this function
     if output_dir and summary_df is not None and len(summary_df) > 0:
         try:
@@ -493,30 +494,102 @@ def select_features_for_target(
             # Format for reproducibility tracker
             cohort_metrics, cohort_additional_data = format_for_reproducibility_tracker(cohort_metadata)
             
-            # Merge with existing metrics and additional_data
-            metrics_with_cohort = {
-                "metric_name": "Consensus Score",
-                "mean_score": mean_consensus,
-                "std_score": std_consensus,
-                "mean_importance": top_feature_score,  # Use top feature score as importance proxy
-                "composite_score": mean_consensus,  # Use mean consensus as composite
-                "n_features_selected": n_features_selected,
-                "n_successful_families": n_successful_families,
-                **cohort_metrics  # Adds N_effective_cs if available
-            }
-            
-            additional_data_with_cohort = {
-                "top_feature": summary_df.iloc[0]['feature'] if not summary_df.empty else None,
-                "top_n": top_n or len(selected_features),
-                **cohort_additional_data  # Adds n_symbols, date_range, cs_config if available
-            }
-            
-            tracker.log_comparison(
-                stage="feature_selection",
-                item_name=target_column,
-                metrics=metrics_with_cohort,
-                additional_data=additional_data_with_cohort
-            )
+            # Try to use new log_run API with RunContext (includes trend analysis)
+            try:
+                from TRAINING.utils.run_context import RunContext
+                from TRAINING.utils.cohort_metadata_extractor import extract_cohort_metadata
+                
+                # Build RunContext from available data
+                # Note: For feature selection, we don't have X, y directly, but we can extract from cohort_context
+                X_for_ctx = None
+                y_for_ctx = None
+                feature_names_for_ctx = selected_features if selected_features else []
+                
+                # Try to get X, y from cohort_context if available (for data fingerprint)
+                if 'cohort_context' in locals() and cohort_context:
+                    mtf_data_for_ctx = cohort_context.get('mtf_data')
+                    if mtf_data_for_ctx:
+                        # We can't easily reconstruct X, y here, so pass None
+                        # The data fingerprint will be computed from symbols/time_vals if available
+                        pass
+                
+                # Build RunContext
+                ctx = RunContext(
+                    stage="FEATURE_SELECTION",
+                    target_name=target_column,
+                    target_column=target_column,
+                    X=X_for_ctx,  # May be None - fingerprint will use symbols/time_vals
+                    y=y_for_ctx,  # May be None
+                    feature_names=feature_names_for_ctx,
+                    symbols=symbols,
+                    time_vals=None,  # Not directly available here
+                    horizon_minutes=None,  # Not applicable for feature selection
+                    purge_minutes=None,
+                    embargo_minutes=None,
+                    cv_folds=None,
+                    fold_timestamps=None,
+                    data_interval_minutes=None,
+                    seed=None
+                )
+                
+                # Build metrics dict
+                metrics_dict = {
+                    "metric_name": "Consensus Score",
+                    "mean_score": mean_consensus,
+                    "std_score": std_consensus,
+                    "mean_importance": top_feature_score,
+                    "composite_score": mean_consensus,
+                    "n_features_selected": n_features_selected,
+                    "n_successful_families": n_successful_families,
+                    "n_selected": n_features_selected  # For trend analyzer
+                }
+                
+                # Use automated log_run API (includes trend analysis)
+                audit_result = tracker.log_run(ctx, metrics_dict)
+                
+                # Log audit report summary if available
+                if audit_result.get("audit_report"):
+                    audit_report = audit_result["audit_report"]
+                    if audit_report.get("violations"):
+                        logger.warning(f"⚠️  Audit violations: {len(audit_report['violations'])}")
+                    if audit_report.get("warnings"):
+                        logger.info(f"ℹ️  Audit warnings: {len(audit_report['warnings'])}")
+                
+                # Log trend summary if available
+                if audit_result.get("trend_summary"):
+                    trend = audit_result["trend_summary"]
+                    # Trend summary is already logged by log_run, but we can add additional context here if needed
+                    pass
+                    
+            except ImportError:
+                # Fallback to legacy API if RunContext not available
+                logger.debug("RunContext not available, falling back to legacy reproducibility tracking")
+                
+                # Merge with existing metrics and additional_data
+                metrics_with_cohort = {
+                    "metric_name": "Consensus Score",
+                    "mean_score": mean_consensus,
+                    "std_score": std_consensus,
+                    "mean_importance": top_feature_score,  # Use top feature score as importance proxy
+                    "composite_score": mean_consensus,  # Use mean consensus as composite
+                    "n_features_selected": n_features_selected,
+                    "n_successful_families": n_successful_families,
+                    "n_selected": n_features_selected,  # For trend analyzer
+                    **cohort_metrics  # Adds N_effective_cs if available
+                }
+                
+                additional_data_with_cohort = {
+                    "top_feature": summary_df.iloc[0]['feature'] if not summary_df.empty else None,
+                    "top_n": top_n or len(selected_features),
+                    **cohort_additional_data  # Adds n_symbols, date_range, cs_config if available
+                }
+                
+                tracker.log_comparison(
+                    stage="feature_selection",
+                    item_name=target_column,
+                    metrics=metrics_with_cohort,
+                    additional_data=additional_data_with_cohort
+                )
         except Exception as e:
             logger.warning(f"Reproducibility tracking failed for {target_column}: {e}")
             import traceback

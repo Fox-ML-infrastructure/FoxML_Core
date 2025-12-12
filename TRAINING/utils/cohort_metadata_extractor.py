@@ -56,6 +56,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Any, Optional, Union, List, Tuple
 import logging
+import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ def extract_cohort_metadata(
     X: Optional[Union[np.ndarray, pd.DataFrame]] = None,
     symbols: Optional[Union[List[str], np.ndarray, pd.Series]] = None,
     time_vals: Optional[Union[np.ndarray, pd.Series, List]] = None,
+    y: Optional[Union[np.ndarray, pd.Series]] = None,  # Label vector for data fingerprint
     mtf_data: Optional[Dict[str, pd.DataFrame]] = None,
     min_cs: Optional[int] = None,
     max_cs_samples: Optional[int] = None,
@@ -72,7 +74,9 @@ def extract_cohort_metadata(
     n_samples: Optional[int] = None,  # Direct override for sample size
     n_symbols: Optional[int] = None,  # Direct override for symbol count
     date_start: Optional[Union[str, pd.Timestamp]] = None,  # Direct override for date range
-    date_end: Optional[Union[str, pd.Timestamp]] = None
+    date_end: Optional[Union[str, pd.Timestamp]] = None,
+    compute_data_fingerprint: bool = True,  # Whether to compute data fingerprint
+    compute_per_symbol_stats: bool = True  # Whether to compute per-symbol statistics
 ) -> Dict[str, Any]:
     """
     Extract cohort metadata from various data sources.
@@ -244,6 +248,83 @@ def extract_cohort_metadata(
         cs_config['universe_id'] = str(universe_id)
     
     metadata['cs_config'] = cs_config
+    
+    # 5. Compute data fingerprint (hash of timestamps + symbols + label vector)
+    if compute_data_fingerprint:
+        try:
+            fingerprint_components = []
+            
+            # Add timestamps (sorted, unique)
+            if time_vals is not None:
+                try:
+                    if isinstance(time_vals, (np.ndarray, pd.Series, list)):
+                        time_vals_clean = pd.to_datetime(time_vals).dropna().sort_values()
+                        # Use unique timestamps only (panel data has duplicates)
+                        unique_times = time_vals_clean.unique()
+                        fingerprint_components.append(f"times:{','.join(str(t) for t in unique_times[:1000])}")  # Limit to first 1000 for performance
+                except Exception as e:
+                    logger.debug(f"Could not add timestamps to fingerprint: {e}")
+            
+            # Add symbols (sorted, unique)
+            if symbols_list:
+                fingerprint_components.append(f"symbols:{','.join(symbols_list)}")
+            
+            # Add label vector hash (if available)
+            if y is not None:
+                try:
+                    if isinstance(y, (np.ndarray, pd.Series)):
+                        # Hash the label vector (use first 10000 samples for performance)
+                        y_sample = y[:10000] if len(y) > 10000 else y
+                        y_hash = hashlib.sha256(y_sample.tobytes() if isinstance(y_sample, np.ndarray) else y_sample.values.tobytes()).hexdigest()[:16]
+                        fingerprint_components.append(f"y_hash:{y_hash}")
+                except Exception as e:
+                    logger.debug(f"Could not add label hash to fingerprint: {e}")
+            
+            if fingerprint_components:
+                fingerprint_str = "|".join(fingerprint_components)
+                metadata['data_fingerprint'] = hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]
+        except Exception as e:
+            logger.debug(f"Failed to compute data fingerprint: {e}")
+    
+    # 6. Compute per-symbol statistics (n, start, end for each symbol)
+    if compute_per_symbol_stats and symbols is not None and time_vals is not None:
+        try:
+            per_symbol_stats = {}
+            
+            # Convert to arrays for easier processing
+            if isinstance(symbols, (list, tuple)):
+                symbols_array = np.array(symbols)
+            elif isinstance(symbols, pd.Series):
+                symbols_array = symbols.values
+            else:
+                symbols_array = symbols
+            
+            if isinstance(time_vals, (list, tuple)):
+                time_vals_array = pd.to_datetime(time_vals).values
+            elif isinstance(time_vals, pd.Series):
+                time_vals_array = time_vals.values
+            else:
+                time_vals_array = pd.to_datetime(time_vals).values
+            
+            # Ensure same length
+            if len(symbols_array) == len(time_vals_array):
+                # Group by symbol
+                unique_symbols = np.unique(symbols_array)
+                for symbol in unique_symbols:
+                    symbol_mask = symbols_array == symbol
+                    symbol_times = time_vals_array[symbol_mask]
+                    
+                    if len(symbol_times) > 0:
+                        per_symbol_stats[str(symbol)] = {
+                            'n': int(np.sum(symbol_mask)),
+                            'start': pd.Timestamp(symbol_times.min()).isoformat(),
+                            'end': pd.Timestamp(symbol_times.max()).isoformat()
+                        }
+            
+            if per_symbol_stats:
+                metadata['per_symbol_stats'] = per_symbol_stats
+        except Exception as e:
+            logger.debug(f"Failed to compute per-symbol stats: {e}")
     
     return metadata
 

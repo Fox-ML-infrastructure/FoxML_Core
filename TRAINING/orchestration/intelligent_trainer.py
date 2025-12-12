@@ -221,44 +221,108 @@ class IntelligentTrainer:
         
         try:
             # Try to find cohort_id from REPRODUCIBILITY directory
-            repro_dir = self.output_dir.parent / "REPRODUCIBILITY"
-            target_ranking_dir = repro_dir / "TARGET_RANKING"
+            # REPRODUCIBILITY structure: self.output_dir/target_rankings/REPRODUCIBILITY/TARGET_RANKING/...
+            # OR: self.output_dir/REPRODUCIBILITY/TARGET_RANKING/... (if output_dir is already target_rankings)
             
-            if target_ranking_dir.exists():
-                # Find first target's cohort directory
-                for target_dir in target_ranking_dir.iterdir():
-                    if target_dir.is_dir():
-                        # Look for cohort= directories
-                        for cohort_dir in target_dir.iterdir():
-                            if cohort_dir.is_dir() and cohort_dir.name.startswith("cohort="):
-                                cohort_id = cohort_dir.name.replace("cohort=", "")
-                                self._cohort_id = cohort_id
-                                
-                                # Move the entire run directory to cohort-organized location
-                                repo_root = Path(__file__).parent.parent.parent
-                                results_dir = repo_root / "RESULTS"
-                                new_output_dir = results_dir / cohort_id / self._run_name
-                                
-                                if new_output_dir.exists():
-                                    logger.warning(f"Cohort directory {new_output_dir} already exists, not moving")
-                                    return
-                                
-                                # Move the directory
-                                import shutil
-                                new_output_dir.parent.mkdir(parents=True, exist_ok=True)
-                                shutil.move(str(self._initial_output_dir), str(new_output_dir))
-                                self.output_dir = new_output_dir
-                                
-                                # Update cache_dir path and cache file paths
-                                self.cache_dir = self.output_dir / "cache"
-                                self.target_ranking_cache = self.cache_dir / "target_rankings.json"
-                                self.feature_selection_cache = self.cache_dir / "feature_selections"
-                                
-                                logger.info(f"📁 Organized run by cohort: {self.output_dir}")
-                                return
+            # Check both possible locations
+            possible_repro_dirs = [
+                self.output_dir / "target_rankings" / "REPRODUCIBILITY",
+                self.output_dir / "REPRODUCIBILITY"
+            ]
+            
+            target_ranking_dir = None
+            for repro_dir in possible_repro_dirs:
+                candidate = repro_dir / "TARGET_RANKING"
+                if candidate.exists():
+                    target_ranking_dir = candidate
+                    break
+            
+            if target_ranking_dir is None:
+                logger.debug(f"TARGET_RANKING directory not found, waiting for first target (checked: {[str(d / 'TARGET_RANKING') for d in possible_repro_dirs]})")
+                return
+            
+            # Find first target's cohort directory
+            for target_dir in target_ranking_dir.iterdir():
+                if not target_dir.is_dir():
+                    continue
+                
+                # Look for cohort= directories
+                for cohort_dir in target_dir.iterdir():
+                    if cohort_dir.is_dir() and cohort_dir.name.startswith("cohort="):
+                        cohort_id = cohort_dir.name.replace("cohort=", "")
+                        self._cohort_id = cohort_id
+                        
+                        # Move the entire run directory to cohort-organized location
+                        repo_root = Path(__file__).parent.parent.parent
+                        results_dir = repo_root / "RESULTS"
+                        new_output_dir = results_dir / cohort_id / self._run_name
+                        
+                        if new_output_dir.exists():
+                            logger.warning(f"Cohort directory {new_output_dir} already exists, not moving")
+                            # Still update paths to point to existing directory
+                            self.output_dir = new_output_dir
+                            self.cache_dir = self.output_dir / "cache"
+                            self.target_ranking_cache = self.cache_dir / "target_rankings.json"
+                            self.feature_selection_cache = self.cache_dir / "feature_selections"
+                            logger.info(f"📁 Using existing cohort directory: {self.output_dir}")
+                            return
+                        
+                        # Move the directory
+                        import shutil
+                        new_output_dir.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        logger.info(f"📁 Moving run from {self._initial_output_dir} to {new_output_dir}")
+                        shutil.move(str(self._initial_output_dir), str(new_output_dir))
+                        self.output_dir = new_output_dir
+                        
+                        # Update cache_dir path and cache file paths
+                        self.cache_dir = self.output_dir / "cache"
+                        self.target_ranking_cache = self.cache_dir / "target_rankings.json"
+                        self.feature_selection_cache = self.cache_dir / "feature_selections"
+                        
+                        logger.info(f"✅ Organized run by cohort: {self.output_dir}")
+                        return
+            
+            logger.debug(f"No cohort directories found in {target_ranking_dir}, waiting for first target")
         except Exception as e:
-            logger.debug(f"Could not organize by cohort (will stay in _pending/): {e}")
+            logger.warning(f"Could not organize by cohort (will stay in _pending/): {e}")
+            import traceback
+            logger.debug(f"Traceback: {traceback.format_exc()}")
             # Stay in _pending/ if we can't determine cohort
+        
+        # If we still haven't organized, try one more time with more aggressive search
+        if self._cohort_id is None:
+            try:
+                # Search more broadly - check if REPRODUCIBILITY exists anywhere in the run directory
+                for repro_candidate in self._initial_output_dir.rglob("REPRODUCIBILITY/TARGET_RANKING/*/cohort=*"):
+                    if repro_candidate.is_dir():
+                        cohort_id = repro_candidate.name.replace("cohort=", "")
+                        self._cohort_id = cohort_id
+                        
+                        repo_root = Path(__file__).parent.parent.parent
+                        results_dir = repo_root / "RESULTS"
+                        new_output_dir = results_dir / cohort_id / self._run_name
+                        
+                        if new_output_dir.exists():
+                            logger.warning(f"Cohort directory {new_output_dir} already exists, not moving")
+                            self.output_dir = new_output_dir
+                            self.cache_dir = self.output_dir / "cache"
+                            self.target_ranking_cache = self.cache_dir / "target_rankings.json"
+                            self.feature_selection_cache = self.cache_dir / "feature_selections"
+                            return
+                        
+                        import shutil
+                        new_output_dir.parent.mkdir(parents=True, exist_ok=True)
+                        logger.info(f"📁 Moving run from {self._initial_output_dir} to {new_output_dir} (found via recursive search)")
+                        shutil.move(str(self._initial_output_dir), str(new_output_dir))
+                        self.output_dir = new_output_dir
+                        self.cache_dir = self.output_dir / "cache"
+                        self.target_ranking_cache = self.cache_dir / "target_rankings.json"
+                        self.feature_selection_cache = self.cache_dir / "feature_selections"
+                        logger.info(f"✅ Organized run by cohort: {self.output_dir}")
+                        return
+            except Exception as e2:
+                logger.debug(f"Recursive search also failed: {e2}")
         
         # Create subdirectories
         (self.output_dir / "target_rankings").mkdir(exist_ok=True)
@@ -462,10 +526,15 @@ class IntelligentTrainer:
             max_rows_per_symbol=max_rows_per_symbol  # Pass max_rows_per_symbol from config
         )
         
-        # After first target ranking, try to organize by cohort
-        # Extract cohort_id from REPRODUCIBILITY directory if available
+        # After target ranking completes, organize by cohort
+        # This moves the entire directory (including all REPRODUCIBILITY data) to RESULTS/{cohort_id}/{run_name}/
         if self._cohort_id is None and rankings:
+            logger.info("🔍 Attempting to organize run by cohort...")
             self._organize_by_cohort()
+            if self._cohort_id is not None:
+                logger.info(f"✅ Successfully organized run by cohort: {self.output_dir}")
+            else:
+                logger.warning("⚠️  Could not determine cohort_id, run will stay in _pending/")
         
         # Save to cache
         if use_cache:
@@ -1019,6 +1088,46 @@ class IntelligentTrainer:
                 logger.warning(f"Leakage diagnostics failed: {e}")
                 sentinel_results = {'error': str(e)}
         
+        # Generate trend summary (if reproducibility tracking is available)
+        trend_summary = None
+        try:
+            from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+            from pathlib import Path
+            
+            # Find REPRODUCIBILITY directory
+            repro_dir = self.output_dir / "REPRODUCIBILITY"
+            if not repro_dir.exists():
+                # Try alternative location (if organized by cohort)
+                repro_dir = self.output_dir.parent / "REPRODUCIBILITY"
+            
+            if repro_dir.exists():
+                # Create tracker to access trend summary method
+                tracker = ReproducibilityTracker(output_dir=self.output_dir)
+                trend_summary = tracker.generate_trend_summary(view="STRICT", min_runs_for_trend=3)
+                
+                if trend_summary.get("status") == "ok":
+                    logger.info("="*80)
+                    logger.info("TREND ANALYSIS SUMMARY")
+                    logger.info("="*80)
+                    logger.info(f"Series analyzed: {trend_summary.get('n_series', 0)}")
+                    logger.info(f"Trends computed: {trend_summary.get('n_trends', 0)}")
+                    
+                    if trend_summary.get("declining_trends"):
+                        logger.warning(f"⚠️  {len(trend_summary['declining_trends'])} declining trends detected")
+                        for decl in trend_summary["declining_trends"][:5]:
+                            logger.warning(f"  - {decl['metric']}: slope={decl['slope']:.6f}/day ({decl['series'][:50]}...)")
+                    
+                    if trend_summary.get("alerts"):
+                        logger.info(f"ℹ️  {len(trend_summary['alerts'])} trend alerts")
+                        for alert in trend_summary["alerts"][:3]:  # Show first 3
+                            severity_icon = "⚠️" if alert.get('severity') == 'warning' else "ℹ️"
+                            logger.info(f"  {severity_icon} {alert.get('message', '')[:100]}")
+                    
+                    logger.info("="*80)
+        except Exception as e:
+            logger.debug(f"Could not generate trend summary: {e}")
+            # Don't fail if trend analysis fails
+        
         return {
             'targets': targets,
             'target_features': target_features,
@@ -1028,7 +1137,8 @@ class IntelligentTrainer:
             'sentinel_results': sentinel_results,
             'status': status,  # Use status from above (either 'completed' or 'failed_no_models')
             'failed_targets': failed_targets,
-            'failed_reasons': failed_reasons
+            'failed_reasons': failed_reasons,
+            'trend_summary': trend_summary
         }
 
 

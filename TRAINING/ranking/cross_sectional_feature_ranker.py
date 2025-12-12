@@ -265,7 +265,8 @@ def compute_cross_sectional_importance(
     min_cs: int = None,
     max_cs_samples: int = None,
     normalization: Optional[str] = None,
-    model_configs: Optional[Dict[str, Dict]] = None
+    model_configs: Optional[Dict[str, Dict]] = None,
+    output_dir: Optional[Path] = None  # Optional output directory for reproducibility tracking
 ) -> pd.Series:
     """
     Compute cross-sectional feature importance using panel models.
@@ -374,6 +375,89 @@ def compute_cross_sectional_importance(
         cs_importance = cs_importance / cs_importance.max()
     
     logger.info(f"   ✅ Cross-sectional importance computed: top feature = {cs_importance.idxmax()} ({cs_importance.max():.4f})")
+    
+    # Track reproducibility for cross-sectional feature ranking (if output_dir provided)
+    # This is called from feature_selector.py, which may pass output_dir through
+    # We'll add tracking here but it's optional since the main tracking happens in feature_selector.py
+    # This provides separate tracking for CS ranking specifically
+    if output_dir is not None:
+        try:
+            from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+            from TRAINING.utils.run_context import RunContext
+            from TRAINING.utils.cohort_metadata_extractor import extract_cohort_metadata
+            
+            # Use module-specific directory
+            module_output_dir = output_dir.parent / 'feature_selections' if (output_dir.parent / 'feature_selections').exists() else output_dir
+            
+            tracker = ReproducibilityTracker(
+                output_dir=module_output_dir,
+                search_previous_runs=True
+            )
+            
+            # Extract cohort metadata
+            cohort_metadata = extract_cohort_metadata(
+                symbols=symbols,
+                mtf_data=None,  # Not available here, but symbols are enough for basic tracking
+                min_cs=min_cs,
+                max_cs_samples=max_cs_samples
+            )
+            
+            # Build RunContext
+            ctx = RunContext(
+                stage="FEATURE_SELECTION",
+                target_name=target_column,
+                target_column=target_column,
+                X=X,  # Panel data
+                y=y,  # Panel labels
+                feature_names=feature_names,
+                symbols=symbols_array if 'symbols_array' in locals() else symbols,
+                time_vals=time_vals if 'time_vals' in locals() else None,
+                horizon_minutes=None,  # Not applicable for CS ranking
+                purge_minutes=None,
+                embargo_minutes=None,
+                cv_folds=None,
+                fold_timestamps=None,
+                data_interval_minutes=None,
+                seed=None
+            )
+            
+            # Build metrics dict
+            top_cs_score = cs_importance.max() if len(cs_importance) > 0 else 0.0
+            mean_cs_score = cs_importance.mean() if len(cs_importance) > 0 else 0.0
+            std_cs_score = cs_importance.std() if len(cs_importance) > 0 else 0.0
+            
+            metrics_dict = {
+                "metric_name": "CS Importance Score",
+                "mean_score": mean_cs_score,
+                "std_score": std_cs_score,
+                "mean_importance": top_cs_score,
+                "composite_score": mean_cs_score,
+                "n_features_evaluated": len(candidate_features),
+                "n_selected": len(candidate_features)  # All candidates are "selected" for CS ranking
+            }
+            
+            # Use automated log_run API (includes trend analysis)
+            audit_result = tracker.log_run(ctx, metrics_dict)
+            
+            # Log audit report summary if available
+            if audit_result.get("audit_report"):
+                audit_report = audit_result["audit_report"]
+                if audit_report.get("violations"):
+                    logger.warning(f"⚠️  CS Ranking audit violations: {len(audit_report['violations'])}")
+                if audit_report.get("warnings"):
+                    logger.info(f"ℹ️  CS Ranking audit warnings: {len(audit_report['warnings'])}")
+            
+            # Log trend summary if available
+            if audit_result.get("trend_summary"):
+                trend = audit_result["trend_summary"]
+                # Trend summary is already logged by log_run
+                pass
+                
+        except ImportError:
+            # RunContext not available, skip tracking
+            logger.debug("RunContext not available for CS ranking reproducibility tracking")
+        except Exception as e:
+            logger.debug(f"CS ranking reproducibility tracking failed: {e}")
     
     return cs_importance
 

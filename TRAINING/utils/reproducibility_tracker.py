@@ -33,6 +33,17 @@ from enum import Enum
 import math
 import pandas as pd
 
+# Import RunContext and AuditEnforcer for automated audit-grade tracking
+try:
+    from TRAINING.utils.run_context import RunContext
+    from TRAINING.utils.audit_enforcer import AuditEnforcer, AuditMode
+    _AUDIT_AVAILABLE = True
+except ImportError:
+    _AUDIT_AVAILABLE = False
+    RunContext = None
+    AuditEnforcer = None
+    AuditMode = None
+
 # Use root logger to ensure messages are visible regardless of calling script's logger setup
 logger = logging.getLogger(__name__)
 # Ensure this logger propagates to root so messages are visible
@@ -87,7 +98,8 @@ class ReproducibilityTracker:
         importance_tolerance: float = 0.01,  # Legacy: kept for backward compat
         search_previous_runs: bool = False,  # If True, search parent directories for previous runs
         thresholds: Optional[Dict[str, Dict[str, float]]] = None,  # Override config thresholds
-        use_z_score: Optional[bool] = None  # Override config use_z_score
+        use_z_score: Optional[bool] = None,  # Override config use_z_score
+        audit_mode: str = "warn"  # Audit enforcement mode: "off" | "warn" | "strict"
     ):
         """
         Initialize reproducibility tracker.
@@ -117,6 +129,14 @@ class ReproducibilityTracker:
         self.cohort_aware = self._load_cohort_aware()
         self.n_ratio_threshold = self._load_n_ratio_threshold()
         self.cohort_config_keys = self._load_cohort_config_keys()
+        
+        # Initialize audit enforcer
+        if _AUDIT_AVAILABLE:
+            self.audit_enforcer = AuditEnforcer(mode=audit_mode)
+        else:
+            self.audit_enforcer = None
+            if audit_mode != "off":
+                logger.warning("Audit enforcement not available (RunContext/AuditEnforcer not imported), disabling audit")
         
         # Initialize stats tracking
         self.stats_file = self.output_dir.parent / "REPRODUCIBILITY" / "stats.json"
@@ -679,7 +699,8 @@ class ReproducibilityTracker:
         route_type: Optional[str] = None,
         symbol: Optional[str] = None,
         model_family: Optional[str] = None,
-        additional_data: Optional[Dict[str, Any]] = None
+        additional_data: Optional[Dict[str, Any]] = None,
+        trend_metadata: Optional[Dict[str, Any]] = None
     ) -> None:
         """
         Save run to cohort-specific directory with structured layout.
@@ -755,7 +776,7 @@ class ReproducibilityTracker:
             "schema_version": REPRODUCIBILITY_SCHEMA_VERSION,
             "cohort_id": cohort_id,
             "run_id": run_id_clean,
-            "stage": stage_normalized,
+            "stage": stage_normalized,  # Already normalized to uppercase
             "route_type": route_type.upper() if route_type else None,
             "target": item_name,
             "symbol": symbol,
@@ -776,6 +797,112 @@ class ReproducibilityTracker:
             "git_commit": self._get_git_commit(),
             "created_at": datetime.now().isoformat()
         }
+        
+        # Add audit-grade fields: data fingerprint and per-symbol stats
+        if cohort_metadata.get('data_fingerprint'):
+            full_metadata['data_fingerprint'] = cohort_metadata['data_fingerprint']
+        
+        if cohort_metadata.get('per_symbol_stats'):
+            full_metadata['per_symbol_stats'] = cohort_metadata['per_symbol_stats']
+        
+        # Add CV details from additional_data
+        if additional_data:
+            cv_details = {}
+            
+            # CV method and parameters
+            if 'cv_method' in additional_data:
+                cv_details['cv_method'] = additional_data['cv_method']
+            elif 'cv_scheme' in additional_data:
+                cv_details['cv_method'] = additional_data['cv_scheme']
+            else:
+                cv_details['cv_method'] = 'purged_kfold'  # Default assumption
+            
+            # Horizon, purge, embargo
+            if 'horizon_minutes' in additional_data:
+                cv_details['horizon_minutes'] = additional_data['horizon_minutes']
+            if 'purge_minutes' in additional_data:
+                cv_details['purge_minutes'] = additional_data['purge_minutes']
+            elif 'purge_time' in additional_data:
+                # Extract minutes from Timedelta string
+                try:
+                    purge_str = str(additional_data['purge_time'])
+                    if 'days' in purge_str:
+                        # Parse Timedelta string
+                        import re
+                        match = re.search(r'(\d+)\s*days?\s*(\d+):(\d+):(\d+)', purge_str)
+                        if match:
+                            days, hours, minutes, seconds = map(int, match.groups())
+                            cv_details['purge_minutes'] = days * 24 * 60 + hours * 60 + minutes + seconds / 60
+                    else:
+                        # Try to extract minutes directly
+                        match = re.search(r'(\d+)\s*min', purge_str, re.I)
+                        if match:
+                            cv_details['purge_minutes'] = int(match.group(1))
+                except Exception:
+                    pass
+            
+            if 'embargo_minutes' in additional_data:
+                cv_details['embargo_minutes'] = additional_data['embargo_minutes']
+            
+            # Number of folds
+            if 'cv_folds' in additional_data:
+                cv_details['folds'] = additional_data['cv_folds']
+            elif 'n_splits' in additional_data:
+                cv_details['folds'] = additional_data['n_splits']
+            
+            # Fold boundaries hash
+            if 'fold_boundaries' in additional_data:
+                fold_boundaries = additional_data['fold_boundaries']
+                try:
+                    fold_boundaries_str = json.dumps(fold_boundaries, sort_keys=True)
+                    cv_details['fold_boundaries_hash'] = hashlib.sha256(fold_boundaries_str.encode()).hexdigest()[:16]
+                    # Also store the actual boundaries (for debugging)
+                    cv_details['fold_boundaries'] = fold_boundaries
+                except Exception:
+                    pass
+            elif 'fold_timestamps' in additional_data:
+                # Use fold_timestamps to compute hash
+                fold_timestamps = additional_data['fold_timestamps']
+                try:
+                    fold_timestamps_str = json.dumps(fold_timestamps, sort_keys=True)
+                    cv_details['fold_boundaries_hash'] = hashlib.sha256(fold_timestamps_str.encode()).hexdigest()[:16]
+                    # Also store the timestamps (for debugging)
+                    cv_details['fold_timestamps'] = fold_timestamps
+                except Exception:
+                    pass
+            
+            # Feature lookback max minutes
+            if 'feature_lookback_max_minutes' in additional_data:
+                cv_details['feature_lookback_max_minutes'] = additional_data['feature_lookback_max_minutes']
+            elif 'max_feature_lookback_minutes' in additional_data:
+                cv_details['feature_lookback_max_minutes'] = additional_data['max_feature_lookback_minutes']
+            
+            # Label definition hash
+            if 'label_definition_hash' in additional_data:
+                cv_details['label_definition_hash'] = additional_data['label_definition_hash']
+            elif 'target_config_hash' in additional_data:
+                cv_details['label_definition_hash'] = additional_data['target_config_hash']
+            
+            if cv_details:
+                full_metadata['cv_details'] = cv_details
+        
+        # Add trend metadata (if computed)
+        if trend_metadata:
+            full_metadata['trend'] = trend_metadata
+        
+        # Add feature registry hash
+        if additional_data and 'feature_registry_hash' in additional_data:
+            full_metadata['feature_registry_hash'] = additional_data['feature_registry_hash']
+        elif additional_data and 'feature_names' in additional_data:
+            # Compute hash from feature names (sorted for stability)
+            try:
+                feature_names = additional_data['feature_names']
+                if isinstance(feature_names, (list, tuple)):
+                    feature_names_sorted = sorted([str(f) for f in feature_names])
+                    feature_registry_str = "|".join(feature_names_sorted)
+                    full_metadata['feature_registry_hash'] = hashlib.sha256(feature_registry_str.encode()).hexdigest()[:16]
+            except Exception:
+                pass
         
         # Save metadata.json
         metadata_file = cohort_dir / "metadata.json"
@@ -801,6 +928,7 @@ class ReproducibilityTracker:
             "run_id": run_id_clean,
             "timestamp": datetime.now().isoformat(),
             "reproducibility_mode": "COHORT_AWARE",  # Track which mode was used
+            "stage": stage_normalized,  # Ensure consistent uppercase naming
             **{k: v for k, v in run_data.items() 
                if k not in ['timestamp', 'cohort_metadata', 'additional_data']}
         }
@@ -1729,6 +1857,78 @@ class ReproducibilityTracker:
                 self._save_to_cohort(stage, item_name, cohort_id, cohort_metadata, run_data, route_type, symbol, model_family, additional_data)
                 self._increment_mode_counter("COHORT_AWARE")
                 
+                # Compute trend analysis for this series (if enough runs exist)
+                trend_metadata = None
+                try:
+                    if _AUDIT_AVAILABLE:
+                        from TRAINING.utils.trend_analyzer import TrendAnalyzer, SeriesView
+                        
+                        # Get reproducibility base directory
+                        repro_base = cohort_dir.parent.parent.parent
+                        if repro_base.exists():
+                            trend_analyzer = TrendAnalyzer(
+                                reproducibility_dir=repro_base,
+                                half_life_days=7.0,
+                                min_runs_for_trend=3
+                            )
+                            
+                            # Analyze STRICT series
+                            all_trends = trend_analyzer.analyze_all_series(view=SeriesView.STRICT)
+                            
+                            # Find trend for this series
+                            for series_key_str, trend_list in all_trends.items():
+                                # Check if this series matches
+                                if any(t.series_key.target == item_name and 
+                                       t.series_key.stage == stage_normalized for t in trend_list):
+                                    # Find trend for primary metric
+                                    primary_metric = metrics.get("metric_name", "mean_score")
+                                    for trend in trend_list:
+                                        if trend.metric_name in ["auc_mean", "mean_score", primary_metric.lower()] if primary_metric else True:
+                                            if trend.status == "ok":
+                                                slope_str = f"{trend.slope_per_day:+.6f}" if trend.slope_per_day else "N/A"
+                                                main_logger = _get_main_logger()
+                                                trend_msg = (
+                                                    f"📈 Trend ({trend.metric_name}): "
+                                                    f"slope={slope_str}/day, "
+                                                    f"current={trend.current_estimate:.4f}, "
+                                                    f"ewma={trend.ewma_value:.4f}, "
+                                                    f"n={trend.n_runs} runs"
+                                                )
+                                                if main_logger != logger:
+                                                    main_logger.info(trend_msg)
+                                                else:
+                                                    logger.info(trend_msg)
+                                                
+                                                # Log trend alerts
+                                                if trend.alerts:
+                                                    for alert in trend.alerts:
+                                                        alert_msg = f"  {'⚠️' if alert.get('severity') == 'warning' else 'ℹ️'}  {alert['message']}"
+                                                        if main_logger != logger:
+                                                            (main_logger.warning if alert.get('severity') == 'warning' else main_logger.info)(alert_msg)
+                                                        else:
+                                                            (logger.warning if alert.get('severity') == 'warning' else logger.info)(alert_msg)
+                                                
+                                                # Store trend metadata for inclusion in metadata.json
+                                                trend_metadata = {
+                                                    "enabled": True,
+                                                    "view": "STRICT",
+                                                    "series_key": series_key_str[:100],  # Truncate for readability
+                                                    "metric_name": trend.metric_name,
+                                                    "n_runs": trend.n_runs,
+                                                    "status": trend.status,
+                                                    "slope_per_day": trend.slope_per_day,
+                                                    "current_estimate": trend.current_estimate,
+                                                    "ewma_value": trend.ewma_value,
+                                                    "residual_std": trend.residual_std,
+                                                    "half_life_days": trend.half_life_days,
+                                                    "n_alerts": len(trend.alerts),
+                                                    "applied": False  # Currently only logged, not used for decisions
+                                                }
+                                            break
+                                    break
+                except Exception as e:
+                    logger.debug(f"Could not compute trend analysis: {e}")
+                
                 # Compute and save drift.json if previous run exists
                 if previous:
                     run_id_clean = run_data.get('run_id') or run_data.get('timestamp', datetime.now().isoformat()).replace(':', '-').replace('.', '-').replace('T', '_')
@@ -1769,3 +1969,345 @@ class ReproducibilityTracker:
             self._increment_error_counter("total_failures", error_type)
             
             # Don't re-raise - reproducibility tracking should never break the main pipeline
+    
+    def log_run(
+        self,
+        ctx: Any,  # RunContext (using Any to avoid circular import issues)
+        metrics: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Automated audit-grade reproducibility tracking using RunContext.
+        
+        This is the recommended API for new code. It:
+        1. Extracts all metadata from RunContext automatically
+        2. Validates with AuditEnforcer
+        3. Saves metadata/metrics
+        4. Compares to previous run and writes audit report
+        
+        Args:
+            ctx: RunContext containing all run data and configuration
+            metrics: Dictionary of metrics (mean_score, std_score, etc.)
+        
+        Returns:
+            Dict with audit_report and saved metadata paths
+        
+        Raises:
+            ValueError: If required fields are missing (in COHORT_AWARE mode) or audit validation fails (in strict mode)
+        """
+        if not _AUDIT_AVAILABLE:
+            # Fallback to legacy API
+            logger.warning("RunContext not available, falling back to legacy log_comparison API")
+            self.log_comparison(
+                stage=ctx.stage,
+                item_name=ctx.target_name or ctx.target_column or "unknown",
+                metrics=metrics,
+                additional_data=ctx.to_dict()
+            )
+            return {"mode": "legacy_fallback"}
+        
+        # 1. Validate required fields
+        if self.cohort_aware:
+            missing = ctx.validate_required_fields("COHORT_AWARE")
+            if missing:
+                raise ValueError(
+                    f"Missing required fields for COHORT_AWARE mode: {missing}. "
+                    f"RunContext must contain: {ctx.get_required_fields('COHORT_AWARE')}"
+                )
+        
+        # 2. Auto-derive purge/embargo if not set
+        if ctx.purge_minutes is None and ctx.horizon_minutes is not None:
+            purge_min, embargo_min = ctx.derive_purge_embargo()
+            ctx.purge_minutes = purge_min
+            if ctx.embargo_minutes is None:
+                ctx.embargo_minutes = embargo_min
+            logger.info(f"Auto-derived purge={purge_min:.1f}m, embargo={embargo_min:.1f}m from horizon={ctx.horizon_minutes}m")
+        
+        # 3. Extract metadata from RunContext
+        from TRAINING.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
+        
+        cohort_metadata = extract_cohort_metadata(
+            X=ctx.X,
+            y=ctx.y,
+            symbols=ctx.symbols,
+            time_vals=ctx.time_vals,
+            mtf_data=ctx.mtf_data,
+            min_cs=ctx.min_cs,
+            max_cs_samples=ctx.max_cs_samples,
+            leakage_filter_version=ctx.leakage_filter_version,
+            universe_id=ctx.universe_id,
+            compute_data_fingerprint=True,
+            compute_per_symbol_stats=True
+        )
+        
+        # Format for tracker
+        cohort_metrics, cohort_additional_data = format_for_reproducibility_tracker(cohort_metadata)
+        
+        # Build additional_data with CV details
+        additional_data = {
+            **cohort_additional_data,
+            "cv_method": ctx.cv_method,
+            "cv_folds": ctx.cv_folds,
+            "horizon_minutes": ctx.horizon_minutes,
+            "purge_minutes": ctx.purge_minutes,
+            "embargo_minutes": ctx.embargo_minutes,
+            "feature_lookback_max_minutes": ctx.feature_lookback_max_minutes,
+            "data_interval_minutes": ctx.data_interval_minutes,
+            "feature_names": ctx.feature_names,
+            "seed": ctx.seed
+        }
+        
+        # Add fold timestamps if available
+        if ctx.fold_timestamps:
+            additional_data["fold_timestamps"] = ctx.fold_timestamps
+        
+        # Add label definition hash
+        if ctx.target_column:
+            label_def_str = f"{ctx.target_column}|{ctx.target_name or ctx.target_column}"
+            additional_data["label_definition_hash"] = hashlib.sha256(label_def_str.encode()).hexdigest()[:16]
+        
+        # Merge metrics
+        metrics_with_cohort = {**metrics, **cohort_metrics}
+        
+        # 4. Load previous run metadata for comparison
+        cohort_id = self._compute_cohort_id(cohort_metadata, ctx.route_type)
+        previous_metadata = None
+        try:
+            cohort_dir = self._get_cohort_dir(
+                ctx.stage,
+                ctx.target_name or ctx.target_column or "unknown",
+                cohort_id,
+                ctx.route_type,
+                ctx.symbol,
+                ctx.model_family
+            )
+            if cohort_dir.exists():
+                metadata_file = cohort_dir / "metadata.json"
+                if metadata_file.exists():
+                    with open(metadata_file, 'r') as f:
+                        previous_metadata = json.load(f)
+        except Exception as e:
+            logger.debug(f"Could not load previous metadata: {e}")
+        
+        # 5. Validate with AuditEnforcer (before saving)
+        if self.audit_enforcer:
+            # Build temporary metadata for validation
+            temp_metadata = {
+                "cohort_id": cohort_id,
+                "data_fingerprint": cohort_metadata.get("data_fingerprint"),
+                "feature_registry_hash": None,  # Will be computed in _save_to_cohort
+                "cv_details": {
+                    "cv_method": ctx.cv_method,
+                    "horizon_minutes": ctx.horizon_minutes,
+                    "purge_minutes": ctx.purge_minutes,
+                    "embargo_minutes": ctx.embargo_minutes,
+                    "folds": ctx.cv_folds,
+                    "feature_lookback_max_minutes": ctx.feature_lookback_max_minutes
+                }
+            }
+            if ctx.fold_timestamps:
+                fold_str = json.dumps(ctx.fold_timestamps, sort_keys=True, default=str)
+                temp_metadata["cv_details"]["fold_boundaries_hash"] = hashlib.sha256(fold_str.encode()).hexdigest()[:16]
+            
+            is_valid, audit_report = self.audit_enforcer.validate(temp_metadata, metrics_with_cohort, previous_metadata)
+            
+            if not is_valid and self.audit_enforcer.mode == AuditMode.STRICT:
+                # Already raised by enforcer, but be explicit
+                raise ValueError(f"Audit validation failed: {audit_report}")
+        else:
+            audit_report = {"mode": "off", "violations": [], "warnings": []}
+        
+        # 6. Save using existing log_comparison (which handles cohort-aware saving)
+        self.log_comparison(
+            stage=ctx.stage,
+            item_name=ctx.target_name or ctx.target_column or "unknown",
+            metrics=metrics_with_cohort,
+            additional_data=additional_data
+        )
+        
+        # 7. Write audit report
+        audit_report_path = None
+        cohort_dir = None
+        try:
+            cohort_dir = self._get_cohort_dir(
+                ctx.stage,
+                ctx.target_name or ctx.target_column or "unknown",
+                cohort_id,
+                ctx.route_type,
+                ctx.symbol,
+                ctx.model_family
+            )
+            if cohort_dir.exists():
+                audit_report_path = cohort_dir / "audit_report.json"
+                with open(audit_report_path, 'w') as f:
+                    json.dump(audit_report, f, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())
+        except Exception as e:
+            logger.debug(f"Could not write audit report: {e}")
+        
+        # 8. Compute trend analysis for this series (if enough runs exist)
+        trend_summary = None
+        try:
+            if _AUDIT_AVAILABLE:
+                from TRAINING.utils.trend_analyzer import TrendAnalyzer, SeriesView
+                
+                # Get reproducibility base directory
+                repro_base = cohort_dir.parent.parent.parent if cohort_dir and cohort_dir.exists() else self.output_dir.parent / "REPRODUCIBILITY"
+                
+                if repro_base.exists():
+                    trend_analyzer = TrendAnalyzer(
+                        reproducibility_dir=repro_base,
+                        half_life_days=7.0,
+                        min_runs_for_trend=3  # Lower threshold for per-run analysis
+                    )
+                    
+                    # Analyze STRICT series for this specific target
+                    all_trends = trend_analyzer.analyze_all_series(view=SeriesView.STRICT)
+                    
+                    # Find trend for this series
+                    series_key_str = None
+                    for sk, trend_list in all_trends.items():
+                        # Check if this series matches
+                        if any(t.series_key.target == (ctx.target_name or ctx.target_column) and 
+                               t.series_key.stage == ctx.stage.upper() for t in trend_list):
+                            series_key_str = sk
+                            break
+                    
+                    if series_key_str and series_key_str in all_trends:
+                        trends = all_trends[series_key_str]
+                        
+                        # Find trend for the primary metric
+                        primary_metric = metrics.get("metric_name", "mean_score")
+                        if primary_metric:
+                            # Try to find matching metric trend
+                            for trend in trends:
+                                if trend.metric_name in ["auc_mean", "mean_score", primary_metric.lower()]:
+                                    if trend.status == "ok":
+                                        trend_summary = {
+                                            "slope_per_day": trend.slope_per_day,
+                                            "current_estimate": trend.current_estimate,
+                                            "ewma_value": trend.ewma_value,
+                                            "n_runs": trend.n_runs,
+                                            "residual_std": trend.residual_std,
+                                            "alerts": trend.alerts
+                                        }
+                                        
+                                        # Log trend summary
+                                        slope_str = f"{trend.slope_per_day:+.6f}" if trend.slope_per_day else "N/A"
+                                        logger.info(
+                                            f"📈 Trend ({trend.metric_name}): slope={slope_str}/day, "
+                                            f"current={trend.current_estimate:.4f}, "
+                                            f"ewma={trend.ewma_value:.4f}, "
+                                            f"n={trend.n_runs} runs"
+                                        )
+                                        
+                                        # Log alerts if any
+                                        if trend.alerts:
+                                            for alert in trend.alerts:
+                                                if alert.get('severity') == 'warning':
+                                                    logger.warning(f"  ⚠️  {alert['message']}")
+                                                else:
+                                                    logger.info(f"  ℹ️  {alert['message']}")
+                                    break
+        except Exception as e:
+            logger.debug(f"Could not compute trend analysis: {e}")
+            # Don't fail if trend analysis fails
+        
+        return {
+            "audit_report": audit_report,
+            "audit_report_path": str(audit_report_path) if audit_report_path else None,
+            "cohort_id": cohort_id,
+            "metadata_path": str(cohort_dir / "metadata.json") if cohort_dir and cohort_dir.exists() else None,
+            "trend_summary": trend_summary
+        }
+    
+    def generate_trend_summary(
+        self,
+        view: str = "STRICT",
+        min_runs_for_trend: int = 3
+    ) -> Dict[str, Any]:
+        """
+        Generate trend summary for all series in the reproducibility directory.
+        
+        This can be called at the end of a run to show overall trend status.
+        
+        Args:
+            view: "STRICT" or "PROGRESS"
+            min_runs_for_trend: Minimum runs required for trend fitting
+        
+        Returns:
+            Dict with trend summary statistics
+        """
+        if not _AUDIT_AVAILABLE:
+            return {"status": "trend_analyzer_not_available"}
+        
+        try:
+            from TRAINING.utils.trend_analyzer import TrendAnalyzer, SeriesView
+            
+            # Get reproducibility base directory
+            repro_base = self.output_dir.parent / "REPRODUCIBILITY"
+            if not repro_base.exists():
+                # Try alternative location
+                repro_base = self.output_dir / "REPRODUCIBILITY"
+            
+            if not repro_base.exists():
+                return {"status": "reproducibility_directory_not_found"}
+            
+            trend_analyzer = TrendAnalyzer(
+                reproducibility_dir=repro_base,
+                half_life_days=7.0,
+                min_runs_for_trend=min_runs_for_trend
+            )
+            
+            # Analyze trends
+            series_view = SeriesView(view.upper() if view.upper() in ["STRICT", "PROGRESS"] else "STRICT")
+            all_trends = trend_analyzer.analyze_all_series(view=series_view)
+            
+            # Generate summary
+            summary = {
+                "status": "ok",
+                "view": series_view.value,
+                "n_series": len(all_trends),
+                "n_trends": sum(len(t) for t in all_trends.values()),
+                "series_with_trends": [],
+                "alerts": [],
+                "declining_trends": []
+            }
+            
+            for series_key_str, trend_list in all_trends.items():
+                for trend in trend_list:
+                    if trend.status == "ok":
+                        series_info = {
+                            "series_key": series_key_str[:100],  # Truncate for readability
+                            "metric": trend.metric_name,
+                            "slope_per_day": trend.slope_per_day,
+                            "current_estimate": trend.current_estimate,
+                            "n_runs": trend.n_runs
+                        }
+                        summary["series_with_trends"].append(series_info)
+                        
+                        # Collect alerts
+                        if trend.alerts:
+                            summary["alerts"].extend(trend.alerts)
+                        
+                        # Flag declining trends
+                        if trend.slope_per_day and trend.slope_per_day < -0.001:
+                            summary["declining_trends"].append({
+                                "metric": trend.metric_name,
+                                "slope": trend.slope_per_day,
+                                "series": series_key_str[:100]
+                            })
+            
+            # Log summary
+            logger.info(f"📊 Trend Summary ({series_view.value}): {summary['n_series']} series, {summary['n_trends']} trends")
+            if summary["declining_trends"]:
+                logger.warning(f"  ⚠️  {len(summary['declining_trends'])} declining trends detected")
+                for decl in summary["declining_trends"][:5]:  # Show first 5
+                    logger.warning(f"    - {decl['metric']}: slope={decl['slope']:.6f}/day")
+            if summary["alerts"]:
+                logger.info(f"  ℹ️  {len(summary['alerts'])} trend alerts")
+            
+            return summary
+        except Exception as e:
+            logger.debug(f"Could not generate trend summary: {e}")
+            return {"status": "error", "error": str(e)}
