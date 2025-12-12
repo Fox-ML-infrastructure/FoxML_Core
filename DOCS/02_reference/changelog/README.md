@@ -6,7 +6,7 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
-- **2025-12-11** — Reproducibility Tracking, Leakage Fixes, Interval Detection, Param Sanitization, Cross-Sectional Stability  
+- **2025-12-11** — Training Routing System, Reproducibility Tracking, Leakage Fixes, Interval Detection, Param Sanitization, Cross-Sectional Stability  
   → [View](2025-12-11.md)
 
 - **2025-12-10** — SST Enforcement, Determinism System, Config Centralization  

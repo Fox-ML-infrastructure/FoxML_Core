@@ -190,7 +190,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                            min_cs: int = 10,
                                            max_cs_samples: int = None,
                                            max_rows_train: int = None,
-                                           target_features: Dict[str, List[str]] = None) -> Dict[str, Any]:
+                                           target_features: Dict[str, List[str]] = None,
+                                           target_families: Optional[Dict[str, List[str]]] = None) -> Dict[str, Any]:
     """Train models for a specific interval using comprehensive approach (replicates original script)."""
     
     logger.info(f"🎯 Training models for interval: {interval}")
@@ -208,6 +209,28 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
     
     for j, target in enumerate(targets, 1):
         logger.info(f"🎯 [{j}/{len(targets)}] Training models for target: {target}")
+        
+        # Get families for this target (per-target families override global) - with validation
+        target_families = families
+        if target_families is not None and isinstance(target_families, dict) and target in target_families:
+            try:
+                per_target_families = target_families[target]
+                if isinstance(per_target_families, list) and per_target_families:
+                    target_families = per_target_families
+                    logger.info(f"📋 Using per-target families for {target}: {target_families}")
+                else:
+                    logger.debug(f"Per-target families for {target} is empty or invalid, using global")
+            except (KeyError, TypeError) as e:
+                logger.debug(f"Could not get per-target families for {target}: {e}, using global")
+        
+        # Validate target_families is a list
+        if not isinstance(target_families, list):
+            logger.warning(f"target_families is not a list for {target}, got {type(target_families)}, using global")
+            target_families = families
+        
+        if not target_families:
+            logger.warning(f"No families available for {target}, using global families")
+            target_families = families
         
         # Prepare training data with cross-sectional sampling
         print(f"🔄 Preparing training data for target: {target}")  # Debug print
@@ -281,10 +304,10 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         # Reorder families to prevent thread pollution
         ordered_families = []
         for priority_family in FAMILY_ORDER:
-            if priority_family in families:
+            if priority_family in target_families:
                 ordered_families.append(priority_family)
         # Add any remaining families not in the priority list
-        for family in families:
+        for family in target_families:
             if family not in ordered_families:
                 ordered_families.append(family)
         

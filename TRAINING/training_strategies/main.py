@@ -148,9 +148,13 @@ from TRAINING.common.tf_runtime import ensure_tf_initialized
 from TRAINING.common.tf_setup import tf_thread_setup
 
 # Family classifications
-TF_FAMS = {"MLP", "VAE", "GAN", "MetaLearning", "MultiTask"}
+# TF families: TensorFlow models that use GPU when available
+TF_FAMS = {"MLP", "VAE", "GAN", "MultiTask"}
+# Torch families: PyTorch models that use GPU when available
 TORCH_FAMS = {"CNN1D", "LSTM", "Transformer", "TabCNN", "TabLSTM", "TabTransformer"}
-CPU_FAMS = {"LightGBM", "QuantileLightGBM", "RewardBased", "NGBoost", "GMMRegime", "ChangePoint", "FTRLProximal", "Ensemble"}
+# CPU families: tree-based and CPU-only models (run first to avoid GPU thread pollution)
+# These run in stage 1, before GPU models
+CPU_FAMS = {"LightGBM", "QuantileLightGBM", "XGBoost", "RewardBased", "NGBoost", "GMMRegime", "ChangePoint", "FTRLProximal", "Ensemble", "MetaLearning"}
 
 
 """Main entry point for training strategies."""
@@ -184,7 +188,7 @@ def main():
     parser.add_argument('--data-dir', required=True, help='Data directory')
     parser.add_argument('--symbols', nargs='+', required=True, help='Symbols to train on')
     parser.add_argument('--targets', nargs='+', help='Specific targets to train on (default: auto-discover all targets)')
-    parser.add_argument('--families', nargs='+', default=ALL_FAMILIES, help='Model families to train')
+    parser.add_argument('--families', nargs='+', default=ALL_FAMILIES, help='Model families to train (default: all families). If --model-types is specified, will be filtered to that type.')
     parser.add_argument('--strategy', choices=['single_task', 'multi_task', 'cascade', 'all'], 
                        default='single_task', help='Training strategy')
     parser.add_argument('--seq-backend', choices=['torch', 'tf'], default='torch', 
@@ -263,6 +267,9 @@ def main():
     # Strategy configuration
     parser.add_argument('--strategy-config', type=str, help='Path to strategy configuration file')
     
+    # Training plan integration
+    parser.add_argument('--training-plan-dir', type=str, help='Path to training plan directory (METRICS/training_plan). If provided, will filter targets and model families based on plan.')
+    
     args = parser.parse_args()
     
     # Setup logging first (before any logger calls)
@@ -324,26 +331,49 @@ def main():
         families = [f for f in families if f in CROSS_SECTIONAL_MODELS]
         logger.info(f"🎯 Training only cross-sectional models: {len(families)} models")
     elif args.model_types == 'sequential':
-        families = [f for f in families if f in SEQUENTIAL_MODELS]
-        logger.info(f"🎯 Training only sequential models: {len(families)} models")
+        # Sequential mode: train BOTH sequential AND cross-sectional models
+        # This enables the 2-stage approach (CPU first, then GPU)
+        if families == ALL_FAMILIES:
+            # Use all models (both sequential and cross-sectional)
+            families = ALL_FAMILIES.copy()
+            logger.info(f"🎯 Sequential mode: training all models (sequential + cross-sectional): {len(families)} models")
+        else:
+            # Filter to only include sequential and cross-sectional from provided list
+            seq_fams = [f for f in families if f in SEQUENTIAL_MODELS]
+            cross_fams = [f for f in families if f in CROSS_SECTIONAL_MODELS]
+            families = seq_fams + cross_fams
+            logger.info(f"🎯 Sequential mode: training {len(seq_fams)} sequential + {len(cross_fams)} cross-sectional models")
     else:  # both
         logger.info(f"🎯 Training both model types: {len(families)} models")
     
-    # Sort models by training order
-    if args.train_order == 'cross-first':
-        # Train cross-sectional models first, then sequential
-        cross_models = [f for f in families if f in CROSS_SECTIONAL_MODELS]
-        seq_models = [f for f in families if f in SEQUENTIAL_MODELS]
-        families = cross_models + seq_models
-        logger.info(f"📊 Training order: {len(cross_models)} cross-sectional → {len(seq_models)} sequential")
-    elif args.train_order == 'sequential-first':
-        # Train sequential models first, then cross-sectional
+    # Apply 2-stage ordering: CPU models first, then GPU models
+    # This prevents thread pollution and ensures efficient resource usage
+    # Stage 1: CPU-only models (tree-based, sklearn-based)
+    # Stage 2: GPU models (TensorFlow, PyTorch)
+    cpu_families = [f for f in families if f in CPU_FAMS]
+    gpu_families = [f for f in families if f not in CPU_FAMS]
+    
+    # Within GPU families, order: TF families first, then Torch families
+    # This helps with resource management (TF and Torch can have different GPU memory patterns)
+    tf_families = [f for f in gpu_families if f in TF_FAMS]
+    torch_families = [f for f in gpu_families if f in TORCH_FAMS]
+    other_families = [f for f in gpu_families if f not in TF_FAMS and f not in TORCH_FAMS]
+    
+    # Final order: Stage 1 (CPU) → Stage 2 (GPU: TF → Torch → Others)
+    families = cpu_families + tf_families + torch_families + other_families
+    
+    if cpu_families:
+        logger.info(f"📊 Stage 1 (CPU): {len(cpu_families)} models - {cpu_families[:5]}{'...' if len(cpu_families) > 5 else ''}")
+    if gpu_families:
+        logger.info(f"📊 Stage 2 (GPU): {len(gpu_families)} models - {len(tf_families)} TF, {len(torch_families)} Torch, {len(other_families)} others")
+    
+    # Legacy train_order argument (for backward compatibility, but 2-stage takes precedence)
+    if args.train_order == 'sequential-first' and args.model_types != 'sequential':
+        # Only apply if not in sequential mode (which already uses 2-stage)
         cross_models = [f for f in families if f in CROSS_SECTIONAL_MODELS]
         seq_models = [f for f in families if f in SEQUENTIAL_MODELS]
         families = seq_models + cross_models
-        logger.info(f"📊 Training order: {len(seq_models)} sequential → {len(cross_models)} cross-sectional")
-    else:  # mixed
-        logger.info(f"📊 Training order: mixed (as specified)")
+        logger.info(f"📊 Legacy order override: {len(seq_models)} sequential → {len(cross_models)} cross-sectional")
     
     # Create output directory with session ID (same as original)
     # Using top-level import: datetime
@@ -391,6 +421,111 @@ def main():
                     sys.exit(2)
         
         logger.info(f"✅ Found {len(targets)} targets: {targets[:5]}...")
+        
+        # Auto-detect training plan if not provided and not disabled
+        training_plan_dir = None
+        if args.no_training_plan:
+            logger.debug("Training plan auto-detection disabled")
+        elif args.training_plan_dir:
+            training_plan_dir = Path(args.training_plan_dir)
+        else:
+            # Auto-detect: check if output_dir has METRICS/training_plan
+            # This handles the case where intelligent_trainer was run first
+            potential_plan_dirs = [
+                output_dir.parent / "METRICS" / "training_plan",  # Same level as output
+                output_dir / "METRICS" / "training_plan",  # Inside output_dir
+                Path("results") / "METRICS" / "training_plan",  # Common results location
+                Path.cwd() / "results" / "METRICS" / "training_plan",  # Current dir results
+            ]
+            
+            for plan_dir in potential_plan_dirs:
+                try:
+                    if plan_dir.exists() and (plan_dir / "master_training_plan.json").exists():
+                        training_plan_dir = plan_dir
+                        logger.info(f"📋 Auto-detected training plan: {training_plan_dir}")
+                        break
+                except Exception as e:
+                    logger.debug(f"Error checking {plan_dir}: {e}")
+                    continue
+        
+        # Apply training plan filter if available
+        filtered_targets = targets
+        target_families_map = None
+        
+        if training_plan_dir:
+            try:
+                from TRAINING.orchestration.training_plan_consumer import (
+                    load_training_plan,
+                    filter_targets_by_training_plan,
+                    get_model_families_for_job
+                )
+                
+                # training_plan_dir is already a Path from auto-detection or args
+                # But if it came from args.training_plan_dir, it might be a string
+                if not isinstance(training_plan_dir, Path):
+                    try:
+                        training_plan_dir = Path(training_plan_dir)
+                    except Exception as e:
+                        logger.warning(f"Invalid training_plan_dir: {e}, skipping plan")
+                        training_plan_dir = None
+                
+                if training_plan_dir:
+                    training_plan = load_training_plan(training_plan_dir)
+                else:
+                    training_plan = None
+                
+                if training_plan:
+                    logger.info("📋 Loading training plan for filtering...")
+                    
+                    # Filter targets based on plan
+                    filtered_targets = filter_targets_by_training_plan(
+                        targets=targets,
+                        training_plan=training_plan,
+                        training_type="cross_sectional"
+                    )
+                    
+                    if len(filtered_targets) < len(targets):
+                        logger.info(f"📋 Training plan filter applied: {len(targets)} → {len(filtered_targets)} targets")
+                    
+                    # Get model families per target from plan
+                    target_families_map = {}
+                    for target in filtered_targets:
+                        plan_families = get_model_families_for_job(
+                            training_plan,
+                            target=target,
+                            symbol=None,
+                            training_type="cross_sectional"
+                        )
+                        if plan_families:
+                            # Filter to only include families that are in the requested list
+                            filtered_plan_families = [f for f in plan_families if f in families]
+                            if filtered_plan_families:
+                                target_families_map[target] = filtered_plan_families
+                    
+                    if target_families_map:
+                        # If all targets have same families, update global list
+                        all_plan_families = set()
+                        for target_fams in target_families_map.values():
+                            all_plan_families.update(target_fams)
+                        
+                        # Use intersection if all targets have same families
+                        if len(target_families_map) == len(filtered_targets):
+                            common_families = set(target_families_map[filtered_targets[0]])
+                            for target in filtered_targets[1:]:
+                                if target in target_families_map:
+                                    common_families &= set(target_families_map[target])
+                            
+                            if common_families:
+                                families = sorted(common_families)
+                                logger.info(f"📋 Using model families from training plan: {families}")
+                                target_families_map = None  # Clear since we're using global list
+                        else:
+                            logger.info(f"📋 Using per-target model families from training plan")
+                else:
+                    logger.warning(f"Training plan not found at {training_plan_dir}, proceeding without filtering")
+            except Exception as e:
+                logger.warning(f"Failed to load training plan (non-critical): {e}")
+        
         logger.info(f"🤖 Training {len(families)} model families: {families[:5]}...")
         logger.info(f"📋 Strategy: {args.strategy}")
         logger.info(f"📁 Output directory: {output_dir}")
@@ -429,9 +564,10 @@ def main():
         else:
             # Train with single strategy using comprehensive approach
             results = train_models_for_interval_comprehensive(
-                'cross_sectional', targets, mtf_data, families,
+                'cross_sectional', filtered_targets, mtf_data, families,
                 args.strategy, str(output_dir), args.min_cs, args.max_samples_per_symbol,
-                args.max_rows_train
+                args.max_rows_train,
+                target_families=target_families_map
             )
             
             # Save results

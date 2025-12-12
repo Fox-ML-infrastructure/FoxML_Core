@@ -1,0 +1,46 @@
+# Training Router Configuration
+# 
+# Config-driven routing policy for deciding cross-sectional vs symbol-specific training.
+# This determines which (target, symbol) pairs get which training mode.
+
+routing:
+  # --- General safety rails ---
+  min_sample_size:
+    cross_sectional: 50000      # Total rows required for CS training
+    symbol: 5000                # Per-symbol rows required
+  
+  block_on_leakage: true        # Block training if leakage detected
+  
+  # --- Score thresholds ---
+  cross_sectional:
+    min_score: 0.55             # Minimum score (e.g. ROC-AUC) to allow CS training
+    strong_score: 0.60           # Strong score threshold
+  
+  symbol:
+    min_score: 0.58             # Minimum score for symbol-specific training
+    strong_score: 0.62          # Strong score threshold
+  
+  # --- Stability requirements ---
+  stability_allowlist:
+    cross_sectional: ["STABLE", "DRIFTING"]  # Allowed stability states for CS
+    symbol: ["STABLE"]                        # Allowed stability states for symbol-specific
+  
+  # --- Behavior when both CS and symbol are strong ---
+  both_strong_behavior: "ROUTE_BOTH"  # Options: "ROUTE_BOTH", "PREFER_CS", "PREFER_SYMBOL"
+  
+  # --- Experimental lane ---
+  enable_experimental_lane: true
+  experimental:
+    min_score: 0.52             # Lower threshold for experimental
+    allowed_stabilities: ["DRIFTING", "UNKNOWN"]  # Experimental can be less stable
+    max_fraction_symbols_per_target: 0.2  # Cap experimental load (20% of symbols per target)
+  
+  # --- Feature set safety ---
+  require_safe_features_only: true
+  allowed_feature_leakage_status: ["SAFE"]  # Only use features with SAFE leakage status
+  
+  # --- Logging options ---
+  log_decision_reasons: true
+  dump_plan_as:
+    - "JSON"
+    - "YAML"

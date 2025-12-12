@@ -145,6 +145,8 @@ MANIFEST
 *.manifest
 *.spec
 
+# Lowercase tests folder (use TESTS/ or TRAINING/tests/ instead)
+tests/
 # Unit test / coverage reports
 htmlcov/
 .tox/

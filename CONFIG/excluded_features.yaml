@@ -42,18 +42,28 @@ always_exclude:
   - _day
   - _hour
   - _month
+  - _weekday
   - adx_14
+  - atr_14
   - atr_x_vol
+  - bb_width_20
   - beta_60d
+  - cmf
   - day_of_month
+  - day_of_week
   - flipcount_10m
   - flipcount_15m
   - flipcount_5m
   - flipcount_60m
   - gk_vol_5
+  - ichimoku_chikou
+  - macd_hist
+  - macd_signal
   - market_correlation_20d
   - market_correlation_60d
   - mass_index
+  - mfi_14
+  - mfi_21
   - month_of_year
   - negative_volume_index
   - obv
@@ -68,24 +78,33 @@ always_exclude:
   - ret_zscore_30m
   - ret_zscore_5m
   - ret_zscore_60m
+  - roc_50
   - rs_vol_20
   - rsi_14
   - rsi_21
   - rsi_30
+  - sma_200
+  - stoch_d_21
   - time_in_profit_10m
   - time_in_profit_15m
   - time_in_profit_5m
   - time_in_profit_60m
   - trading_day_of_month
   - vol_15m
+  - vol_30m
   - vol_60m
   - vol_clustering_15m
   - vol_clustering_60m
   - vol_over_vol_15m
+  - vol_over_vol_5m
   - vol_over_vol_60m
   - vol_persistence
   - volatility_60d
+  - volume_quantile_20d
   - volume_ratio_20d
+  - volume_ratio_5d
+  - volume_roc_10
+  - volume_sma_20
   - volume_sma_50
   - volume_std_20d
   - volume_volatility_20d

@@ -620,10 +620,98 @@ class IntelligentTrainer:
             for target in targets:
                 target_features[target] = features
         
+        # Step 2.5: Generate training routing plan (if feature selection completed)
+        training_plan_dir = None
+        if target_features:
+            try:
+                from TRAINING.orchestration.routing_integration import generate_routing_plan_after_feature_selection
+                routing_plan = generate_routing_plan_after_feature_selection(
+                    output_dir=self.output_dir,
+                    targets=list(target_features.keys()),
+                    symbols=self.symbols,
+                    generate_training_plan=True,  # Generate training plan
+                    model_families=families  # Use specified families
+                )
+                if routing_plan:
+                    logger.info("✅ Training routing plan generated - see METRICS/routing_plan/ for details")
+                    # Set training plan directory for filtering
+                    training_plan_dir = self.output_dir / "METRICS" / "training_plan"
+            except Exception as e:
+                logger.debug(f"Failed to generate routing plan (non-critical): {e}")
+        
         # Step 3: Training
         logger.info("="*80)
         logger.info("STEP 3: Model Training")
         logger.info("="*80)
+        
+        # Apply training plan filter if available
+        filtered_targets = targets
+        filtered_symbols_by_target = {t: self.symbols for t in targets}  # Default: all symbols per target
+        training_plan = None
+        
+        if training_plan_dir:
+            try:
+                # Validate training_plan_dir
+                training_plan_dir = Path(training_plan_dir)
+                if not training_plan_dir.exists():
+                    logger.debug(f"Training plan directory does not exist: {training_plan_dir}")
+                elif training_plan_dir.exists():
+                    from TRAINING.orchestration.training_plan_consumer import (
+                        apply_training_plan_filter,
+                        load_training_plan,
+                        get_model_families_for_job
+                    )
+                    
+                    # Load training plan with error handling
+                    try:
+                        training_plan = load_training_plan(training_plan_dir)
+                    except Exception as e:
+                        logger.warning(f"Failed to load training plan: {e}, proceeding without filtering")
+                        training_plan = None
+                    
+                    if training_plan:
+                        try:
+                            filtered_targets, filtered_symbols_by_target = apply_training_plan_filter(
+                                targets=targets,
+                                symbols=self.symbols,
+                                training_plan_dir=training_plan_dir,
+                                use_cs_plan=True,
+                                use_symbol_plan=True
+                            )
+                            
+                            # Validate filtered results
+                            if not isinstance(filtered_targets, list):
+                                logger.warning(f"apply_training_plan_filter returned invalid filtered_targets: {type(filtered_targets)}, using original")
+                                filtered_targets = targets
+                            
+                            if not isinstance(filtered_symbols_by_target, dict):
+                                logger.warning(f"apply_training_plan_filter returned invalid filtered_symbols_by_target: {type(filtered_symbols_by_target)}, using default")
+                                filtered_symbols_by_target = {t: self.symbols for t in filtered_targets}
+                            
+                            if len(filtered_targets) < len(targets):
+                                logger.info(f"📋 Training plan filter applied: {len(targets)} → {len(filtered_targets)} targets")
+                            
+                            # Log symbol filtering per target - safely
+                            for target in filtered_targets[:10]:  # Limit logging to first 10
+                                try:
+                                    filtered_symbols = filtered_symbols_by_target.get(target, self.symbols)
+                                    if isinstance(filtered_symbols, list) and len(filtered_symbols) < len(self.symbols):
+                                        logger.info(f"📋 Filtered symbols for {target}: {len(self.symbols)} → {len(filtered_symbols)} symbols")
+                                except Exception as e:
+                                    logger.debug(f"Error logging symbol filter for {target}: {e}")
+                            
+                            # Update target_features to only include filtered targets - safely
+                            if isinstance(target_features, dict):
+                                try:
+                                    target_features = {t: f for t, f in target_features.items() if t in filtered_targets}
+                                except Exception as e:
+                                    logger.warning(f"Failed to filter target_features: {e}, keeping original")
+                        except Exception as e:
+                            logger.warning(f"Failed to apply training plan filter: {e}, using all targets")
+                            filtered_targets = targets
+                            filtered_symbols_by_target = {t: self.symbols for t in targets}
+            except Exception as e:
+                logger.warning(f"Failed to apply training plan filter (non-critical): {e}", exc_info=True)
         
         # Load MTF data for all symbols
         logger.info(f"Loading data for {len(self.symbols)} symbols...")
@@ -640,13 +728,99 @@ class IntelligentTrainer:
         
         # Prepare training parameters
         interval = 'cross_sectional'  # Use cross-sectional training
+        
+        # Extract model families from training plan if available, otherwise use provided/default
         families_list = families or ALL_FAMILIES
+        target_families_map = {}  # Per-target families from training plan
+        
+        if training_plan and filtered_targets:
+            # Get model families per target from training plan - with error handling
+            for target in filtered_targets:
+                if not isinstance(target, str) or not target:
+                    logger.warning(f"Skipping invalid target in family extraction: {target}")
+                    continue
+                
+                try:
+                    plan_families = get_model_families_for_job(
+                        training_plan,
+                        target=target,
+                        symbol=None,
+                        training_type="cross_sectional"
+                    )
+                    
+                    if plan_families:
+                        # Validate plan_families is a list
+                        if not isinstance(plan_families, list):
+                            logger.warning(f"plan_families for {target} is not a list: {type(plan_families)}")
+                            continue
+                        
+                        # Filter to only include families that are in the provided/default list
+                        try:
+                            filtered_plan_families = [f for f in plan_families if f in families_list]
+                            if filtered_plan_families:
+                                target_families_map[target] = filtered_plan_families
+                                logger.debug(f"📋 Target {target}: using {len(filtered_plan_families)} families from plan")
+                        except Exception as e:
+                            logger.warning(f"Failed to filter plan families for {target}: {e}")
+                except Exception as e:
+                    logger.warning(f"Failed to get model families for {target}: {e}")
+                    continue
+            
+            if target_families_map:
+                # If all targets have the same families, use that as the global list
+                all_target_families = set()
+                for target_fams in target_families_map.values():
+                    all_target_families.update(target_fams)
+                
+                # Use intersection of all target families (most restrictive)
+                # Only compute intersection if we have at least one target with families
+                if filtered_targets and filtered_targets[0] in target_families_map:
+                    common_families = set(target_families_map[filtered_targets[0]])
+                    for target in filtered_targets[1:]:
+                        if target in target_families_map:
+                            common_families &= set(target_families_map[target])
+                    
+                    if common_families:
+                        families_list = sorted(common_families)
+                        logger.info(f"📋 Using common model families from training plan: {families_list}")
+                    else:
+                        # Targets have different families - will need per-target filtering
+                        logger.info(f"📋 Targets have different model families in plan - using union: {sorted(all_target_families)}")
+                        families_list = sorted(all_target_families)
+                else:
+                    # No targets in map, use union of all families found
+                    if all_target_families:
+                        families_list = sorted(all_target_families)
+                        logger.info(f"📋 Using model families from training plan: {families_list}")
+            else:
+                logger.debug("No model families found in training plan, using provided/default families")
+        
+        # Validate families_list is not empty
+        if not families_list:
+            logger.warning("⚠️ No model families available after filtering! Using default families.")
+            families_list = ALL_FAMILIES if not families else families
+        
+        # Validate filtered_targets is not empty
+        if not filtered_targets:
+            logger.warning("⚠️ All targets were filtered out by training plan! Training will be skipped.")
+            logger.warning("   This may indicate an issue with the training plan or routing decisions.")
+        
         output_dir_str = str(self.output_dir / "training_results")
         
         # Get training parameters from kwargs or config (min_cs and max_cs_samples already extracted above)
         max_rows_train = train_kwargs.get('max_rows_train')
         
-        logger.info(f"Training {len(targets)} targets with strategy '{strategy}'")
+        # Early return if no targets to train
+        if not filtered_targets:
+            logger.error("❌ No targets to train after filtering. Exiting.")
+            return {
+                "status": "skipped",
+                "reason": "All targets filtered out by training plan",
+                "targets_requested": len(targets),
+                "targets_filtered": 0
+            }
+        
+        logger.info(f"Training {len(filtered_targets)} targets with strategy '{strategy}'")
         logger.info(f"Model families: {len(families_list)} families")
         if target_features:
             logger.info(f"Using selected features per target (top {top_m_features} per target)")
@@ -664,7 +838,7 @@ class IntelligentTrainer:
         logger.info("Starting model training...")
         training_results = train_models_for_interval_comprehensive(
             interval=interval,
-            targets=targets,
+            targets=filtered_targets,  # Use filtered targets
             mtf_data=mtf_data,
             families=families_list,
             strategy=strategy,
@@ -672,7 +846,8 @@ class IntelligentTrainer:
             min_cs=min_cs,
             max_cs_samples=max_cs_samples,
             max_rows_train=max_rows_train,
-            target_features=features_to_use
+            target_features=features_to_use,
+            target_families=target_families_map if target_families_map else None  # Per-target families from plan
         )
         
         logger.info("="*80)

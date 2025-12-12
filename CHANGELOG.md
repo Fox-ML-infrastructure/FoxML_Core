@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Highlights
 
+- **Training Routing System** (2025-12-11) – Config-driven routing system that makes reproducible decisions about where to train models (cross-sectional vs symbol-specific vs both vs experimental vs blocked) based on feature selection metrics, stability analysis, and leakage detection. Generates routing plans and training plans with automatic filtering. **NEW**: 2-stage training pipeline (CPU models first, then GPU models) and one-command end-to-end flow (target ranking → feature selection → training plan → training execution). See [Training Routing Guide](DOCS/02_reference/training_routing/README.md). **Status: Currently being tested.**
 - **Reproducibility & Drift Tracking** (2025-12-11) – End-to-end reproducibility tracking across ranking, feature selection, and training with per-model metrics and three-tier classification (**STABLE / DRIFTING / DIVERGED**). Module-specific logs and cross-run comparison. See [Reproducibility Tracking Guide](DOCS/03_technical/implementation/REPRODUCIBILITY_TRACKING.md).
 - **Model Parameter Sanitization** (2025-12-11) – Shared `config_cleaner.py` utility using `inspect.signature()` to strip unknown/duplicate params and normalize tricky cases (MLPRegressor `verbose`, CatBoost iteration synonyms and RNG params, sklearn/univariate quirks). Eliminates an entire class of "got multiple values" / "unexpected keyword" failures.
 - **Interval Detection & Time Handling** (2025-12-11) – Median-based gap filtering for overnight/weekend gaps, `interval_detection.mode=fixed` for known bar intervals, and noise reduction (INFO instead of WARNING). Removes spurious "unclear interval" warnings on clean 5m data.
@@ -40,6 +41,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ### Added
+
+- **Training Routing & Planning System**
+  - Config-driven routing decisions for each `(target, symbol)` pair based on metrics (scores, stability, leakage, sample sizes).
+  - Routing states: `ROUTE_CROSS_SECTIONAL`, `ROUTE_SYMBOL_SPECIFIC`, `ROUTE_BOTH`, `ROUTE_EXPERIMENTAL_ONLY`, `ROUTE_BLOCKED`.
+  - Automatic routing plan generation after feature selection with JSON/YAML/Markdown outputs.
+  - Training plan generator that converts routing decisions into actionable training jobs with priorities and model families.
+  - **Automatic integration**: Training phase automatically filters targets based on training plan (CS training filtering implemented).
+  - Metrics aggregator collects metrics from feature selection, stability snapshots, and leakage detection.
+  - Full documentation in `DOCS/02_reference/training_routing/`.
+  - **Note**: Currently filters cross-sectional training targets; symbol-specific training execution is a future enhancement.
 
 - **Reproducibility Tracking System**
   - Reusable `ReproducibilityTracker` with tolerance-based comparisons and STABLE/DRIFTING/DIVERGED classification.

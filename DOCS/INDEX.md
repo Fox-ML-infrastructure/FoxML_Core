@@ -96,6 +96,7 @@ Complete technical reference for daily use.
 ### Systems Reference
 - [Pipeline Reference](02_reference/systems/PIPELINE_REFERENCE.md) - Data pipelines
 - [Feature Importance Stability](../TRAINING/stability/FEATURE_IMPORTANCE_STABILITY.md) - **NEW**: Feature importance stability tracking and analysis system
+- [Training Routing System](02_reference/training_routing/README.md) - **NEW**: Config-driven routing decisions for cross-sectional vs symbol-specific training with automatic plan generation, 2-stage training (CPU→GPU), and one-command end-to-end pipeline
 
 ### API Reference
 - [Module Reference](02_reference/api/MODULE_REFERENCE.md) - Python API for all modules
@@ -108,6 +109,7 @@ Complete technical reference for daily use.
 - [Configuration System Overview](02_reference/configuration/README.md) - Centralized configuration system overview (includes `logging_config.yaml` documentation)
 - [Feature & Target Configs](02_reference/configuration/FEATURE_TARGET_CONFIGS.md) - Feature/target configuration guide
 - [Training Pipeline Configs](02_reference/configuration/TRAINING_PIPELINE_CONFIGS.md) - System resources and training behavior
+- [Training Routing Config](02_reference/training_routing/README.md) - **NEW**: Routing policy configuration (`routing_config.yaml`) for cross-sectional vs symbol-specific training decisions. Includes 2-stage training pipeline (CPU models first, then GPU models) and one-command end-to-end flow.
 - [Safety & Leakage Configs](02_reference/configuration/SAFETY_LEAKAGE_CONFIGS.md) - Leakage detection and numerical stability
 - [Model Configuration](02_reference/configuration/MODEL_CONFIGURATION.md) - Model hyperparameters and variants
 - [Usage Examples](02_reference/configuration/USAGE_EXAMPLES.md) - Practical configuration examples (includes interval config and CatBoost examples)

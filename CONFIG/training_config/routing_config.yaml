@@ -1,0 +1,71 @@
+# Training Routing Configuration
+# Determines whether to train cross-sectional, symbol-specific, both, experimental, or block training
+# for each (target, symbol) pair based on metrics from feature selection, stability, and leakage detection
+
+routing:
+  # --- General Safety Rails ---
+  min_sample_size:
+    cross_sectional: 50_000      # Total rows required for CS training
+    symbol: 5_000                # Per-symbol rows required for symbol-specific training
+  
+  block_on_leakage: true         # Block training if leakage detected
+  
+  # --- Score Thresholds ---
+  # These are typically ROC-AUC for classification, R² for regression
+  cross_sectional:
+    min_score: 0.55              # Minimum score to allow CS training
+    strong_score: 0.60           # Score threshold for "strong" CS signal
+  
+  symbol:
+    min_score: 0.58              # Minimum score to allow symbol-specific training
+    strong_score: 0.62           # Score threshold for "strong" symbol signal
+  
+  # --- Stability Requirements ---
+  # Stability categories: STABLE, DRIFTING, DIVERGED, UNKNOWN
+  stability_allowlist:
+    cross_sectional: ["STABLE", "DRIFTING"]  # CS can tolerate some drift
+    symbol: ["STABLE"]                       # Symbol-specific requires stability
+  
+  # --- Both Strong Behavior ---
+  # When both CS and symbol are strong, what to do?
+  both_strong_behavior: "ROUTE_BOTH"  # Options: "ROUTE_BOTH", "PREFER_CS", "PREFER_SYMBOL"
+  
+  # --- Experimental Lane ---
+  enable_experimental_lane: true
+  experimental:
+    min_score: 0.52              # Lower threshold for experimental
+    allowed_stabilities: ["DRIFTING", "UNKNOWN"]  # Experimental can handle instability
+    max_fraction_symbols_per_target: 0.2  # Cap experiment load (20% of symbols per target)
+  
+  # --- Feature Set Safety ---
+  require_safe_features_only: true
+  allowed_feature_leakage_status: ["SAFE"]  # Only use features marked as SAFE
+  
+  # --- Model Family Failure Handling ---
+  # If all major model families fail, block training
+  require_min_successful_families: 1  # Minimum families that must succeed
+  
+  # --- Logging Options ---
+  log_decision_reasons: true
+  dump_plan_as:
+    - "JSON"
+    - "YAML"
+    - "MARKDOWN"
+  
+  # --- Stability Classification Rules ---
+  # How to classify stability from metrics
+  stability_classification:
+    # Thresholds for mean_overlap (Jaccard similarity of top-K features)
+    stable_overlap_min: 0.70
+    drifting_overlap_min: 0.50
+    
+    # Thresholds for mean_tau (Kendall tau rank correlation)
+    stable_tau_min: 0.60
+    drifting_tau_min: 0.40
+    
+    # If std_overlap or std_tau is high, mark as DIVERGED
+    max_std_overlap: 0.20
+    max_std_tau: 0.25
+    
+    # Minimum snapshots required for stability analysis
+    min_snapshots_for_stability: 2
