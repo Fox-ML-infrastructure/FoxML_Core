@@ -94,7 +94,7 @@ class DecisionEngine:
         if use_bayesian:
             try:
                 # Load config for Bayesian policy (SST: Single Source of Truth)
-                from TRAINING.utils.resolved_config import get_cfg
+                from CONFIG.config_loader import get_cfg
                 self.bayesian_config = {
                     'bayesian': {
                         'min_runs_for_learning': get_cfg('training.decisions.bayesian.min_runs_for_learning', default=5, config_name='training_config'),
