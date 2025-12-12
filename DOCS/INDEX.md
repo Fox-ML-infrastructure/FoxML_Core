@@ -3,7 +3,7 @@
 Complete navigation guide for FoxML Core documentation.
 
 **Last Updated**: 2025-12-12  
-**Recent Updates**: Trend Analysis System - Automated trend analysis across target ranking, feature selection, and cross-sectional ranking with exponential decay weighting and regression detection. Trend metadata stored in `metadata.json` for audit-grade verification. Cohort-Aware Reproducibility System - Runs organized by data cohort with sample-adjusted drift detection. RESULTS Directory Organization - All runs automatically organized in `RESULTS/{cohort_id}/{run_name}/` structure. Integrated Config Backups - Backups stored in run directory, organized by cohort. Enhanced Metadata - `metadata.json` includes full symbols list for debugging. Unified Metadata Extractor - Centralized utility for consistent cohort identification across all modules.
+**Recent Updates**: Sample Size Binning System - RESULTS directory organized by sample size bins (`RESULTS/sample_25k-50k/{run_name}/`) for easy comparison of runs with similar cross-sectional sample sizes. Audit-grade binning with unambiguous boundaries, versioning, and metadata storage. Trend Analysis System - Automated trend analysis across target ranking, feature selection, and cross-sectional ranking with exponential decay weighting and regression detection. Trend metadata stored in `metadata.json` for audit-grade verification. Cohort-Aware Reproducibility System - Runs organized by data cohort with sample-adjusted drift detection. Integrated Config Backups - Backups stored in run directory, organized by sample size bin. Enhanced Metadata - `metadata.json` includes full symbols list, bin info, and data characteristics. Unified Metadata Extractor - Centralized utility for consistent cohort identification across all modules.
 
 ## Quick Navigation
 
@@ -160,7 +160,8 @@ Research notes, design rationale, advanced topics.
 - [Reproducibility Tracking](03_technical/implementation/REPRODUCIBILITY_TRACKING.md) - Automatic reproducibility verification across pipeline stages
 - [Cohort-Aware Reproducibility](03_technical/implementation/COHORT_AWARE_REPRODUCIBILITY.md) - **NEW**: Cohort-aware reproducibility system with sample-adjusted drift detection
 - [Trend Analyzer Verification](03_technical/implementation/TREND_ANALYZER_VERIFICATION.md) - **NEW**: Trend analysis system verification guide (target ranking, feature selection, cross-sectional ranking)
-- [Reproducibility Structure](03_technical/implementation/REPRODUCIBILITY_STRUCTURE.md) - **NEW**: Complete directory structure guide with RESULTS organization
+- [Reproducibility Structure](03_technical/implementation/REPRODUCIBILITY_STRUCTURE.md) - Complete directory structure guide with REPRODUCIBILITY organization
+- [RESULTS Organization](03_technical/implementation/RESULTS_ORGANIZATION_OPTIONS.md) - **NEW**: RESULTS directory organization by sample size bins (current implementation)
 - [Reproducibility API](03_technical/implementation/REPRODUCIBILITY_API.md) - **NEW**: API reference for reproducibility tracking
 - [Reproducibility Error Handling](03_technical/implementation/REPRODUCIBILITY_ERROR_HANDLING.md) - **NEW**: Error classification and handling guide
 - [Reproducibility Improvements](03_technical/implementation/REPRODUCIBILITY_IMPROVEMENTS.md) - **NEW**: Summary of reproducibility improvements
