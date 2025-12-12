@@ -48,6 +48,17 @@ features:
   top_m_features: 100
   
   # Manual feature list (overrides auto_features if provided)
+
+# Target-conditional feature exclusions
+# Generates per-target exclusion lists based on target horizon and semantics
+# This implements "Target-Conditional Feature Selection" - tailoring features to target physics
+target_conditional_exclusions:
+  enabled: true  # Enable target-conditional exclusions
+  horizon_safety_multiplier: 4.0  # Exclude features with lookback > horizon * multiplier (e.g., 60m target -> exclude >240m features)
+  enable_semantic_rules: true  # Enable semantic rules (e.g., exclude repainting indicators for peak/valley targets)
+  # Exclusion lists are saved to: RESULTS/{cohort}/{run}/feature_exclusions/{target}_exclusions.yaml
+
+# Manual feature list (overrides auto_features if provided)
   # Leave empty [] to use auto_features, or specify: ["feature1", "feature2"]
   manual_features: []
 
