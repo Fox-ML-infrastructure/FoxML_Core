@@ -33,8 +33,15 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def add_hft_targets(data_dir: str, output_dir: str):
-    """Add HFT forward return targets to MTF data."""
+def add_hft_targets(data_dir: str, output_dir: str, interval_minutes: float = 5.0):
+    """
+    Add HFT forward return targets to MTF data.
+    
+    Args:
+        data_dir: Input data directory
+        output_dir: Output data directory
+        interval_minutes: Bar interval in minutes (default: 5.0 for 5m data)
+    """
     
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
@@ -53,20 +60,23 @@ def add_hft_targets(data_dir: str, output_dir: str):
         df['datetime'] = pd.to_datetime(df['ts'], unit='ns')
         df = df.sort_values('datetime')
         
+        # CRITICAL: Convert horizon_minutes to horizon_bars
         # Calculate forward returns for HFT horizons
-        # 5m data -> calculate returns for 15m, 30m, 60m, 120m ahead
+        horizons_minutes = [15, 30, 60, 120]
         
-        # 15m ahead (3 bars)
-        df['fwd_ret_15m'] = df['close'].pct_change(3).shift(-3)
-        
-        # 30m ahead (6 bars) 
-        df['fwd_ret_30m'] = df['close'].pct_change(6).shift(-6)
-        
-        # 60m ahead (12 bars)
-        df['fwd_ret_60m'] = df['close'].pct_change(12).shift(-12)
-        
-        # 120m ahead (24 bars)
-        df['fwd_ret_120m'] = df['close'].pct_change(24).shift(-24)
+        for horizon_minutes in horizons_minutes:
+            horizon_bars = int(horizon_minutes / interval_minutes)
+            if abs(horizon_bars * interval_minutes - horizon_minutes) > 0.01:
+                logger.warning(
+                    f"⚠️  Horizon {horizon_minutes}m is not a multiple of interval {interval_minutes}m. "
+                    f"Using {horizon_bars} bars = {horizon_bars * interval_minutes:.1f}m"
+                )
+            
+            # TIME CONTRACT: Label starts at t+1
+            # Forward return: (close[t+horizon_bars] / close[t]) - 1
+            # Using shift(-horizon_bars) to get future close, then compute return
+            col_name = f'fwd_ret_{horizon_minutes}m'
+            df[col_name] = (df['close'].shift(-horizon_bars) / df['close'] - 1)
         
         # Same-day open to close (session-anchored)
         # Group by date and calculate open to close return
@@ -99,7 +109,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Add HFT forward return targets")
     parser.add_argument("--data-dir", default="5m_comprehensive_features_final", help="Input data directory")
     parser.add_argument("--output-dir", default="5m_comprehensive_features_hft", help="Output data directory")
+    parser.add_argument("--interval-minutes", type=float, default=5.0, help="Bar interval in minutes (default: 5.0)")
     
     args = parser.parse_args()
     
-    add_hft_targets(args.data_dir, args.output_dir)
+    add_hft_targets(args.data_dir, args.output_dir, interval_minutes=args.interval_minutes)

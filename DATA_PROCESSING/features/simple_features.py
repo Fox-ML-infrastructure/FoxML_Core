@@ -684,8 +684,19 @@ class SimpleFeatureComputer:
         return features.with_columns(interactions)
     
     def _add_forward_returns(self, features: pl.LazyFrame) -> pl.LazyFrame:
-        """Add forward returns for target variables"""
+        """
+        Add forward returns for target variables.
+        
+        NOTE: Column names use "d" suffix (e.g., fwd_ret_1d) but shifts are in BARS, not days.
+        This is a naming convention issue - the actual computation uses bar shifts:
+        - fwd_ret_1d: 1 bar ahead (not 1 day)
+        - fwd_ret_5d: 5 bars ahead (not 5 days)
+        - fwd_ret_20d: 20 bars ahead (not 20 days)
+        
+        TIME CONTRACT: Label starts at t+1, so shift(-1) gets close[t+1] for return computation.
+        """
         return features.with_columns([
+            # TIME CONTRACT: shift(-1) gets close[t+1], then compute return from close[t]
             (pl.col("close").shift(-1) / pl.col("close") - 1).alias("fwd_ret_1d").cast(pl.Float32),
             (pl.col("close").shift(-5) / pl.col("close") - 1).alias("fwd_ret_5d").cast(pl.Float32),
             (pl.col("close").shift(-20) / pl.col("close") - 1).alias("fwd_ret_20d").cast(pl.Float32),

@@ -345,7 +345,9 @@ class ComprehensiveFeatureBuilder:
                 (pl.col("bb_percent_b_20") * pl.col("vol_15m")).alias("bb_x_vol").cast(pl.Float32),
                 
                 # Forward returns for target
-                pl.col("close").pct_change(-1).alias("fwd_ret_1d").cast(pl.Float32),
+                # TIME CONTRACT: Label starts at t+1, so shift(-1) then compute return
+                # NOTE: pct_change(-1) is forward-looking (leak!), use shift(-1) instead
+                ((pl.col("close").shift(-1) / pl.col("close")) - 1.0).alias("fwd_ret_1d").cast(pl.Float32),
             ])
             .select([
                 "symbol", "ts", "open", "high", "low", "close", "volume", "vwap",
