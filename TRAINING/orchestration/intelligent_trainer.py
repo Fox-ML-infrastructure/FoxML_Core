@@ -273,12 +273,24 @@ class IntelligentTrainer:
             logger.debug(f"Sampling {len(sample_symbols)} symbols from {self.data_dir} to estimate N_effective")
             
             for symbol in sample_symbols:
-                symbol_dir = self.data_dir / f"symbol={symbol}"
-                data_path = symbol_dir / f"{symbol}.parquet"
+                # Try multiple possible paths
+                possible_paths = [
+                    self.data_dir / f"symbol={symbol}" / f"{symbol}.parquet",
+                    self.data_dir / symbol / f"{symbol}.parquet",
+                    self.data_dir / f"{symbol}.parquet"
+                ]
                 
-                if not data_path.exists():
-                    logger.debug(f"Data file not found: {data_path}")
+                data_path = None
+                for path in possible_paths:
+                    if path.exists():
+                        data_path = path
+                        break
+                
+                if data_path is None:
+                    logger.debug(f"Data file not found for {symbol} (tried: {[str(p) for p in possible_paths]})")
                     continue
+                
+                logger.debug(f"Found data file for {symbol}: {data_path}")
                 
                 try:
                     # Use parquet metadata if available (faster - no data load)
