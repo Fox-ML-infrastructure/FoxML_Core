@@ -696,8 +696,8 @@ def rank_targets(
                         for symbol in symbols:
                             try:
                                 if auto_rerun_enabled and _AUTOFIX_AVAILABLE:
-                                # Try with view/symbol, fallback to without if not supported
-                                try:
+                                    # Try with view/symbol, fallback to without if not supported
+                                    try:
                                     result_sym = evaluate_target_with_autofix(
                                         target_name=target_name,
                                         target_config=target_config,
@@ -737,8 +737,8 @@ def rank_targets(
                                         explicit_interval=explicit_interval,
                                         experiment_config=experiment_config
                                     )
-                            else:
-                                result_sym = evaluate_target_predictability(
+                                else:
+                                    result_sym = evaluate_target_predictability(
                                     target_name=target_name,
                                     target_config=target_config,
                                     symbols=[symbol],  # Single symbol
@@ -753,17 +753,17 @@ def rank_targets(
                                     experiment_config=experiment_config,
                                     view="SYMBOL_SPECIFIC",
                                     symbol=symbol
-                                )
-                            
-                            # Gate: Skip if result is degenerate (mean_score = -999)
-                            if result_sym.mean_score == -999.0:
-                                logger.debug(f"    Skipped {target_name} for symbol {symbol}: degenerate result")
+                                    )
+                                
+                                # Gate: Skip if result is degenerate (mean_score = -999)
+                                if result_sym.mean_score == -999.0:
+                                    logger.debug(f"    Skipped {target_name} for symbol {symbol}: degenerate result")
+                                    continue
+                                
+                                result_sym_dict[symbol] = result_sym
+                            except Exception as e:
+                                logger.warning(f"    Failed to evaluate {target_name} for symbol {symbol}: {e}")
                                 continue
-                            
-                            result_sym_dict[symbol] = result_sym
-                        except Exception as e:
-                            logger.warning(f"    Failed to evaluate {target_name} for symbol {symbol}: {e}")
-                            continue
                 
                 # View C: LOSO evaluation (optional, if enabled)
                 result_loso_dict = {}
