@@ -698,7 +698,7 @@ def rank_targets(
                                 if auto_rerun_enabled and _AUTOFIX_AVAILABLE:
                                     # Try with view/symbol, fallback to without if not supported
                                     try:
-                                    result_sym = evaluate_target_with_autofix(
+                                        result_sym = evaluate_target_with_autofix(
                                         target_name=target_name,
                                         target_config=target_config,
                                         symbols=[symbol],  # Single symbol
