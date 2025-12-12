@@ -22,11 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Series key verification**: Series grouping uses stable identity fields only (cohort_id, stage, target, data_fingerprint) - no poisoned fields like run_id or timestamps
   - **Verification tools**: `verify_trend_analyzer.py` script provides comprehensive verification checklist
   - See [Trend Analyzer Verification Guide](DOCS/03_technical/implementation/TREND_ANALYZER_VERIFICATION.md)
-- **Cohort-Aware Reproducibility & RESULTS Organization** (2025-12-11) – **NEW**: Complete overhaul of reproducibility tracking and output organization:
+- **Cohort-Aware Reproducibility & RESULTS Organization** (2025-12-12) – **NEW**: Complete overhaul of reproducibility tracking and output organization:
   - **Cohort-aware reproducibility**: Runs organized by data cohort (sample size, symbols, date range, config) with sample-adjusted drift detection. Only compares runs within the same cohort for statistically meaningful comparisons.
-  - **RESULTS directory structure**: All runs (test and production) organized in `RESULTS/` directory, automatically sorted by cohort after first target is processed: `RESULTS/{cohort_id}/{run_name}/`
-  - **Integrated backups**: Config backups now stored in run directory (`RESULTS/{cohort_id}/{run_name}/backups/`) instead of `CONFIG/backups/`, keeping everything together
-  - **Enhanced metadata**: `metadata.json` now includes full `symbols` list (sorted, deduplicated) for debugging and cohort identification
+  - **RESULTS directory structure**: All runs (test and production) organized in `RESULTS/` directory by sample size bins for easy comparison: `RESULTS/sample_25k-50k/{run_name}/`
+  - **Sample size binning**: Runs grouped into bins (0-5k, 5k-10k, 10k-25k, 25k-50k, 50k-100k, 100k-250k, 250k-500k, 500k-1M, 1M+) to enable easy comparison of runs with similar cross-sectional sample sizes
+  - **Audit-grade binning**: Bin boundaries are unambiguous (EXCLUSIVE upper bounds), versioned (`sample_bin_v1`), and stored in `metadata.json` (bin_name, bin_min, bin_max, binning_scheme_version)
+  - **Early N_effective estimation**: Automatically estimates sample size from data files or existing metadata during initialization to avoid `_pending/` directories
+  - **Integrated backups**: Config backups now stored in run directory (`RESULTS/{bin_name}/{run_name}/backups/`) instead of `CONFIG/backups/`, keeping everything together
+  - **Enhanced metadata**: `metadata.json` now includes full `symbols` list (sorted, deduplicated) and bin metadata for debugging and cohort identification
   - **Unified metadata extractor**: Centralized `cohort_metadata_extractor.py` utility used across all modules (target ranking, feature selection, training) for consistent cohort identification
   - **Immediate writes**: All reproducibility files flushed to disk immediately with `fsync()` for real-time visibility
   - See [Cohort-Aware Reproducibility Guide](DOCS/03_technical/implementation/COHORT_AWARE_REPRODUCIBILITY.md)
@@ -57,6 +60,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ### Added
+
+- **Sample Size Binning System** (2025-12-12)
+  - Automatic binning of runs by sample size into readable ranges (e.g., `sample_25k-50k`) for easy comparison
+  - Bins: 0-5k, 5k-10k, 10k-25k, 25k-50k, 50k-100k, 100k-250k, 250k-500k, 500k-1M, 1M+
+  - Bin metadata stored in `metadata.json`: `bin_name`, `bin_min`, `bin_max`, `binning_scheme_version`
+  - Unambiguous boundary rules (EXCLUSIVE upper bounds: `bin_min <= N_effective < bin_max`)
+  - Versioned binning scheme (`sample_bin_v1`) for backward compatibility
+  - Early N_effective estimation from data files or existing metadata to avoid `_pending/` directories
+  - Bin is for directory organization only; trend series keys use stable identity (cohort_id, stage, target) - no bin_name
 
 - **Trend Analysis System**
   - `TrendAnalyzer` class for analyzing performance trends across runs within comparable series

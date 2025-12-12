@@ -1,29 +1,81 @@
-# RESULTS Directory Organization Options
+# RESULTS Directory Organization
 
-## Current Structure
+## Current Implementation (2025-12-12)
+
+**Structure: Sample Size Bins**
 
 ```
 RESULTS/
-  {N_effective}/              # e.g., 943943
-    {run_name}/               # e.g., test_e2e_ranking_unified_20251212_012021
-      target_rankings/
-      feature_selections/
-      REPRODUCIBILITY/
-      ...
+  sample_25k-50k/            # All runs with 25,000-50,000 samples
+    test_run_20251212_012021/
+    test_run_20251212_020000/
+    ...
+  sample_50k-100k/           # All runs with 50,000-100,000 samples
+    ...
+  sample_500k-1M/            # All runs with 500,000-1,000,000 samples
+    test_e2e_ranking_unified_20251212_012021/
+    ...
 ```
 
-**Pros:**
-- Easy to find runs by sample size
-- Groups comparable runs together
+**Why This Structure?**
 
-**Cons:**
-- Many numeric directories at top level
-- Hard to find recent runs
-- No experiment type grouping
+This organization makes it **easy to compare runs with similar cross-sectional sample sizes**, which is the primary use case for reproducibility and trend analysis.
+
+**Benefits:**
+- ✅ **Easy comparison**: All ~25k runs are in `sample_25k-50k/` - perfect for comparing similar experiments
+- ✅ **Trend analysis friendly**: Series won't fragment when `N_effective` jitters by a few hundred samples
+- ✅ **Cleaner structure**: Only 9 top-level directories (one per bin) instead of hundreds of numeric directories
+- ✅ **Human navigable**: "Show me all ~25k runs" → go to `sample_25k-50k/`
+- ✅ **Audit-grade**: Bin boundaries are unambiguous, versioned, and stored in metadata
+
+**Bins:**
+- `sample_0-5k`: 0 <= N < 5,000
+- `sample_5k-10k`: 5,000 <= N < 10,000
+- `sample_10k-25k`: 10,000 <= N < 25,000
+- `sample_25k-50k`: 25,000 <= N < 50,000
+- `sample_50k-100k`: 50,000 <= N < 100,000
+- `sample_100k-250k`: 100,000 <= N < 250,000
+- `sample_250k-500k`: 250,000 <= N < 500,000
+- `sample_500k-1M`: 500,000 <= N < 1,000,000
+- `sample_1M+`: N >= 1,000,000
+
+**Boundary Rules:**
+- Boundaries are **EXCLUSIVE upper bounds**: `bin_min <= N_effective < bin_max`
+- Example: `sample_25k-50k` means `25000 <= N_effective < 50000`
+- This ensures unambiguous binning (50,000 always goes to `sample_50k-100k`, never `sample_25k-50k`)
+
+**Metadata:**
+Bin information is stored in `metadata.json`:
+```json
+{
+  "N_effective": 943943,
+  "sample_size_bin": {
+    "bin_name": "sample_500k-1M",
+    "bin_min": 500000,
+    "bin_max": 1000000,
+    "binning_scheme_version": "sample_bin_v1"
+  }
+}
+```
+
+**Early Estimation:**
+The system automatically estimates `N_effective` during initialization by:
+1. Checking existing metadata from previous runs with same symbols
+2. Sampling data files (using parquet metadata for fast row counts)
+3. Extrapolating to all symbols
+
+This allows the run directory to be created directly in the correct bin, avoiding `_pending/` directories in most cases.
+
+**Trend Analysis:**
+- Bin is **NOT** included in trend series keys (which use stable identity: cohort_id, stage, target, data_fingerprint)
+- This prevents series fragmentation when binning scheme changes
+- Exact `N_effective` remains first-class in metadata for precise comparisons
 
 ---
 
-## Option 1: Date-Based (Recommended for Most Use Cases)
+## Alternative Options (Not Implemented)
+
+### Option 1: Date-Based
 
 ```
 RESULTS/
@@ -154,49 +206,45 @@ RESULTS/
 
 ---
 
-## Recommendation
+## Why Sample Size Bins Were Chosen
 
-**Option 1 (Date-Based)** is recommended because:
+**Primary use case**: Compare runs with similar cross-sectional sample sizes (e.g., "show me all ~25k runs")
 
-1. **Most common use case**: "Show me runs from today/last week"
-2. **Clean structure**: Only ~365 top-level directories max (one per day)
-3. **Metadata preserved**: N_effective still in `metadata.json` and `index.parquet`
-4. **Queryable**: Can still filter by sample size using the index
-5. **Simple**: No symlinks or complex logic
+**Benefits over alternatives:**
+- **Better than exact N_effective**: Groups similar runs together (25,000 vs 25,100 both in `sample_25k-50k`)
+- **Better than date-based**: Keeps comparable runs together even if run on different days
+- **Better than flat**: Provides natural grouping without needing query tools
+- **Trend analysis friendly**: Prevents series fragmentation from small N_effective variations
 
-**Alternative**: If you frequently filter by sample size, use **Option 2 (Flatter)** with a good CLI tool for querying.
-
----
-
-## Migration Strategy
-
-If changing organization:
-
-1. Keep old structure for existing runs (no migration needed)
-2. New runs use new structure
-3. Update `index.parquet` to include full path for both old and new
-4. Add CLI tool to query/find runs regardless of structure
+**Trade-offs:**
+- Less precise than exact N_effective (but exact value still in metadata)
+- Can't easily find "runs from today" (but can query `index.parquet` or sort by timestamp)
+- Fixed bins may not fit all use cases (but versioned for future changes)
 
 ---
 
-## Implementation Example (Date-Based)
+## Finding Runs
 
-```python
-# In IntelligentTrainer.__init__
-from datetime import datetime
-
-# Determine experiment type
-experiment_type = "test" if "test" in output_dir_name.lower() else "production"
-
-# Get date
-run_date = datetime.now().strftime("%Y-%m-%d")
-
-# Create structure: RESULTS/{experiment_type}/{date}/{run_name}/
-self.output_dir = results_dir / experiment_type / run_date / output_dir_name
+**By sample size bin:**
+```bash
+ls RESULTS/sample_25k-50k/
 ```
 
-Or simpler (just date):
+**By exact N_effective:**
 ```python
-run_date = datetime.now().strftime("%Y-%m-%d")
-self.output_dir = results_dir / run_date / output_dir_name
+# Query index.parquet
+import pandas as pd
+index = pd.read_parquet("RESULTS/*/REPRODUCIBILITY/index.parquet")
+runs = index[index['N_effective'] == 25000]
+```
+
+**By date:**
+```python
+# Query index.parquet
+runs = index[index['created_at'] >= '2025-12-12']
+```
+
+**By cohort:**
+```python
+runs = index[index['cohort_id'] == 'cs_2025Q2_min_cs3_max1000_v1_abc123']
 ```

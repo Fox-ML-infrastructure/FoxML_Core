@@ -373,24 +373,12 @@ See [Config Basics](../configuration/CONFIG_BASICS.md) for how to modify these s
 
 ## Output Structure
 
-**Note**: All runs are automatically organized in the `RESULTS/` directory, sorted by cohort after the first target is processed. Output directories are automatically timestamped by default (format: `YYYYMMDD_HHMMSS`) to make runs distinguishable.
+**Note**: All runs are automatically organized in the `RESULTS/` directory by sample size bins. Output directories are automatically timestamped by default (format: `YYYYMMDD_HHMMSS`) to make runs distinguishable.
 
-**Initial Structure** (before cohort identified):
+**Directory Organization**:
 ```
 RESULTS/
-└── _pending/
-    └── {run_name}_YYYYMMDD_HHMMSS/
-        ├── target_rankings/
-        ├── feature_selections/
-        ├── training_results/
-        ├── backups/                    # Config backups (integrated)
-        └── REPRODUCIBILITY/
-```
-
-**Final Structure** (after cohort identified):
-```
-RESULTS/
-└── {cohort_id}/                        # e.g., cs_2025Q2_min_cs3_max1000_v1_bdbeb515
+└── sample_25k-50k/                     # All runs with 25,000-50,000 samples
     └── {run_name}_YYYYMMDD_HHMMSS/
         ├── target_rankings/
         │   ├── target_predictability_rankings.csv
@@ -415,7 +403,7 @@ RESULTS/
         │   ├── TARGET_RANKING/
         │   │   └── {target}/
         │   │       └── cohort={cohort_id}/
-        │   │           ├── metadata.json  # Includes symbols list
+        │   │           ├── metadata.json  # Includes symbols list, bin info
         │   │           ├── metrics.json
         │   │           └── drift.json
         │   ├── FEATURE_SELECTION/
@@ -428,11 +416,31 @@ RESULTS/
                 └── {target}.json
 ```
 
+**Sample Size Bins**:
+- `sample_0-5k`: 0-5,000 samples
+- `sample_5k-10k`: 5,000-10,000 samples
+- `sample_10k-25k`: 10,000-25,000 samples
+- `sample_25k-50k`: 25,000-50,000 samples
+- `sample_50k-100k`: 50,000-100,000 samples
+- `sample_100k-250k`: 100,000-250,000 samples
+- `sample_250k-500k`: 250,000-500,000 samples
+- `sample_500k-1M`: 500,000-1,000,000 samples
+- `sample_1M+`: 1,000,000+ samples
+
 **Benefits**:
-- **Cohort-organized**: All runs for the same data configuration are grouped together
-- **Easy comparison**: Runs in the same cohort directory are directly comparable
+- **Easy comparison**: All runs with similar sample sizes are grouped together (e.g., all ~25k runs in `sample_25k-50k/`)
+- **Trend analysis friendly**: Series won't fragment when `N_effective` varies slightly
+- **Clean structure**: Only 9 top-level directories instead of hundreds
+- **Audit-grade**: Bin boundaries are unambiguous, versioned, and stored in `metadata.json`
+- **Early estimation**: System estimates `N_effective` during initialization to avoid `_pending/` directories
 - **Integrated backups**: Config backups stored with run artifacts
-- **Complete metadata**: Each cohort includes full symbol list and data characteristics
+- **Complete metadata**: Each run includes full symbol list, bin info, and data characteristics
+
+**Finding Runs**:
+- **By sample size**: `ls RESULTS/sample_25k-50k/`
+- **By exact N_effective**: Query `REPRODUCIBILITY/index.parquet`
+- **By date**: Query `REPRODUCIBILITY/index.parquet` filtered by `created_at`
+- **By cohort**: Query `REPRODUCIBILITY/index.parquet` filtered by `cohort_id`
 
 To disable timestamping, use `add_timestamp=False` when initializing `IntelligentTrainer` programmatically.
 
