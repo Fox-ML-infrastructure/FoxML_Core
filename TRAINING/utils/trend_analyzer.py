@@ -693,9 +693,10 @@ class TrendAnalyzer:
         n_skipped = len(skipped_series)
         logger.info(f"Analyzed {n_analyzed} series, skipped {n_skipped} series")
         
-        if skipped_series and logger.isEnabledFor(logging.DEBUG):
+        # Always log skip reasons at INFO level (not just DEBUG) for visibility
+        if skipped_series:
             for skip in skipped_series[:5]:  # Show first 5
-                logger.debug(f"  - {skip['series_key']}: {skip['reason']} (n={skip.get('n_runs', '?')})")
+                logger.info(f"  SKIP: {skip['series_key']} - {skip['reason']} (n={skip.get('n_runs', '?')}, min={skip.get('min_required', '?')})")
         
         return all_trends
     
