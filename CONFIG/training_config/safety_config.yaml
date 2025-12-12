@@ -90,7 +90,10 @@ safety:
     purge_include_feature_lookback: true  # If true, purge = max(horizon+buffer, feature_lookback_max * 1.01)
     # If false, purge = horizon+buffer only (assumes features are strictly causal, only use past data)
     # When enabled, automatically increases purge to cover longest feature lookback window + 1% safety buffer
-    default_purge_minutes: 85.0  # Default purge if horizon cannot be determined (SST: Single Source of Truth)
+    default_purge_minutes: 1500.0  # NUCLEAR TEST: 24-hour purge to test if leak is in features or target
+    # TEMPORARY: Set to 1500 (24 hours) to test if score drops (feature leak) or stays high (target leak/repainting)
+    # If score drops to ~0.53 → feature leak (fixable)
+    # If score stays at ~0.99 → target leak (delete target, it's repainting)
     # Set purge_include_feature_lookback to false if feature lookback is killing sample efficiency 
     # and you're confident features are strictly causal (only use past data)
   
