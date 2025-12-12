@@ -1066,7 +1066,10 @@ class ReproducibilityTracker:
                 engine = DecisionEngine(index_file, apply_mode=False)  # Assist mode by default
                 decision_result = engine.evaluate(cohort_id, run_id_clean, segment_id=None)
                 engine.persist(decision_result, self.output_dir.parent)
-                # Store decision fields in index for easy querying
+                # Store decision fields in metrics for index update
+                metrics['decision_level'] = decision_result.decision_level
+                metrics['decision_action_mask'] = decision_result.decision_action_mask
+                metrics['decision_reason_codes'] = decision_result.decision_reason_codes
                 if decision_result.decision_level > 0:
                     logger.info(f"📊 Decision: level={decision_result.decision_level}, actions={decision_result.decision_action_mask}, reasons={decision_result.decision_reason_codes}")
         except Exception as e:
@@ -1378,6 +1381,11 @@ class ReproducibilityTracker:
             
             # Time for regression (explicit, monotonic)
             "run_started_at": self._parse_run_started_at(run_id, metadata.get("created_at")),
+            
+            # Decision fields (from decision engine, if available)
+            "decision_level": metrics.get("decision_level") or 0,
+            "decision_action_mask": json.dumps(metrics.get("decision_action_mask") or []) if metrics.get("decision_action_mask") else None,
+            "decision_reason_codes": json.dumps(metrics.get("decision_reason_codes") or []) if metrics.get("decision_reason_codes") else None,
             
             # Path
             "path": str(cohort_dir.relative_to(repro_dir))
