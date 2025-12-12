@@ -37,6 +37,7 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 ## Core System Status
 
 * **TRAINING Pipeline — Phase 1** ✅ — Functioning properly. The intelligent training framework (target ranking, feature selection, automated leakage detection) is operational. **End-to-end testing currently underway** to validate full pipeline from target ranking → feature selection → model training.
+* **Training Routing & Planning System** 🔄 (2025-12-11) — **NEW - Currently being tested**: Config-driven routing decisions, automatic training plan generation, 2-stage training pipeline (CPU → GPU), one-command end-to-end flow. See [Training Routing Guide](DOCS/02_reference/training_routing/README.md).
 * **Code Refactoring** ✅ (2025-12-09) — Large monolithic files split into modular components (4.5k → 82 lines, 3.4k → 56 lines, 2.5k → 66 lines) while maintaining 100% backward compatibility. Largest file now: 2,542 lines (cohesive subsystem, not monolithic).
 * **Model Family Status Tracking** ✅ — Comprehensive debugging system added to identify which families succeed/fail in multi-model feature selection. Status persisted to JSON for analysis.
 * **GPU Families** ✅ — Confirmed working. All GPU model families operational and producing artifacts. Expect some noise and warnings during training (harmless, do not affect functionality).
@@ -85,6 +86,7 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 
 **Current Testing:**
 * 🔄 **End-to-end testing underway** (2025-12-10) — Full pipeline validation from target ranking → feature selection → model training. Testing initiated after SST (Single Source of Truth) enforcement, Determinism system fixes, and complete F821 error elimination. All import errors, config loading issues, syntax errors, and transition validation problems have been resolved.
+* 🔄 **Training Routing System** (2025-12-11) — **NEW - Currently being tested**: One-command pipeline (target ranking → feature selection → training plan → training), 2-stage training (CPU → GPU), automatic plan detection and filtering. See [Training Routing Guide](DOCS/02_reference/training_routing/README.md).
 * Testing with multiple symbols and model families
 * Validating data flow through Phase 3 (model training)
 * Verifying model family status tracking output

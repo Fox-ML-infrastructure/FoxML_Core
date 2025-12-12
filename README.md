@@ -24,6 +24,7 @@ Independent Contractor • ML Engineering • Cross-Sectional ML Systems • Sys
 FoxML Core demonstrates:
 
 - **Intelligent training pipeline** with automated target ranking and feature selection
+- **Training routing & planning system** (NEW - currently being tested): Config-driven routing decisions, automatic training plan generation, 2-stage training pipeline (CPU → GPU), one-command end-to-end flow
 - **Leakage-safe research architecture** with pre-training leak detection and auto-fix
 - **Scalable ML workflow design** with complete Single Source of Truth (SST) config system - all 52+ model trainers use config-driven hyperparameters for full reproducibility
 - **High-throughput data processing** with Polars-optimized pipelines
