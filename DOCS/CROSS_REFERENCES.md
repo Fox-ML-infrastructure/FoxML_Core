@@ -119,3 +119,23 @@ When multiple docs cover similar topics, prefer:
 3. **Intelligent training tutorial** over manual workflow docs
 4. **Usage examples** with practical code over abstract descriptions
 5. **Cohort-aware reproducibility** docs over legacy reproducibility tracking
+
+## Legacy Documentation
+
+**Deprecated files moved to `DOCS/LEGACY/`:**
+- `EXPERIMENTS_WORKFLOW.md` - Replaced by Intelligent Training Pipeline
+- `EXPERIMENTS_QUICK_START.md` - Replaced by Intelligent Training Tutorial
+- `EXPERIMENTS_IMPLEMENTATION.md` - Replaced by current implementation docs
+- `STATUS_DEBUGGING.md` - Outdated debugging status (2025-12-09)
+
+See `DOCS/LEGACY/README.md` for migration guide.
+
+## Cross-Reference Updates (2025-12-12)
+
+**Architecture Documentation Moved:**
+- `TRAINING/stability/FEATURE_IMPORTANCE_STABILITY.md` → `DOCS/03_technical/implementation/FEATURE_IMPORTANCE_STABILITY.md`
+- `TRAINING/common/PARALLEL_EXECUTION.md` → `DOCS/03_technical/implementation/PARALLEL_EXECUTION.md`
+
+**All references updated in:**
+- `INDEX.md` - Systems Reference, Research, Implementation sections
+- `FEATURE_SELECTION_TUTORIAL.md` - Updated path reference

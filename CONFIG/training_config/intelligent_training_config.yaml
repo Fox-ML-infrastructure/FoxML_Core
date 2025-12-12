@@ -58,10 +58,6 @@ target_conditional_exclusions:
   enable_semantic_rules: true  # Enable semantic rules (e.g., exclude repainting indicators for peak/valley targets)
   # Exclusion lists are saved to: RESULTS/{cohort}/{run}/feature_exclusions/{target}_exclusions.yaml
 
-# Manual feature list (overrides auto_features if provided)
-  # Leave empty [] to use auto_features, or specify: ["feature1", "feature2"]
-  manual_features: []
-
 # Model families to train
 # Options: lightgbm, xgboost, random_forest, catboost, neural_network, 
 #          lasso, mutual_information, univariate_selection, etc.
