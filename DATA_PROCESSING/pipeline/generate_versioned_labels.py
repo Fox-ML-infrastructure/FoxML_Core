@@ -260,7 +260,24 @@ def create_metadata_file(
 
 def main():
     parser = argparse.ArgumentParser(description="Generate versioned labeled dataset with corrected barrier targets")
-    parser.add_argument("--data-dir", required=True, help="Input data directory (e.g., data/data_labeled/interval=5m)")
+    
+    # Try to load default data_dir from config
+    default_data_dir = None
+    try:
+        from CONFIG.config_loader import get_cfg
+        # Try multiple config paths (in order of preference)
+        default_data_dir = get_cfg("system.paths.data_dir", default=None, config_name="system_config")
+        if default_data_dir is None:
+            default_data_dir = get_cfg("pipeline.paths.data_dir", default=None, config_name="pipeline_config")
+        if default_data_dir:
+            logger.info(f"📋 Loaded default data_dir from config: {default_data_dir}")
+    except Exception as e:
+        logger.debug(f"Could not load data_dir from config: {e}")
+    
+    parser.add_argument("--data-dir", 
+                       default=default_data_dir,
+                       required=default_data_dir is None,
+                       help=f"Input data directory (default from config: {default_data_dir or 'not set'})")
     parser.add_argument("--output-dir", required=True, help="Output directory (e.g., data/data_labeled_v2)")
     parser.add_argument("--symbols", nargs="+", required=True, help="List of symbols to process (e.g., NVDA AAPL MSFT GOOGL TSLA)")
     parser.add_argument("--horizons", nargs="+", type=int, default=[5, 10, 15, 30, 60],
@@ -271,6 +288,10 @@ def main():
                        help="Bar interval in minutes (default: 5.0)")
     
     args = parser.parse_args()
+    
+    # Validate data_dir was provided (either from config or command line)
+    if not args.data_dir:
+        parser.error("--data-dir is required (not found in config and not provided via command line)")
     
     # Get git commit hash
     commit_hash = get_git_commit_hash()
