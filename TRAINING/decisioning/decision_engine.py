@@ -290,11 +290,17 @@ class DecisionEngine:
         """
         if not self.apply_mode:
             logger.debug("Apply mode disabled, skipping config patch")
-            return resolved_config, {}
+            return resolved_config, {}, []
         
         if decision_result.decision_level < 2:
             logger.debug(f"Decision level {decision_result.decision_level} < 2, skipping config patch")
-            return resolved_config, {}
+            return resolved_config, {}, []
         
         from TRAINING.decisioning.policies import apply_decision_patch
-        return apply_decision_patch(resolved_config, decision_result)
+        new_config, patch, warnings = apply_decision_patch(resolved_config, decision_result)
+        
+        # Log warnings if any
+        for warning in warnings:
+            logger.warning(f"⚠️  Patch clamp warning: {warning}")
+        
+        return new_config, patch, warnings

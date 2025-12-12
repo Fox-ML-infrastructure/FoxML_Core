@@ -1078,59 +1078,81 @@ class IntelligentTrainer:
                                       f"reasons={latest_decision.decision_reason_codes}")
                             
                             if latest_decision.decision_level >= decision_min_level:
-                                # Create artifact directory for patched config
-                                decision_artifact_dir = self.output_dir / "REPRODUCIBILITY" / "applied_configs"
+                                # Create artifact directory for receipts (one location, one format)
+                                decision_artifact_dir = self.output_dir / "REPRODUCIBILITY" / "patches"
                                 decision_artifact_dir.mkdir(parents=True, exist_ok=True)
                                 
-                                # Save decision file used
-                                decision_used_file = decision_artifact_dir / f"decision_used_{latest_decision.run_id}.json"
+                                # Always save receipts (dry-run or apply) - NON-NEGOTIABLE
+                                patched_config, patch, warnings = engine.apply_patch(train_kwargs, latest_decision)
+                                
+                                # Receipt 1: Decision used (always)
+                                decision_used_file = decision_artifact_dir / "decision_used.json"
                                 with open(decision_used_file, 'w') as f:
                                     json.dump(latest_decision.to_dict(), f, indent=2, default=str)
-                                logger.info(f"📄 Decision file used: {decision_used_file.relative_to(self.output_dir)}")
+                                
+                                # Receipt 2: Resolved config baseline (always)
+                                try:
+                                    import yaml
+                                    resolved_config_file = decision_artifact_dir / "resolved_config.yaml"
+                                    with open(resolved_config_file, 'w') as f:
+                                        yaml.dump(train_kwargs.copy(), f, default_flow_style=False, sort_keys=False)
+                                except ImportError:
+                                    resolved_config_file = decision_artifact_dir / "resolved_config.json"
+                                    with open(resolved_config_file, 'w') as f:
+                                        json.dump(train_kwargs.copy(), f, indent=2, default=str)
+                                
+                                # Receipt 3: Applied patch (or "none" if no patch)
+                                patch_file = decision_artifact_dir / "applied_patch.json"
                                 
                                 if decision_dry_run:
                                     # Dry-run: show patch without applying
-                                    patched_config, patch = engine.apply_patch(train_kwargs, latest_decision)
-                                    patch_file = decision_artifact_dir / f"patch_dry_run_{latest_decision.run_id}.json"
                                     with open(patch_file, 'w') as f:
                                         json.dump({
                                             "mode": "dry_run",
                                             "decision_run_id": latest_decision.run_id,
                                             "cohort_id": cohort_id,
                                             "segment_id": segment_id,
-                                            "patch": patch,
-                                            "original_config": train_kwargs.copy(),
-                                            "patched_config": patched_config
+                                            "patch": patch if patch else "none",
+                                            "warnings": warnings,
+                                            "keys_changed": list(patch.keys()) if patch else [],
                                         }, f, indent=2, default=str)
-                                    logger.info(f"🔍 DRY RUN: Patch would be: {patch}")
-                                    logger.info(f"📄 Dry-run patch saved to: {patch_file.relative_to(self.output_dir)}")
+                                    
+                                    logger.info("="*80)
+                                    logger.info("🔍 DRY RUN: Decision Application Preview")
+                                    logger.info("="*80)
+                                    logger.info(f"Decision selected: {latest_decision.run_id}")
+                                    logger.info(f"  Cohort: {cohort_id}, Segment: {segment_id}")
+                                    logger.info(f"  Level: {latest_decision.decision_level}, Actions: {latest_decision.decision_action_mask}")
+                                    logger.info(f"  Reasons: {latest_decision.decision_reason_codes}")
+                                    if patch:
+                                        logger.info(f"Patch that WOULD be applied:")
+                                        for key, value in patch.items():
+                                            old_val = train_kwargs.get(key.split('.')[0]) if '.' in key else train_kwargs.get(key)
+                                            logger.info(f"  {key}: {old_val} → {value}")
+                                        logger.info(f"Keys that would change: {list(patch.keys())}")
+                                    else:
+                                        logger.info("No patch (no actions or all actions skipped)")
+                                    if warnings:
+                                        for w in warnings:
+                                            logger.warning(f"  ⚠️  {w}")
+                                    logger.info(f"📄 Receipts saved to: {decision_artifact_dir.relative_to(self.output_dir)}/")
+                                    logger.info("  - decision_used.json")
+                                    logger.info("  - resolved_config.yaml")
+                                    logger.info(f"  - applied_patch.json (mode: dry_run)")
+                                    logger.info("="*80)
                                 elif decision_apply_mode:
                                     # Apply decision patch to config
-                                    patched_config, patch = engine.apply_patch(train_kwargs, latest_decision)
                                     resolved_config_patch = patch
                                     train_kwargs.update(patched_config)
                                     
-                                    # Save patch artifact
-                                    patch_file = decision_artifact_dir / f"patch_applied_{latest_decision.run_id}.json"
-                                    with open(patch_file, 'w') as f:
-                                        json.dump({
-                                            "mode": "apply",
-                                            "decision_run_id": latest_decision.run_id,
-                                            "cohort_id": cohort_id,
-                                            "segment_id": segment_id,
-                                            "patch": patch,
-                                            "applied_at": datetime.now().isoformat()
-                                        }, f, indent=2, default=str)
-                                    
-                                    # Save patched config artifact
+                                    # Save patched config (receipt - overwrites resolved_config.yaml)
                                     try:
                                         import yaml
-                                        patched_config_file = decision_artifact_dir / f"patched_config_{latest_decision.run_id}.yaml"
+                                        patched_config_file = decision_artifact_dir / "resolved_config.yaml"
                                         with open(patched_config_file, 'w') as f:
                                             yaml.dump(patched_config, f, default_flow_style=False, sort_keys=False)
                                     except ImportError:
-                                        # Fallback to JSON if yaml not available
-                                        patched_config_file = decision_artifact_dir / f"patched_config_{latest_decision.run_id}.json"
+                                        patched_config_file = decision_artifact_dir / "resolved_config.json"
                                         with open(patched_config_file, 'w') as f:
                                             json.dump(patched_config, f, indent=2, default=str)
                                     
@@ -1139,10 +1161,26 @@ class IntelligentTrainer:
                                     patch_hash = hashlib.sha256(json.dumps(patch, sort_keys=True).encode()).hexdigest()[:8]
                                     train_kwargs['decision_patch_hash'] = patch_hash
                                     
-                                    logger.info(f"🔧 Applied decision patch: {patch}")
-                                    logger.info(f"📄 Patch saved to: {patch_file.relative_to(self.output_dir)}")
-                                    logger.info(f"📄 Patched config saved to: {patched_config_file.relative_to(self.output_dir)}")
+                                    logger.info("="*80)
+                                    logger.info("🔧 APPLY MODE: Decision Patch Applied")
+                                    logger.info("="*80)
+                                    logger.info(f"Decision: {latest_decision.run_id} (cohort={cohort_id}, segment={segment_id})")
+                                    if patch:
+                                        logger.info(f"Patch applied:")
+                                        for key, value in patch.items():
+                                            logger.info(f"  {key}: → {value}")
+                                        logger.info(f"Keys changed: {list(patch.keys())}")
+                                    else:
+                                        logger.info("No patch (patch='none')")
+                                    if warnings:
+                                        for w in warnings:
+                                            logger.warning(f"  ⚠️  {w}")
                                     logger.info(f"🔑 Config hash updated with patch_hash: {patch_hash}")
+                                    logger.info(f"📄 Receipts saved to: {decision_artifact_dir.relative_to(self.output_dir)}/")
+                                    logger.info("  - decision_used.json")
+                                    logger.info("  - resolved_config.yaml (patched)")
+                                    logger.info(f"  - applied_patch.json (mode: apply)")
+                                    logger.info("="*80)
                             else:
                                 logger.info(f"⏭️  Decision level {latest_decision.decision_level} < {decision_min_level}, skipping application")
                         else:

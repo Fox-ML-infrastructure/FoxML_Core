@@ -166,27 +166,50 @@ def evaluate_policies(
     return results
 
 
+# Hard clamps on patch actions (prevent unbounded changes)
+PATCH_CLAMPS = {
+    'n_features_selected': {'max_change_pct': 20},  # Max ±20%
+    'cs_auc_threshold': {'max_change_pct': 20},  # Max ±20%
+    'frac_symbols_good_threshold': {'max_change_pct': 20},  # Max ±20%
+    'max_features': {'max_change_pct': 20},  # Max ±20%
+}
+
+
 def apply_decision_patch(
     resolved_config: Dict[str, Any],
     decision_result: Any  # DecisionResult (avoid circular import)
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+) -> Tuple[Dict[str, Any], Dict[str, Any], List[str]]:
     """
-    Apply decision patch to resolved config.
+    Apply decision patch to resolved config with hard clamps.
+    
+    **SAFETY: Only applies ONE policy at a time (first action in list).**
+    **SAFETY: All changes are clamped to prevent unbounded modifications.**
     
     Args:
         resolved_config: Current resolved config
         decision_result: Decision result
     
     Returns:
-        (new_config, patch_dict) - new config and patch that was applied
+        (new_config, patch_dict, warnings) - new config, patch that was applied, and any warnings
     """
     new_config = resolved_config.copy()
     patch = {}
+    warnings = []
     
     actions = decision_result.decision_action_mask or []
     
+    # SAFETY: Apply only ONE policy at a time (first action)
+    if len(actions) > 1:
+        warnings.append(f"Multiple actions detected: {actions}. Applying only first: {actions[0]}")
+        actions = [actions[0]]
+    
+    if not actions:
+        return new_config, patch, warnings
+    
+    action = actions[0]
+    
     # Action: freeze_features
-    if "freeze_features" in actions:
+    if action == "freeze_features":
         # Set feature selection to use cached/previous selection
         if 'feature_selection' not in new_config:
             new_config['feature_selection'] = {}
@@ -194,33 +217,61 @@ def apply_decision_patch(
         patch['feature_selection.use_cached'] = True
     
     # Action: tighten_routing
-    if "tighten_routing" in actions:
-        # Increase routing thresholds
+    elif action == "tighten_routing":
+        # Increase routing thresholds (clamped to max 20% increase)
         if 'target_routing' not in new_config:
             new_config['target_routing'] = {}
         if 'routing' not in new_config['target_routing']:
             new_config['target_routing']['routing'] = {}
         routing = new_config['target_routing']['routing']
-        routing['cs_auc_threshold'] = routing.get('cs_auc_threshold', 0.65) * 1.1  # Increase by 10%
-        routing['frac_symbols_good_threshold'] = routing.get('frac_symbols_good_threshold', 0.5) * 1.1
-        patch['target_routing.routing.cs_auc_threshold'] = routing['cs_auc_threshold']
-        patch['target_routing.routing.frac_symbols_good_threshold'] = routing['frac_symbols_good_threshold']
+        
+        # Clamp cs_auc_threshold (max 20% increase)
+        old_cs_threshold = routing.get('cs_auc_threshold', 0.65)
+        new_cs_threshold = min(old_cs_threshold * 1.2, old_cs_threshold * 1.2)  # Max 20% increase
+        if new_cs_threshold > old_cs_threshold * 1.2:
+            new_cs_threshold = old_cs_threshold * 1.2
+            warnings.append(f"cs_auc_threshold clamped to max 20% increase: {old_cs_threshold} → {new_cs_threshold}")
+        routing['cs_auc_threshold'] = new_cs_threshold
+        patch['target_routing.routing.cs_auc_threshold'] = new_cs_threshold
+        
+        # Clamp frac_symbols_good_threshold (max 20% increase)
+        old_frac_threshold = routing.get('frac_symbols_good_threshold', 0.5)
+        new_frac_threshold = min(old_frac_threshold * 1.2, old_frac_threshold * 1.2)  # Max 20% increase
+        if new_frac_threshold > old_frac_threshold * 1.2:
+            new_frac_threshold = old_frac_threshold * 1.2
+            warnings.append(f"frac_symbols_good_threshold clamped to max 20% increase: {old_frac_threshold} → {new_frac_threshold}")
+        routing['frac_symbols_good_threshold'] = new_frac_threshold
+        patch['target_routing.routing.frac_symbols_good_threshold'] = new_frac_threshold
     
     # Action: cap_features
-    if "cap_features" in actions:
-        # Add feature cap
+    elif action == "cap_features":
+        # Add feature cap (clamped: max 20% reduction from current)
         if 'feature_selection' not in new_config:
             new_config['feature_selection'] = {}
-        if 'max_features' not in new_config['feature_selection']:
-            new_config['feature_selection']['max_features'] = 100  # Cap at 100
-            patch['feature_selection.max_features'] = 100
+        
+        # Get current max_features if set
+        current_max = new_config['feature_selection'].get('max_features')
+        if current_max is None:
+            # Estimate from top_m_features if available
+            current_max = resolved_config.get('top_m_features', 100)
+        
+        # Clamp: reduce by max 20%
+        new_max = max(int(current_max * 0.8), 10)  # At least 10 features
+        if new_max < current_max * 0.8:
+            warnings.append(f"max_features clamped to max 20% reduction: {current_max} → {new_max}")
+        
+        new_config['feature_selection']['max_features'] = new_max
+        patch['feature_selection.max_features'] = new_max
     
     # Action: retune_class_weights
-    if "retune_class_weights" in actions:
+    elif action == "retune_class_weights":
         # Flag for class weight retuning (doesn't auto-apply, just flags)
         if 'training' not in new_config:
             new_config['training'] = {}
         new_config['training']['retune_class_weights'] = True
         patch['training.retune_class_weights'] = True
     
-    return new_config, patch
+    else:
+        warnings.append(f"Unknown action: {action}. Skipping.")
+    
+    return new_config, patch, warnings
