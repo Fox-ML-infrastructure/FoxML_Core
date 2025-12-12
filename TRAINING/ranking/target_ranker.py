@@ -699,25 +699,25 @@ def rank_targets(
                                     # Try with view/symbol, fallback to without if not supported
                                     try:
                                         result_sym = evaluate_target_with_autofix(
-                                        target_name=target_name,
-                                        target_config=target_config,
-                                        symbols=[symbol],  # Single symbol
-                                        data_dir=data_dir,
-                                        model_families=model_families,
-                                        multi_model_config=multi_model_config,
-                                        output_dir=output_dir,
-                                        min_cs=1,  # Single symbol, min_cs=1
-                                        max_cs_samples=max_cs_samples,
-                                        max_rows_per_symbol=max_rows_per_symbol,
-                                        max_reruns=max_reruns,
-                                        rerun_on_perfect_train_acc=rerun_on_perfect_train_acc,
-                                        rerun_on_high_auc_only=rerun_on_high_auc_only,
-                                        explicit_interval=explicit_interval,
-                                        experiment_config=experiment_config,
-                                        view="SYMBOL_SPECIFIC",
-                                        symbol=symbol
-                                    )
-                                except TypeError:
+                                            target_name=target_name,
+                                            target_config=target_config,
+                                            symbols=[symbol],  # Single symbol
+                                            data_dir=data_dir,
+                                            model_families=model_families,
+                                            multi_model_config=multi_model_config,
+                                            output_dir=output_dir,
+                                            min_cs=1,  # Single symbol, min_cs=1
+                                            max_cs_samples=max_cs_samples,
+                                            max_rows_per_symbol=max_rows_per_symbol,
+                                            max_reruns=max_reruns,
+                                            rerun_on_perfect_train_acc=rerun_on_perfect_train_acc,
+                                            rerun_on_high_auc_only=rerun_on_high_auc_only,
+                                            explicit_interval=explicit_interval,
+                                            experiment_config=experiment_config,
+                                            view="SYMBOL_SPECIFIC",
+                                            symbol=symbol
+                                        )
+                                    except TypeError:
                                     # Fallback: autofix doesn't support view/symbol yet
                                     logger.debug(f"evaluate_target_with_autofix doesn't support view/symbol for {symbol}, using without")
                                     result_sym = evaluate_target_with_autofix(
