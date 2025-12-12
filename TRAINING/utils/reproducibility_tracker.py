@@ -1073,6 +1073,51 @@ class ReproducibilityTracker:
             logger.debug(f"Failed to get git commit: {e}")
         return None
     
+    def _parse_run_started_at(self, run_id: str, created_at: Optional[str] = None) -> str:
+        """
+        Parse run_started_at from run_id or use created_at.
+        
+        run_id formats:
+        - YYYYMMDD_HHMMSS_* (preferred)
+        - YYYY-MM-DDTHH:MM:SS* (ISO format)
+        - Other formats fall back to created_at
+        """
+        import re
+        from datetime import datetime
+        
+        # Try to parse from run_id first
+        # Format: YYYYMMDD_HHMMSS_*
+        match = re.match(r'(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})', run_id)
+        if match:
+            year, month, day, hour, minute, second = match.groups()
+            try:
+                dt = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
+                return dt.isoformat() + 'Z'
+            except ValueError:
+                pass
+        
+        # Try ISO format: YYYY-MM-DDTHH:MM:SS*
+        match = re.match(r'(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})', run_id)
+        if match:
+            year, month, day, hour, minute, second = match.groups()
+            try:
+                dt = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
+                return dt.isoformat() + 'Z'
+            except ValueError:
+                pass
+        
+        # Fall back to created_at
+        if created_at:
+            try:
+                # Ensure it's in ISO format with timezone
+                dt = pd.to_datetime(created_at, utc=True)
+                return dt.isoformat()
+            except Exception:
+                pass
+        
+        # Last resort: use current time
+        return datetime.now().isoformat() + 'Z'
+    
     def _increment_error_counter(self, counter_name: str, error_type: str = "UNKNOWN") -> None:
         """
         Increment error counter in stats.json.
@@ -1314,6 +1359,9 @@ class ReproducibilityTracker:
             # Timestamps
             "date": metadata.get("date_start"),
             "created_at": metadata.get("created_at", datetime.now().isoformat()),
+            
+            # Time for regression (explicit, monotonic)
+            "run_started_at": self._parse_run_started_at(run_id, metadata.get("created_at")),
             
             # Path
             "path": str(cohort_dir.relative_to(repro_dir))
@@ -1913,19 +1961,62 @@ class ReproducibilityTracker:
                 current_composite = float(metrics.get("composite_score", current_mean))
                 previous_composite = float(previous.get("composite_score", previous_mean))
                 
+                # Compute route_changed and route_entropy for regression tracking
+                prev_route = previous.get('route') or previous.get('route_type') or previous.get('view') or previous.get('mode')
+                curr_route = additional_data.get('route') if additional_data else None
+                if curr_route is None:
+                    curr_route = route_type or additional_data.get('view') if additional_data else None
+                route_changed = 1 if (prev_route and curr_route and prev_route != curr_route) else 0
+                
+                # Compute route_entropy from route history (if we have access to index)
+                route_entropy = None
+                try:
+                    repro_dir = self.output_dir.parent / "REPRODUCIBILITY"
+                    index_file = repro_dir / "index.parquet"
+                    if index_file.exists():
+                        df = pd.read_parquet(index_file)
+                        # Get route history for this cohort/target
+                        cohort_id = self._compute_cohort_id(cohort_metadata, route_type)
+                        mask = (df['cohort_id'] == cohort_id) & (df['target'] == item_name)
+                        if route_type:
+                            mask &= (df['mode'] == route_type.upper())
+                        route_history = df[mask]['route'].dropna().tolist()
+                        if len(route_history) >= 3:
+                            # Compute entropy: -sum(p * log2(p))
+                            from collections import Counter
+                            route_counts = Counter(route_history)
+                            total = len(route_history)
+                            entropy = -sum((count / total) * math.log2(count / total) 
+                                         for count in route_counts.values() if count > 0)
+                            route_entropy = float(entropy)
+                except Exception:
+                    pass  # Non-critical, continue without entropy
+                
                 # Use sample-adjusted comparison if cohort-aware and within same cohort
                 # Prepare current run data for comparison
+                # Store route_changed and route_entropy in metrics for index update
+                if route_changed is not None:
+                    metrics['route_changed'] = route_changed
+                if route_entropy is not None:
+                    metrics['route_entropy'] = route_entropy
+                if curr_route:
+                    metrics['route'] = curr_route
+                
                 curr_run_data = {
                     **metrics,
                     'N_effective_cs': cohort_metadata.get('N_effective_cs'),
                     'n_samples': cohort_metadata.get('N_effective_cs'),
-                    'sample_size': cohort_metadata.get('N_effective_cs')
+                    'sample_size': cohort_metadata.get('N_effective_cs'),
+                    'route': curr_route,
+                    'route_changed': route_changed,
+                    'route_entropy': route_entropy
                 }
                 prev_run_data = {
                     **previous,
                     'N_effective_cs': previous.get('cohort_metadata', {}).get('N_effective_cs') or previous.get('N_effective_cs'),
                     'n_samples': previous.get('cohort_metadata', {}).get('N_effective_cs') or previous.get('n_samples'),
-                    'sample_size': previous.get('cohort_metadata', {}).get('N_effective_cs') or previous.get('sample_size')
+                    'sample_size': previous.get('cohort_metadata', {}).get('N_effective_cs') or previous.get('sample_size'),
+                    'route': prev_route
                 }
                 
                 mean_class, mean_abs, mean_rel, mean_z, mean_stats = self._compare_within_cohort(
