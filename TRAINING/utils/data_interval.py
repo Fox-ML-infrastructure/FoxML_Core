@@ -371,9 +371,11 @@ def detect_interval_from_timestamps(
             logger.info(f"Auto-detected data interval: {median_diff_minutes:.1f}m → {detected_interval}m")
             return detected_interval
         else:
-            logger.warning(
-                f"Auto-detection unclear ({median_diff_minutes:.1f}m doesn't match common intervals), "
-                f"using default: {default}m"
+            # Downgrade to INFO: this is expected when large gaps are filtered out
+            # The default is being used correctly, just log it at INFO level
+            logger.info(
+                f"Auto-detection unclear ({median_diff_minutes:.1f}m doesn't match common intervals, "
+                f"likely due to large gaps). Using default: {default}m"
             )
             return default if default is not None else None
             
@@ -394,9 +396,9 @@ def detect_interval_from_dataframe(
     
     Precedence order:
     1. Explicit function arg (explicit_interval)
-    2. Experiment config (experiment_config.data.bar_interval)
+    2. Experiment config (experiment_config.data.bar_interval or data.interval_detection.mode=fixed)
     3. Auto-detect from timestamps
-    4. Fallback to default with LOUD warning
+    4. Fallback to default with INFO-level message
     
     Args:
         df: DataFrame with timestamp column
@@ -413,7 +415,7 @@ def detect_interval_from_dataframe(
     if explicit_interval is not None:
         try:
             minutes = normalize_interval(explicit_interval)
-            logger.info(f"Using explicit interval from function arg: {explicit_interval} = {minutes}m")
+            logger.debug(f"Using explicit interval from function arg: {explicit_interval} = {minutes}m")
             return minutes
         except ValueError as e:
             logger.warning(f"Invalid explicit_interval '{explicit_interval}': {e}, falling back to config/auto-detect")
@@ -443,15 +445,31 @@ def detect_interval_from_dataframe(
             except ValueError as e:
                 logger.warning(f"Invalid bar_interval in config '{bar_interval}': {e}, falling back to auto-detect")
     
+    # PRECEDENCE 2.5: Check for fixed interval mode in config
+    if experiment_config is not None:
+        try:
+            # Check for interval_detection.mode = "fixed" in config
+            if hasattr(experiment_config, 'data'):
+                data_config = experiment_config.data
+                if hasattr(data_config, 'interval_detection'):
+                    interval_detection = data_config.interval_detection
+                    if hasattr(interval_detection, 'mode') and interval_detection.mode == 'fixed':
+                        # Fixed mode: use bar_interval directly, no auto-detection
+                        if hasattr(data_config, 'bar_interval') and data_config.bar_interval is not None:
+                            try:
+                                minutes = normalize_interval(data_config.bar_interval)
+                                logger.debug(f"Using fixed interval from config: {data_config.bar_interval} = {minutes}m (interval_detection.mode=fixed)")
+                                return minutes
+                            except ValueError as e:
+                                logger.warning(f"Invalid bar_interval in fixed mode '{data_config.bar_interval}': {e}, falling back to auto-detect")
+        except Exception as e:
+            logger.debug(f"Could not check interval_detection.mode from config: {e}")
+    
     # PRECEDENCE 3: Auto-detect from timestamps
     if timestamp_column not in df.columns:
-        logger.warning(
+        logger.info(
             f"Timestamp column '{timestamp_column}' not found and no config interval set. "
-            f"Falling back to default: {default}m"
-        )
-        logger.warning(
-            "⚠️  INTERVAL AUTO-DETECTION FAILED: Falling back to 5m. "
-            "Set data.bar_interval in your experiment config to silence this warning."
+            f"Using default: {default}m"
         )
         return default
     
@@ -459,11 +477,11 @@ def detect_interval_from_dataframe(
     # Pass default to avoid "Nonem" in warning messages
     detected = detect_interval_from_timestamps(timestamps, default=default, explicit_interval=None)
     
-    # PRECEDENCE 4: Fallback with LOUD warning
+    # PRECEDENCE 4: Fallback (should rarely happen now with improved filtering)
     if detected is None:
-        logger.warning(
-            "⚠️  INTERVAL AUTO-DETECTION FAILED: Falling back to 5m. "
-            "Set data.bar_interval in your experiment config to silence this warning."
+        logger.info(
+            f"Interval detection returned None, using default: {default}m. "
+            "Set data.bar_interval in your experiment config or use interval_detection.mode=fixed to use a specific interval."
         )
         return default
     
