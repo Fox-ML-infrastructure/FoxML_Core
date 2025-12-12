@@ -718,9 +718,9 @@ def rank_targets(
                                             symbol=symbol
                                         )
                                     except TypeError:
-                                    # Fallback: autofix doesn't support view/symbol yet
-                                    logger.debug(f"evaluate_target_with_autofix doesn't support view/symbol for {symbol}, using without")
-                                    result_sym = evaluate_target_with_autofix(
+                                        # Fallback: autofix doesn't support view/symbol yet
+                                        logger.debug(f"evaluate_target_with_autofix doesn't support view/symbol for {symbol}, using without")
+                                        result_sym = evaluate_target_with_autofix(
                                         target_name=target_name,
                                         target_config=target_config,
                                         symbols=[symbol],
