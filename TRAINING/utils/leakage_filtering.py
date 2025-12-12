@@ -809,9 +809,17 @@ def filter_features_for_target(
         safe_columns = list(safe_set)
         
         if verbose:
-            schema_count = sum(1 for f in safe_columns if _is_feature_in_schema_family(f, schema_config, mode))
-            hardcoded_count = sum(1 for f in safe_columns if _is_ranking_safe_feature(f))
-            logger.info(f"  Ranking mode: {len(safe_columns)} total features ({schema_count} from schema families, {hardcoded_count} from hardcoded patterns)")
+            # Count features by source, accounting for overlap
+            schema_only = [f for f in safe_columns if _is_feature_in_schema_family(f, schema_config, mode) and not _is_ranking_safe_feature(f)]
+            hardcoded_only = [f for f in safe_columns if _is_ranking_safe_feature(f) and not _is_feature_in_schema_family(f, schema_config, mode)]
+            overlap = [f for f in safe_columns if _is_feature_in_schema_family(f, schema_config, mode) and _is_ranking_safe_feature(f)]
+            schema_total = len(schema_only) + len(overlap)
+            hardcoded_total = len(hardcoded_only) + len(overlap)
+            
+            if overlap:
+                logger.info(f"  Ranking mode: {len(safe_columns)} total features ({schema_total} from schema families, {hardcoded_total} from hardcoded patterns, {len(overlap)} overlap)")
+            else:
+                logger.info(f"  Ranking mode: {len(safe_columns)} total features ({schema_total} from schema families, {hardcoded_total} from hardcoded patterns)")
     
     return safe_columns
 

@@ -147,7 +147,7 @@ To verify reproducibility integration is working:
 {
   "schema_version": 1,
   "cohort_id": "cs_..._f2849563",
-  "run_id": "2025-01-15_14-30-00",
+  "run_id": "2025-12-12_14-30-00",
   "stage": "TARGET_RANKING",
   "route_type": "CROSS_SECTIONAL",
   "view": "CROSS_SECTIONAL",
@@ -166,7 +166,7 @@ To verify reproducibility integration is working:
 {
   "schema_version": 1,
   "cohort_id": "cs_..._a1b2c3d4",
-  "run_id": "2025-01-15_14-30-00",
+  "run_id": "2025-12-12_14-30-00",
   "stage": "TARGET_RANKING",
   "route_type": "SYMBOL_SPECIFIC",
   "view": "SYMBOL_SPECIFIC",

@@ -74,8 +74,8 @@ reproducibility/
             summary.json
           xyz789uvw012/  # Cohort: N=11k, 5 symbols, 2024-01→2024-03
             runs/
-              2025-01-15T12-00-00.json
-            latest.json → runs/2025-01-15T12-00-00.json
+              2025-12-12T12-00-00.json
+            latest.json → runs/2025-12-12T12-00-00.json
             summary.json
         index.json
 ```

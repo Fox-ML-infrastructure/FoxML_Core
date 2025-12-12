@@ -94,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Dual-View Target Ranking System** (2025-01-XX)
+- **Dual-View Target Ranking System** (2025-12-12)
   - `TargetRankingView` enum (CROSS_SECTIONAL, SYMBOL_SPECIFIC, LOSO) for view specification
   - Extended `evaluate_target_predictability()` to accept `view` and `symbol` parameters
   - Symbol-specific evaluation loop in `rank_targets()` for per-symbol target ranking
@@ -107,7 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `RunContext` extended with `view` field for target ranking
   - Configuration support in `target_ranking_config.yaml` for enabling/disabling views and routing thresholds
 
-- **Config-Based Pipeline Interface** (2025-01-XX)
+- **Config-Based Pipeline Interface** (2025-12-12)
   - New config file: `CONFIG/training_config/intelligent_training_config.yaml`
   - Config sections: `data`, `targets`, `features`, `model_families`, `output`, `cache`, `advanced`, `test`
   - Automatic config loading with CLI override support
