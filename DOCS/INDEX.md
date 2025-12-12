@@ -98,6 +98,10 @@ Complete technical reference for daily use.
 ### Systems Reference
 - [Pipeline Reference](02_reference/systems/PIPELINE_REFERENCE.md) - Data pipelines
 - [Feature Importance Stability](03_technical/implementation/FEATURE_IMPORTANCE_STABILITY.md) - Feature importance stability tracking and analysis system
+- [Feature Filtering Execution Order](03_technical/implementation/FEATURE_FILTERING_EXECUTION_ORDER.md) - Formalized feature filtering hierarchy
+- [Feature Selection Execution Order](03_technical/implementation/FEATURE_SELECTION_EXECUTION_ORDER.md) - Formalized feature selection hierarchy
+- [Feature Pruning Execution Order](03_technical/implementation/FEATURE_PRUNING_EXECUTION_ORDER.md) - Formalized feature pruning hierarchy
+- [Data Loading and Preprocessing Execution Order](03_technical/implementation/DATA_LOADING_PREPROCESSING_EXECUTION_ORDER.md) - Formalized data pipeline hierarchy
 - [Parallel Execution](03_technical/implementation/PARALLEL_EXECUTION.md) - Parallel execution infrastructure for target ranking and feature selection
 - [Active Sanitization (Ghost Buster)](03_technical/implementation/ACTIVE_SANITIZATION.md) - **NEW**: Proactive feature quarantine system that prevents "ghost feature" discrepancies
 
