@@ -188,20 +188,20 @@ class IntelligentTrainer:
             output_dir = Path(output_dir)
             output_dir_name = output_dir.name
         
-        # Put ALL runs in RESULTS directory, organized by cohort
-        # Structure: RESULTS/{cohort_id}/{run_name}/
-        # We'll start in RESULTS/_pending/ and move to cohort directory after first target is processed
+        # Put ALL runs in RESULTS directory, organized by sample size (N_effective)
+        # Structure: RESULTS/{N_effective}/{run_name}/
+        # We'll start in RESULTS/_pending/ and move to N_effective directory after first target is processed
         repo_root = Path(__file__).parent.parent.parent  # Go up from TRAINING/orchestration/ to repo root
         results_dir = repo_root / "RESULTS"
         
-        # Start in _pending/ - will be moved to cohort-specific directory after first cohort is identified
+        # Start in _pending/ - will be moved to N_effective-specific directory after first target is processed
         self._initial_output_dir = results_dir / "_pending" / output_dir_name
         self.output_dir = self._initial_output_dir
-        self._cohort_id = None  # Will be set after first target is processed
+        self._n_effective = None  # Will be set after first target is processed (sample size)
         self._run_name = output_dir_name  # Store for move operation
         
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"📁 Output directory: {self.output_dir} (will be organized by cohort after first target)")
+        logger.info(f"📁 Output directory: {self.output_dir} (will be organized by sample size after first target)")
         
         self.cache_dir = Path(cache_dir) if cache_dir else self.output_dir / "cache"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -213,14 +213,16 @@ class IntelligentTrainer:
     
     def _organize_by_cohort(self):
         """
-        Organize the run directory by cohort after first target is processed.
-        Moves from RESULTS/_pending/{run_name}/ to RESULTS/{cohort_id}/{run_name}/
+        Organize the run directory by sample size (N_effective) after first target is processed.
+        Moves from RESULTS/_pending/{run_name}/ to RESULTS/{N_effective}/{run_name}/
+        
+        Example: RESULTS/25000/test_run_20251212_010000/
         """
-        if self._cohort_id is not None:
+        if self._n_effective is not None:
             return  # Already organized
         
         try:
-            # Try to find cohort_id from REPRODUCIBILITY directory
+            # Try to find N_effective from REPRODUCIBILITY directory metadata.json
             # REPRODUCIBILITY structure: self.output_dir/target_rankings/REPRODUCIBILITY/TARGET_RANKING/...
             # OR: self.output_dir/REPRODUCIBILITY/TARGET_RANKING/... (if output_dir is already target_rankings)
             
@@ -241,17 +243,25 @@ class IntelligentTrainer:
                 logger.info(f"TARGET_RANKING directory not found at expected paths (checked: {[str(d / 'TARGET_RANKING') for d in possible_repro_dirs]})")
                 # Try recursive search as fallback
                 logger.info(f"Trying recursive search in {self._initial_output_dir}")
-                for repro_candidate in self._initial_output_dir.rglob("REPRODUCIBILITY/TARGET_RANKING/*/cohort=*"):
-                    if repro_candidate.is_dir():
-                        cohort_id = repro_candidate.name.replace("cohort=", "")
-                        self._cohort_id = cohort_id
-                        logger.info(f"🔍 Found cohort via recursive search: {cohort_id} at {repro_candidate}")
-                        break
-                if self._cohort_id is None:
-                    logger.warning(f"Could not find cohort directory via recursive search in {self._initial_output_dir}")
+                for metadata_file in self._initial_output_dir.rglob("REPRODUCIBILITY/TARGET_RANKING/*/cohort=*/metadata.json"):
+                    if metadata_file.exists():
+                        try:
+                            import json
+                            with open(metadata_file, 'r') as f:
+                                metadata = json.load(f)
+                            n_effective = metadata.get('N_effective')
+                            if n_effective is not None and n_effective > 0:
+                                self._n_effective = int(n_effective)
+                                logger.info(f"🔍 Found N_effective via recursive search: {self._n_effective} at {metadata_file.parent}")
+                                break
+                        except Exception as e:
+                            logger.debug(f"Failed to read metadata from {metadata_file}: {e}")
+                            continue
+                if self._n_effective is None:
+                    logger.warning(f"Could not find N_effective via recursive search in {self._initial_output_dir}")
                     return
             else:
-                # Find first target's cohort directory
+                # Find first target's metadata.json to extract N_effective
                 for target_dir in target_ranking_dir.iterdir():
                     if not target_dir.is_dir():
                         continue
@@ -259,28 +269,38 @@ class IntelligentTrainer:
                     # Look for cohort= directories
                     for cohort_dir in target_dir.iterdir():
                         if cohort_dir.is_dir() and cohort_dir.name.startswith("cohort="):
-                            cohort_id = cohort_dir.name.replace("cohort=", "")
-                            self._cohort_id = cohort_id
-                            logger.info(f"🔍 Found cohort: {cohort_id}")
-                            break
-                    if self._cohort_id is not None:
+                            metadata_file = cohort_dir / "metadata.json"
+                            if metadata_file.exists():
+                                try:
+                                    import json
+                                    with open(metadata_file, 'r') as f:
+                                        metadata = json.load(f)
+                                    n_effective = metadata.get('N_effective')
+                                    if n_effective is not None and n_effective > 0:
+                                        self._n_effective = int(n_effective)
+                                        logger.info(f"🔍 Found N_effective: {self._n_effective} from {metadata_file}")
+                                        break
+                                except Exception as e:
+                                    logger.debug(f"Failed to read metadata from {metadata_file}: {e}")
+                                    continue
+                    if self._n_effective is not None:
                         break
             
-            # If we found a cohort_id, move the directory
-            if self._cohort_id is not None:
-                # Move the entire run directory to cohort-organized location
+            # If we found N_effective, move the directory
+            if self._n_effective is not None:
+                # Move the entire run directory to N_effective-organized location
                 repo_root = Path(__file__).parent.parent.parent
                 results_dir = repo_root / "RESULTS"
-                new_output_dir = results_dir / self._cohort_id / self._run_name
+                new_output_dir = results_dir / str(self._n_effective) / self._run_name
                 
                 if new_output_dir.exists():
-                    logger.warning(f"Cohort directory {new_output_dir} already exists, not moving")
+                    logger.warning(f"Sample size directory {new_output_dir} already exists, not moving")
                     # Still update paths to point to existing directory
                     self.output_dir = new_output_dir
                     self.cache_dir = self.output_dir / "cache"
                     self.target_ranking_cache = self.cache_dir / "target_rankings.json"
                     self.feature_selection_cache = self.cache_dir / "feature_selections"
-                    logger.info(f"📁 Using existing cohort directory: {self.output_dir}")
+                    logger.info(f"📁 Using existing sample size directory: {self.output_dir}")
                     return
                 
                 # Move the directory
@@ -297,7 +317,7 @@ class IntelligentTrainer:
                     self.target_ranking_cache = self.cache_dir / "target_rankings.json"
                     self.feature_selection_cache = self.cache_dir / "feature_selections"
                     
-                    logger.info(f"✅ Organized run by cohort: {self.output_dir}")
+                    logger.info(f"✅ Organized run by sample size (N={self._n_effective}): {self.output_dir}")
                     return
                 except Exception as move_error:
                     logger.error(f"Failed to move directory: {move_error}")
@@ -305,44 +325,52 @@ class IntelligentTrainer:
                     # Stay in _pending/ if move fails
                     return
             
-            logger.debug(f"No cohort directories found, waiting for first target")
+            logger.debug(f"No metadata.json found to extract N_effective, waiting for first target")
         except Exception as e:
-            logger.warning(f"Could not organize by cohort (will stay in _pending/): {e}")
+            logger.warning(f"Could not organize by sample size (will stay in _pending/): {e}")
             import traceback
             logger.debug(f"Traceback: {traceback.format_exc()}")
             # Stay in _pending/ if we can't determine cohort
         
         # If we still haven't organized, try one more time with more aggressive search
-        if self._cohort_id is None:
+        if self._n_effective is None:
             try:
                 # Search more broadly - check if REPRODUCIBILITY exists anywhere in the run directory
-                for repro_candidate in self._initial_output_dir.rglob("REPRODUCIBILITY/TARGET_RANKING/*/cohort=*"):
-                    if repro_candidate.is_dir():
-                        cohort_id = repro_candidate.name.replace("cohort=", "")
-                        self._cohort_id = cohort_id
-                        
-                        repo_root = Path(__file__).parent.parent.parent
-                        results_dir = repo_root / "RESULTS"
-                        new_output_dir = results_dir / cohort_id / self._run_name
-                        
-                        if new_output_dir.exists():
-                            logger.warning(f"Cohort directory {new_output_dir} already exists, not moving")
-                            self.output_dir = new_output_dir
-                            self.cache_dir = self.output_dir / "cache"
-                            self.target_ranking_cache = self.cache_dir / "target_rankings.json"
-                            self.feature_selection_cache = self.cache_dir / "feature_selections"
-                            return
-                        
-                        import shutil
-                        new_output_dir.parent.mkdir(parents=True, exist_ok=True)
-                        logger.info(f"📁 Moving run from {self._initial_output_dir} to {new_output_dir} (found via recursive search)")
-                        shutil.move(str(self._initial_output_dir), str(new_output_dir))
-                        self.output_dir = new_output_dir
-                        self.cache_dir = self.output_dir / "cache"
-                        self.target_ranking_cache = self.cache_dir / "target_rankings.json"
-                        self.feature_selection_cache = self.cache_dir / "feature_selections"
-                        logger.info(f"✅ Organized run by cohort: {self.output_dir}")
-                        return
+                for metadata_file in self._initial_output_dir.rglob("REPRODUCIBILITY/TARGET_RANKING/*/cohort=*/metadata.json"):
+                    if metadata_file.exists():
+                        try:
+                            import json
+                            with open(metadata_file, 'r') as f:
+                                metadata = json.load(f)
+                            n_effective = metadata.get('N_effective')
+                            if n_effective is not None and n_effective > 0:
+                                self._n_effective = int(n_effective)
+                                
+                                repo_root = Path(__file__).parent.parent.parent
+                                results_dir = repo_root / "RESULTS"
+                                new_output_dir = results_dir / str(self._n_effective) / self._run_name
+                                
+                                if new_output_dir.exists():
+                                    logger.warning(f"Sample size directory {new_output_dir} already exists, not moving")
+                                    self.output_dir = new_output_dir
+                                    self.cache_dir = self.output_dir / "cache"
+                                    self.target_ranking_cache = self.cache_dir / "target_rankings.json"
+                                    self.feature_selection_cache = self.cache_dir / "feature_selections"
+                                    return
+                                
+                                import shutil
+                                new_output_dir.parent.mkdir(parents=True, exist_ok=True)
+                                logger.info(f"📁 Moving run from {self._initial_output_dir} to {new_output_dir} (found via recursive search, N={self._n_effective})")
+                                shutil.move(str(self._initial_output_dir), str(new_output_dir))
+                                self.output_dir = new_output_dir
+                                self.cache_dir = self.output_dir / "cache"
+                                self.target_ranking_cache = self.cache_dir / "target_rankings.json"
+                                self.feature_selection_cache = self.cache_dir / "feature_selections"
+                                logger.info(f"✅ Organized run by sample size (N={self._n_effective}): {self.output_dir}")
+                                return
+                        except Exception as e:
+                            logger.debug(f"Failed to read metadata from {metadata_file}: {e}")
+                            continue
             except Exception as e2:
                 logger.debug(f"Recursive search also failed: {e2}")
         
@@ -548,19 +576,19 @@ class IntelligentTrainer:
             max_rows_per_symbol=max_rows_per_symbol  # Pass max_rows_per_symbol from config
         )
         
-        # After target ranking completes, organize by cohort
-        # This moves the entire directory (including all REPRODUCIBILITY data) to RESULTS/{cohort_id}/{run_name}/
-        if self._cohort_id is None and rankings:
-            logger.info("🔍 Attempting to organize run by cohort...")
+        # After target ranking completes, organize by sample size (N_effective)
+        # This moves the entire directory (including all REPRODUCIBILITY data) to RESULTS/{N_effective}/{run_name}/
+        if self._n_effective is None and rankings:
+            logger.info("🔍 Attempting to organize run by sample size (N_effective)...")
             logger.info(f"   Current output_dir: {self.output_dir}")
             logger.info(f"   Initial output_dir: {self._initial_output_dir}")
             self._organize_by_cohort()
-            if self._cohort_id is not None:
-                logger.info(f"✅ Successfully organized run by cohort: {self.output_dir}")
+            if self._n_effective is not None:
+                logger.info(f"✅ Successfully organized run by sample size (N={self._n_effective}): {self.output_dir}")
                 logger.info(f"   Moved from: {self._initial_output_dir}")
                 logger.info(f"   Moved to: {self.output_dir}")
             else:
-                logger.warning("⚠️  Could not determine cohort_id, run will stay in _pending/")
+                logger.warning("⚠️  Could not determine N_effective, run will stay in _pending/")
                 logger.warning(f"   Run directory: {self._initial_output_dir}")
                 # Try to help debug - check if REPRODUCIBILITY exists
                 repro_check = self._initial_output_dir / "target_rankings" / "REPRODUCIBILITY"
