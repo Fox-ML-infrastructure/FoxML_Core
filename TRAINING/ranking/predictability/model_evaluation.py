@@ -2471,6 +2471,10 @@ def evaluate_target_predictability(
     # Load data based on view
     from TRAINING.utils.cross_sectional_data import load_mtf_data_for_ranking, prepare_cross_sectional_data_for_ranking
     from TRAINING.utils.leakage_filtering import filter_features_for_target
+    from TRAINING.utils.target_conditional_exclusions import (
+        generate_target_exclusion_list,
+        load_target_exclusion_list
+    )
     
     # For SYMBOL_SPECIFIC and LOSO, filter symbols
     symbols_to_load = symbols
@@ -2506,11 +2510,57 @@ def evaluate_target_predictability(
     # Get all columns from first symbol to determine available features
     sample_df = next(iter(mtf_data.values()))
     all_columns = sample_df.columns.tolist()
+
+    # TARGET-CONDITIONAL EXCLUSIONS: Generate per-target exclusion list
+    # This implements "Target-Conditional Feature Selection" - tailoring features to target physics
+    target_conditional_exclusions = []
+    exclusion_metadata = {}
+    target_exclusion_dir = None
     
+    if output_dir:
+        target_exclusion_dir = Path(output_dir) / "feature_exclusions"
+        target_exclusion_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Try to load existing exclusion list first
+        existing_exclusions = load_target_exclusion_list(target_name, target_exclusion_dir)
+        if existing_exclusions is not None:
+            target_conditional_exclusions = existing_exclusions
+            logger.info(f"📋 Loaded existing target-conditional exclusions for {target_name}: {len(target_conditional_exclusions)} features")
+        else:
+            # Generate new exclusion list
+            try:
+                from TRAINING.common.feature_registry import get_registry
+                registry = get_registry()
+            except Exception:
+                registry = None
+            
+            # Detect interval for lookback calculation
+            from TRAINING.utils.data_interval import detect_interval_from_dataframe
+            temp_interval = detect_interval_from_dataframe(sample_df, explicit_interval=explicit_interval)
+            
+            target_conditional_exclusions, exclusion_metadata = generate_target_exclusion_list(
+                target_name=target_name,
+                all_features=all_columns,
+                interval_minutes=temp_interval,
+                output_dir=target_exclusion_dir,
+                registry=registry
+            )
+            
+            if target_conditional_exclusions:
+                logger.info(
+                    f"📋 Generated target-conditional exclusions for {target_name}: "
+                    f"{len(target_conditional_exclusions)} features excluded "
+                    f"(horizon={exclusion_metadata.get('target_horizon_minutes', 'unknown')}m, "
+                    f"semantics={exclusion_metadata.get('target_semantics', {})})"
+                )
+    else:
+        # No output_dir - skip target-conditional exclusions (backward compatibility)
+        logger.debug("No output_dir provided - skipping target-conditional exclusions")
+
     # Detect data interval for horizon conversion (use explicit_interval if provided)
     from TRAINING.utils.data_interval import detect_interval_from_dataframe
     detected_interval = detect_interval_from_dataframe(
-        sample_df, 
+        sample_df,
         timestamp_column='ts', 
         default=5,
         explicit_interval=explicit_interval,
@@ -2526,9 +2576,20 @@ def evaluate_target_predictability(
         target_horizon_bars = int(target_horizon_minutes // detected_interval)
     
     # Use target-aware filtering with registry validation
+    # Apply target-conditional exclusions BEFORE global filtering
+    # This ensures target-specific rules are applied first
+    columns_after_target_exclusions = [c for c in all_columns if c not in target_conditional_exclusions]
+    
+    if target_conditional_exclusions:
+        logger.info(
+            f"  🎯 Target-conditional exclusions: Removed {len(target_conditional_exclusions)} features "
+            f"({len(columns_after_target_exclusions)} remaining before global filtering)"
+        )
+    
+    # Apply global filtering (registry, patterns, etc.)
     safe_columns = filter_features_for_target(
-        all_columns, 
-        target_column, 
+        columns_after_target_exclusions,  # Use pre-filtered columns
+        target_column,
         verbose=True,
         use_registry=True,  # Enable registry validation
         data_interval_minutes=detected_interval,
