@@ -318,37 +318,54 @@ def _enforce_final_safety_gate(
     except Exception:
         pass
     
+    # CRITICAL: Use the SAME lookback calculation as the audit system
+    # Compute lookback for ALL features using the same logic as resolved_config
+    from TRAINING.utils.resolved_config import compute_feature_lookback_max
+    
+    # Compute lookback for all features at once (same as audit)
+    max_lookback_all, top_offenders_all = compute_feature_lookback_max(
+        feature_names,
+        interval_minutes=interval_minutes,
+        max_lookback_cap_minutes=None  # Don't cap - we want the real value
+    )
+    
+    # Build lookup dict from top_offenders (contains all features with lookback > 0)
+    feature_lookback_dict = {}
+    for feat_name, lookback_minutes in top_offenders_all:
+        feature_lookback_dict[feat_name] = lookback_minutes
+    
+    # For features not in top_offenders, compute individually to catch any that exceed threshold
+    # (top_offenders only contains top 10, but we need to check ALL features)
+    for feat_name in feature_names:
+        if feat_name not in feature_lookback_dict:
+            # Compute lookback for this feature individually
+            max_lookback, _ = compute_feature_lookback_max(
+                [feat_name],
+                interval_minutes=interval_minutes,
+                max_lookback_cap_minutes=None
+            )
+            if max_lookback is not None:
+                feature_lookback_dict[feat_name] = max_lookback
+            else:
+                feature_lookback_dict[feat_name] = 0.0  # Unknown feature - assume safe
+    
     # Iterate through features in the FINAL dataframe
     for idx, feature_name in enumerate(feature_names):
         should_drop = False
         reason = None
         
-        # Check explicit 24h/daily naming (very aggressive)
+        # Get lookback from our computed dict (same calculation as audit)
+        lookback_minutes = feature_lookback_dict.get(feature_name, 0.0)
+        
+        # Check explicit 24h/daily naming (very aggressive - catch patterns that might not be in registry)
         is_daily_name = any(x in feature_name.lower() for x in ['_1d', '_24h', 'daily', 'day'])
         
-        # Check calculated lookback
-        lookback_minutes = None
-        try:
-            from TRAINING.utils.target_conditional_exclusions import compute_feature_lookback_minutes
-            lookback_minutes = compute_feature_lookback_minutes(
-                feature_name,
-                interval_minutes=interval_minutes,
-                registry=registry
-            )
-        except Exception:
-            # Fallback: simple pattern matching
-            import re
-            # Check for bar-based patterns (sma_200 = 200 bars * 5m = 1000m)
-            bar_match = re.match(r'^(ret|sma|ema|rsi|macd|bb|atr|adx|mom|vol|std|var)_(\d+)', feature_name)
-            if bar_match:
-                bars = int(bar_match.group(2))
-                lookback_minutes = bars * interval_minutes
-        
         # The Logic: If it violates the purge, KILL IT
+        # Use the SAME calculation as audit - if audit sees 1440m, we should too
         if is_daily_name:
             should_drop = True
             reason = "daily/24h naming pattern"
-        elif lookback_minutes is not None and lookback_minutes > safe_lookback_max:
+        elif lookback_minutes > safe_lookback_max:
             should_drop = True
             reason = f"lookback ({lookback_minutes:.1f}m) > safe_limit ({safe_lookback_max:.1f}m)"
         
