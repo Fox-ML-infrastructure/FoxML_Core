@@ -750,30 +750,6 @@ def filter_features_for_target(
         
         safe_columns = final_safe
 
-    # ACTIVE SANITIZATION: Quarantine features with excessive lookback before training
-    # This prevents "ghost feature" discrepancies where audit and auto-fix see different lookback values
-    try:
-        from TRAINING.utils.feature_sanitizer import auto_quarantine_long_lookback_features
-        
-        sanitized_features, quarantined_features, quarantine_report = auto_quarantine_long_lookback_features(
-            feature_names=safe_columns,
-            interval_minutes=data_interval_minutes,
-            max_safe_lookback_minutes=None,  # Loads from config
-            enabled=None  # Loads from config
-        )
-        
-        if quarantined_features:
-            # Update safe_columns with sanitized features
-            safe_columns = sanitized_features
-            if verbose:
-                logger.info(
-                    f"  👻 Active sanitization: Quarantined {len(quarantined_features)} feature(s) "
-                    f"with lookback > {quarantine_report.get('max_safe_lookback_minutes', 'unknown')}m"
-                )
-    except Exception as e:
-        # Don't fail if sanitization unavailable - just log and continue
-        logger.debug(f"Active sanitization unavailable: {e}")
-
     # CRITICAL: For ranking mode, always include minimal safe feature family
     # This ensures ranking has a baseline feature set (OHLCV + basic TA) even if registry/config excludes them
     if for_ranking:
@@ -856,6 +832,32 @@ def filter_features_for_target(
                     f"schema_family_hits={schema_family_hits}, pattern_hits={pattern_hits}, "
                     f"union_hits={union_hits}, final_total={final_total}"
                 )
+    
+    # ACTIVE SANITIZATION: Quarantine features with excessive lookback AFTER all merging is complete
+    # This prevents "ghost feature" discrepancies where audit and auto-fix see different lookback values
+    # CRITICAL: Must run AFTER ranking mode schema merge (line 833) to catch ghost features that sneak in
+    try:
+        from TRAINING.utils.feature_sanitizer import auto_quarantine_long_lookback_features
+        
+        sanitized_features, quarantined_features, quarantine_report = auto_quarantine_long_lookback_features(
+            feature_names=safe_columns,
+            interval_minutes=data_interval_minutes,
+            max_safe_lookback_minutes=None,  # Loads from config
+            enabled=None  # Loads from config
+        )
+        
+        if quarantined_features:
+            # Update safe_columns with sanitized features
+            safe_columns = sanitized_features
+            if verbose:
+                logger.info(
+                    f"  👻 Active sanitization: Quarantined {len(quarantined_features)} feature(s) "
+                    f"with lookback > {quarantine_report.get('max_safe_lookback_minutes', 'unknown')}m"
+                )
+                logger.debug(f"    Quarantined features: {quarantined_features}")
+    except Exception as e:
+        # Don't fail if sanitization unavailable - just log and continue
+        logger.debug(f"Active sanitization unavailable: {e}")
     
     return safe_columns
 
