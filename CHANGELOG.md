@@ -16,12 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### GPU Acceleration for Target Ranking & Feature Selection (2025-12-12) – **NEW**
 - **GPU support**: XGBoost, CatBoost, and LightGBM now use GPU acceleration when available
-- **XGBoost 3.1+ compatible**: Automatically handles both new API (`device='cuda'`) and legacy API (`gpu_hist`)
-- **CatBoost verification**: Explicit verification that `task_type='GPU'` is set (required for GPU usage)
 - **Automatic detection**: Gracefully falls back to CPU if GPU unavailable
 - **Config-driven**: All GPU settings from `gpu_config.yaml` (SST)
 - **Performance**: Significantly faster on large datasets (>100k samples)
-- **Enhanced logging**: Always logs GPU status with verification messages
 - See [GPU Setup Guide](DOCS/01_tutorials/setup/GPU_SETUP.md) for configuration
 
 #### Critical Bug Fixes (2025-12-12) – **FIXED**
@@ -188,6 +185,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Parameter Passing & Validation** (2025-12-11)
   - Systematic fix for duplicated/incompatible params across all model families
   - Resolved CatBoost iteration synonyms and RNG param conflicts
+
+- **XGBoost 3.1+ GPU Compatibility** (2025-12-12)
+  - Fixed `gpu_id has been removed since 3.1` error
+  - Removed all `gpu_id` references, now uses `device='cuda'` with `tree_method='hist'`
+  - Automatic fallback to legacy API for older XGBoost versions
+  - See [GPU Setup Guide](DOCS/01_tutorials/setup/GPU_SETUP.md) for details
+
+- **CatBoost GPU Verification** (2025-12-12)
+  - Added explicit verification that `task_type='GPU'` is set (CatBoost requires this)
+  - Enhanced logging to show GPU param verification
+  - Added educational hints about CatBoost quantization behavior (CPU first, then GPU)
+  - See [Known Issues](DOCS/02_reference/KNOWN_ISSUES.md) for troubleshooting
 
 - **Leakage Detection & Auto-Fixer** (2025-12-11)
   - Fixed confidence calculation
