@@ -552,13 +552,14 @@ def select_features_for_target(
             try:
                 # FIX: Pass selected_features to per-symbol processing (ensures consistency with pruned features)
                 # This prevents features like "adjusted" from "coming back" after pruning
+                # Note: In fallback path, selected_features is not available yet (computed after aggregation)
                 symbol_results, symbol_statuses = _process_single_symbol(
                     symbol=symbol,
                     data_path=data_path,
                     target_column=target_column,
                     model_families_config=model_families_config,
                     max_samples=max_samples_per_symbol,
-                    selected_features=selected_features if 'selected_features' in globals() else None,  # Use pruned features if available
+                    selected_features=None,  # Not available in fallback path (computed after aggregation)
                     explicit_interval=explicit_interval,
                     experiment_config=experiment_config,
                     output_dir=output_dir
