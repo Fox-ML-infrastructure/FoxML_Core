@@ -78,7 +78,31 @@ Commercial licensing gives your organization the right to:
 - Integrate FoxML into proprietary systems without AGPL disclosure obligations
 - Get access to **commercial license terms** and optional support / integration work
 
-**Indicative annual pricing** starts in the low six figures for small teams and scales to multi-million-dollar enterprise agreements for large institutions.
+**Pricing Structure:**
+
+**Paid Pilots (Non-Negotiable Entry Point):**
+- **Pilot (30 days):** $15,000–$30,000 — 1 environment, limited scope, async support
+- **Pilot+ (60–90 days):** $35,000–$90,000 — 2 environments, onboarding calls, tighter success criteria
+- **Credit:** 50–100% of pilot fee applies toward first-year license if converted
+
+**Annual License Tiers** (based on using team/desk size, not total company headcount):
+- **Team** (1–5 users, 1 environment): $75,000/year
+- **Desk** (6–20 users, up to 2 environments): $150,000–$300,000/year
+- **Division** (21–75 users, up to 3 environments): $350,000–$750,000/year
+- **Enterprise** (76–250 users, multi-environment): $800,000–$2,000,000/year
+- **>250 users / multi-region / regulated bank:** Custom $2,000,000+/year
+
+**Support Add-Ons** (15–30% of license, annual):
+- Standard Support (included): Email/issues, best-effort, no SLA
+- Business Support: +$25,000/year
+- Enterprise Support: +$75,000–$150,000/year
+- Premium / 24×5: +$200,000–$400,000/year (only if we can staff it)
+
+**Services:**
+- Onboarding/Integration: $25,000–$150,000 one-time
+- On-Prem/High-Security: $150,000–$500,000+ one-time (custom)
+
+**Policy:** Licensing is scoped to the business unit/desk, not the parent company's total headcount.
 
 **To begin the licensing process:**
 📧 **jenn.lewis5789@gmail.com**  

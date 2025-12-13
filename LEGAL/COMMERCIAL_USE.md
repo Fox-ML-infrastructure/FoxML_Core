@@ -157,6 +157,8 @@ Enterprise add-ons are available with defined scope and boundaries:
 
 ### 5.1 Licensing Process
 
+**All commercial licensing begins with a paid pilot (non-negotiable).**
+
 **To request a commercial license:**
 
 1. **Email:** jenn.lewis5789@gmail.com
@@ -166,16 +168,18 @@ Enterprise add-ons are available with defined scope and boundaries:
    - Organization name
    - Work email
    - Company website or LinkedIn
-   - Organization size (1–10, 11–50, 51–250, 251–1000, 1000+)
+   - **Team/desk size** (number of users and environments, not total company headcount)
    - Primary use case (1–3 sentences)
    - Desired start timeline
    - Any special requirements (optional)
 
 4. **Review:** We will review your information and reply with:
-   - Appropriate licensing option
+   - Appropriate pilot option (Pilot $15k–$30k or Pilot+ $35k–$90k)
    - Pricing confirmation
    - Stripe payment link
    - Commercial License Agreement (CLA) for signature
+
+**Note:** Pilot fees are non-refundable but credited (50–100%) toward the first-year annual license upon conversion.
 
 ### 5.2 After Purchase
 
