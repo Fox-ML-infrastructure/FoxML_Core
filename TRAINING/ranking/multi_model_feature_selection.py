@@ -1202,25 +1202,26 @@ def train_model_and_get_importance(
                     if test_enabled:
                         # Try GPU (CatBoost uses task_type='GPU' or devices parameter)
                         try:
-                            test_model = cb.CatBoostRegressor(task_type='GPU', devices=devices, thread_count=thread_count, iterations=test_iterations, verbose=False)
+                            test_model = cb.CatBoostRegressor(task_type='GPU', devices=devices, iterations=test_iterations, verbose=False)
                             test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
-                            gpu_params = {'task_type': 'GPU', 'devices': devices, 'thread_count': thread_count}
+                            gpu_params = {'task_type': 'GPU', 'devices': devices}
                         except Exception:
                             pass  # Fallback to CPU silently
                     else:
                         # Skip test, use config values directly
-                        gpu_params = {'task_type': 'GPU', 'devices': devices, 'thread_count': thread_count}
+                        gpu_params = {'task_type': 'GPU', 'devices': devices}
             except Exception:
                 pass  # Fallback to CPU silently
             
             # Remove task-specific params (CatBoost uses thread_count, not n_jobs)
-            # Also remove task_type and devices if present (we set these from GPU config)
+            # Also remove task_type, devices, and thread_count if present (we set these from GPU config)
             cb_config = model_config.copy()
             cb_config.pop('verbose', None)
             cb_config.pop('loss_function', None)
             cb_config.pop('n_jobs', None)
             cb_config.pop('task_type', None)
             cb_config.pop('devices', None)
+            cb_config.pop('thread_count', None)  # Remove if present, we'll set from GPU config when using GPU
             
             # CRITICAL: CatBoost only accepts ONE of iterations/n_estimators/num_boost_round/num_trees
             # Prefer 'iterations' (CatBoost's native param), remove ALL synonyms

@@ -68,9 +68,10 @@ This document tracks features that are **not yet fully functional**, have **know
   - Dataset size < 100k rows
 - **Solutions**:
   1. **For datasets < 100k rows**: Use CPU training instead of GPU (counter-intuitive but faster due to reduced overhead)
-  2. **Reduce CPU threads**: Set `thread_count=8` or `10` (leave headroom for OS and GPU driver) instead of `-1` (all cores)
-  3. **Check metric calculation**: Use built-in GPU metrics (e.g., `eval_metric='AUC'`) rather than custom Python functions (which force CPU evaluation)
-  4. **Increase batch size**: If using data loaders, increase batch size to give GPU more work per iteration
+  2. **CatBoost thread limiting**: CatBoost now limits CPU threads via `gpu.catboost.thread_count` in `gpu_config.yaml` (default: 8 threads). This prevents CPU bottleneck during data preparation/quantization.
+  3. **Reduce CPU threads for other models**: Set `thread_count=8` or `10` (leave headroom for OS and GPU driver) instead of `-1` (all cores)
+  4. **Check metric calculation**: Use built-in GPU metrics (e.g., `eval_metric='AUC'`) rather than custom Python functions (which force CPU evaluation)
+  5. **Increase batch size**: If using data loaders, increase batch size to give GPU more work per iteration
 - **When to use GPU**: GPU acceleration is most beneficial for datasets > 100k-200k rows where the computation time exceeds the overhead
 
 **General GPU Issues:**

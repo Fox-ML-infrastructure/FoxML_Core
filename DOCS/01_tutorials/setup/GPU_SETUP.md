@@ -170,7 +170,12 @@ For model training, reduce VRAM usage in model configs:
    - Set `gpu.catboost.task_type: "CPU"` in `gpu_config.yaml`
    - For small datasets, CPU is often faster due to reduced overhead
 
-2. **Reduce CPU thread count**: If you must use GPU, set explicit thread limits
+2. **CatBoost thread limiting**: CatBoost now limits CPU threads automatically
+   - Configured via `gpu.catboost.thread_count` in `gpu_config.yaml` (default: 8 threads)
+   - Limits CPU threads used for data preparation/quantization, leaving headroom for OS/GPU driver
+   - Adjust based on your system: 8 threads for 16-core systems, 4-6 for 8-core systems
+
+3. **Reduce CPU thread count for other models**: If you must use GPU, set explicit thread limits
    - In model config: `thread_count: 8` or `10` (leave headroom for OS and GPU driver)
    - Avoid `thread_count: -1` (all cores) which can cause context switching overhead
 
