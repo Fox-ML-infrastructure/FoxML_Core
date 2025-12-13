@@ -1836,6 +1836,7 @@ def train_and_evaluate_models(
                 # SST: All values from config, no hardcoded defaults
                 task_type = get_cfg('gpu.catboost.task_type', default='CPU', config_name='gpu_config')
                 devices = get_cfg('gpu.catboost.devices', default='0', config_name='gpu_config')
+                thread_count = get_cfg('gpu.catboost.thread_count', default=8, config_name='gpu_config')
                 test_enabled = get_cfg('gpu.catboost.test_enabled', default=True, config_name='gpu_config')
                 test_iterations = get_cfg('gpu.catboost.test_iterations', default=1, config_name='gpu_config')
                 test_samples = get_cfg('gpu.catboost.test_samples', default=10, config_name='gpu_config')
@@ -1870,9 +1871,10 @@ def train_and_evaluate_models(
             # Build params dict (copy to avoid mutating original)
             params = dict(cb_config)
             
-            # Remove task_type and devices if present (we set these from GPU config)
+            # Remove task_type, devices, and thread_count if present (we set these from GPU config)
             params.pop('task_type', None)
             params.pop('devices', None)
+            params.pop('thread_count', None)  # Remove if present, we'll set from GPU config when using GPU
             
             # Add GPU params if available (will override any task_type/devices in config)
             params.update(gpu_params)

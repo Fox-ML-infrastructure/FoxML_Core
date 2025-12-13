@@ -79,6 +79,7 @@ gpu:
   catboost:
     task_type: "GPU"  # "GPU" or "CPU"
     devices: "0"  # GPU device IDs (comma-separated, or "0" for single GPU)
+    thread_count: 8  # CPU threads for data preparation/quantization (leave headroom for OS/GPU driver, default: 8)
     # GPU Detection Settings
     test_enabled: true  # Enable GPU test before use
     test_iterations: 1  # Number of iterations for test model

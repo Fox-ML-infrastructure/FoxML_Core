@@ -1192,6 +1192,7 @@ def train_model_and_get_importance(
                 # SST: All values from config, no hardcoded defaults
                 task_type = get_cfg('gpu.catboost.task_type', default='CPU', config_name='gpu_config')
                 devices = get_cfg('gpu.catboost.devices', default='0', config_name='gpu_config')
+                thread_count = get_cfg('gpu.catboost.thread_count', default=8, config_name='gpu_config')
                 test_enabled = get_cfg('gpu.catboost.test_enabled', default=True, config_name='gpu_config')
                 test_iterations = get_cfg('gpu.catboost.test_iterations', default=1, config_name='gpu_config')
                 test_samples = get_cfg('gpu.catboost.test_samples', default=10, config_name='gpu_config')
@@ -1201,14 +1202,14 @@ def train_model_and_get_importance(
                     if test_enabled:
                         # Try GPU (CatBoost uses task_type='GPU' or devices parameter)
                         try:
-                            test_model = cb.CatBoostRegressor(task_type='GPU', devices=devices, iterations=test_iterations, verbose=False)
+                            test_model = cb.CatBoostRegressor(task_type='GPU', devices=devices, thread_count=thread_count, iterations=test_iterations, verbose=False)
                             test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
-                            gpu_params = {'task_type': 'GPU', 'devices': devices}
+                            gpu_params = {'task_type': 'GPU', 'devices': devices, 'thread_count': thread_count}
                         except Exception:
                             pass  # Fallback to CPU silently
                     else:
                         # Skip test, use config values directly
-                        gpu_params = {'task_type': 'GPU', 'devices': devices}
+                        gpu_params = {'task_type': 'GPU', 'devices': devices, 'thread_count': thread_count}
             except Exception:
                 pass  # Fallback to CPU silently
             
