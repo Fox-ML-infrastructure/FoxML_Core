@@ -100,6 +100,10 @@ def load_experiment_config(experiment_name: str) -> ExperimentConfig:
         # Normalize path separators
         normalized = experiment_name.replace('\\', '/')
         
+        # Remove .yaml extension if present (before processing)
+        if normalized.endswith('.yaml') or normalized.endswith('.yml'):
+            normalized = normalized[:-5] if normalized.endswith('.yaml') else normalized[:-4]
+        
         # Remove CONFIG/experiments/ prefix if present (common mistake)
         if normalized.startswith('CONFIG/experiments/'):
             normalized = normalized[len('CONFIG/experiments/'):]
@@ -109,16 +113,12 @@ def load_experiment_config(experiment_name: str) -> ExperimentConfig:
             # If it's just CONFIG/something, assume it's already in CONFIG_DIR
             normalized = normalized[len('CONFIG/'):]
         
-        # Remove .yaml extension if present (before building path)
-        if normalized.endswith('.yaml') or normalized.endswith('.yml'):
-            normalized = normalized[:-5] if normalized.endswith('.yaml') else normalized[:-4]
-        
-        # Build path relative to CONFIG_DIR
-        exp_path = CONFIG_DIR / normalized
+        # Build path relative to CONFIG_DIR/experiments
+        exp_path = CONFIG_DIR / "experiments" / normalized
         if not exp_path.suffix:
             exp_path = exp_path.with_suffix('.yaml')
         
-        # If not found in CONFIG_DIR, try as relative to current working directory
+        # If not found in CONFIG_DIR/experiments, try as relative to current working directory
         if not exp_path.exists():
             exp_path = Path(experiment_name)
             if not exp_path.suffix:
