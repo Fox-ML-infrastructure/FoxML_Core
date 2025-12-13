@@ -40,6 +40,12 @@ Recent improvements:
 - ✅ Full determinism (all random seeds use centralized system)
 - ✅ Pipeline robustness fixes (syntax errors, import issues resolved)
 - ✅ Complete F821 undefined name error elimination (194 errors fixed)
+- ✅ **NEW**: GPU Acceleration for Target Ranking & Feature Selection (2025-12-12) - **Functional, under validation**
+  - XGBoost, CatBoost, and LightGBM GPU acceleration
+  - XGBoost 3.1+ compatibility (fixed `gpu_id` removal issue)
+  - CatBoost GPU verification (explicit `task_type='GPU'` requirement)
+  - Automatic detection with graceful CPU fallback
+  - All settings config-driven from `gpu_config.yaml` (SST)
 - ✅ **NEW**: Training Routing & Planning System (2025-12-11) - **Currently being tested**
   - Config-driven routing decisions (cross-sectional vs symbol-specific)
   - Automatic training plan generation
@@ -48,11 +54,19 @@ Recent improvements:
 
 ## What's Being Tested
 
+- **GPU Acceleration** (NEW - 2025-12-12):
+  - XGBoost 3.1+ GPU compatibility (verify no `gpu_id` errors)
+  - CatBoost GPU usage verification (check logs for `✅ CatBoost GPU verified`)
+  - GPU detection and fallback behavior
+  - Performance improvements on large datasets
+  - **Note**: CatBoost does quantization on CPU first (20+ seconds), then trains on GPU. Watch GPU memory allocation, not just utilization %, to verify GPU usage.
+
 - **Training Routing System** (NEW - 2025-12-11):
   - One-command pipeline: target ranking → feature selection → training plan → training execution
   - 2-stage training (CPU models first, then GPU models)
   - Training plan auto-detection and filtering
   - All 20 models (sequential + cross-sectional)
+
 - Full pipeline validation: target ranking → feature selection → model training
 - Testing with 5 symbols (AAPL, MSFT, GOOGL, TSLA, NVDA)
 - Validating all model families (20 families)
