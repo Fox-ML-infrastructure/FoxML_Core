@@ -18,11 +18,12 @@ Centralized configuration management for FoxML Core training pipeline, model fam
 
 The configuration system provides a **complete Single Source of Truth (SST)** for all training parameters, system settings, model hyperparameters, feature management, and safety controls. **As of 2025-12-12, ALL hardcoded configuration values have been removed from the TRAINING pipeline**, including decision policy thresholds, stability analysis parameters, and temporal safety defaults. All 52+ model trainers and specialized models now load hyperparameters, test splits, and random seeds from centralized config files, ensuring complete reproducibility: same config → same results across all pipeline stages.
 
-**NEW (2025-12-12)**: Decision-making, stability analysis, and GPU settings are now fully config-driven:
+**NEW (2025-12-12)**: Decision-making, stability analysis, GPU settings, and training parameters are now fully config-driven:
 - **Decision Policies** (`decision_policies.yaml`): All thresholds for feature instability, route instability, feature explosion decline, and class balance drift
 - **Stability Analysis** (`stability_config.yaml`): Importance difference thresholds for stability analysis
 - **Temporal Safety** (`safety_config.yaml`): Default purge minutes and temporal safety parameters
 - **GPU Acceleration** (`gpu_config.yaml`): All GPU settings for target ranking, feature selection, and model training (LightGBM, XGBoost, CatBoost)
+- **Training Configuration** (`intelligent_training_config.yaml`): CV folds, parallel jobs, and CatBoost-specific settings (metric_period)
 
 All configurations are stored as YAML files and loaded programmatically via `config_loader.py`.
 
@@ -231,6 +232,7 @@ See [CHANGELOG](../../../CHANGELOG.md) for logging configuration details.
 
 **See [Training Pipeline Configs](TRAINING_PIPELINE_CONFIGS.md) for complete guide.**
 
+- `intelligent_training_config.yaml` - **NEW (2025-12-12)**: Main intelligent training config (CV folds, parallel jobs, CatBoost settings)
 - `pipeline_config.yaml` - Main pipeline orchestration
 - `gpu_config.yaml` - GPU/CUDA configuration
 - `memory_config.yaml` - Memory management
@@ -594,6 +596,11 @@ leakage_threshold = get_cfg(
     default=0.99,
     config_name="safety_config"
 )
+
+# Access training config (CV and CatBoost settings)
+cv_folds = get_cfg("training.cv_folds", default=3, config_name="intelligent_training_config")
+cv_n_jobs = get_cfg("training.cv_n_jobs", default=1, config_name="intelligent_training_config")
+metric_period = get_cfg("training.catboost.metric_period", default=50, config_name="intelligent_training_config")
 ```
 
 #### Loading Feature/Target Configs

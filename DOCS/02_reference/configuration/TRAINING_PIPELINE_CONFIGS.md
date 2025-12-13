@@ -105,6 +105,17 @@ export CUDA_VISIBLE_DEVICES=0,1,2,3
 
 **NEW (2025-12-12)**: GPU acceleration is now automatically enabled for target ranking and feature selection when GPU is available. All settings are config-driven from this file (SST compliance).
 
+**CatBoost Thread Limiting (2025-12-12):**
+```yaml
+gpu:
+  catboost:
+    thread_count: 8  # Limit CPU threads during GPU training (prevents CPU bottleneck)
+    task_type: "GPU"  # Required for GPU usage
+    devices: "0"  # GPU device IDs
+```
+
+**Note:** For GPU training, set `cv_n_jobs=1` in `intelligent_training_config.yaml` to avoid outer parallelism conflicts (see `intelligent_training_config.yaml` section below).
+
 ---
 
 ### `training_config/memory_config.yaml`
@@ -414,6 +425,46 @@ importance_diff:
 - Flags features with high importance in full set but low in safe set (potential leaks)
 - All thresholds are config-driven (SST: Single Source of Truth)
 - Used by `ImportanceDiffDetector` in stability analysis
+
+---
+
+### `training_config/intelligent_training_config.yaml` ⭐ NEW (2025-12-12)
+
+**Purpose:** Main configuration for the intelligent training pipeline, including cross-validation settings and CatBoost-specific parameters.
+
+**When to use:** When adjusting CV folds, parallel jobs, or CatBoost training parameters.
+
+**Key Settings:**
+- `training.cv_folds` - Number of cross-validation folds (default: 3)
+- `training.cv_n_jobs` - Parallel jobs for CV (1 = sequential, -1 = all cores). **Set to 1 for GPU training** to avoid outer parallelism conflicts
+- `training.catboost.metric_period` - CatBoost metric calculation frequency (default: 50). Reduces evaluation overhead
+
+**Example: Configuring CV Settings**
+```yaml
+training:
+  cv_folds: 3  # Number of CV folds
+  cv_n_jobs: 1  # Sequential CV (required for GPU training to avoid CPU bottleneck)
+  
+  catboost:
+    metric_period: 50  # Calculate metrics every 50 trees (reduces evaluation overhead)
+```
+
+**Example: CPU Training (Parallel CV)**
+```yaml
+training:
+  cv_folds: 5  # More folds for better validation
+  cv_n_jobs: -1  # Use all CPU cores for parallel CV
+```
+
+**SST Compliance:**
+- All CV and CatBoost settings are pulled from this config file via `get_cfg()`
+- Fallback chain: `intelligent_training_config.yaml` → model config → defaults
+- No hardcoded values in code (except as final fallback)
+
+**How It Works:**
+- `cv_folds` and `cv_n_jobs` control cross-validation behavior in target ranking and feature selection
+- `metric_period` is automatically injected into CatBoost params if not specified in model config
+- For GPU training, `cv_n_jobs=1` prevents outer parallelism from causing CPU bottlenecks
 
 ---
 

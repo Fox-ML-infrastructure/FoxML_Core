@@ -161,6 +161,38 @@ my_lightgbm_variant:
 - `colsample_bytree` - Column sampling ratio
 - `reg_alpha`, `reg_lambda` - L1/L2 regularization
 
+**GPU Configuration:**
+- GPU settings are loaded from `training_config/gpu_config.yaml` (SST compliance)
+- `device: "cuda"` and `tree_method: "hist"` are automatically injected for GPU training
+- See [Training Pipeline Configs](TRAINING_PIPELINE_CONFIGS.md) for GPU setup details
+
+### CatBoost
+
+**File:** `target_ranking/multi_model.yaml` or `feature_selection/multi_model.yaml` (model-specific configs)
+
+**Key Parameters:**
+- `iterations` - Number of boosting rounds
+- `learning_rate` - Learning rate
+- `depth` - Tree depth (keep ≤ 8 to avoid exponential complexity)
+- `loss_function` - Loss function (RMSE, Logloss, etc.)
+- `metric_period` - Calculate metrics every N trees (reduces evaluation overhead, default: 50)
+
+**GPU Configuration:**
+- GPU settings are loaded from `training_config/gpu_config.yaml` (SST compliance)
+- `task_type: "GPU"` and `devices: "0"` are automatically injected for GPU training
+- `thread_count` is set from `gpu_config.yaml` to limit CPU threads during GPU training
+- See [Training Pipeline Configs](TRAINING_PIPELINE_CONFIGS.md) for GPU setup details
+
+**Training Configuration:**
+- `metric_period` is pulled from `intelligent_training_config.yaml` → `training.catboost.metric_period` (SST compliance)
+- If not in `intelligent_training_config.yaml`, falls back to model config, then default (50)
+- All settings follow SST: `intelligent_training_config.yaml` → model config → defaults
+
+**Performance Tips:**
+- Set `metric_period: 50` or higher to reduce evaluation overhead
+- Keep `depth ≤ 8` to avoid exponential complexity (2^d)
+- For GPU training, ensure `cv_n_jobs=1` in `intelligent_training_config.yaml` to avoid outer parallelism conflicts
+
 ### Neural Networks (MLP, LSTM, Transformer, CNN1D)
 
 **Key Parameters:**
