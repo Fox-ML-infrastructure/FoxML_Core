@@ -56,6 +56,7 @@ Step-by-step guides for common tasks.
 
 ### Training
 - [Intelligent Training Tutorial](01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Automated target ranking, feature selection, training plan generation, and training (includes timestamped outputs and backup system)
+- [Auto Target Ranking](01_tutorials/training/AUTO_TARGET_RANKING.md) - **NEW**: How to auto-discover, rank, and select top targets from your dataset
 - [Training Routing Quick Start](02_reference/training_routing/QUICK_START.md) - **NEW**: Quick start for training routing system and 2-stage training
 - [Training Routing End-to-End Flow](02_reference/training_routing/END_TO_END_FLOW.md) - **NEW**: Complete end-to-end pipeline documentation
 - [Ranking and Selection Consistency](01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - **NEW**: Unified pipeline behavior (interval handling, sklearn preprocessing, CatBoost configuration, Boruta gatekeeper)
