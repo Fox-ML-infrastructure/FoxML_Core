@@ -763,10 +763,21 @@ def train_and_evaluate_models(
         if log_cfg.cv_detail:
             logger.info(f"  ✅ Resolved config created: purge={resolved_config.purge_minutes:.1f}m, embargo={resolved_config.embargo_minutes:.1f}m")
     
-    # Get CV config
-    cv_config = multi_model_config.get('cross_validation', {}) if multi_model_config else {}
-    cv_folds = cv_config.get('cv_folds', 3)
-    cv_n_jobs = cv_config.get('n_jobs', 1)
+    # Get CV config (with fallback if multi_model_config is None)
+    if multi_model_config is None:
+        cv_config = {}
+        # Try to load from config if multi_model_config not provided
+        try:
+            from CONFIG.config_loader import get_cfg
+            cv_folds = int(get_cfg("training.cv_folds", default=3, config_name="intelligent_training_config"))
+            cv_n_jobs = int(get_cfg("training.cv_n_jobs", default=1, config_name="intelligent_training_config"))
+        except Exception:
+            cv_folds = 3
+            cv_n_jobs = 1
+    else:
+        cv_config = multi_model_config.get('cross_validation', {})
+        cv_folds = cv_config.get('cv_folds', 3)
+        cv_n_jobs = cv_config.get('n_jobs', 1)
     
     # CRITICAL: Use PurgedTimeSeriesSplit to prevent temporal leakage
     # Standard K-Fold shuffles data randomly, which destroys time patterns

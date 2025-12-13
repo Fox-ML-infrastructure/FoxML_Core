@@ -64,8 +64,14 @@ def load_experiment_config(experiment_name: str) -> ExperimentConfig:
     """
     Load experiment configuration from YAML file.
     
+    Supports multiple input formats:
+    - Just name: "honest_baseline_test" → CONFIG/experiments/honest_baseline_test.yaml
+    - Relative path: "experiments/honest_baseline_test.yaml" → CONFIG/experiments/honest_baseline_test.yaml
+    - Full path: "CONFIG/experiments/honest_baseline_test.yaml" → CONFIG/experiments/honest_baseline_test.yaml
+    - Absolute path: "/path/to/CONFIG/experiments/honest_baseline_test.yaml" → uses as-is
+    
     Args:
-        experiment_name: Name of experiment (without .yaml extension)
+        experiment_name: Name of experiment, path to experiment, or full path
     
     Returns:
         ExperimentConfig object
@@ -74,11 +80,64 @@ def load_experiment_config(experiment_name: str) -> ExperimentConfig:
         FileNotFoundError: If experiment config file doesn't exist
         ValueError: If required fields are missing or invalid
     """
-    exp_path = CONFIG_DIR / "experiments" / f"{experiment_name}.yaml"
+    # Normalize input
+    experiment_name = experiment_name.strip()
+    
+    # Convert to Path for easier manipulation
+    input_path = Path(experiment_name)
+    
+    # Determine if it's a path or just a name
+    exp_path = None
+    
+    # Case 1: Absolute path - use as-is
+    if input_path.is_absolute():
+        exp_path = input_path
+        if not exp_path.suffix:
+            exp_path = exp_path.with_suffix('.yaml')
+    
+    # Case 2: Relative path (contains / or \)
+    elif '/' in experiment_name or '\\' in experiment_name:
+        # Normalize path separators
+        normalized = experiment_name.replace('\\', '/')
+        
+        # Remove CONFIG/experiments/ prefix if present (common mistake)
+        if normalized.startswith('CONFIG/experiments/'):
+            normalized = normalized[len('CONFIG/experiments/'):]
+        elif normalized.startswith('experiments/'):
+            normalized = normalized[len('experiments/'):]
+        elif normalized.startswith('CONFIG/'):
+            # If it's just CONFIG/something, assume it's already in CONFIG_DIR
+            normalized = normalized[len('CONFIG/'):]
+        
+        # Remove .yaml extension if present (before building path)
+        if normalized.endswith('.yaml') or normalized.endswith('.yml'):
+            normalized = normalized[:-5] if normalized.endswith('.yaml') else normalized[:-4]
+        
+        # Build path relative to CONFIG_DIR
+        exp_path = CONFIG_DIR / normalized
+        if not exp_path.suffix:
+            exp_path = exp_path.with_suffix('.yaml')
+        
+        # If not found in CONFIG_DIR, try as relative to current working directory
+        if not exp_path.exists():
+            exp_path = Path(experiment_name)
+            if not exp_path.suffix:
+                exp_path = exp_path.with_suffix('.yaml')
+    
+    # Case 3: Just a name (default: look in CONFIG/experiments/)
+    else:
+        # Remove .yaml extension if present
+        name = experiment_name
+        if name.endswith('.yaml') or name.endswith('.yml'):
+            name = name[:-5] if name.endswith('.yaml') else name[:-4]
+        exp_path = CONFIG_DIR / "experiments" / f"{name}.yaml"
+    
+    # Final check: ensure file exists
     if not exp_path.exists():
+        available = [f.stem for f in (CONFIG_DIR / 'experiments').glob('*.yaml') if f.is_file()]
         raise FileNotFoundError(
             f"Experiment config not found: {exp_path}\n"
-            f"Available experiments: {[f.stem for f in (CONFIG_DIR / 'experiments').glob('*.yaml') if f.is_file()]}"
+            f"Available experiments: {available}"
         )
     
     data = load_yaml(exp_path)

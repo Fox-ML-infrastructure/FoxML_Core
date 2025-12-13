@@ -1,0 +1,100 @@
+# Experiment Config Template
+# Copy this file and rename it to create a new experiment config
+# Example: cp _template.yaml my_experiment.yaml
+
+experiment:
+  name: my_experiment  # Change this to your experiment name
+  description: "Description of your experiment"
+
+# ============================================================================
+# DATA CONFIGURATION
+# ============================================================================
+data:
+  # Data directory (relative to repo root or absolute path)
+  data_dir: data/data_labeled_v2/interval=5m
+  
+  # List of symbols to use
+  symbols: [AAPL, MSFT, GOOGL, TSLA, NVDA]
+  
+  # Bar interval (5m, 15m, 1h, etc.)
+  interval: 5m  # or bar_interval: 5m (both work)
+  
+  # Maximum samples per symbol (caps data to prevent memory issues)
+  max_samples_per_symbol: 50000
+  
+  # Optional: Validation split (for train/val split if needed)
+  validation_split: 0.2
+  
+  # Optional: Random state for reproducibility
+  random_state: 42
+
+# ============================================================================
+# TARGET CONFIGURATION
+# ============================================================================
+targets:
+  # Primary target to evaluate
+  # Examples:
+  #   - fwd_ret_60m (forward return - non-repainting, honest baseline)
+  #   - y_first_touch_60m_0.8 (triple barrier - which barrier hits first)
+  #   - y_will_peak_60m_0.8 (peak detection - may repaint)
+  #   - y_will_valley_60m_0.8 (valley detection - may repaint)
+  primary: fwd_ret_60m
+  
+  # Optional: Additional targets to evaluate
+  # secondary: [fwd_ret_30m, fwd_ret_120m]
+
+# ============================================================================
+# FEATURE SELECTION CONFIGURATION
+# ============================================================================
+feature_selection:
+  # Number of top features to select
+  top_n: 50
+  
+  # Model families to use for feature selection
+  # Options: lightgbm, xgboost, random_forest, neural_network, catboost, lasso, etc.
+  model_families: [lightgbm, random_forest, neural_network]
+  
+  # Optional: Override max_samples_per_symbol for feature selection
+  # max_samples_per_symbol: 30000
+
+# ============================================================================
+# TARGET RANKING CONFIGURATION
+# ============================================================================
+target_ranking:
+  # Minimum samples required for ranking
+  min_samples: 100
+  
+  # Cross-sectional configuration
+  cross_sectional:
+    # Minimum symbols per timestamp (for cross-sectional sampling)
+    min_cs: 10
+    
+    # Maximum samples per timestamp (caps cross-sectional data)
+    max_cs_samples: 1000
+  
+  # Optional: Model families for ranking (if different from feature selection)
+  # model_families: [lightgbm, random_forest, neural_network]
+
+# ============================================================================
+# TRAINING CONFIGURATION
+# ============================================================================
+training:
+  # Model families to train
+  model_families: [lightgbm, random_forest, neural_network]
+  
+  # Cross-validation folds
+  cv_folds: 5
+  
+  # Optional: Number of parallel jobs for CV
+  cv_n_jobs: 1
+  
+  # Optional: Training strategy
+  # strategy: single_task  # or multi_task, cascade
+
+# ============================================================================
+# NOTES
+# ============================================================================
+# - Forward return targets (fwd_ret_*) are non-repainting and give honest baseline (~0.52-0.54)
+# - Peak/valley targets (y_will_peak_*, y_will_valley_*) may repaint (scores > 0.70 suspicious)
+# - First touch targets (y_first_touch_*) are generally non-repainting
+# - Compare scores: honest baseline (~0.52-0.54) vs repainting targets (~0.70+) to see effect
