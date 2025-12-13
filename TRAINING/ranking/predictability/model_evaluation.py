@@ -1829,6 +1829,38 @@ def train_and_evaluate_models(
             import catboost as cb
             from TRAINING.utils.target_utils import is_classification_target, is_binary_classification_target
             
+            # GPU settings (will fallback to CPU if GPU not available)
+            gpu_params = {}
+            try:
+                from CONFIG.config_loader import get_cfg
+                cb_gpu_cfg = get_cfg('gpu.catboost', default={}, config_name='gpu_config')
+                task_type = cb_gpu_cfg.get('task_type', 'CPU')
+                devices = cb_gpu_cfg.get('devices', '0')
+                test_enabled = cb_gpu_cfg.get('test_enabled', True)
+                test_iterations = cb_gpu_cfg.get('test_iterations', 1)
+                test_samples = cb_gpu_cfg.get('test_samples', 10)
+                test_features = cb_gpu_cfg.get('test_features', 5)
+                
+                if task_type == 'GPU':
+                    if test_enabled:
+                        # Try GPU (CatBoost uses task_type='GPU' or devices parameter)
+                        # Test if GPU is available
+                        try:
+                            test_model = cb.CatBoostRegressor(task_type='GPU', devices=devices, iterations=test_iterations, verbose=False)
+                            test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
+                            gpu_params = {'task_type': 'GPU', 'devices': devices}
+                            logger.info(f"  ✅ Using GPU (CUDA) for CatBoost (devices={devices})")
+                        except Exception as gpu_test_error:
+                            logger.warning(f"  ⚠️  CatBoost GPU test failed, falling back to CPU: {gpu_test_error}")
+                    else:
+                        # Skip test, use config values directly
+                        gpu_params = {'task_type': 'GPU', 'devices': devices}
+                        logger.info(f"  Using GPU (CUDA) for CatBoost (devices={devices}, test disabled)")
+                else:
+                    logger.info("  Using CPU for CatBoost (task_type='CPU' in config)")
+            except Exception as e:
+                logger.warning(f"  ⚠️  CatBoost GPU config error, using CPU: {e}")
+            
             # Get config values
             cb_config = get_model_config('catboost', multi_model_config)
             # Defensive check: ensure config is a dict
@@ -1837,6 +1869,13 @@ def train_and_evaluate_models(
             
             # Build params dict (copy to avoid mutating original)
             params = dict(cb_config)
+            
+            # Remove task_type and devices if present (we set these from GPU config)
+            params.pop('task_type', None)
+            params.pop('devices', None)
+            
+            # Add GPU params if available (will override any task_type/devices in config)
+            params.update(gpu_params)
             
             # Auto-detect target type and set loss_function if not specified
             if "loss_function" not in params:
