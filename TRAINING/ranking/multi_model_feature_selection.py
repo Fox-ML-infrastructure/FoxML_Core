@@ -1272,6 +1272,14 @@ def train_model_and_get_importance(
             # CRITICAL: CatBoost REQUIRES task_type='GPU' to actually use GPU (devices alone is ignored)
             if gpu_params:
                 cb_config.update(gpu_params)
+                # Add thread_count from GPU config when using GPU
+                if gpu_params.get('task_type') == 'GPU' and 'thread_count' not in cb_config:
+                    try:
+                        from CONFIG.config_loader import get_cfg
+                        thread_count = get_cfg('gpu.catboost.thread_count', default=8, config_name='gpu_config')
+                        cb_config['thread_count'] = thread_count
+                    except Exception:
+                        pass  # Non-critical, skip if config not available
                 # Explicit verification that task_type is set
                 if cb_config.get('task_type') != 'GPU':
                     logger.warning(f"    catboost: GPU params updated but task_type is '{cb_config.get('task_type')}', expected 'GPU'")
@@ -1280,6 +1288,67 @@ def train_model_and_get_importance(
             elif gpu_params is None or (isinstance(gpu_params, dict) and not gpu_params):
                 # GPU was requested but params are empty - log for debugging
                 logger.debug(f"    catboost: No GPU params to add (gpu_params={gpu_params})")
+            
+            # CatBoost Performance Diagnostics and Optimizations
+            # Check for common issues that cause slow training (>20min for 50k samples)
+            warnings_issued = []
+            
+            # 1. Check for excessive depth (exponential complexity: 2^d)
+            depth = cb_config.get('depth', 6)  # Default is 6
+            if depth > 8:
+                warnings_issued.append(f"⚠️  CatBoost depth={depth} is high (exponential complexity 2^{depth}). Consider depth ≤ 8 for faster training.")
+            
+            # 2. Check for text-like features and high cardinality categoricals
+            # Convert X to DataFrame temporarily to check dtypes if feature_names available
+            if feature_names and len(feature_names) == X.shape[1]:
+                try:
+                    # Create temporary DataFrame to check dtypes
+                    X_df = pd.DataFrame(X, columns=feature_names)
+                    
+                    # Check for object/string dtype columns (potential text features)
+                    object_cols = X_df.select_dtypes(include=['object', 'string']).columns.tolist()
+                    if object_cols:
+                        if 'text_features' not in cb_config or not cb_config.get('text_features'):
+                            warnings_issued.append(
+                                f"⚠️  CatBoost: Detected {len(object_cols)} text/object columns: {object_cols[:5]}{'...' if len(object_cols) > 5 else ''}. "
+                                f"Add text_features=['col_name'] to config to avoid treating them as high-cardinality categoricals."
+                            )
+                    
+                    # Check for high cardinality categoricals (potential ID columns)
+                    high_cardinality_features = []
+                    for col in feature_names:
+                        if col in X_df.columns:
+                            try:
+                                unique_count = X_df[col].nunique()
+                                if unique_count > 1000 and unique_count > len(X_df) * 0.8:  # >80% unique values
+                                    # Check if name suggests it's an ID column
+                                    id_patterns = ['_id', '_ID', 'id_', 'ID_', 'user_', 'User_', 'ip_', 'IP_', 'row_', 'Row_']
+                                    if any(pattern in col for pattern in id_patterns) or unique_count == len(X_df):
+                                        high_cardinality_features.append((col, unique_count))
+                            except Exception:
+                                pass  # Skip if can't compute unique count
+                    
+                    if high_cardinality_features:
+                        id_cols = [col for col, _ in high_cardinality_features[:5]]
+                        warnings_issued.append(
+                            f"⚠️  CatBoost: Detected {len(high_cardinality_features)} high-cardinality ID-like columns: {id_cols}{'...' if len(high_cardinality_features) > 5 else ''}. "
+                            f"Consider dropping these columns (they don't generalize and slow training)."
+                        )
+                except Exception as e:
+                    # If DataFrame conversion fails, skip diagnostics (non-critical)
+                    logger.debug(f"    catboost: Diagnostics skipped (non-critical): {e}")
+            
+            # 3. Automatic metric_period injection (reduces evaluation overhead)
+            if 'metric_period' not in cb_config:
+                # Set default metric_period from model_config or use 50 as default
+                cb_config['metric_period'] = model_config.get('metric_period', 50)
+                logger.debug(f"    catboost: Added metric_period={cb_config['metric_period']} to reduce evaluation overhead")
+            
+            # Log warnings if any
+            if warnings_issued:
+                logger.warning(f"    catboost: Performance Warnings:")
+                for warning in warnings_issued:
+                    logger.warning(f"      {warning}")
             
             # Log final config for debugging (only if GPU was requested)
             if gpu_params and gpu_params.get('task_type') == 'GPU':
