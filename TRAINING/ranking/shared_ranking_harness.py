@@ -536,27 +536,54 @@ class RankingHarness:
         else:
             X_df = X.copy()
         
-        # Enforce numeric dtypes - hard-fail if "should be numeric" columns are object
-        object_cols = X_df.select_dtypes(include=['object']).columns.tolist()
+        # FIX: Hard guardrail - enforce numeric dtypes BEFORE any model training
+        # This prevents CatBoost from treating numeric columns as text/categorical
+        # CatBoost "categoricalizing" numeric features causes fake performance (perfect scores)
+        import numpy as np
+        
+        # Step 1: Try to convert object columns to numeric (don't drop immediately)
+        object_cols = X_df.select_dtypes(include=['object', 'string', 'category']).columns.tolist()
         if object_cols:
-            logger.warning(f"Found {len(object_cols)} object columns: {object_cols}")
-            logger.warning("Dropping object columns to prevent dtype errors")
-            X_df = X_df.drop(columns=object_cols)
-            feature_names = [f for f in feature_names if f not in object_cols]
-        
-        # Ensure all remaining columns are numeric
-        for col in X_df.columns:
-            if not pd.api.types.is_numeric_dtype(X_df[col]):
-                logger.warning(f"Column {col} is not numeric (dtype={X_df[col].dtype}), converting")
+            logger.warning(f"Found {len(object_cols)} object/string/category columns: {object_cols[:10]}")
+            logger.warning("Attempting to convert to numeric (coercing errors to NaN)")
+            for col in object_cols:
                 try:
-                    X_df[col] = pd.to_numeric(X_df[col], errors='coerce')
+                    X_df[col] = pd.to_numeric(X_df[col], errors='coerce').astype('float32')
+                    logger.debug(f"Converted object column {col} to float32")
                 except Exception as e:
-                    logger.error(f"Failed to convert {col} to numeric: {e}, dropping")
-                    X_df = X_df.drop(columns=[col])
-                    feature_names = [f for f in feature_names if f != col]
+                    logger.warning(f"Failed to convert {col} to numeric: {e}, will drop")
         
-        # Convert to float32/float64 for numeric features
-        X_df = X_df.astype({col: 'float32' for col in X_df.columns})
+        # Step 2: Ensure all remaining columns are numeric (hard-fail if not)
+        still_bad = [c for c in X_df.columns if not pd.api.types.is_numeric_dtype(X_df[c])]
+        if still_bad:
+            logger.error(f"Non-numeric columns remain after conversion: {still_bad[:10]}")
+            logger.error("Dropping non-numeric columns to prevent dtype errors")
+            X_df = X_df.drop(columns=still_bad)
+            feature_names = [f for f in feature_names if f not in still_bad]
+        
+        # Step 3: Hard-cast all numeric columns to float32 (prevents object dtype from NaN/mixed types)
+        # This is critical - CatBoost can interpret float64 with NaN as object dtype
+        for col in X_df.columns:
+            if pd.api.types.is_numeric_dtype(X_df[col]):
+                X_df[col] = X_df[col].astype('float32')
+            else:
+                # Should not happen after Step 2, but defensive check
+                logger.error(f"Column {col} is still not numeric (dtype={X_df[col].dtype}), dropping")
+                X_df = X_df.drop(columns=[col])
+                feature_names = [f for f in feature_names if f != col]
+        
+        # Step 4: Final verification - fail fast if any non-numeric remain
+        final_bad = [c for c in X_df.columns if not np.issubdtype(X_df[c].dtype, np.number)]
+        if final_bad:
+            raise TypeError(f"CRITICAL: Non-numeric columns remain after all conversions: {final_bad[:10]}. "
+                          f"This will cause CatBoost to treat them as text/categorical and fake performance.")
+        
+        # FIX: Replace inf/-inf with nan before fail-fast (prevents phantom issues)
+        # Some models (e.g., Ridge) may fail on inf values
+        X_df = X_df.replace([np.inf, -np.inf], np.nan)
+        # Drop columns that are all nan/inf
+        X_df = X_df.dropna(axis=1, how='all')
+        feature_names = [f for f in feature_names if f in X_df.columns]
         
         # Convert back to numpy array
         X_sanitized = X_df.values

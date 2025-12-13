@@ -14,12 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
-#### Feature Selection Unification (2025-12-13) – **NEW**
+#### Feature Selection Unification & Critical Fixes (2025-12-13) – **NEW**
 - **Shared Ranking Harness**: Feature selection now uses same harness as target ranking, ensuring identical evaluation contracts
 - **Comprehensive Hardening**: Feature selection now has complete parity with target ranking (ghost busters, leak scan, stability tracking, linear models)
 - **Same Output Structure**: Feature selection saves results in same format as target ranking (CSV, YAML, REPRODUCIBILITY structure)
 - **Config-Driven**: Feature selection uses same config hierarchy and loading methods as target ranking
-- See [2025-12-13 feature selection unification changelog](DOCS/02_reference/changelog/2025-12-13-feature-selection-unification.md) for details
+- **Critical Fixes**: Fixed shared harness unpack crashes, CatBoost dtype mis-typing, RFE/linear model failures, stability cross-model mixing, telemetry scoping issues
+- **Last-Mile Improvements**: Failed model skip reasons in consensus summary, feature universe fingerprint for stability tracking
+- See [2025-12-13 feature selection unification changelog](DOCS/02_reference/changelog/2025-12-13-feature-selection-unification.md) and [implementation verification](DOCS/03_technical/fixes/2025-12-13-implementation-verification.md) for details
 
 #### Generalized Duration Parsing System & Audit Fixes (2025-12-13) – **NEW**
 - **Duration Parsing System**: New duration parsing system handles time period formats (minutes, hours, days, bars, compound durations)
@@ -116,6 +118,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 **Recent fixes (2025-12-12 - 2025-12-13):**
+- **Feature Selection Critical Fixes** (2025-12-13):
+  - Fixed shared harness unpack crashes (tolerant unpack with length checking)
+  - Fixed CatBoost treating numeric columns as text/categorical (hard dtype enforcement guardrail)
+  - Fixed RFE `KeyError: 'n_features_to_select'` (safe defaults + clamping to [1, n_features])
+  - Fixed Ridge/ElasticNet "Unknown model family" errors (full implementations with StandardScaler)
+  - Fixed stability cross-model mixing (per-model-family snapshots, feature universe fingerprint)
+  - Fixed telemetry scoping issues (view→route_type mapping, symbol=None for CROSS_SECTIONAL, cohort_id filtering)
+  - Fixed uniform importance fallback polluting consensus (raises ValueError, marks model invalid)
+  - Added failed model skip reasons in consensus summary (e.g., `ridge:zero_coefs`)
+  - Added feature universe fingerprint for stability tracking (prevents comparing different candidate sets)
 - Documentation Link Fixes - Fixed 404 errors when navigating between documentation
 - Resolved Config System - Fixed purge calculation bug
 - Reproducibility Tracker Fixes - Fixed NameError and save path issues

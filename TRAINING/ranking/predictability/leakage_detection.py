@@ -1630,8 +1630,12 @@ def train_and_evaluate_models(
             
             # Get config values
             rfe_config = get_model_config('rfe', multi_model_config)
-            n_features_to_select = min(rfe_config['n_features_to_select'], X_imputed.shape[1])
-            step = rfe_config['step']
+            # FIX: Use .get() with default to prevent KeyError, and clamp to [1, n_features]
+            default_n_features = max(1, int(0.2 * X_imputed.shape[1]))
+            n_features_to_select = rfe_config.get('n_features_to_select', default_n_features)
+            # FIX: Clamp to [1, n_features] to prevent edge-case crashes on small feature sets
+            n_features_to_select = max(1, min(n_features_to_select, X_imputed.shape[1]))
+            step = rfe_config.get('step', 5)
             
             # Use random_forest config for RFE estimator
             rf_config = get_model_config('random_forest', multi_model_config)

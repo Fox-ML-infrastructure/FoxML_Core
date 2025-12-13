@@ -69,7 +69,16 @@ Recent improvements:
 
 ## What's Being Tested
 
-- **Training Routing System** (NEW - 2025-12-11):
+- **Feature Selection Critical Fixes** (NEW - 2025-12-13):
+  - **Shared harness robustness**: Tolerant unpack handling, fallback path consistency
+  - **Dtype enforcement**: Hard guardrail preventing CatBoost from mis-typing numeric features
+  - **Linear model implementations**: Ridge/ElasticNet with StandardScaler, proper l1_ratio handling
+  - **RFE edge cases**: Clamping n_features_to_select to [1, n_features] for small feature sets
+  - **Stability tracking**: Per-model-family snapshots with feature universe fingerprint (not cross-model mixing)
+  - **Telemetry scoping**: Correct view→route_type mapping, symbol=None for CROSS_SECTIONAL, cohort_id filtering
+  - **Consensus integrity**: Failed models excluded with skip reasons (no uniform fallback noise)
+  - **Acceptance criteria**: CROSS_SECTIONAL and INDIVIDUAL runs compare only within matching (method, universe_id) buckets
+- **Training Routing System** (2025-12-11):
   - One-command pipeline: target ranking → feature selection → training plan → training execution
   - 2-stage training (CPU models first, then GPU models)
   - Training plan auto-detection and filtering

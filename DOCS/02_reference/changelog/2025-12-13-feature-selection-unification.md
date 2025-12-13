@@ -144,19 +144,55 @@ For other dates, see the [changelog index](README.md).
 
 ## Fixed
 
+### Critical Feature Selection Fixes
+
+**Comprehensive Hardening and Bug Fixes**
+- **Shared Harness Unpack Crashes**: Fixed `KeyError` / "too many values to unpack" errors with tolerant unpack handling (length checking, logging, graceful fallback)
+- **CatBoost Dtype Mis-typing**: Fixed CatBoost treating numeric features as text/categorical with hard dtype enforcement guardrail (explicit float32 casting, fail-fast checks, inf/-inf handling)
+- **RFE Edge Cases**: Fixed `KeyError: 'n_features_to_select'` with safe defaults and clamping to `[1, n_features]` for small feature sets
+- **Linear Model Failures**: Fixed Ridge/ElasticNet "Unknown model family" errors with full implementations (RidgeClassifier/LogisticRegression, StandardScaler in pipelines, proper l1_ratio handling)
+- **Stability Cross-Model Mixing**: Fixed stability warnings from comparing heterogeneous model families by using per-model-family snapshots with feature universe fingerprint
+- **Telemetry Scoping Issues**: Fixed incorrect comparisons across targets/views/symbols with proper view→route_type mapping, symbol=None for CROSS_SECTIONAL, cohort_id filtering
+- **Uniform Importance Fallback**: Fixed polluting consensus by raising ValueError for invalid models (all-zero coefficients) instead of uniform fallback
+- **Last-Mile Improvements**:
+  - Failed model skip reasons in consensus summary (e.g., `ridge:zero_coefs`, `elastic_net:singular`)
+  - Feature universe fingerprint for stability tracking (prevents comparing different candidate sets)
+- **Files**:
+  - `TRAINING/ranking/feature_selector.py` - Tolerant unpack, RunContext population, telemetry scoping
+  - `TRAINING/ranking/multi_model_feature_selection.py` - Dtype enforcement, linear models, stability fingerprint, skip reasons
+  - `TRAINING/ranking/shared_ranking_harness.py` - Hard dtype guardrail, inf handling
+  - `TRAINING/ranking/predictability/leakage_detection.py` - RFE clamping
+  - `TRAINING/utils/reproducibility_tracker.py` - Telemetry scoping, cohort filtering
+- **Documentation**:
+  - [Implementation Verification](03_technical/fixes/2025-12-13-implementation-verification.md) - Complete verification of all 6 critical checks + 2 last-mile improvements
+  - [Critical Fixes](03_technical/fixes/2025-12-13-critical-fixes.md) - Detailed root-cause analysis and fixes
+  - [Telemetry Scoping Fix](03_technical/fixes/2025-12-13-telemetry-scoping-fix.md) - Telemetry scoping implementation
+  - [Sharp Edges Verification](03_technical/fixes/2025-12-13-sharp-edges-verification.md) - Verification against user checklist
+- **Benefits**:
+  - ✅ No more shared harness unpack crashes (tolerant handling)
+  - ✅ CatBoost correctly treats all numeric features as numeric (hard guardrail)
+  - ✅ RFE handles edge cases gracefully (clamping)
+  - ✅ Linear models work correctly (full implementations with scaling)
+  - ✅ Stability tracking is per-model-family (no cross-model mixing)
+  - ✅ Telemetry compares only within correct scopes (target, view, symbol, cohort)
+  - ✅ Consensus integrity maintained (failed models excluded with reasons)
+
 ### Feature Selection Stability Tracking
 
-**Per-Model Snapshots Now Saved**
-- **Issue**: Feature selection was only saving aggregated consensus snapshots, not per-model snapshots
-- **Fix**: Now saves stability snapshots for each model family (LightGBM, XGBoost, Random Forest, etc.) after training
+**Per-Model Snapshots Now Saved with Feature Universe Fingerprint**
+- **Issue**: Feature selection was only saving aggregated consensus snapshots, not per-model snapshots, and stability was comparing across different candidate feature sets
+- **Fix**: Now saves stability snapshots for each model family with feature universe fingerprint (prevents comparing different candidate sets)
 - **Implementation**:
-  - CROSS_SECTIONAL: Saves snapshots with `universe_id="CROSS_SECTIONAL"`
-  - SYMBOL_SPECIFIC: Saves snapshots with `universe_id=symbol_name` (per symbol)
+  - CROSS_SECTIONAL: Saves snapshots with `universe_id="ALL:{feature_universe_fingerprint}"`
+  - SYMBOL_SPECIFIC: Saves snapshots with `universe_id="{symbol}:{feature_universe_fingerprint}"`
+  - Fingerprint computed from sorted feature names (stable across runs)
 - **Files**:
   - `TRAINING/ranking/feature_selector.py` - Added per-model snapshot saving
+  - `TRAINING/ranking/multi_model_feature_selection.py` - Feature universe fingerprint computation
 - **Benefits**:
   - ✅ Same stability tracking as target ranking
   - ✅ Can analyze stability per model family
+  - ✅ Prevents comparing stability across different candidate feature sets (pruner/sanitizer differences)
   - ✅ Enables comprehensive stability analysis
 
 ### Feature Selection Leak Detection
@@ -218,11 +254,20 @@ To verify config system:
 ## Files Modified
 
 ### Core Ranking System
-- `TRAINING/ranking/shared_ranking_harness.py` - New shared harness class
-- `TRAINING/ranking/feature_selector.py` - Refactored to use shared harness
+- `TRAINING/ranking/shared_ranking_harness.py` - New shared harness class, hard dtype guardrail, inf handling
+- `TRAINING/ranking/feature_selector.py` - Refactored to use shared harness, tolerant unpack, RunContext population, telemetry scoping (lines 259-281, 371-404, 1144-1163, 1187-1202, 1218-1246)
+- `TRAINING/ranking/multi_model_feature_selection.py` - Dtype enforcement, linear models, stability fingerprint, skip reasons (lines 1419-1455, 1486-1650, 2285-2325, 2447-2470, 2604-2630)
 - `TRAINING/ranking/feature_selection_reporting.py` - New reporting module
+- `TRAINING/ranking/predictability/leakage_detection.py` - RFE clamping (line 1635)
+- `TRAINING/ranking/predictability/model_evaluation.py` - Telemetry scoping (lines 4540-4560)
+- `TRAINING/utils/reproducibility_tracker.py` - Telemetry scoping, cohort filtering (lines 529-551, 1728-1750)
+- `TRAINING/utils/run_context.py` - Added view and symbol fields (lines 83-84)
 - `CONFIG/ranking/features/multi_model.yaml` - Enabled Ridge and ElasticNet
 
 ### Documentation
 - `DOCS/02_reference/changelog/2025-12-13-feature-selection-unification.md` - This changelog
 - `DOCS/02_reference/target_ranking/README.md` - Updated integration section
+- `DOCS/03_technical/fixes/2025-12-13-implementation-verification.md` - Complete verification of all fixes
+- `DOCS/03_technical/fixes/2025-12-13-critical-fixes.md` - Detailed root-cause analysis
+- `DOCS/03_technical/fixes/2025-12-13-telemetry-scoping-fix.md` - Telemetry scoping implementation
+- `DOCS/03_technical/fixes/2025-12-13-sharp-edges-verification.md` - Verification against user checklist

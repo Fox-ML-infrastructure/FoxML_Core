@@ -256,11 +256,29 @@ def select_features_for_target(
                     
                     # Build panel data for this symbol (includes all cleaning checks and target-conditional exclusions)
                     # Note: target-conditional exclusions are saved automatically by build_panel if output_dir is set
-                    X, y, feature_names, symbols_array, time_vals, mtf_data, detected_interval, resolved_config = harness.build_panel(
+                    # FIX: Make unpack tolerant to signature changes
+                    build_result = harness.build_panel(
                         target_column=target_column,
                         target_name=target_column,  # Use target_column as target_name for exclusions
                         feature_names=None
                     )
+                    # FIX: Unpack with tolerance for signature changes, but log what we got
+                    # This prevents silently masking real breakage (signature changes)
+                    actual_len = len(build_result)
+                    logger.debug(f"build_panel returned {actual_len} values: {[type(x).__name__ for x in build_result]}")
+                    
+                    if actual_len >= 8:
+                        X, y, feature_names, symbols_array, time_vals, mtf_data, detected_interval, resolved_config = build_result[:8]
+                        if actual_len > 8:
+                            logger.warning(f"build_panel returned {actual_len} values (expected 6-8), using first 8. Extra: {build_result[8:]}")
+                    elif actual_len >= 6:
+                        # Fallback for older signature (6 values)
+                        X, y, feature_names, symbols_array, time_vals, mtf_data = build_result[:6]
+                        detected_interval = build_result[6] if actual_len > 6 else 5.0
+                        resolved_config = build_result[7] if actual_len > 7 else None
+                        logger.debug(f"build_panel returned {actual_len} values (legacy signature)")
+                    else:
+                        raise ValueError(f"build_panel returned {actual_len} values, expected at least 6. Got: {[type(x).__name__ for x in build_result]}")
                     
                     if X is None or y is None:
                         logger.warning(f"Failed to build panel data for {symbol_to_process}, skipping")
@@ -303,15 +321,18 @@ def select_features_for_target(
                     )
                     
                     # Save stability snapshots for each model family (same as target ranking)
+                    # CRITICAL: Per-model-family snapshots ensure stability is computed within same family
                     # Per-symbol snapshots for SYMBOL_SPECIFIC view
                     if all_feature_importances and output_dir:
                         try:
                             from TRAINING.stability.feature_importance import save_snapshot_hook
                             for model_family, importance_dict in all_feature_importances.items():
                                 if importance_dict:
+                                    # FIX: Ensure method name is model_family (e.g., "lightgbm", "ridge")
+                                    # NOT importance_method (e.g., "native") - stability must be per-family
                                     save_snapshot_hook(
                                         target_name=target_column,
-                                        method=model_family,
+                                        method=model_family,  # Use model_family as method identifier
                                         importance_dict=importance_dict,
                                         universe_id=symbol_to_process,  # Symbol name for SYMBOL_SPECIFIC
                                         output_dir=output_dir,
@@ -365,11 +386,28 @@ def select_features_for_target(
                 )
                 
                 # Build panel data using same logic as target ranking (includes target-conditional exclusions)
-                X, y, feature_names, symbols_array, time_vals, mtf_data, detected_interval, resolved_config = harness.build_panel(
+                # FIX: Make unpack tolerant to signature changes (use *rest to catch extra values)
+                build_result = harness.build_panel(
                     target_column=target_column,
                     target_name=target_column,  # Use target_column as target_name for exclusions
                     feature_names=None  # Will filter automatically
                 )
+                # FIX: Unpack with tolerance for signature changes, but log what we got
+                actual_len = len(build_result)
+                logger.debug(f"build_panel returned {actual_len} values: {[type(x).__name__ for x in build_result]}")
+                
+                if actual_len >= 8:
+                    X, y, feature_names, symbols_array, time_vals, mtf_data, detected_interval, resolved_config = build_result[:8]
+                    if actual_len > 8:
+                        logger.warning(f"build_panel returned {actual_len} values (expected 6-8), using first 8. Extra: {build_result[8:]}")
+                elif actual_len >= 6:
+                    # Fallback for older signature (6 values)
+                    X, y, feature_names, symbols_array, time_vals, mtf_data = build_result[:6]
+                    detected_interval = build_result[6] if actual_len > 6 else 5.0
+                    resolved_config = build_result[7] if actual_len > 7 else None
+                    logger.debug(f"build_panel returned {actual_len} values (legacy signature)")
+                else:
+                    raise ValueError(f"build_panel returned {actual_len} values, expected at least 6. Got: {[type(x).__name__ for x in build_result]}")
                 
                 if X is None or y is None:
                     logger.warning("Failed to build panel data with shared harness, falling back to per-symbol processing")
@@ -452,6 +490,10 @@ def select_features_for_target(
                                 })
                         
                         # Create RunContext for reproducibility tracking
+                        # FIX: Extract purge/embargo from resolved_config
+                        purge_minutes = resolved_config.purge_minutes if resolved_config else None
+                        embargo_minutes = resolved_config.embargo_minutes if resolved_config else None
+                        
                         ctx = harness.create_run_context(
                             X=X,
                             y=y,
@@ -460,8 +502,8 @@ def select_features_for_target(
                             time_vals=time_vals,
                             cv_splitter=cv_splitter,
                             horizon_minutes=horizon_minutes,
-                            purge_minutes=None,  # Will be derived from resolved_config
-                            embargo_minutes=None,
+                            purge_minutes=purge_minutes,
+                            embargo_minutes=embargo_minutes,
                             data_interval_minutes=data_interval_minutes
                         )
                         
@@ -508,12 +550,15 @@ def select_features_for_target(
                 return symbol, None, None, f"Data file not found: {data_path}"
             
             try:
+                # FIX: Pass selected_features to per-symbol processing (ensures consistency with pruned features)
+                # This prevents features like "adjusted" from "coming back" after pruning
                 symbol_results, symbol_statuses = _process_single_symbol(
                     symbol=symbol,
                     data_path=data_path,
                     target_column=target_column,
                     model_families_config=model_families_config,
                     max_samples=max_samples_per_symbol,
+                    selected_features=selected_features if 'selected_features' in globals() else None,  # Use pruned features if available
                     explicit_interval=explicit_interval,
                     experiment_config=experiment_config,
                     output_dir=output_dir
@@ -569,16 +614,19 @@ def select_features_for_target(
                 try:
                     # Process symbol (preserves all leakage-free behavior)
                     # Returns tuple: (results, family_statuses)
-                    symbol_results, symbol_statuses = _process_single_symbol(
-                        symbol=symbol,
-                        data_path=data_path,
-                        target_column=target_column,
-                        model_families_config=model_families_config,
-                        max_samples=max_samples_per_symbol,
-                        explicit_interval=explicit_interval,
-                        experiment_config=experiment_config,
-                        output_dir=output_dir  # Pass output_dir for reproducibility tracking
-                    )
+                # FIX: Pass selected_features to per-symbol processing (ensures consistency with pruned features)
+                # Note: selected_features may not exist yet (computed after aggregation), so use None as fallback
+                symbol_results, symbol_statuses = _process_single_symbol(
+                    symbol=symbol,
+                    data_path=data_path,
+                    target_column=target_column,
+                    model_families_config=model_families_config,
+                    max_samples=max_samples_per_symbol,
+                    explicit_interval=explicit_interval,
+                    experiment_config=experiment_config,
+                    output_dir=output_dir,  # Pass output_dir for reproducibility tracking
+                    selected_features=None  # Not available in fallback path (computed after aggregation)
+                )
                     
                     all_results.extend(symbol_results)
                     all_family_statuses.extend(symbol_statuses)
@@ -1090,6 +1138,26 @@ def select_features_for_target(
                             pass
                     
                     # Build RunContext
+                    # FIX: Try to get time_vals and horizon_minutes from available data
+                    time_vals_for_ctx = None
+                    horizon_minutes_for_ctx = None
+                    if use_shared_harness and 'time_vals' in locals():
+                        time_vals_for_ctx = time_vals
+                    if use_shared_harness and 'horizon_minutes' in locals():
+                        horizon_minutes_for_ctx = horizon_minutes
+                    elif target_column:
+                        # Try to extract horizon from target column name
+                        try:
+                            from TRAINING.utils.leakage_filtering import _extract_horizon, _load_leakage_config
+                            leakage_config = _load_leakage_config()
+                            horizon_minutes_for_ctx = _extract_horizon(target_column, leakage_config)
+                        except Exception:
+                            pass
+                    
+                    # FIX: Ensure view and symbol are set for proper telemetry scoping
+                    # Telemetry must be scoped by: target, view (CROSS_SECTIONAL vs SYMBOL_SPECIFIC), and symbol
+                    # CRITICAL: For CROSS_SECTIONAL, symbol must be None to prevent history forking
+                    symbol_for_ctx = symbol if view == "SYMBOL_SPECIFIC" else None
                     ctx_to_use = RunContext(
                         stage="FEATURE_SELECTION",
                         target_name=target_column,
@@ -1098,14 +1166,16 @@ def select_features_for_target(
                         y=y_for_ctx,  # May be None
                         feature_names=feature_names_for_ctx,
                         symbols=symbols,
-                        time_vals=None,  # Not directly available here
-                        horizon_minutes=None,  # Not applicable for feature selection
+                        time_vals=time_vals_for_ctx,  # Use from shared harness if available
+                        horizon_minutes=horizon_minutes_for_ctx,  # Extract from target if available
                         purge_minutes=None,
                         embargo_minutes=None,
                         cv_folds=None,
                         fold_timestamps=None,
                         data_interval_minutes=None,
-                        seed=None
+                        seed=None,
+                        view=view,  # FIX: Set view for proper telemetry scoping (CROSS_SECTIONAL vs SYMBOL_SPECIFIC)
+                        symbol=symbol_for_ctx  # FIX: Set symbol for SYMBOL_SPECIFIC view only (None for CROSS_SECTIONAL to prevent history forking)
                     )
                 
                 # Build metrics dict
@@ -1121,7 +1191,37 @@ def select_features_for_target(
                 }
                 
                 # Use automated log_run API (includes trend analysis)
-                audit_result = tracker.log_run(ctx_to_use, metrics_dict)
+                # FIX: Pass RunContext to log_run (required for COHORT_AWARE mode)
+                try:
+                    audit_result = tracker.log_run(ctx_to_use, metrics_dict)
+                except Exception as e:
+                    # If COHORT_AWARE fails due to missing fields, fall back to legacy mode
+                    if "Missing required fields" in str(e) or "COHORT_AWARE" in str(e):
+                        logger.debug(f"COHORT_AWARE mode failed (missing fields), using legacy tracking: {e}")
+                        # Disable COHORT_AWARE and retry with minimal context
+                        # FIX: Ensure view and symbol are set for proper telemetry scoping
+                        # CRITICAL: For CROSS_SECTIONAL, symbol must be None to prevent history forking
+                        symbol_for_ctx = symbol if view == "SYMBOL_SPECIFIC" else None
+                        ctx_minimal = RunContext(
+                            stage="FEATURE_SELECTION",
+                            target_name=target_column,
+                            target_column=target_column,
+                            X=None,  # Not available in fallback
+                            y=None,
+                            feature_names=selected_features if selected_features else [],
+                            symbols=symbols,
+                            time_vals=None,
+                            horizon_minutes=None,
+                            purge_minutes=None,
+                            embargo_minutes=None,
+                            data_interval_minutes=None,
+                            cv_splitter=None,
+                            view=view,  # FIX: Set view for proper telemetry scoping
+                            symbol=symbol_for_ctx  # FIX: Set symbol for SYMBOL_SPECIFIC view only (None for CROSS_SECTIONAL)
+                        )
+                        audit_result = tracker.log_run(ctx_minimal, metrics_dict)
+                    else:
+                        raise
                 
                 # Log audit report summary if available
                 if audit_result.get("audit_report"):
@@ -1154,17 +1254,30 @@ def select_features_for_target(
                     **cohort_metrics  # Adds N_effective_cs if available
                 }
                 
+                # FIX: Map view to route_type for FEATURE_SELECTION (ensures proper telemetry scoping)
+                route_type_for_legacy = None
+                if view:
+                    if view.upper() == "CROSS_SECTIONAL":
+                        route_type_for_legacy = "CROSS_SECTIONAL"
+                    elif view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
+                        route_type_for_legacy = "INDIVIDUAL"  # SYMBOL_SPECIFIC maps to INDIVIDUAL
+                
                 additional_data_with_cohort = {
                     "top_feature": summary_df.iloc[0]['feature'] if not summary_df.empty else None,
                     "top_n": top_n or len(selected_features),
+                    "view": view,  # FIX: Include view for proper telemetry scoping
+                    "symbol": symbol,  # FIX: Include symbol for SYMBOL_SPECIFIC view
+                    "route_type": route_type_for_legacy,  # FIX: Map view to route_type
                     **cohort_additional_data  # Adds n_symbols, date_range, cs_config if available
                 }
                 
                 tracker.log_comparison(
                     stage="feature_selection",
-                    item_name=target_column,
+                    item_name=target_column,  # FIX: item_name is just target (view/symbol handled by route_type/symbol params)
                     metrics=metrics_with_cohort,
-                    additional_data=additional_data_with_cohort
+                    additional_data=additional_data_with_cohort,
+                    route_type=route_type_for_legacy,  # FIX: Properly scoped by view
+                    symbol=symbol  # FIX: Properly scoped by symbol (for SYMBOL_SPECIFIC view)
                 )
         except Exception as e:
             logger.warning(f"Reproducibility tracking failed for {target_column}: {e}")

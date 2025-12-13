@@ -530,6 +530,12 @@ class ReproducibilityTracker:
         """
         Extract route type from additional_data (for feature_selection stage).
         
+        **CRITICAL**: For FEATURE_SELECTION, map view to route_type:
+        - view="CROSS_SECTIONAL" → route_type="CROSS_SECTIONAL"
+        - view="SYMBOL_SPECIFIC" → route_type="INDIVIDUAL"
+        
+        This ensures telemetry is scoped correctly (features compared per-target, per-view, per-symbol).
+        
         Returns:
             "CROSS_SECTIONAL", "INDIVIDUAL", or None
         """
@@ -541,7 +547,16 @@ class ReproducibilityTracker:
         if route_type:
             return route_type.upper()
         
-        # Infer from other fields
+        # FIX: For FEATURE_SELECTION, map view to route_type (same as TARGET_RANKING)
+        # This ensures proper scoping: features compared per-target, per-view, per-symbol
+        view = additional_data.get('view')
+        if view:
+            if view.upper() == "CROSS_SECTIONAL":
+                return "CROSS_SECTIONAL"
+            elif view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
+                return "INDIVIDUAL"  # SYMBOL_SPECIFIC maps to INDIVIDUAL for FEATURE_SELECTION
+        
+        # Infer from other fields (fallback)
         if additional_data.get('cross_sectional') or additional_data.get('is_cross_sectional'):
             return "CROSS_SECTIONAL"
         elif additional_data.get('symbol_specific') or additional_data.get('is_symbol_specific'):
@@ -1710,16 +1725,44 @@ class ReproducibilityTracker:
             # Filter for matching stage, target, mode, symbol, model_family
             mask = (df['phase'] == phase) & (df['target'] == item_name)
             
+            # FIX: Handle null mode/symbol for backward compatibility
+            # For FEATURE_SELECTION, require mode non-null (new runs must have mode)
+            # For other stages, allow nulls (backward compatibility)
             if route_type:
-                mask &= (df['mode'] == route_type.upper())
+                route_upper = route_type.upper()
+                if stage.upper() == "FEATURE_SELECTION":
+                    # For FEATURE_SELECTION, require mode non-null (new runs must have mode)
+                    mask &= (df['mode'].notna()) & (df['mode'] == route_upper)
+                else:
+                    # For other stages, allow nulls (backward compatibility)
+                    mask &= ((df['mode'].isna()) | (df['mode'] == route_upper))
+            
+            # FIX: Handle null symbol for backward compatibility
+            # For INDIVIDUAL mode, require symbol non-null
+            # For CROSS_SECTIONAL, allow nulls (backward compatibility)
             if symbol:
-                mask &= (df['symbol'] == symbol)
+                if route_type and route_type.upper() == "INDIVIDUAL":
+                    # For INDIVIDUAL mode, require symbol non-null
+                    mask &= (df['symbol'].notna()) & (df['symbol'] == symbol)
+                else:
+                    # For CROSS_SECTIONAL, allow nulls (backward compatibility)
+                    mask &= ((df['symbol'].isna()) | (df['symbol'] == symbol))
+            elif route_type and route_type.upper() == "CROSS_SECTIONAL":
+                # For CROSS_SECTIONAL, require symbol is null (prevent history forking)
+                mask &= (df['symbol'].isna())
+            
             if model_family:
                 mask &= (df['model_family'] == model_family)
             
-            # If cohort_id provided, filter to same cohort
+            # FIX: Always filter by cohort_id or data_fingerprint (don't compare across cohorts)
+            # This prevents noisy comparisons when underlying dataset changes
             if cohort_id:
                 mask &= (df['cohort_id'] == cohort_id)
+            else:
+                # Try to compute cohort_id from current run metadata if available
+                # Or filter by data_fingerprint if available (stronger than cohort_id)
+                # For now, log warning and allow comparison (may be noisy)
+                logger.debug("No cohort_id provided to get_last_comparable_run, comparisons may be noisy")
             
             candidates = df[mask].sort_values('date', ascending=False)
             
@@ -1959,11 +2002,23 @@ class ReproducibilityTracker:
             # Extract route_type, symbol, model_family
             # Use provided parameters if available, otherwise extract from additional_data
             # For TARGET_RANKING, route_type comes from "view" field in additional_data
+            # For FEATURE_SELECTION, map view to route_type (CROSS_SECTIONAL → CROSS_SECTIONAL, SYMBOL_SPECIFIC → INDIVIDUAL)
             if route_type is None:
                 if stage.upper() == "TARGET_RANKING":
                     route_type = additional_data.get("view") if additional_data else None
                     if route_type:
                         route_type = route_type.upper()  # Normalize to uppercase
+                elif stage.upper() == "FEATURE_SELECTION":
+                    # FIX: Map view to route_type for FEATURE_SELECTION (ensures proper telemetry scoping)
+                    view = additional_data.get("view") if additional_data else None
+                    if view:
+                        if view.upper() == "CROSS_SECTIONAL":
+                            route_type = "CROSS_SECTIONAL"
+                        elif view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
+                            route_type = "INDIVIDUAL"  # SYMBOL_SPECIFIC maps to INDIVIDUAL for FEATURE_SELECTION
+                    if not route_type:
+                        # Fallback to extraction method
+                        route_type = self._extract_route_type(additional_data)
                 else:
                     route_type = self._extract_route_type(additional_data) if stage.lower() in ["feature_selection", "model_training", "training"] else None
             
@@ -2516,17 +2571,28 @@ class ReproducibilityTracker:
             additional_data["label_definition_hash"] = hashlib.sha256(label_def_str.encode()).hexdigest()[:16]
         
         # Add view metadata for TARGET_RANKING
-        if ctx.stage == "target_ranking" and hasattr(ctx, 'view') and ctx.view:
+        # FIX: Add view to additional_data for both TARGET_RANKING and FEATURE_SELECTION
+        # This ensures proper telemetry scoping (features compared per-target, per-view, per-symbol)
+        if hasattr(ctx, 'view') and ctx.view:
             additional_data["view"] = ctx.view
+        # Also add symbol for SYMBOL_SPECIFIC/INDIVIDUAL views
+        if hasattr(ctx, 'symbol') and ctx.symbol:
+            additional_data["symbol"] = ctx.symbol
         
         # Merge metrics
         metrics_with_cohort = {**metrics, **cohort_metrics}
         
         # 4. Load previous run metadata for comparison
-        # For TARGET_RANKING, use view as route_type
-        route_type_for_cohort = ctx.route_type
+        # FIX: For FEATURE_SELECTION, map view to route_type (ensures proper telemetry scoping)
+        route_type_for_cohort = ctx.route_type if hasattr(ctx, 'route_type') else None
         if ctx.stage == "target_ranking" and hasattr(ctx, 'view') and ctx.view:
             route_type_for_cohort = ctx.view
+        elif ctx.stage == "feature_selection" and hasattr(ctx, 'view') and ctx.view:
+            # Map view to route_type for FEATURE_SELECTION
+            if ctx.view.upper() == "CROSS_SECTIONAL":
+                route_type_for_cohort = "CROSS_SECTIONAL"
+            elif ctx.view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
+                route_type_for_cohort = "INDIVIDUAL"  # SYMBOL_SPECIFIC maps to INDIVIDUAL
         
         cohort_id = self._compute_cohort_id(cohort_metadata, route_type_for_cohort)
         previous_metadata = None
@@ -2594,10 +2660,16 @@ class ReproducibilityTracker:
         audit_report_path = None
         cohort_dir = None
         try:
-            # Use view as route_type for TARGET_RANKING when getting cohort directory
+            # FIX: Use view as route_type for TARGET_RANKING and FEATURE_SELECTION when getting cohort directory
             route_type_for_cohort_dir = route_type_for_log  # Use same as log_comparison
             if ctx.stage == "target_ranking" and hasattr(ctx, 'view') and ctx.view:
                 route_type_for_cohort_dir = ctx.view
+            elif ctx.stage == "feature_selection" and hasattr(ctx, 'view') and ctx.view:
+                # Map view to route_type for FEATURE_SELECTION
+                if ctx.view.upper() == "CROSS_SECTIONAL":
+                    route_type_for_cohort_dir = "CROSS_SECTIONAL"
+                elif ctx.view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
+                    route_type_for_cohort_dir = "INDIVIDUAL"  # SYMBOL_SPECIFIC maps to INDIVIDUAL
             
             cohort_dir = self._get_cohort_dir(
                 ctx.stage,

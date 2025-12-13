@@ -2199,6 +2199,172 @@ def train_and_evaluate_models(
         except Exception as e:
             logger.warning(f"Lasso failed: {e}")
     
+    # Ridge
+    if 'ridge' in model_families:
+        try:
+            from sklearn.linear_model import Ridge, RidgeClassifier
+            from sklearn.pipeline import Pipeline
+            from sklearn.preprocessing import StandardScaler
+            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+            
+            # Ridge doesn't handle NaNs - use sklearn-safe conversion
+            X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
+            
+            # Get config values
+            ridge_config = get_model_config('ridge', multi_model_config)
+            
+            # CRITICAL: Use correct estimator based on task type
+            # For classification: RidgeClassifier (not Ridge regression)
+            # For regression: Ridge
+            if is_binary or is_multiclass:
+                est_cls = RidgeClassifier
+            else:
+                est_cls = Ridge
+            
+            # CRITICAL: Ridge requires scaling for proper convergence
+            # Pipeline ensures scaling happens within each CV fold (no leakage)
+            steps = [
+                ('scaler', StandardScaler()),  # Required for Ridge convergence
+                ('model', est_cls(**ridge_config))
+            ]
+            pipeline = Pipeline(steps)
+            
+            scores = cross_val_score(pipeline, X_dense, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
+            valid_scores = scores[~np.isnan(scores)]
+            primary_score = valid_scores.mean() if len(valid_scores) > 0 else np.nan
+            
+            # Fit on full data for importance extraction (CV is done elsewhere)
+            pipeline.fit(X_dense, y)
+            
+            # Compute and store full task-aware metrics
+            if not np.isnan(primary_score):
+                _compute_and_store_metrics('ridge', pipeline, X_dense, y, primary_score, task_type)
+            
+            # Extract coefficients from the fitted model
+            model = pipeline.named_steps['model']
+            # FIX: Handle both 1D (binary) and 2D (multiclass) coef_ shapes
+            coef = model.coef_
+            if len(coef.shape) > 1:
+                # Multiclass: use max absolute coefficient across classes
+                importance = np.abs(coef).max(axis=0)
+            else:
+                # Binary or regression: use absolute coefficients
+                importance = np.abs(coef)
+            
+            # Update feature_names to match dense array
+            feature_names = feature_names_dense
+            
+            # Validate importance is not all zeros
+            if np.all(importance == 0) or np.sum(importance) == 0:
+                logger.warning(f"Ridge: All coefficients are zero (over-regularized or no signal)")
+                importance_ratio = 0.0
+            else:
+                if len(importance) > 0:
+                    total_importance = np.sum(importance)
+                    if total_importance > 0:
+                        top_fraction = _get_importance_top_fraction()
+                        top_k = max(1, int(len(importance) * top_fraction))
+                        top_importance_sum = np.sum(np.sort(importance)[-top_k:])
+                        importance_ratio = top_importance_sum / total_importance
+                    else:
+                        importance_ratio = 0.0
+                else:
+                    importance_ratio = 0.0
+            importance_magnitudes.append(importance_ratio)
+        except Exception as e:
+            logger.warning(f"Ridge failed: {e}")
+    
+    # Elastic Net
+    if 'elastic_net' in model_families:
+        try:
+            from sklearn.linear_model import ElasticNet, LogisticRegression
+            from sklearn.pipeline import Pipeline
+            from sklearn.preprocessing import StandardScaler
+            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+            
+            # Elastic Net doesn't handle NaNs - use sklearn-safe conversion
+            X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
+            
+            # Get config values
+            elastic_net_config = get_model_config('elastic_net', multi_model_config)
+            
+            # CRITICAL: Use correct estimator based on task type
+            # For classification: LogisticRegression with penalty='elasticnet' and solver='saga'
+            # For regression: ElasticNet
+            if is_binary or is_multiclass:
+                # LogisticRegression with elasticnet penalty
+                est_cls = LogisticRegression
+                # ElasticNet requires solver='saga' for penalty='elasticnet'
+                elastic_net_config = elastic_net_config.copy()
+                elastic_net_config['penalty'] = 'elasticnet'
+                elastic_net_config['solver'] = 'saga'  # Required for elasticnet penalty
+                # l1_ratio maps to ElasticNet's l1_ratio (0 = pure L2, 1 = pure L1)
+                if 'l1_ratio' not in elastic_net_config:
+                    elastic_net_config['l1_ratio'] = elastic_net_config.get('l1_ratio', 0.5)
+                # alpha maps to C (inverse regularization strength)
+                if 'alpha' in elastic_net_config:
+                    # Convert alpha to C (C = 1/alpha for consistency with sklearn)
+                    alpha = elastic_net_config.pop('alpha')
+                    elastic_net_config['C'] = 1.0 / alpha if alpha > 0 else 1.0
+                elif 'C' not in elastic_net_config:
+                    elastic_net_config['C'] = 1.0  # Default C=1.0
+            else:
+                # ElasticNet regression
+                est_cls = ElasticNet
+            
+            # CRITICAL: Elastic Net requires scaling for proper convergence
+            # Pipeline ensures scaling happens within each CV fold (no leakage)
+            steps = [
+                ('scaler', StandardScaler()),  # Required for ElasticNet convergence
+                ('model', est_cls(**elastic_net_config))
+            ]
+            pipeline = Pipeline(steps)
+            
+            scores = cross_val_score(pipeline, X_dense, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
+            valid_scores = scores[~np.isnan(scores)]
+            primary_score = valid_scores.mean() if len(valid_scores) > 0 else np.nan
+            
+            # Fit on full data for importance extraction (CV is done elsewhere)
+            pipeline.fit(X_dense, y)
+            
+            # Compute and store full task-aware metrics
+            if not np.isnan(primary_score):
+                _compute_and_store_metrics('elastic_net', pipeline, X_dense, y, primary_score, task_type)
+            
+            # Extract coefficients from the fitted model
+            model = pipeline.named_steps['model']
+            # FIX: Handle both 1D (binary) and 2D (multiclass) coef_ shapes
+            coef = model.coef_
+            if len(coef.shape) > 1:
+                # Multiclass: use max absolute coefficient across classes
+                importance = np.abs(coef).max(axis=0)
+            else:
+                # Binary or regression: use absolute coefficients
+                importance = np.abs(coef)
+            
+            # Update feature_names to match dense array
+            feature_names = feature_names_dense
+            
+            # Validate importance is not all zeros
+            if np.all(importance == 0) or np.sum(importance) == 0:
+                logger.warning(f"Elastic Net: All coefficients are zero (over-regularized or no signal)")
+                importance_ratio = 0.0
+            else:
+                if len(importance) > 0:
+                    total_importance = np.sum(importance)
+                    if total_importance > 0:
+                        top_fraction = _get_importance_top_fraction()
+                        top_k = max(1, int(len(importance) * top_fraction))
+                        top_importance_sum = np.sum(np.sort(importance)[-top_k:])
+                        importance_ratio = top_importance_sum / total_importance
+                    else:
+                        importance_ratio = 0.0
+                else:
+                    importance_ratio = 0.0
+            importance_magnitudes.append(importance_ratio)
+        except Exception as e:
+            logger.warning(f"Elastic Net failed: {e}")
+    
     # Mutual Information
     if 'mutual_information' in model_families:
         try:
@@ -2312,10 +2478,13 @@ def train_and_evaluate_models(
             imputer = SimpleImputer(strategy='median')
             X_imputed = imputer.fit_transform(X)
             
-            # Get config values
+            # Get config values with defaults
             rfe_config = get_model_config('rfe', multi_model_config)
-            n_features_to_select = min(rfe_config['n_features_to_select'], X_imputed.shape[1])
-            step = rfe_config['step']
+            # FIX: Use .get() with default to prevent KeyError
+            # Default to 20% of features or top_k if available, but at least 1
+            default_n_features = max(1, int(0.2 * X_imputed.shape[1]))
+            n_features_to_select = min(rfe_config.get('n_features_to_select', default_n_features), X_imputed.shape[1])
+            step = rfe_config.get('step', 5)
             
             # Use random_forest config for RFE estimator
             rf_config = get_model_config('random_forest', multi_model_config)
@@ -4378,11 +4547,25 @@ def evaluate_target_predictability(
                     max_lookback_bars = 288
                     additional_data_with_cohort['feature_lookback_max_minutes'] = max_lookback_bars * data_interval_minutes
                 
+                # FIX: Ensure view and symbol are included in additional_data for proper telemetry scoping
+                # This aligns target ranking telemetry with feature selection telemetry
+                # Features are compared per-target, per-view, per-symbol (not across all targets/views/symbols)
+                if 'view' in locals() and view:
+                    additional_data_with_cohort['view'] = view
+                if 'symbol' in locals() and symbol:
+                    additional_data_with_cohort['symbol'] = symbol
+                
+                # FIX: For TARGET_RANKING, view is used as route_type (CROSS_SECTIONAL, SYMBOL_SPECIFIC, LOSO)
+                # This ensures directory structure aligns: TARGET_RANKING/{view}/{target}/{symbol}/cohort={cohort_id}/
+                route_type_for_target_ranking = view if 'view' in locals() and view else None
+                
                 tracker.log_comparison(
                     stage="target_ranking",
-                    item_name=target_name,
+                    item_name=target_name,  # FIX: item_name is just target (view/symbol handled by route_type/symbol params)
                     metrics=metrics_with_cohort,
-                    additional_data=additional_data_with_cohort
+                    additional_data=additional_data_with_cohort,
+                    route_type=route_type_for_target_ranking,  # FIX: Use view as route_type for TARGET_RANKING (ensures alignment with feature selection)
+                    symbol=symbol if 'symbol' in locals() and symbol else None  # FIX: Properly scoped by symbol (for SYMBOL_SPECIFIC/LOSO views)
                 )
         except Exception as e:
             logger.warning(f"Reproducibility tracking failed for {target_name}: {e}")

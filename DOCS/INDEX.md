@@ -182,6 +182,11 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 - [Bug Fixes](03_technical/fixes/BUG_FIXES.md) - Fix history
 - [Migration Notes](03_technical/fixes/MIGRATION_NOTES.md) - Migration guide
 - [TensorFlow Executable Stack Fix](03_technical/fixes/TENSORFLOW_EXECUTABLE_STACK_FIX.md) - Fix for libtensorflow_cc.so executable stack error
+- **Feature Selection Critical Fixes (2025-12-13)**:
+  - [Implementation Verification](03_technical/fixes/2025-12-13-implementation-verification.md) - Complete verification of all 6 critical checks + 2 last-mile improvements
+  - [Critical Fixes](03_technical/fixes/2025-12-13-critical-fixes.md) - Detailed root-cause analysis and fixes
+  - [Telemetry Scoping Fix](03_technical/fixes/2025-12-13-telemetry-scoping-fix.md) - Telemetry scoping implementation
+  - [Sharp Edges Verification](03_technical/fixes/2025-12-13-sharp-edges-verification.md) - Verification against user checklist
 
 ### Roadmaps
 - [Alpha Enhancement Roadmap](03_technical/roadmaps/ALPHA_ENHANCEMENT_ROADMAP.md) - Enhancement plan

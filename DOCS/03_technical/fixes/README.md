@@ -9,8 +9,21 @@ Known issues, bug fixes, and migration notes.
 - **[Migration Notes](MIGRATION_NOTES.md)** - Migration guide
 - **[TensorFlow Executable Stack Fix](TENSORFLOW_EXECUTABLE_STACK_FIX.md)** - TensorFlow fix
 
+## Recent Critical Fixes (2025-12-13)
+
+### Feature Selection Critical Fixes
+
+- **[Implementation Verification](2025-12-13-implementation-verification.md)** - Complete verification of all 6 critical checks + 2 last-mile improvements
+- **[Critical Fixes](2025-12-13-critical-fixes.md)** - Detailed root-cause analysis and fixes for shared harness, CatBoost dtype, RFE, linear models
+- **[Telemetry Scoping Fix](2025-12-13-telemetry-scoping-fix.md)** - Telemetry scoping implementation (view→route_type mapping, cohort filtering)
+- **[Sharp Edges Verification](2025-12-13-sharp-edges-verification.md)** - Verification against user checklist (view consistency, symbol policy, cohort filtering)
+- **[Stability and Dtype Fixes](2025-12-13-stability-and-dtype-fixes.md)** - Stability per-model-family and dtype enforcement fixes
+- **[Feature Selection Fixes](2025-12-13-feature-selection-fixes.md)** - Additional feature selection fixes and improvements
+- **[Telemetry Scoping Audit](2025-12-13-telemetry-scoping-audit.md)** - Audit of telemetry scoping against user's checklist
+
 ## Related Documentation
 
 - [Known Issues](../../02_reference/KNOWN_ISSUES.md) - Reference documentation
 - [Changelog](../../02_reference/changelog/README.md) - Change history
+- [Feature Selection Unification Changelog](../../02_reference/changelog/2025-12-13-feature-selection-unification.md) - Complete changelog for feature selection unification
 

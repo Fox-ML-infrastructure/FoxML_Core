@@ -1416,9 +1416,54 @@ def train_model_and_get_importance(
                     else:
                         logger.debug(f"    catboost: Model confirmed using GPU (task_type={model_params.get('task_type')})")
             
+            # CRITICAL: CatBoost dtype fix - ensure all features are numeric float32/float64
+            # CatBoost can treat object dtypes as text/categorical and memorize patterns
+            # This causes fake performance (perfect scores) with poor generalization
             try:
-                model.fit(X, y)
-                train_score = model.score(X, y)
+                # Convert X to DataFrame to check/fix dtypes
+                if isinstance(X, np.ndarray):
+                    X_df = pd.DataFrame(X, columns=feature_names)
+                else:
+                    X_df = pd.DataFrame(X) if not isinstance(X, pd.DataFrame) else X.copy()
+                    if X_df.shape[1] != len(feature_names):
+                        X_df.columns = feature_names[:X_df.shape[1]]
+                
+                # Hard-cast all numeric columns to float32 (CatBoost expects numeric, not object)
+                for col in X_df.columns:
+                    if pd.api.types.is_numeric_dtype(X_df[col]):
+                        # Convert to float32 explicitly (prevents object dtype from NaN/mixed types)
+                        X_df[col] = X_df[col].astype('float32')
+                    elif X_df[col].dtype.name in ['object', 'string', 'category']:
+                        # Try to convert to numeric, drop if fails
+                        try:
+                            X_df[col] = pd.to_numeric(X_df[col], errors='coerce').astype('float32')
+                        except Exception:
+                            logger.warning(f"    catboost: Dropping non-numeric column {col} (dtype={X_df[col].dtype})")
+                            X_df = X_df.drop(columns=[col])
+                            feature_names = [f for f in feature_names if f != col]
+                
+                # Update feature_names to match X_df
+                feature_names = [f for f in feature_names if f in X_df.columns]
+                
+                # FIX: CRITICAL - Verify no object columns reach CatBoost (fail fast if they do)
+                # This prevents CatBoost from treating numeric features as text/categorical
+                object_cols_remaining = [c for c in X_df.columns if X_df[c].dtype.name in ['object', 'string', 'category']]
+                if object_cols_remaining:
+                    raise TypeError(f"CRITICAL: Object columns reached CatBoost: {object_cols_remaining[:10]}. "
+                                   f"This will cause fake performance. Fix dtype enforcement upstream.")
+                
+                X_catboost = X_df.values.astype('float32')
+                
+                # FIX: Also verify X_catboost has no object dtype (double-check)
+                if X_catboost.dtype.name in ['object', 'string']:
+                    raise TypeError(f"CRITICAL: X_catboost has object dtype. This will cause CatBoost to treat features as text.")
+                
+                # Explicitly tell CatBoost there are no categorical features (unless specified)
+                if 'cat_features' not in cb_config:
+                    cb_config['cat_features'] = []  # No categoricals by default
+                
+                model.fit(X_catboost, y)
+                train_score = model.score(X_catboost, y)
             except (ValueError, TypeError) as e:
                 error_str = str(e).lower()
                 if any(kw in error_str for kw in ['invalid classes', 'expected', 'too few']):
@@ -1449,6 +1494,185 @@ def train_model_and_get_importance(
         
         # Update feature_names to match dense array
         feature_names = feature_names_dense
+    
+    elif model_family == 'ridge':
+        # Ridge Regression/Classification - Linear model with L2 regularization
+        from sklearn.linear_model import Ridge, RidgeClassifier
+        from sklearn.pipeline import Pipeline
+        from sklearn.preprocessing import StandardScaler
+        from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+        
+        # Ridge doesn't handle NaNs - use sklearn-safe conversion
+        X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
+        
+        # Determine task type
+        unique_vals = np.unique(y[~np.isnan(y)])
+        is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
+        is_multiclass = len(unique_vals) <= 10 and all(
+            isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer())
+            for v in unique_vals
+        )
+        
+        # CRITICAL: Use correct estimator based on task type
+        # For classification: RidgeClassifier (not Ridge regression)
+        # For regression: Ridge
+        if is_binary or is_multiclass:
+            est_cls = RidgeClassifier
+        else:
+            est_cls = Ridge
+        
+        # Clean config using systematic helper
+        extra = {"random_state": model_seed}  # RidgeClassifier uses random_state for tie-breaking
+        ridge_config = _clean_config_for_estimator(est_cls, model_config, extra, "ridge")
+        
+        # CRITICAL: Ridge requires scaling for proper convergence
+        # Pipeline ensures scaling happens within each CV fold (no leakage)
+        steps = [
+            ('scaler', StandardScaler()),  # Required for Ridge convergence
+            ('model', est_cls(**ridge_config, **extra))
+        ]
+        pipeline = Pipeline(steps)
+        
+        # Fit on full data for importance extraction (CV is done elsewhere)
+        try:
+            pipeline.fit(X_dense, y)
+            train_score = pipeline.score(X_dense, y)
+        except Exception as e:
+            logger.warning(f"    ridge: Failed to fit: {e}")
+            # Use uniform fallback
+            importance_values, fallback_reason = normalize_importance(
+                raw_importance=None,
+                n_features=len(feature_names_dense),
+                family="ridge",
+                feature_names=feature_names_dense
+            )
+            model = type('DummyModel', (), {'importance': importance_values, '_fallback_reason': fallback_reason})()
+            feature_names = feature_names_dense
+        else:
+            # Extract coefficients from the fitted model
+            model = pipeline.named_steps['model']
+            # FIX: Handle both 1D (binary) and 2D (multiclass) coef_ shapes
+            coef = model.coef_
+            if len(coef.shape) > 1:
+                # Multiclass: use max absolute coefficient across classes
+                importance_values = np.abs(coef).max(axis=0)
+            else:
+                # Binary or regression: use absolute coefficients
+                importance_values = np.abs(coef)
+            
+            # Update feature_names to match dense array
+            feature_names = feature_names_dense
+            
+            # Validate importance is not all zeros
+            if np.all(importance_values == 0) or np.sum(importance_values) == 0:
+                logger.warning(f"    ridge: All coefficients are zero (over-regularized or no signal). Marking as invalid.")
+                # FIX: Don't use uniform fallback - it injects randomness into consensus
+                # Instead, raise exception to mark model as invalid (will be caught and marked as failed)
+                raise ValueError("ridge: All coefficients are zero (over-regularized or no signal). Model invalid.")
+            else:
+                # Normalize importance to sum to 1.0 for consistency
+                total = np.sum(importance_values)
+                if total > 0:
+                    importance_values = importance_values / total
+                model = type('DummyModel', (), {'importance': importance_values})()
+    
+    elif model_family == 'elastic_net':
+        # Elastic Net Regression/Classification - Linear model with L1+L2 regularization
+        from sklearn.linear_model import ElasticNet, LogisticRegression
+        from sklearn.pipeline import Pipeline
+        from sklearn.preprocessing import StandardScaler
+        from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+        
+        # Elastic Net doesn't handle NaNs - use sklearn-safe conversion
+        X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
+        
+        # Determine task type
+        unique_vals = np.unique(y[~np.isnan(y)])
+        is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
+        is_multiclass = len(unique_vals) <= 10 and all(
+            isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer())
+            for v in unique_vals
+        )
+        
+        # CRITICAL: Use correct estimator based on task type
+        # For classification: LogisticRegression with penalty='elasticnet' and solver='saga'
+        # For regression: ElasticNet
+        if is_binary or is_multiclass:
+            # LogisticRegression with elasticnet penalty
+            est_cls = LogisticRegression
+            # ElasticNet requires solver='saga' for penalty='elasticnet'
+            elastic_net_config = model_config.copy()
+            elastic_net_config['penalty'] = 'elasticnet'
+            elastic_net_config['solver'] = 'saga'  # Required for elasticnet penalty
+            # l1_ratio maps to ElasticNet's l1_ratio (0 = pure L2, 1 = pure L1)
+            if 'l1_ratio' not in elastic_net_config:
+                elastic_net_config['l1_ratio'] = model_config.get('l1_ratio', 0.5)
+            # alpha maps to C (inverse regularization strength)
+            if 'alpha' in elastic_net_config:
+                # Convert alpha to C (C = 1/alpha for consistency with sklearn)
+                alpha = elastic_net_config.pop('alpha')
+                elastic_net_config['C'] = 1.0 / alpha if alpha > 0 else 1.0
+            elif 'C' not in elastic_net_config:
+                elastic_net_config['C'] = 1.0  # Default C=1.0
+        else:
+            # ElasticNet regression
+            est_cls = ElasticNet
+            elastic_net_config = model_config.copy()
+        
+        # Clean config using systematic helper
+        extra = {"random_state": model_seed}
+        elastic_net_config_clean = _clean_config_for_estimator(est_cls, elastic_net_config, extra, "elastic_net")
+        
+        # CRITICAL: Elastic Net requires scaling for proper convergence
+        # Pipeline ensures scaling happens within each CV fold (no leakage)
+        steps = [
+            ('scaler', StandardScaler()),  # Required for ElasticNet convergence
+            ('model', est_cls(**elastic_net_config_clean, **extra))
+        ]
+        pipeline = Pipeline(steps)
+        
+        # Fit on full data for importance extraction (CV is done elsewhere)
+        try:
+            pipeline.fit(X_dense, y)
+            train_score = pipeline.score(X_dense, y)
+        except Exception as e:
+            logger.warning(f"    elastic_net: Failed to fit: {e}")
+            # Use uniform fallback
+            importance_values, fallback_reason = normalize_importance(
+                raw_importance=None,
+                n_features=len(feature_names_dense),
+                family="elastic_net",
+                feature_names=feature_names_dense
+            )
+            model = type('DummyModel', (), {'importance': importance_values, '_fallback_reason': fallback_reason})()
+            feature_names = feature_names_dense
+        else:
+            # Extract coefficients from the fitted model
+            model = pipeline.named_steps['model']
+            # FIX: Handle both 1D (binary) and 2D (multiclass) coef_ shapes
+            coef = model.coef_
+            if len(coef.shape) > 1:
+                # Multiclass: use max absolute coefficient across classes
+                importance_values = np.abs(coef).max(axis=0)
+            else:
+                # Binary or regression: use absolute coefficients
+                importance_values = np.abs(coef)
+            
+            # Update feature_names to match dense array
+            feature_names = feature_names_dense
+            
+            # Validate importance is not all zeros
+            if np.all(importance_values == 0) or np.sum(importance_values) == 0:
+                logger.warning(f"    elastic_net: All coefficients are zero (over-regularized or no signal). Marking as invalid.")
+                # FIX: Don't use uniform fallback - it injects randomness into consensus
+                # Instead, raise exception to mark model as invalid (will be caught and marked as failed)
+                raise ValueError("elastic_net: All coefficients are zero (over-regularized or no signal). Model invalid.")
+            else:
+                # Normalize importance to sum to 1.0 for consistency
+                total = np.sum(importance_values)
+                if total > 0:
+                    importance_values = importance_values / total
+                model = type('DummyModel', (), {'importance': importance_values})()
     
     elif model_family == 'mutual_information':
         # Mutual information doesn't train a model, just calculates information
@@ -1568,7 +1792,10 @@ def train_model_and_get_importance(
             for v in unique_vals
         )
         
-        n_features_to_select = min(model_config.get('n_features_to_select', 50), len(feature_names))
+        # FIX: Use default based on feature count or top_k if available
+        # Default to 20% of features, but at least 1
+        default_n_features = max(1, int(0.2 * len(feature_names)))
+        n_features_to_select = min(model_config.get('n_features_to_select', default_n_features), len(feature_names))
         step = model_config.get('step', 5)
         
         # Use config for RFE's internal estimator (load from preprocessing config if not in model_config)
@@ -1950,9 +2177,23 @@ def process_single_symbol(
     max_samples: int = None,
     explicit_interval: Optional[Union[int, str]] = None,  # Optional explicit interval from config
     experiment_config: Optional[Any] = None,  # Optional ExperimentConfig (for data.bar_interval)
-    output_dir: Optional[Path] = None  # Optional output directory for stability snapshots
+    output_dir: Optional[Path] = None,  # Optional output directory for stability snapshots
+    selected_features: Optional[List[str]] = None  # FIX: Use pruned feature list from shared harness
 ) -> Tuple[List[ImportanceResult], List[Dict[str, Any]]]:
-    """Process a single symbol with multiple model families"""
+    """
+    Process a single symbol with multiple model families.
+    
+    Args:
+        symbol: Symbol name
+        data_path: Path to symbol data file
+        target_column: Target column name
+        model_families_config: Model families configuration
+        max_samples: Maximum samples per symbol
+        explicit_interval: Explicit data interval
+        experiment_config: Experiment configuration
+        output_dir: Output directory for snapshots
+        selected_features: Optional pruned feature list from shared harness (ensures consistency)
+    """
     
     # Load default max_samples from config if not provided
     if max_samples is None:
@@ -2009,38 +2250,92 @@ def process_single_symbol(
             experiment_config=experiment_config
         )
         
-        all_columns = df.columns.tolist()
-        # Use target-aware filtering with registry validation
-        safe_columns = filter_features_for_target(
-            all_columns, 
-            target_column, 
-            verbose=False,
-            use_registry=True,  # Enable registry validation
-            data_interval_minutes=detected_interval
-        )
-        
-        # Keep only safe features + target
-        safe_columns_with_target = [c for c in safe_columns if c != target_column] + [target_column]
-        df = df[safe_columns_with_target]
+        # FIX: Use pruned feature list from shared harness if available (ensures consistency)
+        # This prevents features like "adjusted" from "coming back" after pruning
+        if selected_features is not None and len(selected_features) > 0:
+            # Use the pruned feature list from shared harness
+            # Only keep features that exist in the dataframe
+            available_features = [f for f in selected_features if f in df.columns]
+            if len(available_features) < len(selected_features):
+                missing = set(selected_features) - set(available_features)
+                logger.debug(f"  {symbol}: {len(missing)} pruned features not in dataframe: {list(missing)[:5]}")
+            
+            # Keep only pruned features + target + required ID columns (ts, symbol, etc.)
+            required_cols = ['ts', 'symbol'] if 'ts' in df.columns else []
+            keep_cols = available_features + [target_column] + [c for c in required_cols if c in df.columns]
+            df = df[keep_cols]
+            logger.debug(f"  {symbol}: Using {len(available_features)} pruned features from shared harness")
+        else:
+            # Fallback: rebuild feature list (original behavior)
+            all_columns = df.columns.tolist()
+            # Use target-aware filtering with registry validation
+            safe_columns = filter_features_for_target(
+                all_columns, 
+                target_column, 
+                verbose=False,
+                use_registry=True,  # Enable registry validation
+                data_interval_minutes=detected_interval
+            )
+            
+            # Keep only safe features + target
+            safe_columns_with_target = [c for c in safe_columns if c != target_column] + [target_column]
+            df = df[safe_columns_with_target]
         
         # Prepare features (target already in safe list, so exclude it explicitly)
         X = df.drop(columns=[target_column], errors='ignore')
         
-        # Drop object dtypes
-        object_cols = X.select_dtypes(include=['object']).columns.tolist()
+        # FIX: Enforce numeric dtypes BEFORE any model training (prevents CatBoost object column errors)
+        # This is critical - CatBoost treating numeric columns as object/text causes fake performance
+        import pandas as pd
+        import numpy as np
+        
+        # Convert to DataFrame if needed
+        if isinstance(X, np.ndarray):
+            X_df = pd.DataFrame(X, columns=X.columns if hasattr(X, 'columns') else [f'f{i}' for i in range(X.shape[1])])
+        else:
+            X_df = X.copy() if isinstance(X, pd.DataFrame) else pd.DataFrame(X)
+        
+        # Hard-cast all numeric columns to float32 (prevents object dtype from NaN/mixed types)
+        object_cols = []
+        for col in X_df.columns:
+            if X_df[col].dtype.name in ['object', 'string', 'category']:
+                # Try to convert to numeric, drop if fails
+                try:
+                    X_df[col] = pd.to_numeric(X_df[col], errors='coerce').astype('float32')
+                    logger.debug(f"  {symbol}: Converted object column {col} to float32")
+                except Exception:
+                    object_cols.append(col)
+            elif pd.api.types.is_numeric_dtype(X_df[col]):
+                # Explicitly cast to float32 (prevents object dtype)
+                X_df[col] = X_df[col].astype('float32')
+        
+        # Drop columns that couldn't be converted
         if object_cols:
-            X = X.drop(columns=object_cols)
+            logger.warning(f"  {symbol}: Dropping {len(object_cols)} non-numeric columns: {object_cols[:5]}")
+            X_df = X_df.drop(columns=object_cols)
+        
+        # Verify all columns are numeric
+        still_bad = [c for c in X_df.columns if not np.issubdtype(X_df[c].dtype, np.number)]
+        if still_bad:
+            raise TypeError(f"  {symbol}: Non-numeric columns remain after conversion: {still_bad[:10]}")
+        
+        # FIX: Replace inf/-inf with nan before fail-fast (prevents phantom issues)
+        # Some models (e.g., Ridge) may fail on inf values
+        X_df = X_df.replace([np.inf, -np.inf], np.nan)
+        # Drop columns that are all nan/inf
+        X_df = X_df.dropna(axis=1, how='all')
+        feature_names = [f for f in feature_names if f in X_df.columns]
+        
+        # Update X and feature_names
+        X_arr = X_df.values.astype('float32')  # Already float32 from conversion above
+        feature_names = X_df.columns.tolist()
         
         y = df[target_column]
-        feature_names = X.columns.tolist()
+        y_arr = y.to_numpy() if hasattr(y, 'to_numpy') else np.array(y)
         
         if not feature_names:
             logger.warning(f"Skipping {symbol}: No features after filtering")
             return results, family_statuses
-        
-        # Convert to numpy
-        X_arr = X.to_numpy()
-        y_arr = y.to_numpy()
         
         # CRITICAL: Use already-detected interval (detected above at line 773)
         # No need to detect again - use the same detected_interval from above
@@ -2143,22 +2438,42 @@ def process_single_symbol(
                         "importance_corr": repro_stats['importance_corr']
                     })
                     
-                    # Save stability snapshot for this method (non-invasive hook)
+                    # Save stability snapshot for this model family (non-invasive hook)
+                    # CRITICAL: Use model_family as method name, not importance_method
+                    # This ensures stability is computed per-model-family (comparing same family across runs)
                     # Only save if output_dir is available (optional feature)
                     if output_dir is not None:
                         try:
                             from TRAINING.stability.feature_importance import save_snapshot_from_series_hook
-                            universe_id = symbol if symbol else "ALL"
+                            import hashlib
+                            
+                            # FIX: Use feature_universe_fingerprint instead of symbol for universe_id
+                            # Symbol is useful for INDIVIDUAL, but universe fingerprint is the real guard
+                            # against comparing different candidate sets (pruner/sanitizer differences)
+                            # Compute fingerprint from sorted feature names (stable across runs)
+                            sorted_features = sorted(feature_names)
+                            feature_universe_str = "|".join(sorted_features)
+                            feature_universe_fingerprint = hashlib.sha256(feature_universe_str.encode()).hexdigest()[:16]
+                            
+                            # For INDIVIDUAL mode, include symbol in universe_id for clarity
+                            # But use fingerprint as the primary identifier
+                            if symbol:
+                                universe_id = f"{symbol}:{feature_universe_fingerprint}"
+                            else:
+                                universe_id = f"ALL:{feature_universe_fingerprint}"
+                            
+                            # FIX: Use model_family (e.g., "lightgbm", "ridge", "elastic_net") as method name
+                            # NOT importance_method (e.g., "native", "shap") - stability should be per-family
                             save_snapshot_from_series_hook(
                                 target_name=target_column if target_column else 'unknown',
-                                method=method,  # "rfe", "boruta", "stability_selection", etc.
+                                method=family_name,  # Use model_family, not importance_method
                                 importance_series=importance,
-                                universe_id=universe_id,
+                                universe_id=universe_id,  # FIX: Use feature_universe_fingerprint (not just symbol)
                                 output_dir=output_dir,
                                 auto_analyze=None,  # Load from config
                             )
                         except Exception as e:
-                            logger.debug(f"Stability snapshot save failed for {method} (non-critical): {e}")
+                            logger.debug(f"Stability snapshot save failed for {family_name} (non-critical): {e}")
                     
                     # Check if model used a fallback (soft no-signal case)
                     fallback_reason = getattr(model, '_fallback_reason', None)
@@ -2304,13 +2619,41 @@ def aggregate_multi_model_importance(
         
         if families_without_results:
             logger.warning(f"⚠️  {len(families_without_results)} model families excluded from aggregation (no results): {', '.join(sorted(families_without_results))}")
-            # Log per-symbol failure details if available
+            # FIX: Log skip reasons for failed models in consensus summary (makes debugging easier)
+            failed_models_with_reasons = []
             for family in families_without_results:
                 family_failures = [s for s in all_family_statuses if s.get('family') == family and s.get('status') == 'failed']
                 if family_failures:
+                    # Extract error messages and create concise skip reasons
+                    error_messages = [s.get('error', '') for s in family_failures if s.get('error')]
                     error_types = set(s.get('error_type') for s in family_failures if s.get('error_type'))
                     symbols_failed = [s.get('symbol') for s in family_failures]
+                    
+                    # Create concise skip reason (e.g., 'ridge:zero_coefs', 'elastic_net:singular')
+                    skip_reason = None
+                    if error_messages:
+                        # Extract key phrase from error message
+                        first_error = error_messages[0].lower()
+                        if 'zero' in first_error and 'coefficient' in first_error:
+                            skip_reason = f"{family}:zero_coefs"
+                        elif 'singular' in first_error:
+                            skip_reason = f"{family}:singular"
+                        elif 'invalid' in first_error:
+                            skip_reason = f"{family}:invalid"
+                        else:
+                            # Use error_type if available, otherwise generic
+                            skip_reason = f"{family}:{list(error_types)[0].lower() if error_types else 'unknown'}"
+                    else:
+                        skip_reason = f"{family}:{list(error_types)[0].lower() if error_types else 'unknown'}"
+                    
+                    if skip_reason:
+                        failed_models_with_reasons.append(skip_reason)
+                    
                     logger.warning(f"   - {family}: Failed for {len(symbols_failed)} symbol(s) ({', '.join(set(symbols_failed))}) with error types: {', '.join(error_types) if error_types else 'Unknown'}")
+            
+            # Log concise skip reasons for consensus summary
+            if failed_models_with_reasons:
+                logger.info(f"📋 Failed models (excluded from consensus): {', '.join(failed_models_with_reasons)}")
         
         logger.info(f"✅ Aggregating {len(families_with_results)} model families with results: {', '.join(sorted(families_with_results))}")
     
