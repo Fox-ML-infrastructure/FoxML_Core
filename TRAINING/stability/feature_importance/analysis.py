@@ -43,6 +43,13 @@ def top_k_overlap(s1: FeatureImportanceSnapshot, s2: FeatureImportanceSnapshot, 
     """
     Compute Jaccard similarity of top-K features between two snapshots.
     
+    **IMPORTANT**: This compares features by NAME, not by importance magnitude.
+    Features are already sorted by importance (descending) in the snapshot.
+    
+    For stability analysis, this should only be called on snapshots from the SAME
+    model family and importance method (e.g., LightGBM gain across runs).
+    Comparing across different methods (RFE vs Boruta) will naturally have low overlap.
+    
     Args:
         s1: First snapshot
         s2: Second snapshot
@@ -52,8 +59,11 @@ def top_k_overlap(s1: FeatureImportanceSnapshot, s2: FeatureImportanceSnapshot, 
         Jaccard similarity (intersection / union) of top-K features
     """
     # Features are already sorted by importance (descending)
-    top1 = set(s1.features[:k])
-    top2 = set(s2.features[:k])
+    # Take top k (or all if fewer than k)
+    k1 = min(k, len(s1.features))
+    k2 = min(k, len(s2.features))
+    top1 = set(s1.features[:k1])
+    top2 = set(s2.features[:k2])
     
     if not top1 and not top2:
         return 1.0  # Both empty = perfect match
@@ -135,17 +145,28 @@ def compute_stability_metrics(
     """
     Compute stability metrics for a list of snapshots.
     
+    **CRITICAL**: This function assumes all snapshots are from the SAME model family
+    and importance method (e.g., all LightGBM with "native" importance).
+    Comparing snapshots from different methods (RFE vs Boruta vs Lasso) will
+    naturally have low overlap because they use different importance definitions.
+    
+    The snapshots should be sorted by importance (descending) already, so we
+    compare top-K by feature name (not magnitude, since magnitudes are not comparable
+    across different importance definitions).
+    
     Args:
-        snapshots: List of snapshots to analyze
+        snapshots: List of snapshots to analyze (must be same method/family)
         top_k: Number of top features to consider for overlap
     
     Returns:
         Dictionary with stability metrics:
-        - mean_overlap: Mean top-K overlap between adjacent runs
-        - std_overlap: Std dev of overlaps
-        - mean_tau: Mean Kendall tau correlation
+        - mean_overlap: Mean Jaccard similarity of top-K features
+        - std_overlap: Std dev of overlap
+        - mean_tau: Mean Kendall tau rank correlation
         - std_tau: Std dev of tau
+        - n_snapshots: Number of snapshots
         - n_comparisons: Number of pairwise comparisons
+        - status: "stable", "drifting", "diverged", or "insufficient"
     """
     if len(snapshots) < 2:
         return {

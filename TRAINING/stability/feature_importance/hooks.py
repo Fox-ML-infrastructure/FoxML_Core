@@ -179,6 +179,11 @@ def analyze_all_stability_hook(
     """
     Hook function to analyze stability for all available snapshots.
     
+    **IMPORTANT**: Stability is computed PER-METHOD (not across methods).
+    Low overlap between different methods (e.g., RFE vs Boruta vs Lasso) is EXPECTED
+    because they use different importance definitions. Only compare snapshots from the
+    SAME method across different runs/time periods.
+    
     Can be called at end of pipeline run to generate comprehensive stability report.
     
     Args:
@@ -198,6 +203,8 @@ def analyze_all_stability_hook(
     all_metrics = {}
     
     # Find all target/method combinations
+    # CRITICAL: Stability is computed per-method (comparing same method across runs)
+    # NOT across methods (RFE vs Boruta will naturally have low overlap)
     for target_path in base_dir.iterdir():
         if not target_path.is_dir():
             continue
@@ -215,6 +222,7 @@ def analyze_all_stability_hook(
                 continue
             
             # Analyze this target/method combination
+            # This compares snapshots from the SAME method across different runs
             metrics = analyze_stability_auto(
                 base_dir=base_dir,
                 target_name=target,
@@ -225,5 +233,34 @@ def analyze_all_stability_hook(
             
             if metrics:
                 all_metrics[f"{target}/{method}"] = metrics
+                
+                # Log per-method stability with context
+                status = metrics.get('status', 'unknown')
+                mean_overlap = metrics.get('mean_overlap', 0.0)
+                mean_tau = metrics.get('mean_tau', None)
+                n_snapshots = metrics.get('n_snapshots', 0)
+                
+                # Adjust warning thresholds based on method type
+                # Some methods (stability_selection, boruta) are inherently more variable
+                high_variance_methods = {'stability_selection', 'boruta', 'rfe', 'neural_network'}
+                if method in high_variance_methods:
+                    # Lower thresholds for high-variance methods
+                    overlap_threshold = 0.5  # vs 0.7 default
+                    tau_threshold = 0.4  # vs 0.6 default
+                else:
+                    overlap_threshold = 0.7
+                    tau_threshold = 0.6
+                
+                if status == 'stable':
+                    logger.info(f"  [{method}] ✅ STABLE: overlap={mean_overlap:.3f}, tau={mean_tau:.3f if mean_tau else 'N/A'}, snapshots={n_snapshots}")
+                elif mean_overlap < overlap_threshold or (mean_tau is not None and mean_tau < tau_threshold):
+                    # Only warn if below threshold (not just "drifting" status)
+                    logger.warning(
+                        f"  [{method}] ⚠️  LOW STABILITY: overlap={mean_overlap:.3f} (threshold={overlap_threshold:.1f}), "
+                        f"tau={mean_tau:.3f if mean_tau else 'N/A'} (threshold={tau_threshold:.1f}), snapshots={n_snapshots}. "
+                        f"This is comparing {method} snapshots across runs - low overlap may indicate method variability or data changes."
+                    )
+                else:
+                    logger.info(f"  [{method}] ℹ️  DRIFTING: overlap={mean_overlap:.3f}, tau={mean_tau:.3f if mean_tau else 'N/A'}, snapshots={n_snapshots}")
     
     return all_metrics
