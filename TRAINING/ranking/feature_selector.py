@@ -614,19 +614,19 @@ def select_features_for_target(
                 try:
                     # Process symbol (preserves all leakage-free behavior)
                     # Returns tuple: (results, family_statuses)
-                # FIX: Pass selected_features to per-symbol processing (ensures consistency with pruned features)
-                # Note: selected_features may not exist yet (computed after aggregation), so use None as fallback
-                symbol_results, symbol_statuses = _process_single_symbol(
-                    symbol=symbol,
-                    data_path=data_path,
-                    target_column=target_column,
-                    model_families_config=model_families_config,
-                    max_samples=max_samples_per_symbol,
-                    explicit_interval=explicit_interval,
-                    experiment_config=experiment_config,
-                    output_dir=output_dir,  # Pass output_dir for reproducibility tracking
-                    selected_features=None  # Not available in fallback path (computed after aggregation)
-                )
+                    # FIX: Pass selected_features to per-symbol processing (ensures consistency with pruned features)
+                    # Note: selected_features may not exist yet (computed after aggregation), so use None as fallback
+                    symbol_results, symbol_statuses = _process_single_symbol(
+                        symbol=symbol,
+                        data_path=data_path,
+                        target_column=target_column,
+                        model_families_config=model_families_config,
+                        max_samples=max_samples_per_symbol,
+                        explicit_interval=explicit_interval,
+                        experiment_config=experiment_config,
+                        output_dir=output_dir,  # Pass output_dir for reproducibility tracking
+                        selected_features=None  # Not available in fallback path (computed after aggregation)
+                    )
                     
                     all_results.extend(symbol_results)
                     all_family_statuses.extend(symbol_statuses)
