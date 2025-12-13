@@ -1853,6 +1853,24 @@ Examples:
         advanced_cfg = intel_config_data.get('advanced', {})
         cache_cfg = intel_config_data.get('cache', {})
         
+        # NEW: Merge experiment config data section into data_cfg (experiment config takes priority)
+        if experiment_config:
+            # Merge experiment config data into data_cfg (experiment config overrides intelligent_training_config)
+            if hasattr(experiment_config, 'data') and experiment_config.data:
+                # Merge experiment config data values
+                exp_data_dict = {
+                    'data_dir': str(experiment_config.data_dir) if experiment_config.data_dir else None,
+                    'symbols': experiment_config.symbols if experiment_config.symbols else None,
+                    'interval': experiment_config.data.bar_interval if experiment_config.data.bar_interval else None,
+                    'max_rows_per_symbol': experiment_config.max_samples_per_symbol if hasattr(experiment_config, 'max_samples_per_symbol') else None,
+                    'max_samples_per_symbol': experiment_config.max_samples_per_symbol if hasattr(experiment_config, 'max_samples_per_symbol') else None,
+                }
+                # Update data_cfg with experiment config values (only non-None values)
+                for key, value in exp_data_dict.items():
+                    if value is not None:
+                        data_cfg[key] = value
+                logger.debug(f"📋 Merged experiment config data into data_cfg: {exp_data_dict}")
+        
         auto_targets = targets_cfg.get('auto_targets', True)
         top_n_targets = targets_cfg.get('top_n_targets', 10)
         max_targets_to_evaluate = targets_cfg.get('max_targets_to_evaluate', None)
