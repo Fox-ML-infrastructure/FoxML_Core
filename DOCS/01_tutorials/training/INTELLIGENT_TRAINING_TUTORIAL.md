@@ -23,6 +23,7 @@ Trained Models
 **Benefits:**
 - **No manual steps**: Everything automated in one command
 - **Intelligent selection**: Multi-model consensus for ranking/selection
+- **GPU acceleration**: Target ranking and feature selection automatically use GPU (LightGBM, XGBoost, CatBoost) when available (NEW 2025-12-12)
 - **Training routing**: Config-driven decisions about where to train (cross-sectional vs symbol-specific)
 - **2-stage training**: Efficient CPU → GPU resource usage (all 20 models)
 - **Plan-aware filtering**: Only approved targets and model families are trained

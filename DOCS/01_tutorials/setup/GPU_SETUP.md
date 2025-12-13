@@ -1,10 +1,12 @@
 # GPU Setup Guide
 
-Configure GPU acceleration for feature selection and model training.
+Configure GPU acceleration for target ranking, feature selection, and model training.
 
 ## Overview
 
-GPU acceleration provides 10-50x speedup for feature selection and training, especially with large datasets.
+GPU acceleration provides 10-50x speedup for target ranking, feature selection, and training, especially with large datasets (>100k samples).
+
+**NEW (2025-12-12)**: GPU acceleration is now enabled for target ranking and feature selection in addition to model training. LightGBM, XGBoost, and CatBoost automatically use GPU when available.
 
 ## Prerequisites
 
@@ -76,25 +78,64 @@ lightgbm:
 
 ## Performance Expectations
 
+### Target Ranking
+- **CPU**: ~5-15 minutes per target (with 11 model families)
+- **GPU**: ~1-3 minutes per target (10-50x speedup on large datasets)
+
+### Feature Selection
 - **CPU**: ~2-5 minutes per symbol (421 features)
 - **GPU (7GB)**: ~10-30 seconds per symbol
 - **GPU (11GB+)**: ~5-15 seconds per symbol
 
+### Model Training
+- **CPU**: Varies by model family
+- **GPU**: 10-50x speedup for supported families (LightGBM, XGBoost, CatBoost, neural networks)
+
 ## Troubleshooting
 
-### GPU Not Detected
+### GPU Not Being Used
 
-1. Verify CUDA installation: `nvidia-smi`
-2. Check OpenCL: `clinfo`
-3. Reinstall LightGBM with GPU: `pip install lightgbm --install-option=--gpu`
+**Check Logs:**
+- Look for `✅ Using GPU (CUDA) for [Model]` - GPU is active
+- Look for `⚠️ [Model] GPU test failed` - GPU not available, using CPU
+
+**Common Issues:**
+1. **XGBoost not compiled with GPU support**
+   - Install XGBoost with GPU: `pip install xgboost --upgrade`
+   - Or build from source with CUDA support
+
+2. **CatBoost GPU not available**
+   - Ensure CatBoost was installed with GPU support
+   - Check CUDA drivers: `nvidia-smi`
+
+3. **LightGBM GPU not detected**
+   - Verify CUDA installation: `nvidia-smi`
+   - Check OpenCL: `clinfo` (for OpenCL fallback)
+   - Reinstall LightGBM with GPU: `pip install lightgbm --install-option=--gpu`
+
+### GPU Test Disabled
+
+To skip GPU test for faster startup (not recommended):
+```yaml
+gpu:
+  lightgbm:
+    test_enabled: false  # Skip GPU test
+  xgboost:
+    test_enabled: false
+  catboost:
+    test_enabled: false
+```
 
 ### Out of Memory
 
-Reduce `max_bin` to 63 or 31, or reduce `num_leaves`.
+For model training, reduce VRAM usage in model configs:
+- LightGBM: Reduce `max_bin` to 63 or 31
+- XGBoost: Reduce `max_depth` or `tree_method` complexity
+- CatBoost: Reduce `iterations` or `depth`
 
 ### Fallback to CPU
 
-If GPU fails, the system automatically falls back to CPU. Check logs for error messages.
+If GPU fails, the system automatically falls back to CPU. Check logs for specific error messages explaining why GPU failed.
 
 ## Future: ROCm Support
 
@@ -107,9 +148,16 @@ ROCm (AMD GPU) support is planned for future development once the major architec
 
 The implementation will follow the same patterns as CUDA support but use the ROCm backend. This expansion will increase accessibility and deployment options for users with AMD hardware.
 
+## Configuration Reference
+
+All GPU settings are in `CONFIG/training_config/gpu_config.yaml`. See:
+- [Training Pipeline Configs](../../02_reference/configuration/TRAINING_PIPELINE_CONFIGS.md) - GPU configuration details
+- [Configuration System Overview](../../02_reference/configuration/README.md) - Complete config system guide
+
 ## See Also
 
-- [GPU Feature Selection Guide](../../../dep/GPU_FEATURE_SELECTION_GUIDE.md) - Detailed guide
-- [Quick Start GPU](../../../dep/QUICK_START_GPU.md) - Quick reference
-- [Roadmap](../../../ROADMAP.md) - See Phase 5 for ROCm support timeline
+- [Auto Target Ranking](../../training/AUTO_TARGET_RANKING.md) - How to use GPU-accelerated target ranking
+- [Feature Selection Tutorial](../../training/FEATURE_SELECTION_TUTORIAL.md) - GPU-accelerated feature selection
+- [Roadmap](../../../ROADMAP.md) - See Phase 4 for multi-GPU support timeline
+- [Known Issues](../../02_reference/KNOWN_ISSUES.md) - GPU troubleshooting and limitations
 

@@ -1660,30 +1660,26 @@ def train_and_evaluate_models(
                 
                 if xgb_device == 'cuda':
                     if test_enabled:
-                        # Try CUDA GPU - XGBoost 3.1+ uses device='cuda' with tree_method='hist'
-                        # Note: XGBoost 3.1+ removed gpu_id parameter (use device='cuda:0' format if needed)
-                        # Also: gpu_hist is deprecated, only 'hist' with device='cuda' works
+                        # Try CUDA GPU - XGBoost 2.0+ uses device='cuda' with tree_method='hist'
+                        # Older versions might need tree_method='gpu_hist', but we'll try hist first
                         try:
-                            # XGBoost 3.1+: device='cuda' or device='cuda:0' (no gpu_id parameter)
-                            device_str = f'cuda:{xgb_gpu_id}' if xgb_gpu_id != 0 else 'cuda'
-                            test_model = xgb.XGBRegressor(tree_method='hist', device=device_str, n_estimators=test_n_estimators, verbosity=0)
+                            test_model = xgb.XGBRegressor(tree_method='hist', device='cuda', gpu_id=xgb_gpu_id, n_estimators=test_n_estimators, verbosity=0)
                             test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
-                            gpu_params = {'tree_method': 'hist', 'device': device_str}
-                            logger.info(f"  ✅ Using GPU (CUDA) for XGBoost (device={device_str})")
+                            gpu_params = {'tree_method': xgb_tree_method, 'device': 'cuda', 'gpu_id': xgb_gpu_id}
+                            logger.info(f"  ✅ Using GPU (CUDA) for XGBoost (gpu_id={xgb_gpu_id})")
                         except Exception as gpu_test_error:
-                            # Try without gpu_id (XGBoost 3.1+ format)
+                            # Try older API: tree_method='gpu_hist' (no device parameter)
                             try:
-                                test_model = xgb.XGBRegressor(tree_method='hist', device='cuda', n_estimators=test_n_estimators, verbosity=0)
+                                test_model = xgb.XGBRegressor(tree_method='gpu_hist', n_estimators=test_n_estimators, verbosity=0)
                                 test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
-                                gpu_params = {'tree_method': 'hist', 'device': 'cuda'}
-                                logger.info("  ✅ Using GPU (CUDA) for XGBoost (device=cuda)")
-                            except Exception as fallback_error:
-                                logger.warning(f"  ⚠️  XGBoost GPU test failed: {gpu_test_error}, falling back to CPU")
+                                gpu_params = {'tree_method': 'gpu_hist'}  # Older API doesn't use device parameter
+                                logger.info("  ✅ Using GPU (CUDA) for XGBoost (legacy API: gpu_hist)")
+                            except Exception as legacy_error:
+                                logger.warning(f"  ⚠️  XGBoost GPU test failed (new API: {gpu_test_error}, legacy API: {legacy_error}), falling back to CPU")
                     else:
-                        # Skip test, use config values directly (XGBoost 3.1+ format)
-                        device_str = f'cuda:{xgb_gpu_id}' if xgb_gpu_id != 0 else 'cuda'
-                        gpu_params = {'tree_method': 'hist', 'device': device_str}
-                        logger.info(f"  Using GPU (CUDA) for XGBoost (device={device_str}, test disabled)")
+                        # Skip test, use config values directly
+                        gpu_params = {'tree_method': xgb_tree_method, 'device': 'cuda', 'gpu_id': xgb_gpu_id}
+                        logger.info(f"  Using GPU (CUDA) for XGBoost (gpu_id={xgb_gpu_id}, test disabled)")
                 else:
                     logger.info("  Using CPU for XGBoost (device='cpu' in config)")
             except Exception as e:
@@ -1696,8 +1692,7 @@ def train_and_evaluate_models(
                 xgb_config = {}
             # Remove task-specific parameters (we set these explicitly based on task type)
             # CRITICAL: Extract early_stopping_rounds from config - it goes in constructor for XGBoost 2.0+
-            # Also remove tree_method, device, and gpu_id if present (we set these from GPU config)
-            # Note: XGBoost 3.1+ removed gpu_id parameter, use device='cuda:0' format instead
+            # Also remove tree_method and device if present (we set these from GPU config)
             early_stopping_rounds = xgb_config.get('early_stopping_rounds', None)
             xgb_config_clean = {k: v for k, v in xgb_config.items() 
                               if k not in ['objective', 'eval_metric', 'early_stopping_rounds', 'tree_method', 'device', 'gpu_id']}

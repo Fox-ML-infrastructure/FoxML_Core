@@ -60,7 +60,8 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 * **Decision-Making System** — Under active testing. Use `dry_run` mode until validated.
 * **Stability Analysis** — Under active testing. Thresholds may need adjustment.
 
-See [Known Issues & Limitations](DOCS/02_reference/KNOWN_ISSUES.md) for complete details.
+**For complete list of limitations, experimental features, and troubleshooting:**
+- [Known Issues & Limitations](DOCS/02_reference/KNOWN_ISSUES.md) — Features that don't work yet, experimental features, and known limitations
 
 ---
 

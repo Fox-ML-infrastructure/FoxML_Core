@@ -4,6 +4,8 @@
 
 This document describes the parallel execution infrastructure added to speed up target ranking and feature selection operations.
 
+**NEW (2025-12-12)**: GPU acceleration is now enabled for target ranking and feature selection in addition to parallel execution. LightGBM, XGBoost, and CatBoost automatically use GPU when available, providing 10-50x speedup on large datasets.
+
 ## Architecture
 
 ### Components

@@ -38,38 +38,72 @@ pipeline:
 
 ### `training_config/gpu_config.yaml`
 
-**Purpose:** GPU device management and CUDA settings.
+**Purpose:** GPU device management, CUDA settings, and GPU acceleration for target ranking and feature selection.
 
-**When to use:** When configuring GPU usage, VRAM limits, or multi-GPU setups.
+**When to use:** When configuring GPU usage, VRAM limits, multi-GPU setups, or GPU acceleration for ranking/selection.
 
 **Key Settings:**
-- `vram_cap_mb` - Maximum VRAM usage per GPU
-- `device_visibility` - Which GPUs to use
+- `cuda_visible_devices` - GPU IDs to use (comma-separated)
+- `vram.caps` - Per-family VRAM limits (in MB)
 - TensorFlow/PyTorch GPU options
-- CUDA device selection
+- **LightGBM/XGBoost/CatBoost GPU settings** (NEW 2025-12-12) - GPU acceleration for target ranking and feature selection
 
-**Example: Single GPU Setup**
+**Example: Enable GPU for Target Ranking and Feature Selection**
 
 ```yaml
 gpu:
-  vram_cap_mb: 8192  # 8GB VRAM limit
-  device_visibility: [0]  # Use GPU 0 only
+  cuda_visible_devices: "0"  # Use GPU 0
+  
+  # LightGBM GPU Settings
+  lightgbm:
+    device: "cuda"  # "cuda" (CUDA) or "gpu" (OpenCL) or "cpu"
+    gpu_device_id: 0
+    test_enabled: true  # Test GPU before use
+    try_cuda_first: true  # Try CUDA before OpenCL
+  
+  # XGBoost GPU Settings
+  xgboost:
+    device: "cuda"  # "cuda" or "cpu"
+    tree_method: "hist"  # "hist" (new API) or "gpu_hist" (legacy)
+    gpu_id: 0
+    test_enabled: true
+  
+  # CatBoost GPU Settings
+  catboost:
+    task_type: "GPU"  # "GPU" or "CPU"
+    devices: "0"  # GPU device IDs
+    test_enabled: true
+  
+  # TensorFlow GPU Settings
   tensorflow:
-    allow_growth: true
+    allocator: "cuda_malloc_async"
+    force_gpu_allow_growth: true
+  
+  # VRAM Management
+  vram:
+    caps:
+      MLP: 4096
+      default: 4096
 ```
 
-**Example: Multi-GPU Setup**
+**Example: Disable GPU Test (Faster Startup)**
 
 ```yaml
 gpu:
-  device_visibility: [0, 1, 2, 3]  # Use all 4 GPUs
-  vram_cap_mb: 8192  # Per-GPU limit
+  lightgbm:
+    test_enabled: false  # Skip GPU test, use config directly
+  xgboost:
+    test_enabled: false
+  catboost:
+    test_enabled: false
 ```
 
 **Environment Variable Override:**
 ```bash
 export CUDA_VISIBLE_DEVICES=0,1,2,3
 ```
+
+**NEW (2025-12-12)**: GPU acceleration is now automatically enabled for target ranking and feature selection when GPU is available. All settings are config-driven from this file (SST compliance).
 
 ---
 

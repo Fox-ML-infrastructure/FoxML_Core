@@ -46,7 +46,7 @@ Step-by-step guides for common tasks.
 ### Setup
 - [Installation](01_tutorials/setup/INSTALLATION.md) - System installation
 - [Environment Setup](01_tutorials/setup/ENVIRONMENT_SETUP.md) - Python environment
-- [GPU Setup](01_tutorials/setup/GPU_SETUP.md) - GPU configuration
+- [GPU Setup](01_tutorials/setup/GPU_SETUP.md) - **UPDATED**: GPU configuration for target ranking, feature selection, and model training
 
 ### Pipelines
 - [First Pipeline Run](01_tutorials/pipelines/FIRST_PIPELINE_RUN.md) - Run your first pipeline

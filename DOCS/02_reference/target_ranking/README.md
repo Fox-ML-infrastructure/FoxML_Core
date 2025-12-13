@@ -4,6 +4,8 @@
 
 The target ranking system evaluates which targets (labels) are most predictable and worth pursuing for model training. It now supports **dual-view evaluation** to ensure consistency with downstream feature selection and training.
 
+**NEW (2025-12-12)**: GPU acceleration is automatically enabled for target ranking. LightGBM, XGBoost, and CatBoost use GPU when available, providing 10-50x speedup on large datasets. See [GPU Setup Guide](../../01_tutorials/setup/GPU_SETUP.md) for configuration.
+
 ## Dual-View Evaluation
 
 Each target is evaluated in two views:

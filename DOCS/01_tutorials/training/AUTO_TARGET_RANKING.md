@@ -6,6 +6,8 @@ The intelligent training pipeline can automatically discover, rank, and select t
 
 ## Quick Start
 
+**Note**: GPU acceleration is automatically enabled for target ranking when available. See [GPU Setup Guide](../setup/GPU_SETUP.md) for configuration.
+
 ### Step 1: Create or Edit Experiment Config
 
 Create a new experiment config file (or edit an existing one) in `CONFIG/experiments/`:
