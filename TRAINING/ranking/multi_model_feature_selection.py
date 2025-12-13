@@ -935,11 +935,30 @@ def train_model_and_get_importance(
                 for v in unique_vals
             )
             
+            # GPU settings (will fallback to CPU if GPU not available)
+            gpu_params = {}
+            try:
+                # Try CUDA first (fastest)
+                test_model = LGBMRegressor(device='cuda', n_estimators=1, verbose=-1)
+                test_model.fit(np.random.rand(10, 5), np.random.rand(10))
+                gpu_params = {'device': 'cuda', 'gpu_device_id': 0}
+            except Exception:
+                try:
+                    # Try OpenCL
+                    test_model = LGBMRegressor(device='gpu', n_estimators=1, verbose=-1)
+                    test_model.fit(np.random.rand(10, 5), np.random.rand(10))
+                    gpu_params = {'device': 'gpu', 'gpu_platform_id': 0, 'gpu_device_id': 0}
+                except Exception:
+                    pass  # Fallback to CPU silently
+            
             # Clean config: remove params that don't apply to sklearn wrapper
             # Remove early stopping (requires eval_set) and other semantic params
+            # Also remove device if present (we set this from GPU config)
             lgb_config = model_config.copy()
             lgb_config.pop('boosting_type', None)
             lgb_config.pop('device', None)
+            lgb_config.pop('gpu_device_id', None)
+            lgb_config.pop('gpu_platform_id', None)
             lgb_config.pop('early_stopping_rounds', None)
             lgb_config.pop('early_stopping_round', None)
             lgb_config.pop('callbacks', None)
@@ -956,6 +975,9 @@ def train_model_and_get_importance(
             # Remove 'verbose' from lgb_config if present (to avoid double argument error)
             # verbose will be set explicitly if needed, or use default from config_cleaner
             lgb_config.pop('verbose', None)
+            
+            # Add GPU params if available (will override any device in config)
+            lgb_config.update(gpu_params)
             
             # Instantiate with cleaned config + explicit params
             model = est_cls(**lgb_config, **extra)
@@ -982,14 +1004,35 @@ def train_model_and_get_importance(
                 for v in unique_vals
             )
             
+            # GPU settings (will fallback to CPU if GPU not available)
+            gpu_params = {}
+            try:
+                from CONFIG.config_loader import get_cfg
+                gpu_cfg = get_cfg('gpu.xgboost', default={}, config_name='gpu_config')
+                xgb_device = gpu_cfg.get('device', 'cpu')
+                xgb_tree_method = gpu_cfg.get('tree_method', 'hist')
+                xgb_gpu_id = gpu_cfg.get('gpu_id', 0)
+                
+                if xgb_device == 'cuda':
+                    # Try CUDA GPU
+                    test_model = xgb.XGBRegressor(tree_method='hist', device='cuda', n_estimators=1)
+                    test_model.fit(np.random.rand(10, 5), np.random.rand(10))
+                    gpu_params = {'tree_method': xgb_tree_method, 'device': 'cuda', 'gpu_id': xgb_gpu_id}
+            except Exception:
+                pass  # Fallback to CPU silently
+            
             # Remove early stopping params (requires eval_set) - feature selection doesn't need it
             # XGBoost 2.x requires eval_set if early_stopping_rounds is set, so we must remove it
+            # Also remove tree_method and device if present (we set these from GPU config)
             xgb_config = model_config.copy()
             xgb_config.pop('early_stopping_rounds', None)
             xgb_config.pop('early_stopping_round', None)  # Alternative name
             xgb_config.pop('callbacks', None)
             xgb_config.pop('eval_set', None)  # Remove if present
             xgb_config.pop('eval_metric', None)  # Often paired with early stopping
+            xgb_config.pop('tree_method', None)
+            xgb_config.pop('device', None)
+            xgb_config.pop('gpu_id', None)
             
             # Determine estimator class
             est_cls = xgb.XGBClassifier if (is_binary or is_multiclass) else xgb.XGBRegressor
@@ -997,6 +1040,9 @@ def train_model_and_get_importance(
             # Clean config using systematic helper (removes duplicates and unknown params)
             extra = {"random_state": model_seed}
             xgb_config = _clean_config_for_estimator(est_cls, xgb_config, extra, "xgboost")
+            
+            # Add GPU params if available (will override any tree_method/device in config)
+            xgb_config.update(gpu_params)
             
             # Instantiate with cleaned config + explicit params
             model = est_cls(**xgb_config, **extra)
@@ -1132,6 +1178,9 @@ def train_model_and_get_importance(
                 if synonym in cb_config:
                     logger.warning(f"    catboost: {synonym} still present after cleaning, removing it")
                     cb_config.pop(synonym, None)
+            
+            # Add GPU params if available (will override any task_type/devices in config)
+            cb_config.update(gpu_params)
             
             # Instantiate with cleaned config + explicit params
             model = est_cls(**cb_config, **extra)
