@@ -71,52 +71,17 @@ Commercial organizations may evaluate the Software for up to 30 days from initia
 
 **When in doubt, assume a commercial license is required. Contact jenn.lewis5789@gmail.com for clarification.**
 
-## Paid Pilots (Non-Negotiable Entry Point)
+## Pricing
 
-All commercial licensing begins with a paid pilot. This ensures commitment and allows for proper evaluation in a production-like environment.
+**For pricing information, please contact the maintainer:**
 
-### Pilot (30 days): $15,000–$30,000
+📧 **jenn.lewis5789@gmail.com**
 
-- 1 environment (development or staging)
-- Limited scope evaluation
-- Async support (email/issues)
-- No custom features
-- **Credit:** 50–100% of pilot fee applies toward first-year license if converted
-
-### Pilot+ (60–90 days): $35,000–$90,000
-
-- 2 environments (dev + prod, or dev + stage)
-- Onboarding calls included
-- Tighter success criteria and defined evaluation milestones
-- **Credit:** 50–100% of pilot fee applies toward first-year license if converted
-
-**Note:** Pilot fees are non-refundable but credited toward annual license upon conversion.
-
----
-
-## Annual License Tiers
+All commercial licensing begins with a paid pilot. Pilot options and annual license tiers are available based on your team size, deployment requirements, and usage needs.
 
 **Licensing is scoped to the business unit/desk and the authorized users/environments operating the software, not the parent company's total headcount.**
 
 Tiers are based on the **using team/desk size** (number of users and environments), not total legal-entity headcount.
-
-### Option A: Team/Desk Tiers (Recommended)
-
-- **Team** (1–5 users, 1 environment): **$75,000 / year**
-- **Desk** (6–20 users, up to 2 environments): **$150,000–$300,000 / year**
-- **Division** (21–75 users, up to 3 environments): **$350,000–$750,000 / year**
-- **Enterprise** (76–250 users, multi-environment): **$800,000–$2,000,000 / year**
-- **>250 users / multi-region / regulated bank rollout:** **Custom $2,000,000+ / year**
-
-### Option B: Platform Fee + Per-Seat (Alternative Model)
-
-- **Platform fee:** $50,000–$200,000 / year (depends on environment count + deployment complexity)
-- **Per-seat:** $5,000–$15,000 / user / year
-- **Per-production environment add-on:** $25,000–$100,000 / environment / year
-
-**Default Recommendation:** Pilot $35k (60 days) → Desk $250k/yr → Support +$75k/yr
-
-*Pricing aligned with enterprise ML infrastructure standards while maintaining accessible entry points for teams and desks.*
 
 To request access or begin the licensing process, email:
 

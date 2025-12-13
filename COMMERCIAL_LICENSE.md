@@ -258,11 +258,15 @@ All versions of the Software (including older versions, legacy versions, and any
 
 Commercial licensing fees are based on the using team/desk size (number of users and environments), usage tier, and selected add-ons.
 
-**Pilot Requirement:** All commercial licensing begins with a paid pilot (30-day Pilot: $15,000–$30,000, or 60–90 day Pilot+: $35,000–$90,000). Pilot fees are non-refundable but credited (50–100%) toward the first-year annual license upon conversion.
+**Pilot Requirement:** All commercial licensing begins with a paid pilot. Pilot fees are non-refundable but credited toward the first-year annual license upon conversion.
+
+**For pricing information, please contact the maintainer:**
+
+📧 **jenn.lewis5789@gmail.com**
 
 Specific fees, term length, and payment schedule will be set forth in one or more **Order Forms** or **Statements of Work** executed by the parties (collectively, "Ordering Documents"). If there is any conflict between this License and an Ordering Document regarding fees, the Ordering Document will control.
 
-Standard pricing tiers are published in `LEGAL/SUBSCRIPTIONS.md` for reference, but actual fees are determined by the Ordering Documents.
+Pricing information is available by contacting the maintainer. Actual fees are determined by the Ordering Documents.
 
 **Payment Terms.**
 

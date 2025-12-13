@@ -95,32 +95,15 @@
 
 ## 4. Pricing
 
-### 4.1 Paid Pilots (Non-Negotiable Entry Point)
+**For pricing information, please contact the maintainer:**
 
-All commercial licensing begins with a paid pilot:
+📧 **jenn.lewis5789@gmail.com**
 
-- **Pilot (30 days):** $15,000–$30,000 — 1 environment, limited scope, async support
-- **Pilot+ (60–90 days):** $35,000–$90,000 — 2 environments, onboarding calls, tighter success criteria
-
-**Credit:** 50–100% of pilot fee applies toward first-year license if converted.
-
-### 4.2 Annual License Fees
+All commercial licensing begins with a paid pilot. Pilot options and annual license tiers are available based on your team size, deployment requirements, and usage needs.
 
 **Licensing is scoped to the business unit/desk and the authorized users/environments operating the software, not the parent company's total headcount.**
 
 Commercial license pricing is based on the using team/desk size (number of users and environments), not total legal-entity headcount.
-
-**Team/Desk Tiers (Recommended):**
-- **Team** (1–5 users, 1 environment): $75,000 / year
-- **Desk** (6–20 users, up to 2 environments): $150,000–$300,000 / year
-- **Division** (21–75 users, up to 3 environments): $350,000–$750,000 / year
-- **Enterprise** (76–250 users, multi-environment): $800,000–$2,000,000 / year
-- **>250 users / multi-region / regulated bank rollout:** Custom $2,000,000+ / year
-
-**Alternative: Platform Fee + Per-Seat Model:**
-- Platform fee: $50,000–$200,000 / year
-- Per-seat: $5,000–$15,000 / user / year
-- Per-production environment: $25,000–$100,000 / environment / year
 
 **See `LEGAL/SUBSCRIPTIONS.md` for complete pricing information and optional add-ons.**
 
@@ -129,14 +112,14 @@ Commercial license pricing is based on the using team/desk size (number of users
 Enterprise add-ons are available with defined scope and boundaries:
 
 - **Standard Support (Included):** Email/issues, best-effort, no SLA
-- **Business Support:** +$25,000 / year (response targets, limited hours)
-- **Enterprise Support:** +$75,000–$150,000 / year
-- **Premium / 24×5 Support:** +$200,000–$400,000 / year (only if we can staff it)
-- **Onboarding / Integration Package:** $25,000–$150,000 one-time
-- **On-Prem / High-Security Deployment:** $150,000–$500,000+ one-time (custom)
-- **Additional User Seats:** $5,000–$15,000 / seat / year
+- **Business Support:** Response targets, limited hours (contact for pricing)
+- **Enterprise Support:** Priority response, scheduled calls (contact for pricing)
+- **Premium / 24×5 Support:** Extended hours, direct engineering access (contact for pricing, availability limited)
+- **Onboarding / Integration Package:** Training, architecture review, integration assistance (contact for pricing)
+- **On-Prem / High-Security Deployment:** Custom deployment and security configuration (contact for pricing)
+- **Additional User Seats:** Additional named users beyond tier limits (contact for pricing)
 
-**Note:** Support add-ons are priced as a percentage of license (15–30% range), not as a separate giant contract.
+**Note:** Support add-ons are available at various tiers. Contact the maintainer for pricing information.
 
 **See `LEGAL/SUBSCRIPTIONS.md` for complete add-on details, scope definitions, and boundaries.**
 
@@ -174,12 +157,12 @@ Enterprise add-ons are available with defined scope and boundaries:
    - Any special requirements (optional)
 
 4. **Review:** We will review your information and reply with:
-   - Appropriate pilot option (Pilot $15k–$30k or Pilot+ $35k–$90k)
+   - Appropriate pilot option
    - Pricing confirmation
-   - Stripe payment link
+   - Payment information
    - Commercial License Agreement (CLA) for signature
 
-**Note:** Pilot fees are non-refundable but credited (50–100%) toward the first-year annual license upon conversion.
+**Note:** Pilot fees are non-refundable but credited toward the first-year annual license upon conversion.
 
 ### 5.2 After Purchase
 

@@ -59,22 +59,21 @@ FoxML Core is dual-licensed under two distinct options. This document is a **hig
 - Pilot+ (60–90 days): $35,000–$90,000
 - 50–100% credit toward first-year license if converted
 
-**Annual License Tiers** (based on using team/desk size, not total company headcount):
-- Team (1–5 users, 1 env): $75,000/year
-- Desk (6–20 users, up to 2 env): $150,000–$300,000/year
-- Division (21–75 users, up to 3 env): $350,000–$750,000/year
-- Enterprise (76–250 users, multi-env): $800,000–$2,000,000/year
-- >250 users / multi-region: Custom $2,000,000+/year
+**For pricing information, please contact the maintainer:**
 
-**Support Add-Ons** (15–30% of license, annual):
+📧 **jenn.lewis5789@gmail.com**
+
+Annual license tiers are available based on using team/desk size (not total company headcount). All commercial licensing begins with a paid pilot.
+
+**Support Add-Ons:**
 - Standard Support (included): Email/issues, best-effort, no SLA
-- Business Support: +$25,000/year
-- Enterprise Support: +$75,000–$150,000/year
-- Premium / 24×5: +$200,000–$400,000/year (only if we can staff it)
+- Business Support: Response targets, business hours (contact for pricing)
+- Enterprise Support: Priority response, scheduled calls (contact for pricing)
+- Premium / 24×5: Extended hours, direct engineering access (contact for pricing, availability limited)
 
 **Services:**
-- Onboarding/Integration: $25,000–$150,000 one-time
-- On-Prem/High-Security: $150,000–$500,000+ one-time (custom)
+- Onboarding/Integration: Training, architecture review, integration assistance (contact for pricing)
+- On-Prem/High-Security: Custom deployment and security configuration (contact for pricing)
 
 **Policy:** Licensing is scoped to the business unit/desk, not the parent company's total headcount.
 

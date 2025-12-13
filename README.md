@@ -79,29 +79,23 @@ Commercial licensing gives your organization the right to:
 - Integrate FoxML into proprietary systems without AGPL disclosure obligations
 - Get access to **commercial license terms** and optional support / integration work
 
-**Pricing Structure:**
+**Pricing:**
 
-**Paid Pilots (Required for Commercial Use):**
-- **Pilot (30 days):** $15,000–$30,000 — 1 environment, limited scope, async support
-- **Pilot+ (60–90 days):** $35,000–$90,000 — 2 environments, onboarding calls, defined milestones
-- **Credit:** 50–100% of pilot fee applies toward first-year license if converted
+**For pricing information, please contact the maintainer:**
 
-**Annual License Tiers** (based on using team/desk size, not total company headcount):
-- **Team** (1–5 users, 1 environment): $75,000/year
-- **Desk** (6–20 users, up to 2 environments): $150,000–$300,000/year
-- **Division** (21–75 users, up to 3 environments): $350,000–$750,000/year
-- **Enterprise** (76–250 users, multi-environment): $800,000–$2,000,000/year
-- **>250 users / multi-region / regulated bank:** Custom pricing
+📧 **jenn.lewis5789@gmail.com**
 
-**Support Options** (annual add-ons):
+All commercial licensing begins with a paid pilot. Pilot options and annual license tiers are available based on your team size, deployment requirements, and usage needs.
+
+**Support Options:**
 - **Standard Support** (included): Email/issues, best-effort response, no SLA
-- **Business Support:** +$25,000/year — Response targets, business hours coverage
-- **Enterprise Support:** +$75,000–$150,000/year — Priority response, scheduled calls
-- **Premium Support:** +$200,000–$400,000/year — Extended hours, direct engineering access (availability limited)
+- **Business Support:** Response targets, business hours coverage (contact for pricing)
+- **Enterprise Support:** Priority response, scheduled calls (contact for pricing)
+- **Premium Support:** Extended hours, direct engineering access (contact for pricing, availability limited)
 
-**Professional Services** (one-time):
-- **Onboarding/Integration:** $25,000–$150,000 — Training, architecture review, initial setup
-- **On-Prem/High-Security Deployment:** $150,000–$500,000+ — Custom deployment and security configuration
+**Professional Services:**
+- **Onboarding/Integration:** Training, architecture review, initial setup (contact for pricing)
+- **On-Prem/High-Security Deployment:** Custom deployment and security configuration (contact for pricing)
 
 **Important:** Licensing is scoped to the business unit/desk using the software, not the parent company's total headcount. This makes pricing accessible for teams and desks within larger organizations.
 
