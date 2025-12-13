@@ -183,6 +183,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Documentation Link Fixes** (2025-12-12)
+  - Fixed 404 errors when navigating between root and lower-level documentation
+  - Corrected relative paths to root-level files (`ROADMAP.md`, `CHANGELOG.md`, `TESTING_NOTICE.md`)
+  - Fixed paths to root-level directories (`LEGAL/`, `DATA_PROCESSING/`, `CONFIG/`, `TRAINING/`)
+  - Links now use correct relative paths based on file depth from `DOCS/` root
+  - 26 documentation files updated with proper relative paths
+  - All documentation links now work correctly when viewing from any location in the repository
+
 - **Resolved Config System** (2025-12-12)
   - Centralized configuration resolution
   - Fixed purge calculation bug (was causing 1465m purge instead of 85m)
