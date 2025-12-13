@@ -1614,6 +1614,29 @@ def train_and_evaluate_models(
         try:
             import xgboost as xgb
             
+            # GPU settings (will fallback to CPU if GPU not available)
+            gpu_params = {}
+            try:
+                from CONFIG.config_loader import get_cfg
+                gpu_cfg = get_cfg('gpu.xgboost', default={}, config_name='gpu_config')
+                xgb_device = gpu_cfg.get('device', 'cpu')
+                xgb_tree_method = gpu_cfg.get('tree_method', 'hist')
+                xgb_gpu_id = gpu_cfg.get('gpu_id', 0)
+                
+                if xgb_device == 'cuda':
+                    # Try CUDA GPU
+                    test_model = xgb.XGBRegressor(tree_method='hist', device='cuda', n_estimators=1)
+                    test_model.fit(np.random.rand(10, 5), np.random.rand(10))
+                    gpu_params = {'tree_method': xgb_tree_method, 'device': 'cuda', 'gpu_id': xgb_gpu_id}
+                    if log_cfg.gpu_detail:
+                        logger.info("  Using GPU (CUDA) for XGBoost")
+                else:
+                    if log_cfg.gpu_detail:
+                        logger.info("  Using CPU for XGBoost (device='cpu' in config)")
+            except Exception as e:
+                if log_cfg.gpu_detail:
+                    logger.info(f"  Using CPU for XGBoost (GPU not available: {e})")
+            
             # Get config values
             xgb_config = get_model_config('xgboost', multi_model_config)
             # Defensive check: ensure config is a dict
@@ -1621,13 +1644,17 @@ def train_and_evaluate_models(
                 xgb_config = {}
             # Remove task-specific parameters (we set these explicitly based on task type)
             # CRITICAL: Extract early_stopping_rounds from config - it goes in constructor for XGBoost 2.0+
+            # Also remove tree_method and device if present (we set these from GPU config)
             early_stopping_rounds = xgb_config.get('early_stopping_rounds', None)
             xgb_config_clean = {k: v for k, v in xgb_config.items() 
-                              if k not in ['objective', 'eval_metric', 'early_stopping_rounds']}
+                              if k not in ['objective', 'eval_metric', 'early_stopping_rounds', 'tree_method', 'device', 'gpu_id']}
             
             # XGBoost 2.0+ requires early_stopping_rounds in constructor, not fit()
             if early_stopping_rounds is not None:
                 xgb_config_clean['early_stopping_rounds'] = early_stopping_rounds
+            
+            # Add GPU params if available (will override any tree_method/device in config)
+            xgb_config_clean.update(gpu_params)
             
             if is_binary:
                 model = xgb.XGBClassifier(
@@ -1646,6 +1673,13 @@ def train_and_evaluate_models(
                     objective='reg:squarederror',
                     **xgb_config_clean
                 )
+            
+            # Log GPU usage if available (controlled by config)
+            if 'device' in gpu_params and gpu_params.get('device') == 'cuda' and log_cfg.gpu_detail:
+                logger.info(f"  🚀 Training XGBoost on CUDA (gpu_id={gpu_params.get('gpu_id', 0)})")
+                logger.info(f"  📊 Dataset size: {len(X)} samples, {X.shape[1]} features")
+                if log_cfg.edu_hints:
+                    logger.info(f"  💡 Note: GPU is most efficient for large datasets (>100k samples)")
             
             # CRITICAL FIX: Use manual CV loop with early stopping for gradient boosting
             # Get early stopping rounds from config (default: 50)
