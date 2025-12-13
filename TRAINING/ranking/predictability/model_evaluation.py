@@ -1888,16 +1888,26 @@ def train_and_evaluate_models(
                     params["loss_function"] = "RMSE"
             # If loss_function is specified in config, respect it (YAML in charge)
             
+            # Verify GPU params are in params dict before instantiation
+            if gpu_params and 'task_type' in gpu_params:
+                # Ensure GPU params are definitely in params (defensive check)
+                params.update(gpu_params)
+                if log_cfg.gpu_detail:
+                    logger.debug(f"  CatBoost params include: task_type={params.get('task_type')}, devices={params.get('devices')}")
+            
             # Choose model class based on target type
             if is_classification_target(y):
                 model = cb.CatBoostClassifier(**params)
             else:
                 model = cb.CatBoostRegressor(**params)
-            
-            # Log GPU usage if available (controlled by config)
-            if 'task_type' in gpu_params and gpu_params.get('task_type') == 'GPU' and log_cfg.gpu_detail:
-                logger.info(f"  🚀 Training CatBoost on GPU (devices={gpu_params.get('devices', '0')})")
+
+            # Log GPU usage if available (always log, not just when gpu_detail enabled)
+            if 'task_type' in params and params.get('task_type') == 'GPU':
+                logger.info(f"  🚀 Training CatBoost on GPU (devices={params.get('devices', '0')})")
                 logger.info(f"  📊 Dataset size: {len(X)} samples, {X.shape[1]} features")
+            elif gpu_params and gpu_params.get('task_type') == 'GPU':
+                # Fallback: log if GPU was requested but not in final params
+                logger.warning(f"  ⚠️  CatBoost GPU requested but task_type not in final params (check config cleaning)")
                 if log_cfg.edu_hints:
                     logger.info(f"  💡 Note: GPU is most efficient for large datasets (>100k samples)")
             
