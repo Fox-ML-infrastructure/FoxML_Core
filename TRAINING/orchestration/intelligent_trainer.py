@@ -89,6 +89,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Print license banner on startup (compliance and commercial use notice)
+try:
+    from TRAINING.common.license_banner import print_license_banner_once
+    print_license_banner_once()
+except Exception:
+    # Don't fail if banner can't be printed
+    pass
+
 # Import leakage sentinels
 try:
     from TRAINING.common.leakage_sentinels import LeakageSentinel, SentinelResult
