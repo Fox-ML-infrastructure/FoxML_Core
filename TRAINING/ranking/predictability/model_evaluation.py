@@ -1988,22 +1988,21 @@ def train_and_evaluate_models(
             # we should add metric_period to reduce overhead
             # SST: Check config first, then use default
             if 'metric_period' not in params:
-                # Try to get from config (SST), fallback to default
-                metric_period_default = 50  # Default if not in config
+                # SST: Try to get from intelligent_training_config first, then model config, then default
                 try:
                     from CONFIG.config_loader import get_cfg
-                    # Check if there's a global metric_period setting
+                    # Check intelligent_training_config first (SST)
                     metric_period_from_config = get_cfg('training.catboost.metric_period', default=None, config_name='intelligent_training_config')
                     if metric_period_from_config is not None:
                         params['metric_period'] = metric_period_from_config
                     else:
-                        # Fallback to model config or default
-                        params['metric_period'] = cb_config.get('metric_period', metric_period_default)
+                        # Fallback to model config (from multi_model.yaml) or default
+                        params['metric_period'] = cb_config.get('metric_period', 50)  # Default: 50 if not in any config
                 except Exception:
                     # If config loader fails, use model config or default
-                    params['metric_period'] = cb_config.get('metric_period', metric_period_default)
+                    params['metric_period'] = cb_config.get('metric_period', 50)
                 if log_cfg.edu_hints:
-                    logger.debug(f"  CatBoost: Added metric_period={params['metric_period']} to reduce evaluation overhead (from config or default)")
+                    logger.debug(f"  CatBoost: Added metric_period={params['metric_period']} to reduce evaluation overhead (SST: from config or default)")
             
             # Log warnings if any
             if warnings_issued:

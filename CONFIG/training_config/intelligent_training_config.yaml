@@ -141,6 +141,16 @@ decisions:
     #     reduction_pct: 10
     #     description: "Reduce max_features by 10%"
 
+# Training configuration
+training:
+  # Cross-validation settings
+  cv_folds: 3  # Number of CV folds (default: 3)
+  cv_n_jobs: 1  # Parallel jobs for CV (1 = sequential, -1 = all cores). Set to 1 for GPU training to avoid outer parallelism conflicts
+  
+  # CatBoost-specific settings
+  catboost:
+    metric_period: 50  # Calculate metrics every N trees (reduces evaluation overhead). Default: 50
+
 # Test mode configuration (auto-detected if 'test' in output_dir name)
 test:
   # Override settings for test runs
