@@ -1,9 +1,9 @@
 # Non-Repainting Targets Test
-# Comprehensive test of all non-repainting targets to establish honest baseline
+# Comprehensive test of multiple non-repainting targets to establish honest baseline
 
 experiment:
   name: non_repainting_targets_test
-  description: "Test multiple non-repainting targets to find honest baseline scores"
+  description: "Test multiple non-repainting targets (forward returns, first_touch) to find honest baseline"
 
 data:
   data_dir: data/data_labeled_v2/interval=5m
@@ -12,14 +12,9 @@ data:
   max_samples_per_symbol: 50000
 
 targets:
-  # Test multiple forward return horizons
-  # These are mathematically "hard" and don't repaint
   primary: fwd_ret_60m
-  # Additional targets to evaluate:
-  # - fwd_ret_30m
-  # - fwd_ret_120m
-  # - y_first_touch_60m_0.8 (triple barrier - which barrier hits first)
 
+# Module-specific overrides
 feature_selection:
   top_n: 50
   model_families: [lightgbm, random_forest, neural_network]
@@ -33,9 +28,3 @@ target_ranking:
 training:
   model_families: [lightgbm, random_forest, neural_network]
   cv_folds: 5
-
-# Expected Results:
-# - Forward returns (fwd_ret_*): Should score ~0.52-0.54 (honest baseline)
-# - First touch (y_first_touch_*): Should score ~0.52-0.55 (honest baseline)
-# - If any score > 0.70, investigate for leaks
-# - Compare against peak/valley scores (0.763) to see the repainting effect
