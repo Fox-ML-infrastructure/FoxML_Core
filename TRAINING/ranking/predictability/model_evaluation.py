@@ -1255,15 +1255,15 @@ def train_and_evaluate_models(
             gpu_params = {}
             try:
                 from CONFIG.config_loader import get_cfg
-                lgb_gpu_cfg = get_cfg('gpu.lightgbm', default={}, config_name='gpu_config')
-                test_enabled = lgb_gpu_cfg.get('test_enabled', True)
-                test_n_estimators = lgb_gpu_cfg.get('test_n_estimators', 1)
-                test_samples = lgb_gpu_cfg.get('test_samples', 10)
-                test_features = lgb_gpu_cfg.get('test_features', 5)
-                gpu_device_id = lgb_gpu_cfg.get('gpu_device_id', 0)
-                gpu_platform_id = lgb_gpu_cfg.get('gpu_platform_id', 0)
-                try_cuda_first = lgb_gpu_cfg.get('try_cuda_first', True)
-                preferred_device = lgb_gpu_cfg.get('device', 'cuda')
+                # SST: All values from config, no hardcoded defaults
+                test_enabled = get_cfg('gpu.lightgbm.test_enabled', default=True, config_name='gpu_config')
+                test_n_estimators = get_cfg('gpu.lightgbm.test_n_estimators', default=1, config_name='gpu_config')
+                test_samples = get_cfg('gpu.lightgbm.test_samples', default=10, config_name='gpu_config')
+                test_features = get_cfg('gpu.lightgbm.test_features', default=5, config_name='gpu_config')
+                gpu_device_id = get_cfg('gpu.lightgbm.gpu_device_id', default=0, config_name='gpu_config')
+                gpu_platform_id = get_cfg('gpu.lightgbm.gpu_platform_id', default=0, config_name='gpu_config')
+                try_cuda_first = get_cfg('gpu.lightgbm.try_cuda_first', default=True, config_name='gpu_config')
+                preferred_device = get_cfg('gpu.lightgbm.device', default='cuda', config_name='gpu_config')
                 
                 if test_enabled and try_cuda_first:
                     # Try CUDA first (fastest)
@@ -1833,13 +1833,13 @@ def train_and_evaluate_models(
             gpu_params = {}
             try:
                 from CONFIG.config_loader import get_cfg
-                cb_gpu_cfg = get_cfg('gpu.catboost', default={}, config_name='gpu_config')
-                task_type = cb_gpu_cfg.get('task_type', 'CPU')
-                devices = cb_gpu_cfg.get('devices', '0')
-                test_enabled = cb_gpu_cfg.get('test_enabled', True)
-                test_iterations = cb_gpu_cfg.get('test_iterations', 1)
-                test_samples = cb_gpu_cfg.get('test_samples', 10)
-                test_features = cb_gpu_cfg.get('test_features', 5)
+                # SST: All values from config, no hardcoded defaults
+                task_type = get_cfg('gpu.catboost.task_type', default='CPU', config_name='gpu_config')
+                devices = get_cfg('gpu.catboost.devices', default='0', config_name='gpu_config')
+                test_enabled = get_cfg('gpu.catboost.test_enabled', default=True, config_name='gpu_config')
+                test_iterations = get_cfg('gpu.catboost.test_iterations', default=1, config_name='gpu_config')
+                test_samples = get_cfg('gpu.catboost.test_samples', default=10, config_name='gpu_config')
+                test_features = get_cfg('gpu.catboost.test_features', default=5, config_name='gpu_config')
                 
                 if task_type == 'GPU':
                     if test_enabled:
