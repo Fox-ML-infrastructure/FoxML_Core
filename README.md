@@ -27,6 +27,7 @@ FoxML Core provides:
 - **Single Source of Truth (SST)** config system - all 20 model families use config-driven hyperparameters
 - **Multi-model training systems** with 20+ model families (GPU-accelerated)
 - **Reproducibility tracking** with end-to-end reproducibility verification
+- **A toaster ding will be added for the completion noise. 
 
 **For detailed capabilities:** See [Architecture Overview](DOCS/00_executive/ARCHITECTURE_OVERVIEW.md)
 
