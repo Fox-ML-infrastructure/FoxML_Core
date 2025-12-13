@@ -152,6 +152,36 @@ For model training, reduce VRAM usage in model configs:
 - XGBoost: Reduce `max_depth` or `tree_method` complexity
 - CatBoost: Reduce `iterations` or `depth`
 
+### CPU Bottleneck (GPU Underutilization)
+
+**Symptom**: CPU at 100% usage, GPU at low utilization (30-40%), slow training despite GPU being enabled.
+
+**Cause**: For small datasets (<100k-200k rows), the overhead of CPU data preparation, VRAM transfers, and CUDA kernel management exceeds the actual GPU computation time. The GPU finishes quickly and waits for the CPU to prepare the next batch.
+
+**Diagnosis**:
+- System monitor shows: CPU at 100%, load average > number of CPU cores
+- GPU utilization < 50% despite `task_type='GPU'` being set
+- Dataset size < 100k rows
+- Training is slower than expected
+
+**Solutions**:
+1. **For datasets < 100k rows**: Use CPU training instead of GPU
+   - Set `gpu.xgboost.device: "cpu"` in `gpu_config.yaml`
+   - Set `gpu.catboost.task_type: "CPU"` in `gpu_config.yaml`
+   - For small datasets, CPU is often faster due to reduced overhead
+
+2. **Reduce CPU thread count**: If you must use GPU, set explicit thread limits
+   - In model config: `thread_count: 8` or `10` (leave headroom for OS and GPU driver)
+   - Avoid `thread_count: -1` (all cores) which can cause context switching overhead
+
+3. **Check metric calculation**: Use built-in GPU metrics
+   - Use `eval_metric='AUC'` instead of custom Python functions
+   - Custom Python metrics force data back to CPU for evaluation, causing bottlenecks
+
+4. **Increase batch size**: If using data loaders, increase batch size to give GPU more work per iteration
+
+**When to use GPU**: GPU acceleration is most beneficial for datasets > 100k-200k rows where the computation time exceeds the overhead.
+
 ### Fallback to CPU
 
 If GPU fails, the system automatically falls back to CPU. Check logs for specific error messages explaining why GPU failed.
