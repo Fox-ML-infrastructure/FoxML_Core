@@ -148,6 +148,27 @@ For model training, reduce VRAM usage in model configs:
 
 If GPU fails, the system automatically falls back to CPU. Check logs for specific error messages explaining why GPU failed.
 
+### Process Deadlock/Hang (readline library conflict)
+
+**Symptom**: Process hangs for 10+ minutes on small datasets, CPU at 100%, error: `sh: symbol lookup error: sh: undefined symbol: rl_print_keybinding`
+
+**Cause**: Conda environment's `readline` library conflicts with system's `readline` library, causing shell commands (like `nvidia-smi` checks) to fail and retry indefinitely.
+
+**Fix**:
+1. Kill the hung process (`Ctrl+C` or `kill -9`)
+2. Repair Conda environment:
+   ```bash
+   conda install -c conda-forge readline=8.2
+   # Or: conda update readline
+   # If that doesn't work, also install:
+   conda install -c conda-forge ncurses
+   ```
+3. Verify fix: Run a quick test - training should complete in seconds, not minutes
+
+**Prevention**: The system sets `TERM=dumb` and `SHELL=/usr/bin/bash` to mitigate readline issues, but Conda environment conflicts can still occur.
+
+See [Known Issues](DOCS/02_reference/KNOWN_ISSUES.md) for more details.
+
 ### XGBoost 3.1+ Compatibility
 
 **Important**: XGBoost 3.1+ removed the `gpu_id` parameter. The system now uses:
