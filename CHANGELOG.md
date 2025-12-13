@@ -16,15 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### GPU Acceleration for Target Ranking & Feature Selection (2025-12-12) – **NEW**
 - **GPU support**: XGBoost, CatBoost, and LightGBM now use GPU acceleration when available
+- **XGBoost 3.1+ compatible**: Automatically handles both new API (`device='cuda'`) and legacy API (`gpu_hist`)
+- **CatBoost verification**: Explicit verification that `task_type='GPU'` is set (required for GPU usage)
 - **Automatic detection**: Gracefully falls back to CPU if GPU unavailable
 - **Config-driven**: All GPU settings from `gpu_config.yaml` (SST)
 - **Performance**: Significantly faster on large datasets (>100k samples)
+- **Enhanced logging**: Always logs GPU status with verification messages
 - See [GPU Setup Guide](DOCS/01_tutorials/setup/GPU_SETUP.md) for configuration
 
 #### Critical Bug Fixes (2025-12-12) – **FIXED**
 - **Mutual Information**: Fixed `random_state` SST compliance (no more KeyError)
 - **Audit violations**: Fixed false violations when Final Gatekeeper drops features
 - **CatBoost**: Fixed feature importance calculation (requires training dataset)
+- **XGBoost 3.1+ GPU**: Fixed compatibility with XGBoost 3.1+ (removed `gpu_id` parameter, now uses `device='cuda'`)
+- **CatBoost GPU**: Added explicit verification that `task_type='GPU'` is set (CatBoost requires this to use GPU)
 - **GPU Detection**: Made fully config-driven - all GPU settings from `gpu_config.yaml` (SST)
 - All fixes maintain SST compliance (no hardcoded values)
 
