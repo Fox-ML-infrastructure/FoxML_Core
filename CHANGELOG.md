@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CatBoost**: Fixed feature importance calculation (requires training dataset)
 - **XGBoost 3.1+ GPU**: Fixed compatibility with XGBoost 3.1+ (removed `gpu_id` parameter, now uses `device='cuda'`)
 - **CatBoost GPU**: Added explicit verification that `task_type='GPU'` is set (CatBoost requires this to use GPU)
+- **Process Deadlock**: Fixed readline library conflict causing process hangs (all subprocess calls now use safe environment)
 - **GPU Detection**: Made fully config-driven - all GPU settings from `gpu_config.yaml` (SST)
 - All fixes maintain SST compliance (no hardcoded values)
 
@@ -199,6 +200,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added explicit verification that `task_type='GPU'` is set (CatBoost requires this)
   - Enhanced logging to show GPU param verification
   - Added educational hints about CatBoost quantization behavior (CPU first, then GPU)
+  - See [Known Issues](DOCS/02_reference/KNOWN_ISSUES.md) for troubleshooting
+
+- **Process Deadlock Fix (readline library conflict)** (2025-12-12)
+  - **Issue**: Process hangs for 10+ minutes, CPU at 100%, error: `sh: symbol lookup error: rl_print_keybinding`
+  - **Cause**: Conda environment's `readline` library conflicts with system's `readline` library
+  - **Fix**: Created `safe_subprocess_run()` utility that sets `TERM=dumb`, `SHELL=/usr/bin/bash`, `INPUTRC=/dev/null`
+  - **Impact**: All subprocess calls (nvidia-smi, git, etc.) now use safe environment variables
+  - **Files**: 
+    - `TRAINING/common/subprocess_utils.py` (new utility module)
+    - Updated all subprocess calls in: `xgboost_trainer.py`, `leakage_auto_fixer.py`, `routing_integration.py`, `generate_routing_plan.py`, `reproducibility_tracker.py`
+  - **Prevention**: Prevents deadlocks from readline conflicts in subprocess calls
   - See [Known Issues](DOCS/02_reference/KNOWN_ISSUES.md) for troubleshooting
 
 - **Leakage Detection & Auto-Fixer** (2025-12-11)
