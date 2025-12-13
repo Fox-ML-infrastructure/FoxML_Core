@@ -2153,9 +2153,9 @@ def train_and_evaluate_models(
                         lr_config_clean = clean_config_for_estimator(LogisticRegressionCV, lr_config, extra_kwargs={'random_state': random_state}, family_name='stability_selection')
                         model = LogisticRegressionCV(**lr_config_clean, random_state=random_state)
                     else:
-                        model = LassoCV(cv=tscv, random_state=random_state,
-                                      max_iter=lasso_config['max_iter'], 
-                                      n_jobs=stability_n_jobs)
+                        lasso_config_clean_dict = {'cv': tscv, 'max_iter': lasso_config.get('max_iter', 1000), 'n_jobs': stability_n_jobs}
+                        lasso_config_clean = clean_config_for_estimator(LassoCV, lasso_config_clean_dict, extra_kwargs={'random_state': random_state}, family_name='stability_selection')
+                        model = LassoCV(**lasso_config_clean, random_state=random_state)
                     
                     model.fit(X_boot, y_boot)
                     coef = model.coef_[0] if len(model.coef_.shape) > 1 else model.coef_
@@ -2166,11 +2166,13 @@ def train_and_evaluate_models(
                     # for consistency (it won't help here, but maintains the pattern)
                     # Use a quick model for CV scoring
                     if is_binary or is_multiclass:
-                        cv_model = LogisticRegressionCV(Cs=[1.0], cv=tscv, random_state=random_state, 
-                                                        max_iter=lasso_config['max_iter'], n_jobs=1)
+                        lr_cv_config = {'Cs': [1.0], 'cv': tscv, 'max_iter': lasso_config.get('max_iter', 1000), 'n_jobs': 1}
+                        lr_cv_config_clean = clean_config_for_estimator(LogisticRegressionCV, lr_cv_config, extra_kwargs={'random_state': random_state}, family_name='stability_selection')
+                        cv_model = LogisticRegressionCV(**lr_cv_config_clean, random_state=random_state)
                     else:
-                        cv_model = LassoCV(cv=tscv, random_state=random_state,
-                                          max_iter=lasso_config['max_iter'], n_jobs=1)
+                        lasso_cv_config = {'cv': tscv, 'max_iter': lasso_config.get('max_iter', 1000), 'n_jobs': 1}
+                        lasso_cv_config_clean = clean_config_for_estimator(LassoCV, lasso_cv_config, extra_kwargs={'random_state': random_state}, family_name='stability_selection')
+                        cv_model = LassoCV(**lasso_cv_config_clean, random_state=random_state)
                     cv_scores = cross_val_score(cv_model, X_boot, y_boot, cv=tscv, scoring=scoring, n_jobs=1, error_score=np.nan)
                     valid_cv_scores = cv_scores[~np.isnan(cv_scores)]
                     if len(valid_cv_scores) > 0:
