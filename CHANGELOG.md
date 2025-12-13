@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Highlights
 
+#### License & Commercial Use Banner (2025-12-12) – **NEW**
+- **Terminal Billboard**: Professional startup banner prints licensing information on every run
+- **Compliance**: Ensures users see licensing requirements even in automated systems
+- **Log Integration**: Banner appears in logs (indexed in Splunk/Datadog for compliance teams)
+- **Commercial Use Notice**: Clear messaging about commercial license requirements
+- **Links**: Direct links to `LEGAL/SUBSCRIPTIONS.md`, `LEGAL/LICENSING.md`, and contact email
+- **Suppressible**: Can be disabled via `FOXML_SUPPRESS_BANNER` environment variable
+- **Impact**: Helps capture value from "headless" clones (1,250+ clones vs 43 visitors)
+
 #### GPU Acceleration for Target Ranking & Feature Selection (2025-12-12) – **NEW**
 - **GPU support**: XGBoost, CatBoost, and LightGBM now use GPU acceleration when available
 - **XGBoost 3.1+ compatible**: Automatically handles both new API (`device='cuda'`) and legacy API (`gpu_hist`)
@@ -147,6 +156,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automated trend tracking across runs
   - Exponential decay weighting
   - Multi-stage integration (target ranking, feature selection, cross-sectional ranking)
+
+- **License & Commercial Use Banner** (2025-12-12)
+  - Professional startup banner with licensing information
+  - Appears in all main entry points (intelligent_trainer, feature_selection, training_strategies)
+  - Links to legal documentation and contact information
+  - Can be suppressed via `FOXML_SUPPRESS_BANNER` environment variable
 
 - **Training Routing & Planning System** (2025-12-11)
   - Config-driven routing decisions
