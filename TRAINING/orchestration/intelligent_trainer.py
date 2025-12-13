@@ -1850,7 +1850,7 @@ Examples:
         if experiment_config:
             try:
                 import yaml
-                from pathlib import Path
+                # Path is already imported at top of file
                 exp_name = experiment_config.name
                 exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
                 if exp_file.exists():
