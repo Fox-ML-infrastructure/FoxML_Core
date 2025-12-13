@@ -55,8 +55,35 @@ gpu:
   # XGBoost GPU Settings
   xgboost:
     device: "cuda"  # "cuda" or "cpu"
-    tree_method: "hist"  # Use "hist" with device="cuda" (XGBoost 3.x)
+    tree_method: "hist"  # Use "hist" with device="cuda" (XGBoost 3.x), or "gpu_hist" for legacy
     gpu_id: 0  # GPU ID for XGBoost
+    # GPU Detection Settings
+    test_enabled: true  # Enable GPU test before use
+    test_n_estimators: 1  # Number of estimators for test model
+    test_samples: 10  # Number of samples for test model
+    test_features: 5  # Number of features for test model
+  
+  # LightGBM GPU Settings
+  lightgbm:
+    device: "cuda"  # "cuda" (CUDA) or "gpu" (OpenCL) or "cpu"
+    gpu_device_id: 0  # GPU device ID for CUDA
+    gpu_platform_id: 0  # GPU platform ID for OpenCL
+    # GPU Detection Settings
+    test_enabled: true  # Enable GPU test before use
+    test_n_estimators: 1  # Number of estimators for test model
+    test_samples: 10  # Number of samples for test model
+    test_features: 5  # Number of features for test model
+    try_cuda_first: true  # Try CUDA before OpenCL
+  
+  # CatBoost GPU Settings
+  catboost:
+    task_type: "GPU"  # "GPU" or "CPU"
+    devices: "0"  # GPU device IDs (comma-separated, or "0" for single GPU)
+    # GPU Detection Settings
+    test_enabled: true  # Enable GPU test before use
+    test_iterations: 1  # Number of iterations for test model
+    test_samples: 10  # Number of samples for test model
+    test_features: 5  # Number of features for test model
   
   # PyTorch GPU Settings
   pytorch:

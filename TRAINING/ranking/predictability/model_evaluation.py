@@ -1254,22 +1254,56 @@ def train_and_evaluate_models(
             # GPU settings (will fallback to CPU if GPU not available)
             gpu_params = {}
             try:
-                # Try CUDA first (fastest)
-                # DESIGN_CONSTANT_OK: n_estimators=1 for diagnostic leakage detection only, not production behavior
-                test_model = lgb.LGBMRegressor(device='cuda', n_estimators=1, verbose=lgbm_backend_cfg.native_verbosity)
-                test_model.fit(np.random.rand(10, 5), np.random.rand(10))
-                gpu_params = {'device': 'cuda', 'gpu_device_id': 0}
-                logger.info("  ✅ Using GPU (CUDA) for LightGBM")
-            except Exception as cuda_error:
-                try:
-                    # Try OpenCL
-                    # DESIGN_CONSTANT_OK: n_estimators=1 for diagnostic leakage detection only, not production behavior
-                    test_model = lgb.LGBMRegressor(device='gpu', n_estimators=1, verbose=lgbm_backend_cfg.native_verbosity)
-                    test_model.fit(np.random.rand(10, 5), np.random.rand(10))
-                    gpu_params = {'device': 'gpu', 'gpu_platform_id': 0, 'gpu_device_id': 0}
-                    logger.info("  ✅ Using GPU (OpenCL) for LightGBM")
-                except Exception as opencl_error:
-                    logger.warning(f"  ⚠️  LightGBM GPU not available (CUDA: {cuda_error}, OpenCL: {opencl_error}), using CPU")
+                from CONFIG.config_loader import get_cfg
+                lgb_gpu_cfg = get_cfg('gpu.lightgbm', default={}, config_name='gpu_config')
+                test_enabled = lgb_gpu_cfg.get('test_enabled', True)
+                test_n_estimators = lgb_gpu_cfg.get('test_n_estimators', 1)
+                test_samples = lgb_gpu_cfg.get('test_samples', 10)
+                test_features = lgb_gpu_cfg.get('test_features', 5)
+                gpu_device_id = lgb_gpu_cfg.get('gpu_device_id', 0)
+                gpu_platform_id = lgb_gpu_cfg.get('gpu_platform_id', 0)
+                try_cuda_first = lgb_gpu_cfg.get('try_cuda_first', True)
+                preferred_device = lgb_gpu_cfg.get('device', 'cuda')
+                
+                if test_enabled and try_cuda_first:
+                    # Try CUDA first (fastest)
+                    try:
+                        test_model = lgb.LGBMRegressor(device='cuda', n_estimators=test_n_estimators, gpu_device_id=gpu_device_id, verbose=lgbm_backend_cfg.native_verbosity)
+                        test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
+                        gpu_params = {'device': 'cuda', 'gpu_device_id': gpu_device_id}
+                        logger.info(f"  ✅ Using GPU (CUDA) for LightGBM (device_id={gpu_device_id})")
+                    except Exception as cuda_error:
+                        # Try OpenCL
+                        try:
+                            test_model = lgb.LGBMRegressor(device='gpu', n_estimators=test_n_estimators, gpu_platform_id=gpu_platform_id, gpu_device_id=gpu_device_id, verbose=lgbm_backend_cfg.native_verbosity)
+                            test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
+                            gpu_params = {'device': 'gpu', 'gpu_platform_id': gpu_platform_id, 'gpu_device_id': gpu_device_id}
+                            logger.info(f"  ✅ Using GPU (OpenCL) for LightGBM (platform_id={gpu_platform_id}, device_id={gpu_device_id})")
+                        except Exception as opencl_error:
+                            logger.warning(f"  ⚠️  LightGBM GPU not available (CUDA: {cuda_error}, OpenCL: {opencl_error}), using CPU")
+                elif test_enabled and preferred_device in ['cuda', 'gpu']:
+                    # Use preferred device directly
+                    try:
+                        if preferred_device == 'cuda':
+                            test_model = lgb.LGBMRegressor(device='cuda', n_estimators=test_n_estimators, gpu_device_id=gpu_device_id, verbose=lgbm_backend_cfg.native_verbosity)
+                            gpu_params = {'device': 'cuda', 'gpu_device_id': gpu_device_id}
+                        else:
+                            test_model = lgb.LGBMRegressor(device='gpu', n_estimators=test_n_estimators, gpu_platform_id=gpu_platform_id, gpu_device_id=gpu_device_id, verbose=lgbm_backend_cfg.native_verbosity)
+                            gpu_params = {'device': 'gpu', 'gpu_platform_id': gpu_platform_id, 'gpu_device_id': gpu_device_id}
+                        test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
+                        logger.info(f"  ✅ Using GPU ({preferred_device.upper()}) for LightGBM")
+                    except Exception as gpu_error:
+                        logger.warning(f"  ⚠️  LightGBM GPU ({preferred_device}) not available: {gpu_error}, using CPU")
+                else:
+                    # Skip test, use preferred device from config
+                    if preferred_device in ['cuda', 'gpu']:
+                        if preferred_device == 'cuda':
+                            gpu_params = {'device': 'cuda', 'gpu_device_id': gpu_device_id}
+                        else:
+                            gpu_params = {'device': 'gpu', 'gpu_platform_id': gpu_platform_id, 'gpu_device_id': gpu_device_id}
+                        logger.info(f"  Using GPU ({preferred_device.upper()}) for LightGBM (test disabled)")
+            except Exception as e:
+                logger.warning(f"  ⚠️  LightGBM GPU config error: {e}, using CPU")
             
             # Get config values
             lgb_config = get_model_config('lightgbm', multi_model_config)
@@ -1619,24 +1653,33 @@ def train_and_evaluate_models(
                 xgb_device = gpu_cfg.get('device', 'cpu')
                 xgb_tree_method = gpu_cfg.get('tree_method', 'hist')
                 xgb_gpu_id = gpu_cfg.get('gpu_id', 0)
+                test_enabled = gpu_cfg.get('test_enabled', True)
+                test_n_estimators = gpu_cfg.get('test_n_estimators', 1)
+                test_samples = gpu_cfg.get('test_samples', 10)
+                test_features = gpu_cfg.get('test_features', 5)
                 
                 if xgb_device == 'cuda':
-                    # Try CUDA GPU - XGBoost 2.0+ uses device='cuda' with tree_method='hist'
-                    # Older versions might need tree_method='gpu_hist', but we'll try hist first
-                    try:
-                        test_model = xgb.XGBRegressor(tree_method='hist', device='cuda', n_estimators=1, verbosity=0)
-                        test_model.fit(np.random.rand(10, 5), np.random.rand(10))
-                        gpu_params = {'tree_method': xgb_tree_method, 'device': 'cuda', 'gpu_id': xgb_gpu_id}
-                        logger.info("  ✅ Using GPU (CUDA) for XGBoost")
-                    except Exception as gpu_test_error:
-                        # Try older API: tree_method='gpu_hist' (no device parameter)
+                    if test_enabled:
+                        # Try CUDA GPU - XGBoost 2.0+ uses device='cuda' with tree_method='hist'
+                        # Older versions might need tree_method='gpu_hist', but we'll try hist first
                         try:
-                            test_model = xgb.XGBRegressor(tree_method='gpu_hist', n_estimators=1, verbosity=0)
-                            test_model.fit(np.random.rand(10, 5), np.random.rand(10))
-                            gpu_params = {'tree_method': 'gpu_hist'}  # Older API doesn't use device parameter
-                            logger.info("  ✅ Using GPU (CUDA) for XGBoost (legacy API: gpu_hist)")
-                        except Exception:
-                            logger.warning(f"  ⚠️  XGBoost GPU test failed, falling back to CPU: {gpu_test_error}")
+                            test_model = xgb.XGBRegressor(tree_method='hist', device='cuda', gpu_id=xgb_gpu_id, n_estimators=test_n_estimators, verbosity=0)
+                            test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
+                            gpu_params = {'tree_method': xgb_tree_method, 'device': 'cuda', 'gpu_id': xgb_gpu_id}
+                            logger.info(f"  ✅ Using GPU (CUDA) for XGBoost (gpu_id={xgb_gpu_id})")
+                        except Exception as gpu_test_error:
+                            # Try older API: tree_method='gpu_hist' (no device parameter)
+                            try:
+                                test_model = xgb.XGBRegressor(tree_method='gpu_hist', n_estimators=test_n_estimators, verbosity=0)
+                                test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
+                                gpu_params = {'tree_method': 'gpu_hist'}  # Older API doesn't use device parameter
+                                logger.info("  ✅ Using GPU (CUDA) for XGBoost (legacy API: gpu_hist)")
+                            except Exception as legacy_error:
+                                logger.warning(f"  ⚠️  XGBoost GPU test failed (new API: {gpu_test_error}, legacy API: {legacy_error}), falling back to CPU")
+                    else:
+                        # Skip test, use config values directly
+                        gpu_params = {'tree_method': xgb_tree_method, 'device': 'cuda', 'gpu_id': xgb_gpu_id}
+                        logger.info(f"  Using GPU (CUDA) for XGBoost (gpu_id={xgb_gpu_id}, test disabled)")
                 else:
                     logger.info("  Using CPU for XGBoost (device='cpu' in config)")
             except Exception as e:
