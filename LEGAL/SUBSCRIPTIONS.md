@@ -140,9 +140,9 @@ Once received, we will review your information and reply with the appropriate li
 
 ---
 
-### Onboarding / Integration Package — $25,000–$150,000 one-time
+### Onboarding / Integration Package
 
-Founder-led onboarding and integration services to accelerate adoption. Pricing reflects realistic "founder-led" professional services capacity.
+Founder-led onboarding and integration services to accelerate adoption.
 
 **Scope (defined via separate SOW):**
 - Architecture review and integration planning
@@ -151,9 +151,7 @@ Founder-led onboarding and integration services to accelerate adoption. Pricing 
 - Basic integration with client infrastructure
 - Standard documentation and guides
 
-**Pricing based on scope:**
-- **Basic Onboarding** ($25,000–$75,000): Training + architecture review + initial pipeline design
-- **Standard Integration** ($75,000–$150,000): Custom training workshops + deep architecture review + hands-on pipeline design + integration assistance
+**Pricing:** Contact maintainer for pricing information based on scope and requirements.
 
 **Excludes:**
 - Ongoing feature development (separate SOW)
@@ -164,7 +162,7 @@ Founder-led onboarding and integration services to accelerate adoption. Pricing 
 
 ---
 
-### On-Prem / High-Security Deployment — $150,000–$500,000+ one-time
+### On-Prem / High-Security Deployment
 
 Custom on-premises deployment and high-security setup. Pricing depends on infrastructure complexity, security review requirements, environment count, and deployment scope.
 
@@ -175,15 +173,17 @@ Custom on-premises deployment and high-security setup. Pricing depends on infras
 - High-security deployment requirements
 - Custom security hardening
 
-**Note:** All on-prem deployment work is scoped via a separate Statement of Work (SOW). Custom deployments beyond $500k require custom quotes.
+**Pricing:** Contact maintainer for pricing information.
+
+**Note:** All on-prem deployment work is scoped via a separate Statement of Work (SOW). Custom deployments require custom quotes.
 
 ---
 
-### Additional User Seats — $5,000–$15,000 / seat / year
+### Additional User Seats
 
-Additional named users beyond the included seats per license tier. Pricing depends on seat type (standard user vs. power user/administrator). Seats are for named individuals, not shared accounts.
+Additional named users beyond the included seats per license tier. Seats are for named individuals, not shared accounts.
 
-**Note:** Additional seats are priced per the per-seat model in Option B above. For Option A (Team/Desk tiers), additional seats beyond the tier limits are available at per-seat pricing.
+**Pricing:** Contact maintainer for pricing information.
 
 ---
 
