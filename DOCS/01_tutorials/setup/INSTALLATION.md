@@ -8,20 +8,25 @@ System installation and setup for FoxML Core.
 
 ### Minimum Requirements (Development/Testing Only)
 
-- Python 3.11 or higher
-- pip package manager
-- Git (for cloning the repository)
+- **OS**: Linux (Arch Linux, Ubuntu 22.04+, or similar)
+  - Tested on: Arch Linux (kernel 6.17+)
+- **Python**: 3.10 (as specified in `environment.yml`)
+- **Package manager**: Conda (recommended) or pip
+- **Git**: For cloning the repository
 - **16 GB RAM minimum** (32 GB recommended for development)
-- Linux/macOS (Windows via WSL)
+- **Build tools**: GCC 11+ (provided via conda-forge if using conda)
 
 **Note**: Minimum configuration is suitable for small-scale testing and development only. See [System Requirements](../../00_executive/SYSTEM_REQUIREMENTS.md) for production requirements.
 
 ### Production Requirements
 
+- **OS**: Linux (Arch Linux, Ubuntu 22.04+, or similar)
+  - Tested on: Arch Linux (kernel 6.17+)
+- **Python**: 3.10 (as specified in `environment.yml`)
 - **64 GB RAM minimum** (128 GB+ recommended)
 - Multi-core processor (16+ cores)
 - SSD storage (500 GB+)
-- GPU optional but recommended (11 GB+ VRAM)
+- GPU optional but recommended (11 GB+ VRAM, CUDA 12.9)
 
 **Verified Stable Range**: Up to 100 GB RAM (tested and verified)  
 **Targeted Capacity**: 1 TB+ RAM (enterprise deployment)

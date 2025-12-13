@@ -16,10 +16,12 @@ It covers setup, configuration, integration, and how to request custom features.
 ### 1.1 Required Dependencies
 
 **System Requirements:**
-- Linux (Ubuntu 22.04+ recommended) or macOS
-- Python 3.11+
-- Git
-- Sufficient disk space for datasets and models
+- **OS**: Linux (Arch Linux, Ubuntu 22.04+, or similar distributions)
+  - Tested on: Arch Linux (kernel 6.17+)
+  - Build tools: GCC 11+ (provided via conda-forge)
+- **Python**: 3.10 (as specified in `environment.yml`)
+- **Git**: For repository access
+- **Storage**: Sufficient disk space for datasets and models
 
 **Python Dependencies:**
 - Core dependencies are listed in `requirements.txt` (included in repository)

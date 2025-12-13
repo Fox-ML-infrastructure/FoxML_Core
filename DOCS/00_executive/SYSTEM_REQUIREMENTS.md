@@ -35,12 +35,14 @@ FoxML Core is designed for **institutional-scale ML infrastructure**, not deskto
 
 **Minimum viable configuration** (for small-scale testing and development):
 
-- **OS**: Linux (Ubuntu 22.04+ recommended) or macOS
-- **Python**: 3.11 or higher
+- **OS**: Linux (Arch Linux, Ubuntu 22.04+, or similar distributions)
+  - Environment tested on: Arch Linux (kernel 6.17+)
+  - Build tools: GCC 11+ (gcc_linux-64, gxx_linux-64 from conda-forge)
+- **Python**: 3.10 (as specified in `environment.yml`)
 - **RAM**: 16 GB minimum (32 GB recommended for development)
 - **CPU**: Multi-core processor (8+ cores)
 - **Storage**: 50 GB+ free space for datasets and models
-- **GPU**: Optional (CUDA 11.8+ if using GPU acceleration)
+- **GPU**: Optional (CUDA 12.9 if using GPU acceleration, as specified in `environment.yml`)
 
 **Limitations**: Minimum configuration is suitable for:
 - Small-scale testing (< 10 symbols, < 50k samples)
@@ -57,15 +59,18 @@ FoxML Core is designed for **institutional-scale ML infrastructure**, not deskto
 
 **Recommended configuration** (for production and research use):
 
-- **OS**: Linux (Ubuntu 22.04+ recommended)
-- **Python**: 3.11 or higher
+- **OS**: Linux (Arch Linux, Ubuntu 22.04+, or similar distributions)
+  - Environment tested on: Arch Linux (kernel 6.17+)
+  - Build tools: GCC 11+ (gcc_linux-64, gxx_linux-64 from conda-forge)
+- **Python**: 3.10 (as specified in `environment.yml`)
 - **RAM**: **64 GB minimum** (128 GB+ recommended for production)
 - **CPU**: Multi-core processor (16+ cores, 32+ cores for large workloads)
 - **Storage**: 500 GB+ SSD (1 TB+ for large datasets)
 - **GPU**: Recommended (11GB+ VRAM for optimal performance)
   - NVIDIA GPU with CUDA support
-  - CUDA toolkit 11.8+
+  - CUDA toolkit 12.9 (as specified in `environment.yml`)
   - OpenCL drivers (for LightGBM GPU)
+  - cuDNN 8.9+ (as specified in `environment.yml`)
 
 ## Memory Requirements by Workload
 
@@ -102,7 +107,8 @@ GPU acceleration provides 10-50x speedup for:
 **Minimum GPU**:
 - NVIDIA GPU with CUDA support
 - 7 GB VRAM minimum
-- CUDA toolkit 11.8+
+- CUDA toolkit 12.9 (as specified in `environment.yml`)
+- cuDNN 8.9+ (as specified in `environment.yml`)
 
 **Recommended GPU**:
 - 11 GB+ VRAM for optimal performance
@@ -142,15 +148,20 @@ GPU acceleration provides 10-50x speedup for:
 
 ### Operating System
 
-- **Linux**: Ubuntu 22.04+ (recommended)
-- **macOS**: Supported (development and testing)
-- **Windows**: Via WSL (Windows Subsystem for Linux)
+- **Linux**: Arch Linux, Ubuntu 22.04+, or similar distributions
+  - **Tested on**: Arch Linux (kernel 6.17+)
+  - **Build requirements**: GCC 11+ (provided via conda-forge: gcc_linux-64, gxx_linux-64)
+  - **Package management**: Conda (recommended) or pip
+- **macOS**: Supported for development and testing (limited GPU support)
+- **Windows**: Via WSL (Windows Subsystem for Linux) - not recommended for production
 
 ### Python Environment
 
-- **Python**: 3.11 or higher
-- **Package manager**: pip or conda
-- **Virtual environment**: Recommended (venv or conda env)
+- **Python**: 3.10 (as specified in `environment.yml`)
+- **Package manager**: Conda (recommended, see `environment.yml`) or pip (see `requirements.txt`)
+- **Virtual environment**: Required (conda env recommended)
+  - Create with: `conda env create -f environment.yml`
+  - Activate with: `conda activate foxml_env`
 
 ### Core Dependencies
 

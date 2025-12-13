@@ -95,30 +95,48 @@
 
 ## 4. Pricing
 
-### 4.1 Annual License Fees
+### 4.1 Paid Pilots (Non-Negotiable Entry Point)
 
-Commercial license pricing is aligned with enterprise ML infrastructure standards (Databricks, Palantir, H2O Driverless AI, Scale AI, Recursion Pharma partnerships).
+All commercial licensing begins with a paid pilot:
 
-Tiers are based on total headcount of the legal entity (not just users of the Software).
+- **Pilot (30 days):** $15,000–$30,000 — 1 environment, limited scope, async support
+- **Pilot+ (60–90 days):** $35,000–$90,000 — 2 environments, onboarding calls, tighter success criteria
 
-- **Tier 1 — 1–10 employees** — $350,000 / year
-- **Tier 2 — 11–50 employees** — $850,000 / year
-- **Tier 3 — 51–250 employees** — $2,500,000 / year
-- **Tier 4 — 251–1000 employees** — $6,000,000–$10,000,000 / year (pricing depends on deployment complexity and usage scope)
-- **Tier 5 — 1000+ employees** — $15,000,000–$30,000,000+ / year (custom enterprise quote)
+**Credit:** 50–100% of pilot fee applies toward first-year license if converted.
+
+### 4.2 Annual License Fees
+
+**Licensing is scoped to the business unit/desk and the authorized users/environments operating the software, not the parent company's total headcount.**
+
+Commercial license pricing is based on the using team/desk size (number of users and environments), not total legal-entity headcount.
+
+**Team/Desk Tiers (Recommended):**
+- **Team** (1–5 users, 1 environment): $75,000 / year
+- **Desk** (6–20 users, up to 2 environments): $150,000–$300,000 / year
+- **Division** (21–75 users, up to 3 environments): $350,000–$750,000 / year
+- **Enterprise** (76–250 users, multi-environment): $800,000–$2,000,000 / year
+- **>250 users / multi-region / regulated bank rollout:** Custom $2,000,000+ / year
+
+**Alternative: Platform Fee + Per-Seat Model:**
+- Platform fee: $50,000–$200,000 / year
+- Per-seat: $5,000–$15,000 / user / year
+- Per-production environment: $25,000–$100,000 / environment / year
 
 **See `LEGAL/SUBSCRIPTIONS.md` for complete pricing information and optional add-ons.**
 
-### 4.2 Optional Enterprise Add-Ons
+### 4.3 Optional Enterprise Add-Ons
 
-Enterprise add-ons are available with defined scope, boundaries, and pricing tiers (aligned with enterprise ML infrastructure standards):
+Enterprise add-ons are available with defined scope and boundaries:
 
-- **Dedicated Support SLA** — $25,000–$250,000 / month (tiered: Business Support $25k–$50k/month, Enterprise Support $60k–$120k/month, Premium Support $150k–$250k/month with defined response times, coverage, and channels)
-- **Integration & On-Prem Setup** — $500,000–$3,000,000 one-time (scoped via SOW, depends on infrastructure complexity, environment count, data integration volume, orchestration complexity, and cross-team rollout scope)
-- **Onboarding** — $150,000–$600,000 one-time (Basic: $150k–$300k for training + architecture review; Advanced/Custom: $300k–$600k for tailored workshops + hands-on pipeline design + extended engineering consultation)
-- **Private Slack / Direct Founder Access** — $300,000–$1,000,000 / year (rare, non-replicable strategic access to system architect; comparable to CTO-level advisory fees; up to 3–5 named contacts, business hours, strategic discussions only; not a replacement for support SLA)
-- **Additional User Seats** — $500–$2,000 / seat / year (beyond included seats per tier; each license tier includes a base number of named users)
-- **Adaptive Intelligence Layer** (Tier 5 only) — +$2,000,000–$5,000,000 / year (subject to roadmap availability, requires separate SOW with milestones)
+- **Standard Support (Included):** Email/issues, best-effort, no SLA
+- **Business Support:** +$25,000 / year (response targets, limited hours)
+- **Enterprise Support:** +$75,000–$150,000 / year
+- **Premium / 24×5 Support:** +$200,000–$400,000 / year (only if we can staff it)
+- **Onboarding / Integration Package:** $25,000–$150,000 one-time
+- **On-Prem / High-Security Deployment:** $150,000–$500,000+ one-time (custom)
+- **Additional User Seats:** $5,000–$15,000 / seat / year
+
+**Note:** Support add-ons are priced as a percentage of license (15–30% range), not as a separate giant contract.
 
 **See `LEGAL/SUBSCRIPTIONS.md` for complete add-on details, scope definitions, and boundaries.**
 

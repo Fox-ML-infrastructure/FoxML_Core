@@ -269,22 +269,27 @@ See [`DOCS/LEGAL_INDEX.md`](../../LEGAL_INDEX.md) for complete legal documentati
 
 ### Commercial
 
-- **Commercial license pricing** updated to enterprise ML infrastructure standards (aligned with Databricks, Palantir, H2O Driverless AI, Scale AI, Recursion Pharma partnerships):
-  - Tier 1 — 1–10 employees: $350,000/year
-  - Tier 2 — 11–50 employees: $850,000/year
-  - Tier 3 — 51–250 employees: $2,500,000/year
-  - Tier 4 — 251–1000 employees: $6,000,000–$10,000,000/year (pricing depends on deployment complexity and usage scope)
-  - Tier 5 — 1000+ employees: $15,000,000–$30,000,000+ /year (custom enterprise quote)
-  - **Optional enterprise add-ons** (with defined scope and boundaries, aligned with enterprise ML infrastructure standards):
-    - Dedicated Support SLA: $25,000–$250,000/month (Business Support $25k–$50k/month, Enterprise Support $60k–$120k/month, Premium Support $150k–$250k/month with defined response times, coverage, channels)
-    - Integration & On-Prem Setup: $500,000–$3,000,000 one-time (scoped via SOW, depends on infrastructure complexity, environment count, data integration volume, orchestration complexity, cross-team rollout scope)
-    - Onboarding: $150,000–$600,000 one-time (Basic: $150k–$300k for training + architecture review; Advanced/Custom: $300k–$600k for tailored workshops + hands-on pipeline design + extended engineering consultation)
-    - Private Slack / Direct Founder Access: $300,000–$1,000,000/year (rare, non-replicable strategic access to system architect; comparable to CTO-level advisory fees; up to 3–5 named contacts, business hours, strategic discussions only; not a replacement for support SLA)
-    - Additional User Seats: $500–$2,000/seat/year (beyond included seats per tier)
-    - Adaptive Intelligence Layer (Tier 5 only): +$2,000,000–$5,000,000/year (subject to roadmap, requires separate SOW with milestones)
+- **Commercial license pricing** restructured for better market fit and accessibility:
+  - **Paid pilots (non-negotiable entry point):** Pilot (30 days): $15,000–$30,000; Pilot+ (60–90 days): $35,000–$90,000 (50–100% credit toward first-year license)
+  - **Team/Desk-based tiers** (based on using team/desk size, not total company headcount):
+    - Team (1–5 users, 1 env): $75,000/year
+    - Desk (6–20 users, up to 2 env): $150,000–$300,000/year
+    - Division (21–75 users, up to 3 env): $350,000–$750,000/year
+    - Enterprise (76–250 users, multi-env): $800,000–$2,000,000/year
+    - >250 users / multi-region / regulated bank: Custom $2,000,000+/year
+  - **Alternative: Platform fee + per-seat model** (platform: $50k–$200k/year, per-seat: $5k–$15k/user/year, per-env: $25k–$100k/env/year)
+  - **Support add-ons** (priced as 15–30% of license, not separate giant contracts):
+    - Standard Support (included): Email/issues, best-effort, no SLA
+    - Business Support: +$25,000/year
+    - Enterprise Support: +$75,000–$150,000/year
+    - Premium / 24×5 Support: +$200,000–$400,000/year (only if we can staff it)
+  - **Services** (founder-led, realistic pricing):
+    - Onboarding / Integration: $25,000–$150,000 one-time
+    - On-Prem / High-Security Deployment: $150,000–$500,000+ one-time (custom)
+  - **Policy:** Licensing scoped to business unit/desk, not parent company total headcount
 - Enhanced copyright headers across codebase (2025-2026 Fox ML Infrastructure LLC)
 
-See [`COMMERCIAL_LICENSE.md`](../../../../COMMERCIAL_LICENSE.md) for complete pricing details.
+See [`COMMERCIAL_LICENSE.md`](../../../../COMMERCIAL_LICENSE.md) and [`LEGAL/SUBSCRIPTIONS.md`](../../../../LEGAL/SUBSCRIPTIONS.md) for complete pricing details.
 
 ---
 

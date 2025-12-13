@@ -25,12 +25,14 @@ Until then, Enterprise customers will receive direct communication instructions 
 
 ### 1.1 Pricing
 
-Enterprise Support pricing: $25,000–$250,000/month based on SLA level and requirements. Pricing aligned with enterprise ML infrastructure support standards (Snowflake, Palantir, Databricks).
+Enterprise Support pricing is structured as annual add-ons (15–30% of license fee), not separate monthly contracts:
 
-**Tiered Pricing:**
-- Business Support: $25,000–$50,000/month
-- Enterprise Support: $60,000–$120,000/month  
-- Premium Support: $150,000–$250,000/month
+**Annual Support Add-Ons:**
+- Business Support: +$25,000/year
+- Enterprise Support: +$75,000–$150,000/year
+- Premium / 24×5 Support: +$200,000–$400,000/year (only if we can staff it)
+
+**Note:** Standard Support (email/issues, best-effort, no SLA) is included with all licenses. Support add-ons are priced as a percentage of license, not as separate giant contracts.
 
 See `LEGAL/SUBSCRIPTIONS.md` for complete pricing information, tier definitions (response times, coverage, channels), and optional add-ons.
 

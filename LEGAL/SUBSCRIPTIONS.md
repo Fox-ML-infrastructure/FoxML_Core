@@ -71,17 +71,52 @@ Commercial organizations may evaluate the Software for up to 30 days from initia
 
 **When in doubt, assume a commercial license is required. Contact jenn.lewis5789@gmail.com for clarification.**
 
-**Annual License Tiers**
+## Paid Pilots (Non-Negotiable Entry Point)
 
-Tiers are based on total headcount of the legal entity (not just users of the Software).
+All commercial licensing begins with a paid pilot. This ensures commitment and allows for proper evaluation in a production-like environment.
 
-- **Tier 1 — 1–10 employees** — $350,000 / year  
-- **Tier 2 — 11–50 employees** — $850,000 / year  
-- **Tier 3 — 51–250 employees** — $2,500,000 / year  
-- **Tier 4 — 251–1000 employees** — $6,000,000–$10,000,000 / year (pricing depends on deployment complexity and usage scope)
-- **Tier 5 — 1000+ employees** — $15,000,000–$30,000,000+ / year (custom enterprise quote)
+### Pilot (30 days): $15,000–$30,000
 
-*Pricing aligned with enterprise ML infrastructure standards (Databricks, Palantir, H2O Driverless AI, Scale AI, Recursion Pharma partnerships).*
+- 1 environment (development or staging)
+- Limited scope evaluation
+- Async support (email/issues)
+- No custom features
+- **Credit:** 50–100% of pilot fee applies toward first-year license if converted
+
+### Pilot+ (60–90 days): $35,000–$90,000
+
+- 2 environments (dev + prod, or dev + stage)
+- Onboarding calls included
+- Tighter success criteria and defined evaluation milestones
+- **Credit:** 50–100% of pilot fee applies toward first-year license if converted
+
+**Note:** Pilot fees are non-refundable but credited toward annual license upon conversion.
+
+---
+
+## Annual License Tiers
+
+**Licensing is scoped to the business unit/desk and the authorized users/environments operating the software, not the parent company's total headcount.**
+
+Tiers are based on the **using team/desk size** (number of users and environments), not total legal-entity headcount.
+
+### Option A: Team/Desk Tiers (Recommended)
+
+- **Team** (1–5 users, 1 environment): **$75,000 / year**
+- **Desk** (6–20 users, up to 2 environments): **$150,000–$300,000 / year**
+- **Division** (21–75 users, up to 3 environments): **$350,000–$750,000 / year**
+- **Enterprise** (76–250 users, multi-environment): **$800,000–$2,000,000 / year**
+- **>250 users / multi-region / regulated bank rollout:** **Custom $2,000,000+ / year**
+
+### Option B: Platform Fee + Per-Seat (Alternative Model)
+
+- **Platform fee:** $50,000–$200,000 / year (depends on environment count + deployment complexity)
+- **Per-seat:** $5,000–$15,000 / user / year
+- **Per-production environment add-on:** $25,000–$100,000 / environment / year
+
+**Default Recommendation:** Pilot $35k (60 days) → Desk $250k/yr → Support +$75k/yr
+
+*Pricing aligned with enterprise ML infrastructure standards while maintaining accessible entry points for teams and desks.*
 
 To request access or begin the licensing process, email:
 
@@ -104,139 +139,86 @@ Once received, we will review your information and reply with the appropriate li
 
 ## Optional Enterprise Add-Ons
 
-### Dedicated Support SLA — $25,000–$250,000 / month
+### Standard Support (Included)
 
-Tiered support with defined response times, coverage, and channels. Pricing aligned with enterprise ML infrastructure support standards (Snowflake, Palantir, Databricks). Pricing based on SLA level:
+- Email/issues support
+- Best-effort response (no SLA)
+- Community documentation access
+- Updates and patches (as released)
 
-- **Business Support** ($25,000–$50,000/month):
-  - Response: Initial acknowledgement within 1 business day, substantive response within 3 business days
-  - Coverage: Business hours (US Central Time, Monday–Friday)
-  - Channels: Dedicated support email, private issue tracking
-  - Includes: Priority bug fixes, deployment guidance, integration questions, configuration assistance
+### Business Support — +$25,000 / year
 
-- **Enterprise Support** ($60,000–$120,000/month):
-  - Response: Initial acknowledgement same business day, substantive response within 1–2 business days
-  - Coverage: Business hours with scheduled call windows (pre-arranged)
-  - Channels: Dedicated enterprise support email, optional scheduled calls, prioritized issue handling
-  - Includes: Priority bug fixes, deployment guidance, integration questions, architecture review, scheduled support calls (limited hours)
+- Response targets: Initial acknowledgement within 1 business day, substantive response within 3 business days
+- Coverage: Business hours (US Central Time, Monday–Friday)
+- Channels: Dedicated support email, private issue tracking
+- Includes: Priority bug fixes, deployment guidance, integration questions, configuration assistance
+- **Pricing:** Approximately 15–30% of annual license fee
 
-- **Premium Support** ($150,000–$250,000/month):
-  - Response: Initial acknowledgement same business day (typically within hours), substantive response within 1 business day
-  - Coverage: Business hours with flexible scheduling, extended availability
-  - Channels: Dedicated premium support email, scheduled support calls (flexible scheduling), direct access to engineering resources and founder-adjacent consultation
-  - Includes: Highest priority bug fixes, deployment guidance, architecture review, direct engineering consultation, flexible support call scheduling, strategic infrastructure guidance
+### Enterprise Support — +$75,000–$150,000 / year
 
-**Note:** Support SLAs do not include custom feature development, which requires separate Statements of Work (SOWs). See `LEGAL/SUPPORT_POLICY.md` and `LEGAL/SERVICE_LEVEL_AGREEMENT.md` for complete details.
+- Response targets: Initial acknowledgement same business day, substantive response within 1–2 business days
+- Coverage: Business hours with scheduled call windows (pre-arranged)
+- Channels: Dedicated enterprise support email, optional scheduled calls, prioritized issue handling
+- Includes: Priority bug fixes, deployment guidance, integration questions, architecture review, scheduled support calls (limited hours)
+- **Pricing:** Approximately 15–30% of annual license fee
+
+### Premium / 24×5 Support — +$200,000–$400,000 / year
+
+- Response targets: Initial acknowledgement same business day (typically within hours), substantive response within 1 business day
+- Coverage: Extended business hours (24×5 or custom schedule)
+- Channels: Dedicated premium support email, scheduled support calls (flexible scheduling), direct access to engineering resources
+- Includes: Highest priority bug fixes, deployment guidance, architecture review, direct engineering consultation, flexible support call scheduling
+- **Availability:** Only if we can staff it
+- **Pricing:** Approximately 15–30% of annual license fee
+
+**Note:** Support add-ons are priced as a percentage of license (15–30% range), not as a separate giant contract. Support SLAs do not include custom feature development, which requires separate Statements of Work (SOWs). See `LEGAL/SUPPORT_POLICY.md` and `LEGAL/SERVICE_LEVEL_AGREEMENT.md` for complete details.
 
 ---
 
-### Integration & On-Prem Setup — $500,000–$3,000,000 one-time
+### Onboarding / Integration Package — $25,000–$150,000 one-time
 
-One-time professional services for integration and on-premises deployment setup. Pricing depends on infrastructure complexity, security review requirements, environment count (dev/staging/production), data integration volume, orchestration complexity, and cross-team rollout scope. This reflects standard pricing for enterprise ML infrastructure onboarding.
+Founder-led onboarding and integration services to accelerate adoption. Pricing reflects realistic "founder-led" professional services capacity.
 
 **Scope (defined via separate SOW):**
 - Architecture review and integration planning
-- On-premises deployment configuration
-- Security review and compliance alignment
-- Multi-environment setup (dev/staging/production)
-- Initial integration with client infrastructure
+- Training sessions on core functionality
+- Initial pipeline design assistance
+- Basic integration with client infrastructure
+- Standard documentation and guides
+
+**Pricing based on scope:**
+- **Basic Onboarding** ($25,000–$75,000): Training + architecture review + initial pipeline design
+- **Standard Integration** ($75,000–$150,000): Custom training workshops + deep architecture review + hands-on pipeline design + integration assistance
 
 **Excludes:**
 - Ongoing feature development (separate SOW)
 - Ongoing maintenance (covered by support SLA or separate agreement)
 - Custom feature development (separate SOW)
 
-**Note:** All integration work is scoped via a separate Statement of Work (SOW) with defined deliverables and milestones.
+**Note:** All onboarding/integration work is scoped via a separate Statement of Work (SOW) with defined deliverables and milestones. Higher license tiers may include basic onboarding.
 
 ---
 
-### Onboarding — $150,000–$600,000 one-time
+### On-Prem / High-Security Deployment — $150,000–$500,000+ one-time
 
-One-time onboarding services to accelerate adoption. Pricing reflects the value of engineering guidance and architecture validation for enterprise ML infrastructure. Pricing based on scope:
+Custom on-premises deployment and high-security setup. Pricing depends on infrastructure complexity, security review requirements, environment count, and deployment scope.
 
-- **Basic Onboarding** ($150,000–$300,000):
-  - Training sessions on core functionality
-  - Architecture review and best practices
-  - Initial pipeline design assistance
-  - Standard documentation and guides
+**Scope (defined via separate SOW):**
+- On-premises deployment configuration
+- Security review and compliance alignment
+- Multi-environment setup (dev/staging/production)
+- High-security deployment requirements
+- Custom security hardening
 
-- **Advanced / Custom Onboarding** ($300,000–$600,000):
-  - Custom training workshops tailored to client workflows
-  - Deep architecture review and optimization recommendations
-  - Hands-on assistance designing first production pipelines
-  - Custom best-practices documentation tailored to client infrastructure
-  - Extended engineering consultation and validation
-
-**Note:** Higher license tiers may include basic onboarding. Custom onboarding is always available as an add-on.
+**Note:** All on-prem deployment work is scoped via a separate Statement of Work (SOW). Custom deployments beyond $500k require custom quotes.
 
 ---
 
-### Private Slack / Direct Founder Access — $300,000–$1,000,000 / year
+### Additional User Seats — $5,000–$15,000 / seat / year
 
-Direct communication channel with founder for strategic discussions and high-level guidance. This is strategic access to the architect of the entire system. Comparable to CTO-level advisory fees for enterprise infrastructure. **Not a replacement for paid support SLA** (these are separate services).
+Additional named users beyond the included seats per license tier. Pricing depends on seat type (standard user vs. power user/administrator). Seats are for named individuals, not shared accounts.
 
-**Included:**
-- Up to 3–5 named contacts (depending on tier)
-- Business hours response (US Central Time, Monday–Friday)
-- Response within ≤24 hours during business hours
-- Strategic discussions, architecture guidance, roadmap alignment
-- Access to the only person who knows the system end-to-end
-
-**Excludes:**
-- Feature development requests (requires separate SOW)
-- Technical support (covered by support SLA)
-- Emergency response (covered by support SLA)
-- Non-business-hours availability
-
-**Boundaries:**
-- This is a communication channel for strategic alignment, not a 24/7 hotline
-- Technical issues should go through the support SLA channels
-- Custom development requests require separate Statements of Work (SOWs)
-
----
-
-### Additional User Seats — $500–$2,000 / seat / year
-
-Additional named users beyond the included seats per license tier.
-
-**Included Seats per License Tier:**
-- 1–10 employees: Up to 10 named users included
-- 11–50 employees: Up to 25 named users included
-- 51–250 employees: Up to 50 named users included
-- 251–1000 employees: Up to 100 named users included
-- 1000+ employees: Up to 200 named users included (custom)
-
-**Additional Seats:**
-- Additional named users beyond the included count: $500–$2,000 per seat per year
-- Pricing depends on seat type (standard user vs. power user/administrator)
-- Seats are for named individuals, not shared accounts
-
-**Note:** License tiers are based on total company headcount, not seat count. Additional seats are for organizations needing more named users than the tier includes.
-
----
-
-### Adaptive Intelligence Layer (Tier 5 only) — +$2,000,000–$5,000,000 / year
-
-Advanced orchestration and adaptive pipeline capabilities. **Subject to roadmap availability and separate SOW with defined milestones.**
-
-**What This Includes:**
-- Advanced orchestration and automated strategy search
-- Adaptive pipelines and agents using FoxML Core infrastructure
-- Automated feature/target discovery and optimization
-- Self-tuning model selection and ensemble management
-
-**What This Does NOT Include:**
-- Generic AGI or unlimited research promises
-- Custom feature development outside the adaptive layer scope
-- Guaranteed delivery timelines without milestone-based SOW
-
-**Requirements:**
-- Available only for Tier 5 (1000+ employees) customers
-- Requires separate Statement of Work (SOW) with defined milestones
-- Subject to roadmap availability and engineering capacity
-- Pricing based on scope and complexity
-
-**Note:** This is a premium add-on for organizations requiring the highest level of automation and adaptive intelligence. All work is scoped via a separate SOW with milestone-based delivery.
+**Note:** Additional seats are priced per the per-seat model in Option B above. For Option A (Team/Desk tiers), additional seats beyond the tier limits are available at per-seat pricing.
 
 ---
 

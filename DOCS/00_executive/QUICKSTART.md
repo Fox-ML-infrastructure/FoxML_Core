@@ -8,17 +8,22 @@ Installation and basic usage.
 
 ### Minimum Requirements (Development/Testing Only)
 
-- Python 3.11+
+- **OS**: Linux (Arch Linux, Ubuntu 22.04+, or similar)
+  - Tested on: Arch Linux (kernel 6.17+)
+- **Python**: 3.10 (as specified in `environment.yml`)
 - **16 GB RAM minimum** (32 GB recommended for development)
-- GPU optional (CUDA 11.8+ if using GPU) - **Recommended for target ranking and feature selection** (10-50x speedup)
+- GPU optional (CUDA 12.9 if using GPU) - **Recommended for target ranking and feature selection** (10-50x speedup)
 
 **Note**: Minimum configuration is suitable for small-scale testing and development only.
 
 ### Production Requirements
 
+- **OS**: Linux (Arch Linux, Ubuntu 22.04+, or similar)
+  - Tested on: Arch Linux (kernel 6.17+)
+- **Python**: 3.10 (as specified in `environment.yml`)
 - **64 GB RAM minimum** (128 GB+ recommended)
 - Multi-core processor (16+ cores)
-- GPU recommended (11 GB+ VRAM for optimal performance)
+- GPU recommended (11 GB+ VRAM, CUDA 12.9 for optimal performance)
 
 **Verified Stable Range**: Up to 100 GB RAM (tested and verified)  
 **Targeted Capacity**: 1 TB+ RAM (enterprise deployment)

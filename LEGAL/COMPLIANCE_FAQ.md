@@ -242,14 +242,26 @@
 
 ### Q9.1: How much does a commercial license cost?
 
-**A:** Pricing is based on organization size and aligned with enterprise ML infrastructure standards (Databricks, Palantir, H2O Driverless AI, Scale AI, Recursion Pharma partnerships). Tiers are based on total headcount of the legal entity (not just users of the Software):
-- Tier 1 — 1–10 employees: $350,000/year
-- Tier 2 — 11–50 employees: $850,000/year
-- Tier 3 — 51–250 employees: $2,500,000/year
-- Tier 4 — 251–1000 employees: $6,000,000–$10,000,000/year (pricing depends on deployment complexity and usage scope)
-- Tier 5 — 1000+ employees: $15,000,000–$30,000,000+ /year (custom enterprise quote)
+**A:** All commercial licensing begins with a paid pilot (non-negotiable):
+- **Pilot (30 days):** $15,000–$30,000 — 1 environment, limited scope, async support
+- **Pilot+ (60–90 days):** $35,000–$90,000 — 2 environments, onboarding calls, tighter success criteria
+- **Credit:** 50–100% of pilot fee applies toward first-year license if converted
 
-**See `LEGAL/SUBSCRIPTIONS.md` for complete pricing information.**
+**Annual license pricing** is based on the using team/desk size (number of users and environments), not total company headcount. **Licensing is scoped to the business unit/desk, not the parent company's total headcount.**
+
+**Team/Desk Tiers (Recommended):**
+- Team (1–5 users, 1 environment): $75,000/year
+- Desk (6–20 users, up to 2 environments): $150,000–$300,000/year
+- Division (21–75 users, up to 3 environments): $350,000–$750,000/year
+- Enterprise (76–250 users, multi-environment): $800,000–$2,000,000/year
+- >250 users / multi-region / regulated bank: Custom $2,000,000+/year
+
+**Alternative: Platform Fee + Per-Seat Model:**
+- Platform fee: $50,000–$200,000/year
+- Per-seat: $5,000–$15,000/user/year
+- Per-production environment: $25,000–$100,000/environment/year
+
+**See `LEGAL/SUBSCRIPTIONS.md` for complete pricing information and optional add-ons.**
 
 ---
 
