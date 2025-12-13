@@ -1873,10 +1873,11 @@ Examples:
             except Exception as e:
                 logger.debug(f"Could not load intelligent_training from experiment config: {e}")
             
-            # Fallback: Use targets.primary if no manual_targets specified
-            if not manual_targets and hasattr(experiment_config, 'target') and experiment_config.target:
+            # Fallback: Use targets.primary ONLY if auto_targets is False and no manual_targets specified
+            # If auto_targets is True, we should auto-discover targets, not use primary as fallback
+            if not manual_targets and not auto_targets and hasattr(experiment_config, 'target') and experiment_config.target:
                 manual_targets = [experiment_config.target]
-                logger.info(f"📋 Using primary target from experiment config: {manual_targets}")
+                logger.info(f"📋 Using primary target from experiment config (auto_targets=false): {manual_targets}")
         
         auto_features = features_cfg.get('auto_features', True)
         top_m_features = features_cfg.get('top_m_features', 100)

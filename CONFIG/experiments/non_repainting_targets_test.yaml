@@ -18,7 +18,7 @@ data:
 intelligent_training:
   auto_targets: false  # Disable auto-discovery - use manual target list below
   top_n_targets: 3
-  max_targets_to_evaluate: 3
+  max_targets_to_evaluate: 5
   auto_features: true
   top_m_features: 50
   strategy: single_task

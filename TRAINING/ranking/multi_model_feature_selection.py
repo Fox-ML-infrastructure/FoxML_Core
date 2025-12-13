@@ -1432,20 +1432,17 @@ def train_model_and_get_importance(
                     # Use config value directly (could be dict, 'balanced', etc.)
                     class_weight_value = boruta_class_weight
                 
-                base_estimator = ExtraTreesClassifier(
-                    n_estimators=boruta_n_estimators,
-                    max_depth=boruta_max_depth,
-                    random_state=boruta_random_state,
-                    n_jobs=boruta_n_jobs,
-                    class_weight=class_weight_value
-                )
+                # Clean config to prevent double random_state argument
+                from TRAINING.utils.config_cleaner import clean_config_for_estimator
+                et_config = {'n_estimators': boruta_n_estimators, 'max_depth': boruta_max_depth, 'n_jobs': boruta_n_jobs, 'class_weight': class_weight_value}
+                et_config_clean = clean_config_for_estimator(ExtraTreesClassifier, et_config, extra_kwargs={'random_state': boruta_random_state}, family_name='boruta_et')
+                base_estimator = ExtraTreesClassifier(**et_config_clean, random_state=boruta_random_state)
             else:
-                base_estimator = ExtraTreesRegressor(
-                    n_estimators=boruta_n_estimators,
-                    max_depth=boruta_max_depth,
-                    random_state=boruta_random_state,
-                    n_jobs=boruta_n_jobs
-                )
+                # Clean config to prevent double random_state argument
+                from TRAINING.utils.config_cleaner import clean_config_for_estimator
+                et_config = {'n_estimators': boruta_n_estimators, 'max_depth': boruta_max_depth, 'n_jobs': boruta_n_jobs}
+                et_config_clean = clean_config_for_estimator(ExtraTreesRegressor, et_config, extra_kwargs={'random_state': boruta_random_state}, family_name='boruta_et')
+                base_estimator = ExtraTreesRegressor(**et_config_clean, random_state=boruta_random_state)
             
             boruta = BorutaPy(
                 base_estimator,
@@ -1582,21 +1579,16 @@ def train_model_and_get_importance(
             X_boot, y_boot = X[indices], y[indices]
             
             try:
+                # Clean config to prevent double random_state argument
+                from TRAINING.utils.config_cleaner import clean_config_for_estimator
                 if is_binary or is_multiclass:
-                    model = LogisticRegressionCV(
-                        Cs=stability_cs,
-                        cv=purged_cv,
-                        random_state=stability_random_state,
-                        max_iter=stability_max_iter,
-                        n_jobs=stability_n_jobs
-                    )
+                    lr_config = {'Cs': stability_cs, 'cv': purged_cv, 'max_iter': stability_max_iter, 'n_jobs': stability_n_jobs}
+                    lr_config_clean = clean_config_for_estimator(LogisticRegressionCV, lr_config, extra_kwargs={'random_state': stability_random_state}, family_name='stability_selection')
+                    model = LogisticRegressionCV(**lr_config_clean, random_state=stability_random_state)
                 else:
-                    model = LassoCV(
-                        cv=purged_cv,
-                        random_state=stability_random_state,
-                        max_iter=stability_max_iter,
-                        n_jobs=stability_n_jobs
-                    )
+                    lasso_config = {'cv': purged_cv, 'max_iter': stability_max_iter, 'n_jobs': stability_n_jobs}
+                    lasso_config_clean = clean_config_for_estimator(LassoCV, lasso_config, extra_kwargs={'random_state': stability_random_state}, family_name='stability_selection')
+                    model = LassoCV(**lasso_config_clean, random_state=stability_random_state)
                 
                 model.fit(X_boot, y_boot)
                 stability_scores += (np.abs(model.coef_[0] if len(model.coef_.shape) > 1 else model.coef_) > 1e-6).astype(int)
