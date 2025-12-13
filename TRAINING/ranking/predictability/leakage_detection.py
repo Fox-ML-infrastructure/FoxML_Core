@@ -1438,10 +1438,14 @@ def train_and_evaluate_models(
             
             if not np.isnan(primary_score):
                 model.fit(X, y)
-                
+
                 # Compute and store full task-aware metrics
                 _compute_and_store_metrics('catboost', model, X, y, primary_score, task_type)
-            importance = model.get_feature_importance()
+                
+                # CatBoost requires training dataset to compute feature importance
+                importance = model.get_feature_importance(data=X, type='PredictionValuesChange')
+            else:
+                importance = np.array([])
             if len(importance) > 0:
                 total_importance = np.sum(importance)
                 if total_importance > 0:
