@@ -143,15 +143,27 @@ def load_experiment_config(experiment_name: str) -> ExperimentConfig:
     data = load_yaml(exp_path)
     exp_data = data.get('experiment', {})
     data_data = data.get('data', {})
-    targets_data = data.get('targets', {})
+    targets_data = data.get('targets')  # Don't default to {} - need to check if None
+    if targets_data is None:
+        targets_data = {}
+    
+    # Check if auto_targets is enabled (targets.primary not required if auto_targets=true)
+    intel_training = data.get('intelligent_training', {})
+    auto_targets = intel_training.get('auto_targets', False) if intel_training else False
     
     # Validate required fields
     if not data_data.get('data_dir'):
         raise ValueError(f"Experiment config missing required field: data.data_dir")
     if not data_data.get('symbols'):
         raise ValueError(f"Experiment config missing required field: data.symbols")
-    if not targets_data.get('primary'):
-        raise ValueError(f"Experiment config missing required field: targets.primary")
+    
+    # targets.primary is only required if auto_targets is false
+    if not auto_targets and not targets_data.get('primary'):
+        raise ValueError(
+            f"Experiment config missing required field: targets.primary "
+            f"(required when auto_targets=false). "
+            f"Either set targets.primary or set intelligent_training.auto_targets=true"
+        )
     
     # Build DataConfig from data section
     # Support both old format (interval) and new format (bar_interval)
