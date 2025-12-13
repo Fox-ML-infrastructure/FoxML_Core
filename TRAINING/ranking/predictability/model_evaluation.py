@@ -1649,37 +1649,37 @@ def train_and_evaluate_models(
             gpu_params = {}
             try:
                 from CONFIG.config_loader import get_cfg
-                gpu_cfg = get_cfg('gpu.xgboost', default={}, config_name='gpu_config')
-                xgb_device = gpu_cfg.get('device', 'cpu')
-                xgb_tree_method = gpu_cfg.get('tree_method', 'hist')
-                xgb_gpu_id = gpu_cfg.get('gpu_id', 0)
-                test_enabled = gpu_cfg.get('test_enabled', True)
-                test_n_estimators = gpu_cfg.get('test_n_estimators', 1)
-                test_samples = gpu_cfg.get('test_samples', 10)
-                test_features = gpu_cfg.get('test_features', 5)
+                # SST: All values from config, no hardcoded defaults
+                xgb_device = get_cfg('gpu.xgboost.device', default='cpu', config_name='gpu_config')
+                xgb_tree_method = get_cfg('gpu.xgboost.tree_method', default='hist', config_name='gpu_config')
+                # Note: gpu_id removed in XGBoost 3.1+, use device='cuda:0' format if needed
+                # For now, just use 'cuda' for default GPU
+                test_enabled = get_cfg('gpu.xgboost.test_enabled', default=True, config_name='gpu_config')
+                test_n_estimators = get_cfg('gpu.xgboost.test_n_estimators', default=1, config_name='gpu_config')
+                test_samples = get_cfg('gpu.xgboost.test_samples', default=10, config_name='gpu_config')
+                test_features = get_cfg('gpu.xgboost.test_features', default=5, config_name='gpu_config')
                 
                 if xgb_device == 'cuda':
                     if test_enabled:
-                        # Try CUDA GPU - XGBoost 2.0+ uses device='cuda' with tree_method='hist'
-                        # Older versions might need tree_method='gpu_hist', but we'll try hist first
+                        # XGBoost 3.1+ uses device='cuda' with tree_method='hist' (gpu_id removed)
                         try:
-                            test_model = xgb.XGBRegressor(tree_method='hist', device='cuda', gpu_id=xgb_gpu_id, n_estimators=test_n_estimators, verbosity=0)
+                            test_model = xgb.XGBRegressor(tree_method='hist', device='cuda', n_estimators=test_n_estimators, verbosity=0)
                             test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
-                            gpu_params = {'tree_method': xgb_tree_method, 'device': 'cuda', 'gpu_id': xgb_gpu_id}
-                            logger.info(f"  ✅ Using GPU (CUDA) for XGBoost (gpu_id={xgb_gpu_id})")
+                            gpu_params = {'tree_method': xgb_tree_method, 'device': 'cuda'}
+                            logger.info("  ✅ Using GPU (CUDA) for XGBoost")
                         except Exception as gpu_test_error:
-                            # Try older API: tree_method='gpu_hist' (no device parameter)
+                            # Try legacy API: tree_method='gpu_hist' (for XGBoost < 2.0)
                             try:
                                 test_model = xgb.XGBRegressor(tree_method='gpu_hist', n_estimators=test_n_estimators, verbosity=0)
                                 test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
-                                gpu_params = {'tree_method': 'gpu_hist'}  # Older API doesn't use device parameter
+                                gpu_params = {'tree_method': 'gpu_hist'}  # Legacy API doesn't use device parameter
                                 logger.info("  ✅ Using GPU (CUDA) for XGBoost (legacy API: gpu_hist)")
                             except Exception as legacy_error:
                                 logger.warning(f"  ⚠️  XGBoost GPU test failed (new API: {gpu_test_error}, legacy API: {legacy_error}), falling back to CPU")
                     else:
                         # Skip test, use config values directly
-                        gpu_params = {'tree_method': xgb_tree_method, 'device': 'cuda', 'gpu_id': xgb_gpu_id}
-                        logger.info(f"  Using GPU (CUDA) for XGBoost (gpu_id={xgb_gpu_id}, test disabled)")
+                        gpu_params = {'tree_method': xgb_tree_method, 'device': 'cuda'}
+                        logger.info("  Using GPU (CUDA) for XGBoost (test disabled)")
                 else:
                     logger.info("  Using CPU for XGBoost (device='cpu' in config)")
             except Exception as e:
@@ -1724,7 +1724,7 @@ def train_and_evaluate_models(
             
             # Log GPU usage if available (controlled by config)
             if 'device' in gpu_params and gpu_params.get('device') == 'cuda' and log_cfg.gpu_detail:
-                logger.info(f"  🚀 Training XGBoost on CUDA (gpu_id={gpu_params.get('gpu_id', 0)})")
+                logger.info("  🚀 Training XGBoost on CUDA")
                 logger.info(f"  📊 Dataset size: {len(X)} samples, {X.shape[1]} features")
                 if log_cfg.edu_hints:
                     logger.info(f"  💡 Note: GPU is most efficient for large datasets (>100k samples)")

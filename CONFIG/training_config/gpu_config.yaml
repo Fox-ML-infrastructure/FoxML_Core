@@ -54,9 +54,9 @@ gpu:
   
   # XGBoost GPU Settings
   xgboost:
-    device: "cuda"  # "cuda" or "cpu"
-    tree_method: "hist"  # Use "hist" with device="cuda" (XGBoost 3.x), or "gpu_hist" for legacy
-    gpu_id: 0  # GPU ID for XGBoost
+    device: "cuda"  # "cuda" or "cpu" (XGBoost 3.1+ removed gpu_id, use device='cuda:0' format if needed)
+    tree_method: "hist"  # Use "hist" with device="cuda" (XGBoost 3.x), or "gpu_hist" for legacy (< 2.0)
+    # Note: gpu_id removed in XGBoost 3.1+, use device='cuda:0' format to specify GPU ID
     # GPU Detection Settings
     test_enabled: true  # Enable GPU test before use
     test_n_estimators: 1  # Number of estimators for test model

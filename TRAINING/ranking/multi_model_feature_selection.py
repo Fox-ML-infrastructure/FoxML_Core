@@ -1044,7 +1044,7 @@ def train_model_and_get_importance(
                 # SST: All values from config, no hardcoded defaults
                 xgb_device = get_cfg('gpu.xgboost.device', default='cpu', config_name='gpu_config')
                 xgb_tree_method = get_cfg('gpu.xgboost.tree_method', default='hist', config_name='gpu_config')
-                xgb_gpu_id = get_cfg('gpu.xgboost.gpu_id', default=0, config_name='gpu_config')
+                # Note: gpu_id removed in XGBoost 3.1+, use device='cuda:0' format if needed
                 test_enabled = get_cfg('gpu.xgboost.test_enabled', default=True, config_name='gpu_config')
                 test_n_estimators = get_cfg('gpu.xgboost.test_n_estimators', default=1, config_name='gpu_config')
                 test_samples = get_cfg('gpu.xgboost.test_samples', default=10, config_name='gpu_config')
@@ -1052,22 +1052,22 @@ def train_model_and_get_importance(
                 
                 if xgb_device == 'cuda':
                     if test_enabled:
-                        # Try CUDA GPU - XGBoost 2.0+ uses device='cuda' with tree_method='hist'
+                        # XGBoost 3.1+ uses device='cuda' with tree_method='hist' (gpu_id removed)
                         try:
-                            test_model = xgb.XGBRegressor(tree_method='hist', device='cuda', gpu_id=xgb_gpu_id, n_estimators=test_n_estimators, verbosity=0)
+                            test_model = xgb.XGBRegressor(tree_method='hist', device='cuda', n_estimators=test_n_estimators, verbosity=0)
                             test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
-                            gpu_params = {'tree_method': xgb_tree_method, 'device': 'cuda', 'gpu_id': xgb_gpu_id}
+                            gpu_params = {'tree_method': xgb_tree_method, 'device': 'cuda'}
                         except Exception:
-                            # Try older API: tree_method='gpu_hist' (no device parameter)
+                            # Try legacy API: tree_method='gpu_hist' (for XGBoost < 2.0)
                             try:
                                 test_model = xgb.XGBRegressor(tree_method='gpu_hist', n_estimators=test_n_estimators, verbosity=0)
                                 test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
-                                gpu_params = {'tree_method': 'gpu_hist'}  # Older API doesn't use device parameter
+                                gpu_params = {'tree_method': 'gpu_hist'}  # Legacy API doesn't use device parameter
                             except Exception:
                                 pass  # Fallback to CPU silently
                     else:
                         # Skip test, use config values directly
-                        gpu_params = {'tree_method': xgb_tree_method, 'device': 'cuda', 'gpu_id': xgb_gpu_id}
+                        gpu_params = {'tree_method': xgb_tree_method, 'device': 'cuda'}
             except Exception:
                 pass  # Fallback to CPU silently
             
@@ -1082,6 +1082,7 @@ def train_model_and_get_importance(
             xgb_config.pop('eval_metric', None)  # Often paired with early stopping
             xgb_config.pop('tree_method', None)
             xgb_config.pop('device', None)
+            # Remove gpu_id if present (removed in XGBoost 3.1+, use device='cuda:0' format if needed)
             xgb_config.pop('gpu_id', None)
             
             # Determine estimator class
@@ -1245,7 +1246,13 @@ def train_model_and_get_importance(
                 est_cls = cb.CatBoostRegressor
                 loss_fn = 'RMSE'
             
+            # Add GPU params BEFORE cleaning (so they're preserved)
+            # This ensures task_type and devices are not removed by config cleaner
+            if gpu_params:
+                cb_config.update(gpu_params)
+            
             # Clean config using systematic helper (removes duplicates and unknown params)
+            # Note: task_type and devices should be valid CatBoost params, so they won't be removed
             extra = {
                 "random_seed": model_seed,
                 "verbose": False,
@@ -1259,8 +1266,9 @@ def train_model_and_get_importance(
                     logger.warning(f"    catboost: {synonym} still present after cleaning, removing it")
                     cb_config.pop(synonym, None)
             
-            # Add GPU params if available (will override any task_type/devices in config)
-            cb_config.update(gpu_params)
+            # Re-add GPU params after cleaning (in case they were removed)
+            if gpu_params:
+                cb_config.update(gpu_params)
             
             # Instantiate with cleaned config + explicit params
             model = est_cls(**cb_config, **extra)
