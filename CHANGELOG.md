@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### Generalized Duration Parsing System & Audit Fixes (2025-12-13) – **NEW**
+- **Duration Parsing System**: New duration parsing system handles time period formats (minutes, hours, days, bars, compound durations)
+- **Interval-Aware Strictness**: Primary mechanism uses data resolution for purge/lookback enforcement
+- **Fail-Closed Policy**: No silent fallbacks on parsing errors; non-auditable status impossible to miss
+- **Lookback Detection Fix**: Fixed false positives where features with explicit short lookbacks (`_15m`, `_30m`) were incorrectly tagged as 1440m
+- **Documentation Review**: Initial review completed to ensure realistic statements about capabilities
+- See [2025-12-13 duration system changelog](DOCS/02_reference/changelog/2025-12-13-duration-system.md) for details
+
 #### Documentation Organization (2025-12-13) – **NEW**
 - **Index Files**: Created README.md index files for all DOCS subdirectories
 - **Config Migration Docs**: Moved scattered CONFIG documentation to `DOCS/02_reference/configuration/migration/`

@@ -357,14 +357,33 @@ def _enforce_final_safety_gate(
         # Get lookback from our computed dict (same calculation as audit)
         lookback_minutes = feature_lookback_dict.get(feature_name, 0.0)
         
-        # Check explicit 24h/daily naming (very aggressive - catch patterns that might not be in registry)
-        is_daily_name = any(x in feature_name.lower() for x in ['_1d', '_24h', 'daily', 'day'])
+        # IMPORTANT: Use the SAME precedence as compute_feature_lookback_max()
+        # Explicit suffixes take precedence over keyword heuristics
+        # Check for explicit time suffixes first (most reliable)
+        import re
+        has_explicit_suffix = (
+            re.search(r'_(\d+)m$', feature_name, re.I) or  # _15m, _30m, etc.
+            re.search(r'_(\d+)h', feature_name, re.I) or  # _12h, _24h, etc.
+            re.search(r'_(\d+)d', feature_name, re.I)      # _1d, _3d, etc.
+        )
+        
+        # Only use keyword heuristics if no explicit suffix found
+        # This prevents false positives like "intraday_seasonality_15m" being dropped
+        is_daily_name = False
+        if not has_explicit_suffix:
+            # Check for explicit daily patterns (ends with _1d, _24h, starts with daily_, etc.)
+            is_daily_name = (
+                re.search(r'_1d$|_1D$|_24h$|_24H$|^daily_|_daily$|_1440m', feature_name, re.I) or
+                re.search(r'rolling.*daily|daily.*high|daily.*low', feature_name, re.I) or
+                re.search(r'volatility.*day|vol.*day|volume.*day', feature_name, re.I) or
+                re.search(r'.*day.*', feature_name, re.I)  # Last resort: "day" anywhere
+            )
         
         # The Logic: If it violates the purge, KILL IT
         # Use the SAME calculation as audit - if audit sees 1440m, we should too
         if is_daily_name:
             should_drop = True
-            reason = "daily/24h naming pattern"
+            reason = "daily/24h naming pattern (no explicit time suffix)"
         elif lookback_minutes > safe_lookback_max:
             should_drop = True
             reason = f"lookback ({lookback_minutes:.1f}m) > safe_limit ({safe_lookback_max:.1f}m)"

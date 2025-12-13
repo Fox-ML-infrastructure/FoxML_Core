@@ -12,9 +12,17 @@ This module provides a single source of truth for:
 """
 
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, List, Tuple, Union
 import pandas as pd
 import logging
+
+from TRAINING.utils.duration_parser import (
+    parse_duration,
+    enforce_purge_audit_rule,
+    format_duration,
+    Duration,
+    DurationLike
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +33,13 @@ class ResolvedConfig:
     Single resolved configuration object for a target evaluation.
     
     All values are computed once and logged consistently.
+    
+    **Duration Type Conversion Boundary:**
+    Internally, all duration comparisons and computations use Duration objects
+    (canonical representation). The float minutes stored here are converted at the
+    boundary for backward compatibility with existing code that expects float minutes.
+    
+    For new code, prefer using Duration objects directly from duration_parser.
     """
     # Cross-sectional sampling
     requested_min_cs: int
@@ -33,12 +48,16 @@ class ResolvedConfig:
     max_cs_samples: Optional[int]
     
     # Data configuration
-    interval_minutes: Optional[float]
-    horizon_minutes: Optional[float]
+    # @deprecated: Use Duration objects directly in new code. These float fields are for backward compatibility.
+    interval_minutes: Optional[float]  # Converted from Duration at boundary (backward compat)
+    horizon_minutes: Optional[float]  # Converted from Duration at boundary (backward compat)
     
     # Purge/embargo (single source of truth)
-    purge_minutes: float
-    embargo_minutes: float
+    # @deprecated: Use Duration objects directly in new code. These float fields are for backward compatibility.
+    # NOTE: These are converted from Duration to float minutes at the boundary.
+    # Internally, all comparisons use Duration objects (see enforce_purge_audit_rule).
+    purge_minutes: float  # @deprecated: Use Duration objects in new code
+    embargo_minutes: float  # @deprecated: Use Duration objects in new code
     purge_buffer_bars: int = 5
     purge_buffer_minutes: Optional[float] = None
     
@@ -130,11 +149,11 @@ class ResolvedConfig:
 
 
 def derive_purge_embargo(
-    horizon_minutes: Optional[float],
-    interval_minutes: Optional[float] = None,
-    feature_lookback_max_minutes: Optional[float] = None,
+    horizon_minutes: Optional[Union[float, DurationLike]],
+    interval_minutes: Optional[Union[float, DurationLike]] = None,
+    feature_lookback_max_minutes: Optional[Union[float, DurationLike]] = None,
     purge_buffer_bars: int = 5,
-    default_purge_minutes: Optional[float] = None  # If None, loads from safety_config.yaml (SST)
+    default_purge_minutes: Optional[Union[float, DurationLike]] = None  # If None, loads from safety_config.yaml (SST)
 ) -> tuple[float, float]:
     """
     CENTRALIZED purge/embargo derivation function.
@@ -151,21 +170,26 @@ def derive_purge_embargo(
     Feature lookback is historical data that doesn't need purging - only the target's future window does.
     
     Args:
-        horizon_minutes: Target horizon in minutes
-        interval_minutes: Data interval in minutes (for buffer calculation)
-        feature_lookback_max_minutes: Maximum feature lookback in minutes (accepted but not used)
+        horizon_minutes: Target horizon (float minutes, Duration, or duration string like "60m")
+        interval_minutes: Data interval (float minutes, Duration, or duration string like "5m")
+        feature_lookback_max_minutes: Maximum feature lookback (accepted but not used)
         purge_buffer_bars: Number of bars to add as buffer
         default_purge_minutes: Default if horizon cannot be determined (if None, loads from safety_config.yaml)
     
     Returns:
-        (purge_minutes, embargo_minutes) tuple
+        (purge_minutes, embargo_minutes) tuple as floats (for backward compatibility)
     """
-    # Compute buffer
+    # Parse interval (for buffer calculation)
     if interval_minutes is not None:
-        buffer_minutes = purge_buffer_bars * interval_minutes
+        if isinstance(interval_minutes, (int, float)):
+            interval_d = Duration.from_seconds(interval_minutes * 60.0)
+        else:
+            interval_d = parse_duration(interval_minutes)
+        buffer_d = interval_d * purge_buffer_bars
     else:
         # Fallback: assume 5m bars if interval unknown
-        buffer_minutes = purge_buffer_bars * 5.0
+        interval_d = Duration.from_seconds(5.0 * 60.0)
+        buffer_d = interval_d * purge_buffer_bars
     
     # Base purge/embargo = horizon (feature lookback is separate concern)
     # Feature lookback doesn't need to be purged - it's historical data that's safe to use
@@ -184,19 +208,30 @@ def derive_purge_embargo(
         except Exception:
             default_purge_minutes = 85.0  # Final fallback
     
-    if default_purge_minutes >= 1500.0:
+    # Parse default_purge_minutes
+    if isinstance(default_purge_minutes, (int, float)):
+        default_purge_d = Duration.from_seconds(default_purge_minutes * 60.0)
+    else:
+        default_purge_d = parse_duration(default_purge_minutes)
+    
+    if default_purge_d.to_minutes() >= 1500.0:
         # Nuclear test mode: Force 24-hour purge to test if leak is in features or target
         force_nuclear_test = True
-        base_minutes = default_purge_minutes
+        base_d = default_purge_d
     elif horizon_minutes is not None:
-        base_minutes = horizon_minutes
+        # Parse horizon
+        if isinstance(horizon_minutes, (int, float)):
+            base_d = Duration.from_seconds(horizon_minutes * 60.0)
+        else:
+            base_d = parse_duration(horizon_minutes)
     else:
-        base_minutes = default_purge_minutes
+        base_d = default_purge_d
     
     # Add buffer
-    purge_embargo_minutes = base_minutes + buffer_minutes
+    purge_embargo_d = base_d + buffer_d
     
-    return purge_embargo_minutes, purge_embargo_minutes
+    # Convert back to minutes (float) for backward compatibility
+    return purge_embargo_d.to_minutes(), purge_embargo_d.to_minutes()
 
 
 def compute_feature_lookback_max(
@@ -245,42 +280,57 @@ def compute_feature_lookback_max(
         # Fallback: pattern matching for common patterns
         if lag_bars is None:
             import re
-            # CRITICAL: Check for time-based patterns FIRST (before bar-based patterns)
-            # These are the "ghost features" that cause 1440m lookback
+            # PRECEDENCE ORDER (critical for accuracy):
+            # 1. Explicit time suffixes (most reliable) - check FIRST
+            # 2. Keyword heuristics (less reliable) - only as fallback
             
-            # Daily/24h patterns (1 day = 1440 minutes) - CHECK FIRST to catch "ghost features"
-            # These patterns indicate 24-hour/1-day lookback windows
-            # CRITICAL: Check for 1440 (exact 24h) anywhere in name - this is the "ghost feature" pattern
-            # AGGRESSIVE PATTERNS: Catch all variations that might slip through
-            # Pattern: _1d, _24h, daily_*, _1440m, or 1440 (not followed by digit) anywhere
-            # Also catch "day" anywhere (very aggressive) to catch features like "atr_day", "vol_day", etc.
-            if (re.search(r'_1d$|_1D$|_24h$|_24H$|^daily_|_daily$|_1440m|1440(?!\d)|rolling.*daily|daily.*high|daily.*low', feat_name, re.I) or
-                re.search(r'volatility.*day|vol.*day|volume.*day', feat_name, re.I) or
-                re.search(r'.*day.*', feat_name, re.I)):  # Very aggressive: catch "day" anywhere
-                # 1 day = 1440 minutes (exact match for the "ghost feature")
-                # Convert to bars based on interval
-                if interval_minutes > 0:
-                    lag_bars = int(1440 / interval_minutes)  # 1 day in bars
-                else:
-                    lag_bars = 288  # Fallback: assume 5m bars (1440 / 5 = 288)
-            # Hour-based patterns (e.g., _12h, _24h)
+            # PRIORITY 1: Explicit time-based suffixes (most reliable)
+            # These take precedence over keyword heuristics to avoid false positives
+            # Example: "intraday_seasonality_15m" should use 15m, not "day" keyword
+            
+            # Minute-based patterns (e.g., _15m, _30m, _1440m) - CHECK FIRST
+            minutes_match = re.search(r'_(\d+)m$', feat_name, re.I)
+            if minutes_match:
+                minutes = int(minutes_match.group(1))
+                # Convert minutes to bars
+                lag_bars = int(minutes / interval_minutes) if interval_minutes > 0 else minutes // 5
+            
+            # Hour-based patterns (e.g., _12h, _24h) - CHECK SECOND
             elif re.search(r'_(\d+)h', feat_name, re.I):
                 hours_match = re.search(r'_(\d+)h', feat_name, re.I)
                 hours = int(hours_match.group(1))
                 # Convert hours to bars (assume 12 bars/hour for 5m data)
                 lag_bars = hours * 12
-            # Multi-day patterns (mom_3d, volatility_60d, etc.) - must be > 1 day
+            
+            # Day-based patterns (e.g., _1d, _3d) - CHECK THIRD
             elif re.search(r'_(\d+)d', feat_name, re.I):
                 days_match = re.search(r'_(\d+)d', feat_name, re.I)
                 days = int(days_match.group(1))
                 # Convert days to bars (assume 288 bars/day for 5m data)
                 lag_bars = days * 288
-            # Minute-based patterns (e.g., _1440m, _720m)
-            elif re.search(r'_(\d+)m$', feat_name, re.I):
-                minutes_match = re.search(r'_(\d+)m$', feat_name, re.I)
-                minutes = int(minutes_match.group(1))
-                # Convert minutes to bars
-                lag_bars = int(minutes / interval_minutes) if interval_minutes > 0 else minutes // 5
+            
+            # PRIORITY 2: Keyword heuristics (fallback only if no explicit suffix)
+            # Only use keyword patterns if no explicit time suffix was found
+            # This prevents false positives like "intraday_seasonality_15m" being tagged as 1440m
+            elif (re.search(r'_1d$|_1D$|_24h$|_24H$|^daily_|_daily$|_1440m|1440(?!\d)', feat_name, re.I) or
+                  re.search(r'rolling.*daily|daily.*high|daily.*low', feat_name, re.I) or
+                  re.search(r'volatility.*day|vol.*day|volume.*day', feat_name, re.I)):
+                # Explicit daily patterns (ends with _1d, _24h, starts with daily_, etc.)
+                # 1 day = 1440 minutes
+                if interval_minutes > 0:
+                    lag_bars = int(1440 / interval_minutes)  # 1 day in bars
+                else:
+                    lag_bars = 288  # Fallback: assume 5m bars (1440 / 5 = 288)
+            
+            # Last resort: very aggressive "day" keyword (only if no explicit suffix)
+            # This is less reliable but catches features like "atr_day", "vol_day" that have no suffix
+            elif re.search(r'.*day.*', feat_name, re.I):
+                # Very aggressive: catch "day" anywhere (but only if no explicit suffix found)
+                # Convert to bars based on interval
+                if interval_minutes > 0:
+                    lag_bars = int(1440 / interval_minutes)  # 1 day in bars
+                else:
+                    lag_bars = 288  # Fallback: assume 5m bars (1440 / 5 = 288)
             # Bar-based patterns (ret_N, sma_N, ema_N, rsi_N, etc.)
             elif re.match(r'^(ret|sma|ema|rsi|macd|bb|atr|adx|mom|vol|std|var)_(\d+)', feat_name):
                 match = re.match(r'^(ret|sma|ema|rsi|macd|bb|atr|adx|mom|vol|std|var)_(\d+)', feat_name)
@@ -389,21 +439,52 @@ def create_resolved_config(
     except Exception:
         pass
     
-    if purge_include_feature_lookback and feature_lookback_max_minutes is not None and purge_minutes < feature_lookback_max_minutes:
-        # Add safety buffer (1% to handle edge cases)
-        safety_buffer_factor = 1.01
-        safe_purge = int(feature_lookback_max_minutes * safety_buffer_factor)
+    if purge_include_feature_lookback and feature_lookback_max_minutes is not None:
+        # Use generalized duration-aware audit rule enforcement
+        # All inputs are currently floats (minutes), but we support DurationLike for future extensibility
+        purge_in = purge_minutes  # Already a float (minutes)
+        lookback_in = feature_lookback_max_minutes  # Already a float (minutes)
+        interval_for_rule = interval_minutes  # Already a float (minutes) or None
         
-        logger.warning(
-            f"⚠️  Audit violation prevention: purge ({purge_minutes:.1f}m) < feature_lookback_max ({feature_lookback_max_minutes:.1f}m). "
-            f"Increasing purge to {safe_purge:.1f}m (feature_lookback_max * {safety_buffer_factor:.0%}) to satisfy audit rule. "
-            f"Embargo remains {embargo_minutes:.1f}m (horizon-based, not feature lookback)."
+        # Enforce audit rule with duration-aware comparison
+        # parse_duration will handle float inputs (interpreted as seconds by default)
+        # But we want minutes, so convert: float minutes -> Duration
+        purge_out, min_purge, changed = enforce_purge_audit_rule(
+            purge_in * 60.0,  # Convert minutes to seconds for parse_duration
+            lookback_in * 60.0,  # Convert minutes to seconds
+            interval=interval_for_rule * 60.0 if interval_for_rule is not None else None,  # Convert to seconds
+            buffer_frac=0.01,  # 1% safety buffer
+            strict_greater=True
         )
-        purge_minutes = safe_purge
+        
+        if changed:
+            purge_minutes = purge_out.to_minutes()
+            purge_in_str = f"{purge_in:.1f}m"
+            lookback_in_str = f"{lookback_in:.1f}m"
+            # Only log once per unique (purge, lookback, interval) combination
+            # Use a simple cache key to avoid duplicate warnings
+            cache_key = f"purge_bump_{purge_in:.1f}_{lookback_in:.1f}_{interval_for_rule or 0:.1f}"
+            if not hasattr(create_resolved_config, '_logged_warnings'):
+                create_resolved_config._logged_warnings = set()
+            
+            if cache_key not in create_resolved_config._logged_warnings:
+                logger.warning(
+                    f"⚠️  Audit violation prevention: purge ({purge_in_str}) < "
+                    f"feature_lookback_max ({lookback_in_str}). "
+                    f"Increasing purge to {format_duration(purge_out)} (min required: {format_duration(min_purge)}) "
+                    f"to satisfy audit rule. Embargo remains {embargo_minutes:.1f}m (horizon-based, not feature lookback)."
+                )
+                create_resolved_config._logged_warnings.add(cache_key)
         # embargo_minutes stays at embargo_base (NOT increased)
     elif not purge_include_feature_lookback and feature_lookback_max_minutes is not None:
+        # Format lookback for logging (handle both float and DurationLike)
+        if isinstance(feature_lookback_max_minutes, (int, float)):
+            lookback_str = f"{feature_lookback_max_minutes:.1f}m"
+        else:
+            lookback_str = format_duration(parse_duration(feature_lookback_max_minutes))
+        
         logger.info(
-            f"ℹ️  Feature lookback ({feature_lookback_max_minutes:.1f}m) detected, but purge_include_feature_lookback=false. "
+            f"ℹ️  Feature lookback ({lookback_str}) detected, but purge_include_feature_lookback=false. "
             f"Using horizon-based purge only ({purge_minutes:.1f}m). "
             f"Note: This assumes features are strictly causal (only use past data)."
         )

@@ -130,28 +130,39 @@ def compute_feature_lookback_minutes(
             pass
     
     # Fallback: pattern matching
-    # Daily/24h patterns (1440 minutes)
-    if (re.search(r'_1d$|_1D$|_24h$|_24H$|^daily_|_daily$|_1440m|1440(?!\d)|rolling.*daily|daily.*high|daily.*low', feature_name, re.I) or
-        re.search(r'volatility.*day|vol.*day|volume.*day|.*day.*', feature_name, re.I)):
-        return 1440.0
+    # PRECEDENCE ORDER (same as compute_feature_lookback_max):
+    # 1. Explicit time suffixes (most reliable) - check FIRST
+    # 2. Keyword heuristics (less reliable) - only as fallback
     
-    # Hour-based patterns
+    # PRIORITY 1: Explicit time-based suffixes (most reliable)
+    # Minute-based patterns (e.g., _15m, _30m, _1440m) - CHECK FIRST
+    minutes_match = re.search(r'_(\d+)m$', feature_name, re.I)
+    if minutes_match:
+        minutes = int(minutes_match.group(1))
+        return float(minutes)
+    
+    # Hour-based patterns (e.g., _12h, _24h) - CHECK SECOND
     hours_match = re.search(r'_(\d+)h', feature_name, re.I)
     if hours_match:
         hours = int(hours_match.group(1))
         return hours * 60.0
     
-    # Day-based patterns
+    # Day-based patterns (e.g., _1d, _3d) - CHECK THIRD
     days_match = re.search(r'_(\d+)d', feature_name, re.I)
     if days_match:
         days = int(days_match.group(1))
         return days * 1440.0
     
-    # Minute-based patterns
-    minutes_match = re.search(r'_(\d+)m$', feature_name, re.I)
-    if minutes_match:
-        minutes = int(minutes_match.group(1))
-        return float(minutes)
+    # PRIORITY 2: Keyword heuristics (fallback only if no explicit suffix)
+    # Explicit daily patterns (ends with _1d, _24h, starts with daily_, etc.)
+    if (re.search(r'_1d$|_1D$|_24h$|_24H$|^daily_|_daily$|_1440m|1440(?!\d)', feature_name, re.I) or
+        re.search(r'rolling.*daily|daily.*high|daily.*low', feature_name, re.I) or
+        re.search(r'volatility.*day|vol.*day|volume.*day', feature_name, re.I)):
+        return 1440.0
+    
+    # Last resort: very aggressive "day" keyword (only if no explicit suffix)
+    if re.search(r'.*day.*', feature_name, re.I):
+        return 1440.0
     
     # Bar-based patterns (sma_200, rsi_14, etc.)
     bar_match = re.match(r'^(ret|sma|ema|rsi|macd|bb|atr|adx|mom|vol|std|var)_(\d+)', feature_name)

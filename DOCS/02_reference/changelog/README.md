@@ -6,6 +6,12 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-13 (Duration System)** — Generalized Duration Parsing System, Lookback Detection Precedence Fix, Documentation Review, Non-Auditable Status Markers  
+  → [View](2025-12-13-duration-system.md)
+
+- **2025-12-13** — Config Path Consolidation, Config Trace System, Max Samples Fix, Output Directory Binning Fix  
+  → [View](2025-12-13.md)
+
 - **2025-12-12** — Trend Analysis System Extension (Feature Selection), Cohort-Aware Reproducibility System, RESULTS Directory Organization, Integrated Backups, Enhanced Metadata  
   → [View](2025-12-12.md)
 

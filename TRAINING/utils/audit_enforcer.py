@@ -12,8 +12,10 @@ Usage:
 """
 
 import logging
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, Union
 from enum import Enum
+
+from TRAINING.utils.duration_parser import parse_duration, Duration, DurationLike
 
 logger = logging.getLogger(__name__)
 
@@ -104,22 +106,42 @@ class AuditEnforcer:
         self._validate_suspicious_scores(metrics)
         self._validate_feature_registry_changes(metadata, previous_metadata)
         
+        # Check for non-auditable status (STICKY MARKER)
+        is_non_auditable = metadata.get("is_auditable", True) == False or metadata.get("audit_status") == "non_auditable"
+        
         # Build audit report
         audit_report = {
             "mode": self.mode.value,
             "violations": self.violations,
             "warnings": self.warnings,
-            "is_valid": len(self.violations) == 0,
-            "has_warnings": len(self.warnings) > 0
+            "is_valid": len(self.violations) == 0 and not is_non_auditable,
+            "has_warnings": len(self.warnings) > 0,
+            "is_auditable": not is_non_auditable,  # STICKY MARKER: explicit boolean
+            "audit_status": metadata.get("audit_status", "auditable"),
+            "audit_failure_reason": metadata.get("audit_failure_reason")
         }
         
         # Determine if validation passed
-        is_valid = len(self.violations) == 0
+        is_valid = len(self.violations) == 0 and not is_non_auditable
+        
+        # STICKY MARKER: Print non-auditable status prominently in header
+        if is_non_auditable:
+            reason = metadata.get("audit_failure_reason", "Unknown reason")
+            logger.error(
+                "=" * 80 + "\n"
+                "🚨 RUN MARKED AS NON-AUDITABLE 🚨\n"
+                f"Reason: {reason}\n"
+                "This run cannot be used for production decisions or reproducibility tracking.\n"
+                "=" * 80
+            )
         
         # In strict mode, violations cause failure
         if self.mode == AuditMode.STRICT and not is_valid:
             violation_summary = "; ".join([v["message"] for v in self.violations])
-            raise ValueError(f"Audit validation failed (strict mode): {violation_summary}")
+            if is_non_auditable:
+                raise ValueError(f"Audit validation failed (strict mode): Run is NON-AUDITABLE. {violation_summary}")
+            else:
+                raise ValueError(f"Audit validation failed (strict mode): {violation_summary}")
         
         # In warn mode, log violations but don't fail
         if not is_valid:
@@ -129,6 +151,14 @@ class AuditEnforcer:
         # Log warnings
         for warning in self.warnings:
             logger.warning(f"⚠️  AUDIT WARNING: {warning['message']} (rule: {warning['rule']})")
+        
+        # STICKY MARKER: Include in summary line
+        if is_non_auditable:
+            logger.error("❌ AUDIT STATUS: NON-AUDITABLE - Results cannot be trusted")
+        elif is_valid:
+            logger.info("✅ AUDIT STATUS: PASSED - Results are auditable")
+        else:
+            logger.warning("⚠️  AUDIT STATUS: VIOLATIONS DETECTED - Review required")
         
         return is_valid, audit_report
     
@@ -161,23 +191,83 @@ class AuditEnforcer:
             })
     
     def _validate_feature_lookback(self, metadata: Dict[str, Any]) -> None:
-        """Validate purge/embargo cover feature lookback."""
-        cv_details = metadata.get("cv_details", {})
-        purge = cv_details.get("purge_minutes") or metadata.get("purge_minutes")
-        embargo = cv_details.get("embargo_minutes") or metadata.get("embargo_minutes")
-        lookback = cv_details.get("feature_lookback_max_minutes") or metadata.get("feature_lookback_max_minutes")
+        """
+        Validate purge/embargo cover feature lookback.
         
-        if lookback is None:
+        Uses duration-aware comparison to handle any time period format
+        (strings like "85.0m", "1h30m", or numeric values in minutes).
+        
+        **Fail-closed policy**: If duration parsing fails, this marks the run as
+        non-auditable rather than silently falling back to potentially incorrect comparisons.
+        """
+        cv_details = metadata.get("cv_details", {})
+        purge_raw = cv_details.get("purge_minutes") or metadata.get("purge_minutes")
+        embargo_raw = cv_details.get("embargo_minutes") or metadata.get("embargo_minutes")
+        lookback_raw = cv_details.get("feature_lookback_max_minutes") or metadata.get("feature_lookback_max_minutes")
+        
+        if lookback_raw is None:
             return  # Can't validate without lookback
         
-        if purge is not None and purge < lookback:
-            self.violations.append({
-                "rule": "purge_minutes >= feature_lookback_max_minutes",
-                "message": f"purge_minutes ({purge}) < feature_lookback_max_minutes ({lookback}) - ROLLING WINDOW LEAKAGE RISK",
-                "severity": "critical",
-                "purge_minutes": purge,
-                "feature_lookback_max_minutes": lookback
-            })
+        # Parse durations (handle both float minutes and duration strings)
+        # Current codebase uses float minutes, but we support DurationLike for future extensibility
+        try:
+            # If numeric, interpret as minutes (convert to seconds for parse_duration)
+            # If string, parse directly
+            if isinstance(lookback_raw, (int, float)):
+                lookback_d = Duration.from_seconds(lookback_raw * 60.0)
+            else:
+                lookback_d = parse_duration(lookback_raw)
+            
+            if purge_raw is not None:
+                if isinstance(purge_raw, (int, float)):
+                    purge_d = Duration.from_seconds(purge_raw * 60.0)
+                else:
+                    purge_d = parse_duration(purge_raw)
+                
+                if purge_d < lookback_d:
+                    # Format for error message (preserve original format if possible)
+                    purge_str = f"{purge_raw}" if isinstance(purge_raw, (int, float)) else str(purge_raw)
+                    lookback_str = f"{lookback_raw}" if isinstance(lookback_raw, (int, float)) else str(lookback_raw)
+                    
+                    self.violations.append({
+                        "rule": "purge_minutes >= feature_lookback_max_minutes",
+                        "message": f"purge_minutes ({purge_str}) < feature_lookback_max_minutes ({lookback_str}) - ROLLING WINDOW LEAKAGE RISK",
+                        "severity": "critical",
+                        "purge_minutes": purge_raw,
+                        "feature_lookback_max_minutes": lookback_raw
+                    })
+        except (ValueError, TypeError) as e:
+            # FAIL CLOSED: Don't silently fall back to potentially incorrect comparisons
+            # This is a configuration error that must be fixed
+            error_msg = (
+                f"Failed to parse durations for feature lookback validation: {e}. "
+                f"This indicates a configuration error. Run marked as NON-AUDITABLE."
+            )
+            
+            if self.mode == AuditMode.STRICT:
+                # In strict mode, raise immediately
+                raise ValueError(error_msg) from e
+            else:
+                # In warn mode, log loud warning and mark as violation
+                logger.error(f"🚨 {error_msg}")
+                self.violations.append({
+                    "rule": "duration_parsing_failed",
+                    "message": error_msg,
+                    "severity": "critical",
+                    "purge_minutes": purge_raw,
+                    "feature_lookback_max_minutes": lookback_raw,
+                    "parsing_error": str(e)
+                })
+                # Mark metadata as non-auditable with STICKY markers
+                metadata["audit_status"] = "non_auditable"
+                metadata["audit_failure_reason"] = f"Duration parsing failed: {e}"
+                metadata["is_auditable"] = False  # Explicit boolean flag
+                metadata["audit_warnings"] = metadata.get("audit_warnings", [])
+                metadata["audit_warnings"].append({
+                    "type": "non_auditable",
+                    "message": error_msg,
+                    "timestamp": pd.Timestamp.now().isoformat() if 'pd' in globals() else None
+                })
         
         # NOTE: Embargo is NOT required to cover feature lookback
         # Embargo is for label/horizon overlap, not rolling window features
