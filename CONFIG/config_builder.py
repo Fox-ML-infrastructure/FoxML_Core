@@ -177,11 +177,13 @@ def load_experiment_config(experiment_name: str) -> ExperimentConfig:
     )
     
     # Build ExperimentConfig (validation happens in __post_init__)
+    # Use targets.primary if available, otherwise use empty string (will be overridden by auto_targets)
+    primary_target = targets_data.get('primary', '') if targets_data else ''
     return ExperimentConfig(
         name=exp_data.get('name', experiment_name),
         data_dir=Path(data_data['data_dir']),
         symbols=data_data['symbols'],
-        target=targets_data['primary'],
+        target=primary_target,
         data=data_config,
         max_samples_per_symbol=data_data.get('max_samples_per_symbol', 5000),
         description=exp_data.get('description'),
