@@ -13,7 +13,9 @@ Complete navigation guide for FoxML Core documentation.
 
 ### Project Status & Licensing
 
-- [Roadmap](../ROADMAP.md) - Current development focus and upcoming work
+- [Roadmap](../ROADMAP.md) - Current development focus and upcoming work (executive summary)
+- [Detailed Roadmap](02_reference/roadmap/README.md) - **NEW**: Per-date detailed roadmap with component status and priorities
+- [Known Issues & Limitations](02_reference/KNOWN_ISSUES.md) - **NEW**: Features that don't work yet or have limitations
 - [Deterministic Training](00_executive/DETERMINISTIC_TRAINING.md) - SST config system and reproducibility guarantees
 - [Changelog](../CHANGELOG.md) - Recent technical and compliance changes (quick overview)
 - [Changelog Index](02_reference/changelog/README.md) - Per-day detailed changelogs with file paths and config references

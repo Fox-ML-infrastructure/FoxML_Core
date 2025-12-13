@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Mutual Information**: Fixed `random_state` SST compliance (no more KeyError)
 - **Audit violations**: Fixed false violations when Final Gatekeeper drops features
 - **CatBoost**: Fixed feature importance calculation (requires training dataset)
+- **GPU Detection**: Made fully config-driven - all GPU settings from `gpu_config.yaml` (SST)
 - All fixes maintain SST compliance (no hardcoded values)
 
 #### Experiment Configuration System (2025-12-12) – **NEW**
