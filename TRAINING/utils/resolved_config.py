@@ -56,6 +56,9 @@ class ResolvedConfig:
     label_starts_at: str = "t+1"  # When label window starts (t+1 = never includes bar t)
     prices: str = "unknown"  # Price adjustment: unknown/unadjusted/adjusted
     
+    # Feature lookback (for audit validation)
+    feature_lookback_max_minutes: Optional[float] = None  # Maximum feature lookback in minutes
+    
     def __post_init__(self):
         """Compute derived values after initialization."""
         # Compute effective_min_cs if not set
