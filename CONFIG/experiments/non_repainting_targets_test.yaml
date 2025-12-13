@@ -23,7 +23,7 @@ intelligent_training:
   top_m_features: 50
   strategy: single_task
   run_leakage_diagnostics: false
-  manual_targets: [fwd_ret_60m, fwd_ret_30m, fwd_ret_120m]  # Test multiple forward return horizons
+  manual_targets: [fwd_ret_60m, fwd_ret_30m, fwd_ret_120m, fw_ret_5m, fwd_ret_30m]  # Test multiple forward return horizons
 
 targets:
   primary: fwd_ret_60m  # Primary target (for reference)

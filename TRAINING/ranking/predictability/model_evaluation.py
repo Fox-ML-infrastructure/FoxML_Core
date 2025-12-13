@@ -1279,8 +1279,9 @@ def train_and_evaluate_models(
             # Defensive check: ensure config is a dict
             if not isinstance(lgb_config, dict):
                 lgb_config = {}
-            # Remove objective and device from config (we set these explicitly)
-            lgb_config_clean = {k: v for k, v in lgb_config.items() if k not in ['device', 'objective', 'metric']}
+            # Remove objective, device, and verbose from config (we set these explicitly)
+            # CRITICAL: Remove verbose to prevent double argument error
+            lgb_config_clean = {k: v for k, v in lgb_config.items() if k not in ['device', 'objective', 'metric', 'verbose']}
             
             # Set verbose level from backend config
             # Note: verbose is a model constructor parameter, not fit() parameter
