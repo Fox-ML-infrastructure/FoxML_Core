@@ -1259,20 +1259,17 @@ def train_and_evaluate_models(
                 test_model = lgb.LGBMRegressor(device='cuda', n_estimators=1, verbose=lgbm_backend_cfg.native_verbosity)
                 test_model.fit(np.random.rand(10, 5), np.random.rand(10))
                 gpu_params = {'device': 'cuda', 'gpu_device_id': 0}
-                if log_cfg.gpu_detail:
-                    logger.info("  Using GPU (CUDA) for LightGBM")
-            except:
+                logger.info("  ✅ Using GPU (CUDA) for LightGBM")
+            except Exception as cuda_error:
                 try:
                     # Try OpenCL
                     # DESIGN_CONSTANT_OK: n_estimators=1 for diagnostic leakage detection only, not production behavior
                     test_model = lgb.LGBMRegressor(device='gpu', n_estimators=1, verbose=lgbm_backend_cfg.native_verbosity)
                     test_model.fit(np.random.rand(10, 5), np.random.rand(10))
                     gpu_params = {'device': 'gpu', 'gpu_platform_id': 0, 'gpu_device_id': 0}
-                    if log_cfg.gpu_detail:
-                        logger.info("  Using GPU (OpenCL) for LightGBM")
-                except:
-                    if log_cfg.gpu_detail:
-                        logger.info("  Using CPU for LightGBM")
+                    logger.info("  ✅ Using GPU (OpenCL) for LightGBM")
+                except Exception as opencl_error:
+                    logger.warning(f"  ⚠️  LightGBM GPU not available (CUDA: {cuda_error}, OpenCL: {opencl_error}), using CPU")
             
             # Get config values
             lgb_config = get_model_config('lightgbm', multi_model_config)
@@ -1624,18 +1621,26 @@ def train_and_evaluate_models(
                 xgb_gpu_id = gpu_cfg.get('gpu_id', 0)
                 
                 if xgb_device == 'cuda':
-                    # Try CUDA GPU
-                    test_model = xgb.XGBRegressor(tree_method='hist', device='cuda', n_estimators=1)
-                    test_model.fit(np.random.rand(10, 5), np.random.rand(10))
-                    gpu_params = {'tree_method': xgb_tree_method, 'device': 'cuda', 'gpu_id': xgb_gpu_id}
-                    if log_cfg.gpu_detail:
-                        logger.info("  Using GPU (CUDA) for XGBoost")
+                    # Try CUDA GPU - XGBoost 2.0+ uses device='cuda' with tree_method='hist'
+                    # Older versions might need tree_method='gpu_hist', but we'll try hist first
+                    try:
+                        test_model = xgb.XGBRegressor(tree_method='hist', device='cuda', n_estimators=1, verbosity=0)
+                        test_model.fit(np.random.rand(10, 5), np.random.rand(10))
+                        gpu_params = {'tree_method': xgb_tree_method, 'device': 'cuda', 'gpu_id': xgb_gpu_id}
+                        logger.info("  ✅ Using GPU (CUDA) for XGBoost")
+                    except Exception as gpu_test_error:
+                        # Try older API: tree_method='gpu_hist' (no device parameter)
+                        try:
+                            test_model = xgb.XGBRegressor(tree_method='gpu_hist', n_estimators=1, verbosity=0)
+                            test_model.fit(np.random.rand(10, 5), np.random.rand(10))
+                            gpu_params = {'tree_method': 'gpu_hist'}  # Older API doesn't use device parameter
+                            logger.info("  ✅ Using GPU (CUDA) for XGBoost (legacy API: gpu_hist)")
+                        except Exception:
+                            logger.warning(f"  ⚠️  XGBoost GPU test failed, falling back to CPU: {gpu_test_error}")
                 else:
-                    if log_cfg.gpu_detail:
-                        logger.info("  Using CPU for XGBoost (device='cpu' in config)")
+                    logger.info("  Using CPU for XGBoost (device='cpu' in config)")
             except Exception as e:
-                if log_cfg.gpu_detail:
-                    logger.info(f"  Using CPU for XGBoost (GPU not available: {e})")
+                logger.warning(f"  ⚠️  XGBoost GPU config error, using CPU: {e}")
             
             # Get config values
             xgb_config = get_model_config('xgboost', multi_model_config)
