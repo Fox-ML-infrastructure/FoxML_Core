@@ -60,6 +60,27 @@ This License covers the use case(s) and scope specified in the Ordering Document
 
 ## 2. GRANT OF LICENSE
 
+**Evaluation License (30-Day Trial Period).**
+
+Notwithstanding the foregoing, Licensor grants Licensee a temporary, royalty-free, non-exclusive license to use the Software for Internal Commercial Use solely for the purpose of evaluation and testing for a period of thirty (30) days from the initial download or first use of the Software ("Evaluation Period"). 
+
+During the Evaluation Period, Licensee may:
+- Use the Software for internal evaluation, testing, and proof-of-concept purposes
+- Deploy the Software in development, testing, or staging environments
+- Evaluate the Software's functionality, performance, and suitability for Licensee's business needs
+
+**Evaluation Period Limitations:**
+- The Evaluation Period is limited to thirty (30) days from initial download or first use
+- Use during the Evaluation Period is limited to evaluation and testing purposes only
+- Production use, revenue-generating activities, or use beyond the Evaluation Period requires a paid Commercial License
+- The Evaluation License does not include support, maintenance, or updates beyond what is publicly available
+- Licensee must comply with all other terms of this License (including restrictions in Section 4) during the Evaluation Period
+
+**Transition to Paid License:**
+If Licensee continues to use the Software after the Evaluation Period, Licensee must execute a Commercial License and pay applicable fees. Continued use after the Evaluation Period without a valid Commercial License constitutes unlicensed use and may result in copyright infringement claims and liability for retroactive licensing fees.
+
+**Commercial License (After Evaluation Period).**
+
 Subject to payment of applicable fees and execution of a commercial agreement, the Licensor grants the Licensee a non-exclusive, non-transferable, non-sublicensable, worldwide right to:
 
 - Use the Software for Commercial Use

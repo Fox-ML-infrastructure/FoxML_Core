@@ -23,7 +23,10 @@ Commercial license pricing is aligned with enterprise ML infrastructure standard
 
 **Any business or internal use by or for a commercial organization requires a commercial license**, regardless of whether the use directly generates revenue, is experimental, is a proof of concept, or is claimed to be "non-commercial" or "research-only." See `COMMERCIAL_LICENSE.md` Section 1 for the complete definition of "Commercial Use."
 
-**FOR THE AVOIDANCE OF DOUBT:** There is no "free trial" or "evaluation period" for Commercial Use (as defined in `COMMERCIAL_LICENSE.md` Section 1). Any use within a business context requires a commercial license from the start. The 30-day evaluation period described in `LEGAL/SUPPORT_POLICY.md` is for non-commercial evaluation only and does not permit Commercial Use.
+**30-DAY EVALUATION PERIOD FOR COMMERCIAL USE:**
+Commercial organizations may evaluate the Software for up to 30 days from initial download for testing and evaluation purposes without a paid license. This evaluation period allows organizations to test the Software's functionality, performance, and suitability before committing to a commercial license. Continued use after the 30-day evaluation period requires a commercial license. See `COMMERCIAL_LICENSE.md` Section 2 for complete evaluation license terms.
+
+**FOR THE AVOIDANCE OF DOUBT:** The 30-day evaluation period is for evaluation and testing purposes only. Production use, revenue-generating activities, or use beyond the evaluation period requires a paid commercial license. The 30-day evaluation period described in `LEGAL/SUPPORT_POLICY.md` is for non-commercial evaluation only and is separate from the commercial evaluation period.
 
 ### Academic & Personal Use (AGPL-3.0 Only)
 
