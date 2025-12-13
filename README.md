@@ -170,3 +170,11 @@ For bug reports, feature requests, or technical issues:
 
 For commercial licensing or organizational engagements:  
 **jenn.lewis5789@gmail.com**
+
+---
+
+## Support Development
+
+If you appreciate this work and want to support ongoing development, you can contribute here: [Support Development](https://www.paypal.com/ncp/payment/75FQ39PTAUNFQ)
+
+Contributions are voluntary and provided as-is. They do not confer ownership, governance rights, priority support, or any implied agreement beyond appreciation for the work.
