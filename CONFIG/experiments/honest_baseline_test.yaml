@@ -1,0 +1,46 @@
+# Honest Baseline Test - Non-Repainting Targets
+# Tests forward return targets and first_touch barrier targets
+# These targets don't repaint and should give honest baseline scores (~0.52-0.54)
+
+experiment:
+  name: honest_baseline_test
+  description: "Test non-repainting targets (forward returns, first_touch) to get honest baseline scores"
+
+data:
+  data_dir: data/data_labeled_v2/interval=5m
+  symbols: [AAPL, MSFT, GOOGL, TSLA, NVDA]  # Use same symbols as your current test
+  interval: 5m
+  max_samples_per_symbol: 50000  # Match your current test settings
+
+targets:
+  # Forward return targets (non-repainting, mathematically "hard")
+  # These should give honest baseline scores (~0.52-0.54)
+  primary: fwd_ret_60m
+  # Alternative targets to test:
+  # - fwd_ret_30m (30-minute forward return)
+  # - fwd_ret_120m (120-minute forward return)
+  # - y_first_touch_60m_0.8 (triple barrier - which barrier hits first)
+
+# Module-specific overrides
+feature_selection:
+  top_n: 50  # Match your current test
+  model_families: [lightgbm, random_forest, neural_network]  # Use all families for comparison
+
+target_ranking:
+  # Use same settings as your current test for fair comparison
+  min_samples: 100
+  cross_sectional:
+    min_cs: 10
+    max_cs_samples: 1000
+
+training:
+  model_families: [lightgbm, random_forest, neural_network]
+  cv_folds: 5
+
+# Notes:
+# - Forward return targets (fwd_ret_*) are non-repainting
+# - They calculate: (future_price - current_price) / current_price
+# - No lookahead bias - the target is fixed at time t
+# - Expected honest score: ~0.52-0.54 (real alpha)
+# - If score > 0.70, there's still a leak somewhere
+# - If score ~0.52-0.54, you have your honest baseline
