@@ -28,12 +28,12 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ## Documentation Audits
 
-Quality assurance audits and accuracy checks:
+Quality assurance audits and accuracy checks (publicly available for transparency):
 
-- **[Documentation Accuracy Check](../audits/DOCS_ACCURACY_CHECK.md)** - Accuracy audit results and fixes (2025-12-13)
-- **[Unverified Claims Analysis](../audits/DOCS_UNVERIFIED_CLAIMS.md)** - Claims without verified test coverage (2025-12-13)
-- **[Marketing Language Removal](../audits/MARKETING_LANGUAGE_REMOVED.md)** - Marketing terms removed for accuracy (2025-12-13)
-- **[Dishonest Statements Fixed](../audits/DISHONEST_STATEMENTS_FIXED.md)** - Final pass fixing contradictions and overselling (2025-12-13)
+- **[Documentation Accuracy Check](../../00_executive/audits/DOCS_ACCURACY_CHECK.md)** - Accuracy audit results and fixes (2025-12-13)
+- **[Unverified Claims Analysis](../../00_executive/audits/DOCS_UNVERIFIED_CLAIMS.md)** - Claims without verified test coverage (2025-12-13)
+- **[Marketing Language Removal](../../00_executive/audits/MARKETING_LANGUAGE_REMOVED.md)** - Marketing terms removed for accuracy (2025-12-13)
+- **[Dishonest Statements Fixed](../../00_executive/audits/DISHONEST_STATEMENTS_FIXED.md)** - Final pass fixing contradictions and overselling (2025-12-13)
 
 ---
 

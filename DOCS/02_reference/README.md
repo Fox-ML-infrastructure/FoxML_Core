@@ -39,9 +39,10 @@ This directory contains comprehensive reference documentation for developers, ML
 - **[Training Routing System](training_routing/README.md)** - Routing decisions and training plans
 - **[Target Ranking](target_ranking/README.md)** - Target ranking system
 
-### Changelog & Audits
+### Changelog
 - **[Changelog Index](changelog/README.md)** - Per-day detailed changelogs
-- **[Documentation Audits](audits/README.md)** - Quality assurance audits and accuracy checks
+
+**Note**: Documentation audits have been moved to [Executive Documentation](../00_executive/audits/README.md) for public transparency.
 
 ### Roadmap
 - **[Roadmap Index](roadmap/README.md)** - Development roadmap and priorities
@@ -55,7 +56,7 @@ This directory contains comprehensive reference documentation for developers, ML
 - **Developers** - API Reference, Configuration Reference
 - **ML Engineers** - Models Reference, Systems Reference
 - **System Administrators** - Configuration Reference, Systems Reference
-- **QA/Testing** - Audits, Known Issues
+- **QA/Testing** - Known Issues (audits moved to executive docs for transparency)
 
 ## Related Documentation
 

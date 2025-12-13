@@ -28,6 +28,8 @@ See each directory's [README](00_executive/README.md) for detailed contents.
 - [Detailed Roadmap](02_reference/roadmap/README.md) - **NEW**: Per-date detailed roadmap with component status and priorities
 - [Known Issues & Limitations](02_reference/KNOWN_ISSUES.md) - **NEW**: Features that don't work yet or have limitations
 - [Deterministic Training](00_executive/DETERMINISTIC_TRAINING.md) - SST config system and reproducibility guarantees
+- [Audit Reports](00_executive/audits/README.md) - **NEW**: Quality assurance audits, documentation accuracy checks, and technical audits (public transparency)
+- [Documentation Review Statement](../DOCUMENTATION_REVIEW.md) - **NEW**: Initial documentation review completed
 - [Changelog](../CHANGELOG.md) - Recent technical and compliance changes (quick overview)
 - [Changelog Index](02_reference/changelog/README.md) - Per-day detailed changelogs with file paths and config references
 - [Licensing & Subscriptions](../LEGAL/SUBSCRIPTIONS.md) - AGPL vs commercial usage and subscription tiers
@@ -49,6 +51,7 @@ First-time users start here. See [00_executive/README.md](00_executive/README.md
 - [Quick Start](00_executive/QUICKSTART.md) - Get running in 5 minutes
 - [Architecture Overview](00_executive/ARCHITECTURE_OVERVIEW.md) - System architecture
 - [Getting Started](00_executive/GETTING_STARTED.md) - Onboarding guide
+- [Audit Reports](00_executive/audits/README.md) - Quality assurance audits, documentation checks, and technical audits (public transparency)
 
 ## Tier B: Tutorials / Walkthroughs
 

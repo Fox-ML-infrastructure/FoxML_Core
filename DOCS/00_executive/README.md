@@ -12,6 +12,7 @@ This directory contains executive-level documentation designed for quick underst
 - **[Getting Started](GETTING_STARTED.md)** - Complete onboarding guide with examples
 - **[Architecture Overview](ARCHITECTURE_OVERVIEW.md)** - System architecture at a glance
 - **[Deterministic Training](DETERMINISTIC_TRAINING.md)** - Reproducibility and SST config system
+- **[Audit Reports](audits/README.md)** - Quality assurance audits, documentation accuracy checks, and technical audits (public transparency)
 
 ## Who Should Read This
 
