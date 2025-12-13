@@ -11,6 +11,8 @@ FoxML Core is an ML infrastructure stack for cross-sectional and panel data for 
 
 > **Note:** Personal / academic use is AGPL-3.0. **Company / production use requires a commercial license.**
 
+> **📊 Testing & Development:** All testing, validation, and development work is performed using **5-minute interval data**. The software supports various data intervals, but all tests, benchmarks, and development workflows use 5-minute bars as the standard reference.
+
 Developed and maintained by **Jennifer Lewis**  
 Independent Contractor • ML Engineering • Cross-Sectional ML Systems • Systems Architecture
 

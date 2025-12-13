@@ -2,6 +2,8 @@
 
 Installation, setup, and first pipeline run.
 
+> **📊 Testing & Development:** All testing, validation, and development work is performed using **5-minute interval data**. The software supports various data intervals, but all tests, benchmarks, and development workflows use 5-minute bars as the standard reference.
+
 ## Installation
 
 ### Prerequisites
@@ -55,6 +57,8 @@ See [Architecture Overview](ARCHITECTURE_OVERVIEW.md) for details.
 ## Data Preparation
 
 ### Data Location
+
+**Note:** All testing and development uses 5-minute interval data. The examples below use `interval=5m` as the standard reference.
 
 ```
 data/data_labeled/interval=5m/

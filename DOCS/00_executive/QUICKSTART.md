@@ -2,6 +2,8 @@
 
 Installation and basic usage.
 
+> **📊 Testing & Development:** All testing, validation, and development work is performed using **5-minute interval data**. The software supports various data intervals, but all tests, benchmarks, and development workflows use 5-minute bars as the standard reference.
+
 ## Prerequisites
 
 **⚠️ Important**: FoxML Core requires significant computational resources. This is **not suitable for laptop deployment** for production workloads.

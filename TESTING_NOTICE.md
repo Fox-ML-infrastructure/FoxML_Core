@@ -1,5 +1,19 @@
 # Testing Notice
 
+## Testing & Development Data
+
+**All testing and development is performed using 5-minute interval data.** This includes:
+- All unit tests
+- Integration tests
+- End-to-end pipeline validation
+- Performance benchmarks
+- Feature validation
+- Model training workflows
+
+The software is designed to work with various data intervals, but all validation, testing, and development work uses 5-minute bar data as the standard reference.
+
+---
+
 ## Highly Experimental Features (2025-12-12)
 
 ⚠️ **IMPORTANT**: The following features are **highly experimental** and are currently being **heavily tested**. These are new additions to the TRAINING system and should be used with caution until fully validated in your environment.
