@@ -1631,8 +1631,7 @@ class IntelligentTrainer:
         trend_summary = None
         try:
             from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
-            from pathlib import Path
-            
+            # Path is already imported at top of file
             # Find REPRODUCIBILITY directory
             repro_dir = self.output_dir / "REPRODUCIBILITY"
             if not repro_dir.exists():
