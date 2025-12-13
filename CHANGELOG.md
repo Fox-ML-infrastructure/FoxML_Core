@@ -16,12 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### License & Commercial Use Banner (2025-12-12) – **NEW**
 - **Terminal Billboard**: Professional startup banner prints licensing information on every run
+- **30-Day Evaluation Period**: Banner now includes 30-day evaluation period for commercial organizations
 - **Compliance**: Ensures users see licensing requirements even in automated systems
 - **Log Integration**: Banner appears in logs (indexed in Splunk/Datadog for compliance teams)
-- **Commercial Use Notice**: Clear messaging about commercial license requirements
-- **Links**: Direct links to `LEGAL/SUBSCRIPTIONS.md`, `LEGAL/LICENSING.md`, and contact email
+- **Commercial Use Notice**: Clear messaging about commercial license requirements and evaluation period
+- **Links**: Direct links to `LEGAL/SUBSCRIPTIONS.md`, `LEGAL/LICENSING.md`, `COMMERCIAL_LICENSE.md`, and contact email
 - **Suppressible**: Can be disabled via `FOXML_SUPPRESS_BANNER` environment variable
 - **Impact**: Helps capture value from "headless" clones (1,250+ clones vs 43 visitors)
+- **Legal Update**: Added 30-day evaluation period clause to `COMMERCIAL_LICENSE.md` Section 2
 
 #### GPU Acceleration for Target Ranking & Feature Selection (2025-12-12) – **NEW**
 - **GPU support**: XGBoost, CatBoost, and LightGBM now use GPU acceleration when available
@@ -159,9 +161,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **License & Commercial Use Banner** (2025-12-12)
   - Professional startup banner with licensing information
+  - **30-Day Evaluation Period**: Banner includes notice about 30-day evaluation period for commercial organizations
   - Appears in all main entry points (intelligent_trainer, feature_selection, training_strategies)
   - Links to legal documentation and contact information
   - Can be suppressed via `FOXML_SUPPRESS_BANNER` environment variable
+  - **Legal Update**: Added 30-day evaluation period clause to commercial license (removes friction for compliance officers)
 
 - **Training Routing & Planning System** (2025-12-11)
   - Config-driven routing decisions
