@@ -876,7 +876,13 @@ def train_and_evaluate_models(
             
             # Recompute resolved_config with actual pruned feature lookback
             # This overrides the baseline config created earlier
+            # CRITICAL: Use computed_lookback (from POST_PRUNE recompute) not feature_lookback_max_minutes variable
+            # The variable might be stale if computed_lookback was None
             if resolved_config is not None:
+                # Use the value we just computed and stored in resolved_config (line 867)
+                # OR use feature_lookback_max_minutes if computed_lookback was None
+                final_lookback = resolved_config.feature_lookback_max_minutes if resolved_config.feature_lookback_max_minutes is not None else feature_lookback_max_minutes
+                
                 # Override with post-prune config
                 resolved_config = create_resolved_config(
                     requested_min_cs=resolved_config.requested_min_cs,
@@ -884,7 +890,7 @@ def train_and_evaluate_models(
                     max_cs_samples=resolved_config.max_cs_samples,
                     interval_minutes=resolved_config.interval_minutes,
                     horizon_minutes=resolved_config.horizon_minutes,
-                    feature_lookback_max_minutes=feature_lookback_max_minutes,  # Now with actual pruned lookback
+                    feature_lookback_max_minutes=final_lookback,  # Use final computed value
                     purge_buffer_bars=resolved_config.purge_buffer_bars,
                     default_purge_minutes=None,  # Loads from safety_config.yaml (SST)
                     features_safe=resolved_config.features_safe,
@@ -1243,6 +1249,20 @@ def train_and_evaluate_models(
             purge_buffer_bars=purge_buffer_bars,
             default_purge_minutes=85.0
         )
+    
+    # CRITICAL: Validate purge doesn't exceed data span (hard-stop if invalid)
+    if time_vals is not None and len(time_vals) > 0:
+        time_series = pd.Series(time_vals) if not isinstance(time_vals, pd.Series) else time_vals
+        if hasattr(time_series, 'min') and hasattr(time_series, 'max'):
+            data_span_minutes = (time_series.max() - time_series.min()).total_seconds() / 60.0
+            if purge_minutes_val >= data_span_minutes:
+                raise RuntimeError(
+                    f"🚨 INVALID CV CONFIGURATION: purge_minutes ({purge_minutes_val:.1f}m) >= data_span ({data_span_minutes:.1f}m). "
+                    f"This will produce empty/invalid CV folds. "
+                    f"Either: 1) Set lookback_budget_minutes cap to drop long-lookback features, "
+                    f"2) Load more data (≥ {purge_minutes_val/1440:.1f} trading days), or "
+                    f"3) Disable purge_include_feature_lookback in config."
+                )
     
     purge_time = pd.Timedelta(minutes=purge_minutes_val)
     
@@ -4855,9 +4875,21 @@ def evaluate_target_predictability(
     if 'resolved_config' in locals() and resolved_config:
         purge_minutes_val = resolved_config.purge_minutes
         embargo_minutes_val = resolved_config.embargo_minutes
+        # CRITICAL: Use the FINAL lookback from resolved_config (should match POST_PRUNE recompute)
+        # If there's a mismatch, the invariant check should have caught it
         max_lookback_val = resolved_config.feature_lookback_max_minutes
         splitter_name = "PurgedTimeSeriesSplit"  # Default for time-series CV
         n_splits_val = cv_folds if 'cv_folds' in locals() else None
+        
+        # SANITY CHECK: Verify resolved_config lookback matches what we computed at POST_PRUNE
+        if 'computed_lookback' in locals() and computed_lookback is not None:
+            if abs(max_lookback_val - computed_lookback) > 1.0:
+                logger.error(
+                    f"🚨 SUMMARY MISMATCH: resolved_config.feature_lookback_max_minutes={max_lookback_val:.1f}m "
+                    f"but POST_PRUNE computed_lookback={computed_lookback:.1f}m. "
+                    f"Using POST_PRUNE value for summary."
+                )
+                max_lookback_val = computed_lookback  # Use the correct value
     
     _log_canonical_summary(
         target_name=target_name,
