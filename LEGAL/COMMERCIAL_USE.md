@@ -99,7 +99,8 @@
 
 For detailed pricing information, please contact the maintainer:
 
-📧 **jenn.lewis5789@gmail.com**
+📧 **jenn.lewis5789@gmail.com**  
+🔗 [LinkedIn](https://www.linkedin.com/in/jennifer-l-3434b3315)
 
 All commercial licensing begins with a paid pilot. Pilot options and annual license tiers are available based on your team size, deployment requirements, and usage needs.
 

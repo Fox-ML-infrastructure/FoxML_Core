@@ -87,7 +87,8 @@ Tiers are based on the **using team/desk size** (number of users and environment
 
 To request access or begin the licensing process, email:
 
-📧 jenn.lewis5789@gmail.com
+📧 jenn.lewis5789@gmail.com  
+🔗 [LinkedIn](https://www.linkedin.com/in/jennifer-l-3434b3315)
 
 Please include:
 

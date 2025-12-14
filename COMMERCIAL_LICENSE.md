@@ -264,7 +264,8 @@ Commercial licensing fees are based on the using team/desk size (number of users
 
 For detailed pricing information, please contact the maintainer:
 
-📧 **jenn.lewis5789@gmail.com**
+📧 **jenn.lewis5789@gmail.com**  
+🔗 [LinkedIn](https://www.linkedin.com/in/jennifer-l-3434b3315)
 
 Specific fees, term length, and payment schedule will be set forth in one or more **Order Forms** or **Statements of Work** executed by the parties (collectively, "Ordering Documents"). If there is any conflict between this License and an Ordering Document regarding fees, the Ordering Document will control.
 
