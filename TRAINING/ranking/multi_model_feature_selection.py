@@ -1253,7 +1253,8 @@ def train_model_and_get_importance(
             try:
                 from CONFIG.config_loader import get_cfg
                 # SST: All values from config, no hardcoded defaults
-                task_type = get_cfg('gpu.catboost.task_type', default='CPU', config_name='gpu_config')
+                # FIX: Rename to catboost_task_type to avoid potential variable name collision
+                catboost_task_type = get_cfg('gpu.catboost.task_type', default='CPU', config_name='gpu_config')
                 devices = get_cfg('gpu.catboost.devices', default='0', config_name='gpu_config')
                 thread_count = get_cfg('gpu.catboost.thread_count', default=8, config_name='gpu_config')
                 test_enabled = get_cfg('gpu.catboost.test_enabled', default=True, config_name='gpu_config')
@@ -1261,7 +1262,7 @@ def train_model_and_get_importance(
                 test_samples = get_cfg('gpu.catboost.test_samples', default=10, config_name='gpu_config')
                 test_features = get_cfg('gpu.catboost.test_features', default=5, config_name='gpu_config')
                 
-                if task_type == 'GPU':
+                if catboost_task_type == 'GPU':
                     if test_enabled:
                         # Try GPU (CatBoost uses task_type='GPU' or devices parameter)
                         try:
@@ -1269,12 +1270,14 @@ def train_model_and_get_importance(
                             test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
                             gpu_params = {'task_type': 'GPU', 'devices': devices}
                         except Exception:
-                            pass  # Fallback to CPU silently
+                            gpu_params = {}  # Fallback to CPU silently
                     else:
                         # Skip test, use config values directly
                         gpu_params = {'task_type': 'GPU', 'devices': devices}
+                else:
+                    gpu_params = {}  # Use CPU (no GPU params)
             except Exception:
-                pass  # Fallback to CPU silently
+                gpu_params = {}  # Fallback to CPU silently
             
             # Remove task-specific params (CatBoost uses thread_count, not n_jobs)
             # Also remove task_type, devices, and thread_count if present (we set these from GPU config)
