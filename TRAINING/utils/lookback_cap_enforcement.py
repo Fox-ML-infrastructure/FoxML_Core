@@ -144,11 +144,10 @@ def apply_lookback_cap(
                         f"🚨 {stage}: Feature '{feat_name}' missing from canonical map. "
                         f"This indicates a bug in lookback computation."
                     )
-                    if policy == "strict":
-                        raise RuntimeError(
-                            f"Feature '{feat_name}' missing from canonical map in {stage}. "
-                            f"This indicates a bug in lookback computation."
-                        )
+                    raise RuntimeError(
+                        f"Feature '{feat_name}' missing from canonical map in {stage}. "
+                        f"This indicates a bug in lookback computation."
+                    )
                 quarantined_features.append(feat_name)
             elif lookback == float("inf"):
                 # Unknown lookback - treat as unsafe
@@ -278,3 +277,4 @@ def apply_lookback_cap(
         actual_max_lookback=actual_max_lookback,
         quarantine_count=len(quarantined_features)
     )
+
