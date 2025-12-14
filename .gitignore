@@ -25,6 +25,7 @@ INTERNAL_DOCS/**
 .internal/**
 
 # Scripts (users implement their own tooling)
+SCRIPTS/*
 SCRIPTS/
 # Lowercase scripts folder (use SCRIPTS/ instead)
 scripts/

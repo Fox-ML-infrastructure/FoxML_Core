@@ -265,13 +265,16 @@ def compute_feature_lookback_max(
     # Use the legacy wrapper function from leakage_budget module
     from TRAINING.utils import leakage_budget
     
-    return leakage_budget.compute_feature_lookback_max(
+    result = leakage_budget.compute_feature_lookback_max(
         feature_names=feature_names,
         interval_minutes=interval_minutes,
         max_lookback_cap_minutes=max_lookback_cap_minutes,
         horizon_minutes=horizon_minutes,
-        registry=registry
+        registry=registry,
+        stage="resolved_config_wrapper"
     )
+    # Return only first two values for backward compatibility
+    return result[0], result[1]
 
 
 def create_resolved_config(

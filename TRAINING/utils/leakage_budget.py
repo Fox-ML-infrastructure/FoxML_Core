@@ -27,10 +27,29 @@ structural contradictions where audit and gatekeeper report different values.
 
 import re
 import logging
+import hashlib
 from dataclasses import dataclass
 from typing import Iterable, Optional, Dict, List, Tuple, Any
 
 logger = logging.getLogger(__name__)
+
+
+def _compute_feature_fingerprint(feature_names: Iterable[str]) -> str:
+    """
+    Compute order-sensitive fingerprint for feature list.
+    
+    Uses same algorithm as cross_sectional_data._compute_feature_fingerprint()
+    to ensure consistency with MODEL_TRAIN_INPUT logging.
+    
+    Args:
+        feature_names: Iterable of feature names (order matters)
+    
+    Returns:
+        8-character hex fingerprint
+    """
+    feature_list = list(feature_names)  # Convert to list to preserve order
+    feature_str = "\n".join(feature_list)  # Preserve order (matches MODEL_TRAIN_INPUT)
+    return hashlib.sha1(feature_str.encode()).hexdigest()[:8]
 
 # Calendar/exogenous features that have 0m lookback (not rolling windows)
 CALENDAR_FEATURES = {
@@ -189,8 +208,10 @@ def compute_budget(
     horizon_minutes: float,
     registry: Optional[Any] = None,
     max_lookback_cap_minutes: Optional[float] = None,
-    unknown_policy: str = "conservative"
-) -> LeakageBudget:
+    unknown_policy: str = "conservative",
+    expected_fingerprint: Optional[str] = None,
+    stage: str = "unknown"
+) -> Tuple[LeakageBudget, str]:
     """
     Compute leakage budget from final feature list.
     
@@ -205,15 +226,31 @@ def compute_budget(
         registry: Optional feature registry for metadata lookup
         max_lookback_cap_minutes: Optional cap for ranking mode (e.g., 240m = 4 hours)
         unknown_policy: "conservative" (default 1440m) or "drop" (return inf)
+        expected_fingerprint: Optional expected fingerprint for validation
+        stage: Stage name for logging (e.g., "post_gatekeeper", "post_pruning")
     
     Returns:
-        LeakageBudget with computed max_feature_lookback_minutes
+        (LeakageBudget, fingerprint) tuple
     """
-    if not final_feature_names or interval_minutes <= 0:
-        return LeakageBudget(
-            interval_minutes=interval_minutes,
-            horizon_minutes=horizon_minutes,
-            max_feature_lookback_minutes=0.0
+    feature_list = list(final_feature_names) if final_feature_names else []
+    fingerprint = _compute_feature_fingerprint(feature_list)
+    
+    # Validate fingerprint if expected
+    if expected_fingerprint is not None and fingerprint != expected_fingerprint:
+        logger.error(
+            f"🚨 FINGERPRINT MISMATCH at stage={stage}: "
+            f"expected={expected_fingerprint}, actual={fingerprint}. "
+            f"This indicates lookback computed on different feature set than enforcement."
+        )
+    
+    if not feature_list or interval_minutes <= 0:
+        return (
+            LeakageBudget(
+                interval_minutes=interval_minutes,
+                horizon_minutes=horizon_minutes,
+                max_feature_lookback_minutes=0.0
+            ),
+            fingerprint
         )
     
     # Get registry if not provided
@@ -260,10 +297,20 @@ def compute_budget(
     if max_lookback_cap_minutes is not None and max_lookback > max_lookback_cap_minutes:
         max_lookback = max_lookback_cap_minutes
     
-    return LeakageBudget(
-        interval_minutes=interval_minutes,
-        horizon_minutes=horizon_minutes,
-        max_feature_lookback_minutes=max_lookback
+    # Log fingerprint with lookback computation
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(
+            f"📊 compute_budget({stage}): max_lookback={max_lookback:.1f}m, "
+            f"n_features={len(feature_list)}, fingerprint={fingerprint}"
+        )
+    
+    return (
+        LeakageBudget(
+            interval_minutes=interval_minutes,
+            horizon_minutes=horizon_minutes,
+            max_feature_lookback_minutes=max_lookback
+        ),
+        fingerprint
     )
 
 
@@ -272,30 +319,34 @@ def compute_feature_lookback_max(
     interval_minutes: Optional[float] = None,
     max_lookback_cap_minutes: Optional[float] = None,
     horizon_minutes: Optional[float] = None,
-    registry: Optional[Any] = None
-) -> Tuple[Optional[float], List[Tuple[str, float]]]:
+    registry: Optional[Any] = None,
+    expected_fingerprint: Optional[str] = None,
+    stage: str = "unknown"
+) -> Tuple[Optional[float], List[Tuple[str, float]], str]:
     """
     Legacy wrapper for compute_budget() to maintain backward compatibility.
     
     This function is DEPRECATED. New code should use compute_budget() directly.
     
     Returns:
-        (max_lookback_minutes, top_lookback_features) tuple
+        (max_lookback_minutes, top_lookback_features, fingerprint) tuple
     """
     if not feature_names or interval_minutes is None or interval_minutes <= 0:
-        return None, []
+        return None, [], ""
     
     # Use default horizon if not provided
     if horizon_minutes is None:
         horizon_minutes = 60.0  # Default 1 hour
     
-    # Compute budget
-    budget = compute_budget(
+    # Compute budget (returns tuple now)
+    budget, fingerprint = compute_budget(
         feature_names,
         interval_minutes,
         horizon_minutes,
         registry=registry,
-        max_lookback_cap_minutes=max_lookback_cap_minutes
+        max_lookback_cap_minutes=max_lookback_cap_minutes,
+        expected_fingerprint=expected_fingerprint,
+        stage=stage
     )
     
     # Build top offenders list (for backward compatibility)
@@ -355,5 +406,12 @@ def compute_feature_lookback_max(
             if max_lookback is None or lookback >= max_lookback * 0.9 or len(top_offenders) < 10:
                 top_offenders.append((feat_name, lookback))
     
+    # Log fingerprint with lookback computation
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(
+            f"📊 compute_feature_lookback_max({stage}): max_lookback={max_lookback:.1f}m, "
+            f"n_features={len(feature_names)}, fingerprint={fingerprint}"
+        )
+    
     # Return top 10 offenders (only from current feature set, matching reported max)
-    return max_lookback, top_offenders[:10]
+    return max_lookback, top_offenders[:10], fingerprint

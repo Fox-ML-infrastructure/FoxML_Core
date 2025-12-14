@@ -736,10 +736,11 @@ class RankingHarness:
         
         # Recompute resolved_config.feature_lookback_max AFTER Final Gatekeeper
         if feature_names and len(feature_names) > 0:
-            max_lookback_after_gatekeeper, _ = compute_feature_lookback_max(
+            max_lookback_after_gatekeeper, _, fingerprint = compute_feature_lookback_max(
                 feature_names,
                 interval_minutes=detected_interval,
-                max_lookback_cap_minutes=None
+                max_lookback_cap_minutes=None,
+                stage="shared_harness_post_gatekeeper"
             )
             if max_lookback_after_gatekeeper is not None:
                 resolved_config.feature_lookback_max_minutes = max_lookback_after_gatekeeper

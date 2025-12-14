@@ -678,7 +678,7 @@ def train_and_evaluate_models(
             
             # Compute budget from PRUNED feature set
             if resolved_config and resolved_config.horizon_minutes:
-                budget = compute_budget(
+                budget, _ = compute_budget(
                     feature_names,
                     data_interval_minutes,
                     resolved_config.horizon_minutes,
@@ -812,12 +812,20 @@ def train_and_evaluate_models(
                         pass
                     
                     # Compute budget from final pruned features
-                    budget = compute_budget(
+                    budget, budget_fp = compute_budget(
                         feature_names,
                         data_interval_minutes,
                         resolved_config.horizon_minutes,
-                        registry=registry
+                        registry=registry,
+                        expected_fingerprint=post_prune_fingerprint if 'post_prune_fingerprint' in locals() else None,
+                        stage="post_pruning_policy_check"
                     )
+                    
+                    # Validate fingerprint
+                    if 'post_prune_fingerprint' in locals() and budget_fp != post_prune_fingerprint:
+                        logger.error(
+                            f"🚨 FINGERPRINT MISMATCH (policy_check): budget={budget_fp} != expected={post_prune_fingerprint}"
+                        )
                     purge_minutes = resolved_config.purge_minutes
                     embargo_minutes = resolved_config.embargo_minutes if resolved_config.embargo_minutes is not None else purge_minutes
                     
@@ -1112,9 +1120,13 @@ def train_and_evaluate_models(
         logger.error(f"  🚨 DUPLICATE COLUMN NAMES before training: {duplicates}")
         raise ValueError(f"Duplicate feature names before training: {duplicates}")
     
-    # Log feature set before training
-    from TRAINING.utils.cross_sectional_data import _log_feature_set
+    # Log feature set before training and compute fingerprint
+    # CRITICAL: This fingerprint represents the ACTUAL features used in training (post gatekeeper)
+    # All subsequent lookback computations must use this same fingerprint for validation
+    from TRAINING.utils.cross_sectional_data import _log_feature_set, _compute_feature_fingerprint
     _log_feature_set("MODEL_TRAIN_INPUT", feature_names, previous_names=None, logger_instance=logger)
+    model_train_input_fingerprint = _compute_feature_fingerprint(feature_names)
+    logger.debug(f"📊 MODEL_TRAIN_INPUT fingerprint={model_train_input_fingerprint} (n_features={len(feature_names)})")
     
     # Create purged time series split with time-based purging
     # CRITICAL: Validate time_vals alignment and sorting before using time-based purging
@@ -3882,6 +3894,8 @@ def evaluate_target_predictability(
     # This runs AFTER all loading/merging/sanitization is done
     # It physically drops features that violate the purge limit from the dataframe
     # This is the "worry-free" auto-corrector that handles race conditions
+    from TRAINING.utils.cross_sectional_data import _compute_feature_fingerprint
+    pre_gatekeeper_fingerprint = _compute_feature_fingerprint(feature_names)
     X, feature_names = _enforce_final_safety_gate(
         X=X,
         feature_names=feature_names,
@@ -3889,6 +3903,14 @@ def evaluate_target_predictability(
         interval_minutes=detected_interval,
         logger=logger
     )
+    
+    # CRITICAL: Compute fingerprint AFTER gatekeeper (this is the actual MODEL_TRAIN_INPUT fingerprint)
+    # The gatekeeper may drop features, so we need to use the post-gatekeeper fingerprint
+    post_gatekeeper_fingerprint = _compute_feature_fingerprint(feature_names)
+    
+    # Store fingerprint for use in train_and_evaluate_models (MODEL_TRAIN_INPUT logging)
+    # This ensures all subsequent lookback computations use the same fingerprint
+    model_train_input_fingerprint = post_gatekeeper_fingerprint
     
     # CRITICAL: Recompute resolved_config.feature_lookback_max AFTER Final Gatekeeper
     # The audit system uses this value, so it must reflect the ACTUAL features that will be trained
@@ -3906,17 +3928,31 @@ def evaluate_target_predictability(
             pass
         
         # Compute budget from FINAL feature set (post gatekeeper)
-        budget = compute_budget(
+        # CRITICAL: Validate fingerprint matches MODEL_TRAIN_INPUT (computed above)
+        budget, computed_fingerprint = compute_budget(
             feature_names,
             detected_interval,
             resolved_config.horizon_minutes if resolved_config else 60.0,
-            registry=registry
+            registry=registry,
+            expected_fingerprint=model_train_input_fingerprint,
+            stage="post_gatekeeper"
         )
+        
+        # Validate fingerprint consistency (invariant check)
+        if computed_fingerprint != model_train_input_fingerprint:
+            logger.error(
+                f"🚨 FINGERPRINT MISMATCH (post_gatekeeper): compute_budget={computed_fingerprint} != "
+                f"MODEL_TRAIN_INPUT={model_train_input_fingerprint}. "
+                f"This indicates lookback computed on different feature set than enforcement."
+            )
         
         # Update resolved_config with the new lookback (from features that actually remain)
         resolved_config.feature_lookback_max_minutes = budget.max_feature_lookback_minutes
         if log_cfg.cv_detail:
-            logger.info(f"📊 Updated feature_lookback_max after Final Gatekeeper: {budget.max_feature_lookback_minutes:.1f}m (from {len(feature_names)} remaining features)")
+            logger.info(
+                f"📊 Updated feature_lookback_max after Final Gatekeeper: {budget.max_feature_lookback_minutes:.1f}m "
+                f"(from {len(feature_names)} remaining features, fingerprint={computed_fingerprint})"
+            )
         
             # CRITICAL: Enforce leakage policy (strict/drop_features/warn)
             # Design: purge covers feature lookback, embargo covers target horizon
@@ -4004,12 +4040,22 @@ def evaluate_target_predictability(
                         feature_names = [name for i, name in enumerate(feature_names) if i in keep_indices]
                         
                         # Recompute budget on remaining features
-                        budget = compute_budget(
+                        from TRAINING.utils.cross_sectional_data import _compute_feature_fingerprint
+                        after_drop_fingerprint = _compute_feature_fingerprint(feature_names)
+                        budget, budget_fp = compute_budget(
                             feature_names,
                             detected_interval,
                             resolved_config.horizon_minutes if resolved_config else 60.0,
-                            registry=registry
+                            registry=registry,
+                            expected_fingerprint=after_drop_fingerprint,
+                            stage="after_policy_drop"
                         )
+                        
+                        # Validate fingerprint
+                        if budget_fp != after_drop_fingerprint:
+                            logger.error(
+                                f"🚨 FINGERPRINT MISMATCH (after_drop): budget={budget_fp} != expected={after_drop_fingerprint}"
+                            )
                         resolved_config.feature_lookback_max_minutes = budget.max_feature_lookback_minutes
                         
                         # Verify violation is resolved (check both constraints)
@@ -4059,6 +4105,18 @@ def evaluate_target_predictability(
     try:
         # Use detected_interval from outer scope (already computed above)
         # No need to recompute here
+        
+        # CRITICAL: Validate fingerprint consistency before training
+        # The feature_names passed to train_and_evaluate_models should match post_gatekeeper fingerprint
+        if 'gatekeeper_output_fingerprint' in locals():
+            from TRAINING.utils.cross_sectional_data import _compute_feature_fingerprint
+            current_fp = _compute_feature_fingerprint(feature_names)
+            if current_fp != gatekeeper_output_fingerprint:
+                logger.error(
+                    f"🚨 FINGERPRINT MISMATCH (pre_training): current={current_fp} != "
+                    f"gatekeeper_output={gatekeeper_output_fingerprint}. "
+                    f"Features changed between gatekeeper and training."
+                )
         
         result = train_and_evaluate_models(
             X, y, feature_names, task_type, model_families, multi_model_config,
@@ -4774,7 +4832,7 @@ def evaluate_target_predictability(
                         try:
                             # Get horizon for budget calculation
                             horizon = target_horizon_minutes if 'target_horizon_minutes' in locals() else 60.0
-                            budget = compute_budget(feature_names, data_interval_minutes, horizon)
+                            budget, _ = compute_budget(feature_names, data_interval_minutes, horizon)
                             feature_lookback_max = budget.max_feature_lookback_minutes
                         except Exception:
                             # Fallback: conservative estimate
