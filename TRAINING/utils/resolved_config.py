@@ -239,7 +239,9 @@ def compute_feature_lookback_max(
     interval_minutes: Optional[float] = None,
     max_lookback_cap_minutes: Optional[float] = None,
     horizon_minutes: Optional[float] = None,
-    registry: Optional[Any] = None
+    registry: Optional[Any] = None,
+    expected_fingerprint: Optional[str] = None,
+    stage: str = "unknown"
 ) -> Tuple[Optional[float], List[Tuple[str, float]]]:
     """
     Compute maximum feature lookback from actual feature names.
@@ -271,7 +273,8 @@ def compute_feature_lookback_max(
         max_lookback_cap_minutes=max_lookback_cap_minutes,
         horizon_minutes=horizon_minutes,
         registry=registry,
-        stage="resolved_config_wrapper"
+        expected_fingerprint=expected_fingerprint,
+        stage=stage if stage != "unknown" else "resolved_config_wrapper"
     )
     # Return only first two values for backward compatibility (LookbackResult dataclass)
     return result.max_minutes, result.top_offenders
