@@ -328,7 +328,7 @@ def compute_budget(
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(
             f"📊 compute_budget({stage}): max_lookback={max_lookback:.1f}m, "
-            f"n_features={len(feature_list)}, fingerprint={fingerprint}"
+            f"n_features={len(feature_list)}, fingerprint={set_fingerprint}"
         )
     
     return (
@@ -337,7 +337,8 @@ def compute_budget(
             horizon_minutes=horizon_minutes,
             max_feature_lookback_minutes=max_lookback
         ),
-        fingerprint
+        set_fingerprint,
+        order_fingerprint
     )
 
 
