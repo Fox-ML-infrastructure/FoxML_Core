@@ -95,7 +95,9 @@
 
 ## 4. Pricing
 
-**For pricing information, please contact the maintainer:**
+**Commercial licenses typically start in the low five figures annually, depending on team size and deployment scope.**
+
+For detailed pricing information, please contact the maintainer:
 
 📧 **jenn.lewis5789@gmail.com**
 
