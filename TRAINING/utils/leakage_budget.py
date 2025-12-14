@@ -384,10 +384,9 @@ def compute_feature_lookback_max(
     )
     
     # Build top offenders list (for backward compatibility)
-    # CRITICAL: Only include features from the ACTUAL feature_names list (current feature set)
-    # STRICT: Build lookback dict ONLY for features in feature_names (no registry-wide fallback)
+    # CRITICAL: max_lookback and top_offenders MUST be derived from the EXACT same (feature_names, lookback_map) pair
+    # NO clamping in reporting - clamping belongs in gatekeeper logic, not here
     top_offenders = []
-    max_lookback = budget.max_feature_lookback_minutes if budget.max_feature_lookback_minutes > 0 else None
     
     # Build lookback for ALL features in the current feature set
     # CRITICAL: Only iterate over feature_names (the passed list), not any global registry
@@ -416,42 +415,48 @@ def compute_feature_lookback_max(
     # Sort by lookback (descending)
     feature_lookbacks.sort(key=lambda x: x[1], reverse=True)
     
-    # SANITY CHECK: Verify max_lookback matches actual max from feature set
+    # Compute ACTUAL max from feature_lookbacks (uncapped - this is the truth)
+    # The budget.max_feature_lookback_minutes may be capped, but we report the actual max
+    actual_max_uncapped = feature_lookbacks[0][1] if feature_lookbacks else 0.0
+    
+    # Use the ACTUAL uncapped max for reporting (not the capped budget value)
+    # The cap is for gatekeeper logic, not for reporting
+    max_lookback = actual_max_uncapped if actual_max_uncapped > 0 else None
+    
+    # SANITY CHECK: Verify budget.max_feature_lookback_minutes matches actual max from feature set
     # CRITICAL: Only warn about mismatch if expected_fingerprint is provided (invariant-checked stage)
     # For earlier stages (pre-filter), mismatch is expected and not an error
-    if feature_lookbacks and max_lookback is not None:
-        actual_max = feature_lookbacks[0][1]
-        # Apply cap if provided (to match what was applied to max_lookback)
-        if max_lookback_cap_minutes is not None and actual_max > max_lookback_cap_minutes:
-            actual_max = max_lookback_cap_minutes
-        
-        # Only warn if this is an invariant-checked stage (expected_fingerprint provided)
-        # AND there's a real mismatch (not just floating point noise)
-        if expected_fingerprint is not None and abs(actual_max - max_lookback) > 1.0:
+    if feature_lookbacks and budget.max_feature_lookback_minutes is not None:
+        budget_max = budget.max_feature_lookback_minutes
+        # Compare uncapped actual_max to budget_max (which may be capped)
+        # If they differ significantly, it means cap was applied or features were filtered
+        if expected_fingerprint is not None and abs(actual_max_uncapped - budget_max) > 1.0:
+            # This is a real mismatch - budget was computed on different features or cap was applied
             logger.error(
-                f"🚨 Lookback mismatch (invariant violation): reported max={max_lookback:.1f}m but actual max from features={actual_max:.1f}m. "
-                f"This indicates lookback computed on different feature set than expected (stage={stage})."
+                f"🚨 Lookback mismatch (invariant violation): budget.max={budget_max:.1f}m but actual max from features={actual_max_uncapped:.1f}m. "
+                f"This indicates lookback computed on different feature set than expected (stage={stage}). "
+                f"Feature set contains {len([f for f, l in feature_lookbacks if l > budget_max + 1.0])} features with lookback > budget.max."
             )
     
-    # Build top_offenders STRICTLY from feature_names (no registry-wide fallback)
-    # CRITICAL: Only include features that are in the passed feature_names list
-    # This ensures top_offenders reflects the ACTUAL feature set, not a global registry
-    effective_cap = max_lookback_cap_minutes if max_lookback_cap_minutes is not None else float("inf")
+    # Build top_offenders STRICTLY from feature_lookbacks (which is built from feature_names)
+    # CRITICAL: max_lookback and top_offenders MUST come from the same feature_lookbacks list
+    # NO filtering by cap here - show the actual top offenders from the actual feature set
+    # The cap is for gatekeeper logic (dropping features), not for reporting
     feature_names_set = set(feature_names)  # For fast lookup
     
-    # STRICT: Build top_offenders only from features in feature_names
-    # feature_lookbacks is already built from feature_names, but add explicit check for safety
+    # STRICT: Build top_offenders only from feature_lookbacks (which is from feature_names)
+    # Show top 10 features by lookback, regardless of cap
+    # This ensures max_lookback and top_offenders are from the same source
     for feat_name, lookback in feature_lookbacks:
         # STRICT: Only include if feature is in the passed feature_names list
         # This is redundant since feature_lookbacks is built from feature_names, but ensures correctness
         if feat_name not in feature_names_set:
             continue  # Skip features not in current feature set (should never happen, but safety check)
         
-        # Only include if within effective cap
-        if lookback <= effective_cap:
-            # If we have a max_lookback, only show features that are close to it (within 10% or top 10)
-            if max_lookback is None or lookback >= max_lookback * 0.9 or len(top_offenders) < 10:
-                top_offenders.append((feat_name, lookback))
+        # Include top features by lookback (no cap filtering - show reality)
+        # If we have a max_lookback, show features that are close to it (within 10% or top 10)
+        if max_lookback is None or lookback >= max_lookback * 0.9 or len(top_offenders) < 10:
+            top_offenders.append((feat_name, lookback))
     
     # Final sanity check: Verify all top_offenders are in feature_names
     top_feature_names = {f for f, _ in top_offenders}
