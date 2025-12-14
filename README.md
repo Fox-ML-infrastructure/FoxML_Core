@@ -3,7 +3,7 @@
 > **⚠️ ACTIVE DEVELOPMENT — EXPECT BREAKING CHANGES**  
 > This project is under **heavy active development**. Breaking changes may occur without notice. APIs, configuration schemas, directory structures, and file formats may change between commits. Use at your own risk in production environments. See [ROADMAP.md](ROADMAP.md) for current status and known issues.
 
-> **🎯 Version 1.0 Definition:** See [VERSION_1.0_MANIFEST.md](VERSION_1.0_MANIFEST.md) for the capability boundary that defines what constitutes FoxML 1.0.
+> **🎯 Version 1.0 Definition:** See [FOXML_1.0_MANIFEST.md](FOXML_1.0_MANIFEST.md) for the capability boundary that defines what constitutes FoxML 1.0.
 
 > **📝 See [CHANGELOG.md](CHANGELOG.md) for recent technical and compliance changes.**
 
