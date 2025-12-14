@@ -764,9 +764,11 @@ def rank_targets(
                     
                     # Gate: Only evaluate if cross-sectional succeeded (no point without baseline)
                     if not cs_succeeded:
-                        logger.debug(f"  Skipping symbol-specific evaluation for {target_name} (cross-sectional failed)")
+                        logger.warning(f"  ⚠️  Skipping symbol-specific evaluation for {target_name} (cross-sectional failed: mean_score={result_cs.mean_score}, status={result_cs.status})")
                     else:
+                        logger.info(f"  ✅ Cross-sectional succeeded for {target_name}, proceeding with symbol-specific evaluation")
                         for symbol in symbols:
+                            logger.info(f"    Evaluating {target_name} for symbol {symbol}...")
                             try:
                                 if auto_rerun_enabled and _AUTOFIX_AVAILABLE:
                                     # Try with view/symbol, fallback to without if not supported
@@ -830,13 +832,16 @@ def rank_targets(
                                 
                                 # Gate: Skip if result is degenerate (mean_score = -999)
                                 if result_sym.mean_score == -999.0:
-                                    logger.debug(f"    Skipped {target_name} for symbol {symbol}: degenerate result")
+                                    logger.warning(f"    ⚠️  Skipped {target_name} for symbol {symbol}: degenerate result (mean_score=-999.0, status={result_sym.status})")
                                     continue
                                 
+                                logger.info(f"    ✅ {target_name} for {symbol}: mean_score={result_sym.mean_score:.4f}, status={result_sym.status}")
                                 result_sym_dict[symbol] = result_sym
                             except Exception as e:
-                                logger.warning(f"    Failed to evaluate {target_name} for symbol {symbol}: {e}")
+                                logger.error(f"    ❌ Failed to evaluate {target_name} for symbol {symbol}: {e}", exc_info=True)
                                 continue
+                        
+                        logger.info(f"  📊 Symbol-specific results for {target_name}: {len(result_sym_dict)}/{len(symbols)} symbols succeeded")
                 
                 # View C: LOSO evaluation (optional, if enabled)
                 result_loso_dict = {}
@@ -869,12 +874,18 @@ def rank_targets(
                 if enable_symbol_specific:
                     if target_name not in results_sym:
                         results_sym[target_name] = {}
+                    stored_count = 0
                     for symbol, result_sym in result_sym_dict.items():
                         if result_sym.mean_score != -999.0 and result_sym.status not in skip_statuses:
                             results_sym[target_name][symbol] = result_sym
+                            stored_count += 1
                         else:
                             reason = result_sym.status if result_sym.status in skip_statuses else "degenerate/failed"
-                            logger.debug(f"    Skipped {target_name} SYMBOL_SPECIFIC ({symbol}): {reason}")
+                            logger.warning(f"    ⚠️  Filtered out {target_name} SYMBOL_SPECIFIC ({symbol}): {reason} (mean_score={result_sym.mean_score})")
+                    if stored_count > 0:
+                        logger.info(f"  ✅ Stored {stored_count} symbol-specific results for {target_name}")
+                    elif len(result_sym_dict) > 0:
+                        logger.warning(f"  ⚠️  All {len(result_sym_dict)} symbol-specific results for {target_name} were filtered out")
                 
                 # Store LOSO results
                 if enable_loso:

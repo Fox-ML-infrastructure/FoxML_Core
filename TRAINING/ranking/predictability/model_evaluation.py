@@ -2917,15 +2917,16 @@ def train_and_evaluate_models(
             try:
                 from CONFIG.config_loader import get_cfg
                 # SST: All values from config, no hardcoded defaults
-                task_type = get_cfg('gpu.catboost.task_type', default='CPU', config_name='gpu_config')
+                # FIX: Rename to catboost_task_type to avoid overwriting task_type (TaskType enum)
+                catboost_task_type = get_cfg('gpu.catboost.task_type', default='CPU', config_name='gpu_config')
                 devices = get_cfg('gpu.catboost.devices', default='0', config_name='gpu_config')
                 thread_count = get_cfg('gpu.catboost.thread_count', default=8, config_name='gpu_config')
                 test_enabled = get_cfg('gpu.catboost.test_enabled', default=True, config_name='gpu_config')
                 test_iterations = get_cfg('gpu.catboost.test_iterations', default=1, config_name='gpu_config')
                 test_samples = get_cfg('gpu.catboost.test_samples', default=10, config_name='gpu_config')
                 test_features = get_cfg('gpu.catboost.test_features', default=5, config_name='gpu_config')
-                
-                if task_type == 'GPU':
+
+                if catboost_task_type == 'GPU':
                     if test_enabled:
                         # Try GPU (CatBoost uses task_type='GPU' or devices parameter)
                         # Test if GPU is available
@@ -2936,11 +2937,13 @@ def train_and_evaluate_models(
                             logger.info(f"  ✅ Using GPU (CUDA) for CatBoost (devices={devices})")
                         except Exception as gpu_test_error:
                             logger.warning(f"  ⚠️  CatBoost GPU test failed, falling back to CPU: {gpu_test_error}")
+                            gpu_params = {}  # Fallback to CPU
                     else:
                         # Skip test, use config values directly
                         gpu_params = {'task_type': 'GPU', 'devices': devices}
                         logger.info(f"  Using GPU (CUDA) for CatBoost (devices={devices}, test disabled)")
                 else:
+                    gpu_params = {}  # Use CPU (no GPU params)
                     logger.info("  Using CPU for CatBoost (task_type='CPU' in config)")
             except Exception as e:
                 logger.warning(f"  ⚠️  CatBoost GPU config error, using CPU: {e}")
