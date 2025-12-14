@@ -385,11 +385,12 @@ def compute_feature_lookback_max(
     
     # Build top offenders list (for backward compatibility)
     # CRITICAL: Only include features from the ACTUAL feature_names list (current feature set)
-    # and ensure they match the reported max_lookback (sanity check)
+    # STRICT: Build lookback dict ONLY for features in feature_names (no registry-wide fallback)
     top_offenders = []
     max_lookback = budget.max_feature_lookback_minutes if budget.max_feature_lookback_minutes > 0 else None
     
     # Build lookback for ALL features in the current feature set
+    # CRITICAL: Only iterate over feature_names (the passed list), not any global registry
     feature_lookbacks = []
     for feat_name in feature_names:
         spec_lookback = None
@@ -416,29 +417,52 @@ def compute_feature_lookback_max(
     feature_lookbacks.sort(key=lambda x: x[1], reverse=True)
     
     # SANITY CHECK: Verify max_lookback matches actual max from feature set
+    # CRITICAL: Only warn about mismatch if expected_fingerprint is provided (invariant-checked stage)
+    # For earlier stages (pre-filter), mismatch is expected and not an error
     if feature_lookbacks and max_lookback is not None:
         actual_max = feature_lookbacks[0][1]
-        # Apply cap if provided
+        # Apply cap if provided (to match what was applied to max_lookback)
         if max_lookback_cap_minutes is not None and actual_max > max_lookback_cap_minutes:
             actual_max = max_lookback_cap_minutes
         
-        # Allow small floating point differences (1 minute tolerance)
-        if abs(actual_max - max_lookback) > 1.0:
-            logger.warning(
-                f"⚠️  Lookback mismatch: reported max={max_lookback:.1f}m but actual max from features={actual_max:.1f}m. "
-                f"This suggests features were filtered after lookback computation."
+        # Only warn if this is an invariant-checked stage (expected_fingerprint provided)
+        # AND there's a real mismatch (not just floating point noise)
+        if expected_fingerprint is not None and abs(actual_max - max_lookback) > 1.0:
+            logger.error(
+                f"🚨 Lookback mismatch (invariant violation): reported max={max_lookback:.1f}m but actual max from features={actual_max:.1f}m. "
+                f"This indicates lookback computed on different feature set than expected (stage={stage})."
             )
     
-    # Filter top_offenders to only include features that contribute to max_lookback
-    # If cap is applied, only show features within cap
+    # Build top_offenders STRICTLY from feature_names (no registry-wide fallback)
+    # CRITICAL: Only include features that are in the passed feature_names list
+    # This ensures top_offenders reflects the ACTUAL feature set, not a global registry
     effective_cap = max_lookback_cap_minutes if max_lookback_cap_minutes is not None else float("inf")
+    feature_names_set = set(feature_names)  # For fast lookup
     
+    # STRICT: Build top_offenders only from features in feature_names
+    # feature_lookbacks is already built from feature_names, but add explicit check for safety
     for feat_name, lookback in feature_lookbacks:
-        # Only include if within effective cap AND matches the reported max (or close to it)
+        # STRICT: Only include if feature is in the passed feature_names list
+        # This is redundant since feature_lookbacks is built from feature_names, but ensures correctness
+        if feat_name not in feature_names_set:
+            continue  # Skip features not in current feature set (should never happen, but safety check)
+        
+        # Only include if within effective cap
         if lookback <= effective_cap:
             # If we have a max_lookback, only show features that are close to it (within 10% or top 10)
             if max_lookback is None or lookback >= max_lookback * 0.9 or len(top_offenders) < 10:
                 top_offenders.append((feat_name, lookback))
+    
+    # Final sanity check: Verify all top_offenders are in feature_names
+    top_feature_names = {f for f, _ in top_offenders}
+    if not top_feature_names.issubset(feature_names_set):
+        missing = top_feature_names - feature_names_set
+        logger.error(
+            f"🚨 CRITICAL: top_offenders contains features not in feature_names: {missing}. "
+            f"This indicates a bug in top_offenders construction."
+        )
+        # Filter out invalid features
+        top_offenders = [(f, l) for f, l in top_offenders if f in feature_names_set]
     
     # Log fingerprint with lookback computation
     if logger.isEnabledFor(logging.DEBUG):
