@@ -775,27 +775,36 @@ def train_and_evaluate_models(
             
             if computed_lookback is not None:
                 feature_lookback_max_minutes = computed_lookback
-                # SANITY CHECK: Verify top_offenders matches reported max
+                # SANITY CHECK: Verify top_offenders matches reported max and is from current feature set
                 if top_offenders:
                     actual_max_in_list = top_offenders[0][1]
-                    if abs(actual_max_in_list - computed_lookback) > 1.0:
-                        logger.warning(
-                            f"⚠️  Lookback logging mismatch: reported max={computed_lookback:.1f}m "
-                            f"but top feature in list={actual_max_in_list:.1f}m. "
-                            f"This suggests the top_offenders list is from a different feature set."
+                    current_feature_set = set(feature_names)
+                    
+                    # Verify all top features are in current feature set (should always be true now)
+                    top_feature_names = {f for f, _ in top_offenders[:5]}
+                    missing = top_feature_names - current_feature_set
+                    if missing:
+                        logger.error(
+                            f"🚨 CRITICAL: Top lookback features not in current feature set: {missing}. "
+                            f"This indicates top_offenders was built from wrong feature set."
                         )
-                    else:
-                        # Only log if > 4 hours or if there's a mismatch (for debugging)
-                        if computed_lookback > 240 or abs(actual_max_in_list - computed_lookback) > 1.0:
-                            fingerprint_str = lookback_fingerprint if lookback_fingerprint else (lookback_result.fingerprint if hasattr(lookback_result, 'fingerprint') else 'N/A')
-                            logger.info(f"  📊 Feature lookback (POST_PRUNE): max={computed_lookback:.1f}m, fingerprint={fingerprint_str}")
-                            logger.info(f"    Top lookback features (from {len(feature_names)} features): {', '.join([f'{f}({m:.0f}m)' for f, m in top_offenders[:5]])}")
-                            # Sanity check: verify all top features are in current feature set
-                            top_feature_names = {f for f, _ in top_offenders[:5]}
-                            current_feature_set = set(feature_names)
-                            missing = top_feature_names - current_feature_set
-                            if missing:
-                                logger.error(f"🚨 CRITICAL: Top lookback features not in current feature set: {missing}")
+                    
+                    # Only warn about max mismatch if fingerprint validation passed (invariant-checked stage)
+                    # For POST_PRUNE stage, mismatch is a real error if fingerprint matches
+                    if lookback_fingerprint and lookback_fingerprint == post_prune_fp:
+                        # This is an invariant-checked stage, so mismatch is a real error
+                        if abs(actual_max_in_list - computed_lookback) > 1.0:
+                            logger.error(
+                                f"🚨 Lookback max mismatch (POST_PRUNE): reported={computed_lookback:.1f}m "
+                                f"but top feature={actual_max_in_list:.1f}m. "
+                                f"This indicates lookback computation bug."
+                            )
+                    
+                    # Log top features (only if > 4 hours for debugging)
+                    if computed_lookback > 240:
+                        fingerprint_str = lookback_fingerprint if lookback_fingerprint else (lookback_result.fingerprint if hasattr(lookback_result, 'fingerprint') else 'N/A')
+                        logger.info(f"  📊 Feature lookback (POST_PRUNE): max={computed_lookback:.1f}m, fingerprint={fingerprint_str}")
+                        logger.info(f"    Top lookback features (from {len(feature_names)} features): {', '.join([f'{f}({m:.0f}m)' for f, m in top_offenders[:5]])}")
             else:
                 feature_lookback_max_minutes = None
             
@@ -957,27 +966,36 @@ def train_and_evaluate_models(
         
         if computed_lookback is not None:
             feature_lookback_max_minutes = computed_lookback
-            # SANITY CHECK: Verify top_offenders matches reported max
+            # SANITY CHECK: Verify top_offenders matches reported max and is from current feature set
             if top_offenders:
                 actual_max_in_list = top_offenders[0][1]
-                if abs(actual_max_in_list - computed_lookback) > 1.0:
-                    logger.warning(
-                        f"⚠️  Lookback logging mismatch: reported max={computed_lookback:.1f}m "
-                        f"but top feature in list={actual_max_in_list:.1f}m. "
-                        f"This suggests the top_offenders list is from a different feature set."
+                current_feature_set = set(feature_names)
+                
+                # Verify all top features are in current feature set (should always be true now)
+                top_feature_names = {f for f, _ in top_offenders[:5]}
+                missing = top_feature_names - current_feature_set
+                if missing:
+                    logger.error(
+                        f"🚨 CRITICAL: Top lookback features not in current feature set: {missing}. "
+                        f"This indicates top_offenders was built from wrong feature set."
                     )
-                else:
-                    # Only log if > 4 hours or if there's a mismatch (for debugging)
-                    if computed_lookback > 240 or abs(actual_max_in_list - computed_lookback) > 1.0:
-                        fingerprint_str = lookback_fingerprint if lookback_fingerprint else (lookback_result.fingerprint if hasattr(lookback_result, 'fingerprint') else 'N/A')
-                        logger.info(f"  📊 Feature lookback analysis: max={computed_lookback:.1f}m, fingerprint={fingerprint_str}")
-                        logger.info(f"    Top lookback features (from {len(feature_names)} features): {', '.join([f'{f}({m:.0f}m)' for f, m in top_offenders[:5]])}")
-                        # Sanity check: verify all top features are in current feature set
-                        top_feature_names = {f for f, _ in top_offenders[:5]}
-                        current_feature_set = set(feature_names)
-                        missing = top_feature_names - current_feature_set
-                        if missing:
-                            logger.error(f"🚨 CRITICAL: Top lookback features not in current feature set: {missing}")
+                
+                # Only warn about max mismatch if fingerprint validation passed (invariant-checked stage)
+                # For fallback stage, mismatch might be expected
+                if lookback_fingerprint and lookback_fingerprint == current_fp:
+                    # This is an invariant-checked stage, so mismatch is a real error
+                    if abs(actual_max_in_list - computed_lookback) > 1.0:
+                        logger.error(
+                            f"🚨 Lookback max mismatch (fallback): reported={computed_lookback:.1f}m "
+                            f"but top feature={actual_max_in_list:.1f}m. "
+                            f"This indicates lookback computation bug."
+                        )
+                
+                # Log top features (only if > 4 hours for debugging)
+                if computed_lookback > 240:
+                    fingerprint_str = lookback_fingerprint if lookback_fingerprint else (lookback_result.fingerprint if hasattr(lookback_result, 'fingerprint') else 'N/A')
+                    logger.info(f"  📊 Feature lookback analysis: max={computed_lookback:.1f}m, fingerprint={fingerprint_str}")
+                    logger.info(f"    Top lookback features (from {len(feature_names)} features): {', '.join([f'{f}({m:.0f}m)' for f, m in top_offenders[:5]])}")
         else:
             # Fallback: use conservative estimate if cannot compute
             if data_interval_minutes is not None and data_interval_minutes > 0:
