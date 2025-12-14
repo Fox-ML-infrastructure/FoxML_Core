@@ -342,14 +342,20 @@ def _enforce_final_safety_gate(
     
     # Define maximum allowed lookback
     # Priority: 1) config cap (lookback_budget_minutes), 2) purge-derived (purge_limit * 0.99)
+    safe_lookback_max_source = None
     if lookback_budget_cap is not None:
         # Use explicit cap from config
         safe_lookback_max = lookback_budget_cap
-        logger.debug(f"Gatekeeper using lookback_budget_minutes cap: {safe_lookback_max:.1f}m")
+        safe_lookback_max_source = "budget_cap"
+        logger.info(f"🛡️ Gatekeeper threshold: {safe_lookback_max:.1f}m (source: lookback_budget_minutes cap)")
     else:
         # Fallback to purge-derived limit (with 1% safety buffer)
         safe_lookback_max = purge_limit * 0.99
-        logger.debug(f"Gatekeeper using purge-derived limit: {safe_lookback_max:.1f}m (from purge={purge_limit:.1f}m)")
+        safe_lookback_max_source = "purge_derived"
+        logger.warning(
+            f"⚠️ Gatekeeper threshold: {safe_lookback_max:.1f}m (source: purge_derived, purge={purge_limit:.1f}m). "
+            f"Consider setting lookback_budget_minutes cap to avoid circular dependency."
+        )
     
     dropped_features = []
     dropped_indices = []
@@ -470,17 +476,12 @@ def _enforce_final_safety_gate(
     
     # Mutate the Dataframe (drop columns) - only if action is "drop"
     if dropped_features:
-        # Log policy context
-        if lookback_budget_cap is not None:
-            logger.warning(
-                f"🛡️ FINAL GATEKEEPER: Dropping {len(dropped_features)} features that violate lookback budget cap "
-                f"(cap={safe_lookback_max:.1f}m, purge_limit={purge_limit:.1f}m)"
-            )
-        else:
-            logger.warning(
-                f"🛡️ FINAL GATEKEEPER: Dropping {len(dropped_features)} features that violate purge limit "
-                f"({purge_limit:.1f}m, safe_lookback_max={safe_lookback_max:.1f}m)"
-            )
+        # Log policy context with explicit source
+        source_str = safe_lookback_max_source if safe_lookback_max_source else "unknown"
+        logger.warning(
+            f"🛡️ FINAL GATEKEEPER: Dropping {len(dropped_features)} features that violate lookback threshold "
+            f"(threshold={safe_lookback_max:.1f}m, source={source_str}, purge_limit={purge_limit:.1f}m)"
+        )
         logger.info(f"   Policy: drop_features (auto-drop violating features)")
         logger.info(f"   Drop list ({len(dropped_features)} features):")
         for feat_name, feat_reason in dropped_features[:10]:  # Show first 10
@@ -813,8 +814,22 @@ def train_and_evaluate_models(
             _log_feature_set("POST_PRUNE", feature_names, previous_names=None, logger_instance=logger)
             post_prune_fp, post_prune_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
             
+            # CRITICAL: Use lookback_budget_minutes cap (if set) for POST_PRUNE recompute
+            # This ensures consistency with gatekeeper threshold
+            lookback_budget_cap_for_recompute = None
+            try:
+                from CONFIG.config_loader import get_cfg
+                budget_cap_raw = get_cfg("safety.leakage_detection.lookback_budget_minutes", default="auto", config_name="safety_config")
+                if budget_cap_raw != "auto" and isinstance(budget_cap_raw, (int, float)):
+                    lookback_budget_cap_for_recompute = float(budget_cap_raw)
+            except Exception:
+                pass
+            
+            # Use lookback_budget_minutes cap if set, else use ranking_mode_max_lookback_minutes
+            effective_cap = lookback_budget_cap_for_recompute if lookback_budget_cap_for_recompute is not None else max_lookback_cap
+            
             lookback_result = compute_feature_lookback_max(
-                feature_names, data_interval_minutes, max_lookback_cap_minutes=max_lookback_cap,
+                feature_names, data_interval_minutes, max_lookback_cap_minutes=effective_cap,
                 expected_fingerprint=post_prune_fp,
                 stage="POST_PRUNE"
             )
@@ -869,8 +884,22 @@ def train_and_evaluate_models(
                     # Log top features (only if > 4 hours for debugging)
                     if computed_lookback > 240:
                         fingerprint_str = lookback_fingerprint if lookback_fingerprint else (lookback_result.fingerprint if hasattr(lookback_result, 'fingerprint') else 'N/A')
-                        logger.info(f"  📊 Feature lookback (POST_PRUNE): max={computed_lookback:.1f}m, fingerprint={fingerprint_str}")
-                        logger.info(f"    Top lookback features (from {len(feature_names)} features): {', '.join([f'{f}({m:.0f}m)' for f, m in top_offenders[:5]])}")
+                        logger.info(f"  📊 Feature lookback (POST_PRUNE): max={computed_lookback:.1f}m, fingerprint={fingerprint_str}, n_features={len(feature_names)}")
+                        logger.info(f"    Top lookback features: {', '.join([f'{f}({m:.0f}m)' for f, m in top_offenders[:5]])}")
+                        
+                        # Check if lookback_budget_minutes cap is set
+                        try:
+                            from CONFIG.config_loader import get_cfg
+                            budget_cap_raw = get_cfg("safety.leakage_detection.lookback_budget_minutes", default="auto", config_name="safety_config")
+                            if budget_cap_raw != "auto" and isinstance(budget_cap_raw, (int, float)):
+                                budget_cap = float(budget_cap_raw)
+                                if computed_lookback > budget_cap:
+                                    logger.warning(
+                                        f"  ⚠️ POST_PRUNE lookback ({computed_lookback:.1f}m) > budget_cap ({budget_cap:.1f}m). "
+                                        f"Gatekeeper should have dropped {len([f for f, m in top_offenders if m > budget_cap])} features exceeding cap."
+                                    )
+                        except Exception:
+                            pass
             else:
                 feature_lookback_max_minutes = None
             
@@ -918,11 +947,22 @@ def train_and_evaluate_models(
                     
                     # Compute budget from final pruned features
                     # CRITICAL: This is the ACTUAL budget for the final feature set
+                    # Use lookback_budget_minutes cap (if set) for consistency
+                    lookback_budget_cap_for_budget = None
+                    try:
+                        from CONFIG.config_loader import get_cfg
+                        budget_cap_raw = get_cfg("safety.leakage_detection.lookback_budget_minutes", default="auto", config_name="safety_config")
+                        if budget_cap_raw != "auto" and isinstance(budget_cap_raw, (int, float)):
+                            lookback_budget_cap_for_budget = float(budget_cap_raw)
+                    except Exception:
+                        pass
+                    
                     budget, budget_fp, budget_order_fp = compute_budget(
                         feature_names,
                         data_interval_minutes,
                         resolved_config.horizon_minutes,
                         registry=registry,
+                        max_lookback_cap_minutes=lookback_budget_cap_for_budget,  # Pass cap to compute_budget
                         expected_fingerprint=post_prune_fp if 'post_prune_fp' in locals() else None,
                         stage="POST_PRUNE_policy_check"
                     )
@@ -1254,15 +1294,34 @@ def train_and_evaluate_models(
     if time_vals is not None and len(time_vals) > 0:
         time_series = pd.Series(time_vals) if not isinstance(time_vals, pd.Series) else time_vals
         if hasattr(time_series, 'min') and hasattr(time_series, 'max'):
-            data_span_minutes = (time_series.max() - time_series.min()).total_seconds() / 60.0
-            if purge_minutes_val >= data_span_minutes:
-                raise RuntimeError(
-                    f"🚨 INVALID CV CONFIGURATION: purge_minutes ({purge_minutes_val:.1f}m) >= data_span ({data_span_minutes:.1f}m). "
-                    f"This will produce empty/invalid CV folds. "
-                    f"Either: 1) Set lookback_budget_minutes cap to drop long-lookback features, "
-                    f"2) Load more data (≥ {purge_minutes_val/1440:.1f} trading days), or "
-                    f"3) Disable purge_include_feature_lookback in config."
-                )
+            try:
+                time_min = time_series.min()
+                time_max = time_series.max()
+                # Handle both datetime and numeric (nanoseconds) timestamps
+                if isinstance(time_min, (pd.Timestamp, pd.DatetimeTZDtype)):
+                    # Already datetime - use total_seconds()
+                    data_span_minutes = (time_max - time_min).total_seconds() / 60.0
+                elif isinstance(time_min, (int, float, np.integer, np.floating)):
+                    # Numeric (likely nanoseconds) - convert to timedelta
+                    time_min_dt = pd.to_datetime(time_min, unit='ns')
+                    time_max_dt = pd.to_datetime(time_max, unit='ns')
+                    data_span_minutes = (time_max_dt - time_min_dt).total_seconds() / 60.0
+                else:
+                    # Try to convert to datetime
+                    time_min_dt = pd.to_datetime(time_min)
+                    time_max_dt = pd.to_datetime(time_max)
+                    data_span_minutes = (time_max_dt - time_min_dt).total_seconds() / 60.0
+                
+                if purge_minutes_val >= data_span_minutes:
+                    raise RuntimeError(
+                        f"🚨 INVALID CV CONFIGURATION: purge_minutes ({purge_minutes_val:.1f}m) >= data_span ({data_span_minutes:.1f}m). "
+                        f"This will produce empty/invalid CV folds. "
+                        f"Either: 1) Set lookback_budget_minutes cap to drop long-lookback features, "
+                        f"2) Load more data (≥ {purge_minutes_val/1440:.1f} trading days), or "
+                        f"3) Disable purge_include_feature_lookback in config."
+                    )
+            except Exception as e:
+                logger.warning(f"  Failed to validate purge vs data span: {e}, skipping validation")
     
     purge_time = pd.Timedelta(minutes=purge_minutes_val)
     
@@ -4890,6 +4949,17 @@ def evaluate_target_predictability(
                     f"Using POST_PRUNE value for summary."
                 )
                 max_lookback_val = computed_lookback  # Use the correct value
+        
+        # Log lookback_budget_minutes cap status for auditability
+        try:
+            from CONFIG.config_loader import get_cfg
+            budget_cap_raw = get_cfg("safety.leakage_detection.lookback_budget_minutes", default="auto", config_name="safety_config")
+            if budget_cap_raw != "auto" and isinstance(budget_cap_raw, (int, float)):
+                logger.info(f"📊 lookback_budget_minutes cap: {float(budget_cap_raw):.1f}m (active)")
+            else:
+                logger.info(f"📊 lookback_budget_minutes cap: auto (no cap, using actual max)")
+        except Exception:
+            pass
     
     _log_canonical_summary(
         target_name=target_name,
