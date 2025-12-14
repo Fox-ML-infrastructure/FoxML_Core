@@ -899,8 +899,9 @@ def select_features_for_target(
         elif explicit_interval:
             if isinstance(explicit_interval, str):
                 # Parse "5m" -> 5.0
-                from TRAINING.utils.duration_parser import parse_duration_minutes
-                data_interval_minutes = parse_duration_minutes(explicit_interval)
+                from TRAINING.utils.duration_parser import parse_duration
+                duration = parse_duration(explicit_interval)
+                data_interval_minutes = duration.to_minutes()
             else:
                 data_interval_minutes = float(explicit_interval)
         

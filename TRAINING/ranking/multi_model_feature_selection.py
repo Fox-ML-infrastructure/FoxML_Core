@@ -1232,7 +1232,7 @@ def train_model_and_get_importance(
         # For CV-based normalization, we still use full X_scaled for importance to get complete feature rankings
         if X_train is not None and X_test is not None and normalize_inside_cv:
             # Concatenate train and test for importance extraction (feature selection needs full dataset)
-            import numpy as np
+            # NOTE: np is already imported at module level, don't import locally
             X = np.vstack([X_train_scaled, X_test_scaled])
         else:
             X = X_scaled
