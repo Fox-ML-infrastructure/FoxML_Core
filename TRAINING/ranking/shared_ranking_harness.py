@@ -555,7 +555,7 @@ class RankingHarness:
         # FIX: Hard guardrail - enforce numeric dtypes BEFORE any model training
         # This prevents CatBoost from treating numeric columns as text/categorical
         # CatBoost "categoricalizing" numeric features causes fake performance (perfect scores)
-        import numpy as np
+        # NOTE: np and pd are imported at module scope - do not import locally to avoid UnboundLocalError
         
         # Step 1: Try to convert object columns to numeric (don't drop immediately)
         object_cols = X_df.select_dtypes(include=['object', 'string', 'category']).columns.tolist()

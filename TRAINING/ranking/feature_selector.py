@@ -715,6 +715,9 @@ def select_features_for_target(
             use_shared_harness = False
             all_results = []
             all_family_statuses = []
+            # HARDENING: Re-initialize contract expected from harness
+            # The fallback path must not assume harness outputs exist (feature_names, X_df, etc.)
+            # This ensures per-symbol processing can run independently even if harness failed early
     
     if not use_shared_harness:
         # Fallback to original per-symbol processing (for SYMBOL_SPECIFIC view or if harness fails)
@@ -1007,8 +1010,8 @@ def select_features_for_target(
     }
     
     # Try to load mtf_data for date range extraction (optional, for better metadata)
+    # NOTE: pd is imported at module scope - do not import locally to avoid UnboundLocalError
     try:
-        import pandas as pd
         mtf_data_for_cohort = {}
         for symbol in symbols[:5]:  # Limit to first 5 symbols to avoid loading too much
             symbol_dir = data_dir / f"symbol={symbol}"

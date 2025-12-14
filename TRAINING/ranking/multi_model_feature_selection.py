@@ -2324,11 +2324,14 @@ def process_single_symbol(
         X_df = X_df.replace([np.inf, -np.inf], np.nan)
         # Drop columns that are all nan/inf
         X_df = X_df.dropna(axis=1, how='all')
-        feature_names = [f for f in feature_names if f in X_df.columns]
         
-        # Update X and feature_names
-        X_arr = X_df.values.astype('float32')  # Already float32 from conversion above
+        # FIX: Initialize feature_names from X_df.columns before any filtering
+        # This prevents UnboundLocalError when feature_names is used before assignment
+        # In fallback path, feature_names may not exist from shared harness, so derive from dataframe
         feature_names = X_df.columns.tolist()
+        
+        # Update X
+        X_arr = X_df.values.astype('float32')  # Already float32 from conversion above
         
         y = df[target_column]
         y_arr = y.to_numpy() if hasattr(y, 'to_numpy') else np.array(y)

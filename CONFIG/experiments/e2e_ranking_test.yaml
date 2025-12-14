@@ -15,6 +15,18 @@ data:
   max_cs_samples: 1000  # Max cross-sectional samples per timestamp (reduced for faster testing)
   min_cs: 3  # Reduced for faster testing
 
+# ============================================================================
+# TARGET RANKING CONFIGURATION (Per-Experiment Control)
+# ============================================================================
+target_ranking:
+  # Enable SYMBOL_SPECIFIC view evaluation (evaluates each symbol separately)
+  # If false, only CROSS_SECTIONAL view will be evaluated
+  enable_symbol_specific: true
+  
+  # Enable LOSO (Leave-One-Symbol-Out) evaluation (optional, slower)
+  # LOSO evaluates each symbol by training on all other symbols
+  enable_loso: false
+
 # Intelligent training settings
 intelligent_training:
   auto_targets: true

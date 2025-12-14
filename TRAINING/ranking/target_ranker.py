@@ -314,15 +314,40 @@ def rank_targets(
     results_sym = {}  # Symbol-specific results: {symbol: [results]}
     results_loso = {}  # LOSO results: {symbol: [results]} (optional)
     
-    # Load dual-view config
+    # Load dual-view config (experiment config takes precedence over global config)
     enable_symbol_specific = True  # Default: enable symbol-specific evaluation
     enable_loso = False  # Default: disable LOSO (optional, high value)
+    
+    # First, try to load from experiment config (per-experiment control)
+    exp_target_ranking = {}
+    if experiment_config:
+        try:
+            import yaml
+            exp_name = experiment_config.name
+            exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+            if exp_file.exists():
+                with open(exp_file, 'r') as f:
+                    exp_yaml = yaml.safe_load(f) or {}
+                exp_target_ranking = exp_yaml.get('target_ranking', {})
+                if 'enable_symbol_specific' in exp_target_ranking:
+                    enable_symbol_specific = bool(exp_target_ranking['enable_symbol_specific'])
+                    logger.debug(f"Using enable_symbol_specific={enable_symbol_specific} from experiment config")
+                if 'enable_loso' in exp_target_ranking:
+                    enable_loso = bool(exp_target_ranking['enable_loso'])
+                    logger.debug(f"Using enable_loso={enable_loso} from experiment config")
+        except Exception as e:
+            logger.debug(f"Failed to load target_ranking from experiment config: {e}")
+    
+    # Fallback to global config if not set in experiment config
     if _CONFIG_AVAILABLE:
         try:
             from CONFIG.config_loader import get_cfg
             ranking_cfg = get_cfg("target_ranking", default={}, config_name="target_ranking_config")
-            enable_symbol_specific = ranking_cfg.get('enable_symbol_specific', True)
-            enable_loso = ranking_cfg.get('enable_loso', False)
+            # Only use global config if experiment config didn't set these
+            if 'enable_symbol_specific' not in exp_target_ranking:
+                enable_symbol_specific = ranking_cfg.get('enable_symbol_specific', enable_symbol_specific)
+            if 'enable_loso' not in exp_target_ranking:
+                enable_loso = ranking_cfg.get('enable_loso', enable_loso)
         except Exception:
             pass
     
