@@ -1,6 +1,6 @@
 # Single Source of Truth for Lookback Computation - 2025-12-13
 
-**Related**: [Single Source of Truth Fix Summary](../../../../TRAINING/utils/SINGLE_SOURCE_OF_TRUTH_COMPLETE.md) | [POST_PRUNE Invariant Check](../../../../TRAINING/utils/POST_PRUNE_INVARIANT_CHECK.md) | [XD Pattern Fix](../../../../TRAINING/utils/XD_PATTERN_FIX_SUMMARY.md)
+**Related**: [Single Source of Truth Fix Summary](../../03_technical/fixes/2025-12-13-single-source-of-truth-complete.md) | [POST_PRUNE Invariant Check](../../03_technical/fixes/2025-12-13-post-prune-invariant-check.md) | [XD Pattern Fix](../../03_technical/fixes/2025-12-13-xd-pattern-fix.md)
 
 ## Overview
 

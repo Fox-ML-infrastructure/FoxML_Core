@@ -166,10 +166,10 @@ def _is_indicator_period_feature(name: str) -> bool:
     
     Handles both simple patterns (rsi_30) and compound patterns (bb_upper_20, stoch_k_fast_21).
     """
-    # Simple indicator-period patterns: rsi_30, cci_30, stoch_d_21, etc.
+    # Simple indicator-period patterns: rsi_30, cci_30, stoch_d_21, roc_50, etc.
     simple_patterns = [
         r'^(stoch_d|stoch_k|williams_r)_(\d+)$',
-        r'^(rsi|cci|mfi|atr|adx|macd|bb|mom|std|var)_(\d+)$',
+        r'^(rsi|cci|mfi|atr|adx|macd|bb|mom|std|var|roc)_(\d+)$',
         r'^(ret|sma|ema|vol)_(\d+)$',
     ]
     for pattern in simple_patterns:
@@ -486,15 +486,15 @@ def infer_lookback_minutes(
             )
         return lookback
     
-    # 4) Parse indicator-period patterns (e.g., rsi_30, cci_30, stoch_d_21) as bars*interval
+    # 4) Parse indicator-period patterns (e.g., rsi_30, cci_30, stoch_d_21, roc_50) as bars*interval
     # CRITICAL: This must come before generic numeric suffix to catch indicator-period features
     # Known indicator families with period suffixes (period = bars, not minutes)
     # Pattern handles both simple (rsi_30) and compound (stoch_d_21, williams_r_14) indicator names
     indicator_patterns = [
         # Compound indicators (with underscore in name): stoch_d_21, stoch_k_21, williams_r_14
         r'^(stoch_d|stoch_k|williams_r)_(\d+)$',
-        # Simple indicators: rsi_30, cci_30, mfi_21
-        r'^(rsi|cci|mfi|atr|adx|macd|bb|mom|std|var)_(\d+)$',
+        # Simple indicators: rsi_30, cci_30, mfi_21, roc_50
+        r'^(rsi|cci|mfi|atr|adx|macd|bb|mom|std|var|roc)_(\d+)$',
         # Other common patterns: ret_288, sma_20, ema_12, vol_30
         r'^(ret|sma|ema|vol)_(\d+)$',
     ]
@@ -964,33 +964,64 @@ def compute_budget(
     
     # Compute ACTUAL max lookback (uncapped - this is the truth)
     # CRITICAL: Unknown lookback (inf) = unsafe
-    # Rule: Use finite lookbacks for max calculation, but log warning if unknown features exist
-    # Unknown features should have been dropped/quarantined by gatekeeper/sanitizer
+    # Rule: If unknowns exist, they should have been dropped/quarantined BEFORE calling compute_budget
+    # This function should only be called on SAFE features (no unknowns)
     finite_lookbacks = [lb for lb in lookbacks if lb != float("inf") and lb is not None]
     
     # Check for unknown features (they should have been handled by gatekeeper/sanitizer)
     unknown_features = [f for f, lb in feature_lookback_map.items() if lb == float("inf")]
     if unknown_features:
-        # CRITICAL: In strict mode, unknown lookback should be treated as violation
-        # For now, log warning and exclude from max (they should have been dropped)
-        policy = "strict"
-        try:
-            from CONFIG.config_loader import get_cfg
-            policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
-        except Exception:
-            pass
+        # CRITICAL: Stage-aware handling
+        # Pre-enforcement stages (create_resolved_config, etc.) are allowed to see unknowns
+        # Post-enforcement stages (POST_PRUNE, POST_GATEKEEPER, etc.) should never see unknowns
+        is_pre_enforcement_stage = any(
+            pre_stage in stage.lower() 
+            for pre_stage in ["create_resolved_config", "pre_", "initial", "baseline"]
+        )
+        is_post_enforcement_stage = any(
+            post_stage in stage.lower()
+            for post_stage in ["post_prune", "post_gatekeeper", "post_", "gatekeeper_budget", "enforced"]
+        )
         
-        if policy == "strict":
-            logger.error(
+        if is_post_enforcement_stage:
+            # Post-enforcement: This is a bug - unknowns should not reach compute_budget
+            policy = "strict"
+            try:
+                from CONFIG.config_loader import get_cfg
+                policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+            except Exception:
+                pass
+            
+            error_msg = (
                 f"🚨 compute_budget({stage}): {len(unknown_features)} features have unknown lookback (inf). "
-                f"In strict mode, unknown lookback is UNSAFE. These should have been dropped/quarantined. "
+                f"This indicates a bug: compute_budget() was called on features that should have been quarantined. "
+                f"Enforcement (gatekeeper/sanitizer) should have dropped these BEFORE calling compute_budget(). "
                 f"Sample: {unknown_features[:5]}"
             )
-            # Don't hard-fail here (gatekeeper/sanitizer should have caught them), but log error
+            
+            if policy == "strict":
+                logger.error(error_msg)
+                # Hard-fail: unknowns should not reach compute_budget in post-enforcement stages
+                raise RuntimeError(
+                    f"{error_msg} "
+                    f"(policy: strict - training blocked. Fix enforcement to quarantine unknowns before calling compute_budget)"
+                )
+            else:
+                logger.warning(error_msg)
+        elif is_pre_enforcement_stage:
+            # Pre-enforcement: Log warning but allow (enforcement will handle later)
+            # This is expected - create_resolved_config, initial setup, etc. run before enforcement
+            logger.debug(
+                f"📊 compute_budget({stage}): {len(unknown_features)} features have unknown lookback (inf). "
+                f"This is expected in pre-enforcement stages. Enforcement (gatekeeper/sanitizer) will drop these later. "
+                f"Sample: {unknown_features[:5]}"
+            )
         else:
+            # Unknown stage - be conservative and log warning (but don't hard-fail)
             logger.warning(
                 f"⚠️ compute_budget({stage}): {len(unknown_features)} features have unknown lookback (inf). "
-                f"These should have been dropped/quarantined. Sample: {unknown_features[:5]}"
+                f"Stage '{stage}' is not clearly pre- or post-enforcement. "
+                f"Enforcement (gatekeeper/sanitizer) should drop these. Sample: {unknown_features[:5]}"
             )
     
     actual_max_lookback = max(finite_lookbacks) if finite_lookbacks else 0.0
@@ -1069,7 +1100,8 @@ def compute_feature_lookback_max(
     expected_fingerprint: Optional[str] = None,
     stage: str = "unknown",
     feature_time_meta_map: Optional[Dict[str, Any]] = None,  # NEW: Optional map of feature_name -> FeatureTimeMeta
-    base_interval_minutes: Optional[float] = None  # NEW: Base training grid interval (for defaulting native_interval)
+    base_interval_minutes: Optional[float] = None,  # NEW: Base training grid interval (for defaulting native_interval)
+    canonical_lookback_map: Optional[Dict[str, float]] = None  # NEW: Optional pre-computed canonical map (SST reuse)
 ) -> LookbackResult:
     """
     Legacy wrapper for compute_budget() to maintain backward compatibility.
@@ -1106,87 +1138,113 @@ def compute_feature_lookback_max(
             f"Cannot build canonical lookback map: interval_minutes={interval_minutes} is invalid."
         )
     
-    # Check cache first (keyed by featureset fingerprint, interval, and policy flags)
-    # Policy flags: include feature_time_meta_map presence and base_interval_minutes
+    # CRITICAL: Use passed canonical_lookback_map if provided (SST reuse)
+    # Otherwise, build it from cache or compute it
     set_fp, _ = _compute_feature_fingerprint(feature_names, set_invariant=True)
-    policy_flags = f"meta={feature_time_meta_map is not None},base={base_interval_minutes}"
-    cache_key = (set_fp, interval_minutes, policy_flags)
     
-    global _canonical_lookback_cache
-    if cache_key in _canonical_lookback_cache:
+    if canonical_lookback_map is not None:
+        # Use passed map (the truth) - no cache lookup or building needed
         if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"📋 Cache hit for canonical lookback map: fingerprint={set_fp[:8]}, interval={interval_minutes}m")
-        canonical_lookback_map = _canonical_lookback_cache[cache_key].copy()
+            logger.debug(f"📋 Using passed canonical lookback map: fingerprint={set_fp[:8]}, n_features={len(canonical_lookback_map)}")
     else:
-        canonical_lookback_map = {}
-    
-    for feat in feature_names:
-        feat_name = _feat_key(feat)  # Normalize key
-        spec_lookback = None
-        if registry is not None:
+        # Check cache first (keyed by featureset fingerprint, interval, and policy flags)
+        # Policy flags: include feature_time_meta_map presence and base_interval_minutes
+        policy_flags = f"meta={feature_time_meta_map is not None},base={base_interval_minutes}"
+        cache_key = (set_fp, interval_minutes, policy_flags)
+        
+        global _canonical_lookback_cache
+        if cache_key in _canonical_lookback_cache:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"📋 Cache hit for canonical lookback map: fingerprint={set_fp[:8]}, interval={interval_minutes}m")
+            canonical_lookback_map = _canonical_lookback_cache[cache_key].copy()
+        else:
+            canonical_lookback_map = {}
+            
+            # CRITICAL: Determine unknown_policy based on safety policy (for consistency)
+            # In strict mode, unknown features should be inf (unsafe), not 1440m (conservative default)
+            # This ensures gatekeeper and strict check use the same unknown policy
+            unknown_policy_for_canonical = "conservative"  # Default
             try:
-                metadata = registry.get_feature_metadata(feat_name)
-                lag_bars = metadata.get('lag_bars')
-                if lag_bars is not None and lag_bars >= 0:
-                    computed_spec = float(lag_bars * interval_minutes)
-                    # CRITICAL: If registry returns 0.0 for indicator-period features or _Xd features, ignore it and use pattern matching
-                    is_xd_feature = bool(re.search(r'_\d+d$', feat_name, re.I))
-                    if computed_spec == 0.0 and (_is_indicator_period_feature(feat_name) or is_xd_feature):
-                        feature_type = "_Xd feature" if is_xd_feature else "indicator-period feature"
-                        _log_warning_once(
-                            feat_name, stage, 'registry_zero',
-                            f"⚠️ CANONICAL MAP BUILDER: Registry returned lag_bars=0 for {feature_type} {feat_name}. "
-                            f"Ignoring and using pattern matching instead."
-                        )
-                        spec_lookback = None  # Don't pass 0.0 - let pattern matching handle it
-                    else:
-                        spec_lookback = computed_spec
+                from CONFIG.config_loader import get_cfg
+                safety_policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+                # In strict mode, use "drop" to get inf for unknown features (treat as unsafe)
+                # In other modes, use "conservative" to get 1440m (backward compatibility)
+                if safety_policy == "strict":
+                    unknown_policy_for_canonical = "drop"  # inf = unsafe, will be quarantined
             except Exception:
-                pass
-        
-        # NEW: Get FeatureTimeMeta for this feature if available
-        feat_meta = feature_time_meta_map.get(feat_name) if feature_time_meta_map else None
-        lookback = infer_lookback_minutes(
-            feat_name,
-            interval_minutes,  # Fallback interval (used if feat_meta.native_interval_minutes is None)
-            spec_lookback_minutes=spec_lookback,
-            registry=registry,
-            feature_time_meta=feat_meta  # NEW: Pass per-feature metadata
-        )
-        
-        # NEW: If FeatureTimeMeta is available, compute effective lookback (lookback + embargo)
-        if feat_meta is not None:
-            from TRAINING.utils.feature_time_meta import effective_lookback_minutes
-            effective_base = base_interval_minutes or interval_minutes
-            lookback = effective_lookback_minutes(feat_meta, effective_base, inferred_lookback_minutes=lookback)
-        
-        # CRITICAL: Store lookback for ALL features (even if inf), so canonical map is complete
-        # This ensures every feature has an entry (None/inf for unknown, not missing)
-        canonical_lookback_map[feat_name] = lookback
-        
-        # HARD-FAIL: If lookback is 0.0 for an indicator-period feature, raise immediately
-        if lookback == 0.0 and _is_indicator_period_feature(feat_name):
-            # Get the patterns that were tried for error message
-            all_patterns = [
-                r'^(stoch_d|stoch_k|williams_r)_(\d+)$',
-                r'^(rsi|cci|mfi|atr|adx|macd|bb|mom|std|var)_(\d+)$',
-                r'^(ret|sma|ema|vol)_(\d+)$',
-            ]
-            patterns_tried = ', '.join([p.replace('^', '').replace('$', '') for p in all_patterns])
-            raise ValueError(
-                f"🚨 HARD-FAIL: Indicator-period feature '{feat_name}' computed lookback=0.0m. "
-                f"This indicates a pattern matching failure. "
-                f"Feature matches _is_indicator_period_feature() but no pattern resolved it. "
-                f"Patterns tried: {patterns_tried}. "
-                f"interval_minutes={interval_minutes}, spec_lookback={spec_lookback}. "
-                f"This is a bug - pattern detection must be expanded or feature name normalized."
-            )
-    
-    # Store in cache for future use
-    if cache_key not in _canonical_lookback_cache:
-        _canonical_lookback_cache[cache_key] = canonical_lookback_map.copy()
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"📋 Cached canonical lookback map: fingerprint={set_fp[:8]}, interval={interval_minutes}m, n_features={len(canonical_lookback_map)}")
+                pass  # Use default "conservative" if config lookup fails
+            
+            # Build canonical map from scratch
+            for feat in feature_names:
+                feat_name = _feat_key(feat)  # Normalize key
+                spec_lookback = None
+                if registry is not None:
+                    try:
+                        metadata = registry.get_feature_metadata(feat_name)
+                        lag_bars = metadata.get('lag_bars')
+                        if lag_bars is not None and lag_bars >= 0:
+                            computed_spec = float(lag_bars * interval_minutes)
+                            # CRITICAL: If registry returns 0.0 for indicator-period features or _Xd features, ignore it and use pattern matching
+                            is_xd_feature = bool(re.search(r'_\d+d$', feat_name, re.I))
+                            if computed_spec == 0.0 and (_is_indicator_period_feature(feat_name) or is_xd_feature):
+                                feature_type = "_Xd feature" if is_xd_feature else "indicator-period feature"
+                                _log_warning_once(
+                                    feat_name, stage, 'registry_zero',
+                                    f"⚠️ CANONICAL MAP BUILDER: Registry returned lag_bars=0 for {feature_type} {feat_name}. "
+                                    f"Ignoring and using pattern matching instead."
+                                )
+                                spec_lookback = None  # Don't pass 0.0 - let pattern matching handle it
+                            else:
+                                spec_lookback = computed_spec
+                    except Exception:
+                        pass
+                
+                # NEW: Get FeatureTimeMeta for this feature if available
+                feat_meta = feature_time_meta_map.get(feat_name) if feature_time_meta_map else None
+                lookback = infer_lookback_minutes(
+                    feat_name,
+                    interval_minutes,  # Fallback interval (used if feat_meta.native_interval_minutes is None)
+                    spec_lookback_minutes=spec_lookback,
+                    registry=registry,
+                    unknown_policy=unknown_policy_for_canonical,  # CRITICAL: Use consistent policy
+                    feature_time_meta=feat_meta  # NEW: Pass per-feature metadata
+                )
+                
+                # NEW: If FeatureTimeMeta is available, compute effective lookback (lookback + embargo)
+                if feat_meta is not None:
+                    from TRAINING.utils.feature_time_meta import effective_lookback_minutes
+                    effective_base = base_interval_minutes or interval_minutes
+                    lookback = effective_lookback_minutes(feat_meta, effective_base, inferred_lookback_minutes=lookback)
+                
+                # CRITICAL: Store lookback for ALL features (even if inf), so canonical map is complete
+                # This ensures every feature has an entry (None/inf for unknown, not missing)
+                canonical_lookback_map[feat_name] = lookback
+                
+                # HARD-FAIL: If lookback is 0.0 for an indicator-period feature, raise immediately
+                if lookback == 0.0 and _is_indicator_period_feature(feat_name):
+                    # Get the patterns that were tried for error message
+                    all_patterns = [
+                        r'^(stoch_d|stoch_k|williams_r)_(\d+)$',
+                        r'^(rsi|cci|mfi|atr|adx|macd|bb|mom|std|var)_(\d+)$',
+                        r'^(ret|sma|ema|vol)_(\d+)$',
+                    ]
+                    patterns_tried = ', '.join([p.replace('^', '').replace('$', '') for p in all_patterns])
+                    raise ValueError(
+                        f"🚨 HARD-FAIL: Indicator-period feature '{feat_name}' computed lookback=0.0m. "
+                        f"This indicates a pattern matching failure. "
+                        f"Feature matches _is_indicator_period_feature() but no pattern resolved it. "
+                        f"Patterns tried: {patterns_tried}. "
+                        f"interval_minutes={interval_minutes}, spec_lookback={spec_lookback}. "
+                        f"This is a bug - pattern detection must be expanded or feature name normalized."
+                    )
+            
+            # Store in cache for future use (only if we built it, not if it was passed)
+            policy_flags = f"meta={feature_time_meta_map is not None},base={base_interval_minutes}"
+            cache_key = (set_fp, interval_minutes, policy_flags)
+            if cache_key not in _canonical_lookback_cache:
+                _canonical_lookback_cache[cache_key] = canonical_lookback_map.copy()
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f"📋 Cached canonical lookback map: fingerprint={set_fp[:8]}, interval={interval_minutes}m, n_features={len(canonical_lookback_map)}")
     
     # Compute budget using the canonical map (ensures no drift)
     budget, set_fingerprint, order_fingerprint = compute_budget(

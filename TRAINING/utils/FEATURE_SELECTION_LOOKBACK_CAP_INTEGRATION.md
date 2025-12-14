@@ -230,3 +230,4 @@ Run feature selection with `lookback_budget_minutes: 240` and verify:
 - [Single Source of Truth Fix Summary](SINGLE_SOURCE_OF_TRUTH_COMPLETE.md)
 - [POST_PRUNE Invariant Check](POST_PRUNE_INVARIANT_CHECK.md)
 - [XD Pattern Fix Summary](XD_PATTERN_FIX_SUMMARY.md)
+

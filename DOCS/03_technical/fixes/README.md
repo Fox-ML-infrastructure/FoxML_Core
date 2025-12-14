@@ -11,8 +11,21 @@ Known issues, bug fixes, and migration notes.
 
 ## Recent Critical Fixes (2025-12-13)
 
+### SST Enforcement Design Implementation
+
+- **[SST Enforcement Design](2025-12-13-sst-enforcement-design.md)** - Complete SST enforcement design implementation with EnforcedFeatureSet contract, type boundary wiring, and boundary assertions
+
 ### Leakage Controls & Fingerprint Tracking
 
+- **[Single Source of Truth Fix](2025-12-13-single-source-of-truth-fix.md)** - Main fix summary for single source of truth lookback computation
+- **[Single Source of Truth Complete](2025-12-13-single-source-of-truth-complete.md)** - Complete fix summary with all details
+- **[Single Source of Truth Detailed](2025-12-13-single-source-of-truth-fix-detailed.md)** - Detailed technical notes
+- **[POST_PRUNE Invariant Check](2025-12-13-post-prune-invariant-check.md)** - Invariant check implementation
+- **[XD Pattern Fix](2025-12-13-xd-pattern-fix.md)** - Day-suffix pattern inference fix
+- **[Gatekeeper Lookback Fix](2025-12-13-gatekeeper-lookback-fix.md)** - Gatekeeper lookback computation fix
+- **[Lookback Detection Fix](2025-12-13-lookback-detection-fix.md)** - Lookback detection precedence fix
+- **[Lookback Inference Consistency Fix](2025-12-13-lookback-inference-consistency-fix.md)** - Consistency fixes for lookback inference
+- **[Canonical Map XD Fix](2025-12-13-canonical-map-xd-fix.md)** - Canonical map day-suffix fix
 - **[Lookback Fingerprint Tracking](2025-12-13-lookback-fingerprint-tracking.md)** - Initial fingerprint tracking implementation to ensure lookback computed on exact final feature set
 - **[Fingerprint Improvements](2025-12-13-fingerprint-improvements.md)** - Set-invariant fingerprints, LookbackResult dataclass, explicit stage logging
 - **[Lookback Result Migration](2025-12-13-lookback-result-dataclass-migration.md)** - Migration from tuple to dataclass return types

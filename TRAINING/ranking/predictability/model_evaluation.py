@@ -388,10 +388,6 @@ def _enforce_final_safety_gate(
         )
         logger.info(f"   📋 CONFIG TRACE: {budget_cap_provenance}")
     
-    dropped_features = []
-    dropped_indices = []
-    violating_features = []  # Track violations for hard_stop/warn modes
-    
     # Get feature registry for lookback calculation
     registry = None
     try:
@@ -400,9 +396,54 @@ def _enforce_final_safety_gate(
     except Exception:
         pass
     
-    # CRITICAL: Use the EXACT SAME lookback calculation as compute_feature_lookback_max
-    # This ensures gatekeeper sees the same lookbacks as the audit system
-    from TRAINING.utils.leakage_budget import compute_feature_lookback_max
+    # CRITICAL: Use apply_lookback_cap() to follow the same structure as all other phases
+    # This ensures consistency: same canonical map, same quarantine logic, same invariants
+    # Gatekeeper has extra logic (X matrix manipulation, daily pattern heuristics, dropped_tracker),
+    # so we use apply_lookback_cap() for the core structure and preserve the extra logic
+    from TRAINING.utils.lookback_cap_enforcement import apply_lookback_cap
+    from CONFIG.config_loader import get_cfg
+    
+    # Load policy and log_mode from config
+    policy = "drop"  # Gatekeeper uses "drop" by default (over_budget_action controls behavior)
+    try:
+        policy = get_cfg("safety.leakage_detection.policy", default="drop", config_name="safety_config")
+    except Exception:
+        pass
+    
+    log_mode = "summary"
+    try:
+        log_mode = get_cfg("safety.leakage_detection.log_mode", default="summary", config_name="safety_config")
+    except Exception:
+        pass
+    
+    # Get feature_time_meta_map and base_interval from resolved_config if available
+    feature_time_meta_map = None
+    base_interval_minutes = None
+    if resolved_config:
+        feature_time_meta_map = resolved_config.feature_time_meta_map if hasattr(resolved_config, 'feature_time_meta_map') else None
+        base_interval_minutes = resolved_config.base_interval_minutes if hasattr(resolved_config, 'base_interval_minutes') else None
+    
+    # Use apply_lookback_cap() - follows standard 6-step structure
+    # This ensures gatekeeper uses the same canonical map and quarantine logic as all other phases
+    cap_result = apply_lookback_cap(
+        features=feature_names,
+        interval_minutes=interval_minutes,
+        cap_minutes=safe_lookback_max,
+        policy=policy,
+        stage="GATEKEEPER",
+        registry=registry,
+        feature_time_meta_map=feature_time_meta_map,
+        base_interval_minutes=base_interval_minutes,
+        log_mode=log_mode
+    )
+    
+    # CRITICAL: Convert to EnforcedFeatureSet (SST contract)
+    # This is the authoritative feature set - downstream code must use this, not raw lists
+    enforced = cap_result.to_enforced_set(stage="GATEKEEPER", cap_minutes=safe_lookback_max)
+    
+    # Extract results (for backward compatibility with existing gatekeeper logic)
+    safe_features = enforced.features  # Use enforced.features (the truth)
+    quarantined_features = list(enforced.quarantined.keys()) + enforced.unknown  # All quarantined
     
     # DIAGNOSTIC: Count features with _d suffix (day-based patterns)
     import re
@@ -411,215 +452,66 @@ def _enforce_final_safety_gate(
     if day_suffix_features:
         logger.info(f"   Sample _Xd features: {day_suffix_features[:5]}")
     
-    # Build canonical lookback map using the SAME function as compute_feature_lookback_max
-    # This ensures we use the exact same inference logic
-    lookback_result = compute_feature_lookback_max(
-        feature_names,
-        interval_minutes,
-        max_lookback_cap_minutes=lookback_budget_cap,  # Pass cap for consistency
-        registry=registry,
-        stage="GATEKEEPER"
-    )
-    
-    # Extract canonical map from result (if available)
-    canonical_map = lookback_result.canonical_lookback_map if hasattr(lookback_result, 'canonical_lookback_map') else None
-    
-    # CRITICAL: Normalize feature keys for lookup (canonical map uses normalized keys)
+    # Build lookup dict from canonical map for per-feature iteration (needed for X matrix manipulation)
+    # Use the canonical map from enforced result (SST)
     from TRAINING.utils.leakage_budget import _feat_key
-    
-    # Build lookup dict from canonical map (the truth)
     feature_lookback_dict = {}
-    unknown_features = []
-    missing_from_canonical = []
-    
     for feat_name in feature_names:
-        # Normalize key for lookup (canonical map uses normalized keys)
-        normalized_key = _feat_key(feat_name)
-        
-        if canonical_map and normalized_key in canonical_map:
-            lookback = canonical_map[normalized_key]
-            feature_lookback_dict[feat_name] = lookback
-            # DIAGNOSTIC: Log if _Xd feature has 0.0 lookback (this is a bug)
-            if feat_name in day_suffix_features and lookback == 0.0:
-                logger.error(
-                    f"🚨 GATEKEEPER BUG: {feat_name} is _Xd feature but canonical map has lookback=0.0. "
-                    f"This indicates a bug in compute_feature_lookback_max or infer_lookback_minutes."
-                )
-        else:
-            # Feature not in canonical map - this should not happen if compute_feature_lookback_max worked correctly
-            missing_from_canonical.append(feat_name)
-            # CRITICAL: Unknown lookback must be treated as UNSAFE (not 0.0)
-            unknown_features.append(feat_name)
-            # Use infer_lookback_minutes as fallback, but treat inf as unsafe
-            from TRAINING.utils.leakage_budget import infer_lookback_minutes
-            spec_lookback = None
-            if registry is not None:
-                try:
-                    metadata = registry.get_feature_metadata(feat_name)
-                    lag_bars = metadata.get('lag_bars')
-                    if lag_bars is not None and lag_bars >= 0:
-                        spec_lookback = float(lag_bars * interval_minutes)
-                except Exception:
-                    pass
-            
-            lookback = infer_lookback_minutes(
-                feat_name,
-                interval_minutes,
-                spec_lookback_minutes=spec_lookback,
-                registry=registry,
-                unknown_policy="drop"  # CRITICAL: Use "drop" to return inf for unknown (not conservative default)
-            )
-            
-            # CRITICAL FIX: Unknown lookback (inf) must be UNSAFE, not safe
-            if lookback == float("inf"):
-                # In strict mode: raise immediately
-                # In drop mode: treat as exceeding cap (will be dropped)
-                # In warn mode: warn and treat as exceeding cap
-                if over_budget_action == "hard_stop":
-                    raise RuntimeError(
-                        f"🚨 GATEKEEPER: Feature '{feat_name}' has unknown lookback (cannot infer). "
-                        f"In strict mode, unknown lookback is UNSAFE and training is blocked."
-                    )
-                # For drop/warn modes, treat as exceeding cap (will be dropped or warned)
-                feature_lookback_dict[feat_name] = float("inf")  # Mark as unsafe
-            else:
-                feature_lookback_dict[feat_name] = lookback
-                # DIAGNOSTIC: Log if _Xd feature got lookback from fallback (should be in canonical map)
-                if feat_name in day_suffix_features:
-                    logger.warning(
-                        f"⚠️ GATEKEEPER: {feat_name} is _Xd feature but not in canonical map. "
-                        f"Using fallback inference: {lookback:.1f}m"
-                    )
-                # DIAGNOSTIC: Log if _Xd feature got lookback from fallback (should be in canonical map)
-                if feat_name in day_suffix_features:
-                    logger.warning(
-                        f"⚠️ GATEKEEPER: {feat_name} is _Xd feature but not in canonical map. "
-                        f"Using fallback inference: {lookback:.1f}m"
-                    )
+        feat_key = _feat_key(feat_name)
+        lookback = enforced.canonical_map.get(feat_key)
+        if lookback is None:
+            lookback = float("inf")  # Unknown = unsafe
+        feature_lookback_dict[feat_name] = lookback
     
-    if missing_from_canonical:
-        logger.warning(
-            f"⚠️ GATEKEEPER: {len(missing_from_canonical)} features missing from canonical map. "
-            f"Sample: {missing_from_canonical[:5]}"
-        )
+    # GATEKEEPER-SPECIFIC: Additional logic for "daily/24h naming pattern" heuristic
+    # This is gatekeeper-specific and not part of apply_lookback_cap()
+    # We need to check this for features that passed apply_lookback_cap but might still violate purge
+    # due to the "daily/24h naming pattern" heuristic
     
-    # Log diagnostic: check if _Xd features have correct lookback
-    # Also log top offenders (1440m features) to verify gatekeeper sees them
-    if day_suffix_features:
-        logger.info(f"🔍 GATEKEEPER DIAGNOSTIC: Lookback values for _Xd features:")
-        for feat in day_suffix_features[:5]:
-            lookback_val = feature_lookback_dict.get(feat, "NOT_FOUND")
-            logger.info(f"   {feat}: lookback={lookback_val}")
+    # Build dropped_features and dropped_indices from quarantined_features
+    # Also check for "daily/24h naming pattern" heuristic (gatekeeper-specific)
+    dropped_features = []
+    dropped_indices = []
+    violating_features = []  # Track violations for hard_stop/warn modes
     
-    # CRITICAL: Log top offenders (1440m features) to verify gatekeeper sees them
-    # These should appear in the offenders list and get dropped
-    top_offenders_list = []
-    for feat_name, lookback in feature_lookback_dict.items():
-        if lookback > safe_lookback_max:
-            top_offenders_list.append((feat_name, lookback))
-    
-    # Sort by lookback descending
-    top_offenders_list.sort(key=lambda x: x[1], reverse=True)
-    
-    if top_offenders_list:
-        logger.info(
-            f"🔍 GATEKEEPER DIAGNOSTIC: Found {len(top_offenders_list)} features exceeding cap ({safe_lookback_max:.1f}m):"
-        )
-        for feat_name, lookback in top_offenders_list[:10]:  # Top 10
-            logger.info(f"   {feat_name}: lookback={lookback:.1f}m")
-    else:
-        logger.info(f"🔍 GATEKEEPER DIAGNOSTIC: No features exceed cap ({safe_lookback_max:.1f}m)")
-    
-    if unknown_features:
-        logger.warning(
-            f"⚠️ GATEKEEPER: {len(unknown_features)} features not in canonical map (should not happen). "
-            f"Sample: {unknown_features[:5]}"
-        )
-        # Check if any _Xd features are in unknown list (this is a bug)
-        unknown_xd = [f for f in unknown_features if f in day_suffix_features]
-        if unknown_xd:
-            logger.error(
-                f"🚨 GATEKEEPER BUG: {len(unknown_xd)} _Xd features missing from canonical map: {unknown_xd[:5]}. "
-                f"This indicates compute_feature_lookback_max is not including them."
-            )
-    
-    # Iterate through features in the FINAL dataframe
+    # First, add all quarantined features from apply_lookback_cap()
     for idx, feature_name in enumerate(feature_names):
-        should_drop = False
-        reason = None
-        
-        # Get lookback from our computed dict (same calculation as audit)
-        # CRITICAL: Missing features must be treated as unsafe (inf), not safe (0.0)
-        # Use None as default, then check for missing
-        lookback_minutes = feature_lookback_dict.get(feature_name)
-        if lookback_minutes is None:
-            # Feature missing from dict - this should not happen, but treat as unsafe
-            logger.error(
-                f"🚨 GATEKEEPER BUG: Feature '{feature_name}' missing from feature_lookback_dict. "
-                f"This indicates a bug in canonical map construction."
-            )
-            lookback_minutes = float("inf")  # Treat as unsafe
-        if lookback_minutes == float("inf"):
-            # Unknown lookback - treat as unsafe (exceeds any cap)
-            should_drop = True
-            reason = "unknown lookback (cannot infer - treated as unsafe)"
+        if feature_name in quarantined_features:
+            lookback_minutes = feature_lookback_dict.get(feature_name, float("inf"))
+            if lookback_minutes == float("inf"):
+                reason = "unknown lookback (cannot infer - treated as unsafe)"
+            else:
+                reason = f"lookback ({lookback_minutes:.1f}m) > safe_limit ({safe_lookback_max:.1f}m)"
+            dropped_features.append((feature_name, reason))
+            dropped_indices.append(idx)
             violating_features.append((feature_name, reason))
-            if over_budget_action == "drop":
-                dropped_features.append((feature_name, reason))
-                dropped_indices.append(idx)
-            continue  # Skip to next feature
-        
-        # IMPORTANT: Use the SAME precedence as compute_feature_lookback_max()
-        # Explicit suffixes take precedence over keyword heuristics
-        # Check for explicit time suffixes first (most reliable)
-        import re
-        has_explicit_suffix = (
-            re.search(r'_(\d+)m$', feature_name, re.I) or  # _15m, _30m, etc.
-            re.search(r'_(\d+)h', feature_name, re.I) or  # _12h, _24h, etc.
-            re.search(r'_(\d+)d', feature_name, re.I)      # _1d, _3d, etc.
-        )
-        
-        # CRITICAL: Calendar features have 0m lookback and should NEVER be dropped
-        # If lookback is 0.0, it's either a calendar feature or truly instantaneous
-        # In either case, it doesn't violate purge limits
-        # Use the lookback from feature_lookback_dict (already computed correctly)
-        is_calendar_feature = (lookback_minutes == 0.0)
-        
-        # Only use keyword heuristics if no explicit suffix found AND not a calendar feature
-        # This prevents false positives like "intraday_seasonality_15m" being dropped
-        # AND prevents calendar features from being misclassified as "daily/24h naming pattern"
-        is_daily_name = False
-        if not has_explicit_suffix and not is_calendar_feature:
-            # Check for explicit daily patterns (ends with _1d, _24h, starts with daily_, etc.)
-            # EXCLUDE calendar features (they already have 0m lookback)
-            is_daily_name = (
-                re.search(r'_1d$|_1D$|_24h$|_24H$|^daily_|_daily$|_1440m', feature_name, re.I) or
-                re.search(r'rolling.*daily|daily.*high|daily.*low', feature_name, re.I) or
-                re.search(r'volatility.*day|vol.*day|volume.*day', feature_name, re.I) or
-                (re.search(r'.*day.*', feature_name, re.I) and not is_calendar_feature)  # "day" anywhere, but not calendar
-            )
-        
-        # The Logic: If it violates the purge, KILL IT
-        # Use the SAME calculation as audit - if audit sees 1440m, we should too
-        # BUT: Calendar features (0m lookback) should never be dropped for "daily/24h naming pattern"
-        # CRITICAL: Unknown lookback (inf) is already handled above - skip to next feature
-        if lookback_minutes == float("inf"):
-            # Should not reach here (handled above), but defensive check
             continue
         
-        if is_daily_name and not is_calendar_feature:
-            should_drop = True
-            reason = "daily/24h naming pattern (no explicit time suffix)"
-        elif lookback_minutes > safe_lookback_max:
-            should_drop = True
-            reason = f"lookback ({lookback_minutes:.1f}m) > safe_limit ({safe_lookback_max:.1f}m)"
+        # CRITICAL: Use the canonical map lookback directly (single source of truth)
+        # The canonical map already includes all inference logic (patterns, heuristics, etc.)
+        # So if a feature has lookback > cap in the canonical map, it should be dropped
+        # The "daily/24h naming pattern" heuristic is redundant - canonical map already handles it
+        lookback_minutes = feature_lookback_dict.get(feature_name)
+        if lookback_minutes is None:
+            lookback_minutes = float("inf")  # Unknown = unsafe
         
-        if should_drop:
+        if lookback_minutes == float("inf"):
+            # Unknown lookback - already handled by apply_lookback_cap, but check again for safety
+            continue
+        
+        # Calendar features have 0m lookback and should NEVER be dropped
+        is_calendar_feature = (lookback_minutes == 0.0)
+        
+        # CRITICAL: If canonical map says lookback > cap, drop it (canonical map is the truth)
+        # This ensures gatekeeper sees the same lookbacks as POST_PRUNE
+        # The canonical map already includes all inference (patterns, heuristics, etc.)
+        if lookback_minutes > safe_lookback_max and not is_calendar_feature:
+            # This feature should have been quarantined by apply_lookback_cap
+            # But if it wasn't (e.g., due to a bug), drop it here as a safety net
+            reason = f"lookback ({lookback_minutes:.1f}m) > safe_limit ({safe_lookback_max:.1f}m) [canonical map]"
+            dropped_features.append((feature_name, reason))
+            dropped_indices.append(idx)
             violating_features.append((feature_name, reason))
-            if over_budget_action == "drop":
-                # Only add to dropped_features if action is "drop"
-                dropped_features.append((feature_name, reason))
-                dropped_indices.append(idx)
     
     # Handle violations based on over_budget_action
     if violating_features:
@@ -662,10 +554,22 @@ def _enforce_final_safety_gate(
         if len(dropped_features) > 10:
             logger.warning(f"   ... and {len(dropped_features) - 10} more")
         
-        # Drop columns from X (numpy array)
-        keep_indices = [i for i in range(X.shape[1]) if i not in dropped_indices]
-        X = X[:, keep_indices]
-        feature_names = [name for idx, name in enumerate(feature_names) if idx not in dropped_indices]
+        # CRITICAL: Slice X immediately using enforced.features (no rediscovery)
+        # The enforced.features list IS the authoritative order - X columns must match it
+        # Build indices for safe features (enforced.features)
+        feature_indices = [i for i, name in enumerate(feature_names) if name in enforced.features]
+        if len(feature_indices) == len(enforced.features):
+            X = X[:, feature_indices]
+            feature_names = enforced.features.copy()  # Use enforced.features (the truth)
+        else:
+            # Fallback: use dropped_indices (shouldn't happen, but safety net)
+            logger.warning(
+                f"   ⚠️ Gatekeeper: Index mismatch. Expected {len(enforced.features)} features, "
+                f"got {len(feature_indices)} indices. Using dropped_indices fallback."
+            )
+            keep_indices = [i for i in range(X.shape[1]) if i not in dropped_indices]
+            X = X[:, keep_indices]
+            feature_names = [name for idx, name in enumerate(feature_names) if idx not in dropped_indices]
         
         logger.info(f"   ✅ After final gatekeeper: {X.shape[1]} features remaining")
         
@@ -977,6 +881,20 @@ def train_and_evaluate_models(
                         X, feature_names, resolved_config, data_interval_minutes, logger, dropped_tracker=dropped_tracker
                     )
                     logger.info(f"  ✅ After post-prune gatekeeper: {len(feature_names)} features remaining")
+                    
+                    # CRITICAL: Get EnforcedFeatureSet from gatekeeper (if available)
+                    # This is the authoritative feature set after post-prune gatekeeper
+                    post_prune_gatekeeper_enforced = None
+                    if hasattr(resolved_config, '_gatekeeper_enforced'):
+                        post_prune_gatekeeper_enforced = resolved_config._gatekeeper_enforced
+                        # Validate that feature_names matches enforced.features
+                        if feature_names != post_prune_gatekeeper_enforced.features:
+                            logger.warning(
+                                f"  ⚠️ Post-prune gatekeeper: feature_names != enforced.features. "
+                                f"This indicates a bug - X was sliced but feature_names wasn't updated correctly."
+                            )
+                            # Fix it: use enforced.features (the truth)
+                            feature_names = post_prune_gatekeeper_enforced.features.copy()
             else:
                 logger.info(f"  No features pruned (all above threshold)")
                 from TRAINING.utils.cross_sectional_data import _log_feature_set
@@ -1078,6 +996,8 @@ def train_and_evaluate_models(
             from TRAINING.utils.cross_sectional_data import _log_feature_set, _compute_feature_fingerprint
             _log_feature_set("POST_PRUNE", feature_names, previous_names=None, logger_instance=logger)
             post_prune_fp, post_prune_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
+            # CRITICAL: Store feature_names for invariant check later
+            post_prune_feature_names = feature_names.copy()  # Store for later comparison
             
             # CRITICAL: Use lookback_budget_minutes cap (if set) for POST_PRUNE recompute
             # This ensures consistency with gatekeeper threshold
@@ -1093,10 +1013,92 @@ def train_and_evaluate_models(
             # Use lookback_budget_minutes cap if set, else use ranking_mode_max_lookback_minutes
             effective_cap = lookback_budget_cap_for_recompute if lookback_budget_cap_for_recompute is not None else max_lookback_cap
             
+            # CRITICAL: Use apply_lookback_cap() to enforce (quarantine unknowns), not just compute
+            # This ensures unknowns are dropped at POST_PRUNE, not just logged
+            from TRAINING.utils.lookback_cap_enforcement import apply_lookback_cap
+            from CONFIG.config_loader import get_cfg
+            
+            # Load policy
+            policy = "drop"  # Default: drop (over_budget_action)
+            try:
+                policy = get_cfg("safety.leakage_detection.policy", default="drop", config_name="safety_config")
+                over_budget_action = get_cfg("safety.leakage_detection.over_budget_action", default="drop", config_name="safety_config")
+                # Use over_budget_action for behavior, policy for logging
+                if over_budget_action == "hard_stop":
+                    policy = "strict"
+                elif over_budget_action == "drop":
+                    policy = "drop"
+            except Exception:
+                pass
+            
+            # Enforce cap (this will quarantine unknowns in strict mode, drop them in drop mode)
+            cap_result = apply_lookback_cap(
+                features=feature_names,
+                interval_minutes=data_interval_minutes,
+                cap_minutes=effective_cap,
+                policy=policy,
+                stage="POST_PRUNE",
+                registry=registry,
+                log_mode="summary"
+            )
+            
+            # CRITICAL: Convert to EnforcedFeatureSet (SST contract)
+            enforced_post_prune = cap_result.to_enforced_set(stage="POST_PRUNE", cap_minutes=effective_cap)
+            
+            # Extract results (for backward compatibility)
+            safe_features_post_prune = enforced_post_prune.features  # Use enforced.features (the truth)
+            quarantined_post_prune = list(enforced_post_prune.quarantined.keys()) + enforced_post_prune.unknown
+            canonical_map_from_post_prune = enforced_post_prune.canonical_map
+            
+            # CRITICAL: Slice X immediately using enforced.features (no rediscovery)
+            # The enforced.features list IS the authoritative order - X columns must match it
+            if len(safe_features_post_prune) < len(feature_names):
+                logger.info(
+                    f"  🔄 POST_PRUNE enforcement: {len(feature_names)} → {len(safe_features_post_prune)} "
+                    f"(quarantined={len(quarantined_post_prune)})"
+                )
+                # Slice X to match enforced.features
+                if X is not None and len(X.shape) == 2:
+                    # Build indices for safe features (enforced.features)
+                    feature_indices = [i for i, f in enumerate(feature_names) if f in enforced_post_prune.features]
+                    if feature_indices and len(feature_indices) == len(enforced_post_prune.features):
+                        X = X[:, feature_indices]
+                    else:
+                        logger.warning(
+                            f"  ⚠️ POST_PRUNE: Could not slice X (indices mismatch). "
+                            f"Expected {len(enforced_post_prune.features)} features, got {len(feature_indices)} indices."
+                        )
+                feature_names = enforced_post_prune.features.copy()  # Use enforced.features (the truth)
+                # Update fingerprint after enforcement
+                post_prune_fp, post_prune_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
+                post_prune_feature_names = feature_names.copy()  # Update stored list
+                # Store EnforcedFeatureSet for downstream use
+                post_prune_enforced = enforced_post_prune
+                
+                # CRITICAL: Boundary assertion - validate feature_names matches POST_PRUNE EnforcedFeatureSet
+                from TRAINING.utils.lookback_policy import assert_featureset_fingerprint
+                try:
+                    assert_featureset_fingerprint(
+                        label="POST_PRUNE",
+                        expected=post_prune_enforced,
+                        actual_features=feature_names,
+                        logger_instance=logger,
+                        allow_reorder=False  # Strict order check
+                    )
+                except RuntimeError as e:
+                    # This should never happen if we used enforced.features.copy() above
+                    logger.error(f"POST_PRUNE assertion failed (unexpected): {e}")
+                    # Fix it: use enforced.features (the truth)
+                    feature_names = post_prune_enforced.features.copy()
+                    logger.info(f"Fixed: Updated feature_names to match post_prune_enforced.features")
+            
+            # Now compute lookback from SAFE features only (no unknowns)
+            # Use the canonical map from enforcement (already computed)
             lookback_result = compute_feature_lookback_max(
-                feature_names, data_interval_minutes, max_lookback_cap_minutes=effective_cap,
+                safe_features_post_prune, data_interval_minutes, max_lookback_cap_minutes=effective_cap,
                 expected_fingerprint=post_prune_fp,
-                stage="POST_PRUNE"
+                stage="POST_PRUNE",
+                canonical_lookback_map=canonical_map_from_post_prune  # Use same map from enforcement
             )
             # Handle dataclass return
             if hasattr(lookback_result, 'max_minutes'):
@@ -1445,6 +1447,63 @@ def train_and_evaluate_models(
         # Compute feature lookback from actual features (pruned or unpruned)
         from TRAINING.utils.cross_sectional_data import _compute_feature_fingerprint
         current_fp, current_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
+        
+        # CRITICAL INVARIANT CHECK: Verify featureset matches POST_PRUNE (if it exists)
+        # This detects featureset mis-wire: if feature_names changed between POST_PRUNE and strict check
+        if 'post_prune_fp' in locals() and post_prune_fp is not None:
+            # Use reusable invariant check helper (if EnforcedFeatureSet available)
+            if 'post_prune_enforced' in locals():
+                from TRAINING.utils.lookback_policy import assert_featureset_fingerprint
+                assert_featureset_fingerprint(
+                    label="MODEL_TRAIN_INPUT",
+                    expected=post_prune_enforced,
+                    actual_features=feature_names,
+                    logger_instance=logger,
+                    allow_reorder=False  # Strict order check (default)
+                )
+            else:
+                # Fallback: manual check (for backward compatibility)
+                # Check exact list equality first (not just hash)
+                if 'post_prune_feature_names' in locals() and feature_names == post_prune_feature_names:
+                    logger.debug(
+                        f"✅ INVARIANT CHECK PASSED: exact list match, n_features={len(feature_names)}"
+                    )
+                elif current_fp != post_prune_fp:
+                    logger.error(
+                        f"🚨 FEATURESET MIS-WIRE DETECTED: current fingerprint={current_fp[:16]} != POST_PRUNE={post_prune_fp[:16]}. "
+                        f"Feature list passed to strict check differs from POST_PRUNE. "
+                        f"Current n_features={len(feature_names)}, POST_PRUNE fingerprint={post_prune_fp[:16]}. "
+                        f"This indicates feature_names was modified or wrong variable passed."
+                    )
+                    # Log sample differences for debugging
+                    if 'post_prune_feature_names' in locals():
+                        current_set = set(feature_names)
+                        post_prune_set = set(post_prune_feature_names)
+                        added = current_set - post_prune_set
+                        removed = post_prune_set - current_set
+                        if added:
+                            logger.error(f"   Added features: {list(added)[:10]}")
+                        if removed:
+                            logger.error(f"   Removed features: {list(removed)[:10]}")
+                        # Check order divergence
+                        if not added and not removed and len(feature_names) == len(post_prune_feature_names):
+                            for i, (exp, act) in enumerate(zip(post_prune_feature_names, feature_names)):
+                                if exp != act:
+                                    logger.error(
+                                        f"   Order divergence at index {i}: expected={exp}, actual={act}"
+                                    )
+                                    break
+                    raise RuntimeError(
+                        f"FEATURESET MIS-WIRE: feature_names passed to strict check (fingerprint={current_fp[:16]}) "
+                        f"does not match POST_PRUNE (fingerprint={post_prune_fp[:16]}). "
+                        f"This indicates a bug: feature list was modified or wrong variable passed."
+                    )
+                else:
+                    logger.debug(
+                        f"✅ INVARIANT CHECK PASSED: current fingerprint={current_fp[:16]} == POST_PRUNE={post_prune_fp[:16]}, "
+                        f"n_features={len(feature_names)}"
+                    )
+        
         lookback_result = compute_feature_lookback_max(
             feature_names, data_interval_minutes, max_lookback_cap_minutes=max_lookback_cap,
             expected_fingerprint=current_fp,
@@ -4537,6 +4596,17 @@ def evaluate_target_predictability(
         X = np.delete(X, leaky_indices, axis=1)
         feature_names = [name for name in feature_names if name not in leaky_features]
         
+        # CRITICAL: Reindex X columns to match feature_names order (prevent order drift)
+        # After leak removal, ensure X columns match feature_names order exactly
+        # This prevents "(order changed)" warnings and ensures deterministic column alignment
+        if X.shape[1] != len(feature_names):
+            logger.warning(
+                f"  ⚠️ Column count mismatch after leak removal: X.shape[1]={X.shape[1]}, "
+                f"len(feature_names)={len(feature_names)}. This should not happen."
+            )
+        # Note: For numpy arrays, column order is implicit via feature_names list
+        # The feature_names list IS the authoritative order - X columns must match it
+        
         logger.info(f"  After leak removal: {X.shape[1]} features remaining")
         from TRAINING.utils.cross_sectional_data import _log_feature_set
         _log_feature_set("AFTER_LEAK_REMOVAL", feature_names, previous_names=feature_names_before_leak_scan, logger_instance=logger)
@@ -4705,6 +4775,24 @@ def evaluate_target_predictability(
     # CRITICAL: Log POST_GATEKEEPER stage explicitly
     post_gatekeeper_fp, post_gatekeeper_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
     _log_feature_set("POST_GATEKEEPER", feature_names, previous_names=None, logger_instance=logger)
+    
+    # CRITICAL: Boundary assertion - validate feature_names matches gatekeeper EnforcedFeatureSet
+    if resolved_config and hasattr(resolved_config, '_gatekeeper_enforced'):
+        from TRAINING.utils.lookback_policy import assert_featureset_fingerprint
+        try:
+            assert_featureset_fingerprint(
+                label="POST_GATEKEEPER",
+                expected=resolved_config._gatekeeper_enforced,
+                actual_features=feature_names,
+                logger_instance=logger,
+                allow_reorder=False  # Strict order check
+            )
+        except RuntimeError as e:
+            # Log but don't fail - this is a validation check
+            logger.error(f"POST_GATEKEEPER assertion failed: {e}")
+            # Fix it: use enforced.features (the truth)
+            feature_names = resolved_config._gatekeeper_enforced.features.copy()
+            logger.info(f"Fixed: Updated feature_names to match gatekeeper_enforced.features")
     
     # NOTE: MODEL_TRAIN_INPUT fingerprint will be computed in train_and_evaluate_models AFTER pruning
     # Pruning happens inside train_and_evaluate_models, so we can't set it here

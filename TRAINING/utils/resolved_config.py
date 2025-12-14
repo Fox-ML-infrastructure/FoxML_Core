@@ -265,7 +265,8 @@ def compute_feature_lookback_max(
     expected_fingerprint: Optional[str] = None,
     stage: str = "unknown",
     feature_time_meta_map: Optional[Dict[str, Any]] = None,  # NEW: Optional map of feature_name -> FeatureTimeMeta
-    base_interval_minutes: Optional[float] = None  # NEW: Base training grid interval
+    base_interval_minutes: Optional[float] = None,  # NEW: Base training grid interval
+    canonical_lookback_map: Optional[Dict[str, float]] = None  # NEW: Optional pre-computed canonical map (SST reuse)
 ) -> Tuple[Optional[float], List[Tuple[str, float]]]:
     """
     Compute maximum feature lookback from actual feature names.
@@ -304,7 +305,8 @@ def compute_feature_lookback_max(
         expected_fingerprint=expected_fingerprint,
         stage=stage if stage != "unknown" else "resolved_config_wrapper",
         feature_time_meta_map=feature_time_meta_map,  # NEW: Pass per-feature metadata
-        base_interval_minutes=base_interval_minutes  # NEW: Pass base interval
+        base_interval_minutes=base_interval_minutes,  # NEW: Pass base interval
+        canonical_lookback_map=canonical_lookback_map  # NEW: Pass canonical map for SST reuse
     )
     # Return the LookbackResult dataclass directly (not a tuple)
     # This maintains compatibility with new code that expects dataclass
@@ -537,10 +539,39 @@ def create_resolved_config(
     logger.info(f"📋 CONFIG TRACE (purge_include_feature_lookback): {purge_include_provenance}")
     
     if purge_include_feature_lookback and feature_lookback_max_minutes is not None:
+        # CRITICAL: In pre-enforcement stages, cap lookback used for purge bump
+        # Pre-enforcement lookback includes long-lookback features that will be dropped by gatekeeper
+        # Don't inflate purge based on pre-enforcement max - cap it to lookback budget cap
+        lookback_budget_cap = None
+        try:
+            from CONFIG.config_loader import get_cfg
+            # Check for lookback budget cap (ranking mode)
+            budget_cap_raw = get_cfg("safety.leakage_detection.lookback_budget_minutes", default="auto", config_name="safety_config")
+            if budget_cap_raw != "auto" and isinstance(budget_cap_raw, (int, float)):
+                lookback_budget_cap = float(budget_cap_raw)
+            # Fallback to legacy ranking_mode_max_lookback_minutes
+            if lookback_budget_cap is None:
+                lookback_budget_cap = get_cfg("safety.leakage_detection.ranking_mode_max_lookback_minutes", default=None, config_name="safety_config")
+                if lookback_budget_cap is not None:
+                    lookback_budget_cap = float(lookback_budget_cap)
+        except Exception:
+            pass
+        
+        # If we have a cap and lookback exceeds it, cap lookback for purge bump
+        # This prevents pre-enforcement purge inflation (gatekeeper will drop long-lookback features)
+        lookback_for_purge = feature_lookback_max_minutes
+        if lookback_budget_cap is not None and feature_lookback_max_minutes > lookback_budget_cap:
+            lookback_for_purge = lookback_budget_cap
+            logger.debug(
+                f"📊 Pre-enforcement purge guard: feature_lookback_max={feature_lookback_max_minutes:.1f}m > "
+                f"cap={lookback_budget_cap:.1f}m. Capping lookback used for purge bump to {lookback_budget_cap:.1f}m "
+                f"(gatekeeper will drop long-lookback features, final purge will be recomputed at POST_PRUNE)."
+            )
+        
         # Use generalized duration-aware audit rule enforcement
         # All inputs are currently floats (minutes), but we support DurationLike for future extensibility
         purge_in = purge_minutes  # Already a float (minutes)
-        lookback_in = feature_lookback_max_minutes  # Already a float (minutes)
+        lookback_in = lookback_for_purge  # Capped lookback (if pre-enforcement) or original
         interval_for_rule = interval_minutes  # Already a float (minutes) or None
         
         # Enforce audit rule with duration-aware comparison

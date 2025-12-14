@@ -191,6 +191,10 @@ def select_features_for_target(
     # Both views use the same evaluation contract, just with different data preparation
     use_shared_harness = (view == "CROSS_SECTIONAL" or view == "SYMBOL_SPECIFIC")
     
+    # Initialize lookback cap enforcement results at function scope for telemetry tracking
+    pre_cap_result = None
+    post_cap_result = None
+    
     # Load min_cs and max_cs_samples from config if not provided (for shared harness)
     if use_shared_harness:
         # Load defaults from config (same as target ranking)
@@ -303,9 +307,8 @@ def select_features_for_target(
                     resolved_config = resolved_config_updated
                     
                     # CRITICAL: Pre-selection lookback cap enforcement (FS_PRE)
-                    # Store result for telemetry tracking
-                    pre_cap_result = None
                     # Apply lookback cap BEFORE running importance producers
+                    # Note: pre_cap_result is initialized at function scope for telemetry
                     # This prevents selector from even seeing unsafe features (faster + safer)
                     from TRAINING.utils.lookback_cap_enforcement import apply_lookback_cap
                     from CONFIG.config_loader import get_cfg
@@ -350,22 +353,52 @@ def select_features_for_target(
                             log_mode=log_mode
                         )
                         
-                        # Update feature_names to only include safe features
-                        feature_names = pre_cap_result.safe_features
+                        # CRITICAL: Convert to EnforcedFeatureSet (SST contract)
+                        enforced_fs_pre = pre_cap_result.to_enforced_set(
+                            stage=f"FS_PRE_{view}_{symbol_to_process}" if view == "SYMBOL_SPECIFIC" else f"FS_PRE_{view}",
+                            cap_minutes=lookback_cap
+                        )
                         
-                        # Update X to match (remove columns for quarantined features)
-                        if pre_cap_result.quarantine_count > 0:
-                            # Find indices of safe features
-                            safe_indices = [i for i, f in enumerate(feature_names_cleaned) if f in pre_cap_result.safe_features]
-                            if safe_indices:
-                                X = X[:, safe_indices]
-                            else:
+                        # CRITICAL: Slice X immediately using enforced.features (no rediscovery)
+                        # The enforced.features list IS the authoritative order - X columns must match it
+                        feature_indices = [i for i, f in enumerate(feature_names_cleaned) if f in enforced_fs_pre.features]
+                        if feature_indices and len(feature_indices) == len(enforced_fs_pre.features):
+                            X = X[:, feature_indices]
+                            feature_names = enforced_fs_pre.features.copy()  # Use enforced.features (the truth)
+                        else:
+                            logger.warning(
+                                f"FS_PRE: Index mismatch for {symbol_to_process}. "
+                                f"Expected {len(enforced_fs_pre.features)} features, got {len(feature_indices)} indices."
+                            )
+                            if not feature_indices:
                                 logger.warning(f"All features quarantined for {symbol_to_process}, skipping")
                                 continue
+                            # Fallback: use available indices
+                            X = X[:, feature_indices]
+                            feature_names = [feature_names_cleaned[i] for i in feature_indices]
+                        
+                        # CRITICAL: Boundary assertion - validate feature_names matches FS_PRE EnforcedFeatureSet
+                        from TRAINING.utils.lookback_policy import assert_featureset_fingerprint
+                        try:
+                            assert_featureset_fingerprint(
+                                label=f"FS_PRE_{view}_{symbol_to_process}" if view == "SYMBOL_SPECIFIC" else f"FS_PRE_{view}",
+                                expected=enforced_fs_pre,
+                                actual_features=feature_names,
+                                logger_instance=logger,
+                                allow_reorder=False  # Strict order check
+                            )
+                        except RuntimeError as e:
+                            # Log but don't fail - this is a validation check
+                            logger.error(f"FS_PRE assertion failed: {e}")
+                            # Fix it: use enforced.features (the truth)
+                            feature_names = enforced_fs_pre.features.copy()
+                            logger.info(f"Fixed: Updated feature_names to match enforced_fs_pre.features")
                         
                         # Update resolved_config with new lookback max
                         if resolved_config:
-                            resolved_config.feature_lookback_max_minutes = pre_cap_result.actual_max_lookback
+                            resolved_config.feature_lookback_max_minutes = enforced_fs_pre.actual_max_minutes
+                            # Store EnforcedFeatureSet for downstream use
+                            resolved_config._fs_pre_enforced = enforced_fs_pre
                     elif feature_names:
                         # No cap set, but still validate canonical map consistency
                         logger.debug(f"FS_PRE: No lookback cap set, skipping cap enforcement (view={view}, symbol={symbol_to_process})")
@@ -506,9 +539,8 @@ def select_features_for_target(
                         resolved_config = resolved_config_updated
                         
                         # CRITICAL: Pre-selection lookback cap enforcement (FS_PRE)
-                        # Store result for telemetry tracking
-                        pre_cap_result = None
                         # Apply lookback cap BEFORE running importance producers
+                        # Note: pre_cap_result is initialized at function scope for telemetry
                         from TRAINING.utils.lookback_cap_enforcement import apply_lookback_cap
                         from CONFIG.config_loader import get_cfg
                         from TRAINING.common.feature_registry import get_registry
@@ -552,20 +584,52 @@ def select_features_for_target(
                                 log_mode=log_mode
                             )
                             
-                            # Store for telemetry (will be collected later)
-                            # Update feature_names to only include safe features
-                            feature_names = pre_cap_result.safe_features
+                            # CRITICAL: Convert to EnforcedFeatureSet (SST contract)
+                            enforced_fs_pre = pre_cap_result.to_enforced_set(
+                                stage=f"FS_PRE_{view}",
+                                cap_minutes=lookback_cap
+                            )
                             
-                            # Update X to match (remove columns for quarantined features)
-                            if pre_cap_result.quarantine_count > 0:
-                                # Find indices of safe features
-                                safe_indices = [i for i, f in enumerate(feature_names_cleaned) if f in pre_cap_result.safe_features]
-                                if safe_indices:
-                                    X = X[:, safe_indices]
-                                else:
+                            # CRITICAL: Slice X immediately using enforced.features (no rediscovery)
+                            # The enforced.features list IS the authoritative order - X columns must match it
+                            feature_indices = [i for i, f in enumerate(feature_names_cleaned) if f in enforced_fs_pre.features]
+                            if feature_indices and len(feature_indices) == len(enforced_fs_pre.features):
+                                X = X[:, feature_indices]
+                                feature_names = enforced_fs_pre.features.copy()  # Use enforced.features (the truth)
+                            else:
+                                logger.warning(
+                                    f"FS_PRE: Index mismatch. "
+                                    f"Expected {len(enforced_fs_pre.features)} features, got {len(feature_indices)} indices."
+                                )
+                                if not feature_indices:
                                     logger.warning("All features quarantined, skipping")
                                     use_shared_harness = False
                                     # Fall back to per-symbol processing (flag set, will skip rest of shared harness path)
+                                else:
+                                    # Fallback: use available indices
+                                    X = X[:, feature_indices]
+                                    feature_names = [feature_names_cleaned[i] for i in feature_indices]
+                            
+                            # CRITICAL: Boundary assertion - validate feature_names matches FS_PRE EnforcedFeatureSet
+                            from TRAINING.utils.lookback_policy import assert_featureset_fingerprint
+                            try:
+                                assert_featureset_fingerprint(
+                                    label=f"FS_PRE_{view}",
+                                    expected=enforced_fs_pre,
+                                    actual_features=feature_names,
+                                    logger_instance=logger,
+                                    allow_reorder=False  # Strict order check
+                                )
+                            except RuntimeError as e:
+                                # Log but don't fail - this is a validation check
+                                logger.error(f"FS_PRE assertion failed: {e}")
+                                # Fix it: use enforced.features (the truth)
+                                feature_names = enforced_fs_pre.features.copy()
+                                logger.info(f"Fixed: Updated feature_names to match enforced_fs_pre.features")
+                            
+                            # Store EnforcedFeatureSet for downstream use
+                            if resolved_config:
+                                resolved_config._fs_pre_enforced = enforced_fs_pre
                             
                             # Update resolved_config with new lookback max
                             if resolved_config:
@@ -862,16 +926,43 @@ def select_features_for_target(
                 log_mode=log_mode
             )
             
-            # Store for telemetry (will be collected later)
-            # Update selected_features to only include safe features
-            selected_features = post_cap_result.safe_features
+            # CRITICAL: Convert to EnforcedFeatureSet (SST contract)
+            enforced_fs_post = post_cap_result.to_enforced_set(
+                stage=f"FS_POST_{view}",
+                cap_minutes=lookback_cap
+            )
+            
+            # CRITICAL: Use enforced.features (the truth) - no rediscovery
+            selected_features = enforced_fs_post.features.copy()
+            
+            # CRITICAL: Boundary assertion - validate selected_features matches FS_POST EnforcedFeatureSet
+            from TRAINING.utils.lookback_policy import assert_featureset_fingerprint
+            try:
+                assert_featureset_fingerprint(
+                    label=f"FS_POST_{view}",
+                    expected=enforced_fs_post,
+                    actual_features=selected_features,
+                    logger_instance=logger,
+                    allow_reorder=False  # Strict order check
+                )
+            except RuntimeError as e:
+                # Log but don't fail - this is a validation check
+                logger.error(f"FS_POST assertion failed: {e}")
+                # Fix it: use enforced.features (the truth)
+                selected_features = enforced_fs_post.features.copy()
+                logger.info(f"Fixed: Updated selected_features to match enforced_fs_post.features")
             
             # Update summary_df to match (remove rows for quarantined features)
-            if post_cap_result.quarantine_count > 0:
-                summary_df = summary_df[summary_df['feature'].isin(post_cap_result.safe_features)].copy()
-                logger.info(f"✅ Post-selection cap enforcement: {len(post_cap_result.safe_features)} safe features (quarantined {post_cap_result.quarantine_count})")
+            if len(enforced_fs_post.quarantined) > 0 or len(enforced_fs_post.unknown) > 0:
+                summary_df = summary_df[summary_df['feature'].isin(enforced_fs_post.features)].copy()
+                quarantined_count = len(enforced_fs_post.quarantined) + len(enforced_fs_post.unknown)
+                logger.info(f"✅ Post-selection cap enforcement: {len(enforced_fs_post.features)} safe features (quarantined {quarantined_count})")
             else:
                 logger.debug(f"FS_POST: All {len(selected_features)} selected features passed lookback cap")
+            
+            # Store EnforcedFeatureSet for downstream use (if resolved_config available)
+            if use_shared_harness and 'resolved_config' in locals() and resolved_config:
+                resolved_config._fs_post_enforced = enforced_fs_post
         else:
             logger.debug(f"FS_POST: No lookback cap set, skipping post-selection cap enforcement (view={view})")
     
@@ -1481,26 +1572,22 @@ def select_features_for_target(
                 
                 # Track lookback cap enforcement results (pre and post selection) in telemetry
                 lookback_cap_metadata = {}
-                # Check for pre_cap_result and post_cap_result in function scope
-                # They may not exist if cap wasn't set or if we're in a different code path
-                if 'pre_cap_result' in locals():
-                    pre_result = locals().get('pre_cap_result')
-                    if pre_result:
-                        lookback_cap_metadata['pre_selection'] = {
-                            'quarantine_count': pre_result.quarantine_count,
-                            'actual_max_lookback': pre_result.actual_max_lookback,
-                            'safe_features_count': len(pre_result.safe_features),
-                            'quarantined_features_sample': pre_result.quarantined_features[:10]  # Top 10
-                        }
-                if 'post_cap_result' in locals():
-                    post_result = locals().get('post_cap_result')
-                    if post_result:
-                        lookback_cap_metadata['post_selection'] = {
-                            'quarantine_count': post_result.quarantine_count,
-                            'actual_max_lookback': post_result.actual_max_lookback,
-                            'safe_features_count': len(post_result.safe_features),
-                            'quarantined_features_sample': post_result.quarantined_features[:10]  # Top 10
-                        }
+                # pre_cap_result and post_cap_result are initialized at function scope
+                # They may be None if cap wasn't set or if we're in a different code path
+                if pre_cap_result is not None:
+                    lookback_cap_metadata['pre_selection'] = {
+                        'quarantine_count': pre_cap_result.quarantine_count,
+                        'actual_max_lookback': pre_cap_result.actual_max_lookback,
+                        'safe_features_count': len(pre_cap_result.safe_features),
+                        'quarantined_features_sample': pre_cap_result.quarantined_features[:10]  # Top 10
+                    }
+                if post_cap_result is not None:
+                    lookback_cap_metadata['post_selection'] = {
+                        'quarantine_count': post_cap_result.quarantine_count,
+                        'actual_max_lookback': post_cap_result.actual_max_lookback,
+                        'safe_features_count': len(post_cap_result.safe_features),
+                        'quarantined_features_sample': post_cap_result.quarantined_features[:10]  # Top 10
+                    }
                 
                 additional_data_with_cohort = {
                     "top_feature": summary_df.iloc[0]['feature'] if not summary_df.empty else None,

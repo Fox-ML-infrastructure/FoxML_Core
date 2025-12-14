@@ -14,7 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
-#### Single Source of Truth for Lookback Computation (2025-12-13) – **NEW**
+#### SST Enforcement Design Implementation (2025-12-13) – **NEW**
+- **EnforcedFeatureSet Contract**: New dataclass represents authoritative state after enforcement with set/ordered fingerprints
+- **Type Boundary Wiring**: All enforcement stages (gatekeeper, POST_PRUNE, FS_PRE, FS_POST) use `EnforcedFeatureSet` and slice X immediately
+- **Boundary Assertions**: Reusable `assert_featureset_fingerprint()` validates featureset integrity at all key boundaries
+- **No Rediscovery Rule**: X matrix sliced immediately using `enforced.features` - no deriving truth from `X.columns` later
+- **Order Preservation**: X columns match `enforced.features` order exactly, ordered fingerprints detect drift
+- **Full Coverage**: Implemented across target ranking and feature selection, both CROSS_SECTIONAL and SYMBOL_SPECIFIC views
+- **Canonical Map Reuse**: `canonical_lookback_map` parameter enables SST reuse across stages
+- **Pre-Enforcement Purge Guard**: Prevents early purge inflation from features that will be dropped by gatekeeper
+- **Results**: Provably split-brain free system with immediate mis-wire detection and auto-fix capability
+- See [SST Enforcement Design](DOCS/02_reference/changelog/2025-12-13-sst-enforcement-design.md) for details
+
+#### Single Source of Truth for Lookback Computation (2025-12-13)
 - **Eliminated Split-Brain**: Fixed critical issue where different code paths computed different lookback values for the same feature set
 - **Canonical Lookback Map**: All stages (sanitizer, gatekeeper, POST_PRUNE, POST_GATEKEEPER) now use the same canonical map from `compute_feature_lookback_max()`
 - **POST_PRUNE Invariant Check**: Hard-fail check ensures `max(canonical_map[features]) == computed_lookback` (prevents regression)

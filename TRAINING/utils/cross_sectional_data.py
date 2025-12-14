@@ -490,6 +490,14 @@ def prepare_cross_sectional_data_for_ranking(
         feature_df = feature_df[numeric_cols]
         feature_names = [f for f in feature_names if f in numeric_cols]
         logger.info(f"🔧 Dropped {non_numeric_dropped} non-numeric feature columns: {dropped_non_numeric[:10]}{'...' if len(dropped_non_numeric) > 10 else ''}")
+    # CRITICAL: Reindex DataFrame columns to match feature_names order (prevent order drift)
+    # After cleaning, DataFrame columns might be reordered - enforce authoritative order
+    # The feature_names list IS the authoritative order - DataFrame columns must match it
+    if isinstance(feature_df, pd.DataFrame):
+        # Reindex columns to match feature_names order exactly
+        # This prevents "(order changed)" warnings and ensures deterministic column alignment
+        feature_df = feature_df.loc[:, [f for f in feature_names if f in feature_df.columns]]
+    
     _log_feature_set("AFTER_CLEANING", feature_names, previous_names=feature_names_before_numeric)
     
     # Check if we have any features left
