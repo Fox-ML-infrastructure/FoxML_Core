@@ -155,7 +155,9 @@ class ReproducibilityTracker:
             if telemetry_config.get("enabled", False):
                 self.telemetry = TelemetryWriter(
                     output_dir=self.output_dir.parent,  # Base output dir (not module-specific)
-                    **telemetry_config
+                    enabled=telemetry_config.get("enabled", True),
+                    baselines=telemetry_config.get("baselines"),
+                    drift=telemetry_config.get("drift")
                 )
             else:
                 self.telemetry = None
@@ -1053,16 +1055,36 @@ class ReproducibilityTracker:
             self._increment_error_counter("write_failures", "IO_ERROR")
             raise  # Re-raise to prevent silent failure
         
-        # Record telemetry facts (if enabled)
+        # Write telemetry sidecar files (if enabled)
         if self.telemetry:
-            self._record_telemetry_facts(
-                run_id=run_id_clean,
+            # Determine view from route_type
+            view = None
+            if route_type:
+                if route_type in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+                    view = route_type
+                elif route_type == "INDIVIDUAL":
+                    view = "SYMBOL_SPECIFIC"
+            
+            # Determine target (for TARGET_RANKING stage, item_name is the target)
+            target = item_name if stage_normalized == "TARGET_RANKING" else None
+            
+            # Generate baseline key for drift comparison: (stage, view, target[, symbol])
+            baseline_key = None
+            if view and target:
+                baseline_key = f"{stage_normalized}:{view}:{target}"
+                if symbol and view == "SYMBOL_SPECIFIC":
+                    baseline_key += f":{symbol}"
+            
+            # Write telemetry sidecar files in cohort directory
+            self.telemetry.write_cohort_telemetry(
+                cohort_dir=cohort_dir,
                 stage=stage_normalized,
-                route_type=route_type,
-                item_name=item_name,
+                view=view or "UNKNOWN",
+                target=target,
                 symbol=symbol,
-                cohort_metadata=cohort_metadata,
-                run_data=run_data
+                run_id=run_id_clean,
+                metrics=run_data,
+                baseline_key=baseline_key
             )
         
         # Save metrics.json
@@ -2837,13 +2859,50 @@ class ReproducibilityTracker:
                 repro_base = self.output_dir / "REPRODUCIBILITY"
             
             if not repro_base.exists():
-                return {"status": "reproducibility_directory_not_found"}
-            
-            trend_analyzer = TrendAnalyzer(
-                reproducibility_dir=repro_base,
-                half_life_days=7.0,
-                min_runs_for_trend=min_runs_for_trend
-            )
+            return {"status": "reproducibility_directory_not_found"}
+        
+        trend_analyzer = TrendAnalyzer(
+            reproducibility_dir=repro_base,
+            half_life_days=7.0,
+            min_runs_for_trend=min_runs_for_trend
+        )
+    
+    def generate_telemetry_rollups(
+        self,
+        stage: str,
+        run_id: str
+    ) -> None:
+        """
+        Generate view-level and stage-level telemetry rollups.
+        
+        Should be called after all cohorts for a stage are saved.
+        
+        Args:
+            stage: Pipeline stage (TARGET_RANKING, FEATURE_SELECTION, etc.)
+            run_id: Current run identifier
+        """
+        if not self.telemetry:
+            return
+        
+        repro_dir = self.output_dir.parent / "REPRODUCIBILITY"
+        if not repro_dir.exists():
+            repro_dir = self.output_dir / "REPRODUCIBILITY"
+        
+        if not repro_dir.exists():
+            return
+        
+        stage_dir = repro_dir / stage.upper()
+        if not stage_dir.exists():
+            return
+        
+        # Generate view-level rollups
+        for view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+            view_dir = stage_dir / view
+            if view_dir.exists():
+                self.telemetry.generate_view_rollup(view_dir, stage.upper(), view, run_id)
+        
+        # Generate stage-level rollup
+        self.telemetry.generate_stage_rollup(stage_dir, stage.upper(), run_id)
             
             # Analyze trends
             series_view = SeriesView(view.upper() if view.upper() in ["STRICT", "PROGRESS"] else "STRICT")

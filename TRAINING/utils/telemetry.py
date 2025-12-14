@@ -1,21 +1,14 @@
 """
-Telemetry System
+Telemetry System (Sidecar-based, View-Isolated)
 
-Implements a cube-based telemetry system with explicit dimensions and rollups.
-Generates atomic metrics at finest granularity, then rolls them up.
+Writes telemetry as sidecar files next to existing artifacts (metadata.json, metrics.json, audit_report.json).
+Telemetry follows the exact same directory structure as existing artifacts.
 
-Dimensions:
-- run_id
-- view: CROSS_SECTIONAL | SYMBOL_SPECIFIC | BOTH
-- target
-- symbol (nullable for cross-sectional aggregates)
-- universe_id (optional, for symbol set identification)
-
-Granularity levels:
-1. Per symbol (individual)
-2. Per cross-sectional (group)
-3. Per target (across symbols)
-4. Per run (global rollup)
+Key principles:
+- View isolation: CROSS_SECTIONAL drift only compares to CROSS_SECTIONAL baselines
+- SYMBOL_SPECIFIC drift only compares to SYMBOL_SPECIFIC baselines
+- Sidecar placement: telemetry files live in same cohort folder as existing JSONs
+- Hierarchical rollups: per-target/symbol → view-level → stage-level
 """
 
 import json
@@ -31,60 +24,32 @@ logger = logging.getLogger(__name__)
 
 class TelemetryWriter:
     """
-    Writes telemetry facts to Parquet and generates rollups.
+    Writes telemetry as sidecar files in cohort directories.
     
-    Facts table schema:
-    - run_id: str
-    - baseline_run_id: Optional[str]
-    - level: str (run|view|target|symbol|target_symbol)
-    - view: Optional[str] (CROSS_SECTIONAL|SYMBOL_SPECIFIC|BOTH)
-    - target: Optional[str]
-    - symbol: Optional[str]
-    - universe_id: Optional[str]
-    - metric_name: str
-    - metric_value: float
-    - metric_unit: Optional[str]
-    - status: Optional[str]
-    - severity: Optional[str]
-    - extras_json: Optional[str] (JSON string for small blobs)
+    Structure:
+    - Sidecar files in each cohort folder: telemetry_metrics.json, telemetry_drift.json, telemetry_trend.json
+    - View-level rollups: CROSS_SECTIONAL/telemetry_rollup.json, SYMBOL_SPECIFIC/telemetry_rollup.json
+    - Stage-level container: TARGET_RANKING/telemetry_rollup.json
     """
     
     def __init__(
         self,
         output_dir: Path,
         enabled: bool = True,
-        levels: Optional[Dict[str, bool]] = None,
         baselines: Optional[Dict[str, Any]] = None,
-        drift: Optional[Dict[str, Any]] = None,
-        rollups: Optional[Dict[str, bool]] = None
+        drift: Optional[Dict[str, Any]] = None
     ):
         """
         Initialize telemetry writer.
         
         Args:
-            output_dir: Base output directory (telemetry/ subdirectory created here)
+            output_dir: Base output directory (REPRODUCIBILITY/ is under this)
             enabled: Whether telemetry is enabled
-            levels: Dict of level flags (run, view, target, symbol, target_symbol)
             baselines: Baseline configuration (previous_run, rolling_window_k, last_good_run)
             drift: Drift detection configuration
-            rollups: Rollup flags (per_symbol, per_cross_sectional, per_target, per_run)
         """
         self.output_dir = Path(output_dir)
-        self.telemetry_dir = self.output_dir / "REPRODUCIBILITY" / "TELEMETRY"
-        self.telemetry_dir.mkdir(parents=True, exist_ok=True)
-        
         self.enabled = enabled
-        
-        # Default levels
-        self.levels = {
-            "run": True,
-            "view": True,
-            "target": True,
-            "symbol": True,
-            "target_symbol": False  # Expensive, opt-in
-        }
-        if levels:
-            self.levels.update(levels)
         
         # Default baselines
         self.baselines = {
@@ -97,520 +62,236 @@ class TelemetryWriter:
         
         # Default drift config
         self.drift = {
-            "feature_set_mode": "topk_importance",  # or "fixed_list"
-            "topk": 50,
             "psi_threshold": 0.2,
             "ks_threshold": 0.1
         }
         if drift:
             self.drift.update(drift)
-        
-        # Default rollups
-        self.rollups = {
-            "per_symbol": True,
-            "per_cross_sectional": True,
-            "per_target": True,
-            "per_run": True
-        }
-        if rollups:
-            self.rollups.update(rollups)
-        
-        # Facts accumulator (list of dicts, converted to DataFrame on flush)
-        self.facts: List[Dict[str, Any]] = []
-        
-        # Track current run_id
-        self.current_run_id: Optional[str] = None
     
-    def record_fact(
+    def write_cohort_telemetry(
         self,
+        cohort_dir: Path,
+        stage: str,
+        view: str,
+        target: Optional[str],
+        symbol: Optional[str],
         run_id: str,
-        level: str,
-        metric_name: str,
-        metric_value: float,
-        view: Optional[str] = None,
-        target: Optional[str] = None,
-        symbol: Optional[str] = None,
-        universe_id: Optional[str] = None,
-        baseline_run_id: Optional[str] = None,
-        metric_unit: Optional[str] = None,
-        status: Optional[str] = None,
-        severity: Optional[str] = None,
-        extras: Optional[Dict[str, Any]] = None
+        metrics: Dict[str, Any],
+        baseline_key: Optional[str] = None
     ) -> None:
         """
-        Record a single telemetry fact.
+        Write telemetry sidecar files for a cohort.
         
         Args:
-            run_id: Current run identifier
-            level: Granularity level (run|view|target|symbol|target_symbol)
-            metric_name: Name of the metric
-            metric_value: Metric value (float)
-            view: View type (CROSS_SECTIONAL|SYMBOL_SPECIFIC|BOTH)
+            cohort_dir: Path to cohort directory (where metadata.json, metrics.json live)
+            stage: Pipeline stage (TARGET_RANKING, FEATURE_SELECTION, etc.)
+            view: View type (CROSS_SECTIONAL, SYMBOL_SPECIFIC)
             target: Target name (optional)
-            symbol: Symbol name (optional)
-            universe_id: Universe identifier (optional)
-            baseline_run_id: Baseline run for comparison (optional)
-            metric_unit: Unit of measurement (optional)
-            status: Status indicator (optional)
-            severity: Severity level (optional)
-            extras: Additional metadata as dict (will be JSON-serialized)
+            symbol: Symbol name (optional, only for SYMBOL_SPECIFIC)
+            run_id: Current run identifier
+            metrics: Metrics dictionary (from run_data)
+            baseline_key: Optional baseline key for drift comparison
         """
         if not self.enabled:
             return
         
-        # Validate level
-        valid_levels = ["run", "view", "target", "symbol", "target_symbol"]
-        if level not in valid_levels:
-            logger.warning(f"Invalid level '{level}', must be one of {valid_levels}")
+        cohort_dir = Path(cohort_dir)
+        if not cohort_dir.exists():
+            logger.warning(f"Cohort directory does not exist: {cohort_dir}")
             return
         
-        # Check if level is enabled
-        if not self.levels.get(level, False):
-            return
+        # Write telemetry_metrics.json (facts for this cohort)
+        self._write_telemetry_metrics(cohort_dir, run_id, metrics)
         
-        fact = {
+        # Write telemetry_drift.json (comparison to baseline)
+        if baseline_key:
+            self._write_telemetry_drift(
+                cohort_dir, stage, view, target, symbol, run_id, metrics, baseline_key
+            )
+    
+    def _write_telemetry_metrics(
+        self,
+        cohort_dir: Path,
+        run_id: str,
+        metrics: Dict[str, Any]
+    ) -> None:
+        """Write telemetry_metrics.json with facts for this cohort."""
+        telemetry_data = {
             "run_id": run_id,
-            "baseline_run_id": baseline_run_id,
-            "level": level,
-            "view": view,
-            "target": target,
-            "symbol": symbol,
-            "universe_id": universe_id,
-            "metric_name": metric_name,
-            "metric_value": float(metric_value),
-            "metric_unit": metric_unit,
-            "status": status,
-            "severity": severity,
-            "extras_json": json.dumps(extras) if extras else None
+            "timestamp": datetime.now().isoformat(),
+            "metrics": {}
         }
         
-        self.facts.append(fact)
-        self.current_run_id = run_id
-    
-    def flush(self) -> None:
-        """Write facts to Parquet and generate rollups."""
-        if not self.enabled or not self.facts:
-            return
-        
-        if not self.current_run_id:
-            logger.warning("No run_id set, cannot flush telemetry")
-            return
-        
-        # Convert facts to DataFrame
-        df_facts = pd.DataFrame(self.facts)
-        
-        # Write facts table
-        facts_file = self.telemetry_dir / "facts.parquet"
-        df_facts.to_parquet(facts_file, index=False, engine='pyarrow')
-        logger.info(f"✅ Telemetry: Saved {len(self.facts)} facts to {facts_file}")
-        
-        # Generate rollups
-        self._generate_rollups(df_facts)
-        
-        # Generate summary JSON
-        self._generate_summary(df_facts)
-        
-        # Clear facts accumulator
-        self.facts = []
-    
-    def _generate_rollups(self, df_facts: pd.DataFrame) -> None:
-        """Generate rollup aggregations."""
-        rollups = []
-        
-        # Per symbol aggregate
-        if self.rollups.get("per_symbol", False):
-            symbol_rollups = self._rollup_symbol(df_facts)
-            rollups.extend(symbol_rollups)
-        
-        # Per cross-sectional aggregate
-        if self.rollups.get("per_cross_sectional", False):
-            cs_rollups = self._rollup_cross_sectional(df_facts)
-            rollups.extend(cs_rollups)
-        
-        # Per target aggregate
-        if self.rollups.get("per_target", False):
-            target_rollups = self._rollup_target(df_facts)
-            rollups.extend(target_rollups)
-        
-        # Per run aggregate
-        if self.rollups.get("per_run", False):
-            run_rollups = self._rollup_run(df_facts)
-            rollups.extend(run_rollups)
-        
-        if rollups:
-            df_rollups = pd.DataFrame(rollups)
-            rollups_file = self.telemetry_dir / "rollups.parquet"
-            df_rollups.to_parquet(rollups_file, index=False, engine='pyarrow')
-            logger.info(f"✅ Telemetry: Saved {len(rollups)} rollups to {rollups_file}")
-    
-    def _rollup_symbol(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
-        """Rollup by (run_id, view, symbol) and optionally (run_id, target, view, symbol)."""
-        rollups = []
-        
-        # Group by (run_id, view, symbol)
-        symbol_groups = df[df['symbol'].notna()].groupby(['run_id', 'view', 'symbol'])
-        for (run_id, view, symbol), group in symbol_groups:
-            rollup = {
-                "rollup_type": "per_symbol",
-                "run_id": run_id,
-                "view": view,
-                "symbol": symbol,
-                "target": None,
-                "universe_id": group['universe_id'].iloc[0] if group['universe_id'].notna().any() else None,
-                "n_metrics": len(group),
-                "metrics": self._aggregate_metrics(group)
-            }
-            rollups.append(rollup)
-        
-        # Group by (run_id, target, view, symbol) if target_symbol level enabled
-        if self.levels.get("target_symbol", False):
-            target_symbol_groups = df[(df['target'].notna()) & (df['symbol'].notna())].groupby(['run_id', 'target', 'view', 'symbol'])
-            for (run_id, target, view, symbol), group in target_symbol_groups:
-                rollup = {
-                    "rollup_type": "per_target_symbol",
-                    "run_id": run_id,
-                    "view": view,
-                    "symbol": symbol,
-                    "target": target,
-                    "universe_id": group['universe_id'].iloc[0] if group['universe_id'].notna().any() else None,
-                    "n_metrics": len(group),
-                    "metrics": self._aggregate_metrics(group)
-                }
-                rollups.append(rollup)
-        
-        return rollups
-    
-    def _rollup_cross_sectional(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
-        """Rollup by (run_id, view, universe_id) and optionally (run_id, target, view, universe_id)."""
-        rollups = []
-        
-        # Group by (run_id, view, universe_id)
-        cs_groups = df[df['view'].notna()].groupby(['run_id', 'view', 'universe_id'])
-        for (run_id, view, universe_id), group in cs_groups:
-            rollup = {
-                "rollup_type": "per_cross_sectional",
-                "run_id": run_id,
-                "view": view,
-                "symbol": None,
-                "target": None,
-                "universe_id": universe_id,
-                "n_metrics": len(group),
-                "n_symbols": group['symbol'].nunique() if group['symbol'].notna().any() else 0,
-                "metrics": self._aggregate_metrics(group)
-            }
-            rollups.append(rollup)
-        
-        # Group by (run_id, target, view, universe_id)
-        target_cs_groups = df[(df['target'].notna()) & (df['view'].notna())].groupby(['run_id', 'target', 'view', 'universe_id'])
-        for (run_id, target, view, universe_id), group in target_cs_groups:
-            rollup = {
-                "rollup_type": "per_target_cross_sectional",
-                "run_id": run_id,
-                "view": view,
-                "symbol": None,
-                "target": target,
-                "universe_id": universe_id,
-                "n_metrics": len(group),
-                "n_symbols": group['symbol'].nunique() if group['symbol'].notna().any() else 0,
-                "metrics": self._aggregate_metrics(group)
-            }
-            rollups.append(rollup)
-        
-        return rollups
-    
-    def _rollup_target(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
-        """Rollup by (run_id, target, view) and optionally (run_id, target, view, universe_id)."""
-        rollups = []
-        
-        # Group by (run_id, target, view)
-        target_groups = df[df['target'].notna()].groupby(['run_id', 'target', 'view'])
-        for (run_id, target, view), group in target_groups:
-            rollup = {
-                "rollup_type": "per_target",
-                "run_id": run_id,
-                "view": view,
-                "symbol": None,
-                "target": target,
-                "universe_id": group['universe_id'].iloc[0] if group['universe_id'].notna().any() else None,
-                "n_metrics": len(group),
-                "n_symbols": group['symbol'].nunique() if group['symbol'].notna().any() else 0,
-                "metrics": self._aggregate_metrics(group)
-            }
-            rollups.append(rollup)
-        
-        return rollups
-    
-    def _rollup_run(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
-        """Rollup by (run_id) and (run_id, view)."""
-        rollups = []
-        
-        # Group by (run_id)
-        run_groups = df.groupby('run_id')
-        for run_id, group in run_groups:
-            rollup = {
-                "rollup_type": "per_run",
-                "run_id": run_id,
-                "view": None,
-                "symbol": None,
-                "target": None,
-                "universe_id": None,
-                "n_metrics": len(group),
-                "n_targets": group['target'].nunique() if group['target'].notna().any() else 0,
-                "n_symbols": group['symbol'].nunique() if group['symbol'].notna().any() else 0,
-                "n_views": group['view'].nunique() if group['view'].notna().any() else 0,
-                "metrics": self._aggregate_metrics(group)
-            }
-            rollups.append(rollup)
-        
-        # Group by (run_id, view)
-        run_view_groups = df[df['view'].notna()].groupby(['run_id', 'view'])
-        for (run_id, view), group in run_view_groups:
-            rollup = {
-                "rollup_type": "per_run_view",
-                "run_id": run_id,
-                "view": view,
-                "symbol": None,
-                "target": None,
-                "universe_id": None,
-                "n_metrics": len(group),
-                "n_targets": group['target'].nunique() if group['target'].notna().any() else 0,
-                "n_symbols": group['symbol'].nunique() if group['symbol'].notna().any() else 0,
-                "metrics": self._aggregate_metrics(group)
-            }
-            rollups.append(rollup)
-        
-        return rollups
-    
-    def _aggregate_metrics(self, group: pd.DataFrame) -> Dict[str, Any]:
-        """Aggregate metrics from a group."""
-        metrics = {}
-        
-        for metric_name in group['metric_name'].unique():
-            metric_group = group[group['metric_name'] == metric_name]
-            values = metric_group['metric_value'].values
+        # Extract telemetry-relevant metrics
+        for key, value in metrics.items():
+            if key in ['timestamp', 'cohort_metadata', 'additional_data']:
+                continue
             
-            metrics[metric_name] = {
-                "count": len(values),
-                "mean": float(np.mean(values)) if len(values) > 0 else None,
-                "std": float(np.std(values)) if len(values) > 1 else None,
-                "min": float(np.min(values)) if len(values) > 0 else None,
-                "max": float(np.max(values)) if len(values) > 0 else None,
-                "median": float(np.median(values)) if len(values) > 0 else None,
-                "unit": metric_group['metric_unit'].iloc[0] if metric_group['metric_unit'].notna().any() else None
+            # Convert to float if numeric
+            if isinstance(value, (int, float)):
+                telemetry_data["metrics"][key] = float(value)
+            elif isinstance(value, (list, dict)):
+                # Store complex values as-is (for now)
+                telemetry_data["metrics"][key] = value
+            else:
+                # Store other types as string representation
+                telemetry_data["metrics"][key] = str(value)
+        
+        metrics_file = cohort_dir / "telemetry_metrics.json"
+        try:
+            with open(metrics_file, 'w') as f:
+                json.dump(telemetry_data, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Failed to write telemetry_metrics.json to {cohort_dir}: {e}")
+    
+    def _write_telemetry_drift(
+        self,
+        cohort_dir: Path,
+        stage: str,
+        view: str,
+        target: Optional[str],
+        symbol: Optional[str],
+        run_id: str,
+        current_metrics: Dict[str, Any],
+        baseline_key: str
+    ) -> None:
+        """
+        Write telemetry_drift.json comparing current run to baseline.
+        
+        Baseline key format: (stage, view, target[, symbol])
+        This ensures view isolation: CS only compares to CS, SS only compares to SS.
+        """
+        # Find baseline cohort directory
+        baseline_cohort_dir = self._find_baseline_cohort(
+            cohort_dir.parent.parent,  # Go up to view level
+            stage, view, target, symbol, baseline_key
+        )
+        
+        if baseline_cohort_dir is None or not baseline_cohort_dir.exists():
+            logger.debug(f"No baseline found for drift comparison: {baseline_key}")
+            return
+        
+        # Load baseline metrics
+        baseline_metrics_file = baseline_cohort_dir / "telemetry_metrics.json"
+        if not baseline_metrics_file.exists():
+            # Fallback to metrics.json
+            baseline_metrics_file = baseline_cohort_dir / "metrics.json"
+            if not baseline_metrics_file.exists():
+                logger.debug(f"Baseline metrics not found: {baseline_metrics_file}")
+                return
+        
+        try:
+            with open(baseline_metrics_file, 'r') as f:
+                baseline_data = json.load(f)
+            
+            # Extract baseline metrics
+            if "metrics" in baseline_data:
+                baseline_metrics = baseline_data["metrics"]
+            else:
+                baseline_metrics = baseline_data
+            
+            # Compute drift
+            drift_results = {
+                "current_run_id": run_id,
+                "baseline_run_id": baseline_data.get("run_id", "unknown"),
+                "baseline_key": baseline_key,
+                "timestamp": datetime.now().isoformat(),
+                "view": view,
+                "target": target,
+                "symbol": symbol,
+                "drift_metrics": {}
             }
-        
-        return metrics
+            
+            # Compare numeric metrics
+            for metric_name in set(current_metrics.keys()) & set(baseline_metrics.keys()):
+                curr_val = current_metrics.get(metric_name)
+                base_val = baseline_metrics.get(metric_name)
+                
+                if not isinstance(curr_val, (int, float)) or not isinstance(base_val, (int, float)):
+                    continue
+                
+                delta = float(curr_val) - float(base_val)
+                rel_delta = delta / float(base_val) if base_val != 0 else None
+                
+                drift_results["drift_metrics"][metric_name] = {
+                    "current": float(curr_val),
+                    "baseline": float(base_val),
+                    "delta": delta,
+                    "rel_delta": rel_delta,
+                    "status": self._classify_drift(delta, rel_delta)
+                }
+            
+            # Write drift file
+            drift_file = cohort_dir / "telemetry_drift.json"
+            with open(drift_file, 'w') as f:
+                json.dump(drift_results, f, indent=2)
+            
+        except Exception as e:
+            logger.warning(f"Failed to compute drift for {cohort_dir}: {e}")
     
-    def _generate_summary(self, df_facts: pd.DataFrame) -> None:
-        """Generate human-readable summary JSON."""
-        summary = {
-            "run_id": self.current_run_id,
-            "timestamp": datetime.now().isoformat(),
-            "n_facts": len(df_facts),
-            "levels": {
-                level: len(df_facts[df_facts['level'] == level])
-                for level in df_facts['level'].unique()
-            },
-            "views": list(df_facts['view'].dropna().unique()),
-            "targets": list(df_facts['target'].dropna().unique()),
-            "symbols": list(df_facts['symbol'].dropna().unique()),
-            "n_metrics": df_facts['metric_name'].nunique(),
-            "metric_names": sorted(df_facts['metric_name'].unique().tolist())
-        }
-        
-        summary_file = self.telemetry_dir / "summary.json"
-        with open(summary_file, 'w') as f:
-            json.dump(summary, f, indent=2)
-        
-        logger.info(f"✅ Telemetry: Saved summary to {summary_file}")
-    
-    def compute_drift(
+    def _find_baseline_cohort(
         self,
-        current_run_id: str,
-        baseline_run_id: Optional[str] = None,
-        baseline_mode: str = "previous_run"  # "previous_run" | "rolling_window" | "last_good_run"
-    ) -> Dict[str, Any]:
+        view_dir: Path,
+        stage: str,
+        view: str,
+        target: Optional[str],
+        symbol: Optional[str],
+        baseline_key: str
+    ) -> Optional[Path]:
         """
-        Compute drift metrics by comparing current run to baseline.
+        Find baseline cohort directory using baseline_key.
         
-        Args:
-            current_run_id: Current run identifier
-            baseline_run_id: Specific baseline run (optional, overrides baseline_mode)
-            baseline_mode: How to select baseline ("previous_run" | "rolling_window" | "last_good_run")
-        
-        Returns:
-            Dict with drift metrics per level
+        baseline_key format: (stage, view, target[, symbol])
+        This ensures we only compare within the same view.
         """
-        if not self.enabled:
-            return {}
+        # Parse baseline_key to extract target/symbol
+        # Format: "TARGET_RANKING:CROSS_SECTIONAL:y_will_swing_high_60m_0.05" or
+        #         "TARGET_RANKING:SYMBOL_SPECIFIC:y_will_swing_high_60m_0.05:AAPL"
+        parts = baseline_key.split(":")
+        if len(parts) < 3:
+            return None
         
-        # Load facts table
-        facts_file = self.telemetry_dir / "facts.parquet"
-        if not facts_file.exists():
-            logger.warning(f"Facts table not found: {facts_file}")
-            return {}
+        baseline_stage, baseline_view, baseline_target = parts[0], parts[1], parts[2]
+        baseline_symbol = parts[3] if len(parts) > 3 else None
         
-        df_facts = pd.read_parquet(facts_file)
+        # Ensure view isolation: must match view
+        if baseline_view != view:
+            logger.warning(f"View mismatch: baseline_view={baseline_view} != current_view={view}")
+            return None
         
-        # Get baseline run_id
-        if baseline_run_id is None:
-            baseline_run_id = self._get_baseline_run_id(df_facts, current_run_id, baseline_mode)
+        # Find target directory
+        if baseline_target:
+            target_dir = view_dir / baseline_target
+            if not target_dir.exists():
+                return None
+        else:
+            target_dir = view_dir
         
-        if baseline_run_id is None:
-            logger.warning(f"No baseline found for run {current_run_id}")
-            return {}
+        # Find symbol directory (for SYMBOL_SPECIFIC)
+        if baseline_symbol and view == "SYMBOL_SPECIFIC":
+            symbol_dir = target_dir / f"symbol={baseline_symbol}"
+            if not symbol_dir.exists():
+                return None
+        else:
+            symbol_dir = target_dir
         
-        # Filter to current and baseline runs
-        df_current = df_facts[df_facts['run_id'] == current_run_id].copy()
-        df_baseline = df_facts[df_facts['run_id'] == baseline_run_id].copy()
+        # Find most recent cohort (previous run)
+        cohort_dirs = sorted(
+            [d for d in symbol_dir.iterdir() if d.is_dir() and d.name.startswith("cohort=")],
+            key=lambda x: x.stat().st_mtime,
+            reverse=True
+        )
         
-        if len(df_current) == 0 or len(df_baseline) == 0:
-            logger.warning(f"Insufficient data for drift comparison: current={len(df_current)}, baseline={len(df_baseline)}")
-            return {}
-        
-        # Compute drift at each level
-        drift_results = {
-            "current_run_id": current_run_id,
-            "baseline_run_id": baseline_run_id,
-            "baseline_mode": baseline_mode,
-            "timestamp": datetime.now().isoformat(),
-            "levels": {}
-        }
-        
-        # Per symbol drift
-        if self.rollups.get("per_symbol", False):
-            drift_results["levels"]["symbol"] = self._compute_level_drift(
-                df_current, df_baseline, groupby=['view', 'symbol']
-            )
-        
-        # Per cross-sectional drift
-        if self.rollups.get("per_cross_sectional", False):
-            drift_results["levels"]["cross_sectional"] = self._compute_level_drift(
-                df_current, df_baseline, groupby=['view', 'universe_id']
-            )
-        
-        # Per target drift
-        if self.rollups.get("per_target", False):
-            drift_results["levels"]["target"] = self._compute_level_drift(
-                df_current, df_baseline, groupby=['target', 'view']
-            )
-        
-        # Per run drift
-        if self.rollups.get("per_run", False):
-            drift_results["levels"]["run"] = self._compute_level_drift(
-                df_current, df_baseline, groupby=[]
-            )
-        
-        # Save drift results
-        drift_file = self.telemetry_dir / f"drift_{current_run_id}.json"
-        with open(drift_file, 'w') as f:
-            json.dump(drift_results, f, indent=2)
-        
-        logger.info(f"✅ Telemetry: Computed drift for {current_run_id} vs {baseline_run_id}")
-        
-        return drift_results
-    
-    def _get_baseline_run_id(
-        self,
-        df_facts: pd.DataFrame,
-        current_run_id: str,
-        baseline_mode: str
-    ) -> Optional[str]:
-        """Get baseline run_id based on mode."""
-        available_runs = sorted(df_facts['run_id'].unique(), reverse=True)
-        
-        if baseline_mode == "previous_run":
-            # Get run immediately before current
-            try:
-                idx = available_runs.index(current_run_id)
-                if idx + 1 < len(available_runs):
-                    return available_runs[idx + 1]
-            except ValueError:
-                pass
-        
-        elif baseline_mode == "rolling_window":
-            # Get k-th previous run
-            k = self.baselines.get("rolling_window_k", 10)
-            try:
-                idx = available_runs.index(current_run_id)
-                if idx + k < len(available_runs):
-                    return available_runs[idx + k]
-            except ValueError:
-                pass
-        
-        elif baseline_mode == "last_good_run":
-            # Find last run marked as "good" (would need status field)
-            # For now, fall back to previous_run
-            return self._get_baseline_run_id(df_facts, current_run_id, "previous_run")
+        # Skip current run, return previous
+        if len(cohort_dirs) > 1:
+            return cohort_dirs[1]  # Second most recent (previous run)
+        elif len(cohort_dirs) == 1:
+            return cohort_dirs[0]  # Only one run, use it as baseline
         
         return None
     
-    def _compute_level_drift(
-        self,
-        df_current: pd.DataFrame,
-        df_baseline: pd.DataFrame,
-        groupby: List[str]
-    ) -> Dict[str, Any]:
-        """Compute drift metrics for a specific level."""
-        drift_metrics = []
-        
-        # Group current and baseline
-        if groupby:
-            current_groups = df_current.groupby(groupby)
-            baseline_groups = df_baseline.groupby(groupby)
-        else:
-            # Single group for run-level
-            current_groups = {tuple(): df_current}
-            baseline_groups = {tuple(): df_baseline}
-        
-        for group_key in set(list(current_groups.keys()) + list(baseline_groups.keys())):
-            df_curr_group = current_groups.get(group_key, pd.DataFrame())
-            df_base_group = baseline_groups.get(group_key, pd.DataFrame())
-            
-            if len(df_curr_group) == 0 or len(df_base_group) == 0:
-                continue
-            
-            # Compute drift for each metric
-            for metric_name in set(df_curr_group['metric_name'].unique()) & set(df_base_group['metric_name'].unique()):
-                curr_values = df_curr_group[df_curr_group['metric_name'] == metric_name]['metric_value'].values
-                base_values = df_base_group[df_base_group['metric_name'] == metric_name]['metric_value'].values
-                
-                if len(curr_values) == 0 or len(base_values) == 0:
-                    continue
-                
-                # Simple drift metrics (can be extended with PSI/KS)
-                curr_mean = float(np.mean(curr_values))
-                base_mean = float(np.mean(base_values))
-                delta = curr_mean - base_mean
-                rel_delta = delta / base_mean if base_mean != 0 else None
-                
-                drift_metrics.append({
-                    "group_key": dict(zip(groupby, group_key)) if groupby else "run",
-                    "metric_name": metric_name,
-                    "current_mean": curr_mean,
-                    "baseline_mean": base_mean,
-                    "delta": delta,
-                    "rel_delta": rel_delta,
-                    "status": self._classify_drift(delta, rel_delta, metric_name)
-                })
-        
-        return {
-            "n_comparisons": len(drift_metrics),
-            "metrics": drift_metrics
-        }
-    
-    def _classify_drift(
-        self,
-        delta: float,
-        rel_delta: Optional[float],
-        metric_name: str
-    ) -> str:
+    def _classify_drift(self, delta: float, rel_delta: Optional[float]) -> str:
         """Classify drift status based on thresholds."""
-        # Get thresholds from config
-        psi_threshold = self.drift.get("psi_threshold", 0.2)
-        ks_threshold = self.drift.get("ks_threshold", 0.1)
-        
-        # Simple classification (can be extended)
         if rel_delta is not None:
             abs_rel_delta = abs(rel_delta)
             if abs_rel_delta < 0.05:  # 5% change
@@ -627,6 +308,183 @@ class TelemetryWriter:
                 return "DRIFTING"
             else:
                 return "DIVERGED"
+    
+    def generate_view_rollup(
+        self,
+        view_dir: Path,
+        stage: str,
+        view: str,
+        run_id: str
+    ) -> None:
+        """
+        Generate view-level rollup (CROSS_SECTIONAL/telemetry_rollup.json or SYMBOL_SPECIFIC/telemetry_rollup.json).
+        
+        Args:
+            view_dir: Path to view directory (CROSS_SECTIONAL or SYMBOL_SPECIFIC)
+            stage: Pipeline stage
+            view: View type
+            run_id: Current run identifier
+        """
+        if not self.enabled:
+            return
+        
+        view_dir = Path(view_dir)
+        if not view_dir.exists():
+            return
+        
+        rollup_data = {
+            "run_id": run_id,
+            "stage": stage,
+            "view": view,
+            "timestamp": datetime.now().isoformat(),
+            "targets": {},
+            "symbols": {},
+            "aggregated_metrics": {}
+        }
+        
+        # Collect metrics from all cohort directories in this view
+        all_metrics = []
+        
+        # For CROSS_SECTIONAL: iterate per-target directories
+        if view == "CROSS_SECTIONAL":
+            for target_dir in view_dir.iterdir():
+                if not target_dir.is_dir() or target_dir.name.startswith("telemetry"):
+                    continue
+                
+                target_name = target_dir.name
+                target_metrics = []
+                
+                # Find most recent cohort for this target
+                cohort_dirs = sorted(
+                    [d for d in target_dir.iterdir() if d.is_dir() and d.name.startswith("cohort=")],
+                    key=lambda x: x.stat().st_mtime,
+                    reverse=True
+                )
+                
+                if cohort_dirs:
+                    latest_cohort = cohort_dirs[0]
+                    metrics_file = latest_cohort / "telemetry_metrics.json"
+                    if metrics_file.exists():
+                        try:
+                            with open(metrics_file, 'r') as f:
+                                target_data = json.load(f)
+                                target_metrics = target_data.get("metrics", {})
+                                rollup_data["targets"][target_name] = target_metrics
+                                all_metrics.append(target_metrics)
+                        except Exception as e:
+                            logger.debug(f"Failed to load metrics for {target_name}: {e}")
+        
+        # For SYMBOL_SPECIFIC: iterate per-target, then per-symbol
+        elif view == "SYMBOL_SPECIFIC":
+            for target_dir in view_dir.iterdir():
+                if not target_dir.is_dir() or target_dir.name.startswith("telemetry"):
+                    continue
+                
+                target_name = target_dir.name
+                
+                for symbol_dir in target_dir.iterdir():
+                    if not symbol_dir.is_dir() or not symbol_dir.name.startswith("symbol="):
+                        continue
+                    
+                    symbol_name = symbol_dir.name.replace("symbol=", "")
+                    
+                    # Find most recent cohort for this symbol+target
+                    cohort_dirs = sorted(
+                        [d for d in symbol_dir.iterdir() if d.is_dir() and d.name.startswith("cohort=")],
+                        key=lambda x: x.stat().st_mtime,
+                        reverse=True
+                    )
+                    
+                    if cohort_dirs:
+                        latest_cohort = cohort_dirs[0]
+                        metrics_file = latest_cohort / "telemetry_metrics.json"
+                        if metrics_file.exists():
+                            try:
+                                with open(metrics_file, 'r') as f:
+                                    symbol_data = json.load(f)
+                                    symbol_metrics = symbol_data.get("metrics", {})
+                                    
+                                    if target_name not in rollup_data["targets"]:
+                                        rollup_data["targets"][target_name] = {}
+                                    rollup_data["targets"][target_name][symbol_name] = symbol_metrics
+                                    
+                                    if symbol_name not in rollup_data["symbols"]:
+                                        rollup_data["symbols"][symbol_name] = {}
+                                    rollup_data["symbols"][symbol_name][target_name] = symbol_metrics
+                                    
+                                    all_metrics.append(symbol_metrics)
+                            except Exception as e:
+                                logger.debug(f"Failed to load metrics for {target_name}/{symbol_name}: {e}")
+        
+        # Compute aggregated metrics (mean across all targets/symbols)
+        if all_metrics:
+            numeric_keys = set()
+            for m in all_metrics:
+                numeric_keys.update(k for k, v in m.items() if isinstance(v, (int, float)))
+            
+            for key in numeric_keys:
+                values = [m.get(key) for m in all_metrics if isinstance(m.get(key), (int, float))]
+                if values:
+                    rollup_data["aggregated_metrics"][key] = {
+                        "mean": float(np.mean(values)),
+                        "std": float(np.std(values)) if len(values) > 1 else 0.0,
+                        "min": float(np.min(values)),
+                        "max": float(np.max(values)),
+                        "count": len(values)
+                    }
+        
+        # Write rollup file
+        rollup_file = view_dir / "telemetry_rollup.json"
+        try:
+            with open(rollup_file, 'w') as f:
+                json.dump(rollup_data, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Failed to write view rollup to {rollup_file}: {e}")
+    
+    def generate_stage_rollup(
+        self,
+        stage_dir: Path,
+        stage: str,
+        run_id: str
+    ) -> None:
+        """
+        Generate stage-level container rollup (TARGET_RANKING/telemetry_rollup.json).
+        
+        This is a container that references view-level rollups, no drift mixing.
+        """
+        if not self.enabled:
+            return
+        
+        stage_dir = Path(stage_dir)
+        if not stage_dir.exists():
+            return
+        
+        rollup_data = {
+            "run_id": run_id,
+            "stage": stage,
+            "timestamp": datetime.now().isoformat(),
+            "views": {}
+        }
+        
+        # Load view-level rollups
+        for view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+            view_dir = stage_dir / view
+            if view_dir.exists():
+                view_rollup_file = view_dir / "telemetry_rollup.json"
+                if view_rollup_file.exists():
+                    try:
+                        with open(view_rollup_file, 'r') as f:
+                            rollup_data["views"][view] = json.load(f)
+                    except Exception as e:
+                        logger.debug(f"Failed to load view rollup for {view}: {e}")
+        
+        # Write stage rollup
+        rollup_file = stage_dir / "telemetry_rollup.json"
+        try:
+            with open(rollup_file, 'w') as f:
+                json.dump(rollup_data, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Failed to write stage rollup to {rollup_file}: {e}")
 
 
 def load_telemetry_config() -> Dict[str, Any]:
@@ -635,37 +493,20 @@ def load_telemetry_config() -> Dict[str, Any]:
         from CONFIG.config_loader import get_cfg
         return {
             "enabled": get_cfg("safety.telemetry.enabled", default=True, config_name="safety_config"),
-            "levels": {
-                "run": get_cfg("safety.telemetry.levels.run", default=True, config_name="safety_config"),
-                "view": get_cfg("safety.telemetry.levels.view", default=True, config_name="safety_config"),
-                "target": get_cfg("safety.telemetry.levels.target", default=True, config_name="safety_config"),
-                "symbol": get_cfg("safety.telemetry.levels.symbol", default=True, config_name="safety_config"),
-                "target_symbol": get_cfg("safety.telemetry.levels.target_symbol", default=False, config_name="safety_config")
-            },
             "baselines": {
                 "previous_run": get_cfg("safety.telemetry.baselines.previous_run", default=True, config_name="safety_config"),
                 "rolling_window_k": get_cfg("safety.telemetry.baselines.rolling_window_k", default=10, config_name="safety_config"),
                 "last_good_run": get_cfg("safety.telemetry.baselines.last_good_run", default=True, config_name="safety_config")
             },
             "drift": {
-                "feature_set_mode": get_cfg("safety.telemetry.drift.feature_set_mode", default="topk_importance", config_name="safety_config"),
-                "topk": get_cfg("safety.telemetry.drift.topk", default=50, config_name="safety_config"),
                 "psi_threshold": get_cfg("safety.telemetry.drift.psi_threshold", default=0.2, config_name="safety_config"),
                 "ks_threshold": get_cfg("safety.telemetry.drift.ks_threshold", default=0.1, config_name="safety_config")
-            },
-            "rollups": {
-                "per_symbol": get_cfg("safety.telemetry.rollups.per_symbol", default=True, config_name="safety_config"),
-                "per_cross_sectional": get_cfg("safety.telemetry.rollups.per_cross_sectional", default=True, config_name="safety_config"),
-                "per_target": get_cfg("safety.telemetry.rollups.per_target", default=True, config_name="safety_config"),
-                "per_run": get_cfg("safety.telemetry.rollups.per_run", default=True, config_name="safety_config")
             }
         }
     except Exception as e:
         logger.warning(f"Failed to load telemetry config: {e}, using defaults")
         return {
             "enabled": True,
-            "levels": {"run": True, "view": True, "target": True, "symbol": True, "target_symbol": False},
             "baselines": {"previous_run": True, "rolling_window_k": 10, "last_good_run": True},
-            "drift": {"feature_set_mode": "topk_importance", "topk": 50, "psi_threshold": 0.2, "ks_threshold": 0.1},
-            "rollups": {"per_symbol": True, "per_cross_sectional": True, "per_target": True, "per_run": True}
+            "drift": {"psi_threshold": 0.2, "ks_threshold": 0.1}
         }
