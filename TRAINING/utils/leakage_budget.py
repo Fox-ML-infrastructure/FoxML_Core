@@ -60,6 +60,13 @@ def _compute_feature_fingerprint(feature_names: Iterable[str], set_invariant: bo
     
     return set_fingerprint, order_fingerprint
 
+# OHLCV base columns - should have 1 bar lookback (current bar only)
+OHLCV_BASE_COLUMNS = {
+    "open", "high", "low", "close", "volume", "vwap",
+    "adj_open", "adj_high", "adj_low", "adj_close", "adj_volume",
+    "o", "h", "l", "c", "v",  # Short names
+}
+
 # Calendar/exogenous features that have 0m lookback (not rolling windows)
 CALENDAR_FEATURES = {
     "day_of_week",
@@ -85,7 +92,9 @@ class LeakageBudget:
     Attributes:
         interval_minutes: Data bar interval in minutes
         horizon_minutes: Target prediction horizon in minutes
-        max_feature_lookback_minutes: Maximum feature lookback in minutes
+        max_feature_lookback_minutes: Actual maximum feature lookback in minutes (uncapped)
+        cap_max_lookback_minutes: Optional config cap (e.g., 100m) - separate from actual
+        allowed_max_lookback_minutes: Derived from purge (purge - buffer) - separate from actual
     
     Properties:
         required_gap_minutes: Conservative gap required between train/test
@@ -93,7 +102,9 @@ class LeakageBudget:
     """
     interval_minutes: float
     horizon_minutes: float
-    max_feature_lookback_minutes: float
+    max_feature_lookback_minutes: float  # Actual max from features (uncapped)
+    cap_max_lookback_minutes: Optional[float] = None  # Optional config cap (e.g., 100m)
+    allowed_max_lookback_minutes: Optional[float] = None  # Derived from purge: purge - buffer
 
     @property
     def required_gap_minutes(self) -> float:
@@ -163,7 +174,11 @@ def infer_lookback_minutes(
         except Exception:
             pass  # Fall through to pattern matching
     
-    # 2) True "calendar/exogenous" features should be 0 lookback
+    # 2a) OHLCV base columns - should have 1 bar lookback (current bar only)
+    if feature_name.lower() in OHLCV_BASE_COLUMNS:
+        return float(interval_minutes)  # 1 bar = interval_minutes
+    
+    # 2b) True "calendar/exogenous" features should be 0 lookback
     if feature_name in CALENDAR_FEATURES:
         return 0.0
     
@@ -274,7 +289,9 @@ def compute_budget(
             LeakageBudget(
                 interval_minutes=interval_minutes,
                 horizon_minutes=horizon_minutes,
-                max_feature_lookback_minutes=0.0
+                max_feature_lookback_minutes=0.0,
+                cap_max_lookback_minutes=None,
+                allowed_max_lookback_minutes=None
             ),
             set_fingerprint,
             order_fingerprint
@@ -317,12 +334,15 @@ def compute_budget(
         
         lookbacks.append(lookback)
     
-    # Compute max lookback
-    max_lookback = max(lookbacks) if lookbacks else 0.0
+    # Compute ACTUAL max lookback (uncapped - this is the truth)
+    actual_max_lookback = max(lookbacks) if lookbacks else 0.0
     
-    # Apply cap if provided
-    if max_lookback_cap_minutes is not None and max_lookback > max_lookback_cap_minutes:
-        max_lookback = max_lookback_cap_minutes
+    # Store cap separately (don't modify actual_max)
+    cap_max_lookback = max_lookback_cap_minutes
+    
+    # For backward compatibility, max_feature_lookback_minutes is the actual (not capped)
+    # The cap is stored separately for policy decisions
+    max_lookback = actual_max_lookback
     
     # Log fingerprint with lookback computation
     if logger.isEnabledFor(logging.DEBUG):
@@ -335,7 +355,9 @@ def compute_budget(
         LeakageBudget(
             interval_minutes=interval_minutes,
             horizon_minutes=horizon_minutes,
-            max_feature_lookback_minutes=max_lookback
+            max_feature_lookback_minutes=actual_max_lookback,  # Actual (uncapped)
+            cap_max_lookback_minutes=cap_max_lookback,  # Optional cap
+            allowed_max_lookback_minutes=None  # Will be set by caller if purge-derived
         ),
         set_fingerprint,
         order_fingerprint
@@ -427,15 +449,23 @@ def compute_feature_lookback_max(
     # CRITICAL: Only warn about mismatch if expected_fingerprint is provided (invariant-checked stage)
     # For earlier stages (pre-filter), mismatch is expected and not an error
     if feature_lookbacks and budget.max_feature_lookback_minutes is not None:
-        budget_max = budget.max_feature_lookback_minutes
-        # Compare uncapped actual_max to budget_max (which may be capped)
-        # If they differ significantly, it means cap was applied or features were filtered
-        if expected_fingerprint is not None and abs(actual_max_uncapped - budget_max) > 1.0:
-            # This is a real mismatch - budget was computed on different features or cap was applied
+        budget_actual_max = budget.max_feature_lookback_minutes  # This is the actual (uncapped) max
+        budget_cap = budget.cap_max_lookback_minutes  # Optional cap
+        
+        # Check for cap violation (actual > cap)
+        if budget_cap is not None and actual_max_uncapped > budget_cap:
+            logger.warning(
+                f"⚠️ CAP VIOLATION: actual_max={actual_max_uncapped:.1f}m > cap={budget_cap:.1f}m. "
+                f"Feature set contains {len([f for f, l in feature_lookbacks if l > budget_cap + 1.0])} features exceeding cap."
+            )
+        
+        # Check for fingerprint/invariant violation (computed on different feature set)
+        if expected_fingerprint is not None and abs(actual_max_uncapped - budget_actual_max) > 1.0:
+            # This is a real mismatch - budget was computed on different features
             logger.error(
-                f"🚨 Lookback mismatch (invariant violation): budget.max={budget_max:.1f}m but actual max from features={actual_max_uncapped:.1f}m. "
+                f"🚨 Lookback mismatch (invariant violation): budget.actual_max={budget_actual_max:.1f}m but actual max from features={actual_max_uncapped:.1f}m. "
                 f"This indicates lookback computed on different feature set than expected (stage={stage}). "
-                f"Feature set contains {len([f for f, l in feature_lookbacks if l > budget_max + 1.0])} features with lookback > budget.max."
+                f"Feature set contains {len([f for f, l in feature_lookbacks if l > budget_actual_max + 1.0])} features with lookback > budget.actual_max."
             )
     
     # Build top_offenders STRICTLY from feature_lookbacks (which is built from feature_names)

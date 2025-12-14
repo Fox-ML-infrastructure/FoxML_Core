@@ -85,15 +85,51 @@ def auto_quarantine_long_lookback_features(
         logger.debug("Active sanitization disabled - all features passed through")
         return feature_names, [], {"enabled": False, "quarantined": []}
     
-    # Load max safe lookback threshold
+    # Load sanitization mode and threshold from config
+    sanitize_mode = "budget_cap"  # Default: use budget cap
+    if _CONFIG_AVAILABLE:
+        try:
+            sanitize_mode = get_cfg("safety.leakage_detection.active_sanitization.mode", default="budget_cap", config_name="safety_config")
+        except Exception:
+            pass
+    
+    # Determine threshold based on mode
     if max_safe_lookback_minutes is None:
-        if _CONFIG_AVAILABLE:
-            try:
-                max_safe_lookback_minutes = get_cfg("safety.leakage_detection.active_sanitization.max_safe_lookback_minutes", default=240.0, config_name="safety_config")
-            except Exception:
+        if sanitize_mode == "budget_cap":
+            # Use budget cap from config (if set)
+            if _CONFIG_AVAILABLE:
+                try:
+                    budget_cap = get_cfg("safety.leakage_detection.lookback_budget_minutes", default="auto", config_name="safety_config")
+                    if budget_cap != "auto" and isinstance(budget_cap, (int, float)):
+                        max_safe_lookback_minutes = float(budget_cap)
+                    else:
+                        # No cap set - disable sanitization or use purge-derived
+                        max_safe_lookback_minutes = None  # Will be handled below
+                except Exception:
+                    max_safe_lookback_minutes = None
+            else:
+                max_safe_lookback_minutes = None
+        elif sanitize_mode == "fixed":
+            # Use fixed threshold from config
+            if _CONFIG_AVAILABLE:
+                try:
+                    max_safe_lookback_minutes = get_cfg("safety.leakage_detection.active_sanitization.fixed_threshold_minutes", default=240.0, config_name="safety_config")
+                except Exception:
+                    max_safe_lookback_minutes = 240.0  # Default: 4 hours
+            else:
                 max_safe_lookback_minutes = 240.0  # Default: 4 hours
+        elif sanitize_mode == "purge_allowance":
+            # Will be computed from purge - buffer (not available here, skip sanitization)
+            logger.debug("Sanitization mode 'purge_allowance' requires purge context - skipping sanitization")
+            return feature_names, [], {"enabled": True, "quarantined": [], "reason": "purge_allowance_mode_requires_context"}
         else:
+            # Unknown mode - use fixed default
             max_safe_lookback_minutes = 240.0  # Default: 4 hours
+    
+    # If no threshold determined and mode is budget_cap, disable sanitization
+    if max_safe_lookback_minutes is None and sanitize_mode == "budget_cap":
+        logger.debug("Sanitization mode 'budget_cap' but no cap set (lookback_budget_minutes=auto) - disabling sanitization")
+        return feature_names, [], {"enabled": True, "quarantined": [], "reason": "no_cap_set"}
     
     if not feature_names:
         return [], [], {"enabled": True, "quarantined": [], "reason": "no_features"}

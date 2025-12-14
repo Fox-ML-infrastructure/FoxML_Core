@@ -133,9 +133,12 @@ safety:
   # This prevents "ghost feature" discrepancies where audit and auto-fix see different lookback values
   active_sanitization:
     enabled: true  # Enable active sanitization (automatically quarantine problematic features)
-    max_safe_lookback_minutes: 240.0  # Maximum safe lookback in minutes (default: 4 hours)
-    # Features with lookback > this threshold will be automatically quarantined
-    # Set to null to disable lookback-based quarantine (only use pattern-based)
+    mode: budget_cap  # budget_cap | purge_allowance | fixed
+    # - budget_cap: Use lookback_budget_minutes cap (if set) as threshold
+    # - purge_allowance: Use purge-derived allowance (purge - buffer) as threshold (requires purge context)
+    # - fixed: Use fixed_threshold_minutes as threshold (legacy behavior)
+    fixed_threshold_minutes: 240.0  # Only used if mode=fixed (default: 4 hours)
+    # Features with lookback > threshold will be automatically quarantined
     
     # Pattern-based quarantine (more aggressive - quarantines by naming patterns)
     pattern_quarantine:
