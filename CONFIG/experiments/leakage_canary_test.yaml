@@ -1,0 +1,170 @@
+# Leakage Canary Test Configuration
+# Tests pipeline integrity using known-leaky targets as canaries
+#
+# PURPOSE:
+# - Validate guardrails (purge/embargo, split logic, feature alignment)
+# - Catch split/gap logic bugs, CV preprocessing leakage, schema filter failures
+# - Run permutation/shuffle tests as negative controls
+#
+# EXPECTED BEHAVIOR:
+# - Canary targets should either:
+#   1. Hard-stop under policy=strict (if purge/embargo insufficient), OR
+#   2. Auto-exclude as SUSPICIOUS (AUC>0.90 across multiple families)
+# - Permutation test: shuffle y → AUC should collapse to ~0.50
+# - Time-shift test: shift features +1 bar → AUC should drop hard
+#
+# IMPORTANT:
+# - These targets are TEST FIXTURES, not production targets
+# - They should NEVER enter "top targets" or downstream selection
+# - Results are for pipeline validation, not alpha discovery
+
+experiment:
+  name: leakage_canary_test
+  description: "Leakage canary test: Validate pipeline integrity with known-leaky targets"
+
+# ============================================================================
+# DATA CONFIGURATION (Minimal for fast testing)
+# ============================================================================
+data:
+  # Data directory (relative to repo root or absolute path)
+  data_dir: data/data_labeled_v2/interval=5m
+  
+  # Minimal symbol set for fast testing
+  symbols: [AAPL, MSFT]
+  
+  # Bar interval
+  interval: 5m
+  
+  # Minimal limits for fast testing
+  max_samples_per_symbol: 500    # Very small for speed
+  max_rows_per_symbol: 500       # Very small for speed
+  max_rows_train: 5000           # Very small for speed
+  max_cs_samples: 500            # Max cross-sectional samples per timestamp
+  min_cs: 3                      # Minimal requirement
+
+# ============================================================================
+# INTELLIGENT TRAINING CONFIGURATION
+# ============================================================================
+intelligent_training:
+  # Use specific canary targets (known to be leaky)
+  auto_targets: false
+  
+  # Manual canary targets (known leaky targets for testing)
+  # These should trigger SUSPICIOUS flags or hard-stop
+  manual_targets:
+    # High-scoring targets that should be flagged as suspicious
+    - y_will_swing_high_60m_0.05
+    - y_will_swing_low_60m_0.05
+    - y_will_valley_60m_0.8
+    # Add more known-leaky targets here as they're discovered
+  
+  # Limit to canary targets only
+  max_targets_to_evaluate: 10  # Only evaluate canary targets
+  
+  # Auto-discover features (but we'll validate they're filtered correctly)
+  auto_features: true
+  
+  # Minimal feature set for fast testing
+  top_m_features: 20  # Small set for speed
+  
+  # Training strategy
+  strategy: single_task
+  
+  # ENABLE leakage diagnostics for canary validation
+  run_leakage_diagnostics: true  # CRITICAL: Enable for canary validation
+
+# ============================================================================
+# TARGET CONFIGURATION
+# ============================================================================
+targets:
+  # Primary target (fallback, but manual_targets takes precedence)
+  primary: y_will_swing_high_60m_0.05
+
+# ============================================================================
+# FEATURE SELECTION CONFIGURATION
+# ============================================================================
+feature_selection:
+  # Minimal model families for fast testing
+  model_families:
+    - lightgbm
+    - xgboost
+    # Skip others for speed
+
+# ============================================================================
+# TRAINING CONFIGURATION
+# ============================================================================
+training:
+  # Minimal model families for fast testing
+  model_families:
+    - lightgbm
+    - xgboost
+    # Skip others for speed
+
+# ============================================================================
+# LEAKAGE DETECTION CONFIGURATION
+# ============================================================================
+# Override safety config for canary testing
+safety:
+  leakage_detection:
+    # Use STRICT policy for canary tests (should hard-stop on violations)
+    policy: strict  # CRITICAL: Must be strict for canary validation
+    
+    # Enable smoke tests (permutation + time-shift)
+    # These should be wired as gates (future work)
+    smoke_tests:
+      enabled: true
+      permutation_test:
+        enabled: true
+        max_auc_threshold: 0.58  # AUC should be ~0.50, allow small noise
+      feature_shift_test:
+        enabled: true
+        shift_bars: 1
+        max_auc_threshold: 0.55  # AUC should drop hard after shift
+
+# ============================================================================
+# VALIDATION EXPECTATIONS (Documentation - not enforced by config)
+# ============================================================================
+# Expected outcomes for canary targets:
+#
+# 1. Hard-stop scenarios (policy=strict):
+#    - purge < lookback_requirement → RuntimeError
+#    - embargo < horizon_requirement → RuntimeError
+#
+# 2. Auto-exclude scenarios:
+#    - AUC > 0.90 across multiple families → SUSPICIOUS flag
+#    - Perfect training accuracy → SUSPICIOUS flag
+#    - Leak scan detects near-copy features → FAIL verdict
+#
+# 3. Negative controls (smoke tests):
+#    - Permutation test: shuffle y → AUC ~0.50 (if >0.58, pipeline leak)
+#    - Feature shift test: shift features +1 bar → AUC drops (if >0.55, leak)
+#
+# 4. Top features analysis:
+#    - Log top 20 features for suspicious targets
+#    - Check for features that directly encode label window
+#
+# If canary targets DON'T trigger these defenses, the pipeline has bugs.
+
+# ============================================================================
+# PARALLEL EXECUTION CONFIGURATION
+# ============================================================================
+# Disable parallel execution for canary tests (easier to debug)
+multi_target:
+  parallel_targets: false  # Sequential for easier debugging
+  skip_on_error: false     # Fail fast on errors
+
+multi_model_feature_selection:
+  parallel_symbols: false  # Sequential for easier debugging
+
+threading:
+  parallel:
+    enabled: false  # Disable for easier debugging
+
+# ============================================================================
+# NOTES
+# ============================================================================
+# - This config is for PIPELINE VALIDATION, not alpha discovery
+# - Canary targets should be excluded from production rankings
+# - Run this test regularly to catch regressions in leakage controls
+# - If canaries pass without flags, investigate pipeline integrity
+# - Results should show SUSPICIOUS flags or hard-stops, not high scores
