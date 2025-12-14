@@ -416,7 +416,7 @@ def select_features_for_target(
                     
                     # Run importance producers
                     model_metrics, model_scores, mean_importance, suspicious_features, \
-                    all_feature_importances, fold_timestamps = harness.run_importance_producers(
+                    all_feature_importances, fold_timestamps, perfect_correlation_models = harness.run_importance_producers(
                         X=X, y=y, feature_names=feature_names, time_vals=time_vals,
                         task_type=None, resolved_config=resolved_config
                     )
@@ -656,7 +656,7 @@ def select_features_for_target(
                         
                         # Run importance producers using same harness as target ranking
                         model_metrics, model_scores, mean_importance, suspicious_features, \
-                        all_feature_importances, fold_timestamps = harness.run_importance_producers(
+                        all_feature_importances, fold_timestamps, perfect_correlation_models = harness.run_importance_producers(
                             X=X,
                             y=y,
                             feature_names=feature_names,

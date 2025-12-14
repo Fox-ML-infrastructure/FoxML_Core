@@ -403,9 +403,9 @@ class RankingHarness:
         time_vals: Optional[np.ndarray] = None,
         task_type: Any = None,
         resolved_config: Optional[Any] = None
-    ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, float], float, 
-               Dict[str, List[Tuple[str, float]]], Dict[str, Dict[str, float]], 
-               List[Dict[str, Any]]]:
+    ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, float], float,
+               Dict[str, List[Tuple[str, float]]], Dict[str, Dict[str, float]],
+               List[Dict[str, Any]], set]:
         """
         Run importance producers (models) using the SAME evaluation harness.
         
@@ -424,8 +424,8 @@ class RankingHarness:
             resolved_config: Optional ResolvedConfig with purge/embargo
         
         Returns:
-            Tuple of (model_metrics, model_scores, mean_importance, 
-                     all_suspicious_features, all_feature_importances, fold_timestamps)
+            Tuple of (model_metrics, model_scores, mean_importance,
+                     all_suspicious_features, all_feature_importances, fold_timestamps, perfect_correlation_models)
         """
         from TRAINING.ranking.predictability.model_evaluation import train_and_evaluate_models
         from TRAINING.ranking.predictability.scoring import TaskType
