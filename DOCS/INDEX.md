@@ -29,7 +29,7 @@ See each directory's [README](00_executive/README.md) for detailed contents.
 - [Known Issues & Limitations](02_reference/KNOWN_ISSUES.md) - **NEW**: Features that don't work yet or have limitations
 - [Deterministic Training](00_executive/DETERMINISTIC_TRAINING.md) - SST config system and reproducibility guarantees
 - [Audit Reports](00_executive/audits/README.md) - **NEW**: Quality assurance audits, documentation accuracy checks, and technical audits (public transparency)
-- [Documentation Review Statement](../DOCUMENTATION_REVIEW.md) - **NEW**: Initial documentation review completed
+- [Documentation Review Statement](00_executive/audits/DOCUMENTATION_REVIEW.md) - **NEW**: Initial documentation review completed
 - [Changelog](../CHANGELOG.md) - Recent technical and compliance changes (quick overview)
 - [Changelog Index](02_reference/changelog/README.md) - Per-day detailed changelogs with file paths and config references
 - [Licensing & Subscriptions](../LEGAL/SUBSCRIPTIONS.md) - AGPL vs commercial usage and subscription tiers
@@ -207,10 +207,12 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 ### Implementation
 - [Feature Selection Implementation](03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Feature selection implementation details (see also [Ranking and Selection Consistency](01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) for unified pipeline behavior)
 - [Training Optimization](03_technical/implementation/TRAINING_OPTIMIZATION_GUIDE.md) - Training optimization guide
-- [SST Enforcement Design](../../TRAINING/utils/SST_ENFORCEMENT_DESIGN.md) - **NEW**: EnforcedFeatureSet contract, type boundary wiring, boundary assertions (provably split-brain free across all training paths)
-- [SST Implementation Coverage](../../TRAINING/utils/SST_IMPLEMENTATION_COVERAGE.md) - **NEW**: Complete coverage matrix for SST enforcement across all training paths
-- [Type Boundary Wiring](../../TRAINING/utils/TYPE_BOUNDARY_WIRING_COMPLETE.md) - **NEW**: Type boundary wiring implementation details
-- [Boundary Assertions](../../TRAINING/utils/BOUNDARY_ASSERTIONS_COMPLETE.md) - **NEW**: Boundary assertion implementation details
+- [SST Enforcement Design](03_technical/implementation/training_utils/SST_ENFORCEMENT_DESIGN.md) - **NEW**: EnforcedFeatureSet contract, type boundary wiring, boundary assertions (provably split-brain free across all training paths)
+- [SST Implementation Coverage](03_technical/implementation/training_utils/SST_IMPLEMENTATION_COVERAGE.md) - **NEW**: Complete coverage matrix for SST enforcement across all training paths
+- [Type Boundary Wiring](03_technical/implementation/training_utils/TYPE_BOUNDARY_WIRING_COMPLETE.md) - **NEW**: Type boundary wiring implementation details
+- [Boundary Assertions](03_technical/implementation/training_utils/BOUNDARY_ASSERTIONS_COMPLETE.md) - **NEW**: Boundary assertion implementation details
+- [Duration System](03_technical/implementation/training_utils/DURATION_SYSTEM_FINAL.md) - Duration parsing and schema system
+- [Single Source of Truth](03_technical/implementation/training_utils/SINGLE_SOURCE_OF_TRUTH_COMPLETE.md) - SST implementation for lookback computation
 - [Parallel Execution](03_technical/implementation/PARALLEL_EXECUTION.md) - Parallel execution infrastructure for target ranking and feature selection
 - [Reproducibility Tracking](03_technical/implementation/REPRODUCIBILITY_TRACKING.md) - Automatic reproducibility verification across pipeline stages
 - [Cohort-Aware Reproducibility](03_technical/implementation/COHORT_AWARE_REPRODUCIBILITY.md) - **NEW**: Cohort-aware reproducibility system with sample-adjusted drift detection

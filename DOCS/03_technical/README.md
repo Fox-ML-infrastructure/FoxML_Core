@@ -23,11 +23,12 @@ This directory contains detailed technical documentation for developers, researc
 ### Implementation
 - **[Feature Selection Guide](implementation/FEATURE_SELECTION_GUIDE.md)** - Feature selection implementation
 - **[Reproducibility Tracking](implementation/REPRODUCIBILITY_TRACKING.md)** - Reproducibility system
-- **[Telemetry System](02_reference/changelog/2025-12-14-telemetry-system.md)** - **NEW**: Sidecar-based telemetry with view isolation, hierarchical rollups
+- **[Telemetry System](../02_reference/changelog/2025-12-14-telemetry-system.md)** - **NEW**: Sidecar-based telemetry with view isolation, hierarchical rollups
 - **[Active Sanitization](implementation/ACTIVE_SANITIZATION.md)** - Proactive feature quarantine
 - **[Parallel Execution](implementation/PARALLEL_EXECUTION.md)** - Parallel execution infrastructure
 - **[Decision Engine](implementation/decisioning/DECISION_ENGINE.md)** - ⚠️ EXPERIMENTAL: Automated decision-making
 - **[Bayesian Policy](implementation/decisioning/BAYESIAN_POLICY.md)** - ⚠️ EXPERIMENTAL: Adaptive config tuning
+- **[Training Utils Documentation](implementation/training_utils/)** - Implementation details for training utilities (SST enforcement, duration system, lookback handling, etc.)
 - See [implementation/](implementation/) for complete list
 
 ### Design
