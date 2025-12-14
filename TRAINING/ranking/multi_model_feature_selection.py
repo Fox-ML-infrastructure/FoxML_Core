@@ -1153,13 +1153,32 @@ def train_model_and_get_importance(
         from sklearn.preprocessing import StandardScaler
         from sklearn.impute import SimpleImputer
         
+        # Load look-ahead bias fix config
+        try:
+            from TRAINING.utils.lookahead_bias_config import get_lookahead_bias_fix_config
+            fix_config = get_lookahead_bias_fix_config()
+            normalize_inside_cv = fix_config.get('normalize_inside_cv', False)
+        except Exception:
+            normalize_inside_cv = False
+        
+        # FIX #2: Normalization leak detection
+        # Currently, this function receives full X (not train/test separately)
+        # This means normalization happens on full dataset, leaking future statistics
+        # TODO: Refactor call sites to pass train/test separately for proper CV-based normalization
+        if normalize_inside_cv:
+            logger.warning(
+                f"normalize_inside_cv=True but train_model_and_get_importance receives full X "
+                f"(not train/test separately). Normalization leak may still occur. "
+                f"Refactoring required: call sites must pass X_train, X_test separately."
+            )
+        
         # Handle NaN values (neural networks can't handle them)
         imputer = SimpleImputer(strategy='median')
-        X_imputed = imputer.fit_transform(X)
+        X_imputed = imputer.fit_transform(X)  # ⚠️ LEAK: Fits on full dataset if normalize_inside_cv=False
         
         # Scale for neural networks
         scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X_imputed)
+        X_scaled = scaler.fit_transform(X_imputed)  # ⚠️ LEAK: Fits on full dataset if normalize_inside_cv=False
         
         # Clean config using systematic helper (removes duplicates and unknown params)
         # MLPRegressor doesn't accept n_jobs, num_threads, or threads
