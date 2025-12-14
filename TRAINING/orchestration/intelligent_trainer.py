@@ -827,8 +827,14 @@ class IntelligentTrainer:
                     intel_training = exp_yaml.get('intelligent_training', {})
                     if intel_training:
                         exclude_patterns = intel_training.get('exclude_target_patterns', [])
+                        if exclude_patterns:
+                            logger.info(f"📋 Loaded exclude_target_patterns from experiment config: {exclude_patterns}")
+                else:
+                    logger.debug(f"Experiment config file not found: {exp_file}")
             except Exception as e:
-                logger.debug(f"Could not load exclude_target_patterns from experiment config: {e}")
+                logger.warning(f"Could not load exclude_target_patterns from experiment config: {e}")
+        else:
+            logger.debug("No experiment_config available, skipping exclude_target_patterns")
         
         if exclude_patterns:
             original_count = len(targets_dict)

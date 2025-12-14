@@ -50,6 +50,12 @@ intelligent_training:
   
   # Skip leakage diagnostics for faster testing
   run_leakage_diagnostics: false
+  
+  # Exclude target patterns (targets matching any pattern will be excluded)
+  # Patterns are matched as substrings (e.g., "will_peak" matches "y_will_peak_60m_0.8")
+  exclude_target_patterns:
+    - "will_peak"
+    - "will_valley"
 
 # ============================================================================
 # TARGET CONFIGURATION (Legacy/Reference)
