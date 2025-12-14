@@ -943,9 +943,9 @@ def train_and_evaluate_models(
         top_offenders = lookback_result.top_offenders
         
         # Validate fingerprint
-        if lookback_result.fingerprint != current_fp:
+        if lookback_fingerprint and lookback_fingerprint != current_fp:
             logger.error(
-                f"🚨 FINGERPRINT MISMATCH (fallback): computed={lookback_result.fingerprint} != expected={current_fp}"
+                f"🚨 FINGERPRINT MISMATCH (fallback): computed={lookback_fingerprint} != expected={current_fp}"
             )
         
         if computed_lookback is not None:
