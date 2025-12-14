@@ -2038,20 +2038,46 @@ Examples:
         force_refresh_config = cache_cfg.get('force_refresh', False)
         
         # Check for test mode override (for E2E testing)
+        # NOTE: Experiment config takes priority over test config
         use_test_config = args.output_dir and 'test' in str(args.output_dir).lower()
         if use_test_config and intel_config_data.get('test'):
             test_cfg = intel_config_data['test']
             logger.info("📋 Using test configuration (detected 'test' in output-dir)")
-            if 'max_targets_to_evaluate' in test_cfg:
+            # Only apply test config if experiment config didn't override these values
+            # Check if experiment config already set these (experiment config takes priority)
+            exp_has_max_targets = False
+            exp_has_top_n = False
+            exp_has_top_m = False
+            if experiment_config:
+                try:
+                    import yaml
+                    exp_name = experiment_config.name
+                    exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                    if exp_file.exists():
+                        with open(exp_file, 'r') as f:
+                            exp_yaml = yaml.safe_load(f) or {}
+                        intel_training = exp_yaml.get('intelligent_training', {})
+                        if intel_training:
+                            exp_has_max_targets = 'max_targets_to_evaluate' in intel_training
+                            exp_has_top_n = 'top_n_targets' in intel_training
+                            exp_has_top_m = 'top_m_features' in intel_training
+                except Exception:
+                    pass
+            
+            # Only override if experiment config didn't set these values
+            if 'max_targets_to_evaluate' in test_cfg and not exp_has_max_targets:
                 max_targets_to_evaluate = test_cfg.get('max_targets_to_evaluate')
-            if 'top_n_targets' in test_cfg:
+                logger.info(f"📋 Using max_targets_to_evaluate={max_targets_to_evaluate} from test config")
+            if 'top_n_targets' in test_cfg and not exp_has_top_n:
                 top_n_targets = test_cfg.get('top_n_targets')
-            if 'top_m_features' in test_cfg:
+                logger.info(f"📋 Using top_n_targets={top_n_targets} from test config")
+            if 'top_m_features' in test_cfg and not exp_has_top_m:
                 top_m_features = test_cfg.get('top_m_features')
+                logger.info(f"📋 Using top_m_features={top_m_features} from test config")
     elif _CONFIG_AVAILABLE:
         # Fallback to old config system
         use_test_config = args.output_dir and 'test' in str(args.output_dir).lower()
-        
+
         if use_test_config:
             test_cfg = get_cfg("test.intelligent_training", default={}, config_name="pipeline_config")
             if test_cfg:
@@ -2061,7 +2087,7 @@ Examples:
                 intel_cfg = get_cfg("intelligent_training", default={}, config_name="pipeline_config")
         else:
             intel_cfg = get_cfg("intelligent_training", default={}, config_name="pipeline_config")
-        
+
         auto_targets = intel_cfg.get('auto_targets', True)
         top_n_targets = intel_cfg.get('top_n_targets', 5)
         max_targets_to_evaluate = intel_cfg.get('max_targets_to_evaluate', None)
@@ -2069,6 +2095,30 @@ Examples:
         top_m_features = intel_cfg.get('top_m_features', 100)
         strategy = intel_cfg.get('strategy', 'single_task')
         min_cs = intel_cfg.get('min_cs', 10)
+        
+        # Experiment config overrides test config (experiment config takes priority)
+        if experiment_config:
+            try:
+                import yaml
+                exp_name = experiment_config.name
+                exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                if exp_file.exists():
+                    with open(exp_file, 'r') as f:
+                        exp_yaml = yaml.safe_load(f) or {}
+                    intel_training = exp_yaml.get('intelligent_training', {})
+                    if intel_training:
+                        # Override with experiment config values (experiment config takes priority)
+                        if 'max_targets_to_evaluate' in intel_training:
+                            max_targets_to_evaluate = intel_training.get('max_targets_to_evaluate')
+                            logger.info(f"📋 Using max_targets_to_evaluate={max_targets_to_evaluate} from experiment config (overrides test config)")
+                        if 'top_n_targets' in intel_training:
+                            top_n_targets = intel_training.get('top_n_targets')
+                            logger.info(f"📋 Using top_n_targets={top_n_targets} from experiment config (overrides test config)")
+                        if 'top_m_features' in intel_training:
+                            top_m_features = intel_training.get('top_m_features')
+                            logger.info(f"📋 Using top_m_features={top_m_features} from experiment config (overrides test config)")
+            except Exception as e:
+                logger.debug(f"Could not load intelligent_training from experiment config: {e}")
         
         # Priority: experiment_config object > intel_cfg dict (backward compatibility)
         # Support both max_rows_per_symbol and max_samples_per_symbol
