@@ -899,9 +899,19 @@ def train_model_and_get_importance(
     feature_names: List[str],
     data_interval_minutes: int = 5,  # Data bar interval (default: 5 minutes)
     target_column: Optional[str] = None,  # Target column name for horizon extraction
-    symbol: Optional[str] = None  # Symbol name for deterministic seed generation
+    symbol: Optional[str] = None,  # Symbol name for deterministic seed generation
+    X_train: Optional[np.ndarray] = None,  # Optional: Pre-split training data (for CV-based normalization)
+    X_test: Optional[np.ndarray] = None,  # Optional: Pre-split test data (for CV-based normalization)
+    y_train: Optional[np.ndarray] = None,  # Optional: Pre-split training target
+    y_test: Optional[np.ndarray] = None  # Optional: Pre-split test target
 ) -> Tuple[Any, pd.Series, str]:
-    """Train a single model family and extract importance"""
+    """
+    Train a single model family and extract importance
+    
+    FIX #2: For proper CV-based normalization, pass X_train/X_test separately.
+    When provided, normalization (imputation/scaling) will fit only on X_train.
+    If not provided, falls back to full-dataset normalization (leakage risk).
+    """
     
     # Generate deterministic seed for this model/symbol/target combination
     seed_parts = [model_family]
@@ -1161,24 +1171,45 @@ def train_model_and_get_importance(
         except Exception:
             normalize_inside_cv = False
         
-        # FIX #2: Normalization leak detection
-        # Currently, this function receives full X (not train/test separately)
-        # This means normalization happens on full dataset, leaking future statistics
-        # TODO: Refactor call sites to pass train/test separately for proper CV-based normalization
-        if normalize_inside_cv:
-            logger.warning(
-                f"normalize_inside_cv=True but train_model_and_get_importance receives full X "
-                f"(not train/test separately). Normalization leak may still occur. "
-                f"Refactoring required: call sites must pass X_train, X_test separately."
-            )
-        
-        # Handle NaN values (neural networks can't handle them)
-        imputer = SimpleImputer(strategy='median')
-        X_imputed = imputer.fit_transform(X)  # ⚠️ LEAK: Fits on full dataset if normalize_inside_cv=False
-        
-        # Scale for neural networks
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X_imputed)  # ⚠️ LEAK: Fits on full dataset if normalize_inside_cv=False
+        # FIX #2: CV-based normalization
+        # If X_train/X_test are provided, normalize only on training data to prevent leakage
+        # Otherwise, fall back to full-dataset normalization (acceptable for feature selection, not model training)
+        if X_train is not None and X_test is not None and normalize_inside_cv:
+            # Fit imputer and scaler on training data only
+            imputer = SimpleImputer(strategy='median')
+            X_train_imputed = imputer.fit_transform(X_train)
+            X_test_imputed = imputer.transform(X_test)  # Transform test using training statistics
+            
+            scaler = StandardScaler()
+            X_train_scaled = scaler.fit_transform(X_train_imputed)
+            X_test_scaled = scaler.transform(X_test_imputed)  # Transform test using training statistics
+            
+            # Use training data for model fitting
+            X_scaled = X_train_scaled
+            X_for_scoring = X_test_scaled  # For evaluation if needed
+            y_for_training = y_train if y_train is not None else y
+            y_for_scoring = y_test if y_test is not None else y
+            
+            logger.debug(f"  Neural Network: Using CV-based normalization (fit on train, transform test)")
+        else:
+            # Fallback: Full-dataset normalization (for feature selection context)
+            if normalize_inside_cv and X_train is None:
+                logger.warning(
+                    f"normalize_inside_cv=True but no train/test split provided. "
+                    f"Using full-dataset normalization (acceptable for feature selection, not model training). "
+                    f"To fix: Pass X_train, X_test, y_train, y_test parameters."
+                )
+            
+            # Handle NaN values (neural networks can't handle them)
+            imputer = SimpleImputer(strategy='median')
+            X_imputed = imputer.fit_transform(X)  # ⚠️ LEAK: Fits on full dataset
+            
+            # Scale for neural networks
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(X_imputed)  # ⚠️ LEAK: Fits on full dataset
+            X_for_scoring = X_scaled
+            y_for_training = y
+            y_for_scoring = y
         
         # Clean config using systematic helper (removes duplicates and unknown params)
         # MLPRegressor doesn't accept n_jobs, num_threads, or threads
@@ -1188,8 +1219,8 @@ def train_model_and_get_importance(
         # Instantiate with cleaned config + explicit params
         model = MLPRegressor(**nn_config, **extra)
         try:
-            model.fit(X_scaled, y)
-            train_score = model.score(X_scaled, y)
+            model.fit(X_scaled, y_for_training)
+            train_score = model.score(X_scaled, y_for_training)
         except (ValueError, TypeError) as e:
             error_str = str(e).lower()
             if any(kw in error_str for kw in ['least populated class', 'too few', 'invalid classes']):
@@ -1197,8 +1228,14 @@ def train_model_and_get_importance(
                 return None, pd.Series(0.0, index=feature_names), importance_method, 0.0
             raise
         
-        # Use scaled data for importance
-        X = X_scaled
+        # Use scaled data for importance (use full dataset for importance extraction in feature selection context)
+        # For CV-based normalization, we still use full X_scaled for importance to get complete feature rankings
+        if X_train is not None and X_test is not None and normalize_inside_cv:
+            # Concatenate train and test for importance extraction (feature selection needs full dataset)
+            import numpy as np
+            X = np.vstack([X_train_scaled, X_test_scaled])
+        else:
+            X = X_scaled
     
     elif model_family == 'catboost':
         try:
