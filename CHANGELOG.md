@@ -14,7 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
-#### Feature Selection and Config Fixes (2025-12-14) – **NEW**
+#### Telemetry System (2025-12-14) – **NEW**
+Sidecar-based telemetry system with view isolation. Telemetry files live alongside existing artifacts in cohort directories, enabling per-target, per-symbol, and per-cross-sectional drift tracking.
+- Sidecar files: `telemetry_metrics.json`, `telemetry_drift.json`, `telemetry_trend.json` in each cohort folder
+- View-level rollups: `CROSS_SECTIONAL/telemetry_rollup.json`, `SYMBOL_SPECIFIC/telemetry_rollup.json`
+- Stage-level container: `TARGET_RANKING/telemetry_rollup.json`
+- View isolation: CS drift only compares to CS baselines, SS only to SS (baseline key: `stage:view:target[:symbol]`)
+- Config-driven: All behavior controlled by `safety.telemetry` section
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-14-telemetry-system.md)
+
+#### Feature Selection and Config Fixes (2025-12-14)
 Critical bug fixes for feature selection pipeline, experiment config loading, and target exclusion. Resolves cascading failures preventing feature selection from running.
 - Fixed UnboundLocalError for `np` (11 model families now working)
 - Fixed missing import and unpacking errors in shared harness

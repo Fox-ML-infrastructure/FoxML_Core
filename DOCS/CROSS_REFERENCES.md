@@ -2,6 +2,19 @@
 
 This document tracks key cross-references between documentation files to ensure consistency.
 
+## New Files (2025-12-14)
+
+### Telemetry System
+- **Files**: 
+  - `TRAINING/utils/telemetry.py` (new)
+  - `CONFIG/pipeline/training/safety.yaml` (added `safety.telemetry` section)
+- **References**:
+  - `TRAINING/utils/reproducibility_tracker.py` - Integrated telemetry writer
+  - `DOCS/02_reference/changelog/2025-12-14-telemetry-system.md` - Detailed changelog
+  - `DOCS/03_technical/implementation/REPRODUCIBILITY_STRUCTURE.md` - Reproducibility structure (telemetry follows same structure)
+  - `CHANGELOG.md` - Root changelog entry
+- **Structure**: Sidecar files in cohort directories, view-level and stage-level rollups
+
 ## New Files (2025-12-09)
 
 ### Refactoring Documentation

@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-14 (Telemetry System)** — Sidecar-based telemetry with view isolation, hierarchical rollups (cohort → view → stage), baseline key format for drift comparison, config-driven behavior  
+  → [View](2025-12-14-telemetry-system.md)
+
 - **2025-12-14 (Feature Selection and Config Fixes)** — Fixed UnboundLocalError for np (11 model families), missing import, unpacking error, routing diagnostics, experiment config loading, target exclusion, lookback enforcement  
   → [View](2025-12-14-feature-selection-and-config-fixes.md)
 
