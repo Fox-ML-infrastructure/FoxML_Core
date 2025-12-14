@@ -147,6 +147,21 @@ class ReproducibilityTracker:
         
         # Initialize stats tracking
         self.stats_file = self.output_dir.parent / "REPRODUCIBILITY" / "stats.json"
+        
+        # Initialize telemetry writer (if enabled)
+        try:
+            from TRAINING.utils.telemetry import TelemetryWriter, load_telemetry_config
+            telemetry_config = load_telemetry_config()
+            if telemetry_config.get("enabled", False):
+                self.telemetry = TelemetryWriter(
+                    output_dir=self.output_dir.parent,  # Base output dir (not module-specific)
+                    **telemetry_config
+                )
+            else:
+                self.telemetry = None
+        except Exception as e:
+            logger.debug(f"Telemetry not available: {e}")
+            self.telemetry = None
     
     def _load_thresholds(self, override: Optional[Dict[str, Dict[str, float]]] = None) -> Dict[str, Dict[str, float]]:
         """Load reproducibility thresholds from config."""
@@ -1037,6 +1052,18 @@ class ReproducibilityTracker:
             logger.warning(f"Failed to save metadata.json to {metadata_file}: {e}, error_type=IO_ERROR")
             self._increment_error_counter("write_failures", "IO_ERROR")
             raise  # Re-raise to prevent silent failure
+        
+        # Record telemetry facts (if enabled)
+        if self.telemetry:
+            self._record_telemetry_facts(
+                run_id=run_id_clean,
+                stage=stage_normalized,
+                route_type=route_type,
+                item_name=item_name,
+                symbol=symbol,
+                cohort_metadata=cohort_metadata,
+                run_data=run_data
+            )
         
         # Save metrics.json
         metrics_file = cohort_dir / "metrics.json"

@@ -282,4 +282,36 @@ safety:
         min_kendall_tau: 0.6     # Warn if Kendall tau < 0.6 (rank correlation)
         top_k: 20                # Number of top features to analyze (default: 20)
         min_snapshots: 2         # Minimum snapshots required for analysis (default: 2)
+  
+  # Telemetry System (Cube-based with explicit dimensions and rollups)
+  telemetry:
+    enabled: true  # Enable telemetry collection
+    
+    # Granularity levels (what dimensions to track)
+    levels:
+      run: true              # Per-run aggregates
+      view: true             # Per-view aggregates (CROSS_SECTIONAL, SYMBOL_SPECIFIC)
+      target: true            # Per-target aggregates
+      symbol: true            # Per-symbol aggregates
+      target_symbol: false   # Per-target-per-symbol (expensive, opt-in)
+    
+    # Baseline configuration (for drift comparisons)
+    baselines:
+      previous_run: true      # Compare to previous run
+      rolling_window_k: 10    # Rolling window size for baseline (k runs)
+      last_good_run: true     # Compare to last "good" run (if marked)
+    
+    # Drift detection configuration
+    drift:
+      feature_set_mode: "topk_importance"  # "topk_importance" | "fixed_list"
+      topk: 50                            # Top-K features to track for drift (if mode=topk_importance)
+      psi_threshold: 0.2                  # Population Stability Index threshold
+      ks_threshold: 0.1                   # Kolmogorov-Smirnov test threshold
+    
+    # Rollup configuration (which aggregations to generate)
+    rollups:
+      per_symbol: true           # Per-symbol rollups (groupby run_id, view, symbol)
+      per_cross_sectional: true   # Per-cross-sectional rollups (groupby run_id, view, universe_id)
+      per_target: true            # Per-target rollups (groupby run_id, target, view)
+      per_run: true               # Per-run rollups (groupby run_id)
 
