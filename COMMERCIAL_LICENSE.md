@@ -260,13 +260,15 @@ Commercial licensing fees are based on the using team/desk size (number of users
 
 **Pilot Requirement:** All commercial licensing begins with a paid pilot. Pilot fees are non-refundable but credited toward the first-year annual license upon conversion.
 
-**For pricing information, please contact the maintainer:**
+**Commercial licenses typically start in the low five figures annually, depending on team size and deployment scope.**
+
+For detailed pricing information, please contact the maintainer:
 
 📧 **jenn.lewis5789@gmail.com**
 
 Specific fees, term length, and payment schedule will be set forth in one or more **Order Forms** or **Statements of Work** executed by the parties (collectively, "Ordering Documents"). If there is any conflict between this License and an Ordering Document regarding fees, the Ordering Document will control.
 
-Pricing information is available by contacting the maintainer. Actual fees are determined by the Ordering Documents.
+Actual fees are determined by the Ordering Documents based on your specific requirements.
 
 **Payment Terms.**
 
