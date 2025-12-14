@@ -798,13 +798,22 @@ def train_and_evaluate_models(
             # Get n_symbols_available from mtf_data
             n_symbols_available = len(mtf_data) if 'mtf_data' in locals() else 1
             
-            # Load ranking mode cap from config
+            # Load lookback cap from config
+            # Priority: 1) lookback_budget_minutes (new explicit cap), 2) ranking_mode_max_lookback_minutes (legacy)
             max_lookback_cap = None
             try:
                 from CONFIG.config_loader import get_cfg
-                max_lookback_cap = get_cfg("safety.leakage_detection.ranking_mode_max_lookback_minutes", default=None, config_name="safety_config")
-                if max_lookback_cap is not None:
-                    max_lookback_cap = float(max_lookback_cap)
+                # Try new explicit cap first
+                budget_cap_raw = get_cfg("safety.leakage_detection.lookback_budget_minutes", default="auto", config_name="safety_config")
+                if budget_cap_raw != "auto" and isinstance(budget_cap_raw, (int, float)):
+                    max_lookback_cap = float(budget_cap_raw)
+                    logger.debug(f"Using lookback_budget_minutes cap: {max_lookback_cap:.1f}m")
+                else:
+                    # Fallback to legacy ranking_mode_max_lookback_minutes
+                    max_lookback_cap = get_cfg("safety.leakage_detection.ranking_mode_max_lookback_minutes", default=None, config_name="safety_config")
+                    if max_lookback_cap is not None:
+                        max_lookback_cap = float(max_lookback_cap)
+                        logger.debug(f"Using ranking_mode_max_lookback_minutes cap: {max_lookback_cap:.1f}m (legacy)")
             except Exception:
                 pass
             
@@ -4140,6 +4149,16 @@ def evaluate_target_predictability(
         except Exception:
             pass
         
+        # Load lookback_budget_minutes cap for consistency with gatekeeper
+        lookback_budget_cap_for_budget = None
+        try:
+            from CONFIG.config_loader import get_cfg
+            budget_cap_raw = get_cfg("safety.leakage_detection.lookback_budget_minutes", default="auto", config_name="safety_config")
+            if budget_cap_raw != "auto" and isinstance(budget_cap_raw, (int, float)):
+                lookback_budget_cap_for_budget = float(budget_cap_raw)
+        except Exception:
+            pass
+        
         # Compute budget from FINAL feature set (post gatekeeper)
         # NOTE: MODEL_TRAIN_INPUT fingerprint will be computed later in train_and_evaluate_models AFTER pruning
         # For now, validate against post_gatekeeper fingerprint
@@ -4148,6 +4167,7 @@ def evaluate_target_predictability(
             detected_interval,
             resolved_config.horizon_minutes if resolved_config else 60.0,
             registry=registry,
+            max_lookback_cap_minutes=lookback_budget_cap_for_budget,  # Pass cap for consistency
             expected_fingerprint=post_gatekeeper_fp,
             stage="POST_GATEKEEPER"
         )
