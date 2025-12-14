@@ -177,15 +177,29 @@ class TelemetryWriter:
         Enhanced with fingerprints, drift tiers, critical metrics, and sanity checks.
         Baseline key format: (stage, view, target[, symbol])
         This ensures view isolation: CS only compares to CS, SS only compares to SS.
+        
+        IMPORTANT: Only compares runs with matching fingerprints (seed, config_hash, data_fingerprint)
+        to ensure we're checking determinism (same inputs) rather than comparing different configurations.
         """
-        # Find baseline cohort directory
+        # Load current metadata for fingerprints FIRST (needed for baseline matching)
+        current_metadata_file = cohort_dir / "metadata.json"
+        current_metadata = {}
+        if current_metadata_file.exists():
+            try:
+                with open(current_metadata_file, 'r') as f:
+                    current_metadata = json.load(f)
+            except Exception as e:
+                logger.debug(f"Failed to load current metadata: {e}")
+        
+        # Find baseline cohort directory (filtered by matching fingerprints)
         baseline_cohort_dir = self._find_baseline_cohort(
             cohort_dir.parent.parent,  # Go up to view level
-            stage, view, target, symbol, baseline_key
+            stage, view, target, symbol, baseline_key,
+            current_metadata=current_metadata  # Pass current metadata for fingerprint matching
         )
         
         if baseline_cohort_dir is None or not baseline_cohort_dir.exists():
-            logger.debug(f"No baseline found for drift comparison: {baseline_key}")
+            logger.debug(f"No baseline found for drift comparison: {baseline_key} (no matching fingerprints)")
             return
         
         # Load baseline metrics and metadata
@@ -206,16 +220,6 @@ class TelemetryWriter:
                     baseline_metadata = json.load(f)
             except Exception as e:
                 logger.debug(f"Failed to load baseline metadata: {e}")
-        
-        # Load current metadata for fingerprints
-        current_metadata_file = cohort_dir / "metadata.json"
-        current_metadata = {}
-        if current_metadata_file.exists():
-            try:
-                with open(current_metadata_file, 'r') as f:
-                    current_metadata = json.load(f)
-            except Exception as e:
-                logger.debug(f"Failed to load current metadata: {e}")
         
         try:
             with open(baseline_metrics_file, 'r') as f:
@@ -265,27 +269,34 @@ class TelemetryWriter:
                 "drift_metrics": {}
             }
             
-            # Sanity check: ensure baseline is actually different
-            fingerprints_identical = (
-                baseline_git_commit == current_git_commit and
+            # Extract seed for fingerprint matching
+            baseline_seed = baseline_metadata.get("seed")
+            current_seed = current_metadata.get("seed")
+            
+            # Sanity check: verify fingerprints match (required for determinism check)
+            fingerprints_match = (
+                baseline_seed == current_seed and
                 baseline_config_hash == current_config_hash and
                 baseline_data_fingerprint == current_data_fingerprint
             )
             
-            if fingerprints_identical and run_id != baseline_data.get("run_id"):
+            if not fingerprints_match:
+                # Fingerprints don't match - this shouldn't happen if _find_baseline_cohort worked correctly
                 drift_results["sanity_check"] = {
-                    "status": "SUSPICIOUSLY_IDENTICAL",
-                    "message": "All fingerprints identical but run_id differs - may indicate self-comparison or deterministic run"
+                    "status": "FINGERPRINT_MISMATCH",
+                    "message": f"Fingerprints don't match - seed: {baseline_seed} vs {current_seed}, config: {baseline_config_hash} vs {current_config_hash}, data: {baseline_data_fingerprint} vs {current_data_fingerprint}. This comparison is invalid for determinism checking."
                 }
+                # Still write the drift file but mark it as invalid
             elif run_id == baseline_data.get("run_id"):
                 drift_results["sanity_check"] = {
                     "status": "SELF_COMPARISON",
                     "message": "Comparing run to itself - this should not happen"
                 }
             else:
+                # Fingerprints match and run_ids differ - valid determinism check
                 drift_results["sanity_check"] = {
                     "status": "OK",
-                    "message": "Baseline and current runs are different"
+                    "message": "Baseline and current runs have matching fingerprints (seed, config, data) - valid determinism check"
                 }
             
             # Critical metrics to track (silent killers)
@@ -423,13 +434,20 @@ class TelemetryWriter:
         view: str,
         target: Optional[str],
         symbol: Optional[str],
-        baseline_key: str
+        baseline_key: str,
+        current_metadata: Optional[Dict[str, Any]] = None
     ) -> Optional[Path]:
         """
-        Find baseline cohort directory using baseline_key.
+        Find baseline cohort directory using baseline_key, filtered by matching fingerprints.
         
         baseline_key format: (stage, view, target[, symbol])
         This ensures we only compare within the same view.
+        
+        IMPORTANT: Only returns baselines with matching fingerprints (seed, config_hash, data_fingerprint)
+        to ensure we're checking determinism (same inputs) rather than comparing different configurations.
+        
+        Args:
+            current_metadata: Current run metadata for fingerprint matching
         """
         # Parse baseline_key to extract target/symbol
         # Format: "TARGET_RANKING:CROSS_SECTIONAL:y_will_swing_high_60m_0.05" or
@@ -462,20 +480,66 @@ class TelemetryWriter:
         else:
             symbol_dir = target_dir
         
-        # Find most recent cohort (previous run)
+        # Extract current fingerprints for matching
+        current_seed = current_metadata.get("seed") if current_metadata else None
+        current_config_hash = current_metadata.get("cs_config_hash") or current_metadata.get("config_hash") if current_metadata else None
+        current_data_fingerprint = self._compute_data_fingerprint(current_metadata) if current_metadata else None
+        
+        # Find all cohort directories
         cohort_dirs = sorted(
             [d for d in symbol_dir.iterdir() if d.is_dir() and d.name.startswith("cohort=")],
             key=lambda x: x.stat().st_mtime,
             reverse=True
         )
         
-        # Skip current run, return previous
-        if len(cohort_dirs) > 1:
-            return cohort_dirs[1]  # Second most recent (previous run)
-        elif len(cohort_dirs) == 1:
-            return cohort_dirs[0]  # Only one run, use it as baseline
+        # Filter by matching fingerprints (seed, config_hash, data_fingerprint)
+        # Only compare runs with identical inputs to check determinism
+        matching_cohorts = []
+        for cohort_dir in cohort_dirs:
+            # Load baseline metadata
+            baseline_metadata_file = cohort_dir / "metadata.json"
+            if not baseline_metadata_file.exists():
+                continue
+            
+            try:
+                with open(baseline_metadata_file, 'r') as f:
+                    baseline_metadata = json.load(f)
+            except Exception:
+                continue
+            
+            # Extract baseline fingerprints
+            baseline_seed = baseline_metadata.get("seed")
+            baseline_config_hash = baseline_metadata.get("cs_config_hash") or baseline_metadata.get("config_hash")
+            baseline_data_fingerprint = self._compute_data_fingerprint(baseline_metadata)
+            
+            # Check if fingerprints match (all must match for determinism check)
+            seed_match = (current_seed is None and baseline_seed is None) or (current_seed == baseline_seed)
+            config_match = (current_config_hash is None and baseline_config_hash is None) or (current_config_hash == baseline_config_hash)
+            data_match = (current_data_fingerprint is None and baseline_data_fingerprint is None) or (current_data_fingerprint == baseline_data_fingerprint)
+            
+            if seed_match and config_match and data_match:
+                matching_cohorts.append(cohort_dir)
         
-        return None
+        # Skip current run (most recent), return previous matching run
+        if len(matching_cohorts) > 1:
+            return matching_cohorts[1]  # Second most recent matching run
+        elif len(matching_cohorts) == 1:
+            # Only one matching run - check if it's the current run
+            # If it's the same cohort_id, skip it (self-comparison)
+            if current_metadata:
+                current_cohort_id = current_metadata.get("cohort_id")
+                baseline_metadata_file = matching_cohorts[0] / "metadata.json"
+                if baseline_metadata_file.exists():
+                    try:
+                        with open(baseline_metadata_file, 'r') as f:
+                            baseline_metadata = json.load(f)
+                        if baseline_metadata.get("cohort_id") == current_cohort_id:
+                            return None  # Same cohort, skip self-comparison
+                    except Exception:
+                        pass
+            return matching_cohorts[0]  # Only one matching run
+        
+        return None  # No matching baseline found
     
     def _classify_drift(self, delta: float, rel_delta: Optional[float]) -> str:
         """Classify drift status based on thresholds (legacy method, use _classify_drift_tier)."""
