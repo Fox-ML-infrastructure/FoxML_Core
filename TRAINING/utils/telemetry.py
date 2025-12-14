@@ -510,3 +510,208 @@ def load_telemetry_config() -> Dict[str, Any]:
             "baselines": {"previous_run": True, "rolling_window_k": 10, "last_good_run": True},
             "drift": {"psi_threshold": 0.2, "ks_threshold": 0.1}
         }
+
+
+def aggregate_telemetry_facts(
+    repro_dir: Path,
+    facts_file: Optional[Path] = None
+) -> pd.DataFrame:
+    """
+    Aggregate all telemetry_metrics.json files into a Parquet facts table.
+    
+    This creates/updates a long-format Parquet table with explicit dimensions:
+    - run_id, stage, view, target, symbol, universe_id, cohort_id
+    - All metric values as separate columns
+    
+    Structure matches current telemetry tracking exactly.
+    
+    Args:
+        repro_dir: REPRODUCIBILITY directory root
+        facts_file: Optional path to facts table (defaults to repro_dir/telemetry_facts.parquet)
+    
+    Returns:
+        DataFrame with all telemetry facts
+    """
+    if facts_file is None:
+        facts_file = repro_dir / "telemetry_facts.parquet"
+    
+    repro_dir = Path(repro_dir)
+    if not repro_dir.exists():
+        logger.warning(f"REPRODUCIBILITY directory does not exist: {repro_dir}")
+        return pd.DataFrame()
+    
+    # Collect all telemetry_metrics.json files
+    rows = []
+    
+    # Walk REPRODUCIBILITY structure
+    for stage_dir in repro_dir.iterdir():
+        if not stage_dir.is_dir() or stage_dir.name in ["artifact_index.parquet", "telemetry_facts.parquet", "stats.json"]:
+            continue
+        
+        stage = stage_dir.name
+        
+        # Check if this stage has view subdirectories (TARGET_RANKING, FEATURE_SELECTION)
+        view_dirs = []
+        for item in stage_dir.iterdir():
+            if item.is_dir() and item.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+                view_dirs.append(item)
+            elif item.is_dir() and item.name.startswith("cohort="):
+                # Legacy structure: stage directly contains cohorts (no view separation)
+                # Treat as CROSS_SECTIONAL
+                view_dirs = [stage_dir]  # Process stage_dir directly
+                break
+        
+        if not view_dirs:
+            # No view subdirectories, check for direct cohort directories
+            for item in stage_dir.iterdir():
+                if item.is_dir() and item.name.startswith("cohort="):
+                    view_dirs = [stage_dir]
+                    break
+        
+        # Process each view
+        for view_dir in view_dirs:
+            view = view_dir.name if view_dir.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
+            
+            # Walk through target/symbol structure
+            for target_path in view_dir.iterdir():
+                if not target_path.is_dir():
+                    continue
+                
+                target = target_path.name
+                symbol = None
+                universe_id = None
+                
+                # Check if this is a symbol directory (SYMBOL_SPECIFIC view)
+                if view == "SYMBOL_SPECIFIC":
+                    for symbol_path in target_path.iterdir():
+                        if not symbol_path.is_dir():
+                            continue
+                        
+                        if symbol_path.name.startswith("symbol="):
+                            symbol = symbol_path.name.replace("symbol=", "")
+                            
+                            # Look for cohorts in symbol directory
+                            for cohort_path in symbol_path.iterdir():
+                                if not cohort_path.is_dir() or not cohort_path.name.startswith("cohort="):
+                                    continue
+                                
+                                cohort_id = cohort_path.name.replace("cohort=", "")
+                                telemetry_file = cohort_path / "telemetry_metrics.json"
+                                
+                                if telemetry_file.exists():
+                                    row = _extract_telemetry_row(
+                                        telemetry_file, stage, view, target, symbol, 
+                                        cohort_id, universe_id
+                                    )
+                                    if row:
+                                        rows.append(row)
+                else:
+                    # CROSS_SECTIONAL: cohorts directly under target
+                    for cohort_path in target_path.iterdir():
+                        if not cohort_path.is_dir() or not cohort_path.name.startswith("cohort="):
+                            continue
+                        
+                        cohort_id = cohort_path.name.replace("cohort=", "")
+                        telemetry_file = cohort_path / "telemetry_metrics.json"
+                        
+                        if telemetry_file.exists():
+                            # Try to extract universe_id from metadata
+                            metadata_file = cohort_path / "metadata.json"
+                            if metadata_file.exists():
+                                try:
+                                    with open(metadata_file, 'r') as f:
+                                        metadata = json.load(f)
+                                    universe_id = metadata.get('universe_id')
+                                except Exception:
+                                    pass
+                            
+                            row = _extract_telemetry_row(
+                                telemetry_file, stage, view, target, symbol,
+                                cohort_id, universe_id
+                            )
+                            if row:
+                                rows.append(row)
+    
+    if not rows:
+        logger.debug("No telemetry metrics found to aggregate")
+        return pd.DataFrame()
+    
+    # Create DataFrame
+    df = pd.DataFrame(rows)
+    
+    # Load existing facts table and append
+    if facts_file.exists():
+        try:
+            existing_df = pd.read_parquet(facts_file)
+            # Deduplicate by (run_id, stage, view, target, symbol, cohort_id)
+            # Keep latest timestamp
+            df = pd.concat([existing_df, df], ignore_index=True)
+            df = df.sort_values('timestamp', ascending=False).drop_duplicates(
+                subset=['run_id', 'stage', 'view', 'target', 'symbol', 'cohort_id'],
+                keep='first'
+            )
+        except Exception as e:
+            logger.warning(f"Failed to load existing facts table, creating new: {e}")
+    
+    # Save facts table
+    try:
+        facts_file.parent.mkdir(parents=True, exist_ok=True)
+        df.to_parquet(facts_file, index=False, engine='pyarrow', compression='snappy')
+        logger.info(f"✅ Aggregated {len(df)} telemetry facts to {facts_file}")
+    except Exception as e:
+        logger.warning(f"Failed to save telemetry facts table: {e}")
+    
+    return df
+
+
+def _extract_telemetry_row(
+    telemetry_file: Path,
+    stage: str,
+    view: str,
+    target: str,
+    symbol: Optional[str],
+    cohort_id: str,
+    universe_id: Optional[str]
+) -> Optional[Dict[str, Any]]:
+    """
+    Extract a single row from telemetry_metrics.json for facts table.
+    
+    Returns:
+        Dict with dimensions and metrics, or None if extraction fails
+    """
+    try:
+        with open(telemetry_file, 'r') as f:
+            data = json.load(f)
+        
+        # Extract dimensions
+        row = {
+            'run_id': data.get('run_id', ''),
+            'timestamp': data.get('timestamp', ''),
+            'stage': stage,
+            'view': view,
+            'target': target,
+            'symbol': symbol if symbol else None,
+            'universe_id': universe_id if universe_id else None,
+            'cohort_id': cohort_id
+        }
+        
+        # Extract metrics (flatten nested metrics dict)
+        metrics = data.get('metrics', {})
+        for key, value in metrics.items():
+            # Convert to appropriate type
+            if isinstance(value, (int, float)):
+                row[key] = float(value)
+            elif isinstance(value, bool):
+                row[key] = bool(value)
+            elif isinstance(value, str):
+                row[key] = str(value)
+            elif value is None:
+                row[key] = None
+            else:
+                # Complex types: store as JSON string
+                row[key] = json.dumps(value) if value else None
+        
+        return row
+    except Exception as e:
+        logger.debug(f"Failed to extract telemetry row from {telemetry_file}: {e}")
+        return None

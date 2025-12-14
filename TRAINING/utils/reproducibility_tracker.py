@@ -1086,6 +1086,10 @@ class ReproducibilityTracker:
                 metrics=run_data,
                 baseline_key=baseline_key
             )
+            
+            # Aggregate telemetry facts table (append-only, after all cohorts saved)
+            # This is called per-cohort, but we'll aggregate at the end of the run
+            # For now, we'll aggregate on-demand or at end of stage
         
         # Save metrics.json
         metrics_file = cohort_dir / "metrics.json"
@@ -2956,3 +2960,10 @@ class ReproducibilityTracker:
         
         # Generate stage-level rollup
         self.telemetry.generate_stage_rollup(stage_dir, stage.upper(), run_id)
+        
+        # Aggregate telemetry facts table (append to Parquet)
+        try:
+            from TRAINING.utils.telemetry import aggregate_telemetry_facts
+            aggregate_telemetry_facts(repro_dir)
+        except Exception as e:
+            logger.debug(f"Failed to aggregate telemetry facts table: {e}")
