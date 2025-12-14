@@ -2903,56 +2903,5 @@ class ReproducibilityTracker:
         
         # Generate stage-level rollup
         self.telemetry.generate_stage_rollup(stage_dir, stage.upper(), run_id)
-            
-            # Analyze trends
-            series_view = SeriesView(view.upper() if view.upper() in ["STRICT", "PROGRESS"] else "STRICT")
-            all_trends = trend_analyzer.analyze_all_series(view=series_view)
-            
-            # Generate summary
-            summary = {
-                "status": "ok",
-                "view": series_view.value,
-                "n_series": len(all_trends),
-                "n_trends": sum(len(t) for t in all_trends.values()),
-                "series_with_trends": [],
-                "alerts": [],
-                "declining_trends": []
-            }
-            
-            for series_key_str, trend_list in all_trends.items():
-                for trend in trend_list:
-                    if trend.status == "ok":
-                        series_info = {
-                            "series_key": series_key_str[:100],  # Truncate for readability
-                            "metric": trend.metric_name,
-                            "slope_per_day": trend.slope_per_day,
-                            "current_estimate": trend.current_estimate,
-                            "n_runs": trend.n_runs
-                        }
-                        summary["series_with_trends"].append(series_info)
-                        
-                        # Collect alerts
-                        if trend.alerts:
-                            summary["alerts"].extend(trend.alerts)
-                        
-                        # Flag declining trends
-                        if trend.slope_per_day and trend.slope_per_day < -0.001:
-                            summary["declining_trends"].append({
-                                "metric": trend.metric_name,
-                                "slope": trend.slope_per_day,
-                                "series": series_key_str[:100]
-                            })
-            
-            # Log summary
-            logger.info(f"📊 Trend Summary ({series_view.value}): {summary['n_series']} series, {summary['n_trends']} trends")
-            if summary["declining_trends"]:
-                logger.warning(f"  ⚠️  {len(summary['declining_trends'])} declining trends detected")
-                for decl in summary["declining_trends"][:5]:  # Show first 5
-                    logger.warning(f"    - {decl['metric']}: slope={decl['slope']:.6f}/day")
-            if summary["alerts"]:
-                logger.info(f"  ℹ️  {len(summary['alerts'])} trend alerts")
-            
-            return summary
-        except Exception as e:
             logger.debug(f"Could not generate trend summary: {e}")
             return {"status": "error", "error": str(e)}
