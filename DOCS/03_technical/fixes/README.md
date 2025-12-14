@@ -41,6 +41,21 @@ Known issues, bug fixes, and migration notes.
 - **[Feature Selection Fixes](2025-12-13-feature-selection-fixes.md)** - Additional feature selection fixes and improvements
 - **[Telemetry Scoping Audit](2025-12-13-telemetry-scoping-audit.md)** - Audit of telemetry scoping against user's checklist
 
+### Feature Selection and Config Fixes (2025-12-14)
+
+- **[Feature Selection and Config Fixes Changelog](../../02_reference/changelog/2025-12-14-feature-selection-and-config-fixes.md)** - Complete detailed changelog
+- **Status**: ✅ All fixes implemented and tested
+- **Branch**: `fix/lookahead-bias-fixes`
+- **Fixes**:
+  - Fixed UnboundLocalError for `np` (11 model families now working)
+  - Fixed missing import (`parse_duration_minutes`)
+  - Fixed unpacking error in shared harness (7 values vs 6)
+  - Added honest routing diagnostics with per-symbol skip reasons
+  - Fixed experiment config loading (`max_targets_to_evaluate`, `top_n_targets`)
+  - Added target pattern exclusion (`exclude_target_patterns`)
+  - Fixed experiment config override precedence (experiment config now overrides test config)
+  - Fixed `hour_of_day` unknown lookback violation (added to calendar features)
+
 ### Look-Ahead Bias Fixes (2025-12-14)
 
 - **[Look-Ahead Bias Fix Plan](LOOKAHEAD_BIAS_FIX_PLAN.md)** - Complete analysis of 4 critical look-ahead bias issues and required fixes
@@ -58,6 +73,9 @@ Known issues, bug fixes, and migration notes.
 
 - [Known Issues](../../02_reference/KNOWN_ISSUES.md) - Reference documentation
 - [Changelog](../../02_reference/changelog/README.md) - Change history
+- [Feature Selection and Config Fixes Changelog](../../02_reference/changelog/2025-12-14-feature-selection-and-config-fixes.md) - Complete changelog for feature selection and config fixes
 - [Look-Ahead Bias Fixes Changelog](../../02_reference/changelog/2025-12-14-lookahead-bias-fixes.md) - Complete changelog for look-ahead bias fixes
 - [Feature Selection Unification Changelog](../../02_reference/changelog/2025-12-13-feature-selection-unification.md) - Complete changelog for feature selection unification
+- [Experiment Config Guide](../../01_tutorials/configuration/EXPERIMENT_CONFIG_GUIDE.md) - How to use experiment configs (includes exclude_target_patterns)
+- [Auto Target Ranking](../../01_tutorials/training/AUTO_TARGET_RANKING.md) - Target discovery and ranking (includes exclude_target_patterns)
 

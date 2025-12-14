@@ -35,6 +35,11 @@ intelligent_training:
   top_m_features: 50
   strategy: single_task
   run_leakage_diagnostics: false
+  
+  # Optional: Exclude specific target types (patterns matched as substrings)
+  exclude_target_patterns:
+    - "will_peak"    # Excludes all peak targets
+    - "will_valley"  # Excludes all valley targets
 
 # Feature selection
 feature_selection:
@@ -80,6 +85,7 @@ python -m TRAINING.orchestration.intelligent_trainer \
 | `auto_targets` | Enable auto-discovery of targets | `true` |
 | `top_n_targets` | Number of top targets to select after ranking | `5` (or your desired number) |
 | `max_targets_to_evaluate` | Maximum targets to evaluate (set high to get all) | `100` (or higher) |
+| `exclude_target_patterns` | Exclude targets matching patterns (substring match) | `["will_peak", "will_valley"]` (optional) |
 | `parallel_targets` | Enable parallel target evaluation | `true` (faster) |
 | `skip_on_error` | Continue if one target fails | `true` (recommended) |
 
@@ -101,6 +107,7 @@ The pipeline scans your data directory and discovers all available targets:
 - `y_*` targets (various classification targets)
 - Filters out degenerate targets (single class, zero variance, etc.)
 - Filters out known leaked targets (e.g., `first_touch`)
+- **Optional:** Filters out targets matching `exclude_target_patterns` from experiment config
 
 **Example output:**
 ```

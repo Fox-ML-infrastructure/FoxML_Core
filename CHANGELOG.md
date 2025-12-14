@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### Feature Selection and Config Fixes (2025-12-14) – **NEW**
+Critical bug fixes for feature selection pipeline, experiment config loading, and target exclusion. Resolves cascading failures preventing feature selection from running.
+- Fixed UnboundLocalError for `np` (11 model families now working)
+- Fixed missing import and unpacking errors in shared harness
+- Added honest routing diagnostics with per-symbol skip reasons
+- Fixed experiment config loading (`max_targets_to_evaluate`, `top_n_targets`)
+- Added target pattern exclusion (`exclude_target_patterns`)
+- Fixed `hour_of_day` unknown lookback violation
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-14-feature-selection-and-config-fixes.md)
+
 #### Look-Ahead Bias Fixes (2025-12-14) – **NEW**
 Comprehensive fixes for data leakage in feature engineering and model training. All fixes behind feature flags (default: OFF) for safe gradual rollout.
 - Fix #1: Rolling windows exclude current bar
@@ -96,6 +106,7 @@ Mutual Information SST compliance, XGBoost 3.1+ GPU compatibility, CatBoost GPU 
 ### Added
 
 **Recent additions (2025-12-12 - 2025-12-14):**
+- Target Pattern Exclusion - Per-experiment control to exclude specific target types (2025-12-14)
 - Look-Ahead Bias Fixes - Feature flag-based fixes for data leakage (2025-12-14)
 - Shared Ranking Harness - Unified evaluation contract for target ranking and feature selection
 - Feature Selection Unification - Complete parity with target ranking
@@ -116,6 +127,7 @@ Mutual Information SST compliance, XGBoost 3.1+ GPU compatibility, CatBoost GPU 
 ### Fixed
 
 **Recent fixes (2025-12-12 - 2025-12-14):**
+- **Feature Selection and Config Fixes** (2025-12-14): Fixed UnboundLocalError for np (11 model families), missing import, unpacking error, routing diagnostics, experiment config loading, target exclusion, lookback enforcement
 - **Look-Ahead Bias Fixes** (2025-12-14): Rolling windows exclude current bar, CV-based normalization, feature renaming, symbol-specific logging, feature selection bug (task_type collision)
 - **Leakage Controls Structural Fixes** (2025-12-13): Unified lookback calculator, calendar feature classification, separate purge/embargo validation, fingerprint tracking, leakage canary test
 - **Feature Selection Critical Fixes** (2025-12-13): Shared harness unpack crashes, CatBoost dtype mis-typing, RFE/linear model failures, stability cross-model mixing, telemetry scoping

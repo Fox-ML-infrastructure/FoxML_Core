@@ -43,6 +43,10 @@ This directory contains detailed technical documentation for developers, researc
 - **[Known Issues](fixes/KNOWN_ISSUES.md)** - Current issues and limitations
 - **[Bug Fixes](fixes/BUG_FIXES.md)** - Fix history
 - **[Migration Notes](fixes/MIGRATION_NOTES.md)** - Migration guide
+- **Feature Selection and Config Fixes (2025-12-14)** – **NEW**:
+  - **[Feature Selection and Config Fixes Changelog](../02_reference/changelog/2025-12-14-feature-selection-and-config-fixes.md)** - Complete detailed changelog
+  - **Status**: ✅ All fixes implemented and tested
+  - **Fixes**: UnboundLocalError for np (11 model families), missing import, unpacking error, routing diagnostics, experiment config loading, target exclusion, lookback enforcement
 - **Look-Ahead Bias Fixes (2025-12-14)** – **NEW**:
   - **[Look-Ahead Bias Fix Plan](fixes/LOOKAHEAD_BIAS_FIX_PLAN.md)** - Complete analysis of 4 critical look-ahead bias issues
   - **[Safe Implementation Plan](fixes/LOOKAHEAD_BIAS_SAFE_IMPLEMENTATION.md)** - Feature flag-based implementation strategy

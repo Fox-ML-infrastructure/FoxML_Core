@@ -81,6 +81,11 @@ intelligent_training:
   strategy: single_task        # Training strategy: single_task, multi_task, cascade
   run_leakage_diagnostics: false  # Run detailed leakage checks (slower)
   
+  # Optional: Exclude target patterns (filters discovered targets by substring match)
+  exclude_target_patterns:
+    - "will_peak"    # Excludes y_will_peak_60m_0.8, y_will_peak_15m_0.5, etc.
+    - "will_valley"  # Excludes y_will_valley_60m_0.8, etc.
+  
   # Optional: Manual target list (used when auto_targets=false)
   manual_targets:
     - fwd_ret_60m

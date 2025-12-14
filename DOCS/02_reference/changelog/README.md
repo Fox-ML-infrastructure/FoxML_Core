@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-14 (Feature Selection and Config Fixes)** — Fixed UnboundLocalError for np (11 model families), missing import, unpacking error, routing diagnostics, experiment config loading, target exclusion, lookback enforcement  
+  → [View](2025-12-14-feature-selection-and-config-fixes.md)
+
 - **2025-12-14 (Look-Ahead Bias Fixes)** — Rolling windows exclude current bar, CV-based normalization, pct_change verification, feature renaming, symbol-specific logging, feature selection bug fix  
   → [View](2025-12-14-lookahead-bias-fixes.md)
 

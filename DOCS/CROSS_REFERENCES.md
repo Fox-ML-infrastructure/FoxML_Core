@@ -132,6 +132,27 @@ See `DOCS/LEGACY/README.md` for migration guide.
 
 ## Cross-Reference Updates (2025-12-14)
 
+### Feature Selection and Config Fixes
+- **Files**:
+  - `DOCS/02_reference/changelog/2025-12-14-feature-selection-and-config-fixes.md` - Complete detailed changelog
+- **Code Changes**:
+  - `TRAINING/ranking/multi_model_feature_selection.py` - Fixed UnboundLocalError for np
+  - `TRAINING/ranking/feature_selector.py` - Fixed import and unpacking errors
+  - `TRAINING/ranking/shared_ranking_harness.py` - Fixed return type annotation
+  - `TRAINING/ranking/target_ranker.py` - Added skip reason tracking
+  - `TRAINING/ranking/target_routing.py` - Fixed routing reason strings, added skip reasons
+  - `TRAINING/orchestration/intelligent_trainer.py` - Fixed config loading, added target exclusion
+  - `TRAINING/utils/leakage_budget.py` - Added calendar features (hour_of_day, minute_of_hour)
+- **Config Changes**:
+  - `CONFIG/experiments/e2e_ranking_test.yaml` - Added exclude_target_patterns example
+  - `CONFIG/experiments/e2e_full_targets_test.yaml` - Added exclude_target_patterns
+- **Documentation Updates**:
+  - `CHANGELOG.md` - Added to Recent Highlights and Fixed sections
+  - `DOCS/02_reference/changelog/README.md` - Added 2025-12-14 entry
+  - `DOCS/01_tutorials/configuration/EXPERIMENT_CONFIG_GUIDE.md` - Added exclude_target_patterns documentation
+  - `DOCS/01_tutorials/training/AUTO_TARGET_RANKING.md` - Added exclude_target_patterns to examples and table
+  - `DOCS/CROSS_REFERENCES.md` - This section
+
 ### Look-Ahead Bias Fixes
 - **Files**:
   - `DOCS/03_technical/fixes/LOOKAHEAD_BIAS_FIX_PLAN.md`

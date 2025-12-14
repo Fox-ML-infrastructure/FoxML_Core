@@ -185,6 +185,10 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 - [Bug Fixes](03_technical/fixes/BUG_FIXES.md) - Fix history
 - [Migration Notes](03_technical/fixes/MIGRATION_NOTES.md) - Migration guide
 - [TensorFlow Executable Stack Fix](03_technical/fixes/TENSORFLOW_EXECUTABLE_STACK_FIX.md) - Fix for libtensorflow_cc.so executable stack error
+- **Feature Selection and Config Fixes (2025-12-14)** – **NEW**:
+  - [Feature Selection and Config Fixes Changelog](02_reference/changelog/2025-12-14-feature-selection-and-config-fixes.md) - Complete detailed changelog
+  - **Status**: ✅ All fixes implemented and tested
+  - **Fixes**: UnboundLocalError for np (11 model families), missing import, unpacking error, routing diagnostics, experiment config loading, target exclusion, lookback enforcement
 - **Look-Ahead Bias Fixes (2025-12-14)** – **NEW**:
   - [Look-Ahead Bias Fix Plan](03_technical/fixes/LOOKAHEAD_BIAS_FIX_PLAN.md) - Complete analysis of 4 critical look-ahead bias issues and required fixes
   - [Safe Implementation Plan](03_technical/fixes/LOOKAHEAD_BIAS_SAFE_IMPLEMENTATION.md) - Feature flag-based implementation strategy with gradual rollout plan
