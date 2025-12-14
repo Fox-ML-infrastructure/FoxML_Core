@@ -19,7 +19,10 @@ Feature selection methodology and implementation.
 - **Pre-training Leak Scan**: Detects near-copy features before training
 - **Target-Conditional Exclusions**: Per-target exclusion lists tailored to target physics
 - **Final Gatekeeper**: Drops problematic features before training starts
+- **SST Enforcement**: Uses `EnforcedFeatureSet` contract for provably split-brain free enforcement
 - **Stability Analysis**: Calls `analyze_all_stability_hook()` at end of run
+
+**NEW (2025-12-13)**: SST Enforcement Design ensures feature selection uses the same `EnforcedFeatureSet` contract as target ranking, with immediate X slicing and boundary assertions. See [SST Enforcement Design](../../../TRAINING/utils/SST_ENFORCEMENT_DESIGN.md) for details.
 
 ### Output Structure
 - **Same Format**: CSV and YAML files match target ranking format

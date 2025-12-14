@@ -2,6 +2,8 @@
 
 **Feature Selection Now Uses Same Harness, Config System, and Comprehensive Functionality as Target Ranking**
 
+**Related**: [SST Enforcement Design](../../../TRAINING/utils/SST_ENFORCEMENT_DESIGN.md) | [Feature Selection Guide](../../03_technical/implementation/FEATURE_SELECTION_GUIDE.md)
+
 For a quick overview, see the [root changelog](../../../CHANGELOG.md).  
 For other dates, see the [changelog index](README.md).
 

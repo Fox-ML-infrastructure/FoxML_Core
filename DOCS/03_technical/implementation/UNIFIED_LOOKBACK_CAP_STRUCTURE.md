@@ -1,7 +1,8 @@
 # Unified Lookback Cap Enforcement Structure
 
 **Date**: 2025-12-13  
-**Goal**: Ensure all phases follow the same structure for consistency and maintainability.
+**Goal**: Ensure all phases follow the same structure for consistency and maintainability.  
+**Related**: [SST Enforcement Design](../../../TRAINING/utils/SST_ENFORCEMENT_DESIGN.md) | [Feature Selection Lookback Cap Integration](FEATURE_SELECTION_LOOKBACK_CAP_INTEGRATION.md)
 
 ## Standard Structure (apply_lookback_cap)
 
@@ -35,6 +36,15 @@ All lookback cap enforcement phases should follow this structure:
 - **Structure**: Follows standard ✅ (uses `apply_lookback_cap()` for core structure)
 - **Stages**: `feature_sanitizer`
 - **Difference**: Returns `(safe_features, quarantined_features, quarantine_report)` instead of `LookbackCapResult` (preserves existing API)
+
+## SST Enforcement Design Integration
+
+**NEW (2025-12-13)**: All enforcement phases now use `EnforcedFeatureSet` contract:
+- `apply_lookback_cap()` returns `LookbackCapResult` with `.to_enforced_set()` method
+- All phases convert to `EnforcedFeatureSet` and slice X immediately using `enforced.features`
+- Boundary assertions validate featureset integrity at all key boundaries
+
+See [SST Enforcement Design](../../../TRAINING/utils/SST_ENFORCEMENT_DESIGN.md) for complete details.
 
 ## Refactoring Status
 

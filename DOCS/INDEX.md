@@ -199,6 +199,9 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 - [Feature Selection Implementation](03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Feature selection implementation details (see also [Ranking and Selection Consistency](01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) for unified pipeline behavior)
 - [Training Optimization](03_technical/implementation/TRAINING_OPTIMIZATION_GUIDE.md) - Training optimization guide
 - [SST Enforcement Design](../../TRAINING/utils/SST_ENFORCEMENT_DESIGN.md) - **NEW**: EnforcedFeatureSet contract, type boundary wiring, boundary assertions (provably split-brain free across all training paths)
+- [SST Implementation Coverage](../../TRAINING/utils/SST_IMPLEMENTATION_COVERAGE.md) - **NEW**: Complete coverage matrix for SST enforcement across all training paths
+- [Type Boundary Wiring](../../TRAINING/utils/TYPE_BOUNDARY_WIRING_COMPLETE.md) - **NEW**: Type boundary wiring implementation details
+- [Boundary Assertions](../../TRAINING/utils/BOUNDARY_ASSERTIONS_COMPLETE.md) - **NEW**: Boundary assertion implementation details
 - [Parallel Execution](03_technical/implementation/PARALLEL_EXECUTION.md) - Parallel execution infrastructure for target ranking and feature selection
 - [Reproducibility Tracking](03_technical/implementation/REPRODUCIBILITY_TRACKING.md) - Automatic reproducibility verification across pipeline stages
 - [Cohort-Aware Reproducibility](03_technical/implementation/COHORT_AWARE_REPRODUCIBILITY.md) - **NEW**: Cohort-aware reproducibility system with sample-adjusted drift detection
