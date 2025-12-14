@@ -41,9 +41,23 @@ Known issues, bug fixes, and migration notes.
 - **[Feature Selection Fixes](2025-12-13-feature-selection-fixes.md)** - Additional feature selection fixes and improvements
 - **[Telemetry Scoping Audit](2025-12-13-telemetry-scoping-audit.md)** - Audit of telemetry scoping against user's checklist
 
+### Look-Ahead Bias Fixes (2025-12-14)
+
+- **[Look-Ahead Bias Fix Plan](LOOKAHEAD_BIAS_FIX_PLAN.md)** - Complete analysis of 4 critical look-ahead bias issues and required fixes
+- **[Safe Implementation Plan](LOOKAHEAD_BIAS_SAFE_IMPLEMENTATION.md)** - Feature flag-based implementation strategy with gradual rollout plan
+- **Status**: ✅ All fixes implemented (behind feature flags, default: OFF)
+- **Branch**: `fix/lookahead-bias-fixes`
+- **Fixes**:
+  - Fix #1: Rolling windows exclude current bar
+  - Fix #2: CV-based normalization support
+  - Fix #3: pct_change() verification (handled by Fix #1)
+  - Fix #4: Feature renaming (beta_20d → volatility_20d_returns)
+- **Additional**: Symbol-specific evaluation logging, feature selection bug fix (task_type collision)
+
 ## Related Documentation
 
 - [Known Issues](../../02_reference/KNOWN_ISSUES.md) - Reference documentation
 - [Changelog](../../02_reference/changelog/README.md) - Change history
+- [Look-Ahead Bias Fixes Changelog](../../02_reference/changelog/2025-12-14-lookahead-bias-fixes.md) - Complete changelog for look-ahead bias fixes
 - [Feature Selection Unification Changelog](../../02_reference/changelog/2025-12-13-feature-selection-unification.md) - Complete changelog for feature selection unification
 

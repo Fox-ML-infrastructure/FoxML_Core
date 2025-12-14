@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-14 (Look-Ahead Bias Fixes)** — Rolling windows exclude current bar, CV-based normalization, pct_change verification, feature renaming, symbol-specific logging, feature selection bug fix  
+  → [View](2025-12-14-lookahead-bias-fixes.md)
+
 - **2025-12-13 (SST Enforcement Design)** — EnforcedFeatureSet contract, type boundary wiring, boundary assertions, no rediscovery rule, full coverage across all training paths  
   → [View](2025-12-13-sst-enforcement-design.md)
 

@@ -185,6 +185,11 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 - [Bug Fixes](03_technical/fixes/BUG_FIXES.md) - Fix history
 - [Migration Notes](03_technical/fixes/MIGRATION_NOTES.md) - Migration guide
 - [TensorFlow Executable Stack Fix](03_technical/fixes/TENSORFLOW_EXECUTABLE_STACK_FIX.md) - Fix for libtensorflow_cc.so executable stack error
+- **Look-Ahead Bias Fixes (2025-12-14)** – **NEW**:
+  - [Look-Ahead Bias Fix Plan](03_technical/fixes/LOOKAHEAD_BIAS_FIX_PLAN.md) - Complete analysis of 4 critical look-ahead bias issues and required fixes
+  - [Safe Implementation Plan](03_technical/fixes/LOOKAHEAD_BIAS_SAFE_IMPLEMENTATION.md) - Feature flag-based implementation strategy with gradual rollout plan
+  - **Status**: ✅ All fixes implemented (behind feature flags, default: OFF)
+  - **Fixes**: Rolling windows exclude current bar, CV-based normalization, pct_change verification, feature renaming
 - **Feature Selection Critical Fixes (2025-12-13)**:
   - [Implementation Verification](03_technical/fixes/2025-12-13-implementation-verification.md) - Complete verification of all 6 critical checks + 2 last-mile improvements
   - [Critical Fixes](03_technical/fixes/2025-12-13-critical-fixes.md) - Detailed root-cause analysis and fixes

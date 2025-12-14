@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### Look-Ahead Bias Fixes (2025-12-14) – **NEW**
+- **Fix #1: Rolling Windows Exclude Current Bar**: Conditional `.shift(1)` before all rolling operations (rolling_mean, rolling_std, ewm_mean) to prevent features from leaking current price information
+- **Fix #2: CV-Based Normalization**: Optional train/test split support for proper normalization inside CV loops (prevents leaking future statistics into training)
+- **Fix #3: pct_change() Verification**: Verified and documented that pct_change() behavior is correctly handled via Fix #1's shifted columns
+- **Fix #4: Feature Renaming**: Renamed misnamed features (`beta_20d`/`beta_60d` → `volatility_20d_returns`/`volatility_60d_returns`) with backward-compatible aliases
+- **Feature Flags**: All fixes behind config flags (default: OFF) for safe gradual rollout
+- **Additional Fixes**: Enhanced symbol-specific evaluation logging and fixed feature selection bug (task_type variable collision)
+- **Files**: `DATA_PROCESSING/features/simple_features.py`, `comprehensive_builder.py`, `TRAINING/ranking/multi_model_feature_selection.py`, `target_ranker.py`, `predictability/model_evaluation.py`
+- **Configuration**: `CONFIG/pipeline/training/safety.yaml` → `safety.leakage_detection.lookahead_bias_fixes`
+- **Branch**: `fix/lookahead-bias-fixes`
+- See [Look-Ahead Bias Fix Plan](DOCS/03_technical/fixes/LOOKAHEAD_BIAS_FIX_PLAN.md) and [Safe Implementation Plan](DOCS/03_technical/fixes/LOOKAHEAD_BIAS_SAFE_IMPLEMENTATION.md) for details
+
 #### SST Enforcement Design Implementation (2025-12-13) – **NEW**
 - **EnforcedFeatureSet Contract**: New dataclass represents authoritative state after enforcement with set/ordered fingerprints
 - **Type Boundary Wiring**: All enforcement stages (gatekeeper, POST_PRUNE, FS_PRE, FS_POST) use `EnforcedFeatureSet` and slice X immediately
