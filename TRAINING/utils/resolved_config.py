@@ -259,9 +259,11 @@ def compute_feature_lookback_max(
         registry: Optional feature registry (will be loaded if None)
     
     Returns:
-        (max_lookback_minutes, top_lookback_features) tuple
-        - max_lookback_minutes: Maximum lookback in minutes (None if cannot compute)
-        - top_lookback_features: List of (feature_name, lookback_minutes) for top offenders
+        LookbackResult dataclass (or tuple for backward compatibility if needed)
+        - max_minutes: Maximum lookback in minutes (None if cannot compute)
+        - top_offenders: List of (feature_name, lookback_minutes) for top offenders
+        - fingerprint: Set-invariant fingerprint
+        - order_fingerprint: Order-sensitive fingerprint
     """
     # Delegate to unified leakage budget calculator
     # Use the legacy wrapper function from leakage_budget module
@@ -276,8 +278,10 @@ def compute_feature_lookback_max(
         expected_fingerprint=expected_fingerprint,
         stage=stage if stage != "unknown" else "resolved_config_wrapper"
     )
-    # Return only first two values for backward compatibility (LookbackResult dataclass)
-    return result.max_minutes, result.top_offenders
+    # Return the LookbackResult dataclass directly (not a tuple)
+    # This maintains compatibility with new code that expects dataclass
+    # Old code expecting tuple will need to be updated
+    return result
 
 
 def create_resolved_config(
@@ -318,9 +322,17 @@ def create_resolved_config(
         except Exception:
             pass
         
-        computed_lookback, top_offenders = compute_feature_lookback_max(
-            feature_names, interval_minutes, max_lookback_cap_minutes=max_lookback_cap
+        lookback_result = compute_feature_lookback_max(
+            feature_names, interval_minutes, max_lookback_cap_minutes=max_lookback_cap,
+            stage="create_resolved_config"
         )
+        # Handle dataclass return
+        if hasattr(lookback_result, 'max_minutes'):
+            computed_lookback = lookback_result.max_minutes
+            top_offenders = lookback_result.top_offenders
+        else:
+            # Tuple return (backward compatibility)
+            computed_lookback, top_offenders = lookback_result
         
         if computed_lookback is not None:
             # Log top offenders

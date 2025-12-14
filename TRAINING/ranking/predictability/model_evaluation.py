@@ -757,13 +757,20 @@ def train_and_evaluate_models(
                 expected_fingerprint=post_prune_fp,
                 stage="POST_PRUNE"
             )
-            computed_lookback = lookback_result.max_minutes
-            top_offenders = lookback_result.top_offenders
+            # Handle dataclass return
+            if hasattr(lookback_result, 'max_minutes'):
+                computed_lookback = lookback_result.max_minutes
+                top_offenders = lookback_result.top_offenders
+                lookback_fingerprint = lookback_result.fingerprint
+            else:
+                # Tuple return (backward compatibility)
+                computed_lookback, top_offenders = lookback_result
+                lookback_fingerprint = None
             
             # Validate fingerprint
-            if lookback_result.fingerprint != post_prune_fp:
+            if lookback_fingerprint and lookback_fingerprint != post_prune_fp:
                 logger.error(
-                    f"🚨 FINGERPRINT MISMATCH (POST_PRUNE): computed={lookback_result.fingerprint} != expected={post_prune_fp}"
+                    f"🚨 FINGERPRINT MISMATCH (POST_PRUNE): computed={lookback_fingerprint} != expected={post_prune_fp}"
                 )
             
             if computed_lookback is not None:
@@ -780,7 +787,8 @@ def train_and_evaluate_models(
                     else:
                         # Only log if > 4 hours or if there's a mismatch (for debugging)
                         if computed_lookback > 240 or abs(actual_max_in_list - computed_lookback) > 1.0:
-                            logger.info(f"  📊 Feature lookback (POST_PRUNE): max={computed_lookback:.1f}m, fingerprint={lookback_result.fingerprint}")
+                            fingerprint_str = lookback_fingerprint if lookback_fingerprint else (lookback_result.fingerprint if hasattr(lookback_result, 'fingerprint') else 'N/A')
+                            logger.info(f"  📊 Feature lookback (POST_PRUNE): max={computed_lookback:.1f}m, fingerprint={fingerprint_str}")
                             logger.info(f"    Top lookback features (from {len(feature_names)} features): {', '.join([f'{f}({m:.0f}m)' for f, m in top_offenders[:5]])}")
                             # Sanity check: verify all top features are in current feature set
                             top_feature_names = {f for f, _ in top_offenders[:5]}
@@ -954,7 +962,8 @@ def train_and_evaluate_models(
                 else:
                     # Only log if > 4 hours or if there's a mismatch (for debugging)
                     if computed_lookback > 240 or abs(actual_max_in_list - computed_lookback) > 1.0:
-                        logger.info(f"  📊 Feature lookback analysis: max={computed_lookback:.1f}m, fingerprint={lookback_result.fingerprint}")
+                        fingerprint_str = lookback_fingerprint if lookback_fingerprint else (lookback_result.fingerprint if hasattr(lookback_result, 'fingerprint') else 'N/A')
+                        logger.info(f"  📊 Feature lookback analysis: max={computed_lookback:.1f}m, fingerprint={fingerprint_str}")
                         logger.info(f"    Top lookback features (from {len(feature_names)} features): {', '.join([f'{f}({m:.0f}m)' for f, m in top_offenders[:5]])}")
                         # Sanity check: verify all top features are in current feature set
                         top_feature_names = {f for f, _ in top_offenders[:5]}
