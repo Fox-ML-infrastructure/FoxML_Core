@@ -130,6 +130,28 @@ When multiple docs cover similar topics, prefer:
 
 See `DOCS/LEGACY/README.md` for migration guide.
 
+## Cross-Reference Updates (2025-12-13)
+
+**SST Enforcement Design Implementation:**
+- **Files**:
+  - `TRAINING/utils/SST_ENFORCEMENT_DESIGN.md` - Complete design specification
+  - `TRAINING/utils/SST_IMPLEMENTATION_COVERAGE.md` - Implementation coverage matrix
+  - `TRAINING/utils/TYPE_BOUNDARY_WIRING_COMPLETE.md` - Type boundary wiring details
+  - `TRAINING/utils/BOUNDARY_ASSERTIONS_COMPLETE.md` - Boundary assertions details
+  - `DOCS/02_reference/changelog/2025-12-13-sst-enforcement-design.md` - Complete changelog
+  - `DOCS/03_technical/fixes/2025-12-13-sst-enforcement-design.md` - Technical fix documentation
+- **References**:
+  - `INDEX.md` - Added to implementation and architecture sections
+  - `03_technical/README.md` - Added to fixes section
+  - `03_technical/implementation/README.md` - Added to core systems section
+  - `CHANGELOG.md` - Added highlights section
+  - `changelog/README.md` - Added index entry
+  - `fixes/README.md` - Added to recent fixes
+- **Related Documentation**:
+  - Links to Single Source of Truth fix
+  - Links to Fingerprint Tracking
+  - Links to Feature Selection Unification
+
 ## Cross-Reference Updates (2025-12-12)
 
 **Architecture Documentation Moved:**

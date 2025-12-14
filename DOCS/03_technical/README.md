@@ -43,6 +43,7 @@ This directory contains detailed technical documentation for developers, researc
 - **[Known Issues](fixes/KNOWN_ISSUES.md)** - Current issues and limitations
 - **[Bug Fixes](fixes/BUG_FIXES.md)** - Fix history
 - **[Migration Notes](fixes/MIGRATION_NOTES.md)** - Migration guide
+- **[SST Enforcement Design](fixes/2025-12-13-sst-enforcement-design.md)** - **NEW**: EnforcedFeatureSet contract, type boundary wiring, boundary assertions
 - **[Leakage Controls Fixes](fixes/2025-12-13-leakage-validation-fix.md)** - Leakage validation and fingerprint tracking fixes
 - **[Fingerprint Tracking](fixes/2025-12-13-lookback-fingerprint-tracking.md)** - Lookback fingerprint tracking system
 - **[Fingerprint Improvements](fixes/2025-12-13-fingerprint-improvements.md)** - Set-invariant fingerprints and dataclass improvements

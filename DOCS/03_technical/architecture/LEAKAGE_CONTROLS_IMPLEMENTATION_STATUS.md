@@ -1,8 +1,8 @@
 # Leakage Controls Implementation Status
 
 **Date**: 2025-12-13  
-**Related**: [Leakage Controls Evaluation](LEAKAGE_CONTROLS_EVALUATION.md) | [Leakage Validation Fix](../fixes/2025-12-13-leakage-validation-fix.md) | [Fingerprint Tracking](../fixes/2025-12-13-lookback-fingerprint-tracking.md) | [Fingerprint Improvements](../fixes/2025-12-13-fingerprint-improvements.md) | [Canary Test Guide](../testing/LEAKAGE_CANARY_TEST_GUIDE.md)  
-**Status**: Phase 1 (Critical) - In Progress
+**Related**: [Leakage Controls Evaluation](LEAKAGE_CONTROLS_EVALUATION.md) | [SST Enforcement Design](../../../TRAINING/utils/SST_ENFORCEMENT_DESIGN.md) | [Leakage Validation Fix](../fixes/2025-12-13-leakage-validation-fix.md) | [Fingerprint Tracking](../fixes/2025-12-13-lookback-fingerprint-tracking.md) | [Fingerprint Improvements](../fixes/2025-12-13-fingerprint-improvements.md) | [Canary Test Guide](../testing/LEAKAGE_CANARY_TEST_GUIDE.md)  
+**Status**: Phase 1 (Critical) - Complete | Phase 2 (SST Enforcement Design) - ✅ Complete
 
 ## Completed (Commits 1-3)
 
@@ -158,15 +158,81 @@
 
 ## Files Modified
 
+### Phase 1
 1. **NEW**: `TRAINING/utils/leakage_budget.py` - Unified calculator
 2. **MODIFIED**: `TRAINING/utils/resolved_config.py` - Delegates to unified calculator
 3. **MODIFIED**: `TRAINING/ranking/predictability/model_evaluation.py` - Uses unified calculator, enforces policy
 4. **MODIFIED**: `CONFIG/pipeline/training/safety.yaml` - Added policy config
 
+### Phase 2 (SST Enforcement Design)
+1. **NEW**: `TRAINING/utils/lookback_policy.py` - Policy resolution and boundary assertions
+2. **MODIFIED**: `TRAINING/utils/lookback_cap_enforcement.py` - Added `EnforcedFeatureSet` dataclass
+3. **MODIFIED**: `TRAINING/ranking/predictability/model_evaluation.py` - Type boundary wiring, boundary assertions
+4. **MODIFIED**: `TRAINING/ranking/feature_selector.py` - Type boundary wiring, boundary assertions
+5. **MODIFIED**: `TRAINING/utils/leakage_budget.py` - Added `canonical_lookback_map` parameter support
+6. **MODIFIED**: `TRAINING/utils/resolved_config.py` - Pre-enforcement purge guard
+7. **MODIFIED**: `TRAINING/utils/cross_sectional_data.py` - Order drift clamping
+
+---
+
+---
+
+## Phase 2: SST Enforcement Design (Complete)
+
+### ✅ EnforcedFeatureSet Contract
+
+**File**: `TRAINING/utils/lookback_cap_enforcement.py`
+
+- Created `EnforcedFeatureSet` dataclass with set/ordered fingerprints
+- Stores canonical map for reuse (prevents recomputation)
+- Represents authoritative state after enforcement
+
+**Acceptance**: ✅ All enforcement stages use `EnforcedFeatureSet` contract
+
+---
+
+### ✅ Type Boundary Wiring
+
+**Files**: 
+- `TRAINING/ranking/predictability/model_evaluation.py` (gatekeeper, POST_PRUNE)
+- `TRAINING/ranking/feature_selector.py` (FS_PRE, FS_POST)
+
+- All enforcement stages convert `cap_result` to `EnforcedFeatureSet`
+- X matrix sliced immediately using `enforced.features` (no rediscovery)
+- Feature names updated to match `enforced.features` (the truth)
+
+**Acceptance**: ✅ No split-brain, no rediscovery, order preserved
+
+---
+
+### ✅ Boundary Assertions
+
+**File**: `TRAINING/utils/lookback_policy.py`
+
+- Created `assert_featureset_fingerprint()` reusable helper
+- Validates exact list equality, set equality, order equality, fingerprint match
+- Auto-fixes mismatches using `enforced.features` (the truth)
+
+**Assertion Locations**:
+- POST_GATEKEEPER, POST_PRUNE, MODEL_TRAIN_INPUT (target ranking)
+- FS_PRE, FS_POST (feature selection)
+
+**Acceptance**: ✅ Immediate mis-wire detection at all boundaries
+
+---
+
+### ✅ Full Coverage
+
+- Target ranking: CROSS_SECTIONAL and SYMBOL_SPECIFIC views
+- Feature selection: CROSS_SECTIONAL and SYMBOL_SPECIFIC views
+- All enforcement stages: gatekeeper, POST_PRUNE, FS_PRE, FS_POST
+
+**Acceptance**: ✅ Provably split-brain free across all training paths
+
 ---
 
 ## Next Steps
 
-1. Complete Commit 4 (verify audit timing)
-2. Test Phase 1 changes
-3. Proceed to Phase 2 (Commits 5-8)
+1. ✅ Phase 1 (Critical) - Complete
+2. ✅ Phase 2 (SST Enforcement Design) - Complete
+3. Monitor production runs for assertion failures (should be rare)
