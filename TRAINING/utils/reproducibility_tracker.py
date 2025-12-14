@@ -2057,7 +2057,8 @@ class ReproducibilityTracker:
                     if additional_data:
                         run_data["additional_data"] = additional_data
                     
-                    self._save_to_cohort(stage, item_name, cohort_id, cohort_metadata, run_data, route_type, None, None, additional_data)
+                    # FIX: Pass symbol and model_family to _save_to_cohort so symbol subdirectory is created
+                    self._save_to_cohort(stage, item_name, cohort_id, cohort_metadata, run_data, route_type, symbol, model_family, additional_data)
                     self._increment_mode_counter("COHORT_AWARE")
                     
                     main_logger = _get_main_logger()
