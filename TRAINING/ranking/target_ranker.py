@@ -311,7 +311,8 @@ def rank_targets(
     
     # Results storage: separate by view
     results_cs = []  # Cross-sectional results
-    results_sym = {}  # Symbol-specific results: {symbol: [results]}
+    results_sym = {}  # Symbol-specific results: {target_name: {symbol: result}}
+    symbol_skip_reasons = {}  # Skip reasons: {target_name: {symbol: {reason, status, ...}}}
     results_loso = {}  # LOSO results: {symbol: [results]} (optional)
     
     # Load dual-view config (experiment config takes precedence over global config)
@@ -767,8 +768,8 @@ def rank_targets(
                         logger.warning(f"  ⚠️  Skipping symbol-specific evaluation for {target_name} (cross-sectional failed: mean_score={result_cs.mean_score}, status={result_cs.status})")
                     else:
                         logger.info(f"  ✅ Cross-sectional succeeded for {target_name}, proceeding with symbol-specific evaluation")
-                        # Track per-symbol skip reasons and diagnostics
-                        symbol_skip_reasons = {}  # {symbol: {reason, n_rows, n_train, n_val, n_pos_train, n_neg_train, n_pos_val, n_neg_val}}
+                        # Track per-symbol skip reasons and diagnostics (local to this target evaluation)
+                        local_symbol_skip_reasons = {}  # {symbol: {reason, n_rows, n_train, n_val, n_pos_train, n_neg_train, n_pos_val, n_neg_val}}
                         
                         for symbol in symbols:
                             logger.info(f"    Evaluating {target_name} for symbol {symbol}...")
@@ -837,7 +838,7 @@ def rank_targets(
                                 if result_sym.mean_score == -999.0:
                                     skip_reason = result_sym.status if result_sym.status != "OK" else "degenerate"
                                     logger.warning(f"    ⚠️  Skipped {target_name} for symbol {symbol}: {skip_reason} (mean_score=-999.0, status={result_sym.status})")
-                                    symbol_skip_reasons[symbol] = {
+                                    local_symbol_skip_reasons[symbol] = {
                                         'reason': skip_reason,
                                         'status': result_sym.status,
                                         'leakage_flag': result_sym.leakage_flag,
@@ -850,7 +851,7 @@ def rank_targets(
                             except Exception as e:
                                 skip_reason = f"exception: {type(e).__name__}"
                                 logger.error(f"    ❌ Failed to evaluate {target_name} for symbol {symbol}: {e}", exc_info=True)
-                                symbol_skip_reasons[symbol] = {
+                                local_symbol_skip_reasons[symbol] = {
                                     'reason': skip_reason,
                                     'error': str(e),
                                     'error_type': type(e).__name__
@@ -858,16 +859,15 @@ def rank_targets(
                                 continue
                         
                         # Log summary of skip reasons
-                        if symbol_skip_reasons:
-                            logger.warning(f"  📋 Symbol-specific skip reasons for {target_name}: {len(symbol_skip_reasons)}/{len(symbols)} symbols skipped")
-                            for sym, skip_info in symbol_skip_reasons.items():
+                        if local_symbol_skip_reasons:
+                            logger.warning(f"  📋 Symbol-specific skip reasons for {target_name}: {len(local_symbol_skip_reasons)}/{len(symbols)} symbols skipped")
+                            for sym, skip_info in local_symbol_skip_reasons.items():
                                 reason = skip_info.get('reason', 'unknown')
                                 logger.debug(f"    {sym}: {reason}")
                         
-                        # Store skip reasons for routing decisions
-                        if not hasattr(result_sym_dict, '_skip_reasons'):
-                            result_sym_dict._skip_reasons = {}
-                        result_sym_dict._skip_reasons = symbol_skip_reasons
+                        # Store skip reasons for routing decisions (use global symbol_skip_reasons dict)
+                        if local_symbol_skip_reasons:
+                            symbol_skip_reasons[target_name] = local_symbol_skip_reasons
                         
                         logger.info(f"  📊 Symbol-specific results for {target_name}: {len(result_sym_dict)}/{len(symbols)} symbols succeeded")
                 
@@ -898,19 +898,10 @@ def rank_targets(
                             logger.warning(f"    Failed LOSO evaluation for {target_name} on symbol {symbol}: {e}")
                             continue
                 
-                # Store symbol-specific results and skip reasons
+                # Store symbol-specific results
                 if enable_symbol_specific:
                     if target_name not in results_sym:
                         results_sym[target_name] = {}
-                    # Initialize skip reasons dict if needed
-                    if not hasattr(results_sym, '_skip_reasons'):
-                        results_sym._skip_reasons = {}
-                    if target_name not in results_sym._skip_reasons:
-                        results_sym._skip_reasons[target_name] = {}
-                    
-                    # Add skip reasons from evaluation (if available)
-                    if hasattr(result_sym_dict, '_skip_reasons'):
-                        results_sym._skip_reasons[target_name].update(result_sym_dict._skip_reasons)
                     
                     stored_count = 0
                     for symbol, result_sym in result_sym_dict.items():
@@ -920,9 +911,11 @@ def rank_targets(
                         else:
                             reason = result_sym.status if result_sym.status in skip_statuses else "degenerate/failed"
                             logger.warning(f"    ⚠️  Filtered out {target_name} SYMBOL_SPECIFIC ({symbol}): {reason} (mean_score={result_sym.mean_score})")
-                            # Add to skip reasons if not already there
-                            if symbol not in results_sym._skip_reasons[target_name]:
-                                results_sym._skip_reasons[target_name][symbol] = {
+                            # Add to skip reasons if not already there (use global symbol_skip_reasons dict)
+                            if target_name not in symbol_skip_reasons:
+                                symbol_skip_reasons[target_name] = {}
+                            if symbol not in symbol_skip_reasons[target_name]:
+                                symbol_skip_reasons[target_name][symbol] = {
                                     'reason': reason,
                                     'status': result_sym.status,
                                     'mean_score': result_sym.mean_score
@@ -954,8 +947,7 @@ def rank_targets(
         logger.info(f"Symbol-specific evaluations: {total_sym_results} (across {len(results_sym)} targets)")
     
     # Compute routing decisions for each target
-    # Extract skip reasons if available
-    symbol_skip_reasons = getattr(results_sym, '_skip_reasons', {}) if enable_symbol_specific else {}
+    # Use global symbol_skip_reasons dict (already initialized at top of function)
     
     routing_decisions = _compute_target_routing_decisions(
         results_cs=results_cs,
