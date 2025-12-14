@@ -3958,23 +3958,27 @@ def evaluate_target_predictability(
             pass
         
         # Compute budget from FINAL feature set (post gatekeeper)
-        # CRITICAL: Validate fingerprint matches MODEL_TRAIN_INPUT (computed above)
-        budget, computed_fingerprint = compute_budget(
+        # NOTE: MODEL_TRAIN_INPUT fingerprint will be computed later in train_and_evaluate_models AFTER pruning
+        # For now, validate against post_gatekeeper fingerprint
+        budget, computed_fp, computed_order_fp = compute_budget(
             feature_names,
             detected_interval,
             resolved_config.horizon_minutes if resolved_config else 60.0,
             registry=registry,
-            expected_fingerprint=model_train_input_fingerprint,
-            stage="post_gatekeeper"
+            expected_fingerprint=post_gatekeeper_fp,
+            stage="POST_GATEKEEPER"
         )
         
         # Validate fingerprint consistency (invariant check)
-        if computed_fingerprint != model_train_input_fingerprint:
+        if computed_fp != post_gatekeeper_fp:
             logger.error(
-                f"🚨 FINGERPRINT MISMATCH (post_gatekeeper): compute_budget={computed_fingerprint} != "
-                f"MODEL_TRAIN_INPUT={model_train_input_fingerprint}. "
+                f"🚨 FINGERPRINT MISMATCH (POST_GATEKEEPER): compute_budget={computed_fp} != "
+                f"post_gatekeeper={post_gatekeeper_fp}. "
                 f"This indicates lookback computed on different feature set than enforcement."
             )
+        
+        # Store for validation in train_and_evaluate_models
+        gatekeeper_output_fingerprint = post_gatekeeper_fp
         
         # Update resolved_config with the new lookback (from features that actually remain)
         resolved_config.feature_lookback_max_minutes = budget.max_feature_lookback_minutes
