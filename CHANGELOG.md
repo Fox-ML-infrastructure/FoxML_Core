@@ -25,7 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **LeakageAssessment Dataclass**: Prevents contradictory reason strings like "overfit_likely; cv_not_suspicious"
 - **CV Splitter Logging**: Run summary now shows splitter identity, purge, embargo, and max_feature_lookback_minutes
 - **Policy Explicit Logging**: Active policy and feature drop lists are logged for auditability
-- See [2025-12-13 leakage validation fix](DOCS/03_technical/fixes/2025-12-13-leakage-validation-fix.md) and [implementation status](DOCS/03_technical/architecture/LEAKAGE_CONTROLS_IMPLEMENTATION_STATUS.md) for details
+- **Fingerprint Tracking System**: Set-invariant fingerprints with order-change detection ensure lookback computed on exact final feature set
+- **LookbackResult Dataclass**: Type-safe return type prevents silent mis-wires
+- **Explicit Stage Logging**: PRE_GATEKEEPER, POST_GATEKEEPER, POST_PRUNE, MODEL_TRAIN_INPUT stages logged with fingerprints
+- **Leakage Canary Test**: Dedicated test config for pipeline integrity validation using known-leaky targets
+- See [2025-12-13 leakage validation fix](DOCS/03_technical/fixes/2025-12-13-leakage-validation-fix.md), [fingerprint tracking](DOCS/03_technical/fixes/2025-12-13-lookback-fingerprint-tracking.md), and [implementation status](DOCS/03_technical/architecture/LEAKAGE_CONTROLS_IMPLEMENTATION_STATUS.md) for details
 
 #### Feature Selection Unification & Critical Fixes (2025-12-13) – **NEW**
 - **Shared Ranking Harness**: Feature selection now uses same harness as target ranking, ensuring identical evaluation contracts
@@ -139,6 +143,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Fixed missing import (`Any` from typing) in `leakage_budget.py`
   - Fixed missing import (`create_resolved_config`) in pruning section
   - Fixed top offenders list showing uncapped values when cap is applied
+  - Fixed lookback mismatch warnings ("reported max=100.0m but actual max=86400.0m") with fingerprint tracking
+  - Fixed MODEL_TRAIN_INPUT fingerprint computed before pruning (now POST_PRUNE)
+  - Fixed gatekeeper missing features by using unified lookback calculator
+  - Fixed tuple vs dataclass return type mismatch (`AttributeError: 'tuple' object has no attribute 'max_minutes'`)
+  - Fixed NameError issues during fingerprint tracking implementation
+  - Fixed TypeError: unexpected keyword argument in wrapper functions
 - **Feature Selection Critical Fixes** (2025-12-13):
   - Fixed shared harness unpack crashes (tolerant unpack with length checking)
   - Fixed CatBoost treating numeric columns as text/categorical (hard dtype enforcement guardrail)

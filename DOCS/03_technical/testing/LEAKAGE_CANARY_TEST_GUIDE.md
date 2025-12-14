@@ -1,6 +1,8 @@
 # Leakage Canary Test Guide
 
 **Date**: 2025-12-13  
+**Related**: [Leakage Controls Evaluation](../architecture/LEAKAGE_CONTROLS_EVALUATION.md) | [Leakage Validation Fix](../fixes/2025-12-13-leakage-validation-fix.md) | [Fingerprint Tracking](../fixes/2025-12-13-lookback-fingerprint-tracking.md) | [Fingerprint Improvements](../fixes/2025-12-13-fingerprint-improvements.md)
+
 **Purpose**: Validate pipeline integrity using known-leaky targets as canaries
 
 ## Overview

@@ -11,6 +11,13 @@ Known issues, bug fixes, and migration notes.
 
 ## Recent Critical Fixes (2025-12-13)
 
+### Leakage Controls & Fingerprint Tracking
+
+- **[Lookback Fingerprint Tracking](2025-12-13-lookback-fingerprint-tracking.md)** - Initial fingerprint tracking implementation to ensure lookback computed on exact final feature set
+- **[Fingerprint Improvements](2025-12-13-fingerprint-improvements.md)** - Set-invariant fingerprints, LookbackResult dataclass, explicit stage logging
+- **[Lookback Result Migration](2025-12-13-lookback-result-dataclass-migration.md)** - Migration from tuple to dataclass return types
+- **[Leakage Validation Fix](2025-12-13-leakage-validation-fix.md)** - Unified leakage budget calculator, calendar feature classification, separate purge/embargo validation
+
 ### Feature Selection Critical Fixes
 
 - **[Implementation Verification](2025-12-13-implementation-verification.md)** - Complete verification of all 6 critical checks + 2 last-mile improvements

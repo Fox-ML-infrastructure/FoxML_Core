@@ -1,6 +1,8 @@
 # Leakage Validation Fix - Separate Purge/Embargo Constraints
 
 **Date**: 2025-12-13  
+**Related**: [Fingerprint Tracking](2025-12-13-lookback-fingerprint-tracking.md) | [Fingerprint Improvements](2025-12-13-fingerprint-improvements.md) | [Leakage Controls Evaluation](../architecture/LEAKAGE_CONTROLS_EVALUATION.md) | [Canary Test Guide](../testing/LEAKAGE_CANARY_TEST_GUIDE.md)
+
 **Issue**: Hard-stop validation was incorrectly treating `purge` as needing to cover both lookback AND horizon, when design intent is:
 - `purge` covers feature lookback
 - `embargo` covers target horizon

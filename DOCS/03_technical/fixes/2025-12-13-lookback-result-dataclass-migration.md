@@ -1,6 +1,8 @@
 # LookbackResult Dataclass Migration Fix
 
 **Date**: 2025-12-13  
+**Related**: [Fingerprint Tracking](2025-12-13-lookback-fingerprint-tracking.md) | [Fingerprint Improvements](2025-12-13-fingerprint-improvements.md) | [Leakage Validation Fix](2025-12-13-leakage-validation-fix.md)
+
 **Issue**: `AttributeError: 'tuple' object has no attribute 'max_minutes'`
 
 ## Problem

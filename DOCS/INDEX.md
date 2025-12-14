@@ -160,6 +160,8 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 ### Research
 - [Intelligence Layer Overview](03_technical/research/INTELLIGENCE_LAYER.md) - Complete overview of intelligent training pipeline decision-making and automation
 - [Leakage Analysis](03_technical/research/LEAKAGE_ANALYSIS.md) - Leakage research
+- [Leakage Controls Evaluation](03_technical/architecture/LEAKAGE_CONTROLS_EVALUATION.md) - Leakage controls structural evaluation
+- [Leakage Canary Test Guide](03_technical/testing/LEAKAGE_CANARY_TEST_GUIDE.md) - Pipeline integrity validation
 - [Feature Importance Methodology](03_technical/research/FEATURE_IMPORTANCE_METHODOLOGY.md) - Feature importance research
 - [Feature Importance Stability](03_technical/implementation/FEATURE_IMPORTANCE_STABILITY.md) - Feature importance stability tracking and analysis (see also Systems Reference)
 - [Target Discovery](03_technical/research/TARGET_DISCOVERY.md) - Target research

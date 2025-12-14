@@ -1,6 +1,7 @@
 # Leakage Controls Implementation Status
 
 **Date**: 2025-12-13  
+**Related**: [Leakage Controls Evaluation](LEAKAGE_CONTROLS_EVALUATION.md) | [Leakage Validation Fix](../fixes/2025-12-13-leakage-validation-fix.md) | [Fingerprint Tracking](../fixes/2025-12-13-lookback-fingerprint-tracking.md) | [Fingerprint Improvements](../fixes/2025-12-13-fingerprint-improvements.md) | [Canary Test Guide](../testing/LEAKAGE_CANARY_TEST_GUIDE.md)  
 **Status**: Phase 1 (Critical) - In Progress
 
 ## Completed (Commits 1-3)

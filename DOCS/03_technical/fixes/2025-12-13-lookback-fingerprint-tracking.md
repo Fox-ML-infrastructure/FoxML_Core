@@ -1,6 +1,8 @@
 # Lookback Fingerprint Tracking Fix
 
 **Date**: 2025-12-13  
+**Related**: [Fingerprint Improvements](2025-12-13-fingerprint-improvements.md) | [Lookback Result Migration](2025-12-13-lookback-result-dataclass-migration.md) | [Leakage Validation Fix](2025-12-13-leakage-validation-fix.md) | [Leakage Controls Evaluation](../architecture/LEAKAGE_CONTROLS_EVALUATION.md) | [Canary Test Guide](../testing/LEAKAGE_CANARY_TEST_GUIDE.md)
+
 **Issue**: Lookback accounting using different feature sets at different steps, causing mismatches between reported max and actual max lookback.
 
 ## Problem

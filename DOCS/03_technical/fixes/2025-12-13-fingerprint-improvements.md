@@ -1,6 +1,8 @@
 # Fingerprint Tracking Improvements
 
 **Date**: 2025-12-13  
+**Related**: [Lookback Fingerprint Tracking](2025-12-13-lookback-fingerprint-tracking.md) | [Lookback Result Migration](2025-12-13-lookback-result-dataclass-migration.md) | [Leakage Validation Fix](2025-12-13-leakage-validation-fix.md) | [Leakage Controls Evaluation](../architecture/LEAKAGE_CONTROLS_EVALUATION.md) | [Canary Test Guide](../testing/LEAKAGE_CANARY_TEST_GUIDE.md)
+
 **Follow-up**: Improvements to fingerprint tracking implementation
 
 ## Improvements Made

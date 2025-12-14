@@ -1,6 +1,8 @@
 # Leakage Controls Evaluation
 
 **Date**: 2025-12-13  
+**Related**: [Leakage Validation Fix](../fixes/2025-12-13-leakage-validation-fix.md) | [Fingerprint Tracking](../fixes/2025-12-13-lookback-fingerprint-tracking.md) | [Fingerprint Improvements](../fixes/2025-12-13-fingerprint-improvements.md) | [Canary Test Guide](../testing/LEAKAGE_CANARY_TEST_GUIDE.md) | [Implementation Status](LEAKAGE_CONTROLS_IMPLEMENTATION_STATUS.md)
+
 **Task**: Fix structural contradictions in leakage controls (purge/lookback + messaging) and make CV/time-safety + smoke tests enforceable and self-consistent.
 
 ## Executive Summary

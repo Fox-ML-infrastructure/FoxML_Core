@@ -15,6 +15,11 @@ This directory contains detailed technical documentation for developers, researc
 - **[Target Discovery](research/TARGET_DISCOVERY.md)** - Target research and discovery
 - **[Validation Methodology](research/VALIDATION_METHODOLOGY.md)** - Validation research
 
+### Architecture
+- **[Leakage Controls Evaluation](architecture/LEAKAGE_CONTROLS_EVALUATION.md)** - Leakage controls structural evaluation and fixes
+- **[Leakage Controls Implementation Status](architecture/LEAKAGE_CONTROLS_IMPLEMENTATION_STATUS.md)** - Implementation status tracking
+- See [architecture/](architecture/) for complete list
+
 ### Implementation
 - **[Feature Selection Guide](implementation/FEATURE_SELECTION_GUIDE.md)** - Feature selection implementation
 - **[Reproducibility Tracking](implementation/REPRODUCIBILITY_TRACKING.md)** - Reproducibility system
@@ -38,12 +43,16 @@ This directory contains detailed technical documentation for developers, researc
 - **[Known Issues](fixes/KNOWN_ISSUES.md)** - Current issues and limitations
 - **[Bug Fixes](fixes/BUG_FIXES.md)** - Fix history
 - **[Migration Notes](fixes/MIGRATION_NOTES.md)** - Migration guide
+- **[Leakage Controls Fixes](fixes/2025-12-13-leakage-validation-fix.md)** - Leakage validation and fingerprint tracking fixes
+- **[Fingerprint Tracking](fixes/2025-12-13-lookback-fingerprint-tracking.md)** - Lookback fingerprint tracking system
+- **[Fingerprint Improvements](fixes/2025-12-13-fingerprint-improvements.md)** - Set-invariant fingerprints and dataclass improvements
 - See [fixes/](fixes/) for complete list
 
 ### Testing
 - **[Testing Plan](testing/TESTING_PLAN.md)** - Test strategy
 - **[Testing Summary](testing/TESTING_SUMMARY.md)** - Test results
 - **[Daily Testing](testing/DAILY_TESTING.md)** - Daily test procedures
+- **[Leakage Canary Test Guide](testing/LEAKAGE_CANARY_TEST_GUIDE.md)** - Pipeline integrity validation using canary targets
 
 ### Operations
 - **[Journald Logging](operations/JOURNALD_LOGGING.md)** - Logging setup
