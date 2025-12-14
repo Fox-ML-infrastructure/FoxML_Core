@@ -678,11 +678,12 @@ def train_and_evaluate_models(
             
             # Compute budget from PRUNED feature set
             if resolved_config and resolved_config.horizon_minutes:
-                budget, _ = compute_budget(
+                budget, _, _ = compute_budget(
                     feature_names,
                     data_interval_minutes,
                     resolved_config.horizon_minutes,
-                    registry=registry
+                    registry=registry,
+                    stage="pre_gatekeeper_prune_check"
                 )
                 resolved_config.feature_lookback_max_minutes = budget.max_feature_lookback_minutes
                 
@@ -746,9 +747,24 @@ def train_and_evaluate_models(
                 pass
             
             # Compute feature lookback from PRUNED features
-            computed_lookback, top_offenders = compute_feature_lookback_max(
-                feature_names, data_interval_minutes, max_lookback_cap_minutes=max_lookback_cap
+            # Get fingerprint for validation
+            from TRAINING.utils.cross_sectional_data import _log_feature_set, _compute_feature_fingerprint
+            _log_feature_set("POST_PRUNE", feature_names, previous_names=None, logger_instance=logger)
+            post_prune_fp, post_prune_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
+            
+            lookback_result = compute_feature_lookback_max(
+                feature_names, data_interval_minutes, max_lookback_cap_minutes=max_lookback_cap,
+                expected_fingerprint=post_prune_fp,
+                stage="POST_PRUNE"
             )
+            computed_lookback = lookback_result.max_minutes
+            top_offenders = lookback_result.top_offenders
+            
+            # Validate fingerprint
+            if lookback_result.fingerprint != post_prune_fp:
+                logger.error(
+                    f"🚨 FINGERPRINT MISMATCH (POST_PRUNE): computed={lookback_result.fingerprint} != expected={post_prune_fp}"
+                )
             
             if computed_lookback is not None:
                 feature_lookback_max_minutes = computed_lookback
@@ -764,7 +780,7 @@ def train_and_evaluate_models(
                     else:
                         # Only log if > 4 hours or if there's a mismatch (for debugging)
                         if computed_lookback > 240 or abs(actual_max_in_list - computed_lookback) > 1.0:
-                            logger.info(f"  📊 Feature lookback (post-prune): max={computed_lookback:.1f}m")
+                            logger.info(f"  📊 Feature lookback (POST_PRUNE): max={computed_lookback:.1f}m, fingerprint={lookback_result.fingerprint}")
                             logger.info(f"    Top lookback features (from {len(feature_names)} features): {', '.join([f'{f}({m:.0f}m)' for f, m in top_offenders[:5]])}")
                             # Sanity check: verify all top features are in current feature set
                             top_feature_names = {f for f, _ in top_offenders[:5]}
@@ -812,19 +828,19 @@ def train_and_evaluate_models(
                         pass
                     
                     # Compute budget from final pruned features
-                    budget, budget_fp = compute_budget(
+                    budget, budget_fp, budget_order_fp = compute_budget(
                         feature_names,
                         data_interval_minutes,
                         resolved_config.horizon_minutes,
                         registry=registry,
-                        expected_fingerprint=post_prune_fingerprint if 'post_prune_fingerprint' in locals() else None,
-                        stage="post_pruning_policy_check"
+                        expected_fingerprint=post_prune_fp if 'post_prune_fp' in locals() else None,
+                        stage="POST_PRUNE_policy_check"
                     )
                     
                     # Validate fingerprint
-                    if 'post_prune_fingerprint' in locals() and budget_fp != post_prune_fingerprint:
+                    if 'post_prune_fp' in locals() and budget_fp != post_prune_fp:
                         logger.error(
-                            f"🚨 FINGERPRINT MISMATCH (policy_check): budget={budget_fp} != expected={post_prune_fingerprint}"
+                            f"🚨 FINGERPRINT MISMATCH (POST_PRUNE_policy_check): budget={budget_fp} != expected={post_prune_fp}"
                         )
                     purge_minutes = resolved_config.purge_minutes
                     embargo_minutes = resolved_config.embargo_minutes if resolved_config.embargo_minutes is not None else purge_minutes
@@ -908,9 +924,21 @@ def train_and_evaluate_models(
             pass
         
         # Compute feature lookback from actual features (pruned or unpruned)
-        computed_lookback, top_offenders = compute_feature_lookback_max(
-            feature_names, data_interval_minutes, max_lookback_cap_minutes=max_lookback_cap
+        from TRAINING.utils.cross_sectional_data import _compute_feature_fingerprint
+        current_fp, current_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
+        lookback_result = compute_feature_lookback_max(
+            feature_names, data_interval_minutes, max_lookback_cap_minutes=max_lookback_cap,
+            expected_fingerprint=current_fp,
+            stage="fallback_lookback_compute"
         )
+        computed_lookback = lookback_result.max_minutes
+        top_offenders = lookback_result.top_offenders
+        
+        # Validate fingerprint
+        if lookback_result.fingerprint != current_fp:
+            logger.error(
+                f"🚨 FINGERPRINT MISMATCH (fallback): computed={lookback_result.fingerprint} != expected={current_fp}"
+            )
         
         if computed_lookback is not None:
             feature_lookback_max_minutes = computed_lookback
@@ -926,7 +954,7 @@ def train_and_evaluate_models(
                 else:
                     # Only log if > 4 hours or if there's a mismatch (for debugging)
                     if computed_lookback > 240 or abs(actual_max_in_list - computed_lookback) > 1.0:
-                        logger.info(f"  📊 Feature lookback analysis: max={computed_lookback:.1f}m")
+                        logger.info(f"  📊 Feature lookback analysis: max={computed_lookback:.1f}m, fingerprint={lookback_result.fingerprint}")
                         logger.info(f"    Top lookback features (from {len(feature_names)} features): {', '.join([f'{f}({m:.0f}m)' for f, m in top_offenders[:5]])}")
                         # Sanity check: verify all top features are in current feature set
                         top_feature_names = {f for f, _ in top_offenders[:5]}
@@ -1121,12 +1149,13 @@ def train_and_evaluate_models(
         raise ValueError(f"Duplicate feature names before training: {duplicates}")
     
     # Log feature set before training and compute fingerprint
-    # CRITICAL: This fingerprint represents the ACTUAL features used in training (post gatekeeper)
+    # CRITICAL: This fingerprint represents the ACTUAL features used in training (POST_PRUNE, not just post-gatekeeper)
+    # Pruning happens earlier in this function (line ~635), so feature_names here is the final pruned set
     # All subsequent lookback computations must use this same fingerprint for validation
     from TRAINING.utils.cross_sectional_data import _log_feature_set, _compute_feature_fingerprint
     _log_feature_set("MODEL_TRAIN_INPUT", feature_names, previous_names=None, logger_instance=logger)
-    model_train_input_fingerprint = _compute_feature_fingerprint(feature_names)
-    logger.debug(f"📊 MODEL_TRAIN_INPUT fingerprint={model_train_input_fingerprint} (n_features={len(feature_names)})")
+    model_train_input_fingerprint, model_train_input_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
+    logger.info(f"📊 MODEL_TRAIN_INPUT fingerprint={model_train_input_fingerprint} (n_features={len(feature_names)}, POST_PRUNE)")
     
     # Create purged time series split with time-based purging
     # CRITICAL: Validate time_vals alignment and sorting before using time-based purging
@@ -3894,8 +3923,10 @@ def evaluate_target_predictability(
     # This runs AFTER all loading/merging/sanitization is done
     # It physically drops features that violate the purge limit from the dataframe
     # This is the "worry-free" auto-corrector that handles race conditions
-    from TRAINING.utils.cross_sectional_data import _compute_feature_fingerprint
-    pre_gatekeeper_fingerprint = _compute_feature_fingerprint(feature_names)
+    from TRAINING.utils.cross_sectional_data import _log_feature_set, _compute_feature_fingerprint
+    pre_gatekeeper_fp, _ = _compute_feature_fingerprint(feature_names, set_invariant=True)
+    _log_feature_set("PRE_GATEKEEPER", feature_names, previous_names=None, logger_instance=logger)
+    
     X, feature_names = _enforce_final_safety_gate(
         X=X,
         feature_names=feature_names,
@@ -3904,13 +3935,12 @@ def evaluate_target_predictability(
         logger=logger
     )
     
-    # CRITICAL: Compute fingerprint AFTER gatekeeper (this is the actual MODEL_TRAIN_INPUT fingerprint)
-    # The gatekeeper may drop features, so we need to use the post-gatekeeper fingerprint
-    post_gatekeeper_fingerprint = _compute_feature_fingerprint(feature_names)
+    # CRITICAL: Log POST_GATEKEEPER stage explicitly
+    post_gatekeeper_fp, post_gatekeeper_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
+    _log_feature_set("POST_GATEKEEPER", feature_names, previous_names=None, logger_instance=logger)
     
-    # Store fingerprint for use in train_and_evaluate_models (MODEL_TRAIN_INPUT logging)
-    # This ensures all subsequent lookback computations use the same fingerprint
-    model_train_input_fingerprint = post_gatekeeper_fingerprint
+    # NOTE: MODEL_TRAIN_INPUT fingerprint will be computed in train_and_evaluate_models AFTER pruning
+    # Pruning happens inside train_and_evaluate_models, so we can't set it here
     
     # CRITICAL: Recompute resolved_config.feature_lookback_max AFTER Final Gatekeeper
     # The audit system uses this value, so it must reflect the ACTUAL features that will be trained
@@ -3951,7 +3981,7 @@ def evaluate_target_predictability(
         if log_cfg.cv_detail:
             logger.info(
                 f"📊 Updated feature_lookback_max after Final Gatekeeper: {budget.max_feature_lookback_minutes:.1f}m "
-                f"(from {len(feature_names)} remaining features, fingerprint={computed_fingerprint})"
+                f"(from {len(feature_names)} remaining features, fingerprint={computed_fp}, stage=POST_GATEKEEPER)"
             )
         
             # CRITICAL: Enforce leakage policy (strict/drop_features/warn)
@@ -4041,20 +4071,20 @@ def evaluate_target_predictability(
                         
                         # Recompute budget on remaining features
                         from TRAINING.utils.cross_sectional_data import _compute_feature_fingerprint
-                        after_drop_fingerprint = _compute_feature_fingerprint(feature_names)
-                        budget, budget_fp = compute_budget(
+                        after_drop_fp, after_drop_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
+                        budget, budget_fp, budget_order_fp = compute_budget(
                             feature_names,
                             detected_interval,
                             resolved_config.horizon_minutes if resolved_config else 60.0,
                             registry=registry,
-                            expected_fingerprint=after_drop_fingerprint,
+                            expected_fingerprint=after_drop_fp,
                             stage="after_policy_drop"
                         )
                         
                         # Validate fingerprint
-                        if budget_fp != after_drop_fingerprint:
+                        if budget_fp != after_drop_fp:
                             logger.error(
-                                f"🚨 FINGERPRINT MISMATCH (after_drop): budget={budget_fp} != expected={after_drop_fingerprint}"
+                                f"🚨 FINGERPRINT MISMATCH (after_drop): budget={budget_fp} != expected={after_drop_fp}"
                             )
                         resolved_config.feature_lookback_max_minutes = budget.max_feature_lookback_minutes
                         
@@ -4108,14 +4138,15 @@ def evaluate_target_predictability(
         
         # CRITICAL: Validate fingerprint consistency before training
         # The feature_names passed to train_and_evaluate_models should match post_gatekeeper fingerprint
+        # NOTE: Pruning happens INSIDE train_and_evaluate_models, so MODEL_TRAIN_INPUT will be POST_PRUNE
         if 'gatekeeper_output_fingerprint' in locals():
             from TRAINING.utils.cross_sectional_data import _compute_feature_fingerprint
-            current_fp = _compute_feature_fingerprint(feature_names)
+            current_fp, current_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
             if current_fp != gatekeeper_output_fingerprint:
-                logger.error(
-                    f"🚨 FINGERPRINT MISMATCH (pre_training): current={current_fp} != "
-                    f"gatekeeper_output={gatekeeper_output_fingerprint}. "
-                    f"Features changed between gatekeeper and training."
+                logger.warning(
+                    f"⚠️  FINGERPRINT CHANGE (pre_training): POST_GATEKEEPER={gatekeeper_output_fingerprint} -> "
+                    f"pre_training={current_fp}. "
+                    f"This is expected if features were modified between gatekeeper and train_and_evaluate_models."
                 )
         
         result = train_and_evaluate_models(
@@ -4832,7 +4863,7 @@ def evaluate_target_predictability(
                         try:
                             # Get horizon for budget calculation
                             horizon = target_horizon_minutes if 'target_horizon_minutes' in locals() else 60.0
-                            budget, _ = compute_budget(feature_names, data_interval_minutes, horizon)
+                            budget, _, _ = compute_budget(feature_names, data_interval_minutes, horizon, stage="run_context_budget")
                             feature_lookback_max = budget.max_feature_lookback_minutes
                         except Exception:
                             # Fallback: conservative estimate

@@ -34,22 +34,31 @@ from typing import Iterable, Optional, Dict, List, Tuple, Any
 logger = logging.getLogger(__name__)
 
 
-def _compute_feature_fingerprint(feature_names: Iterable[str]) -> str:
+def _compute_feature_fingerprint(feature_names: Iterable[str], set_invariant: bool = True) -> Tuple[str, str]:
     """
-    Compute order-sensitive fingerprint for feature list.
-    
-    Uses same algorithm as cross_sectional_data._compute_feature_fingerprint()
-    to ensure consistency with MODEL_TRAIN_INPUT logging.
+    Compute feature set fingerprints (set-invariant and order-sensitive).
     
     Args:
-        feature_names: Iterable of feature names (order matters)
+        feature_names: Iterable of feature names
+        set_invariant: If True, compute set-invariant fingerprint (sorted). If False, preserve order.
     
     Returns:
-        8-character hex fingerprint
+        (set_fingerprint, order_fingerprint) tuple:
+        - set_fingerprint: Set-invariant fingerprint (sorted, for set equality checks)
+        - order_fingerprint: Order-sensitive fingerprint (for order-change detection)
     """
-    feature_list = list(feature_names)  # Convert to list to preserve order
-    feature_str = "\n".join(feature_list)  # Preserve order (matches MODEL_TRAIN_INPUT)
-    return hashlib.sha1(feature_str.encode()).hexdigest()[:8]
+    feature_list = list(feature_names)
+    
+    # Set-invariant fingerprint (sorted, for set equality)
+    sorted_features = sorted(feature_list)
+    set_str = "\n".join(sorted_features)
+    set_fingerprint = hashlib.sha1(set_str.encode()).hexdigest()[:8]
+    
+    # Order-sensitive fingerprint (for order-change detection)
+    order_str = "\n".join(feature_list)
+    order_fingerprint = hashlib.sha1(order_str.encode()).hexdigest()[:8]
+    
+    return set_fingerprint, order_fingerprint
 
 # Calendar/exogenous features that have 0m lookback (not rolling windows)
 CALENDAR_FEATURES = {
@@ -93,6 +102,23 @@ class LeakageBudget:
         label uses future up to horizon.
         """
         return self.max_feature_lookback_minutes + self.horizon_minutes
+
+
+@dataclass(frozen=True)
+class LookbackResult:
+    """
+    Result of lookback computation with fingerprint validation.
+    
+    Attributes:
+        max_minutes: Maximum feature lookback in minutes (None if cannot compute)
+        top_offenders: List of (feature_name, lookback_minutes) tuples for top offenders
+        fingerprint: Feature set fingerprint (set-invariant, sorted)
+        order_fingerprint: Order-sensitive fingerprint (for order-change detection)
+    """
+    max_minutes: Optional[float]
+    top_offenders: List[Tuple[str, float]]
+    fingerprint: str
+    order_fingerprint: str
 
 
 def infer_lookback_minutes(
@@ -211,7 +237,7 @@ def compute_budget(
     unknown_policy: str = "conservative",
     expected_fingerprint: Optional[str] = None,
     stage: str = "unknown"
-) -> Tuple[LeakageBudget, str]:
+) -> Tuple[LeakageBudget, str, str]:
     """
     Compute leakage budget from final feature list.
     
@@ -230,16 +256,16 @@ def compute_budget(
         stage: Stage name for logging (e.g., "post_gatekeeper", "post_pruning")
     
     Returns:
-        (LeakageBudget, fingerprint) tuple
+        (LeakageBudget, set_fingerprint, order_fingerprint) tuple
     """
     feature_list = list(final_feature_names) if final_feature_names else []
-    fingerprint = _compute_feature_fingerprint(feature_list)
+    set_fingerprint, order_fingerprint = _compute_feature_fingerprint(feature_list, set_invariant=True)
     
-    # Validate fingerprint if expected
-    if expected_fingerprint is not None and fingerprint != expected_fingerprint:
+    # Validate fingerprint if expected (use set-invariant for comparison)
+    if expected_fingerprint is not None and set_fingerprint != expected_fingerprint:
         logger.error(
             f"🚨 FINGERPRINT MISMATCH at stage={stage}: "
-            f"expected={expected_fingerprint}, actual={fingerprint}. "
+            f"expected={expected_fingerprint}, actual={set_fingerprint}. "
             f"This indicates lookback computed on different feature set than enforcement."
         )
     
@@ -250,7 +276,8 @@ def compute_budget(
                 horizon_minutes=horizon_minutes,
                 max_feature_lookback_minutes=0.0
             ),
-            fingerprint
+            set_fingerprint,
+            order_fingerprint
         )
     
     # Get registry if not provided
@@ -322,24 +349,30 @@ def compute_feature_lookback_max(
     registry: Optional[Any] = None,
     expected_fingerprint: Optional[str] = None,
     stage: str = "unknown"
-) -> Tuple[Optional[float], List[Tuple[str, float]], str]:
+) -> LookbackResult:
     """
     Legacy wrapper for compute_budget() to maintain backward compatibility.
     
     This function is DEPRECATED. New code should use compute_budget() directly.
     
     Returns:
-        (max_lookback_minutes, top_lookback_features, fingerprint) tuple
+        LookbackResult dataclass
     """
     if not feature_names or interval_minutes is None or interval_minutes <= 0:
-        return None, [], ""
+        set_fp, order_fp = _compute_feature_fingerprint([], set_invariant=True)
+        return LookbackResult(
+            max_minutes=None,
+            top_offenders=[],
+            fingerprint=set_fp,
+            order_fingerprint=order_fp
+        )
     
     # Use default horizon if not provided
     if horizon_minutes is None:
         horizon_minutes = 60.0  # Default 1 hour
     
     # Compute budget (returns tuple now)
-    budget, fingerprint = compute_budget(
+    budget, set_fingerprint, order_fingerprint = compute_budget(
         feature_names,
         interval_minutes,
         horizon_minutes,
@@ -410,8 +443,13 @@ def compute_feature_lookback_max(
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(
             f"📊 compute_feature_lookback_max({stage}): max_lookback={max_lookback:.1f}m, "
-            f"n_features={len(feature_names)}, fingerprint={fingerprint}"
+            f"n_features={len(feature_names)}, fingerprint={set_fingerprint}"
         )
     
-    # Return top 10 offenders (only from current feature set, matching reported max)
-    return max_lookback, top_offenders[:10], fingerprint
+    # Return LookbackResult dataclass
+    return LookbackResult(
+        max_minutes=max_lookback,
+        top_offenders=top_offenders[:10],
+        fingerprint=set_fingerprint,
+        order_fingerprint=order_fingerprint
+    )

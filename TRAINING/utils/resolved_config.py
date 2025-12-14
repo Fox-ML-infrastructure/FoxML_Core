@@ -273,8 +273,8 @@ def compute_feature_lookback_max(
         registry=registry,
         stage="resolved_config_wrapper"
     )
-    # Return only first two values for backward compatibility
-    return result[0], result[1]
+    # Return only first two values for backward compatibility (LookbackResult dataclass)
+    return result.max_minutes, result.top_offenders
 
 
 def create_resolved_config(

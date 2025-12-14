@@ -34,18 +34,31 @@ import hashlib
 logger = logging.getLogger(__name__)
 
 
-def _compute_feature_fingerprint(feature_names: List[str]) -> str:
+def _compute_feature_fingerprint(feature_names: List[str], set_invariant: bool = True) -> Tuple[str, str]:
     """
-    Compute order-sensitive fingerprint for feature list.
+    Compute feature set fingerprints (set-invariant and order-sensitive).
     
     Args:
-        feature_names: List of feature names (order matters)
+        feature_names: List of feature names
+        set_invariant: If True, return set-invariant fingerprint (sorted). If False, return order-sensitive.
     
     Returns:
-        8-character hex fingerprint
+        (set_fingerprint, order_fingerprint) tuple:
+        - set_fingerprint: Set-invariant fingerprint (sorted, for set equality checks)
+        - order_fingerprint: Order-sensitive fingerprint (for order-change detection)
     """
-    feature_str = "\n".join(feature_names)
-    return hashlib.sha1(feature_str.encode()).hexdigest()[:8]
+    feature_list = list(feature_names)
+    
+    # Set-invariant fingerprint (sorted, for set equality)
+    sorted_features = sorted(feature_list)
+    set_str = "\n".join(sorted_features)
+    set_fingerprint = hashlib.sha1(set_str.encode()).hexdigest()[:8]
+    
+    # Order-sensitive fingerprint (for order-change detection)
+    order_str = "\n".join(feature_list)
+    order_fingerprint = hashlib.sha1(order_str.encode()).hexdigest()[:8]
+    
+    return set_fingerprint, order_fingerprint
 
 
 def _log_feature_set(
@@ -67,7 +80,8 @@ def _log_feature_set(
         logger_instance = logger
     
     n_features = len(feature_names)
-    fingerprint = _compute_feature_fingerprint(feature_names)
+    set_fingerprint, order_fingerprint = _compute_feature_fingerprint(feature_names, set_invariant=True)
+    fingerprint = set_fingerprint  # Use set-invariant for logging (backward compatibility)
     
     # Check for duplicates
     unique_names = set(feature_names)
@@ -87,6 +101,14 @@ def _log_feature_set(
         added = sorted(curr_set - prev_set)
         removed = sorted(prev_set - curr_set)
         
+        # Check for order changes (if sets are equal but order differs)
+        order_changed = False
+        if not added and not removed and len(previous_names) == len(feature_names):
+            prev_order_fp, _ = _compute_feature_fingerprint(previous_names, set_invariant=False)
+            _, curr_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=False)
+            if prev_order_fp != curr_order_fp:
+                order_changed = True
+        
         if added or removed:
             delta_str = f", added={len(added)}, removed={len(removed)}"
             if added and len(added) <= 5:
@@ -97,6 +119,8 @@ def _log_feature_set(
                 delta_str += f" (removed: {removed})"
             elif removed:
                 delta_str += f" (removed: {removed[:3]}... +{len(removed)-3} more)"
+        elif order_changed:
+            delta_str = " (order changed)"
         else:
             delta_str = " (no changes)"
     else:

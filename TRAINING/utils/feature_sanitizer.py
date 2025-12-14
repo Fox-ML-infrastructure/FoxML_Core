@@ -102,12 +102,14 @@ def auto_quarantine_long_lookback_features(
     from TRAINING.utils.resolved_config import compute_feature_lookback_max
     
     # Get lookback for all features in one call
-    max_lookback_all, top_offenders_all, _ = compute_feature_lookback_max(
+    result_all = compute_feature_lookback_max(
         feature_names,
         interval_minutes=interval_minutes,
         max_lookback_cap_minutes=None,  # Don't cap - we want the real value
         stage="feature_sanitizer"
     )
+    max_lookback_all = result_all.max_minutes
+    top_offenders_all = result_all.top_offenders
     
     # Build lookup dict from top_offenders (contains features with significant lookback)
     # Note: top_offenders_all only contains top 10, so we need to check all features
@@ -115,12 +117,13 @@ def auto_quarantine_long_lookback_features(
     feature_lookbacks = []
     for feat_name in feature_names:
         # Compute lookback for this feature
-        max_lookback, _, _ = compute_feature_lookback_max(
+        result = compute_feature_lookback_max(
             [feat_name],
             interval_minutes=interval_minutes,
             max_lookback_cap_minutes=None,  # Don't cap - we want the real value
             stage="feature_sanitizer_per_feature"
         )
+        max_lookback = result.max_minutes
         
         if max_lookback is not None:
             feature_lookbacks.append((feat_name, max_lookback))
