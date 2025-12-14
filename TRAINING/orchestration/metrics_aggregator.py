@@ -287,7 +287,7 @@ class MetricsAggregator:
             Dict with stability metrics or None
         """
         try:
-            from TRAINING.stability.feature_importance.io import load_snapshots
+            from TRAINING.stability.feature_importance.io import load_snapshots, get_snapshot_base_dir
             from TRAINING.stability.feature_importance.analysis import compute_stability_metrics
             
             # Determine method based on universe
@@ -296,13 +296,47 @@ class MetricsAggregator:
             else:
                 method = "lightgbm"  # Default per-symbol method
             
-            # Load snapshots
-            snapshots = load_snapshots(
-                target_name=target,
-                method=method,
-                universe_id=universe_id,
-                base_dir=self.output_dir.parent if "feature_selections" in str(self.output_dir) else self.output_dir
-            )
+            # Determine base output directory (RESULTS/{run}/)
+            # output_dir might be: RESULTS/{run}/target_rankings/ or RESULTS/{run}/feature_selections/
+            if "feature_selections" in str(self.output_dir):
+                base_output_dir = self.output_dir.parent if self.output_dir.name != "feature_selections" else self.output_dir.parent
+            elif "target_rankings" in str(self.output_dir):
+                base_output_dir = self.output_dir.parent if self.output_dir.name != "target_rankings" else self.output_dir.parent
+            else:
+                base_output_dir = self.output_dir.parent if self.output_dir.parent.exists() else self.output_dir
+            
+            # Determine view and symbol from context
+            # For metrics aggregator, we need to search both CROSS_SECTIONAL and SYMBOL_SPECIFIC
+            # Try CROSS_SECTIONAL first (for universe_id == "ALL" or None)
+            view = "CROSS_SECTIONAL" if (universe_id == "ALL" or universe_id is None) else "SYMBOL_SPECIFIC"
+            symbol = None if view == "CROSS_SECTIONAL" else universe_id
+            
+            # Build REPRODUCIBILITY path for snapshots
+            target_name_clean = target.replace('/', '_').replace('\\', '_')
+            if view == "SYMBOL_SPECIFIC" and symbol:
+                # Try FEATURE_SELECTION first (for feature selection metrics)
+                repro_base_fs = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view / target_name_clean / f"symbol={symbol}"
+                snapshot_base_dir_fs = get_snapshot_base_dir(repro_base_fs)
+                # Also try TARGET_RANKING
+                repro_base_tr = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / view / target_name_clean / f"symbol={symbol}"
+                snapshot_base_dir_tr = get_snapshot_base_dir(repro_base_tr)
+            else:
+                # Try FEATURE_SELECTION first
+                repro_base_fs = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view / target_name_clean
+                snapshot_base_dir_fs = get_snapshot_base_dir(repro_base_fs)
+                # Also try TARGET_RANKING
+                repro_base_tr = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / view / target_name_clean
+                snapshot_base_dir_tr = get_snapshot_base_dir(repro_base_tr)
+            
+            # Try loading from both locations (feature selection and target ranking)
+            snapshots = []
+            for snapshot_base_dir in [snapshot_base_dir_fs, snapshot_base_dir_tr]:
+                if snapshot_base_dir.exists():
+                    try:
+                        found = load_snapshots(snapshot_base_dir, target, method)
+                        snapshots.extend(found)
+                    except Exception as e:
+                        logger.debug(f"Failed to load snapshots from {snapshot_base_dir}: {e}")
             
             if len(snapshots) < 2:
                 return None

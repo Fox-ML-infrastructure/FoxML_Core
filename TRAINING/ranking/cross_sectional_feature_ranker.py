@@ -519,13 +519,29 @@ def compute_cross_sectional_stability(
         if universe_id is None:
             universe_id = "ALL"  # Default universe ID for cross-sectional
         
-        base_dir = get_snapshot_base_dir(output_dir)
+        # Build REPRODUCIBILITY path for snapshots (same structure as feature importances)
+        # Determine base output directory (RESULTS/{run}/)
+        repro_base = None
+        if output_dir:
+            if output_dir.name == "feature_selections" or (output_dir.parent.name == "feature_selections"):
+                base_output_dir = output_dir.parent if output_dir.name != "feature_selections" else output_dir.parent
+            else:
+                base_output_dir = output_dir.parent if output_dir.parent.exists() else output_dir
+            
+            # Cross-sectional is always CROSS_SECTIONAL view
+            target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+            repro_base = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_name_clean
+            snapshot_base_dir = get_snapshot_base_dir(repro_base)
+        else:
+            snapshot_base_dir = get_snapshot_base_dir(output_dir)
+            repro_base = output_dir
+        
         snapshot_path = save_snapshot_from_series_hook(
             target_name=target_column,
             method=method_name,
             importance_series=cs_importance,
             universe_id=universe_id,
-            output_dir=output_dir,
+            output_dir=repro_base,  # Pass REPRODUCIBILITY base
             auto_analyze=False  # We'll analyze manually to get metrics
         )
         
@@ -542,7 +558,7 @@ def compute_cross_sectional_stability(
             }
         
         # Load all snapshots (including the one we just saved)
-        snapshots = load_snapshots(base_dir, target_column, method_name)
+        snapshots = load_snapshots(snapshot_base_dir, target_column, method_name)
         
         if len(snapshots) < 2:
             # First or second run - no comparison yet
