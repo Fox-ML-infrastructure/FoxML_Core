@@ -33,7 +33,7 @@ All rights reserved.
 ```python
 # Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 # All rights reserved.
-# Licensed under AGPL-3.0 or Commercial License (see LICENSE and COMMERCIAL_LICENSE.md)
+# Licensed under source-available license (see LICENSE) or Commercial License (see COMMERCIAL_LICENSE.md)
 ```
 
 ---
@@ -169,7 +169,7 @@ import sys
 - `COMMERCIAL_LICENSE.md` — Commercial license terms (Section 4: Restrictions)
 - `LEGAL/LICENSE_ENFORCEMENT.md` — Enforcement procedures
 - `LEGAL/COMPLIANCE_FAQ.md` — Frequently asked questions
-- `LICENSE` — AGPL-3.0 license text
+- `LICENSE` — Source-available license text
 
 ---
 

@@ -1,9 +1,9 @@
 # Fox ML Infrastructure LLC — Service Level Agreement (SLA)
 Version 1.0 — Effective January 2026
 
-> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` (AGPL-3.0) controls for open-source licensing.
+> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE controls for free use.
 
-> **Commercial Licensees Only:** This document applies only to customers with a valid commercial license. AGPL-3.0 users are not eligible for the policies, services, or terms described here.
+> **Commercial Licensees Only:** This document applies only to customers with a valid commercial license. free users are not eligible for the policies, services, or terms described here.
 
 > **SLA Opt-In Only:** SLA applies only if expressly included in a signed Order Form or SOW. This is an internal policy summary provided for informational purposes only and does not create any SLA, guarantee, or obligation unless explicitly included in a signed agreement.
 

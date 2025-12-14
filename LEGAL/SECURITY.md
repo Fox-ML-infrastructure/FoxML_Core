@@ -1,8 +1,8 @@
 # Fox ML Infrastructure — Security Statement
 
-> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` (AGPL-3.0) controls for open-source licensing.
+> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE controls for free use.
 
-> **Commercial Licensees Only:** This document applies only to customers with a valid commercial license. AGPL-3.0 users are not eligible for the policies, services, or terms described here.
+> **Commercial Licensees Only:** This document applies only to customers with a valid commercial license. free users are not eligible for the policies, services, or terms described here.
 
 > **No Warranties:** Statements in this document are provided on a best-effort basis. No warranties, express or implied, are provided. This document does not grant any license rights. All rights and restrictions are defined solely in `COMMERCIAL_LICENSE.md`.
 
@@ -75,7 +75,7 @@ While we intend to maintain this policy, this statement is provided for informat
 
 - **No telemetry** — The platform does not make outbound calls or collect usage data
 - **No external dependencies at runtime** — All dependencies are explicit and auditable
-- **Open-source transparency** — Core platform is open-source (AGPL-3.0), enabling full code review
+- **Source-available transparency** — Core platform is source-available, enabling full code review
 - **Version control** — All code is version-controlled and tagged
 - **Auditable builds** — Build processes are documented and reproducible
 

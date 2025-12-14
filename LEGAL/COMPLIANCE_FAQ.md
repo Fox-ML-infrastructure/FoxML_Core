@@ -16,27 +16,27 @@
 - Use it in any revenue-generating activity
 
 **You do NOT need a commercial license for:**
-- Non-commercial academic research
-- Personal study or learning
-- Open-source contributions (under AGPL-3.0)
+- Non-commercial academic research (at qualifying institutions, see `LICENSE`)
+- Personal study or learning (individual, non-commercial use)
+- Contributing to the Software in a personal/non-commercial context
 
 **See `LEGAL/COMMERCIAL_USE.md` for detailed guidance.**
 
 ---
 
-### Q1.2: What's the difference between AGPL-3.0 and Commercial License?
+### Q1.2: What's the difference between free use and Commercial License?
 
 **A:** 
-- **AGPL-3.0:** Free for non-commercial use, but requires public disclosure of modifications if deployed over a network
-- **Commercial License:** Allows internal commercial use without AGPL disclosure obligations, includes access to private repositories
+- **Free use:** Personal use and qualifying non-commercial academic research (see `LICENSE` for full definition)
+- **Commercial License:** Required for any organizational use, allows internal commercial use, includes access to private repositories
 
-**See `DUAL_LICENSE.md` for complete dual licensing information.**
+**See `LICENSE` and `DUAL_LICENSE.md` for complete licensing information.**
 
 ---
 
 ### Q1.3: Can I use it for free?
 
-**A:** Yes, for non-commercial academic research and personal study under AGPL-3.0. Commercial use requires a paid license.
+**A:** Yes, for non-commercial academic research (at qualifying institutions) and personal study. Organizational use requires a paid license. See `LICENSE` for the complete definition of free use.
 
 **See `LEGAL/SUBSCRIPTIONS.md` for pricing.**
 
@@ -77,8 +77,8 @@
 
 ### Q3.1: Can I modify the code?
 
-**A:** 
-- **With AGPL-3.0:** Yes, but you must publicly disclose modifications if deployed over a network
+**A:**
+- **With free use:** Yes, for personal/non-commercial academic research use
 - **With Commercial License:** Yes, for internal commercial use. You cannot redistribute or publish modifications.
 
 **See `COMMERCIAL_LICENSE.md` Section 2 (Grant of License).**
@@ -87,8 +87,8 @@
 
 ### Q3.2: Can I fork the repository?
 
-**A:** 
-- **Public forks:** Yes, but you must comply with AGPL-3.0 requirements and maintain copyright notices
+**A:**
+- **Public forks:** Yes, but you must maintain copyright notices and comply with license terms
 - **Internal forks:** Yes, with a commercial license. Internal forks are permitted under commercial license terms.
 
 **See `LEGAL/LICENSE_ENFORCEMENT.md` Section 3 for fork requirements.**
@@ -144,8 +144,8 @@
 
 ### Q5.2: Can I publish my modifications?
 
-**A:** 
-- **With AGPL-3.0:** Yes, but you must comply with AGPL disclosure requirements
+**A:**
+- **With free use:** Yes, for personal/non-commercial academic research use
 - **With Commercial License:** No, you cannot publish source code derived from the commercial version
 
 **See `COMMERCIAL_LICENSE.md` Section 4 (Restrictions).**
@@ -190,7 +190,7 @@
 
 ### Q7.1: Can universities use it for free?
 
-**A:** Yes, for non-commercial academic research under AGPL-3.0. If the university uses it for commercial purposes, a commercial license is required.
+**A:** Yes, for qualifying non-commercial academic research at tax-exempt institutions (see `LICENSE` for full definition). If the university uses it for organizational purposes, a commercial license is required.
 
 **See `DUAL_LICENSE.md` for academic use details.**
 
@@ -198,7 +198,7 @@
 
 ### Q7.2: What about student projects?
 
-**A:** Student projects for academic purposes are permitted under AGPL-3.0. Commercial use by students (e.g., for startups) requires a commercial license.
+**A:** Student projects for academic purposes at qualifying institutions are permitted as free use (see `LICENSE`). Commercial use by students (e.g., for startups) requires a commercial license.
 
 **See `LEGAL/COMMERCIAL_USE.md` Section 1.**
 

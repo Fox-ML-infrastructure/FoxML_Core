@@ -1,8 +1,8 @@
 # Fox ML Infrastructure — Acceptable Use Policy (AUP)
 
-> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` (AGPL-3.0) controls for open-source licensing.
+> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE controls for free use.
 
-> **Commercial Licensees Only:** This document applies only to customers with a valid commercial license. AGPL-3.0 users are not eligible for the policies, services, or terms described here.
+> **Commercial Licensees Only:** This document applies only to customers with a valid commercial license. free users are not eligible for the policies, services, or terms described here.
 
 > **No Rights Granted:** This document does not grant any license rights. All rights and restrictions are defined solely in `COMMERCIAL_LICENSE.md`.
 
@@ -20,7 +20,7 @@ Violation of this policy may result in termination of the commercial license.
 - **Research and development** — Machine learning applications, cross-sectional ML workflows, and model development
 - **Internal operations** — Internal business operations, analytics, and decision-making
 - **Domain-specific applications** — Cross-sectional ML applications across any domain (subject to compliance with applicable laws and regulations)
-- **Academic research** — Academic research and educational purposes (under AGPL-3.0 for non-commercial use)
+- **Academic research** — Academic research and educational purposes (free for qualifying non-commercial use, see LICENSE)
 - **Integration** — Integration with proprietary systems and workflows
 - **Customization** — Customization and modification for internal use
 

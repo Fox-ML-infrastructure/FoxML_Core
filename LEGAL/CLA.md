@@ -3,7 +3,7 @@ FoxML Core — Commercial License Agreement (CLA v1.3)
 Fox ML Infrastructure LLC
 © 2025 Jennifer Lewis. All rights reserved.
 
-> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` (AGPL-3.0) controls for open-source licensing.
+> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE controls for free use.
 
 This Commercial License Agreement ("Agreement") is entered into between Fox ML Infrastructure LLC ("Licensor") and the purchasing organization ("Licensee"). This Agreement governs commercial use of the software known as FoxML Core ("Software").
 

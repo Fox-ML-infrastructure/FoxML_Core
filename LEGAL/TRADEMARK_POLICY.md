@@ -85,10 +85,10 @@ These trademarks are protected under applicable trademark laws.
 
 ## 5. Open-Source Use
 
-### 5.1 AGPL-3.0 License
+### 5.1 Free Use License
 
-**Open-source users (AGPL-3.0):**
-- May reference "Fox ML Infrastructure" in compliance with AGPL-3.0 attribution requirements
+**Free users (personal/academic):**
+- May reference "Fox ML Infrastructure" in compliance with license attribution requirements
 - Must include copyright notices and license text
 - Must comply with this trademark policy
 

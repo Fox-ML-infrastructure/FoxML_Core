@@ -1,4 +1,4 @@
-> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` (AGPL-3.0) controls for open-source licensing.
+> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` controls for free use.
 
 ## Licensing & Access Requests
 
@@ -10,9 +10,9 @@ Commercial license pricing is aligned with enterprise ML infrastructure standard
 
 ## License Requirements & Definitions
 
-### Business / Internal Use
+### Organizational Use
 
-**"Business use" or "internal use"** means any Commercial Use (as defined in `COMMERCIAL_LICENSE.md` Section 1), including but not limited to:
+**"Organizational use"** means any use by or for an organization (as defined in `COMMERCIAL_LICENSE.md` Section 1), including but not limited to:
 
 - Internal tools, dashboards, or research pipelines
 - Proofs of concept, evaluations, or pilot projects (regardless of whether they generate revenue or are "experimental")
@@ -21,16 +21,16 @@ Commercial license pricing is aligned with enterprise ML infrastructure standard
 - Use by sole proprietors, freelancers, or independent contractors in connection with any business activity or client work
 - Use in any environment (development, testing, staging, or production) within a business or organizational context
 
-**Any business or internal use by or for a commercial organization requires a commercial license**, regardless of whether the use directly generates revenue, is experimental, is a proof of concept, or is claimed to be "non-commercial" or "research-only." See `COMMERCIAL_LICENSE.md` Section 1 for the complete definition of "Commercial Use."
+**Any organizational use requires a commercial license**, regardless of whether the use directly generates revenue, is experimental, is a proof of concept, or is claimed to be "non-commercial" or "research-only." See `COMMERCIAL_LICENSE.md` Section 1 for the complete definition of organizational use.
 
 **30-DAY EVALUATION PERIOD FOR COMMERCIAL USE:**
 Commercial organizations may evaluate the Software for up to 30 days from initial download for testing and evaluation purposes without a paid license. This evaluation period allows organizations to test the Software's functionality, performance, and suitability before committing to a commercial license. Continued use after the 30-day evaluation period requires a commercial license. See `COMMERCIAL_LICENSE.md` Section 2 for complete evaluation license terms.
 
 **FOR THE AVOIDANCE OF DOUBT:** The 30-day evaluation period is for evaluation and testing purposes only. Production use, revenue-generating activities, or use beyond the evaluation period requires a paid commercial license. The 30-day evaluation period described in `LEGAL/SUPPORT_POLICY.md` is for non-commercial evaluation only and is separate from the commercial evaluation period.
 
-### Academic & Personal Use (AGPL-3.0 Only)
+### Academic & Personal Use (Free Use)
 
-**"Non-commercial academic or personal research use"** means:
+**"Free use"** (personal use and non-commercial academic research) means:
 
 - Use by an individual in their personal capacity (meaning: not as an employee, contractor, or agent of any business, organization, or other entity; not for the benefit of any third party; and not in connection with any commercial activity, including but not limited to freelance work, consulting, or sole proprietorship activities), or
 - Use by a degree-granting educational or non-profit research institution that is: (i) recognized as a tax-exempt organization under applicable law, (ii) not owned, controlled by, or operated for the benefit of any commercial entity, and (iii) where the research results are not used to support commercial operations, trading, revenue-generating activities, or any business purpose of any commercial organization
@@ -46,9 +46,9 @@ Commercial organizations may evaluate the Software for up to 30 days from initia
 
 **Academic research that is conducted for, funded by, sponsored by, or operationally integrated into a commercial organization's activities requires a commercial license**, even if the research is performed by students, interns, or contractors.
 
-**IMPORTANT:** Use of the AGPL-3.0 version for any commercial purpose (including but not limited to: business operations, trading, investment decisions, client services, or any revenue-generating activity) is a violation of the AGPL-3.0 license terms and may result in copyright infringement claims. If you have used the Software commercially under AGPL-3.0, you must immediately obtain a commercial license and may be required to pay retroactive licensing fees.
+**IMPORTANT:** Unauthorized organizational use of the Software without a valid commercial license is copyright infringement and may result in legal claims. If you have used the Software for organizational purposes without a license, you must immediately obtain a commercial license.
 
-**See `DUAL_LICENSE.md` for complete dual licensing information.**
+**See `LICENSE` for complete free use definition and `DUAL_LICENSE.md` for licensing overview.**
 
 ---
 
@@ -56,8 +56,8 @@ Commercial organizations may evaluate the Software for up to 30 days from initia
 
 | Scenario | License Required | Notes |
 |----------|------------------|-------|
-| **Personal / Individual** | AGPL-3.0 | Personal study, experimentation, or non-commercial research by an individual (NOT for business, client work, or revenue-generating activities) |
-| **Academic Institution** | AGPL-3.0 | Non-profit, tax-exempt educational institution, research not supporting commercial operations (for-profit universities require commercial license) |
+| **Personal / Individual** | Free | Personal study, experimentation, or non-commercial research by an individual (NOT for business, client work, or revenue-generating activities) |
+| **Academic Institution** | Free (if qualifying) | Non-profit, tax-exempt educational institution, research not supporting commercial operations (for-profit universities require commercial license) |
 | **Sole Proprietor / Freelancer** | Commercial | Any use in connection with business activity, client work, or revenue generation (even if claimed to be "personal") |
 | **Startup / Small Business** | Commercial | Any business entity, regardless of size, revenue, profitability, or stage (including pre-revenue startups, companies operating at a loss, or companies in development phase) |
 | **Subsidiary / Affiliate** | Commercial | Each legal entity (including subsidiaries, affiliates, and parent companies) must have its own license. A parent company's license does not cover subsidiaries, and vice versa |
@@ -65,7 +65,7 @@ Commercial organizations may evaluate the Software for up to 30 days from initia
 | **Corporate Research Lab** | Commercial | Research conducted by or for a commercial organization (regardless of non-profit status of lab) |
 | **University Research (Corporate-Funded)** | Commercial | Research funded by, sponsored by, or integrated into commercial operations |
 | **Internal Tools / Dashboards** | Commercial | Any internal use within a business organization (including experimental or non-revenue use) |
-| **Proof of Concept / Pilot** | Commercial | Evaluation or pilot projects within a business context (no free trial for Commercial Use) |
+| **Proof of Concept / Pilot** | Commercial | Evaluation or pilot projects within a business context (30-day evaluation period available, see `COMMERCIAL_LICENSE.md`) |
 | **SaaS / Hosted Service** | Commercial + Custom | Requires explicit written permission and custom licensing terms |
 | **Vendor / Reseller** | Commercial + Custom | Requires separate commercial agreement |
 

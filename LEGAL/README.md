@@ -1,6 +1,6 @@
 # Legal & Licensing Documentation
 
-> **Document Hierarchy:** This directory contains guidance documents. In case of any conflict, `COMMERCIAL_LICENSE.md` (located in repository root) is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` (AGPL-3.0) controls for open-source licensing.
+> **Document Hierarchy:** This directory contains guidance documents. In case of any conflict, `COMMERCIAL_LICENSE.md` (located in repository root) is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` controls for free use.
 
 This directory contains all legal, licensing, and contracting documentation for Fox ML Infrastructure.
 
@@ -30,7 +30,7 @@ This directory is organized into the following structure:
 
 ### 📁 Root Level — Licensing Documents
 
-- **`LICENSING.md`** — Overview of the dual-licensing model (AGPL-3.0 and Commercial License)
+- **`LICENSING.md`** — Overview of the source-available licensing model (Free use and Commercial License)
 - **`../COMMERCIAL_LICENSE.md`** — Commercial License terms and conditions (located in repository root)
 - **`CLA.md`** — Commercial License Agreement (CLA) for organizational use
 - **`SUBSCRIPTIONS.md`** — Licensing request process and pricing information

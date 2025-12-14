@@ -22,33 +22,29 @@
 
 ---
 
-### Q: Can I use the AGPL-3.0 version for internal evaluation or proof of concept?
+### Q: Can I use the Software for internal evaluation or proof of concept?
 
-**A:** No. The AGPL-3.0 version may NOT be used for any Commercial Use, including internal evaluation, proof of concept, or pilot projects within a business context. There is no "free trial" or "evaluation period" for Commercial Use.
+**A:** Organizations may evaluate the Software for up to 30 days from initial download for testing and evaluation purposes without a paid license (see `COMMERCIAL_LICENSE.md` Section 2). Continued use after the 30-day evaluation period requires a commercial license.
 
-The 30-day evaluation period described in `LEGAL/SUPPORT_POLICY.md` is for **non-commercial evaluation only** and does not permit Commercial Use.
-
-If you are a business, organization, or institution, you need a commercial license from the start, even for evaluation or experimental use.
+If you are a business, organization, or institution, you need a commercial license for any organizational use beyond the evaluation period.
 
 ---
 
-### Q: Can interns, contractors, or consultants use the AGPL-3.0 version?
+### Q: Can interns, contractors, or consultants use the Software for free?
 
-**A:** No. If they are using the Software in the scope of their work for a business or organization, that constitutes Commercial Use and requires a commercial license.
+**A:** No. If they are using the Software in the scope of their work for a business or organization, that constitutes organizational use and requires a commercial license.
 
-The AGPL-3.0 version is only permitted for:
+Free use is only permitted for:
 - Individual personal research (not for any business purpose)
-- Non-commercial academic research at degree-granting educational institutions (see `LEGAL/SUBSCRIPTIONS.md` for full definition)
+- Non-commercial academic research at qualifying tax-exempt institutions (see `LICENSE` for full definition)
 
 **Key point:** Use by employees, contractors, interns, or Affiliates in the scope of their work for a business entity requires a commercial license, regardless of their employment status.
 
 ---
 
-### Q: Can our Data Science team use AGPL while our ML Applications team uses a commercial license?
+### Q: Can some teams use it for free while others use a commercial license?
 
-**A:** No. You may not combine AGPL-3.0 copies with Commercial Use or use both licenses simultaneously within the same organization without a commercial agreement. If any part of your organization uses the Software for Commercial Use, all use within that organization requires a commercial license.
-
-This is explicitly prohibited under the "NO MIXED USE" restriction (see `DUAL_LICENSE.md`).
+**A:** No. If any part of your organization uses the Software for organizational purposes, all use within that organization requires a commercial license. Free use is only available for personal use and qualifying non-commercial academic research (see `LICENSE`).
 
 ---
 
@@ -56,12 +52,12 @@ This is explicitly prohibited under the "NO MIXED USE" restriction (see `DUAL_LI
 
 **A:** It depends on the context:
 
-- **Non-commercial academic research** at a degree-granting educational institution (where results are not used to support commercial operations) → AGPL-3.0 is permitted
+- **Non-commercial academic research** at a qualifying tax-exempt educational institution (where results are not used to support commercial operations) → Free use permitted (see `LICENSE`)
 - **Corporate-funded research** or research sponsored by commercial organizations → Commercial license required
 - **For-profit universities** or corporate research labs → Commercial license required
 - **Research that supports commercial operations, trading, or revenue-generating activities** → Commercial license required
 
-See `LEGAL/SUBSCRIPTIONS.md` for the complete definition of "Academic & Personal Use."
+See `LICENSE` for the complete definition of free academic use.
 
 ---
 
@@ -113,9 +109,9 @@ See `COMMERCIAL_LICENSE.md` Section 4 for complete hosting and deployment restri
 
 ---
 
-### Q: What happens if I've been using the AGPL-3.0 version commercially?
+### Q: What happens if I've been using the Software for organizational purposes without a license?
 
-**A:** You must immediately obtain a commercial license and may be required to pay retroactive licensing fees. Commercial Use of the AGPL-3.0 version is a violation of the license terms and may constitute copyright infringement.
+**A:** Unauthorized organizational use without a valid commercial license is copyright infringement. You must immediately obtain a commercial license and may be required to pay retroactive licensing fees.
 
 Contact jenn.lewis5789@gmail.com to discuss retroactive licensing.
 

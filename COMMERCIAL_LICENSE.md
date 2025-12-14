@@ -5,9 +5,32 @@ Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 
 ---
 
+## ⚠️ **ORGANIZATIONAL USE REQUIRES A PAID LICENSE**
+
+**If an organization uses this, they need a license.**
+
+**Organizational Use includes:**
+- Any use by or for a company, university, lab, or other organization
+- Any internal evaluation, pilots, PoCs, dev/staging, or production use
+- Any use supporting revenue, operations, services, or internal tooling
+- Any evaluation/pilot done by an organization
+- Any use by employees, contractors, interns, or affiliates in the scope of their work
+
+**Free use is limited to:**
+- Personal use (individual, non-commercial, not for any business purpose)
+- Non-commercial academic research at qualifying tax-exempt institutions (see `LICENSE` for full definition)
+
+**Unauthorized organizational use is copyright infringement.**
+
+📧 **jenn.lewis5789@gmail.com** | Subject: `FoxML Core Commercial Licensing`
+
+**Commercial licenses typically start in the low five figures annually.** All commercial licensing begins with a paid pilot. See `LEGAL/SUBSCRIPTIONS.md` for details.
+
+---
+
 **Who This License Is For**
 
-This Commercial License is intended for trading firms, hedge funds, financial institutions, and other organizations that wish to use FoxML Core in production or revenue-generating environments without AGPL copyleft obligations.
+This Commercial License is intended for organizations (including companies, universities, labs, and institutions) that wish to use FoxML Core for organizational purposes.
 
 ## 1. DEFINITIONS
 
@@ -43,17 +66,11 @@ This Commercial License is intended for trading firms, hedge funds, financial in
 
 **Examples of Commercial Use include (but are not limited to):** internal tools, dashboards, research pipelines, trading systems, investment analysis, forecasting, modeling, optimization, client services, proofs of concept, evaluations, pilot projects, development environments, testing environments, staging environments, production environments, and any use within a business or organizational context.
 
-Non-commercial academic or personal research use of the AGPL-3.0 version is permitted only as described in `LEGAL/SUBSCRIPTIONS.md`. Any Commercial Use requires this Commercial License, regardless of whether the environment is labeled "non-production," "evaluation," "pilot," "experimental," "non-revenue," or similar.
+Non-commercial academic or personal research use is permitted only as described in `LICENSE`. Any Organizational Use requires this Commercial License, regardless of whether the environment is labeled "non-production," "evaluation," "pilot," "experimental," "non-revenue," or similar.
 
-**AGPL-3.0 Commercial Use Prohibition.**
+**Unauthorized organizational use is copyright infringement.**
 
-The AGPL-3.0 version of the Software may not be used for any Commercial Use. Commercial Use of the Software without a valid commercial license may constitute copyright infringement and may require payment of retroactive licensing fees.
-
-This Commercial License is intended for organizations that wish to:
-  (a) avoid AGPL copyleft obligations in commercial / internal systems, or
-  (b) obtain additional rights or assurances not provided by AGPL-3.0.
-
-Nothing in this Commercial License limits any rights granted under AGPL-3.0 for copies of the Software obtained and used **solely** for qualifying non-commercial academic or personal research use as defined in `LEGAL/SUBSCRIPTIONS.md`. Any commercial use requires this Commercial License.
+This Commercial License is required for any organizational use of the Software. Free use is limited to personal use and qualifying non-commercial academic research as defined in `LICENSE`.
 
 **License Scope and Expansion.**
 This License covers the use case(s) and scope specified in the Ordering Documents. If Licensee expands its use of the Software beyond the scope originally licensed (for example: adding new use cases, expanding to additional business units, increasing seat count beyond purchased Seats, or changing deployment model), Licensee must notify Licensor and may be required to pay additional fees or obtain an amended license. Expansion of use without proper licensing constitutes a Material Breach.
@@ -85,14 +102,13 @@ Subject to payment of applicable fees and execution of a commercial agreement, t
 
 - Use the Software for Commercial Use
 - Modify the Software for internal commercial use (subject to the restrictions in Section 4), provided that: (i) modifications are limited to configuration, integration, and interface layers, (ii) Licensee may NOT modify the core functionality, algorithms, or architecture of the Software, and (iii) any modifications that alter core functionality require Licensor's prior written consent
-- Deploy the Software internally without AGPL disclosure obligations
+- Deploy the Software internally
 - Integrate the Software into proprietary systems, stacks, or workflows
 - Use the Software solely for use by Authorized Users, up to the limits set forth in the applicable Ordering Documents
 
-**IMPORTANT — No Source Code Access Rights:**
-This License does NOT grant Licensee any right to access, view, or receive the source code of the Software. Licensee receives only object code, compiled binaries, or executable versions of the Software. Source code access is not included in this License and is not granted by this License. Any source code access, if provided at all, is provided separately under a separate agreement and subject to additional terms and restrictions. Licensee has no right to demand, request, or require source code access as part of this License.
+**Source code access.**
 
-For clarity: this section applies only to the commercial, non-open-source distribution of the Software. It does not limit any rights you already have to source code made publicly available under AGPL-3.0.
+Source code is publicly available for inspection and study. This Commercial License does not obligate Licensor to provide additional source access, private repositories, or proprietary modules unless explicitly included in Ordering Documents or a separate SOW.
 
 **Authorized Users and Seat Limits.**
 
@@ -115,12 +131,12 @@ For the avoidance of doubt, a Contractor may not use a single instance of the So
 **No License Sharing or Transfer.**
 No sublicensing rights are granted unless explicitly permitted in a separate SOW. Licensee may not share, loan, rent, lease, or otherwise make the Software available to any third party (including but not limited to: clients, partners, vendors, or other entities) unless such third party has its own valid commercial license. Each legal entity that uses the Software must have its own license. Sharing a single license across multiple entities, even if related, is prohibited and constitutes a Material Breach.
 
-**Open-Source Use Unaffected.**
+**Free Use Unaffected.**
 
-Non-commercial use of the Software remains available under the AGPL-3.0 license. This Commercial License does not limit or restrict rights granted under AGPL-3.0 for qualifying non-commercial academic or personal research use.
+Personal use and qualifying non-commercial academic research use remain free as defined in `LICENSE`. This Commercial License does not limit or restrict free use rights.
 
-**IMPORTANT — Open Source Contribution Does Not Exempt Commercial Use:**
-Contributing code, fixes, or improvements to the open-source version of the Software does not exempt Licensee from the requirement to obtain a commercial license for any commercial use. Contributing to open source is separate from and does not affect commercial licensing requirements. Any commercial use (as defined in Section 1) requires a commercial license regardless of whether Licensee has contributed to the open-source version.
+**IMPORTANT — Open Source Contribution Does Not Exempt Organizational Use:**
+Contributing code, fixes, or improvements to the Software does not exempt Licensee from the requirement to obtain a commercial license for any organizational use. Contributing is separate from and does not affect commercial licensing requirements. Any organizational use requires a commercial license regardless of whether Licensee has contributed to the Software.
 
 ## 3. OWNERSHIP
 
@@ -211,7 +227,7 @@ Upon termination of this Commercial License:
 **Copyright Infringement.**
 Commercial use of the Software without a valid commercial license constitutes copyright infringement under applicable law. Licensor reserves all rights and remedies available under copyright law, including but not limited to: injunctive relief, monetary damages, statutory damages, and recovery of attorneys' fees and costs. Licensee acknowledges that unauthorized commercial use may result in liability for copyright infringement in addition to breach of contract claims.
 
-Termination of this Commercial License does not terminate any rights Licensee may have under AGPL-3.0 for copies of the Software obtained and used solely under that license.
+Termination of this Commercial License does not terminate any rights Licensee may have for free use as defined in `LICENSE`.
 
 ## 6. NO WARRANTY / LIMITATION OF LIABILITY
 

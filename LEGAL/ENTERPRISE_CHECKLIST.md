@@ -183,7 +183,7 @@ It covers key areas that enterprise buyers, legal departments, and CTOs typicall
 
 ### Legal Documentation
 - [x] **Commercial license** — Enterprise-grade commercial license terms
-- [x] **Dual license model** — AGPL-3.0 and Commercial License options
+- [x] **Source-available license model** — Free use and Commercial License options
 - [x] **Terms of service** — TOS for hosted services (if applicable)
 - [x] **IP terms** — Clear IP ownership and licensing terms
 

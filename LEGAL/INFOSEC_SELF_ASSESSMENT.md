@@ -107,7 +107,7 @@ This pre-empts common enterprise security review questions and accelerates procu
 - ✅ **No embedded trackers** — No third-party tracking scripts or analytics tools
 - ✅ **Explicit dependencies** — All dependencies are explicit and auditable
 - ✅ **No hidden code** — No obfuscated or hidden code
-- ✅ **Open-source transparency** — Core platform is open-source (AGPL-3.0), enabling full code review
+- ✅ **Source-available transparency** — Core platform is source-available, enabling full code review
 
 **See `LEGAL/SECURITY.md` for detailed supply chain security practices.**
 

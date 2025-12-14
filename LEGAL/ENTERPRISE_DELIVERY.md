@@ -8,7 +8,7 @@ This document describes how Fox ML Infrastructure is delivered to commercial lic
 
 Fox ML Infrastructure uses a **three-tier repository structure** that balances open-source transparency with commercial flexibility and client-specific customization:
 
-1. **Public OSS Core** — Open-source foundation (AGPL-3.0)
+1. **Public Source-Available Core** — Source-available foundation (see LICENSE)
 2. **Enterprise Base Repository** — Private commercial-licensed foundation
 3. **Per-Client Overlay Repositories** — Private client-specific customizations
 
@@ -25,8 +25,8 @@ This model enables:
 ### 1.1 Public OSS Core Repository
 
 **Location:** Public GitHub repository  
-**License:** AGPL-3.0  
-**Purpose:** Marketing, validation, and open-source contribution
+**License:** Source-available (see LICENSE)  
+**Purpose:** Marketing, validation, and community contribution
 
 **Contains:**
 - Core architecture and design

@@ -90,7 +90,7 @@ This statement is essential for organizations with international operations or c
 **Fox ML Infrastructure is distributed via:**
 
 - **Private repositories** — Private GitHub repositories for commercial licensees
-- **Public repository** — Public GitHub repository for open-source (AGPL-3.0) version
+- **Public repository** — Public GitHub repository for source-available version (see LICENSE)
 - **Direct delivery** — Direct delivery to commercial licensees
 
 ### 4.2 Access Controls

@@ -189,7 +189,7 @@ This matrix is designed for enterprise security reviews and SOC2-adjacent compli
 - ✅ **Dependency scanning** — Scan dependencies for vulnerabilities
 - ✅ **No telemetry** — No outbound calls or telemetry
 - ✅ **No embedded trackers** — No third-party tracking scripts
-- ✅ **Open-source transparency** — Core platform open-source (AGPL-3.0)
+- ✅ **Source-available transparency** — Core platform is source-available (see LICENSE)
 
 **Supply chain principles:**
 - **Explicit dependencies** — No hidden dependencies

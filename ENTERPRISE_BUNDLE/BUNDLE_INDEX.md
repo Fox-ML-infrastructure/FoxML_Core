@@ -9,8 +9,8 @@ This directory contains PDF versions of all enterprise-ready legal and operation
 ## Core Legal Documents
 
 1. **COMMERCIAL_LICENSE.pdf** — Commercial License terms and conditions
-2. **DUAL_LICENSE.pdf** — Dual license overview (AGPL-3.0 and Commercial)
-3. **LICENSE.pdf** — GNU Affero General Public License v3.0 (AGPL-3.0) full text
+2. **DUAL_LICENSE.pdf** — Source-available license overview (Free use and Commercial)
+3. **LICENSE.pdf** — Source-available license text
 4. **CLA.pdf** — Contributor License Agreement (CLA) for organizational use
 5. **LICENSING.pdf** — Complete licensing documentation
 6. **LICENSE_ENFORCEMENT.pdf** — License enforcement procedures
@@ -98,7 +98,7 @@ These PDFs can be:
 All PDFs are generated from Markdown source files in:
 - `../COMMERCIAL_LICENSE.md` (root)
 - `../DUAL_LICENSE.md` (root)
-- `../LICENSE` (root - AGPL-3.0 text)
+- `../LICENSE` (root - source-available license)
 - `../LEGAL/*.md` (legal directory, including subdirectories)
 
 Source files are version-controlled in the Git repository.

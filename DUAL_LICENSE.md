@@ -1,140 +1,115 @@
-# FoxML Core – Dual License
+# FoxML Core – Source-Available License
 
-FoxML Core is dual-licensed under two distinct options. This document is a **high-level summary**. 
+FoxML Core is **source-available** with a commercial license required for organizational use.
 
-**Document Hierarchy:** In case of any conflict, the full text of `LICENSE` (AGPL-3.0) and `COMMERCIAL_LICENSE.md` controls. `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms, definitions, and obligations. Any conflicting statements in this document or other documentation are superseded by `COMMERCIAL_LICENSE.md`.
+**Document Hierarchy:** In case of any conflict, the full text of `LICENSE` and `COMMERCIAL_LICENSE.md` controls. `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms, definitions, and obligations.
 
-## License Option 1: GNU Affero General Public License v3.0 (AGPL-3.0)
+---
 
-**For:** Academic, personal, or open-source research use
+## ⚠️ **ORGANIZATIONAL USE REQUIRES A PAID LICENSE**
 
-**Terms (summary):**
+**If an organization uses this, they need a license.**
 
-- You may use, study, and modify FoxML Core under AGPL-3.0.
+**Organizational Use includes:**
+- Any use by or for a company, university, lab, or other organization
+- Any internal evaluation, pilots, PoCs, dev/staging, or production use
+- Any use supporting revenue, operations, services, or internal tooling
+- Any evaluation/pilot done by an organization
+- Any use by employees, contractors, interns, or affiliates in the scope of their work
 
-- If you deploy modified versions over a network, you must provide the corresponding source code to users.
+**Free use is limited to:**
+- Personal use (individual, non-commercial, not for any business purpose)
+- Non-commercial academic research at qualifying tax-exempt institutions (see `LICENSE` for full definition)
 
-- You must comply with all AGPL-3.0 obligations.
+**Unauthorized organizational use is copyright infringement.**
 
-- Full terms: see `LICENSE`.
+📧 **jenn.lewis5789@gmail.com** | Subject: `FoxML Core Commercial Licensing`
 
-**Use this if:**
+**Commercial licenses typically start in the low five figures annually.** All commercial licensing begins with a paid pilot. See `LEGAL/SUBSCRIPTIONS.md` for details.
 
-- Your use is **purely personal or academic research** (see `LEGAL/SUBSCRIPTIONS.md` for full definition).
+---
 
-- Your use is **non-commercial** (meaning: not for any business purpose, not for client work, not for revenue generation, and not in connection with any commercial activity).
+## Free Use (No License Required)
 
-- You are willing and able to comply with AGPL-3.0 source code disclosure requirements.
+### Personal Use
 
-**IMPORTANT RESTRICTIONS:**
-- **AGPL-3.0 AND COMMERCIAL USE:** AGPL-3.0 itself **does permit commercial use**, but only if you fully comply with all copyleft obligations, including complete source-code disclosure for network use. If you use AGPL-licensed FoxML Core for any commercial purpose (as defined in `COMMERCIAL_LICENSE.md` Section 1), you must provide the full source code of your modifications and any derivative works to all users who interact with your system over a network. Most organizations will instead want a **commercial license** to avoid AGPL copyleft requirements and maintain proprietary control over their modifications.
-- **NO BUSINESS CONTEXT:** The AGPL-3.0 version may NOT be used within any business, organization, or commercial entity, even for "research" or "experimental" purposes, without accepting full AGPL obligations. If you are a business or institution, you should assume you need a **commercial license** unless your legal team explicitly decides to accept full AGPL obligations.
-- **NO MIXED USE:** You may not combine AGPL-3.0 copies with Commercial Use or use both licenses simultaneously within the same organization without a commercial agreement. If any part of your organization uses the Software for Commercial Use, all use within that organization requires a commercial license.
-- **RETROACTIVE PAYMENT:** If you have used the Software commercially under AGPL-3.0 without fully complying with AGPL obligations, you must immediately obtain a commercial license and may be required to pay retroactive licensing fees.
+You may use FoxML Core for free if:
+- You are an individual using it in your personal capacity
+- You are not using it as an employee, contractor, or agent of any business, organization, or entity
+- You are not using it for the benefit of any third party
+- You are not using it in connection with any commercial activity
 
-**Note:** Academic research conducted for, funded by, sponsored by, or integrated into a commercial organization requires a commercial license. See `LEGAL/SUBSCRIPTIONS.md` for the complete definition of "non-commercial academic or personal research use."
+### Non-Commercial Academic Research
 
-## License Option 2: Commercial License
+You may use FoxML Core for free if:
+- You are at a degree-granting educational or non-profit research institution
+- The institution is recognized as tax-exempt under applicable law
+- The institution is not owned, controlled by, or operated for the benefit of any commercial entity
+- Research results are not used to support commercial operations, trading, revenue-generating activities, or any business purpose
 
-**For:** Any organizational or revenue-generating use.
+**See `LICENSE` for the complete definition of free use.**
 
-**Terms (summary):**
+---
 
-- Required for internal company use (trading, forecasting, modeling, optimization, analytics).
+## Commercial License (Required for Organizational Use)
 
-- Required for integration into proprietary or closed-source systems.
+**Any organizational use requires a paid commercial license.**
 
-- Allows internal modification and deployment **without** AGPL disclosure obligations.
+This includes:
+- Any use by or for a company, university, lab, or other organization
+- Any internal tooling, deployment, pilot, PoC, or evaluation
+- Any use by employees, contractors, interns, or affiliates in the scope of their work
+- Any use in development, testing, staging, or production environments within a business context
 
-- No requirement to open-source modifications.
-
-- Includes standard commercial protections: liability caps, indemnity, export control compliance, force majeure, etc.
-
-- Full terms: see `COMMERCIAL_LICENSE.md`.
+**Commercial licenses provide:**
+- Permission to use FoxML Core for organizational purposes
+- No source code disclosure obligations
+- Ability to modify and deploy internally
+- Integration into proprietary systems
+- Standard commercial protections
 
 **Pricing:**
+- Commercial licenses typically start in the low five figures annually
+- All commercial licensing begins with a paid pilot
+- Pricing based on team/desk size, not total company headcount
 
-**Paid Pilots (Non-Negotiable Entry Point):**
-- Pilot (30 days): $15,000–$30,000
-- Pilot+ (60–90 days): $35,000–$90,000
-- 50–100% credit toward first-year license if converted
+**To obtain a commercial license:**
+📧 **jenn.lewis5789@gmail.com**  
+Subject: `FoxML Core Commercial Licensing`
 
-**For pricing information, please contact the maintainer:**
+**See `COMMERCIAL_LICENSE.md` for complete commercial license terms.**
 
-📧 **jenn.lewis5789@gmail.com**
-
-Annual license tiers are available based on using team/desk size (not total company headcount). All commercial licensing begins with a paid pilot.
-
-**Support Add-Ons:**
-- Standard Support (included): Email/issues, best-effort, no SLA
-- Business Support: Response targets, business hours (contact for pricing)
-- Enterprise Support: Priority response, scheduled calls (contact for pricing)
-- Premium / 24×5: Extended hours, direct engineering access (contact for pricing, availability limited)
-
-**Services:**
-- Onboarding/Integration: Training, architecture review, integration assistance (contact for pricing)
-- On-Prem/High-Security: Custom deployment and security configuration (contact for pricing)
-
-**Policy:** Licensing is scoped to the business unit/desk, not the parent company's total headcount.
-
-**Use this if:**
-
-- You are a **business, organization, or institution**.
-
-- Your use **directly or indirectly generates revenue**.
-
-- You deploy FoxML Core internally for operational or research purposes.
-
-- You integrate FoxML Core into **proprietary systems**.
-
-- You use FoxML Core as part of services you provide to third parties.
-
-**See `LEGAL/SUBSCRIPTIONS.md` for complete pricing details.**
+---
 
 ## Which License Applies?
 
 **You need a Commercial License if:**
-- Your use generates revenue (directly or indirectly)
+- You are using FoxML Core for any organizational purpose
 - You are a business, organization, or institution
 - You deploy internally for operational purposes
 - You integrate into proprietary systems
 - You provide services to third parties
 
-**You may use AGPL-3.0 if:**
+**You may use it for free if:**
+- Your use is purely personal (individual, non-commercial)
+- Your use is non-commercial academic research at a qualifying tax-exempt institution
 
-- Your use is **purely personal or academic research** (see `LEGAL/SUBSCRIPTIONS.md` for full definition).
+**If you're unsure, contact us. Default assumption for any organization: commercial license required.**
 
-- Your use is **non-commercial**.
-
-- You are willing and able to comply with AGPL-3.0 source code disclosure requirements.
-
-**Note:** If you are using FoxML Core **inside any business or organization**, assume you need a commercial license. See `LEGAL/SUBSCRIPTIONS.md` for details on business/internal use requirements. Academic research conducted for, funded by, or integrated into a commercial organization requires a commercial license, even if performed by students or interns.
-
-**If you're unsure which license applies, contact us. Default assumption for any company: commercial license.**
+---
 
 ## Contact
 
 For commercial licensing inquiries:
 
 **Jennifer Lewis**  
-
-FoxML Core / Fox ML Infrastructure LLC  
-
+Fox ML Infrastructure LLC  
 Email: **jenn.lewis5789@gmail.com**  
-
-Subject: `FoxML Core Licensing Inquiry`
+Subject: `FoxML Core Commercial Licensing`
 
 For detailed licensing information, see:
-
-- `LICENSE` – Full AGPL-3.0 license text  
-
-- `COMMERCIAL_LICENSE.md` – Full Commercial License terms  
-
-- `LEGAL/FAQ.md` – Common questions and answers about commercial licensing
-
-- `LEGAL/DECISION_MATRIX.md` – Quick reference matrix for license selection
-
-- `LEGAL/SUBSCRIPTIONS.md` – Detailed usage scenarios and definitions
-
-- `LEGAL/LICENSING.md` – Additional licensing information and guidance
-
+- `LICENSE` – Source-available license text
+- `COMMERCIAL_LICENSE.md` – Full Commercial License terms
+- `LEGAL/SUBSCRIPTIONS.md` – Pricing and licensing process
+- `LEGAL/COMMERCIAL_USE.md` – Commercial use guide
+- `LEGAL/FAQ.md` – Common questions

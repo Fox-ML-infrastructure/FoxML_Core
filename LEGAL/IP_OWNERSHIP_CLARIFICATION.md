@@ -143,16 +143,16 @@ This is essential for ML research organizations, quantitative firms, and enterpr
 
 **Open-source components follow their upstream licenses:**
 
-- **Upstream licenses** — Components licensed under AGPL, MIT, Apache, etc. follow their respective licenses
+- **Upstream licenses** — Components licensed under various open-source licenses (MIT, Apache, etc.) follow their respective licenses
 - **Client rights** — Clients receive rights under both the commercial license and applicable open-source licenses
 - **No ownership transfer** — Open-source components remain under their original licenses
 
 ### 7.2 Fox ML Infrastructure Open-Source Core
 
-**The public OSS core (AGPL-3.0):**
+**The public source-available core:**
 
-- **Open-source license** — Available under AGPL-3.0 for non-commercial use
-- **Commercial license required** — Commercial use requires a commercial license
+- **Source-available license** — Available for free personal/academic use (see LICENSE)
+- **Commercial license required** — Organizational use requires a commercial license
 - **Core IP remains owned** — Core platform IP remains the property of Fox ML Infrastructure LLC
 
 ---

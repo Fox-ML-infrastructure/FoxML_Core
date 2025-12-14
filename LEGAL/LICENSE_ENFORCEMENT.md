@@ -1,6 +1,6 @@
 # Fox ML Infrastructure — License Enforcement & Compliance
 
-> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` (AGPL-3.0) controls for open-source licensing.
+> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` controls for free use.
 
 > **Enforcement Alignment:** This document describes enforcement procedures that align with remedies set forth in `COMMERCIAL_LICENSE.md`. This document does not introduce new rights, penalties, fines, damages, or obligations beyond those defined in `COMMERCIAL_LICENSE.md`.
 
@@ -10,8 +10,8 @@ This document outlines license enforcement procedures, compliance requirements, 
 
 ## 1. Overview
 
-**FoxML Core is dual-licensed:**
-- **AGPL-3.0** — For non-commercial academic and personal research use
+**FoxML Core is source-available:**
+- **Free use** — For personal use and qualifying non-commercial academic research (see `LICENSE`)
 - **Commercial License** — Required for any organizational, commercial, or production use
 
 **If you use this software in production, you MUST have a commercial license.**
@@ -43,7 +43,7 @@ This document outlines license enforcement procedures, compliance requirements, 
 2. **Complete the compliance form** — See `LEGAL/PRODUCTION_USE_NOTIFICATION.md`
 3. **Maintain license compliance** — Ensure all use is covered by your license
 
-**Failure to obtain a commercial license for production use is a violation of the AGPL-3.0 license terms.**
+**Failure to obtain a commercial license for organizational use is copyright infringement.**
 
 ---
 
@@ -62,13 +62,12 @@ This document outlines license enforcement procedures, compliance requirements, 
 
 **If you create a public fork:**
 
-- You must comply with AGPL-3.0 requirements
 - You must maintain all copyright notices
 - You must include the original LICENSE file
-- You must disclose all modifications if deployed over a network
-- **Commercial use of public forks still requires a commercial license**
+- You must comply with all license terms (see LICENSE)
+- **Organizational use of public forks still requires a commercial license**
 
-**See `DUAL_LICENSE.md` for details on dual licensing.**
+**See `LICENSE` and `DUAL_LICENSE.md` for details on licensing.**
 
 ---
 
@@ -172,9 +171,9 @@ This document outlines license enforcement procedures, compliance requirements, 
 
 ## 8. Legal Consequences
 
-### 8.1 AGPL Violations
+### 8.1 License Violations
 
-**Violating AGPL-3.0 terms may result in:**
+**Unauthorized organizational use without a commercial license may result in:**
 
 - Loss of license rights
 - Requirement to cease use

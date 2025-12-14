@@ -1,6 +1,6 @@
 # Fox ML Infrastructure — Commercial Use Guide
 
-> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` (AGPL-3.0) controls for open-source licensing.
+> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` controls for free use.
 
 **Quick reference for commercial use requirements and licensing.**
 
@@ -25,7 +25,7 @@
 
 - You are using it for **non-commercial academic research** (see `LEGAL/SUBSCRIPTIONS.md` for full definition) at a qualifying non-profit, tax-exempt educational institution
 - You are using it for **personal study or learning** (individual in personal capacity, NOT for business, client work, or revenue generation)
-- You are contributing to **open-source projects** (under AGPL-3.0) in a non-commercial context
+- You are contributing to the Software in a personal/non-commercial context
 - You are **not using it in production** or for commercial purposes
 
 **IMPORTANT EXCLUSIONS:**
@@ -48,7 +48,7 @@
 
 **With a commercial license, you can:**
 
-- ✅ Use FoxML Core internally without AGPL disclosure obligations
+- ✅ Use FoxML Core internally
 - ✅ Modify the software for internal commercial use
 - ✅ Deploy it in production environments
 - ✅ Integrate it into proprietary systems and workflows
@@ -248,9 +248,9 @@ Enterprise add-ons are available with defined scope and boundaries:
 
 ### 8.4 What About Academic Use?
 
-**Academic use is permitted under AGPL-3.0** for non-commercial research. If your academic institution uses it for commercial purposes, a commercial license is required.
+**Academic use is free** for qualifying non-commercial research at tax-exempt institutions (see `LICENSE` for full definition). If your academic institution uses it for organizational purposes, a commercial license is required.
 
-**See `DUAL_LICENSE.md` for academic use details.**
+**See `LICENSE` and `DUAL_LICENSE.md` for free use details.**
 
 ---
 

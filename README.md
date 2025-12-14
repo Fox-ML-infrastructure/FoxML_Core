@@ -1,5 +1,22 @@
 # FoxML Core — ML Cross-Sectional Infrastructure
 
+## License
+
+**FoxML Core is source-available.**
+
+- ✅ **Free for:** Personal use and non-commercial academic research (see `LICENSE` for full definition)
+- 💰 **Paid license required for:** Any organizational, institutional, or commercial use
+
+**If an organization uses this, they need a license.**
+
+📧 **jenn.lewis5789@gmail.com** | Subject: `FoxML Core Commercial Licensing`
+
+Commercial licenses typically start in the low five figures annually. All commercial licensing begins with a paid pilot.
+
+**See [`LICENSE`](LICENSE) for full terms.**
+
+---
+
 > **⚠️ ACTIVE DEVELOPMENT — EXPECT BREAKING CHANGES**  
 > This project is under **heavy active development**. Breaking changes may occur without notice. APIs, configuration schemas, directory structures, and file formats may change between commits. Use at your own risk in production environments. See [ROADMAP.md](ROADMAP.md) for current status and known issues.
 
@@ -7,9 +24,32 @@
 
 > **📝 See [CHANGELOG.md](CHANGELOG.md) for recent technical and compliance changes.**
 
-FoxML Core is an ML infrastructure stack for cross-sectional and panel data for any machine learning applications. It provides a config-driven ML pipeline architecture designed for ML infra teams, data scientists, and researchers.
+---
 
-> **Note:** Personal / academic use is AGPL-3.0. **Company / production use requires a commercial license.**
+## ⚠️ **ORGANIZATIONAL USE REQUIRES A PAID LICENSE**
+
+**If an organization uses this, they need a license.**
+
+**Organizational Use includes:**
+- Any use by or for a company, university, lab, or other organization
+- Any internal evaluation, pilots, PoCs, dev/staging, or production use
+- Any use supporting revenue, operations, services, or internal tooling
+- Any evaluation/pilot done by an organization
+- Any use by employees, contractors, interns, or affiliates in the scope of their work
+
+**Free use is limited to:**
+- Personal use (individual, non-commercial, not for any business purpose)
+- Non-commercial academic research at qualifying tax-exempt institutions (see `LICENSE` for full definition)
+
+**Unauthorized organizational use is copyright infringement.**
+
+📧 **jenn.lewis5789@gmail.com** | Subject: `FoxML Core Commercial Licensing`
+
+**Commercial licenses typically start in the low five figures annually.** All commercial licensing begins with a paid pilot. See [`LEGAL/SUBSCRIPTIONS.md`](LEGAL/SUBSCRIPTIONS.md) for details.
+
+---
+
+FoxML Core is an ML infrastructure stack for cross-sectional and panel data for any machine learning applications. It provides a config-driven ML pipeline architecture designed for ML infra teams, data scientists, and researchers.
 
 > **📊 Testing & Development:** All testing, validation, and development work is performed using **5-minute interval data**. The software supports various data intervals, but all tests, benchmarks, and development workflows use 5-minute bars as the standard reference.
 
@@ -65,15 +105,14 @@ FoxML Core is **general-purpose ML cross-sectional infrastructure** for panel da
 
 ## Licensing & Commercial Use
 
-> ⚠️ **BUSINESS USE REQUIRES A COMMERCIAL LICENSE**
->
-> - If you're running this inside a company or fund, you almost certainly need a commercial license.
-> - Non-commercial academic / personal research is allowed under AGPL-3.0 (see `LICENSE`).
-> - Full details and pricing: [`LEGAL/SUBSCRIPTIONS.md`](LEGAL/SUBSCRIPTIONS.md).
+FoxML Core is **source-available** with a commercial license required for organizational use.
 
-FoxML Core is released under the **AGPL-3.0** license. Personal / academic research uses AGPL. Organizations using FoxML Core in production or revenue-generating environments should obtain a commercial license.
+- **Free use**: Personal use and non-commercial academic research (see `LICENSE`)
+- **Commercial License**: Required for any organizational use (see `COMMERCIAL_LICENSE.md`)
 
-**If you are using FoxML Core inside any business or organization, assume you need a commercial license.**
+**If you are using FoxML Core inside any business or organization, you need a commercial license.**
+
+Source code is publicly available for inspection and study, but organizational use requires a paid license.
 
 ### Commercial License
 
@@ -113,6 +152,18 @@ Subject: `FoxML Core Commercial Licensing`
 - [`LEGAL/SUBSCRIPTIONS.md`](LEGAL/SUBSCRIPTIONS.md) - Detailed tiers and pricing
 - [`LEGAL/COMMERCIAL_USE.md`](LEGAL/COMMERCIAL_USE.md) - Commercial license terms
 - [`COMMERCIAL_LICENSE.md`](COMMERCIAL_LICENSE.md) - Full commercial license text
+- [`DUAL_LICENSE.md`](DUAL_LICENSE.md) - Dual licensing overview
+
+### Quick FAQ
+
+**Q: We're a university lab—do we need a license?**  
+A: If it's institutional use, sponsored/industry work, or internal tooling: yes, you need a commercial license. Pure non-commercial academic research at a qualifying tax-exempt institution: no license needed (see `LICENSE` for full definition).
+
+**Q: Can I use it for free?**  
+A: Only for personal use (individual, non-commercial) or non-commercial academic research at qualifying institutions. Any organizational use requires a commercial license.
+
+**Q: What if I just want to evaluate it?**  
+A: Organizations can evaluate for 30 days without a paid license (see `COMMERCIAL_LICENSE.md`). Continued use after evaluation requires a commercial license.
 
 ---
 

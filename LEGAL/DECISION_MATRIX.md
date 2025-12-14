@@ -8,29 +8,28 @@
 
 ## Quick Decision Matrix
 
-| Scenario | AGPL-3.0 | Commercial License | Notes |
+| Scenario | Free Use | Commercial License | Notes |
 |----------|----------|-------------------|-------|
 | **Individual personal research** (not for any business purpose) | ✅ | ❌ | Must be in personal capacity, not for any business or organization |
-| **Non-commercial academic research** at degree-granting institution | ✅ | ❌ | Results must not support commercial operations. See `LEGAL/SUBSCRIPTIONS.md` for full definition |
-| **Internal evaluation at a company** | ❌ | ✅ | **ALWAYS commercial** — no free trial for commercial use |
-| **Proof of concept / pilot project** within a business | ❌ | ✅ | **ALWAYS commercial** — even if experimental or non-revenue |
-| **Development / testing / staging** environments in a business | ❌ | ✅ | **ALWAYS commercial** — any environment within a business context |
-| **Production use** in a business | ❌ | ✅ | **ALWAYS commercial** |
-| **Trading, investment analysis, financial decision-making** | ❌ | ✅ | **ALWAYS commercial** — regardless of revenue status |
-| **Client services, consulting, freelance work** | ❌ | ✅ | **ALWAYS commercial** — any work for clients or third parties |
-| **Use by employees** in scope of their work | ❌ | ✅ | **ALWAYS commercial** — regardless of role or department |
-| **Use by contractors / consultants** for a business | ❌ | ✅ | **ALWAYS commercial** — even if temporary or part-time |
-| **Use by interns** in scope of their work | ❌ | ✅ | **ALWAYS commercial** — employment status doesn't matter |
-| **Pre-revenue startup** or experimental project | ❌ | ✅ | **ALWAYS commercial** — revenue status doesn't matter |
-| **Sole proprietor / freelancer** business use | ❌ | ✅ | **ALWAYS commercial** — any business activity requires commercial license |
-| **Corporate research lab** | ❌ | ✅ | **ALWAYS commercial** — even if non-profit status |
-| **University research with corporate funding** | ❌ | ✅ | Corporate sponsorship = commercial use |
-| **For-profit university** | ❌ | ✅ | **ALWAYS commercial** — excluded from academic carve-out |
+| **Non-commercial academic research** at degree-granting institution | ✅ | ❌ | Results must not support commercial operations. See `LICENSE` for full definition |
+| **Internal evaluation at a company** | ❌ | ✅ | **ALWAYS requires license** — 30-day evaluation period available (see `COMMERCIAL_LICENSE.md`) |
+| **Proof of concept / pilot project** within a business | ❌ | ✅ | **ALWAYS requires license** — even if experimental or non-revenue |
+| **Development / testing / staging** environments in a business | ❌ | ✅ | **ALWAYS requires license** — any environment within a business context |
+| **Production use** in a business | ❌ | ✅ | **ALWAYS requires license** |
+| **Trading, investment analysis, financial decision-making** | ❌ | ✅ | **ALWAYS requires license** — regardless of revenue status |
+| **Client services, consulting, freelance work** | ❌ | ✅ | **ALWAYS requires license** — any work for clients or third parties |
+| **Use by employees** in scope of their work | ❌ | ✅ | **ALWAYS requires license** — regardless of role or department |
+| **Use by contractors / consultants** for a business | ❌ | ✅ | **ALWAYS requires license** — even if temporary or part-time |
+| **Use by interns** in scope of their work | ❌ | ✅ | **ALWAYS requires license** — employment status doesn't matter |
+| **Pre-revenue startup** or experimental project | ❌ | ✅ | **ALWAYS requires license** — revenue status doesn't matter |
+| **Sole proprietor / freelancer** business use | ❌ | ✅ | **ALWAYS requires license** — any business activity requires commercial license |
+| **Corporate research lab** | ❌ | ✅ | **ALWAYS requires license** — even if non-profit status |
+| **University research with corporate funding** | ❌ | ✅ | Corporate sponsorship = organizational use |
+| **For-profit university** | ❌ | ✅ | **ALWAYS requires license** — excluded from academic carve-out |
 | **Academic partnership with commercial entity** | ❌ | ✅ | If integrated into commercial operations, requires commercial license |
 | **Selling outputs** (signals, analytics, predictions) to clients | ❌ | ✅ | Allowed with commercial license, provided clients don't access Software |
-| **Internal tools / dashboards** within a business | ❌ | ✅ | **ALWAYS commercial** — any internal use in business context |
-| **Research pipelines** within a business | ❌ | ✅ | **ALWAYS commercial** — even if "research-only" |
-| **Mixed use** (some teams AGPL, some commercial) | ❌ | ✅ | **PROHIBITED** — if any part of org uses commercially, all use requires commercial license |
+| **Internal tools / dashboards** within a business | ❌ | ✅ | **ALWAYS requires license** — any internal use in business context |
+| **Research pipelines** within a business | ❌ | ✅ | **ALWAYS requires license** — even if "research-only" |
 | **Subsidiary / parent company** sharing license | ❌ | ✅ | Each legal entity needs its own license — sharing prohibited |
 | **Hosting on AWS / GCP / Azure** for internal use | ❌ | ✅ | Allowed with commercial license for internal use only |
 | **Building competing infrastructure service** | ❌ | ❌ | **PROHIBITED** — may not build Competing Infrastructure Service (see `COMMERCIAL_LICENSE.md`) |
@@ -42,9 +41,11 @@
 
 ## Key Principles
 
-### ✅ AGPL-3.0 is ONLY for:
+### ✅ Free Use is ONLY for:
 1. **Individual personal research** (not for any business purpose)
-2. **Non-commercial academic research** at degree-granting institutions (where results don't support commercial operations)
+2. **Non-commercial academic research** at qualifying tax-exempt institutions (where results don't support commercial operations)
+
+See `LICENSE` for the complete definition of free use.
 
 ### ❌ Commercial License is REQUIRED for:
 1. **Any use within a business, organization, or commercial entity**
@@ -73,7 +74,7 @@
 | "We're a non-profit" | ❌ Non-profit status doesn't exempt commercial use — still requires commercial license |
 | "We're a university" | ⚠️ Only non-commercial academic research at degree-granting institutions is exempt — corporate funding or commercial integration requires commercial license |
 | "We'll only use it for 30 days" | ❌ Duration doesn't matter — commercial use requires commercial license from day one |
-| "It's open source, so it's free" | ❌ AGPL-3.0 is free only for non-commercial use — commercial use requires commercial license |
+| "It's open source, so it's free" | ❌ Source-available means code is visible, but organizational use requires a commercial license |
 | "We'll contribute back to open source" | ❌ Open source contributions don't exempt commercial use from licensing requirements |
 
 ---
@@ -82,22 +83,22 @@
 
 ```
 Are you using this for personal research (not for any business)?
-├─ YES → AGPL-3.0 ✅
+├─ YES → Free Use ✅
 └─ NO → Continue
 
-Are you at a degree-granting educational institution doing non-commercial research?
+Are you at a qualifying tax-exempt educational institution doing non-commercial research?
 ├─ YES → Is it funded by or integrated into commercial operations?
-│   ├─ YES → Commercial License ❌
-│   └─ NO → AGPL-3.0 ✅
+│   ├─ YES → Commercial License Required ❌
+│   └─ NO → Free Use ✅ (see LICENSE for full definition)
 └─ NO → Continue
 
 Are you using this within a business, organization, or commercial entity?
-├─ YES → Commercial License ❌
+├─ YES → Commercial License Required ❌
 └─ NO → Continue
 
 Are you using this for any business purpose, client work, or revenue-generating activity?
-├─ YES → Commercial License ❌
-└─ NO → Review definitions in COMMERCIAL_LICENSE.md Section 1
+├─ YES → Commercial License Required ❌
+└─ NO → Review definitions in LICENSE and COMMERCIAL_LICENSE.md Section 1
 ```
 
 **Default rule:** If you're unsure, you almost certainly need a commercial license. When in doubt, contact jenn.lewis5789@gmail.com.
