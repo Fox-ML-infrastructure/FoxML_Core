@@ -172,8 +172,8 @@ For commercial licensing or organizational engagements:
 
 ## Support Development
 
-If you appreciate this work and want to support ongoing development, you can contribute here: [Support Development](https://www.paypal.com/ncp/payment/75FQ39PTAUNFQ)
+If you appreciate this work and want to support ongoing development, you can contribute here: [Support Development](https://www.paypal.com/ncp/payment/4BHHB4YCVVTH8)
 
-![Coffee Fund QR Code](DOCS/images/coffee_fund_qrcode.png)
+![Mountain Dew Fund QR Code](DOCS/images/mountain_dew_fund_qrcode.png)
 
 Contributions are voluntary and provided as-is. They do not confer ownership, governance rights, priority support, or any implied agreement beyond appreciation for the work.
