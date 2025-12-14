@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-13 (Single Source of Truth)** — Eliminated split-brain in lookback computation, POST_PRUNE invariant check, _Xd pattern inference, readline library conflict fix  
+  → [View](2025-12-13-single-source-of-truth.md)
+
 - **2025-12-13 (Fingerprint Tracking)** — Fingerprint Tracking System, LookbackResult Dataclass, Explicit Stage Logging, Leakage Canary Test  
   → [View](2025-12-13-fingerprint-tracking.md)
 
