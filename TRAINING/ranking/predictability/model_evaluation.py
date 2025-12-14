@@ -861,6 +861,11 @@ def train_and_evaluate_models(
                                 f"This indicates lookback computation bug."
                             )
                     
+                    # CRITICAL: Update resolved_config with the recomputed lookback (from pruned features)
+                    # This ensures the budget object reflects the actual feature set
+                    if resolved_config is not None:
+                        resolved_config.feature_lookback_max_minutes = computed_lookback
+                    
                     # Log top features (only if > 4 hours for debugging)
                     if computed_lookback > 240:
                         fingerprint_str = lookback_fingerprint if lookback_fingerprint else (lookback_result.fingerprint if hasattr(lookback_result, 'fingerprint') else 'N/A')
