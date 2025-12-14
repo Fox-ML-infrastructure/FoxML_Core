@@ -4498,8 +4498,9 @@ def evaluate_target_predictability(
         requested_min_cs=min_cs if view != "SYMBOL_SPECIFIC" else 1,
         n_symbols_available=n_symbols_available,
         max_cs_samples=max_cs_samples,
+        interval_minutes=detected_interval,
+        horizon_minutes=target_horizon_minutes,
         feature_names=selected_features,
-        data_interval_minutes=detected_interval,
         experiment_config=experiment_config
     )
     
