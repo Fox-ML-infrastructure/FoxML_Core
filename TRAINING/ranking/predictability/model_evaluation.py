@@ -1075,6 +1075,31 @@ def train_and_evaluate_models(
                 # Store EnforcedFeatureSet for downstream use
                 post_prune_enforced = enforced_post_prune
                 
+                # CRITICAL: Hard-fail check: POST_PRUNE must have ZERO unknowns in strict mode
+                # This is the contract: post-enforcement stages should never see unknowns
+                if len(enforced_post_prune.unknown) > 0:
+                    policy = "strict"
+                    try:
+                        from CONFIG.config_loader import get_cfg
+                        policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+                    except Exception:
+                        pass
+                    
+                    if policy == "strict":
+                        error_msg = (
+                            f"🚨 POST_PRUNE CONTRACT VIOLATION: {len(enforced_post_prune.unknown)} features have unknown lookback (inf). "
+                            f"In strict mode, post-enforcement stages must have ZERO unknowns. "
+                            f"These should have been quarantined at gatekeeper. "
+                            f"Sample: {enforced_post_prune.unknown[:10]}"
+                        )
+                        logger.error(error_msg)
+                        raise RuntimeError(f"{error_msg} (policy: strict - training blocked)")
+                    else:
+                        logger.warning(
+                            f"⚠️ POST_PRUNE: {len(enforced_post_prune.unknown)} features have unknown lookback (inf). "
+                            f"Policy={policy} allows this, but this is unexpected after enforcement."
+                        )
+                
                 # CRITICAL: Boundary assertion - validate feature_names matches POST_PRUNE EnforcedFeatureSet
                 from TRAINING.utils.lookback_policy import assert_featureset_fingerprint
                 try:
@@ -4776,13 +4801,39 @@ def evaluate_target_predictability(
     post_gatekeeper_fp, post_gatekeeper_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
     _log_feature_set("POST_GATEKEEPER", feature_names, previous_names=None, logger_instance=logger)
     
-    # CRITICAL: Boundary assertion - validate feature_names matches gatekeeper EnforcedFeatureSet
+    # CRITICAL: Hard-fail check: POST_GATEKEEPER must have ZERO unknowns in strict mode
+    # This is the contract: post-enforcement stages should never see unknowns
     if resolved_config and hasattr(resolved_config, '_gatekeeper_enforced'):
+        enforced_gatekeeper = resolved_config._gatekeeper_enforced
+        if len(enforced_gatekeeper.unknown) > 0:
+            policy = "strict"
+            try:
+                from CONFIG.config_loader import get_cfg
+                policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+            except Exception:
+                pass
+            
+            if policy == "strict":
+                error_msg = (
+                    f"🚨 POST_GATEKEEPER CONTRACT VIOLATION: {len(enforced_gatekeeper.unknown)} features have unknown lookback (inf). "
+                    f"In strict mode, post-enforcement stages must have ZERO unknowns. "
+                    f"Gatekeeper should have quarantined these. "
+                    f"Sample: {enforced_gatekeeper.unknown[:10]}"
+                )
+                logger.error(error_msg)
+                raise RuntimeError(f"{error_msg} (policy: strict - training blocked)")
+            else:
+                logger.warning(
+                    f"⚠️ POST_GATEKEEPER: {len(enforced_gatekeeper.unknown)} features have unknown lookback (inf). "
+                    f"Policy={policy} allows this, but this is unexpected after enforcement."
+                )
+        
+        # CRITICAL: Boundary assertion - validate feature_names matches gatekeeper EnforcedFeatureSet
         from TRAINING.utils.lookback_policy import assert_featureset_fingerprint
         try:
             assert_featureset_fingerprint(
                 label="POST_GATEKEEPER",
-                expected=resolved_config._gatekeeper_enforced,
+                expected=enforced_gatekeeper,
                 actual_features=feature_names,
                 logger_instance=logger,
                 allow_reorder=False  # Strict order check
@@ -4791,7 +4842,7 @@ def evaluate_target_predictability(
             # Log but don't fail - this is a validation check
             logger.error(f"POST_GATEKEEPER assertion failed: {e}")
             # Fix it: use enforced.features (the truth)
-            feature_names = resolved_config._gatekeeper_enforced.features.copy()
+            feature_names = enforced_gatekeeper.features.copy()
             logger.info(f"Fixed: Updated feature_names to match gatekeeper_enforced.features")
     
     # NOTE: MODEL_TRAIN_INPUT fingerprint will be computed in train_and_evaluate_models AFTER pruning

@@ -43,6 +43,10 @@ _registry_zero_aggregate: Dict[str, List[str]] = {}  # stage -> list of feature 
 # Canonical lookback map cache: keyed by (featureset_fingerprint, interval_minutes, policy_flags)
 _canonical_lookback_cache: Dict[Tuple[str, float, str], Dict[str, float]] = {}
 
+# Budget cache: keyed by (featureset_fingerprint, interval_minutes, horizon_minutes, cap_minutes, stage)
+# Reduces log noise by caching budget computation results
+_budget_cache: Dict[Tuple[str, float, float, Optional[float], str], Tuple[Any, str, str]] = {}
+
 
 def _get_feature_prefix(feature_name: str) -> str:
     """Extract feature prefix for warning deduplication (e.g., 'rsi' from 'rsi_30' or 'bb_upper' from 'bb_upper_20').
@@ -675,6 +679,21 @@ def compute_budget(
     feature_list = list(final_feature_names) if final_feature_names else []
     set_fingerprint, order_fingerprint = _compute_feature_fingerprint(feature_list, set_invariant=True)
     
+    # CRITICAL: Check budget cache first (reduce log noise from repeated compute_budget calls)
+    # Cache key includes fingerprint, interval, horizon, cap, and stage
+    # This prevents recomputing budget for the same featureset at the same stage
+    cache_key = (set_fingerprint, interval_minutes, horizon_minutes, max_lookback_cap_minutes, stage)
+    global _budget_cache
+    if cache_key in _budget_cache and canonical_lookback_map is None:
+        # Cache hit - reuse budget (only if no canonical map passed, as that might be different)
+        cached_budget, cached_fp, cached_order_fp = _budget_cache[cache_key]
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f"📋 Budget cache hit ({stage}): fingerprint={set_fingerprint[:8]}, "
+                f"max_lookback={cached_budget.max_feature_lookback_minutes:.1f}m"
+            )
+        return cached_budget, cached_fp, cached_order_fp
+    
     # Validate fingerprint if expected (use set-invariant for comparison)
     if expected_fingerprint is not None and set_fingerprint != expected_fingerprint:
         logger.error(
@@ -1009,13 +1028,30 @@ def compute_budget(
             else:
                 logger.warning(error_msg)
         elif is_pre_enforcement_stage:
-            # Pre-enforcement: Log warning but allow (enforcement will handle later)
-            # This is expected - create_resolved_config, initial setup, etc. run before enforcement
-            logger.debug(
-                f"📊 compute_budget({stage}): {len(unknown_features)} features have unknown lookback (inf). "
-                f"This is expected in pre-enforcement stages. Enforcement (gatekeeper/sanitizer) will drop these later. "
-                f"Sample: {unknown_features[:5]}"
-            )
+            # Pre-enforcement: This is a diagnostic-only stage
+            # In strict mode, we should still log at INFO (not DEBUG) to make contract visible
+            # But don't hard-fail - enforcement will handle later
+            policy = "strict"
+            try:
+                from CONFIG.config_loader import get_cfg
+                policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+            except Exception:
+                pass
+            
+            if policy == "strict":
+                # In strict mode, log at INFO to make contract visible (not hidden in DEBUG)
+                # This is expected in pre-enforcement, but we want visibility that unknowns exist
+                logger.info(
+                    f"📊 compute_budget({stage}): {len(unknown_features)} features have unknown lookback (inf). "
+                    f"This is expected in pre-enforcement stages. Enforcement (gatekeeper/sanitizer) will quarantine these. "
+                    f"Sample: {unknown_features[:5]}"
+                )
+            else:
+                # Non-strict: log at DEBUG (less noise)
+                logger.debug(
+                    f"📊 compute_budget({stage}): {len(unknown_features)} features have unknown lookback (inf). "
+                    f"This is expected in pre-enforcement stages. Enforcement will handle later."
+                )
         else:
             # Unknown stage - be conservative and log warning (but don't hard-fail)
             logger.warning(
@@ -1047,13 +1083,6 @@ def compute_budget(
                 f"Sample features: {list(final_feature_names)[:5]}"
             )
     
-    # Log fingerprint with lookback computation
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.debug(
-            f"📊 compute_budget({stage}): max_lookback={max_lookback:.1f}m, "
-            f"n_features={len(feature_list)}, fingerprint={set_fingerprint}"
-        )
-    
     # CRITICAL: Log ALL features with lookback > 240m (or cap if set) for gatekeeper/sanitizer stages
     # This must happen AFTER feature_lookback_map is fully populated and max is computed
     # This diagnostic is essential to catch split-brain early - shows what gatekeeper/sanitizer see
@@ -1078,17 +1107,32 @@ def compute_budget(
                 f"🔍 {stage} DIAGNOSTIC: No features exceed cap ({cap_for_logging:.1f}m) - all features safe"
             )
     
-    return (
-        LeakageBudget(
-            interval_minutes=interval_minutes,
-            horizon_minutes=horizon_minutes,
-            max_feature_lookback_minutes=actual_max_lookback,  # Actual (uncapped) from canonical map
-            cap_max_lookback_minutes=cap_max_lookback,  # Optional cap
-            allowed_max_lookback_minutes=None  # Will be set by caller if purge-derived
-        ),
-        set_fingerprint,
-        order_fingerprint
+    # Create LeakageBudget object
+    budget = LeakageBudget(
+        interval_minutes=interval_minutes,
+        horizon_minutes=horizon_minutes,
+        max_feature_lookback_minutes=max_lookback,  # Actual (uncapped) from canonical map
+        cap_max_lookback_minutes=cap_max_lookback,  # Optional cap
+        allowed_max_lookback_minutes=None  # Will be set by caller if purge-derived
     )
+    
+    # Cache budget result (for log noise reduction)
+    # Only cache if no canonical map passed (canonical map might be different)
+    if canonical_lookback_map is None:
+        _budget_cache[cache_key] = (budget, set_fingerprint, order_fingerprint)
+    
+    # Log one-line summary (not per-feature details)
+    # Only log if not a cache hit (cache hits logged above at DEBUG)
+    # Note: Check cache BEFORE we added to it (was_cached = before this call)
+    was_cached_before = cache_key in _budget_cache
+    if not was_cached_before:
+        # One-line summary at INFO (reduces noise)
+        logger.info(
+            f"📊 compute_budget({stage}): max_lookback={max_lookback:.1f}m, "
+            f"n_features={len(feature_list)}, fingerprint={set_fingerprint[:8]}"
+        )
+    
+    return budget, set_fingerprint, order_fingerprint
 
 
 def compute_feature_lookback_max(
