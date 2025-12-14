@@ -899,7 +899,7 @@ def rank_targets(
                             continue
                 
                 # Store symbol-specific results
-                if enable_symbol_specific:
+                if enable_symbol_specific and result_sym_dict:
                     if target_name not in results_sym:
                         results_sym[target_name] = {}
                     
