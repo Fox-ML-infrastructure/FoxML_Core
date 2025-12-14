@@ -14,11 +14,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
-#### Telemetry System (2025-12-14) – **NEW**
+#### Enhanced Drift Tracking (2025-12-14) – **NEW**
+Bulletproof drift tracking with fingerprints, severity tiers, critical metrics, and sanity checks. Can now definitively answer "What changed between baseline and current, and was it data, config, code, or stochasticity?"
+- Fingerprints: git commit, config hash, data fingerprint (baseline + current) prove baseline is different
+- Drift tiers: OK/WARN/ALERT with configurable thresholds (stricter for critical metrics)
+- Critical metrics: Automatically tracks label_window, horizon, leakage flags, cv_scheme_id, etc.
+- Sanity checks: Detects self-comparison and suspiciously identical runs
+- Parquet files: Queryable long-format data alongside JSON for efficient cross-run analysis
+- Zero handling: Explicit `rel_delta_status` for zero baselines (no ambiguous nulls)
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-14-drift-tracking-enhancements.md)
+
+#### Telemetry System (2025-12-14)
 Sidecar-based telemetry system with view isolation. Telemetry files live alongside existing artifacts in cohort directories, enabling per-target, per-symbol, and per-cross-sectional drift tracking.
-- Sidecar files: `telemetry_metrics.json`, `telemetry_drift.json`, `telemetry_trend.json` in each cohort folder
-- View-level rollups: `CROSS_SECTIONAL/telemetry_rollup.json`, `SYMBOL_SPECIFIC/telemetry_rollup.json`
-- Stage-level container: `TARGET_RANKING/telemetry_rollup.json`
+- Sidecar files: `telemetry_metrics.json` + `.parquet`, `telemetry_drift.json` + `.parquet`, `telemetry_trend.json` in each cohort folder
+- View-level rollups: `CROSS_SECTIONAL/telemetry_rollup.json` + `.parquet`, `SYMBOL_SPECIFIC/telemetry_rollup.json` + `.parquet`
+- Stage-level container: `TARGET_RANKING/telemetry_rollup.json` + `.parquet`
 - View isolation: CS drift only compares to CS baselines, SS only to SS (baseline key: `stage:view:target[:symbol]`)
 - Config-driven: All behavior controlled by `safety.telemetry` section
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-14-telemetry-system.md)

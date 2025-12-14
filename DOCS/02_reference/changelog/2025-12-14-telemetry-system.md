@@ -13,8 +13,8 @@ Implemented a sidecar-based telemetry system with view isolation. Telemetry file
 **Problem:** Need telemetry that matches existing artifact structure and enables per-target, per-symbol, and per-cross-sectional drift tracking.
 
 **Solution:** Telemetry files written as sidecars in cohort directories:
-- `telemetry_metrics.json` - Telemetry facts for this cohort
-- `telemetry_drift.json` - Drift comparison vs baseline (view-isolated)
+- `telemetry_metrics.json` + `telemetry_metrics.parquet` - Telemetry facts for this cohort
+- `telemetry_drift.json` + `telemetry_drift.parquet` - Drift comparison vs baseline (view-isolated)
 - `telemetry_trend.json` - Optional trend analysis (after N runs)
 
 **Files Changed:**
@@ -42,10 +42,14 @@ REPRODUCIBILITY/TARGET_RANKING/
           metrics.json
           audit_report.json
           telemetry_metrics.json    # NEW
+          telemetry_metrics.parquet  # NEW (queryable)
           telemetry_drift.json      # NEW
+          telemetry_drift.parquet   # NEW (queryable)
           telemetry_trend.json      # NEW (optional)
     telemetry_rollup.json           # NEW: aggregated across all SS symbols/targets
+    telemetry_rollup.parquet       # NEW (queryable)
   telemetry_rollup.json             # NEW: stage-level container
+  telemetry_rollup.parquet          # NEW (queryable)
 ```
 
 **Result:** Telemetry follows existing artifact structure exactly, making it easy to find and compare.
@@ -215,6 +219,14 @@ This generates:
 
 - [Reproducibility Structure](03_technical/implementation/REPRODUCIBILITY_STRUCTURE.md)
 - [Reproducibility API](03_technical/implementation/REPRODUCIBILITY_API.md)
+
+---
+
+---
+
+## Related Enhancements
+
+- **[Enhanced Drift Tracking](2025-12-14-drift-tracking-enhancements.md)** - Fingerprints, drift tiers, critical metrics, sanity checks, Parquet files
 
 ---
 
