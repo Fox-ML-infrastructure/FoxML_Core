@@ -174,6 +174,7 @@ class TelemetryWriter:
         """
         Write telemetry_drift.json comparing current run to baseline.
         
+        Enhanced with fingerprints, drift tiers, critical metrics, and sanity checks.
         Baseline key format: (stage, view, target[, symbol])
         This ensures view isolation: CS only compares to CS, SS only compares to SS.
         """
@@ -187,7 +188,7 @@ class TelemetryWriter:
             logger.debug(f"No baseline found for drift comparison: {baseline_key}")
             return
         
-        # Load baseline metrics
+        # Load baseline metrics and metadata
         baseline_metrics_file = baseline_cohort_dir / "telemetry_metrics.json"
         if not baseline_metrics_file.exists():
             # Fallback to metrics.json
@@ -195,6 +196,26 @@ class TelemetryWriter:
             if not baseline_metrics_file.exists():
                 logger.debug(f"Baseline metrics not found: {baseline_metrics_file}")
                 return
+        
+        # Load baseline metadata for fingerprints
+        baseline_metadata_file = baseline_cohort_dir / "metadata.json"
+        baseline_metadata = {}
+        if baseline_metadata_file.exists():
+            try:
+                with open(baseline_metadata_file, 'r') as f:
+                    baseline_metadata = json.load(f)
+            except Exception as e:
+                logger.debug(f"Failed to load baseline metadata: {e}")
+        
+        # Load current metadata for fingerprints
+        current_metadata_file = cohort_dir / "metadata.json"
+        current_metadata = {}
+        if current_metadata_file.exists():
+            try:
+                with open(current_metadata_file, 'r') as f:
+                    current_metadata = json.load(f)
+            except Exception as e:
+                logger.debug(f"Failed to load current metadata: {e}")
         
         try:
             with open(baseline_metrics_file, 'r') as f:
@@ -206,6 +227,17 @@ class TelemetryWriter:
             else:
                 baseline_metrics = baseline_data
             
+            # Extract fingerprints
+            baseline_git_commit = baseline_metadata.get("git_commit") or baseline_data.get("git_commit")
+            current_git_commit = current_metadata.get("git_commit") or self._get_git_commit()
+            
+            baseline_config_hash = baseline_metadata.get("cs_config_hash") or baseline_metadata.get("config_hash")
+            current_config_hash = current_metadata.get("cs_config_hash") or current_metadata.get("config_hash")
+            
+            # Compute data fingerprint (date range + N_effective + n_symbols)
+            baseline_data_fingerprint = self._compute_data_fingerprint(baseline_metadata)
+            current_data_fingerprint = self._compute_data_fingerprint(current_metadata)
+            
             # Compute drift
             drift_results = {
                 "current_run_id": run_id,
@@ -215,8 +247,54 @@ class TelemetryWriter:
                 "view": view,
                 "target": target,
                 "symbol": symbol,
+                # Fingerprints for proving baseline is actually different
+                "fingerprints": {
+                    "baseline": {
+                        "git_commit": baseline_git_commit,
+                        "config_hash": baseline_config_hash,
+                        "data_fingerprint": baseline_data_fingerprint,
+                        "timestamp": baseline_metadata.get("created_at") or baseline_data.get("timestamp")
+                    },
+                    "current": {
+                        "git_commit": current_git_commit,
+                        "config_hash": current_config_hash,
+                        "data_fingerprint": current_data_fingerprint,
+                        "timestamp": current_metadata.get("created_at") or datetime.now().isoformat()
+                    }
+                },
                 "drift_metrics": {}
             }
+            
+            # Sanity check: ensure baseline is actually different
+            fingerprints_identical = (
+                baseline_git_commit == current_git_commit and
+                baseline_config_hash == current_config_hash and
+                baseline_data_fingerprint == current_data_fingerprint
+            )
+            
+            if fingerprints_identical and run_id != baseline_data.get("run_id"):
+                drift_results["sanity_check"] = {
+                    "status": "SUSPICIOUSLY_IDENTICAL",
+                    "message": "All fingerprints identical but run_id differs - may indicate self-comparison or deterministic run"
+                }
+            elif run_id == baseline_data.get("run_id"):
+                drift_results["sanity_check"] = {
+                    "status": "SELF_COMPARISON",
+                    "message": "Comparing run to itself - this should not happen"
+                }
+            else:
+                drift_results["sanity_check"] = {
+                    "status": "OK",
+                    "message": "Baseline and current runs are different"
+                }
+            
+            # Critical metrics to track (silent killers)
+            critical_metrics = [
+                "label_window", "horizon", "lookahead_guard_state",
+                "cv_scheme_id", "fold_count", "purge_gap",
+                "leakage_flag", "leakage_events_count",
+                "missingness_rate", "winsorization_clip", "outlier_rate"
+            ]
             
             # Compare numeric metrics
             for metric_name in set(current_metrics.keys()) & set(baseline_metrics.keys()):
@@ -227,15 +305,60 @@ class TelemetryWriter:
                     continue
                 
                 delta = float(curr_val) - float(base_val)
-                rel_delta = delta / float(base_val) if base_val != 0 else None
+                
+                # Fix rel_delta for zeros: explicit handling
+                if base_val == 0:
+                    if curr_val == 0:
+                        rel_delta = 0.0
+                        rel_delta_status = "both_zero"
+                    else:
+                        rel_delta = None
+                        rel_delta_status = "undefined_zero_baseline"
+                else:
+                    rel_delta = delta / float(base_val)
+                    rel_delta_status = "defined"
+                
+                # Classify drift with tiers (OK/WARN/ALERT)
+                drift_tier = self._classify_drift_tier(delta, rel_delta, metric_name in critical_metrics)
                 
                 drift_results["drift_metrics"][metric_name] = {
                     "current": float(curr_val),
                     "baseline": float(base_val),
                     "delta": delta,
                     "rel_delta": rel_delta,
-                    "status": self._classify_drift(delta, rel_delta)
+                    "rel_delta_status": rel_delta_status,
+                    "baseline_zero": base_val == 0,
+                    "tier": drift_tier,
+                    "is_critical": metric_name in critical_metrics,
+                    # Backward compatibility: legacy status field
+                    "status": "STABLE" if drift_tier == "OK" else ("DRIFTING" if drift_tier == "WARN" else "DIVERGED")
                 }
+            
+            # Track critical metrics from metadata if not in metrics
+            for metric_name in critical_metrics:
+                if metric_name not in drift_results["drift_metrics"]:
+                    curr_val = current_metadata.get(metric_name) or current_metrics.get(metric_name)
+                    base_val = baseline_metadata.get(metric_name) or baseline_metrics.get(metric_name)
+                    
+                    if curr_val is not None and base_val is not None:
+                        if isinstance(curr_val, (int, float)) and isinstance(base_val, (int, float)):
+                            delta = float(curr_val) - float(base_val)
+                            rel_delta = delta / float(base_val) if base_val != 0 else None
+                            rel_delta_status = "undefined_zero_baseline" if base_val == 0 else "defined"
+                            
+                            drift_tier = self._classify_drift_tier(delta, rel_delta, True)
+                            drift_results["drift_metrics"][metric_name] = {
+                                "current": float(curr_val),
+                                "baseline": float(base_val),
+                                "delta": delta,
+                                "rel_delta": rel_delta,
+                                "rel_delta_status": rel_delta_status,
+                                "baseline_zero": base_val == 0,
+                                "tier": drift_tier,
+                                "is_critical": True,
+                                # Backward compatibility: legacy status field
+                                "status": "STABLE" if drift_tier == "OK" else ("DRIFTING" if drift_tier == "WARN" else "DIVERGED")
+                            }
             
             # Write drift files (JSON for human-readable, Parquet for queryable)
             drift_file_json = cohort_dir / "telemetry_drift.json"
@@ -248,6 +371,9 @@ class TelemetryWriter:
                 # Write Parquet (queryable, long format)
                 # Flatten drift_metrics dict into DataFrame
                 parquet_rows = []
+                fingerprints = drift_results.get("fingerprints", {})
+                sanity_check = drift_results.get("sanity_check", {})
+                
                 for metric_name, drift_info in drift_results.get("drift_metrics", {}).items():
                     if isinstance(drift_info, dict):
                         row = {
@@ -263,7 +389,21 @@ class TelemetryWriter:
                             "baseline_value": drift_info.get("baseline"),
                             "delta": drift_info.get("delta"),
                             "rel_delta": drift_info.get("rel_delta"),
-                            "status": drift_info.get("status")
+                            "rel_delta_status": drift_info.get("rel_delta_status"),
+                            "baseline_zero": drift_info.get("baseline_zero", False),
+                            "tier": drift_info.get("tier"),
+                            "is_critical": drift_info.get("is_critical", False),
+                            "status": drift_info.get("status"),  # Legacy field for backward compatibility
+                            # Fingerprints
+                            "baseline_git_commit": fingerprints.get("baseline", {}).get("git_commit"),
+                            "current_git_commit": fingerprints.get("current", {}).get("git_commit"),
+                            "baseline_config_hash": fingerprints.get("baseline", {}).get("config_hash"),
+                            "current_config_hash": fingerprints.get("current", {}).get("config_hash"),
+                            "baseline_data_fingerprint": fingerprints.get("baseline", {}).get("data_fingerprint"),
+                            "current_data_fingerprint": fingerprints.get("current", {}).get("data_fingerprint"),
+                            # Sanity check
+                            "sanity_check_status": sanity_check.get("status"),
+                            "sanity_check_message": sanity_check.get("message")
                         }
                         parquet_rows.append(row)
                 
@@ -338,23 +478,107 @@ class TelemetryWriter:
         return None
     
     def _classify_drift(self, delta: float, rel_delta: Optional[float]) -> str:
-        """Classify drift status based on thresholds."""
+        """Classify drift status based on thresholds (legacy method, use _classify_drift_tier)."""
+        tier = self._classify_drift_tier(delta, rel_delta, False)
+        if tier == "OK":
+            return "STABLE"
+        elif tier == "WARN":
+            return "DRIFTING"
+        else:
+            return "DIVERGED"
+    
+    def _classify_drift_tier(self, delta: float, rel_delta: Optional[float], is_critical: bool = False) -> str:
+        """
+        Classify drift into tiers: OK / WARN / ALERT.
+        
+        Args:
+            delta: Absolute difference
+            rel_delta: Relative difference (None if baseline is zero)
+            is_critical: Whether this is a critical metric (stricter thresholds)
+        
+        Returns:
+            "OK", "WARN", or "ALERT"
+        """
+        # Stricter thresholds for critical metrics
+        if is_critical:
+            warn_threshold_rel = 0.01  # 1% for critical metrics
+            alert_threshold_rel = 0.03  # 3% for critical metrics
+            warn_threshold_abs = 0.001
+            alert_threshold_abs = 0.01
+        else:
+            warn_threshold_rel = 0.05  # 5% for normal metrics
+            alert_threshold_rel = 0.20  # 20% for normal metrics
+            warn_threshold_abs = 0.01
+            alert_threshold_abs = 0.10
+        
         if rel_delta is not None:
             abs_rel_delta = abs(rel_delta)
-            if abs_rel_delta < 0.05:  # 5% change
-                return "STABLE"
-            elif abs_rel_delta < 0.20:  # 20% change
-                return "DRIFTING"
+            if abs_rel_delta < warn_threshold_rel:
+                return "OK"
+            elif abs_rel_delta < alert_threshold_rel:
+                return "WARN"
             else:
-                return "DIVERGED"
+                return "ALERT"
         else:
-            # Use absolute delta
-            if abs(delta) < 0.01:
-                return "STABLE"
-            elif abs(delta) < 0.10:
-                return "DRIFTING"
+            # Use absolute delta when rel_delta is undefined
+            abs_delta = abs(delta)
+            if abs_delta < warn_threshold_abs:
+                return "OK"
+            elif abs_delta < alert_threshold_abs:
+                return "WARN"
             else:
-                return "DIVERGED"
+                return "ALERT"
+    
+    def _compute_data_fingerprint(self, metadata: Dict[str, Any]) -> Optional[str]:
+        """
+        Compute data fingerprint from metadata.
+        
+        Fingerprint includes: date range, N_effective, n_symbols, universe_id
+        """
+        try:
+            import hashlib
+            fingerprint_parts = []
+            
+            date_start = metadata.get("date_start") or metadata.get("start_date")
+            date_end = metadata.get("date_end") or metadata.get("end_date")
+            if date_start and date_end:
+                fingerprint_parts.append(f"dates:{date_start}:{date_end}")
+            
+            n_effective = metadata.get("N_effective") or metadata.get("n_effective")
+            if n_effective is not None:
+                fingerprint_parts.append(f"n_eff:{n_effective}")
+            
+            n_symbols = metadata.get("n_symbols") or metadata.get("num_symbols")
+            if n_symbols is not None:
+                fingerprint_parts.append(f"n_sym:{n_symbols}")
+            
+            universe_id = metadata.get("universe_id")
+            if universe_id:
+                fingerprint_parts.append(f"universe:{universe_id}")
+            
+            if fingerprint_parts:
+                fingerprint_str = "|".join(fingerprint_parts)
+                return hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]
+        except Exception as e:
+            logger.debug(f"Failed to compute data fingerprint: {e}")
+        return None
+    
+    def _get_git_commit(self) -> Optional[str]:
+        """Get current git commit hash."""
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['git', 'rev-parse', '--short', 'HEAD'],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception as e:
+            logger.debug(f"Failed to get git commit: {e}")
+        return None
     
     def generate_view_rollup(
         self,
