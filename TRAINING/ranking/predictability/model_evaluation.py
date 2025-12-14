@@ -639,7 +639,9 @@ def train_and_evaluate_models(
     experiment_config: Optional[Any] = None,  # Optional ExperimentConfig (for data.bar_interval)
     output_dir: Optional[Path] = None,  # Optional output directory for stability snapshots
     resolved_config: Optional[Any] = None,  # NEW: ResolvedConfig with correct purge/embargo (post-pruning)
-    dropped_tracker: Optional[Any] = None  # NEW: Optional DroppedFeaturesTracker for telemetry
+    dropped_tracker: Optional[Any] = None,  # NEW: Optional DroppedFeaturesTracker for telemetry
+    view: str = "CROSS_SECTIONAL",  # View type for REPRODUCIBILITY structure
+    symbol: Optional[str] = None  # Symbol name for SYMBOL_SPECIFIC view
 ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, float], float, Dict[str, List[Tuple[str, float]]], Dict[str, Dict[str, float]], List[Dict[str, Any]]]:
     """
     Train multiple models and return task-aware metrics + importance magnitude
@@ -1426,12 +1428,26 @@ def train_and_evaluate_models(
             if 'full_importance_dict' in pruning_stats and output_dir is not None:
                 try:
                     from TRAINING.stability.feature_importance import save_snapshot_hook
+                    # Build REPRODUCIBILITY path for snapshots (same structure as feature importances)
+                    target_name_clean = (target_column if target_column else 'unknown').replace('/', '_').replace('\\', '_')
+                    # Determine base output directory (RESULTS/{run}/)
+                    if output_dir.name == "target_rankings":
+                        base_output_dir = output_dir.parent
+                    else:
+                        base_output_dir = output_dir
+                    
+                    repro_base = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
+                    if view == "SYMBOL_SPECIFIC" and symbol:
+                        snapshot_base_dir = repro_base / view / target_name_clean / f"symbol={symbol}"
+                    else:
+                        snapshot_base_dir = repro_base / view / target_name_clean
+                    
                     save_snapshot_hook(
                         target_name=target_column if target_column else 'unknown',
                         method="quick_pruner",
                         importance_dict=pruning_stats['full_importance_dict'],
-                        universe_id="CROSS_SECTIONAL",
-                        output_dir=output_dir,
+                        universe_id=view,  # Use view parameter
+                        output_dir=snapshot_base_dir,  # Save in REPRODUCIBILITY structure
                         auto_analyze=None,  # Load from config
                     )
                 except Exception as e:
@@ -5207,7 +5223,9 @@ def evaluate_target_predictability(
             experiment_config=experiment_config,  # Pass experiment config
             output_dir=output_dir,  # Pass output directory for stability snapshots
             resolved_config=resolved_config,  # Pass resolved config with correct purge/embargo (post-pruning)
-            dropped_tracker=dropped_tracker  # Pass tracker for telemetry
+            dropped_tracker=dropped_tracker,  # Pass tracker for telemetry
+            view=view,  # Pass view for REPRODUCIBILITY structure
+            symbol=symbol  # Pass symbol for SYMBOL_SPECIFIC view
         )
         
         if result is None or len(result) != 7:

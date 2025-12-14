@@ -427,6 +427,23 @@ def select_features_for_target(
                     if all_feature_importances and output_dir:
                         try:
                             from TRAINING.stability.feature_importance import save_snapshot_hook
+                            # Build REPRODUCIBILITY path for snapshots (same structure as feature importances)
+                            target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+                            # Determine base output directory (RESULTS/{run}/)
+                            # output_dir might be: RESULTS/{run}/feature_selections/{target}/ or RESULTS/{run}/feature_selections/
+                            if output_dir.name == "feature_selections":
+                                base_output_dir = output_dir.parent
+                            elif output_dir.parent.name == "feature_selections":
+                                base_output_dir = output_dir.parent.parent
+                            else:
+                                base_output_dir = output_dir.parent if output_dir.parent.exists() else output_dir
+                            
+                            repro_base = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION"
+                            if view == "SYMBOL_SPECIFIC" and symbol_to_process:
+                                snapshot_base_dir = repro_base / view / target_name_clean / f"symbol={symbol_to_process}"
+                            else:
+                                snapshot_base_dir = repro_base / view / target_name_clean
+                            
                             for model_family, importance_dict in all_feature_importances.items():
                                 if importance_dict:
                                     # FIX: Ensure method name is model_family (e.g., "lightgbm", "ridge")
@@ -435,8 +452,8 @@ def select_features_for_target(
                                         target_name=target_column,
                                         method=model_family,  # Use model_family as method identifier
                                         importance_dict=importance_dict,
-                                        universe_id=symbol_to_process,  # Symbol name for SYMBOL_SPECIFIC
-                                        output_dir=output_dir,
+                                        universe_id=view,  # Use view parameter
+                                        output_dir=snapshot_base_dir,  # Save in REPRODUCIBILITY structure
                                         auto_analyze=None,  # Load from config
                                     )
                         except Exception as e:
@@ -974,15 +991,32 @@ def select_features_for_target(
     try:
         from TRAINING.stability.feature_importance import save_snapshot_hook
         # Convert summary_df to importance dict (consensus_score as importance)
-        if summary_df is not None and len(summary_df) > 0:
+        if summary_df is not None and len(summary_df) > 0 and output_dir:
             importance_dict = summary_df.set_index('feature')['consensus_score'].to_dict()
-            universe_id = ",".join(sorted(symbols)) if len(symbols) <= 10 else "ALL"
+            
+            # Build REPRODUCIBILITY path for snapshots (same structure as feature importances)
+            target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+            # Determine base output directory (RESULTS/{run}/)
+            # output_dir might be: RESULTS/{run}/feature_selections/{target}/ or RESULTS/{run}/feature_selections/
+            if output_dir.name == "feature_selections":
+                base_output_dir = output_dir.parent
+            elif output_dir.parent.name == "feature_selections":
+                base_output_dir = output_dir.parent.parent
+            else:
+                base_output_dir = output_dir.parent if output_dir.parent.exists() else output_dir
+            
+            repro_base = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION"
+            if view == "SYMBOL_SPECIFIC" and symbol:
+                snapshot_base_dir = repro_base / view / target_name_clean / f"symbol={symbol}"
+            else:
+                snapshot_base_dir = repro_base / view / target_name_clean
+            
             save_snapshot_hook(
                 target_name=target_column,
                 method="multi_model_aggregated",
                 importance_dict=importance_dict,
-                universe_id=universe_id,
-                output_dir=output_dir,
+                universe_id=view,  # Use view parameter
+                output_dir=snapshot_base_dir,  # Save in REPRODUCIBILITY structure
                 auto_analyze=None,  # Load from config
             )
     except Exception as e:
