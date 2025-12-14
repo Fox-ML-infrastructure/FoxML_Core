@@ -130,6 +130,22 @@ When multiple docs cover similar topics, prefer:
 
 See `DOCS/LEGACY/README.md` for migration guide.
 
+## Cross-Reference Updates (2025-12-14)
+
+### Look-Ahead Bias Fixes
+- **Files**:
+  - `DOCS/03_technical/fixes/LOOKAHEAD_BIAS_FIX_PLAN.md`
+  - `DOCS/03_technical/fixes/LOOKAHEAD_BIAS_SAFE_IMPLEMENTATION.md`
+  - `DOCS/02_reference/changelog/2025-12-14-lookahead-bias-fixes.md`
+- **References**:
+  - `CHANGELOG.md` - Added to Recent Highlights
+  - `DOCS/INDEX.md` - Added to Fixes section
+  - `DOCS/02_reference/changelog/README.md` - Added 2025-12-14 entry
+  - `DOCS/03_technical/fixes/README.md` - Added look-ahead bias fixes section
+  - `DOCS/03_technical/README.md` - Added to Fixes section
+  - `CONFIG/pipeline/training/safety.yaml` - Added lookahead_bias_fixes config section
+  - `CONFIG/experiments/e2e_ranking_test.yaml` - Added lookahead_bias_fixes config section
+
 ## Cross-Reference Updates (2025-12-13)
 
 **SST Enforcement Design Implementation:**

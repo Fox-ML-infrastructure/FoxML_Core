@@ -43,7 +43,11 @@ This directory contains detailed technical documentation for developers, researc
 - **[Known Issues](fixes/KNOWN_ISSUES.md)** - Current issues and limitations
 - **[Bug Fixes](fixes/BUG_FIXES.md)** - Fix history
 - **[Migration Notes](fixes/MIGRATION_NOTES.md)** - Migration guide
-- **[SST Enforcement Design](fixes/2025-12-13-sst-enforcement-design.md)** - **NEW**: EnforcedFeatureSet contract, type boundary wiring, boundary assertions
+- **Look-Ahead Bias Fixes (2025-12-14)** – **NEW**:
+  - **[Look-Ahead Bias Fix Plan](fixes/LOOKAHEAD_BIAS_FIX_PLAN.md)** - Complete analysis of 4 critical look-ahead bias issues
+  - **[Safe Implementation Plan](fixes/LOOKAHEAD_BIAS_SAFE_IMPLEMENTATION.md)** - Feature flag-based implementation strategy
+  - **Status**: ✅ All fixes implemented (behind feature flags, default: OFF)
+- **[SST Enforcement Design](fixes/2025-12-13-sst-enforcement-design.md)** - EnforcedFeatureSet contract, type boundary wiring, boundary assertions
 - **[Leakage Controls Fixes](fixes/2025-12-13-leakage-validation-fix.md)** - Leakage validation and fingerprint tracking fixes
 - **[Fingerprint Tracking](fixes/2025-12-13-lookback-fingerprint-tracking.md)** - Lookback fingerprint tracking system
 - **[Fingerprint Improvements](fixes/2025-12-13-fingerprint-improvements.md)** - Set-invariant fingerprints and dataclass improvements
