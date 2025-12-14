@@ -904,28 +904,28 @@ def train_and_evaluate_models(
             feature_names, data_interval_minutes, max_lookback_cap_minutes=max_lookback_cap
         )
         
-                if computed_lookback is not None:
-                    feature_lookback_max_minutes = computed_lookback
-                    # SANITY CHECK: Verify top_offenders matches reported max
-                    if top_offenders:
-                        actual_max_in_list = top_offenders[0][1]
-                        if abs(actual_max_in_list - computed_lookback) > 1.0:
-                            logger.warning(
-                                f"⚠️  Lookback logging mismatch: reported max={computed_lookback:.1f}m "
-                                f"but top feature in list={actual_max_in_list:.1f}m. "
-                                f"This suggests the top_offenders list is from a different feature set."
-                            )
-                        else:
-                            # Only log if > 4 hours or if there's a mismatch (for debugging)
-                            if computed_lookback > 240 or abs(actual_max_in_list - computed_lookback) > 1.0:
-                                logger.info(f"  📊 Feature lookback analysis: max={computed_lookback:.1f}m")
-                                logger.info(f"    Top lookback features (from {len(feature_names)} features): {', '.join([f'{f}({m:.0f}m)' for f, m in top_offenders[:5]])}")
-                                # Sanity check: verify all top features are in current feature set
-                                top_feature_names = {f for f, _ in top_offenders[:5]}
-                                current_feature_set = set(feature_names)
-                                missing = top_feature_names - current_feature_set
-                                if missing:
-                                    logger.error(f"🚨 CRITICAL: Top lookback features not in current feature set: {missing}")
+        if computed_lookback is not None:
+            feature_lookback_max_minutes = computed_lookback
+            # SANITY CHECK: Verify top_offenders matches reported max
+            if top_offenders:
+                actual_max_in_list = top_offenders[0][1]
+                if abs(actual_max_in_list - computed_lookback) > 1.0:
+                    logger.warning(
+                        f"⚠️  Lookback logging mismatch: reported max={computed_lookback:.1f}m "
+                        f"but top feature in list={actual_max_in_list:.1f}m. "
+                        f"This suggests the top_offenders list is from a different feature set."
+                    )
+                else:
+                    # Only log if > 4 hours or if there's a mismatch (for debugging)
+                    if computed_lookback > 240 or abs(actual_max_in_list - computed_lookback) > 1.0:
+                        logger.info(f"  📊 Feature lookback analysis: max={computed_lookback:.1f}m")
+                        logger.info(f"    Top lookback features (from {len(feature_names)} features): {', '.join([f'{f}({m:.0f}m)' for f, m in top_offenders[:5]])}")
+                        # Sanity check: verify all top features are in current feature set
+                        top_feature_names = {f for f, _ in top_offenders[:5]}
+                        current_feature_set = set(feature_names)
+                        missing = top_feature_names - current_feature_set
+                        if missing:
+                            logger.error(f"🚨 CRITICAL: Top lookback features not in current feature set: {missing}")
         else:
             # Fallback: use conservative estimate if cannot compute
             if data_interval_minutes is not None and data_interval_minutes > 0:
