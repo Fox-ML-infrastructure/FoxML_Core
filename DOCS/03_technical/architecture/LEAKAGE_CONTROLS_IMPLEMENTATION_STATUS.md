@@ -149,7 +149,10 @@
 - [ ] **Test 2**: Feature list with `day_of_week`, `holiday_dummy` → `max_feature_lookback_minutes` does NOT jump to 1440m
 - [ ] **Test 3**: Set `policy=strict` + `purge_minutes=35` + include long-lookback feature → training fails fast with clear message
 - [ ] **Test 4**: Set `policy=drop_features` + violation → features dropped, budget recomputed, training continues
-- [ ] **Test 5**: Final feature set (post gatekeeper + pruning) passes policy check
+- [x] **Test 5**: Final feature set (post gatekeeper + pruning) passes policy check
+  - ✅ Fingerprint tracking ensures lookback computed on exact final feature set
+  - ✅ MODEL_TRAIN_INPUT fingerprint computed AFTER pruning (POST_PRUNE stage)
+  - ✅ All lookback computations validate against MODEL_TRAIN_INPUT fingerprint
 
 ---
 

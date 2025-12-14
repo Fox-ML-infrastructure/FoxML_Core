@@ -78,6 +78,78 @@ numerical_stability:
 
 ## Leakage Detection Settings
 
+### Over-Budget Action
+
+**Purpose:** Control what happens when features exceed the lookback budget.
+
+**Settings:**
+```yaml
+leakage_detection:
+  over_budget_action: drop  # drop | hard_stop | warn
+```
+
+**Options:**
+- `drop`: Gatekeeper removes violating features (default for dev/testing)
+- `hard_stop`: Fail the run if any violating feature exists (recommended for prod)
+- `warn`: Allow but log violations (useful only for debugging)
+
+**Example: Production Configuration**
+```yaml
+leakage_detection:
+  over_budget_action: hard_stop  # Fail fast in production
+```
+
+### Lookback Budget Computation
+
+**Purpose:** Control how the required lookback budget is computed.
+
+**Settings:**
+```yaml
+leakage_detection:
+  lookback_budget_minutes: auto  # auto | <number>
+  lookback_buffer_minutes: 5.0   # Safety buffer in minutes
+```
+
+**Options:**
+- `lookback_budget_minutes: auto`: Compute from actual final feature set (post-prune or chosen stage)
+- `lookback_budget_minutes: <number>`: Force a cap for experiments (but still log what the true max was)
+
+**Example: Experiment Configuration**
+```yaml
+leakage_detection:
+  lookback_budget_minutes: 240  # Cap at 4 hours for experiment
+  lookback_buffer_minutes: 10.0  # 10 minute safety buffer
+```
+
+### Cross-Validation Purge/Embargo Settings
+
+**Purpose:** Control purge and embargo computation for CV splits.
+
+**Settings:**
+```yaml
+leakage_detection:
+  cv:
+    purge_minutes: auto      # auto | <number>
+    embargo_minutes: auto     # auto | <number>
+    embargo_extra_bars: 5    # Extra bars for embargo safety margin
+```
+
+**Options:**
+- `purge_minutes: auto`: Compute from feature lookback + buffer
+- `embargo_minutes: auto`: Compute from horizon + extra bars
+- `embargo_extra_bars`: Number of extra bars added to horizon for embargo (default: 5)
+
+**Enforcement:**
+- `purge >= feature_lookback_budget + buffer`
+- `embargo >= horizon + extra`
+
+**Example: Custom Embargo**
+```yaml
+leakage_detection:
+  cv:
+    embargo_extra_bars: 10  # 10 bars = 50 minutes for 5m bars
+```
+
 ### Pre-Training Leak Scan
 
 **Purpose:** Detect near-copy features before model training.

@@ -321,12 +321,21 @@ def _enforce_final_safety_gate(
         # No purge, no rules - allow all features
         return X, feature_names
     
+    # Load over_budget_action from config
+    over_budget_action = "drop"  # Default: drop (for backward compatibility)
+    try:
+        from CONFIG.config_loader import get_cfg
+        over_budget_action = get_cfg("safety.leakage_detection.over_budget_action", default="drop", config_name="safety_config")
+    except Exception:
+        pass
+    
     # Define maximum allowed lookback (with 1% safety buffer)
     # If purge is 100m, max lookback is ~99m
     safe_lookback_max = purge_limit * 0.99
     
     dropped_features = []
     dropped_indices = []
+    violating_features = []  # Track violations for hard_stop/warn modes
     
     # Get feature registry for lookback calculation
     registry = None
@@ -409,10 +418,39 @@ def _enforce_final_safety_gate(
             reason = f"lookback ({lookback_minutes:.1f}m) > safe_limit ({safe_lookback_max:.1f}m)"
         
         if should_drop:
-            dropped_features.append((feature_name, reason))
-            dropped_indices.append(idx)
+            violating_features.append((feature_name, reason))
+            if over_budget_action == "drop":
+                # Only add to dropped_features if action is "drop"
+                dropped_features.append((feature_name, reason))
+                dropped_indices.append(idx)
     
-    # Mutate the Dataframe (drop columns)
+    # Handle violations based on over_budget_action
+    if violating_features:
+        if over_budget_action == "hard_stop":
+            # Hard-stop: fail the run if any violating feature exists
+            violation_list = ", ".join([f"{name} ({reason})" for name, reason in violating_features[:10]])
+            if len(violating_features) > 10:
+                violation_list += f" ... and {len(violating_features) - 10} more"
+            raise RuntimeError(
+                f"🚨 OVER_BUDGET VIOLATION (policy: hard_stop - training blocked): "
+                f"{len(violating_features)} features exceed purge limit ({purge_limit:.1f}m, safe_lookback_max={safe_lookback_max:.1f}m). "
+                f"Violating features: {violation_list}"
+            )
+        elif over_budget_action == "warn":
+            # Warn: allow but log violations (NOT recommended for production)
+            logger.warning(
+                f"⚠️ OVER_BUDGET VIOLATION (policy: warn - allowing violating features): "
+                f"{len(violating_features)} features exceed purge limit ({purge_limit:.1f}m, safe_lookback_max={safe_lookback_max:.1f}m)"
+            )
+            logger.info(f"   Violating features ({len(violating_features)}):")
+            for feat_name, feat_reason in violating_features[:10]:
+                logger.warning(f"   ⚠️ {feat_name}: {feat_reason}")
+            if len(violating_features) > 10:
+                logger.warning(f"   ... and {len(violating_features) - 10} more")
+            # Don't drop - just warn
+        # else: over_budget_action == "drop" - handled below
+    
+    # Mutate the Dataframe (drop columns) - only if action is "drop"
     if dropped_features:
         # Log policy context
         logger.warning(
@@ -693,16 +731,15 @@ def train_and_evaluate_models(
                     purge_minutes = resolved_config.purge_minutes
                     embargo_minutes = resolved_config.embargo_minutes if resolved_config.embargo_minutes is not None else purge_minutes
                     
-                    # Load policy from config
+                    # Load policy and buffer from config
                     policy = "strict"
+                    buffer_minutes = 5.0  # Default
                     try:
                         from CONFIG.config_loader import get_cfg
                         policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+                        buffer_minutes = float(get_cfg("safety.leakage_detection.lookback_buffer_minutes", default=5.0, config_name="safety_config"))
                     except Exception:
                         pass
-                    
-                    # Buffer for safety margin (5 minutes default)
-                    buffer_minutes = 5.0
                     
                     # Constraint 1: purge must cover feature lookback
                     purge_required = budget.max_feature_lookback_minutes + buffer_minutes
@@ -862,16 +899,15 @@ def train_and_evaluate_models(
                     purge_minutes = resolved_config.purge_minutes
                     embargo_minutes = resolved_config.embargo_minutes if resolved_config.embargo_minutes is not None else purge_minutes
                     
-                    # Load policy from config
+                    # Load policy and buffer from config
                     policy = "strict"
+                    buffer_minutes = 5.0  # Default
                     try:
                         from CONFIG.config_loader import get_cfg
                         policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+                        buffer_minutes = float(get_cfg("safety.leakage_detection.lookback_buffer_minutes", default=5.0, config_name="safety_config"))
                     except Exception:
                         pass
-                    
-                    # Buffer for safety margin (5 minutes default)
-                    buffer_minutes = 5.0
                     
                     # Constraint 1: purge must cover feature lookback
                     purge_required = budget.max_feature_lookback_minutes + buffer_minutes
@@ -4029,16 +4065,17 @@ def evaluate_target_predictability(
                 purge_minutes = resolved_config.purge_minutes
                 embargo_minutes = resolved_config.embargo_minutes if resolved_config.embargo_minutes is not None else purge_minutes
                 
-                # Load policy from config
+                # Load policy and over_budget_action from config
                 policy = "strict"  # Default: strict
+                over_budget_action = "drop"  # Default: drop (for gatekeeper behavior)
+                buffer_minutes = 5.0  # Default buffer
                 try:
                     from CONFIG.config_loader import get_cfg
                     policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+                    over_budget_action = get_cfg("safety.leakage_detection.over_budget_action", default="drop", config_name="safety_config")
+                    buffer_minutes = float(get_cfg("safety.leakage_detection.lookback_buffer_minutes", default=5.0, config_name="safety_config"))
                 except Exception:
                     pass
-                
-                # Buffer for safety margin (5 minutes default)
-                buffer_minutes = 5.0
                 
                 # Constraint 1: purge must cover feature lookback
                 purge_required = budget.max_feature_lookback_minutes + buffer_minutes

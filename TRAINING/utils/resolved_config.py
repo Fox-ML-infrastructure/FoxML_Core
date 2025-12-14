@@ -153,6 +153,7 @@ def derive_purge_embargo(
     interval_minutes: Optional[Union[float, DurationLike]] = None,
     feature_lookback_max_minutes: Optional[Union[float, DurationLike]] = None,
     purge_buffer_bars: int = 5,
+    embargo_extra_bars: Optional[int] = None,  # If None, loads from safety_config.yaml
     default_purge_minutes: Optional[Union[float, DurationLike]] = None  # If None, loads from safety_config.yaml (SST)
 ) -> tuple[float, float]:
     """
@@ -227,11 +228,24 @@ def derive_purge_embargo(
     else:
         base_d = default_purge_d
     
-    # Add buffer
-    purge_embargo_d = base_d + buffer_d
+    # Add buffer for purge
+    purge_d = base_d + buffer_d
+    
+    # Embargo uses separate extra_bars (if configured) or same buffer
+    if embargo_extra_bars is None:
+        # Load from config
+        try:
+            from CONFIG.config_loader import get_cfg
+            embargo_extra_bars = int(get_cfg('safety.leakage_detection.cv.embargo_extra_bars', default=purge_buffer_bars, config_name='safety_config'))
+        except Exception:
+            embargo_extra_bars = purge_buffer_bars  # Fallback: use same as purge buffer
+    
+    # Compute embargo buffer separately
+    embargo_buffer_d = interval_d * embargo_extra_bars
+    embargo_d = base_d + embargo_buffer_d
     
     # Convert back to minutes (float) for backward compatibility
-    return purge_embargo_d.to_minutes(), purge_embargo_d.to_minutes()
+    return purge_d.to_minutes(), embargo_d.to_minutes()
 
 
 def compute_feature_lookback_max(

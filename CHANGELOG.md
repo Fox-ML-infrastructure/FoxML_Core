@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `embargo` covers target horizon
   - Previously incorrectly required `purge >= lookback + horizon`
 - **Hard-Stop on Violations**: Configurable policy (`strict`/`drop_features`/`warn`) with proper enforcement
+- **Config-Driven Leakage Control**: New explicit config knobs for auditable behavior:
+  - `over_budget_action`: `drop` | `hard_stop` | `warn` (what to do when features exceed budget)
+  - `lookback_budget_minutes`: `auto` | `<number>` (how to compute required budget)
+  - `lookback_buffer_minutes`: `<number>` (safety buffer for lookback budget)
+  - `cv.embargo_extra_bars`: `<number>` (extra bars for embargo safety margin)
+  - All settings are explicit and auditable (no vague toggles)
 - **LeakageAssessment Dataclass**: Prevents contradictory reason strings like "overfit_likely; cv_not_suspicious"
 - **CV Splitter Logging**: Run summary now shows splitter identity, purge, embargo, and max_feature_lookback_minutes
 - **Policy Explicit Logging**: Active policy and feature drop lists are logged for auditability

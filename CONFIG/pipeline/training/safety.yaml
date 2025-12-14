@@ -52,6 +52,20 @@ safety:
     # - "warn": Log violations but continue (NOT recommended for production)
     policy: "strict"  # Default: strict (fail-fast on violations)
     
+    # Over-budget action: what to do when features exceed the lookback budget
+    # - "drop": Gatekeeper removes violating features (default for dev/testing)
+    # - "hard_stop": Fail the run if any violating feature exists (recommended for prod)
+    # - "warn": Allow but log violations (useful only for debugging)
+    over_budget_action: "drop"  # Default: drop (auto-remove violating features)
+    
+    # Lookback budget computation
+    # - "auto": Compute from actual final feature set (post-prune or chosen stage)
+    # - <number>: Force a cap for experiments (but still log what the true max was)
+    lookback_budget_minutes: "auto"  # Default: auto (compute from actual features)
+    
+    # Buffer added to lookback budget for safety margin
+    lookback_buffer_minutes: 5.0  # Default: 5 minutes safety buffer
+    
     # Auto-fixer triggers when scores exceed these thresholds
     auto_fix_thresholds:
       cv_score: 0.99  # Cross-validation score threshold (0.99 = 99%)
@@ -97,6 +111,17 @@ safety:
     # If false, purge = horizon+buffer only (assumes features are strictly causal, only use past data)
     # When enabled, automatically increases purge to cover longest feature lookback window + 1% safety buffer
     default_purge_minutes: 85.0  # Default purge if horizon cannot be determined (SST: Single Source of Truth)
+  
+  # Cross-validation purge/embargo settings
+  cv:
+    # Purge minutes: "auto" (compute from feature lookback + buffer) or explicit number
+    purge_minutes: "auto"  # Default: auto (compute from actual feature set)
+    
+    # Embargo minutes: "auto" (compute from horizon + extra bars) or explicit number
+    embargo_minutes: "auto"  # Default: auto (compute from horizon)
+    
+    # Extra bars added to horizon for embargo safety margin
+    embargo_extra_bars: 5  # Default: 5 bars (e.g., 25 minutes for 5m bars)
     # NUCLEAR TEST COMPLETE: Tested with 1500.0 (24h purge) - score dropped from 0.99 to 0.763
     # This confirms feature leak is fixed, but 0.763 is still suspicious (target repainting likely)
     # Reverted to 85.0 for normal operation - Final Gatekeeper handles feature leaks autonomously
