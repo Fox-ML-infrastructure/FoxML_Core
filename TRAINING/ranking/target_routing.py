@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 def _compute_target_routing_decisions(
     results_cs: List[Any],  # List of TargetPredictabilityScore (cross-sectional)
     results_sym: Dict[str, Dict[str, Any]],  # {target_name: {symbol: TargetPredictabilityScore}}
-    results_loso: Dict[str, Dict[str, Any]]  # {target_name: {symbol: TargetPredictabilityScore}} (optional)
+    results_loso: Dict[str, Dict[str, Any]],  # {target_name: {symbol: TargetPredictabilityScore}} (optional)
+    symbol_skip_reasons: Dict[str, Dict[str, Dict[str, Any]]] = None  # {target_name: {symbol: {reason, status, ...}}}
 ) -> Dict[str, Dict[str, Any]]:
     """
     Compute routing decisions for each target based on dual-view scores.
@@ -31,6 +32,7 @@ def _compute_target_routing_decisions(
         results_cs: Cross-sectional results
         results_sym: Symbol-specific results by target
         results_loso: LOSO results by target (optional)
+        symbol_skip_reasons: Skip reasons by target and symbol (optional)
     
     Returns:
         Dict mapping target_name -> routing decision dict
@@ -115,7 +117,15 @@ def _compute_target_routing_decisions(
         # Default: CROSS_SECTIONAL (fallback)
         else:
             route = "CROSS_SECTIONAL"
-            reason = f"default (cs_auc={cs_auc:.3f}, no strong symbol-specific signal)"
+            if len(symbol_aucs) == 0:
+                reason = f"default (cs_auc={cs_auc:.3f}, symbol_eval=0 symbols evaluable)"
+            else:
+                reason = f"default (cs_auc={cs_auc:.3f}, no strong symbol-specific signal)"
+        
+        # Get skip reasons for this target
+        target_skip_reasons = {}
+        if symbol_skip_reasons and target_name in symbol_skip_reasons:
+            target_skip_reasons = symbol_skip_reasons[target_name]
         
         routing_decisions[target_name] = {
             'route': route,
@@ -128,7 +138,8 @@ def _compute_target_routing_decisions(
             'symbol_auc_iqr': symbol_auc_iqr,
             'frac_symbols_good': frac_symbols_good,
             'winner_symbols': winner_symbols,
-            'n_symbols_evaluated': len(symbol_aucs) if symbol_aucs else 0
+            'n_symbols_evaluated': len(symbol_aucs) if symbol_aucs else 0,
+            'symbol_skip_reasons': target_skip_reasons if target_skip_reasons else None
         }
     
     return routing_decisions
