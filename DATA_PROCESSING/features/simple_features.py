@@ -271,8 +271,10 @@ class SimpleFeatureComputer:
         close_col = self._get_base_column(pl.col("close"))
         volume_col = self._get_base_column(pl.col("volume"))
         
-        # For pct_change, we need to handle it specially if verify_pct_change is enabled
-        # For now, use close_col.pct_change() which will be shifted if exclude_current_bar is enabled
+        # FIX #3: pct_change() includes current bar, but close_col is already shifted if exclude_current_bar is enabled
+        # When exclude_current_bar=True: close_col = pl.col("close").shift(1)
+        # So close_col.pct_change() = pl.col("close").shift(1).pct_change() correctly excludes current bar
+        # The verify_pct_change flag allows explicit manual calculation for verification/testing
         returns_expr = close_col.pct_change() if not self._fix_config.get('verify_pct_change', False) else (close_col / close_col.shift(1) - 1)
         
         return features.with_columns([
@@ -669,14 +671,16 @@ class SimpleFeatureComputer:
             # Market cap decile (simplified - would need market cap data for full implementation)
             pl.lit(5).alias("market_cap_decile").cast(pl.Int16),  # Placeholder
             
-            # Beta (simplified - would need market data for full implementation)
-            # NOTE: These are actually volatility of returns, not true beta/correlation
-            # Using returns_expr ensures shift is applied if exclude_current_bar is enabled
+            # Volatility of returns (20-day rolling std of returns)
+            # FIX #4: Renamed from "beta_20d" - these are NOT beta/correlation, just volatility
+            # True beta would require: cov(stock_returns, market_returns) / var(market_returns)
+            # True correlation would require: corr(stock_returns, market_returns)
+            returns_expr.rolling_std(20).alias("volatility_20d_returns").cast(pl.Float32),
+            returns_expr.rolling_std(60).alias("volatility_60d_returns").cast(pl.Float32),
+            
+            # Legacy aliases for backward compatibility (deprecated - use volatility_*_returns instead)
             returns_expr.rolling_std(20).alias("beta_20d").cast(pl.Float32),
             returns_expr.rolling_std(60).alias("beta_60d").cast(pl.Float32),
-            
-            # Market correlation (simplified - would need market data for full implementation)
-            # NOTE: These are actually volatility of returns, not true correlation
             returns_expr.rolling_std(20).alias("market_correlation_20d").cast(pl.Float32),
             returns_expr.rolling_std(60).alias("market_correlation_60d").cast(pl.Float32),
         ])
