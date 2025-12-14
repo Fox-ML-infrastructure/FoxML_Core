@@ -245,6 +245,8 @@ CALENDAR_FEATURES = {
     "weekday",
     "is_weekend",
     "is_month_end",
+    "hour_of_day",  # Time-of-day feature (0 lookback - known at time t)
+    "minute_of_hour",  # Minute-of-hour feature (0 lookback)
     "is_quarter_end",
     "is_year_end",
 }
@@ -433,6 +435,8 @@ def infer_lookback_minutes(
         r'^month_of_year$',
         r'^quarter$',
         r'^year$',
+        r'^hour_of_day$',  # hour_of_day (time-of-day feature, 0 lookback)
+        r'^minute_of_hour$',  # minute_of_hour (time-of-day feature, 0 lookback)
         r'^_(day|month|quarter|year|hour)$',  # _day, _month, _quarter, _year, _hour
         r'^weekly_seasonality_.*$',  # weekly_seasonality_friday, etc.
         r'^quarterly_seasonality_.*$',
