@@ -4483,6 +4483,26 @@ def evaluate_target_predictability(
     # NEW: Track NaN drops - capture BEFORE data prep (set-based comparison)
     feature_names_before_data_prep = safe_columns.copy() if 'safe_columns' in locals() else []
     
+    # CRITICAL: Initialize resolved_config early to avoid "referenced before assignment" errors
+    # We need it for SYMBOL_SPECIFIC view data preparation
+    resolved_config = None
+    from TRAINING.utils.resolved_config import create_resolved_config
+    
+    # Get n_symbols_available from mtf_data (needed for resolved_config creation)
+    n_symbols_available = len(mtf_data) if mtf_data is not None else 0
+    
+    # Create baseline resolved_config early (WITH feature lookback computation)
+    # This is needed for SYMBOL_SPECIFIC view data preparation
+    selected_features = safe_columns.copy() if safe_columns else []
+    resolved_config = create_resolved_config(
+        requested_min_cs=min_cs if view != "SYMBOL_SPECIFIC" else 1,
+        n_symbols_available=n_symbols_available,
+        max_cs_samples=max_cs_samples,
+        feature_names=selected_features,
+        data_interval_minutes=detected_interval,
+        experiment_config=experiment_config
+    )
+    
     # Prepare data based on view
     if view == "SYMBOL_SPECIFIC":
         # For symbol-specific, prepare single-symbol time series data
@@ -4553,20 +4573,18 @@ def evaluate_target_predictability(
             model_scores={}
         )
     
-    # CRITICAL: Initialize resolved_config early to avoid "referenced before assignment" errors
-    # We'll create a baseline config first (without feature lookback), then override post-prune
-    resolved_config = None
-    from TRAINING.utils.resolved_config import create_resolved_config
+    # NOTE: resolved_config was already initialized earlier (before data preparation)
+    # This section updates it with post-pruning feature information
+    # Get n_symbols_available from mtf_data (if not already set)
+    if 'n_symbols_available' not in locals():
+        n_symbols_available = len(mtf_data) if mtf_data is not None else 0
     
-    # Get n_symbols_available from mtf_data
-    n_symbols_available = len(mtf_data)
-    
-    # Create baseline resolved_config (WITH feature lookback computation)
+    # Update resolved_config with post-pruning feature information
     # CRITICAL FIX: Compute feature lookback early to ensure purge is large enough
     # This prevents "ROLLING WINDOW LEAKAGE RISK" violations
     selected_features = feature_names.copy() if feature_names else []
     
-    # Create baseline config (WITH feature lookback computation for auto-adjustment)
+    # Update config (WITH feature lookback computation for auto-adjustment)
     # The auto-fix logic in create_resolved_config will increase purge if feature_lookback > purge
     resolved_config = create_resolved_config(
         requested_min_cs=min_cs if view != "SYMBOL_SPECIFIC" else 1,
