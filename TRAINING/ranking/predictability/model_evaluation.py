@@ -329,9 +329,27 @@ def _enforce_final_safety_gate(
     except Exception:
         pass
     
-    # Define maximum allowed lookback (with 1% safety buffer)
-    # If purge is 100m, max lookback is ~99m
-    safe_lookback_max = purge_limit * 0.99
+    # Load lookback_budget_minutes cap from config (if set)
+    # This is the explicit cap that should be enforced
+    lookback_budget_cap = None
+    try:
+        from CONFIG.config_loader import get_cfg
+        budget_cap_raw = get_cfg("safety.leakage_detection.lookback_budget_minutes", default="auto", config_name="safety_config")
+        if budget_cap_raw != "auto" and isinstance(budget_cap_raw, (int, float)):
+            lookback_budget_cap = float(budget_cap_raw)
+    except Exception:
+        pass
+    
+    # Define maximum allowed lookback
+    # Priority: 1) config cap (lookback_budget_minutes), 2) purge-derived (purge_limit * 0.99)
+    if lookback_budget_cap is not None:
+        # Use explicit cap from config
+        safe_lookback_max = lookback_budget_cap
+        logger.debug(f"Gatekeeper using lookback_budget_minutes cap: {safe_lookback_max:.1f}m")
+    else:
+        # Fallback to purge-derived limit (with 1% safety buffer)
+        safe_lookback_max = purge_limit * 0.99
+        logger.debug(f"Gatekeeper using purge-derived limit: {safe_lookback_max:.1f}m (from purge={purge_limit:.1f}m)")
     
     dropped_features = []
     dropped_indices = []
@@ -453,10 +471,16 @@ def _enforce_final_safety_gate(
     # Mutate the Dataframe (drop columns) - only if action is "drop"
     if dropped_features:
         # Log policy context
-        logger.warning(
-            f"🛡️ FINAL GATEKEEPER: Dropping {len(dropped_features)} features that violate purge limit "
-            f"({purge_limit:.1f}m, safe_lookback_max={safe_lookback_max:.1f}m)"
-        )
+        if lookback_budget_cap is not None:
+            logger.warning(
+                f"🛡️ FINAL GATEKEEPER: Dropping {len(dropped_features)} features that violate lookback budget cap "
+                f"(cap={safe_lookback_max:.1f}m, purge_limit={purge_limit:.1f}m)"
+            )
+        else:
+            logger.warning(
+                f"🛡️ FINAL GATEKEEPER: Dropping {len(dropped_features)} features that violate purge limit "
+                f"({purge_limit:.1f}m, safe_lookback_max={safe_lookback_max:.1f}m)"
+            )
         logger.info(f"   Policy: drop_features (auto-drop violating features)")
         logger.info(f"   Drop list ({len(dropped_features)} features):")
         for feat_name, feat_reason in dropped_features[:10]:  # Show first 10
@@ -882,6 +906,7 @@ def train_and_evaluate_models(
                         pass
                     
                     # Compute budget from final pruned features
+                    # CRITICAL: This is the ACTUAL budget for the final feature set
                     budget, budget_fp, budget_order_fp = compute_budget(
                         feature_names,
                         data_interval_minutes,
@@ -890,6 +915,10 @@ def train_and_evaluate_models(
                         expected_fingerprint=post_prune_fp if 'post_prune_fp' in locals() else None,
                         stage="POST_PRUNE_policy_check"
                     )
+                    
+                    # CRITICAL: Update resolved_config with the NEW budget (from pruned features)
+                    # This ensures budget.actual_max reflects the actual feature set
+                    resolved_config.feature_lookback_max_minutes = budget.max_feature_lookback_minutes
                     
                     # Validate fingerprint
                     if 'post_prune_fp' in locals() and budget_fp != post_prune_fp:
