@@ -29,11 +29,49 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Import look-ahead bias fix config utility
+try:
+    from TRAINING.utils.lookahead_bias_config import get_lookahead_bias_fix_config
+    _LOOKAHEAD_BIAS_CONFIG_AVAILABLE = True
+except ImportError:
+    _LOOKAHEAD_BIAS_CONFIG_AVAILABLE = False
+    logger.debug("lookahead_bias_config not available, fixes will be disabled")
+
 class SimpleFeatureComputer:
     """Simple feature computation class with basic features only"""
     
     def __init__(self):
         self.feature_definitions = self._get_feature_definitions()
+        # Load look-ahead bias fix config
+        self._fix_config = self._load_fix_config()
+    
+    def _load_fix_config(self) -> Dict[str, Any]:
+        """Load look-ahead bias fix configuration"""
+        if _LOOKAHEAD_BIAS_CONFIG_AVAILABLE:
+            try:
+                return get_lookahead_bias_fix_config()
+            except Exception as e:
+                logger.debug(f"Failed to load lookahead bias fix config: {e}, using defaults")
+        return {
+            'exclude_current_bar': False,
+            'normalize_inside_cv': False,
+            'verify_pct_change': False,
+            'migration_mode': 'off'
+        }
+    
+    def _get_base_column(self, column_expr: pl.Expr) -> pl.Expr:
+        """
+        Get base column expression with optional shift(1) to exclude current bar.
+        
+        Args:
+            column_expr: Polars expression for the column (e.g., pl.col("close"))
+        
+        Returns:
+            Column expression, optionally shifted by 1 if exclude_current_bar is enabled
+        """
+        if self._fix_config.get('exclude_current_bar', False):
+            return column_expr.shift(1)
+        return column_expr
     
     def get_all_features(self) -> List[str]:
         """Get all feature names as a flat list"""
@@ -229,6 +267,14 @@ class SimpleFeatureComputer:
     
     def _compute_basic_features(self, features: pl.LazyFrame) -> pl.LazyFrame:
         """Compute basic price and volume features"""
+        # Get base columns with optional shift to exclude current bar
+        close_col = self._get_base_column(pl.col("close"))
+        volume_col = self._get_base_column(pl.col("volume"))
+        
+        # For pct_change, we need to handle it specially if verify_pct_change is enabled
+        # For now, use close_col.pct_change() which will be shifted if exclude_current_bar is enabled
+        returns_expr = close_col.pct_change() if not self._fix_config.get('verify_pct_change', False) else (close_col / close_col.shift(1) - 1)
+        
         return features.with_columns([
             # Basic price features
             (pl.col("high") - pl.col("low")).alias("range_frac").cast(pl.Float32),
@@ -249,56 +295,60 @@ class SimpleFeatureComputer:
             (pl.col("open") / pl.col("high")).alias("open_loc_1d").cast(pl.Float32),
             (pl.col("low") / pl.col("high")).alias("low_loc_1d").cast(pl.Float32),
             
-            # Volume features
+            # Volume features (use shifted volume_col for rolling operations)
             (pl.col("close") * pl.col("volume")).alias("dollar_volume").cast(pl.Float32),
-            (pl.col("volume") / pl.col("volume").rolling_mean(20)).alias("turnover_20").cast(pl.Float32),
-            (pl.col("volume") / pl.col("volume").rolling_mean(5)).alias("turnover_5").cast(pl.Float32),
+            (pl.col("volume") / volume_col.rolling_mean(20)).alias("turnover_20").cast(pl.Float32),
+            (pl.col("volume") / volume_col.rolling_mean(5)).alias("turnover_5").cast(pl.Float32),
             
-            # Price momentum
-            pl.col("close").pct_change().alias("ret_1m").cast(pl.Float32),
-            pl.col("close").pct_change(5).alias("ret_5m").cast(pl.Float32),
-            pl.col("close").pct_change(15).alias("ret_15m").cast(pl.Float32),
-            pl.col("close").pct_change(30).alias("ret_30m").cast(pl.Float32),
-            pl.col("close").pct_change(60).alias("ret_60m").cast(pl.Float32),
+            # Price momentum (use returns_expr which may be shifted)
+            returns_expr.alias("ret_1m").cast(pl.Float32),
+            close_col.pct_change(5).alias("ret_5m").cast(pl.Float32),
+            close_col.pct_change(15).alias("ret_15m").cast(pl.Float32),
+            close_col.pct_change(30).alias("ret_30m").cast(pl.Float32),
+            close_col.pct_change(60).alias("ret_60m").cast(pl.Float32),
             
             # Returns
-            pl.col("close").pct_change().alias("returns_1d").cast(pl.Float32),
-            pl.col("close").pct_change(5).alias("returns_5d").cast(pl.Float32),
-            pl.col("close").pct_change(20).alias("returns_20d").cast(pl.Float32),
+            returns_expr.alias("returns_1d").cast(pl.Float32),
+            close_col.pct_change(5).alias("returns_5d").cast(pl.Float32),
+            close_col.pct_change(20).alias("returns_20d").cast(pl.Float32),
             
-            # Volatility
-            pl.col("close").pct_change().rolling_std(5).alias("vol_5m").cast(pl.Float32),
-            pl.col("close").pct_change().rolling_std(15).alias("vol_15m").cast(pl.Float32),
-            pl.col("close").pct_change().rolling_std(30).alias("vol_30m").cast(pl.Float32),
-            pl.col("close").pct_change().rolling_std(60).alias("vol_60m").cast(pl.Float32),
-            pl.col("close").pct_change().rolling_std(20).alias("volatility_20d").cast(pl.Float32),
-            pl.col("close").pct_change().rolling_std(60).alias("volatility_60d").cast(pl.Float32),
+            # Volatility (use returns_expr for rolling_std to ensure shift is applied)
+            returns_expr.rolling_std(5).alias("vol_5m").cast(pl.Float32),
+            returns_expr.rolling_std(15).alias("vol_15m").cast(pl.Float32),
+            returns_expr.rolling_std(30).alias("vol_30m").cast(pl.Float32),
+            returns_expr.rolling_std(60).alias("vol_60m").cast(pl.Float32),
+            returns_expr.rolling_std(20).alias("volatility_20d").cast(pl.Float32),
+            returns_expr.rolling_std(60).alias("volatility_60d").cast(pl.Float32),
             
             # Momentum
-            pl.col("close").pct_change(1).alias("mom_1d").cast(pl.Float32),
-            pl.col("close").pct_change(3).alias("mom_3d").cast(pl.Float32),
-            pl.col("close").pct_change(5).alias("mom_5d").cast(pl.Float32),
-            pl.col("close").pct_change(10).alias("mom_10d").cast(pl.Float32),
-            pl.col("close").pct_change(5).alias("price_momentum_5d").cast(pl.Float32),
-            pl.col("close").pct_change(20).alias("price_momentum_20d").cast(pl.Float32),
-            pl.col("close").pct_change(60).alias("price_momentum_60d").cast(pl.Float32),
+            close_col.pct_change(1).alias("mom_1d").cast(pl.Float32),
+            close_col.pct_change(3).alias("mom_3d").cast(pl.Float32),
+            close_col.pct_change(5).alias("mom_5d").cast(pl.Float32),
+            close_col.pct_change(10).alias("mom_10d").cast(pl.Float32),
+            close_col.pct_change(5).alias("price_momentum_5d").cast(pl.Float32),
+            close_col.pct_change(20).alias("price_momentum_20d").cast(pl.Float32),
+            close_col.pct_change(60).alias("price_momentum_60d").cast(pl.Float32),
         ])
     
     def _compute_technical_features(self, features: pl.LazyFrame) -> pl.LazyFrame:
         """Compute technical indicators using simple, direct expressions"""
+        # Get base column with optional shift to exclude current bar
+        close_col = self._get_base_column(pl.col("close"))
+        volume_col = self._get_base_column(pl.col("volume"))
+        
         return features.with_columns([
             # Basic SMAs
-            pl.col("close").rolling_mean(5).alias("sma_5").cast(pl.Float32),
-            pl.col("close").rolling_mean(10).alias("sma_10").cast(pl.Float32),
-            pl.col("close").rolling_mean(20).alias("sma_20").cast(pl.Float32),
-            pl.col("close").rolling_mean(50).alias("sma_50").cast(pl.Float32),
-            pl.col("close").rolling_mean(200).alias("sma_200").cast(pl.Float32),
+            close_col.rolling_mean(5).alias("sma_5").cast(pl.Float32),
+            close_col.rolling_mean(10).alias("sma_10").cast(pl.Float32),
+            close_col.rolling_mean(20).alias("sma_20").cast(pl.Float32),
+            close_col.rolling_mean(50).alias("sma_50").cast(pl.Float32),
+            close_col.rolling_mean(200).alias("sma_200").cast(pl.Float32),
             
             # Basic EMAs
-            pl.col("close").ewm_mean(span=5).alias("ema_5").cast(pl.Float32),
-            pl.col("close").ewm_mean(span=10).alias("ema_10").cast(pl.Float32),
-            pl.col("close").ewm_mean(span=20).alias("ema_20").cast(pl.Float32),
-            pl.col("close").ewm_mean(span=50).alias("ema_50").cast(pl.Float32),
+            close_col.ewm_mean(span=5).alias("ema_5").cast(pl.Float32),
+            close_col.ewm_mean(span=10).alias("ema_10").cast(pl.Float32),
+            close_col.ewm_mean(span=20).alias("ema_20").cast(pl.Float32),
+            close_col.ewm_mean(span=50).alias("ema_50").cast(pl.Float32),
             
             # Advanced Moving Averages
             self._hull_ma(pl.col("close"), 5).alias("hull_ma_5").cast(pl.Float32),
@@ -401,22 +451,25 @@ class SimpleFeatureComputer:
     
     def _compute_volume_features(self, features: pl.LazyFrame) -> pl.LazyFrame:
         """Compute volume-based features"""
+        # Get base column with optional shift to exclude current bar
+        volume_col = self._get_base_column(pl.col("volume"))
+        
         return features.with_columns([
             # Basic volume features
-            pl.col("volume").pct_change(5).alias("volume_momentum_5d").cast(pl.Float32),
-            pl.col("volume").pct_change(20).alias("volume_momentum_20d").cast(pl.Float32),
-            (pl.col("volume").rolling_mean(5) / pl.col("volume").rolling_mean(20)).alias("volume_ratio_5d").cast(pl.Float32),
-            (pl.col("volume").rolling_mean(20) / pl.col("volume").rolling_mean(60)).alias("volume_ratio_20d").cast(pl.Float32),
-            pl.col("volume").rolling_std(20).alias("volume_volatility_20d").cast(pl.Float32),
+            volume_col.pct_change(5).alias("volume_momentum_5d").cast(pl.Float32),
+            volume_col.pct_change(20).alias("volume_momentum_20d").cast(pl.Float32),
+            (volume_col.rolling_mean(5) / volume_col.rolling_mean(20)).alias("volume_ratio_5d").cast(pl.Float32),
+            (volume_col.rolling_mean(20) / volume_col.rolling_mean(60)).alias("volume_ratio_20d").cast(pl.Float32),
+            volume_col.rolling_std(20).alias("volume_volatility_20d").cast(pl.Float32),
             
             # Volume SMAs
-            pl.col("volume").rolling_mean(5).alias("volume_sma_5").cast(pl.Float32),
-            pl.col("volume").rolling_mean(20).alias("volume_sma_20").cast(pl.Float32),
-            pl.col("volume").rolling_mean(50).alias("volume_sma_50").cast(pl.Float32),
+            volume_col.rolling_mean(5).alias("volume_sma_5").cast(pl.Float32),
+            volume_col.rolling_mean(20).alias("volume_sma_20").cast(pl.Float32),
+            volume_col.rolling_mean(50).alias("volume_sma_50").cast(pl.Float32),
             
             # Volume EMAs
-            pl.col("volume").ewm_mean(span=5).alias("volume_ema_5").cast(pl.Float32),
-            pl.col("volume").ewm_mean(span=20).alias("volume_ema_20").cast(pl.Float32),
+            volume_col.ewm_mean(span=5).alias("volume_ema_5").cast(pl.Float32),
+            volume_col.ewm_mean(span=20).alias("volume_ema_20").cast(pl.Float32),
             
             # Advanced volume features
             self._obv(pl.col("close"), pl.col("volume")).alias("obv").cast(pl.Float32),
@@ -427,9 +480,9 @@ class SimpleFeatureComputer:
             self._cmf_ema(pl.col("high"), pl.col("low"), pl.col("close"), pl.col("volume")).alias("cmf_ema").cast(pl.Float32),
             self._mfi(pl.col("high"), pl.col("low"), pl.col("close"), pl.col("volume"), 14).alias("mfi_14").cast(pl.Float32),
             self._mfi(pl.col("high"), pl.col("low"), pl.col("close"), pl.col("volume"), 21).alias("mfi_21").cast(pl.Float32),
-            pl.col("volume").pct_change(5).alias("volume_roc_5").cast(pl.Float32),
-            pl.col("volume").pct_change(10).alias("volume_roc_10").cast(pl.Float32),
-            pl.col("volume").pct_change(20).alias("volume_roc_20").cast(pl.Float32),
+            volume_col.pct_change(5).alias("volume_roc_5").cast(pl.Float32),
+            volume_col.pct_change(10).alias("volume_roc_10").cast(pl.Float32),
+            volume_col.pct_change(20).alias("volume_roc_20").cast(pl.Float32),
             self._vwap_period(pl.col("high"), pl.col("low"), pl.col("close"), pl.col("volume"), 5).alias("vwap_5").cast(pl.Float32),
             self._vwap_period(pl.col("high"), pl.col("low"), pl.col("close"), pl.col("volume"), 10).alias("vwap_10").cast(pl.Float32),
             self._vwap_period(pl.col("high"), pl.col("low"), pl.col("close"), pl.col("volume"), 20).alias("vwap_20").cast(pl.Float32),
@@ -438,6 +491,10 @@ class SimpleFeatureComputer:
     
     def _compute_volatility_features(self, features: pl.LazyFrame) -> pl.LazyFrame:
         """Compute advanced volatility features"""
+        # Get base column with optional shift to exclude current bar
+        close_col = self._get_base_column(pl.col("close"))
+        returns_expr = close_col.pct_change() if not self._fix_config.get('verify_pct_change', False) else (close_col / close_col.shift(1) - 1)
+        
         return features.with_columns([
             # Garman-Klass Volatility
             self._gk_vol(pl.col("high"), pl.col("low"), pl.col("open"), pl.col("close"), 5).alias("gk_vol_5").cast(pl.Float32),
@@ -459,14 +516,19 @@ class SimpleFeatureComputer:
             self._yz_vol(pl.col("high"), pl.col("low"), pl.col("open"), pl.col("close"), 10).alias("yz_vol_10").cast(pl.Float32),
             self._yz_vol(pl.col("high"), pl.col("low"), pl.col("open"), pl.col("close"), 20).alias("yz_vol_20").cast(pl.Float32),
             
-            # Realized Volatility
-            pl.col("close").pct_change().rolling_std(5).alias("realized_vol_5").cast(pl.Float32),
-            pl.col("close").pct_change().rolling_std(10).alias("realized_vol_10").cast(pl.Float32),
-            pl.col("close").pct_change().rolling_std(20).alias("realized_vol_20").cast(pl.Float32),
+            # Realized Volatility (use returns_expr to ensure shift is applied)
+            returns_expr.rolling_std(5).alias("realized_vol_5").cast(pl.Float32),
+            returns_expr.rolling_std(10).alias("realized_vol_10").cast(pl.Float32),
+            returns_expr.rolling_std(20).alias("realized_vol_20").cast(pl.Float32),
         ])
     
     def _compute_microstructure_features(self, features: pl.LazyFrame) -> pl.LazyFrame:
         """Compute comprehensive microstructure features"""
+        # Get base columns with optional shift to exclude current bar
+        volume_col = self._get_base_column(pl.col("volume"))
+        close_col = self._get_base_column(pl.col("close"))
+        returns_expr = close_col.pct_change() if not self._fix_config.get('verify_pct_change', False) else (close_col / close_col.shift(1) - 1)
+        
         return features.with_columns([
             # Time features
             pl.col("ts").dt.hour().alias("_hour").cast(pl.Int16),
@@ -482,29 +544,30 @@ class SimpleFeatureComputer:
             ((pl.col("high") - pl.col("low")) / pl.col("close")).alias("effective_spread").cast(pl.Float32),
             ((pl.col("close") - pl.col("open")) / pl.col("close")).alias("realized_spread").cast(pl.Float32),
             ((pl.col("high") + pl.col("low")) / 2).alias("mid_price_vol").cast(pl.Float32),
-            (pl.col("volume").rolling_std(5)).alias("trade_size_vol").cast(pl.Float32),
+            # Use shifted columns for rolling operations
+            (volume_col.rolling_std(5)).alias("trade_size_vol").cast(pl.Float32),
             ((pl.col("close") - pl.col("open")) / (pl.col("high") - pl.col("low"))).alias("order_flow_imbalance").cast(pl.Float32),
             ((pl.col("high") + pl.col("low") + pl.col("close")) / 3).alias("volume_weighted_price").cast(pl.Float32),
             
-            # Volatility clustering & microstructure
-            (pl.col("close").pct_change().rolling_std(5)).alias("vol_clustering_5m").cast(pl.Float32),
-            (pl.col("close").pct_change().rolling_std(15)).alias("vol_clustering_15m").cast(pl.Float32),
-            (pl.col("close").pct_change().rolling_std(60)).alias("vol_clustering_60m").cast(pl.Float32),
-            (pl.col("close").pct_change().rolling_std(20)).alias("vol_persistence").cast(pl.Float32),
+            # Volatility clustering & microstructure (use returns_expr to ensure shift is applied)
+            (returns_expr.rolling_std(5)).alias("vol_clustering_5m").cast(pl.Float32),
+            (returns_expr.rolling_std(15)).alias("vol_clustering_15m").cast(pl.Float32),
+            (returns_expr.rolling_std(60)).alias("vol_clustering_60m").cast(pl.Float32),
+            (returns_expr.rolling_std(20)).alias("vol_persistence").cast(pl.Float32),
             
-            # Range compression features
-            ((pl.col("high") - pl.col("low")) / pl.col("close").rolling_mean(5)).alias("range_compression_5m").cast(pl.Float32),
-            ((pl.col("high") - pl.col("low")) / pl.col("close").rolling_mean(15)).alias("range_compression_15m").cast(pl.Float32),
-            ((pl.col("high") - pl.col("low")) / pl.col("close").rolling_mean(60)).alias("range_compression_60m").cast(pl.Float32),
+            # Range compression features (use close_col for rolling operations)
+            ((pl.col("high") - pl.col("low")) / close_col.rolling_mean(5)).alias("range_compression_5m").cast(pl.Float32),
+            ((pl.col("high") - pl.col("low")) / close_col.rolling_mean(15)).alias("range_compression_15m").cast(pl.Float32),
+            ((pl.col("high") - pl.col("low")) / close_col.rolling_mean(60)).alias("range_compression_60m").cast(pl.Float32),
             
-            # Vol over vol features
-            (pl.col("close").pct_change().rolling_std(5) / pl.col("close").pct_change().rolling_std(20)).alias("vol_over_vol_5m").cast(pl.Float32),
-            (pl.col("close").pct_change().rolling_std(15) / pl.col("close").pct_change().rolling_std(20)).alias("vol_over_vol_15m").cast(pl.Float32),
-            (pl.col("close").pct_change().rolling_std(60) / pl.col("close").pct_change().rolling_std(20)).alias("vol_over_vol_60m").cast(pl.Float32),
+            # Vol over vol features (use returns_expr to ensure shift is applied)
+            (returns_expr.rolling_std(5) / returns_expr.rolling_std(20)).alias("vol_over_vol_5m").cast(pl.Float32),
+            (returns_expr.rolling_std(15) / returns_expr.rolling_std(20)).alias("vol_over_vol_15m").cast(pl.Float32),
+            (returns_expr.rolling_std(60) / returns_expr.rolling_std(20)).alias("vol_over_vol_60m").cast(pl.Float32),
             
             # Market microstructure effects
             (pl.col("close").pct_change().abs() / pl.col("volume").log()).alias("market_impact").cast(pl.Float32),
-            (pl.col("volume") / pl.col("volume").rolling_mean(20)).alias("liquidity_ratio").cast(pl.Float32),
+            (pl.col("volume") / volume_col.rolling_mean(20)).alias("liquidity_ratio").cast(pl.Float32),
             (pl.col("volume") / pl.col("volume").rolling_mean(20)).alias("turnover").cast(pl.Float32),
             (pl.col("volume") * pl.col("close")).alias("vol_dollar").cast(pl.Float32),
             (pl.col("close").pct_change() * pl.col("volume")).alias("volume_price_trend").cast(pl.Float32),
@@ -540,12 +603,13 @@ class SimpleFeatureComputer:
             ((pl.col("_month") == 12) & (pl.col("_day") == 23)).cast(pl.UInt8).alias("pre_holiday_dummy"),
             ((pl.col("_month") == 12) & (pl.col("_day") == 27)).cast(pl.UInt8).alias("post_holiday_dummy"),
             
-            # Advanced microstructure
-            (pl.col("volume").rolling_median(20)).alias("volume_quantile_20d").cast(pl.Float32),
-            (pl.col("volume").rolling_std(20)).alias("volume_std_20d").cast(pl.Float32),
+            # Advanced microstructure (use shifted volume_col for rolling operations)
+            volume_col = self._get_base_column(pl.col("volume"))
+            (volume_col.rolling_median(20)).alias("volume_quantile_20d").cast(pl.Float32),
+            (volume_col.rolling_std(20)).alias("volume_std_20d").cast(pl.Float32),
             # Note: rolling_skew and rolling_kurt not available in Polars, using alternatives
-            (pl.col("volume") / pl.col("volume").rolling_mean(20) - 1).alias("volume_skew_20d").cast(pl.Float32),
-            ((pl.col("volume") - pl.col("volume").rolling_mean(20)) / pl.col("volume").rolling_std(20)).alias("volume_kurt_20d").cast(pl.Float32),
+            (pl.col("volume") / volume_col.rolling_mean(20) - 1).alias("volume_skew_20d").cast(pl.Float32),
+            ((pl.col("volume") - volume_col.rolling_mean(20)) / volume_col.rolling_std(20)).alias("volume_kurt_20d").cast(pl.Float32),
             
             # VWAP deviation features
             ((pl.col("close") - pl.col("vwap")) / pl.col("vwap")).alias("vwap_dev_5m").cast(pl.Float32),
@@ -586,26 +650,35 @@ class SimpleFeatureComputer:
     
     def _compute_cross_sectional_features(self, features: pl.LazyFrame) -> pl.LazyFrame:
         """Compute cross-sectional features"""
+        # Get base column with optional shift to exclude current bar
+        close_col = self._get_base_column(pl.col("close"))
+        
+        # For pct_change rolling operations, use shifted close_col
+        returns_expr = close_col.pct_change() if not self._fix_config.get('verify_pct_change', False) else (close_col / close_col.shift(1) - 1)
+        
         return features.with_columns([
             # Relative performance (simplified - would need market data for full implementation)
-            pl.col("close").pct_change(5).alias("relative_performance_5d").cast(pl.Float32),
-            pl.col("close").pct_change(20).alias("relative_performance_20d").cast(pl.Float32),
-            pl.col("close").pct_change(60).alias("relative_performance_60d").cast(pl.Float32),
+            close_col.pct_change(5).alias("relative_performance_5d").cast(pl.Float32),
+            close_col.pct_change(20).alias("relative_performance_20d").cast(pl.Float32),
+            close_col.pct_change(60).alias("relative_performance_60d").cast(pl.Float32),
             
             # Sector momentum (simplified - would need sector data for full implementation)
-            pl.col("close").pct_change(5).alias("sector_momentum_5d").cast(pl.Float32),
-            pl.col("close").pct_change(20).alias("sector_momentum_20d").cast(pl.Float32),
+            close_col.pct_change(5).alias("sector_momentum_5d").cast(pl.Float32),
+            close_col.pct_change(20).alias("sector_momentum_20d").cast(pl.Float32),
             
             # Market cap decile (simplified - would need market cap data for full implementation)
             pl.lit(5).alias("market_cap_decile").cast(pl.Int16),  # Placeholder
             
             # Beta (simplified - would need market data for full implementation)
-            pl.col("close").pct_change().rolling_std(20).alias("beta_20d").cast(pl.Float32),
-            pl.col("close").pct_change().rolling_std(60).alias("beta_60d").cast(pl.Float32),
+            # NOTE: These are actually volatility of returns, not true beta/correlation
+            # Using returns_expr ensures shift is applied if exclude_current_bar is enabled
+            returns_expr.rolling_std(20).alias("beta_20d").cast(pl.Float32),
+            returns_expr.rolling_std(60).alias("beta_60d").cast(pl.Float32),
             
             # Market correlation (simplified - would need market data for full implementation)
-            pl.col("close").pct_change().rolling_std(20).alias("market_correlation_20d").cast(pl.Float32),
-            pl.col("close").pct_change().rolling_std(60).alias("market_correlation_60d").cast(pl.Float32),
+            # NOTE: These are actually volatility of returns, not true correlation
+            returns_expr.rolling_std(20).alias("market_correlation_20d").cast(pl.Float32),
+            returns_expr.rolling_std(60).alias("market_correlation_60d").cast(pl.Float32),
         ])
     
     def _compute_interaction_features(self, features: pl.LazyFrame) -> pl.LazyFrame:

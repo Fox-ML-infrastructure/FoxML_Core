@@ -39,6 +39,14 @@ sys.path.insert(0, str(project_root))
 
 from ml.memory import MemoryManager
 
+# Import look-ahead bias fix config utility
+try:
+    from TRAINING.utils.lookahead_bias_config import get_lookahead_bias_fix_config
+    _LOOKAHEAD_BIAS_CONFIG_AVAILABLE = True
+except ImportError:
+    _LOOKAHEAD_BIAS_CONFIG_AVAILABLE = False
+    logger.debug("lookahead_bias_config not available, fixes will be disabled")
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -55,6 +63,37 @@ class ComprehensiveFeatureBuilder:
         
         self.feature_config = self.config.get('features', {})
         self.memory_manager = MemoryManager()
+        
+        # Load look-ahead bias fix config
+        self._fix_config = self._load_fix_config()
+    
+    def _load_fix_config(self) -> Dict[str, Any]:
+        """Load look-ahead bias fix configuration"""
+        if _LOOKAHEAD_BIAS_CONFIG_AVAILABLE:
+            try:
+                return get_lookahead_bias_fix_config()
+            except Exception as e:
+                logger.debug(f"Failed to load lookahead bias fix config: {e}, using defaults")
+        return {
+            'exclude_current_bar': False,
+            'normalize_inside_cv': False,
+            'verify_pct_change': False,
+            'migration_mode': 'off'
+        }
+    
+    def _get_base_column(self, column_expr: pl.Expr) -> pl.Expr:
+        """
+        Get base column expression with optional shift(1) to exclude current bar.
+        
+        Args:
+            column_expr: Polars expression for the column (e.g., pl.col("close"))
+        
+        Returns:
+            Column expression, optionally shifted by 1 if exclude_current_bar is enabled
+        """
+        if self._fix_config.get('exclude_current_bar', False):
+            return column_expr.shift(1)
+        return column_expr
         
     def build_features(self, input_paths: List[str], output_dir: str, universe_config: str):
         """Build comprehensive features"""
@@ -144,6 +183,13 @@ class ComprehensiveFeatureBuilder:
     
     def _build_comprehensive_features(self, scan: pl.LazyFrame) -> pl.LazyFrame:
         """Build comprehensive feature set"""
+        # Get base columns with optional shift to exclude current bar
+        close_col = self._get_base_column(pl.col("close"))
+        volume_col = self._get_base_column(pl.col("volume"))
+        
+        # For pct_change rolling operations, handle verify_pct_change flag
+        returns_expr = close_col.pct_change() if not self._fix_config.get('verify_pct_change', False) else (close_col / close_col.shift(1) - 1)
+        
         return (
             scan
             .with_columns([
@@ -166,52 +212,52 @@ class ComprehensiveFeatureBuilder:
                 (pl.col("open") / pl.col("high")).alias("open_loc_1d").cast(pl.Float32),
                 (pl.col("low") / pl.col("high")).alias("low_loc_1d").cast(pl.Float32),
                 
-                # Volume features
+                # Volume features (use shifted volume_col for rolling operations)
                 (pl.col("close") * pl.col("volume")).alias("dollar_volume").cast(pl.Float32),
-                (pl.col("volume") / pl.col("volume").rolling_mean(20)).alias("turnover_20").cast(pl.Float32),
-                (pl.col("volume") / pl.col("volume").rolling_mean(5)).alias("turnover_5").cast(pl.Float32),
+                (pl.col("volume") / volume_col.rolling_mean(20)).alias("turnover_20").cast(pl.Float32),
+                (pl.col("volume") / volume_col.rolling_mean(5)).alias("turnover_5").cast(pl.Float32),
                 
-                # Price momentum
-                pl.col("close").pct_change().alias("ret_1m").cast(pl.Float32),
-                pl.col("close").pct_change(5).alias("ret_5m").cast(pl.Float32),
-                pl.col("close").pct_change(15).alias("ret_15m").cast(pl.Float32),
-                pl.col("close").pct_change(30).alias("ret_30m").cast(pl.Float32),
-                pl.col("close").pct_change(60).alias("ret_60m").cast(pl.Float32),
+                # Price momentum (use close_col which may be shifted)
+                returns_expr.alias("ret_1m").cast(pl.Float32),
+                close_col.pct_change(5).alias("ret_5m").cast(pl.Float32),
+                close_col.pct_change(15).alias("ret_15m").cast(pl.Float32),
+                close_col.pct_change(30).alias("ret_30m").cast(pl.Float32),
+                close_col.pct_change(60).alias("ret_60m").cast(pl.Float32),
                 
                 # Returns
-                pl.col("close").pct_change().alias("returns_1d").cast(pl.Float32),
-                pl.col("close").pct_change(5).alias("returns_5d").cast(pl.Float32),
-                pl.col("close").pct_change(20).alias("returns_20d").cast(pl.Float32),
+                returns_expr.alias("returns_1d").cast(pl.Float32),
+                close_col.pct_change(5).alias("returns_5d").cast(pl.Float32),
+                close_col.pct_change(20).alias("returns_20d").cast(pl.Float32),
                 
-                # Volatility
-                pl.col("close").pct_change().rolling_std(5).alias("vol_5m").cast(pl.Float32),
-                pl.col("close").pct_change().rolling_std(15).alias("vol_15m").cast(pl.Float32),
-                pl.col("close").pct_change().rolling_std(30).alias("vol_30m").cast(pl.Float32),
-                pl.col("close").pct_change().rolling_std(60).alias("vol_60m").cast(pl.Float32),
-                pl.col("close").pct_change().rolling_std(20).alias("volatility_20d").cast(pl.Float32),
-                pl.col("close").pct_change().rolling_std(60).alias("volatility_60d").cast(pl.Float32),
+                # Volatility (use returns_expr to ensure shift is applied)
+                returns_expr.rolling_std(5).alias("vol_5m").cast(pl.Float32),
+                returns_expr.rolling_std(15).alias("vol_15m").cast(pl.Float32),
+                returns_expr.rolling_std(30).alias("vol_30m").cast(pl.Float32),
+                returns_expr.rolling_std(60).alias("vol_60m").cast(pl.Float32),
+                returns_expr.rolling_std(20).alias("volatility_20d").cast(pl.Float32),
+                returns_expr.rolling_std(60).alias("volatility_60d").cast(pl.Float32),
                 
                 # Momentum
-                pl.col("close").pct_change(1).alias("mom_1d").cast(pl.Float32),
-                pl.col("close").pct_change(3).alias("mom_3d").cast(pl.Float32),
-                pl.col("close").pct_change(5).alias("mom_5d").cast(pl.Float32),
-                pl.col("close").pct_change(10).alias("mom_10d").cast(pl.Float32),
-                pl.col("close").pct_change(5).alias("price_momentum_5d").cast(pl.Float32),
-                pl.col("close").pct_change(20).alias("price_momentum_20d").cast(pl.Float32),
-                pl.col("close").pct_change(60).alias("price_momentum_60d").cast(pl.Float32),
+                close_col.pct_change(1).alias("mom_1d").cast(pl.Float32),
+                close_col.pct_change(3).alias("mom_3d").cast(pl.Float32),
+                close_col.pct_change(5).alias("mom_5d").cast(pl.Float32),
+                close_col.pct_change(10).alias("mom_10d").cast(pl.Float32),
+                close_col.pct_change(5).alias("price_momentum_5d").cast(pl.Float32),
+                close_col.pct_change(20).alias("price_momentum_20d").cast(pl.Float32),
+                close_col.pct_change(60).alias("price_momentum_60d").cast(pl.Float32),
                 
-                # Technical indicators - SMA
-                pl.col("close").rolling_mean(5).alias("sma_5").cast(pl.Float32),
-                pl.col("close").rolling_mean(10).alias("sma_10").cast(pl.Float32),
-                pl.col("close").rolling_mean(20).alias("sma_20").cast(pl.Float32),
-                pl.col("close").rolling_mean(50).alias("sma_50").cast(pl.Float32),
-                pl.col("close").rolling_mean(200).alias("sma_200").cast(pl.Float32),
+                # Technical indicators - SMA (use close_col which may be shifted)
+                close_col.rolling_mean(5).alias("sma_5").cast(pl.Float32),
+                close_col.rolling_mean(10).alias("sma_10").cast(pl.Float32),
+                close_col.rolling_mean(20).alias("sma_20").cast(pl.Float32),
+                close_col.rolling_mean(50).alias("sma_50").cast(pl.Float32),
+                close_col.rolling_mean(200).alias("sma_200").cast(pl.Float32),
                 
-                # Technical indicators - EMA
-                pl.col("close").ewm_mean(span=5).alias("ema_5").cast(pl.Float32),
-                pl.col("close").ewm_mean(span=10).alias("ema_10").cast(pl.Float32),
-                pl.col("close").ewm_mean(span=20).alias("ema_20").cast(pl.Float32),
-                pl.col("close").ewm_mean(span=50).alias("ema_50").cast(pl.Float32),
+                # Technical indicators - EMA (use close_col which may be shifted)
+                close_col.ewm_mean(span=5).alias("ema_5").cast(pl.Float32),
+                close_col.ewm_mean(span=10).alias("ema_10").cast(pl.Float32),
+                close_col.ewm_mean(span=20).alias("ema_20").cast(pl.Float32),
+                close_col.ewm_mean(span=50).alias("ema_50").cast(pl.Float32),
                 
                 # RSI
                 self._rsi(pl.col("close"), 7).cast(pl.Float32).alias("rsi_7"),
