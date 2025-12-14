@@ -137,12 +137,28 @@ class TelemetryWriter:
                 # Store other types as string representation
                 telemetry_data["metrics"][key] = str(value)
         
-        metrics_file = cohort_dir / "telemetry_metrics.json"
+        metrics_file_json = cohort_dir / "telemetry_metrics.json"
+        metrics_file_parquet = cohort_dir / "telemetry_metrics.parquet"
         try:
-            with open(metrics_file, 'w') as f:
+            # Write JSON (human-readable)
+            with open(metrics_file_json, 'w') as f:
                 json.dump(telemetry_data, f, indent=2)
+            
+            # Write Parquet (queryable, long format)
+            # Flatten metrics dict into DataFrame
+            parquet_rows = [{
+                "run_id": run_id,
+                "timestamp": telemetry_data.get("timestamp"),
+                "metric_name": k,
+                "metric_value": v if isinstance(v, (int, float)) else None,
+                "metric_value_str": str(v) if not isinstance(v, (int, float)) else None
+            } for k, v in telemetry_data.get("metrics", {}).items()]
+            
+            if parquet_rows:
+                df_metrics = pd.DataFrame(parquet_rows)
+                df_metrics.to_parquet(metrics_file_parquet, index=False, engine='pyarrow', compression='snappy')
         except Exception as e:
-            logger.warning(f"Failed to write telemetry_metrics.json to {cohort_dir}: {e}")
+            logger.warning(f"Failed to write telemetry_metrics to {cohort_dir}: {e}")
     
     def _write_telemetry_drift(
         self,
@@ -221,10 +237,41 @@ class TelemetryWriter:
                     "status": self._classify_drift(delta, rel_delta)
                 }
             
-            # Write drift file
-            drift_file = cohort_dir / "telemetry_drift.json"
-            with open(drift_file, 'w') as f:
-                json.dump(drift_results, f, indent=2)
+            # Write drift files (JSON for human-readable, Parquet for queryable)
+            drift_file_json = cohort_dir / "telemetry_drift.json"
+            drift_file_parquet = cohort_dir / "telemetry_drift.parquet"
+            try:
+                # Write JSON (human-readable)
+                with open(drift_file_json, 'w') as f:
+                    json.dump(drift_results, f, indent=2)
+                
+                # Write Parquet (queryable, long format)
+                # Flatten drift_metrics dict into DataFrame
+                parquet_rows = []
+                for metric_name, drift_info in drift_results.get("drift_metrics", {}).items():
+                    if isinstance(drift_info, dict):
+                        row = {
+                            "current_run_id": drift_results.get("current_run_id"),
+                            "baseline_run_id": drift_results.get("baseline_run_id"),
+                            "baseline_key": drift_results.get("baseline_key"),
+                            "view": drift_results.get("view"),
+                            "target": drift_results.get("target"),
+                            "symbol": drift_results.get("symbol"),
+                            "timestamp": drift_results.get("timestamp"),
+                            "metric_name": metric_name,
+                            "current_value": drift_info.get("current"),
+                            "baseline_value": drift_info.get("baseline"),
+                            "delta": drift_info.get("delta"),
+                            "rel_delta": drift_info.get("rel_delta"),
+                            "status": drift_info.get("status")
+                        }
+                        parquet_rows.append(row)
+                
+                if parquet_rows:
+                    df_drift = pd.DataFrame(parquet_rows)
+                    df_drift.to_parquet(drift_file_parquet, index=False, engine='pyarrow', compression='snappy')
+            except Exception as e:
+                logger.warning(f"Failed to write telemetry_drift files to {cohort_dir}: {e}")
             
         except Exception as e:
             logger.warning(f"Failed to compute drift for {cohort_dir}: {e}")
@@ -433,13 +480,64 @@ class TelemetryWriter:
                         "count": len(values)
                     }
         
-        # Write rollup file
-        rollup_file = view_dir / "telemetry_rollup.json"
+        # Write rollup files (JSON for human-readable, Parquet for queryable)
+        rollup_file_json = view_dir / "telemetry_rollup.json"
+        rollup_file_parquet = view_dir / "telemetry_rollup.parquet"
         try:
-            with open(rollup_file, 'w') as f:
+            # Write JSON rollup
+            with open(rollup_file_json, 'w') as f:
                 json.dump(rollup_data, f, indent=2)
+            
+            # Write Parquet rollup (flattened, queryable format)
+            # Convert rollup_data to DataFrame with one row per target/symbol
+            parquet_rows = []
+            for target_name, target_data in rollup_data.get("targets", {}).items():
+                if isinstance(target_data, dict) and "symbols" not in target_data:
+                    # CROSS_SECTIONAL: target-level metrics
+                    row = {
+                        "run_id": run_id,
+                        "stage": stage,
+                        "view": view,
+                        "target": target_name,
+                        "symbol": None,
+                        "timestamp": rollup_data.get("timestamp"),
+                        **{k: v for k, v in target_data.items() if isinstance(v, (int, float, str, bool)) or v is None}
+                    }
+                    parquet_rows.append(row)
+                elif isinstance(target_data, dict):
+                    # SYMBOL_SPECIFIC: iterate through symbols
+                    for symbol_name, symbol_metrics in target_data.get("symbols", {}).items():
+                        row = {
+                            "run_id": run_id,
+                            "stage": stage,
+                            "view": view,
+                            "target": target_name,
+                            "symbol": symbol_name,
+                            "timestamp": rollup_data.get("timestamp"),
+                            **{k: v for k, v in symbol_metrics.items() if isinstance(v, (int, float, str, bool)) or v is None}
+                        }
+                        parquet_rows.append(row)
+            
+            # Also add aggregated metrics as a summary row
+            if rollup_data.get("aggregated_metrics"):
+                agg_row = {
+                    "run_id": run_id,
+                    "stage": stage,
+                    "view": view,
+                    "target": None,  # Aggregated across all targets
+                    "symbol": None,  # Aggregated across all symbols
+                    "timestamp": rollup_data.get("timestamp"),
+                    **{k: v.get("mean") if isinstance(v, dict) and "mean" in v else v 
+                       for k, v in rollup_data["aggregated_metrics"].items()}
+                }
+                parquet_rows.append(agg_row)
+            
+            if parquet_rows:
+                df_rollup = pd.DataFrame(parquet_rows)
+                df_rollup.to_parquet(rollup_file_parquet, index=False, engine='pyarrow', compression='snappy')
+                logger.debug(f"✅ Wrote view rollup: {rollup_file_json.name} and {rollup_file_parquet.name}")
         except Exception as e:
-            logger.warning(f"Failed to write view rollup to {rollup_file}: {e}")
+            logger.warning(f"Failed to write view rollup to {rollup_file_json}: {e}")
     
     def generate_stage_rollup(
         self,
@@ -478,13 +576,51 @@ class TelemetryWriter:
                     except Exception as e:
                         logger.debug(f"Failed to load view rollup for {view}: {e}")
         
-        # Write stage rollup
-        rollup_file = stage_dir / "telemetry_rollup.json"
+        # Write stage rollup files (JSON for human-readable, Parquet for queryable)
+        rollup_file_json = stage_dir / "telemetry_rollup.json"
+        rollup_file_parquet = stage_dir / "telemetry_rollup.parquet"
         try:
-            with open(rollup_file, 'w') as f:
+            # Write JSON rollup
+            with open(rollup_file_json, 'w') as f:
                 json.dump(rollup_data, f, indent=2)
+            
+            # Write Parquet rollup (flattened from view-level rollups)
+            parquet_rows = []
+            for view_name, view_data in rollup_data.get("views", {}).items():
+                # Extract targets from view rollup
+                for target_name, target_data in view_data.get("targets", {}).items():
+                    if isinstance(target_data, dict) and "symbols" not in target_data:
+                        # CROSS_SECTIONAL: target-level
+                        row = {
+                            "run_id": run_id,
+                            "stage": stage,
+                            "view": view_name,
+                            "target": target_name,
+                            "symbol": None,
+                            "timestamp": rollup_data.get("timestamp"),
+                            **{k: v for k, v in target_data.items() if isinstance(v, (int, float, str, bool)) or v is None}
+                        }
+                        parquet_rows.append(row)
+                    elif isinstance(target_data, dict):
+                        # SYMBOL_SPECIFIC: iterate through symbols
+                        for symbol_name, symbol_metrics in target_data.get("symbols", {}).items():
+                            row = {
+                                "run_id": run_id,
+                                "stage": stage,
+                                "view": view_name,
+                                "target": target_name,
+                                "symbol": symbol_name,
+                                "timestamp": rollup_data.get("timestamp"),
+                                **{k: v for k, v in symbol_metrics.items() if isinstance(v, (int, float, str, bool)) or v is None}
+                            }
+                            parquet_rows.append(row)
+            
+            if parquet_rows:
+                df_rollup = pd.DataFrame(parquet_rows)
+                df_rollup.to_parquet(rollup_file_parquet, index=False, engine='pyarrow', compression='snappy')
+                logger.debug(f"✅ Wrote stage rollup: {rollup_file_json.name} and {rollup_file_parquet.name}")
         except Exception as e:
-            logger.warning(f"Failed to write stage rollup to {rollup_file}: {e}")
+            logger.warning(f"Failed to write stage rollup to {rollup_file_json}: {e}")
 
 
 def load_telemetry_config() -> Dict[str, Any]:
