@@ -153,6 +153,37 @@ safety:
       enabled: false  # Default: disabled (more aggressive, use with caution)
       patterns: []  # List of regex patterns to match (e.g., [".*_1d$", ".*daily.*"])
       # If enabled, features matching these patterns will be quarantined regardless of computed lookback
+    
+    # Look-ahead bias fixes (new section)
+    # These fixes address implementation bugs that cause look-ahead bias:
+    # 1. Rolling windows including current bar (should exclude with shift(1))
+    # 2. Global normalization before train/test split (should normalize inside CV)
+    # 3. pct_change() potentially including current bar (needs verification)
+    lookahead_bias_fixes:
+      # Fix #1: Exclude current bar from rolling windows
+      # When enabled, adds .shift(1) before rolling operations (rolling_mean, rolling_std, etc.)
+      # This prevents features from including the current bar's price, which leaks current information
+      # Default: false (maintains current behavior for backward compatibility)
+      exclude_current_bar_from_rolling: false
+      
+      # Fix #2: Normalize inside CV loops (fit on train, transform test)
+      # When enabled, moves scaler/imputer fitting inside CV loops
+      # This prevents leaking future statistics into training (global normalization leak)
+      # Default: false (maintains current behavior for backward compatibility)
+      # NOTE: This fix requires refactoring call sites to pass train/test separately
+      normalize_inside_cv: false
+      
+      # Fix #3: Verify pct_change excludes current bar
+      # When enabled, uses explicit shift for pct_change calculations to ensure current bar is excluded
+      # Default: false (maintains current behavior for backward compatibility)
+      verify_pct_change_shift: false
+      
+      # Migration mode: controls how fixes are applied and validated
+      # - "off": All fixes disabled (current behavior, default)
+      # - "test": Fixes enabled, log differences but don't fail (for validation)
+      # - "warn": Fixes enabled, warn on discrepancies (for gradual rollout)
+      # - "enforce": Fixes enabled, fail on discrepancies (production mode)
+      migration_mode: "off"  # Default: off (maintains current behavior)
   
   # Reproducibility Tracking Thresholds
   reproducibility:
