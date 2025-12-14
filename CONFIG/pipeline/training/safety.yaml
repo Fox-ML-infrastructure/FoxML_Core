@@ -46,6 +46,12 @@ safety:
   
   # Leakage Detection & Auto-Fix Thresholds
   leakage_detection:
+    # Leakage policy: how to handle purge/embargo violations
+    # - "strict": Hard-stop on violations (raise exception, block training)
+    # - "drop_features": Drop violating features, recompute budget, ensure pass
+    # - "warn": Log violations but continue (NOT recommended for production)
+    policy: "strict"  # Default: strict (fail-fast on violations)
+    
     # Auto-fixer triggers when scores exceed these thresholds
     auto_fix_thresholds:
       cv_score: 0.99  # Cross-validation score threshold (0.99 = 99%)

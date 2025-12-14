@@ -237,131 +237,41 @@ def derive_purge_embargo(
 def compute_feature_lookback_max(
     feature_names: List[str],
     interval_minutes: Optional[float] = None,
-    max_lookback_cap_minutes: Optional[float] = None
+    max_lookback_cap_minutes: Optional[float] = None,
+    horizon_minutes: Optional[float] = None,
+    registry: Optional[Any] = None
 ) -> Tuple[Optional[float], List[Tuple[str, float]]]:
     """
     Compute maximum feature lookback from actual feature names.
     
-    Uses feature registry to get lag_bars for each feature, then converts to minutes.
+    DEPRECATED: This is now a thin wrapper around leakage_budget.compute_feature_lookback_max()
+    to maintain backward compatibility. New code should use leakage_budget.compute_budget() directly.
+    
+    Uses unified leakage budget calculator to ensure consistency with audit and gatekeeper.
     
     Args:
         feature_names: List of feature names to analyze
         interval_minutes: Data interval in minutes (for conversion)
         max_lookback_cap_minutes: Optional cap for ranking mode (e.g., 240m = 4 hours)
+        horizon_minutes: Optional target horizon (for budget calculation)
+        registry: Optional feature registry (will be loaded if None)
     
     Returns:
         (max_lookback_minutes, top_lookback_features) tuple
         - max_lookback_minutes: Maximum lookback in minutes (None if cannot compute)
         - top_lookback_features: List of (feature_name, lookback_minutes) for top offenders
     """
-    if not feature_names or interval_minutes is None or interval_minutes <= 0:
-        return None, []
+    # Delegate to unified leakage budget calculator
+    # Use the legacy wrapper function from leakage_budget module
+    from TRAINING.utils import leakage_budget
     
-    try:
-        from TRAINING.common.feature_registry import get_registry
-        registry = get_registry()
-    except Exception:
-        # Fallback: use pattern matching if registry unavailable
-        registry = None
-    
-    feature_lookbacks = []
-    
-    for feat_name in feature_names:
-        lag_bars = None
-        
-        # Try registry first
-        if registry:
-            try:
-                metadata = registry.get_feature_metadata(feat_name)
-                lag_bars = metadata.get('lag_bars')
-            except Exception:
-                pass
-        
-        # Fallback: pattern matching for common patterns
-        if lag_bars is None:
-            import re
-            # PRECEDENCE ORDER (critical for accuracy):
-            # 1. Explicit time suffixes (most reliable) - check FIRST
-            # 2. Keyword heuristics (less reliable) - only as fallback
-            
-            # PRIORITY 1: Explicit time-based suffixes (most reliable)
-            # These take precedence over keyword heuristics to avoid false positives
-            # Example: "intraday_seasonality_15m" should use 15m, not "day" keyword
-            
-            # Minute-based patterns (e.g., _15m, _30m, _1440m) - CHECK FIRST
-            minutes_match = re.search(r'_(\d+)m$', feat_name, re.I)
-            if minutes_match:
-                minutes = int(minutes_match.group(1))
-                # Convert minutes to bars
-                lag_bars = int(minutes / interval_minutes) if interval_minutes > 0 else minutes // 5
-            
-            # Hour-based patterns (e.g., _12h, _24h) - CHECK SECOND
-            elif re.search(r'_(\d+)h', feat_name, re.I):
-                hours_match = re.search(r'_(\d+)h', feat_name, re.I)
-                hours = int(hours_match.group(1))
-                # Convert hours to bars (assume 12 bars/hour for 5m data)
-                lag_bars = hours * 12
-            
-            # Day-based patterns (e.g., _1d, _3d) - CHECK THIRD
-            elif re.search(r'_(\d+)d', feat_name, re.I):
-                days_match = re.search(r'_(\d+)d', feat_name, re.I)
-                days = int(days_match.group(1))
-                # Convert days to bars (assume 288 bars/day for 5m data)
-                lag_bars = days * 288
-            
-            # PRIORITY 2: Keyword heuristics (fallback only if no explicit suffix)
-            # Only use keyword patterns if no explicit time suffix was found
-            # This prevents false positives like "intraday_seasonality_15m" being tagged as 1440m
-            elif (re.search(r'_1d$|_1D$|_24h$|_24H$|^daily_|_daily$|_1440m|1440(?!\d)', feat_name, re.I) or
-                  re.search(r'rolling.*daily|daily.*high|daily.*low', feat_name, re.I) or
-                  re.search(r'volatility.*day|vol.*day|volume.*day', feat_name, re.I)):
-                # Explicit daily patterns (ends with _1d, _24h, starts with daily_, etc.)
-                # 1 day = 1440 minutes
-                if interval_minutes > 0:
-                    lag_bars = int(1440 / interval_minutes)  # 1 day in bars
-                else:
-                    lag_bars = 288  # Fallback: assume 5m bars (1440 / 5 = 288)
-            
-            # Last resort: very aggressive "day" keyword (only if no explicit suffix)
-            # This is less reliable but catches features like "atr_day", "vol_day" that have no suffix
-            elif re.search(r'.*day.*', feat_name, re.I):
-                # Very aggressive: catch "day" anywhere (but only if no explicit suffix found)
-                # Convert to bars based on interval
-                if interval_minutes > 0:
-                    lag_bars = int(1440 / interval_minutes)  # 1 day in bars
-                else:
-                    lag_bars = 288  # Fallback: assume 5m bars (1440 / 5 = 288)
-            # Bar-based patterns (ret_N, sma_N, ema_N, rsi_N, etc.)
-            elif re.match(r'^(ret|sma|ema|rsi|macd|bb|atr|adx|mom|vol|std|var)_(\d+)', feat_name):
-                match = re.match(r'^(ret|sma|ema|rsi|macd|bb|atr|adx|mom|vol|std|var)_(\d+)', feat_name)
-                lag_bars = int(match.group(2))
-            # Calendar features (monthly, quarterly, yearly)
-            elif re.search(r'monthly|quarterly|yearly', feat_name, re.I):
-                # Calendar features - assume 1 month = 30 days
-                lag_bars = 30 * 288  # Very long lookback
-            else:
-                # Unknown feature - assume minimal lookback (1 bar)
-                lag_bars = 1
-        
-        if lag_bars is not None and lag_bars > 0:
-            lookback_minutes = lag_bars * interval_minutes
-            feature_lookbacks.append((feat_name, lookback_minutes))
-    
-    if not feature_lookbacks:
-        return None, []
-    
-    # Sort by lookback (descending)
-    feature_lookbacks.sort(key=lambda x: x[1], reverse=True)
-    max_lookback = feature_lookbacks[0][1]
-    
-    # Apply cap if provided
-    if max_lookback_cap_minutes is not None and max_lookback > max_lookback_cap_minutes:
-        max_lookback = max_lookback_cap_minutes
-    
-    # Return top 10 offenders
-    top_offenders = feature_lookbacks[:10]
-    
-    return max_lookback, top_offenders
+    return leakage_budget.compute_feature_lookback_max(
+        feature_names=feature_names,
+        interval_minutes=interval_minutes,
+        max_lookback_cap_minutes=max_lookback_cap_minutes,
+        horizon_minutes=horizon_minutes,
+        registry=registry
+    )
 
 
 def create_resolved_config(

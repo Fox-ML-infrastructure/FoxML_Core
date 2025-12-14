@@ -210,7 +210,12 @@ def _log_canonical_summary(
     cv_metric: str,
     composite: float,
     leakage_flag: str,
-    cohort_path: Optional[str]
+    cohort_path: Optional[str],
+    splitter_name: Optional[str] = None,
+    purge_minutes: Optional[float] = None,
+    embargo_minutes: Optional[float] = None,
+    max_feature_lookback_minutes: Optional[float] = None,
+    n_splits: Optional[int] = None
 ):
     """
     Log canonical run summary block (one block that can be screenshot for PR comments).
@@ -261,6 +266,19 @@ def _log_canonical_summary(
     logger.info(f"rows: {rows:<10} features: safe={features_safe} → pruned={features_pruned}")
     logger.info(f"leak_scan: {leak_scan_verdict:<6} auto_fix: {auto_fix_str}")
     logger.info(f"cv: {cv_metric:<25} composite: {composite:.3f}")
+    
+    # CV splitter and leakage budget details (CRITICAL for audit)
+    if splitter_name:
+        logger.info(f"splitter: {splitter_name}")
+    if n_splits is not None:
+        logger.info(f"n_splits: {n_splits}")
+    if purge_minutes is not None:
+        logger.info(f"purge_minutes: {purge_minutes:.1f}m")
+    if embargo_minutes is not None:
+        logger.info(f"embargo_minutes: {embargo_minutes:.1f}m")
+    if max_feature_lookback_minutes is not None:
+        logger.info(f"max_feature_lookback_minutes: {max_feature_lookback_minutes:.1f}m")
+    
     if cohort_path:
         logger.info(f"repro: {cohort_path}")
     logger.info("=" * 60)
@@ -319,35 +337,37 @@ def _enforce_final_safety_gate(
         pass
     
     # CRITICAL: Use the SAME lookback calculation as the audit system
-    # Compute lookback for ALL features using the same logic as resolved_config
-    from TRAINING.utils.resolved_config import compute_feature_lookback_max
+    # Use unified leakage budget calculator to ensure consistency
+    from TRAINING.utils.leakage_budget import infer_lookback_minutes
     
-    # Compute lookback for all features at once (same as audit)
-    max_lookback_all, top_offenders_all = compute_feature_lookback_max(
-        feature_names,
-        interval_minutes=interval_minutes,
-        max_lookback_cap_minutes=None  # Don't cap - we want the real value
-    )
-    
-    # Build lookup dict from top_offenders (contains all features with lookback > 0)
+    # Build lookup dict for ALL features using unified calculator
     feature_lookback_dict = {}
-    for feat_name, lookback_minutes in top_offenders_all:
-        feature_lookback_dict[feat_name] = lookback_minutes
-    
-    # For features not in top_offenders, compute individually to catch any that exceed threshold
-    # (top_offenders only contains top 10, but we need to check ALL features)
     for feat_name in feature_names:
-        if feat_name not in feature_lookback_dict:
-            # Compute lookback for this feature individually
-            max_lookback, _ = compute_feature_lookback_max(
-                [feat_name],
-                interval_minutes=interval_minutes,
-                max_lookback_cap_minutes=None
-            )
-            if max_lookback is not None:
-                feature_lookback_dict[feat_name] = max_lookback
-            else:
-                feature_lookback_dict[feat_name] = 0.0  # Unknown feature - assume safe
+        # Try registry first for explicit metadata
+        spec_lookback = None
+        if registry is not None:
+            try:
+                metadata = registry.get_feature_metadata(feat_name)
+                lag_bars = metadata.get('lag_bars')
+                if lag_bars is not None and lag_bars >= 0:
+                    spec_lookback = float(lag_bars * interval_minutes)
+            except Exception:
+                pass
+        
+        # Use unified infer_lookback_minutes (same as audit)
+        lookback = infer_lookback_minutes(
+            feat_name,
+            interval_minutes,
+            spec_lookback_minutes=spec_lookback,
+            registry=registry,
+            unknown_policy="conservative"
+        )
+        
+        # Skip if unknown_policy="drop" and lookback is inf (shouldn't happen with "conservative")
+        if lookback == float("inf"):
+            feature_lookback_dict[feat_name] = 0.0  # Assume safe if unknown
+        else:
+            feature_lookback_dict[feat_name] = lookback
     
     # Iterate through features in the FINAL dataframe
     for idx, feature_name in enumerate(feature_names):
@@ -394,10 +414,13 @@ def _enforce_final_safety_gate(
     
     # Mutate the Dataframe (drop columns)
     if dropped_features:
+        # Log policy context
         logger.warning(
             f"🛡️ FINAL GATEKEEPER: Dropping {len(dropped_features)} features that violate purge limit "
             f"({purge_limit:.1f}m, safe_lookback_max={safe_lookback_max:.1f}m)"
         )
+        logger.info(f"   Policy: drop_features (auto-drop violating features)")
+        logger.info(f"   Drop list ({len(dropped_features)} features):")
         for feat_name, feat_reason in dropped_features[:10]:  # Show first 10
             logger.warning(f"   🗑️ {feat_name}: {feat_reason}")
         if len(dropped_features) > 10:
@@ -642,7 +665,72 @@ def train_and_evaluate_models(
             
             # CRITICAL: Recompute resolved_config with feature_lookback_max from PRUNED features
             # This prevents paying 1440m purge for features we don't even use
+            from TRAINING.utils.leakage_budget import compute_budget
             from TRAINING.utils.resolved_config import compute_feature_lookback_max, create_resolved_config
+            
+            # Get registry for lookback calculation
+            registry = None
+            try:
+                from TRAINING.common.feature_registry import get_registry
+                registry = get_registry()
+            except Exception:
+                pass
+            
+            # Compute budget from PRUNED feature set
+            if resolved_config and resolved_config.horizon_minutes:
+                budget = compute_budget(
+                    feature_names,
+                    data_interval_minutes,
+                    resolved_config.horizon_minutes,
+                    registry=registry
+                )
+                resolved_config.feature_lookback_max_minutes = budget.max_feature_lookback_minutes
+                
+                # Enforce leakage policy after pruning (final feature set)
+                # Design: purge covers feature lookback, embargo covers target horizon
+                if resolved_config.purge_minutes is not None:
+                    purge_minutes = resolved_config.purge_minutes
+                    embargo_minutes = resolved_config.embargo_minutes if resolved_config.embargo_minutes is not None else purge_minutes
+                    
+                    # Load policy from config
+                    policy = "strict"
+                    try:
+                        from CONFIG.config_loader import get_cfg
+                        policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+                    except Exception:
+                        pass
+                    
+                    # Buffer for safety margin (5 minutes default)
+                    buffer_minutes = 5.0
+                    
+                    # Constraint 1: purge must cover feature lookback
+                    purge_required = budget.max_feature_lookback_minutes + buffer_minutes
+                    purge_violation = purge_minutes < purge_required
+                    
+                    # Constraint 2: embargo must cover target horizon
+                    embargo_required = budget.horizon_minutes + buffer_minutes
+                    embargo_violation = embargo_minutes < embargo_required
+                    
+                    if purge_violation or embargo_violation:
+                        violations = []
+                        if purge_violation:
+                            violations.append(
+                                f"purge ({purge_minutes:.1f}m) < lookback_requirement ({purge_required:.1f}m) "
+                                f"[max_lookback={budget.max_feature_lookback_minutes:.1f}m + buffer={buffer_minutes:.1f}m]"
+                            )
+                        if embargo_violation:
+                            violations.append(
+                                f"embargo ({embargo_minutes:.1f}m) < horizon_requirement ({embargo_required:.1f}m) "
+                                f"[horizon={budget.horizon_minutes:.1f}m + buffer={buffer_minutes:.1f}m]"
+                            )
+                        
+                        msg = f"🚨 LEAKAGE VIOLATION (post-pruning): {'; '.join(violations)}"
+                        
+                        if policy == "strict":
+                            raise RuntimeError(msg + " (policy: strict - training blocked)")
+                        elif policy == "warn":
+                            logger.error(msg + " (policy: warn - continuing with violation - NOT RECOMMENDED)")
+                        # Note: drop_features policy already handled in gatekeeper, so we just warn here, create_resolved_config
             
             # Get n_symbols_available from mtf_data
             n_symbols_available = len(mtf_data) if 'mtf_data' in locals() else 1
@@ -664,9 +752,26 @@ def train_and_evaluate_models(
             
             if computed_lookback is not None:
                 feature_lookback_max_minutes = computed_lookback
-                if top_offenders and top_offenders[0][1] > 240:  # Only log if > 4 hours
-                    logger.info(f"  📊 Feature lookback (post-prune): max={computed_lookback:.1f}m")
-                    logger.info(f"    Top lookback features: {', '.join([f'{f}({m:.0f}m)' for f, m in top_offenders[:5]])}")
+                # SANITY CHECK: Verify top_offenders matches reported max
+                if top_offenders:
+                    actual_max_in_list = top_offenders[0][1]
+                    if abs(actual_max_in_list - computed_lookback) > 1.0:
+                        logger.warning(
+                            f"⚠️  Lookback logging mismatch: reported max={computed_lookback:.1f}m "
+                            f"but top feature in list={actual_max_in_list:.1f}m. "
+                            f"This suggests the top_offenders list is from a different feature set."
+                        )
+                    else:
+                        # Only log if > 4 hours or if there's a mismatch (for debugging)
+                        if computed_lookback > 240 or abs(actual_max_in_list - computed_lookback) > 1.0:
+                            logger.info(f"  📊 Feature lookback (post-prune): max={computed_lookback:.1f}m")
+                            logger.info(f"    Top lookback features (from {len(feature_names)} features): {', '.join([f'{f}({m:.0f}m)' for f, m in top_offenders[:5]])}")
+                            # Sanity check: verify all top features are in current feature set
+                            top_feature_names = {f for f, _ in top_offenders[:5]}
+                            current_feature_set = set(feature_names)
+                            missing = top_feature_names - current_feature_set
+                            if missing:
+                                logger.error(f"🚨 CRITICAL: Top lookback features not in current feature set: {missing}")
             else:
                 feature_lookback_max_minutes = None
             
@@ -693,6 +798,68 @@ def train_and_evaluate_models(
                 )
                 if log_cfg.cv_detail:
                     logger.info(f"  ✅ Resolved config (post-prune): purge={resolved_config.purge_minutes:.1f}m, embargo={resolved_config.embargo_minutes:.1f}m")
+                
+                # CRITICAL: Enforce leakage policy after pruning (final feature set)
+                if resolved_config.purge_minutes is not None and resolved_config.feature_lookback_max_minutes is not None:
+                    from TRAINING.utils.leakage_budget import compute_budget
+                    
+                    # Get registry
+                    registry = None
+                    try:
+                        from TRAINING.common.feature_registry import get_registry
+                        registry = get_registry()
+                    except Exception:
+                        pass
+                    
+                    # Compute budget from final pruned features
+                    budget = compute_budget(
+                        feature_names,
+                        data_interval_minutes,
+                        resolved_config.horizon_minutes,
+                        registry=registry
+                    )
+                    purge_minutes = resolved_config.purge_minutes
+                    embargo_minutes = resolved_config.embargo_minutes if resolved_config.embargo_minutes is not None else purge_minutes
+                    
+                    # Load policy from config
+                    policy = "strict"
+                    try:
+                        from CONFIG.config_loader import get_cfg
+                        policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+                    except Exception:
+                        pass
+                    
+                    # Buffer for safety margin (5 minutes default)
+                    buffer_minutes = 5.0
+                    
+                    # Constraint 1: purge must cover feature lookback
+                    purge_required = budget.max_feature_lookback_minutes + buffer_minutes
+                    purge_violation = purge_minutes < purge_required
+                    
+                    # Constraint 2: embargo must cover target horizon
+                    embargo_required = budget.horizon_minutes + buffer_minutes
+                    embargo_violation = embargo_minutes < embargo_required
+                    
+                    if purge_violation or embargo_violation:
+                        violations = []
+                        if purge_violation:
+                            violations.append(
+                                f"purge ({purge_minutes:.1f}m) < lookback_requirement ({purge_required:.1f}m) "
+                                f"[max_lookback={budget.max_feature_lookback_minutes:.1f}m + buffer={buffer_minutes:.1f}m]"
+                            )
+                        if embargo_violation:
+                            violations.append(
+                                f"embargo ({embargo_minutes:.1f}m) < horizon_requirement ({embargo_required:.1f}m) "
+                                f"[horizon={budget.horizon_minutes:.1f}m + buffer={buffer_minutes:.1f}m]"
+                            )
+                        
+                        msg = f"🚨 LEAKAGE VIOLATION (post-pruning): {'; '.join(violations)}"
+                        
+                        if policy == "strict":
+                            raise RuntimeError(msg + " (policy: strict - training blocked)")
+                        elif policy == "warn":
+                            logger.error(msg + " (policy: warn - continuing with violation - NOT RECOMMENDED)")
+                        # Note: drop_features policy already handled in gatekeeper, so we just warn here
             
             # Save stability snapshot for quick pruning (non-invasive hook)
             # Only save if output_dir is available (optional feature)
@@ -737,11 +904,28 @@ def train_and_evaluate_models(
             feature_names, data_interval_minutes, max_lookback_cap_minutes=max_lookback_cap
         )
         
-        if computed_lookback is not None:
-            feature_lookback_max_minutes = computed_lookback
-            if top_offenders and top_offenders[0][1] > 240:  # Only log if > 4 hours
-                logger.info(f"  📊 Feature lookback analysis: max={computed_lookback:.1f}m")
-                logger.info(f"    Top lookback features: {', '.join([f'{f}({m:.0f}m)' for f, m in top_offenders[:5]])}")
+                if computed_lookback is not None:
+                    feature_lookback_max_minutes = computed_lookback
+                    # SANITY CHECK: Verify top_offenders matches reported max
+                    if top_offenders:
+                        actual_max_in_list = top_offenders[0][1]
+                        if abs(actual_max_in_list - computed_lookback) > 1.0:
+                            logger.warning(
+                                f"⚠️  Lookback logging mismatch: reported max={computed_lookback:.1f}m "
+                                f"but top feature in list={actual_max_in_list:.1f}m. "
+                                f"This suggests the top_offenders list is from a different feature set."
+                            )
+                        else:
+                            # Only log if > 4 hours or if there's a mismatch (for debugging)
+                            if computed_lookback > 240 or abs(actual_max_in_list - computed_lookback) > 1.0:
+                                logger.info(f"  📊 Feature lookback analysis: max={computed_lookback:.1f}m")
+                                logger.info(f"    Top lookback features (from {len(feature_names)} features): {', '.join([f'{f}({m:.0f}m)' for f, m in top_offenders[:5]])}")
+                                # Sanity check: verify all top features are in current feature set
+                                top_feature_names = {f for f, _ in top_offenders[:5]}
+                                current_feature_set = set(feature_names)
+                                missing = top_feature_names - current_feature_set
+                                if missing:
+                                    logger.error(f"🚨 CRITICAL: Top lookback features not in current feature set: {missing}")
         else:
             # Fallback: use conservative estimate if cannot compute
             if data_interval_minutes is not None and data_interval_minutes > 0:
@@ -3685,6 +3869,15 @@ def evaluate_target_predictability(
     if log_cfg.cv_detail:
         resolved_config.log_summary(logger)
 
+    # Log active leakage policy (CRITICAL for audit)
+    policy = "strict"  # Default
+    try:
+        from CONFIG.config_loader import get_cfg
+        policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+    except Exception:
+        pass
+    logger.info(f"🔒 Leakage policy: {policy} (strict=hard-stop, drop_features=auto-drop, warn=log-only)")
+    
     # FINAL GATEKEEPER: Enforce safety at the last possible moment
     # This runs AFTER all loading/merging/sanitization is done
     # It physically drops features that violate the purge limit from the dataframe
@@ -3701,17 +3894,147 @@ def evaluate_target_predictability(
     # The audit system uses this value, so it must reflect the ACTUAL features that will be trained
     # (not the original features before the gatekeeper dropped problematic ones)
     if feature_names and len(feature_names) > 0:
+        from TRAINING.utils.leakage_budget import compute_budget
         from TRAINING.utils.resolved_config import compute_feature_lookback_max
-        max_lookback_after_gatekeeper, _ = compute_feature_lookback_max(
+        
+        # Get registry for lookback calculation
+        registry = None
+        try:
+            from TRAINING.common.feature_registry import get_registry
+            registry = get_registry()
+        except Exception:
+            pass
+        
+        # Compute budget from FINAL feature set (post gatekeeper)
+        budget = compute_budget(
             feature_names,
-            interval_minutes=detected_interval,
-            max_lookback_cap_minutes=None
+            detected_interval,
+            resolved_config.horizon_minutes if resolved_config else 60.0,
+            registry=registry
         )
+        
         # Update resolved_config with the new lookback (from features that actually remain)
-        if max_lookback_after_gatekeeper is not None:
-            resolved_config.feature_lookback_max_minutes = max_lookback_after_gatekeeper
-            if log_cfg.cv_detail:
-                logger.info(f"📊 Updated feature_lookback_max after Final Gatekeeper: {max_lookback_after_gatekeeper:.1f}m (from {len(feature_names)} remaining features)")
+        resolved_config.feature_lookback_max_minutes = budget.max_feature_lookback_minutes
+        if log_cfg.cv_detail:
+            logger.info(f"📊 Updated feature_lookback_max after Final Gatekeeper: {budget.max_feature_lookback_minutes:.1f}m (from {len(feature_names)} remaining features)")
+        
+            # CRITICAL: Enforce leakage policy (strict/drop_features/warn)
+            # Design: purge covers feature lookback, embargo covers target horizon
+            # Validate TWO separate constraints (not a single combined requirement)
+            if resolved_config.purge_minutes is not None:
+                purge_minutes = resolved_config.purge_minutes
+                embargo_minutes = resolved_config.embargo_minutes if resolved_config.embargo_minutes is not None else purge_minutes
+                
+                # Load policy from config
+                policy = "strict"  # Default: strict
+                try:
+                    from CONFIG.config_loader import get_cfg
+                    policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+                except Exception:
+                    pass
+                
+                # Buffer for safety margin (5 minutes default)
+                buffer_minutes = 5.0
+                
+                # Constraint 1: purge must cover feature lookback
+                purge_required = budget.max_feature_lookback_minutes + buffer_minutes
+                purge_violation = purge_minutes < purge_required
+                
+                # Constraint 2: embargo must cover target horizon
+                embargo_required = budget.horizon_minutes + buffer_minutes
+                embargo_violation = embargo_minutes < embargo_required
+                
+                if purge_violation or embargo_violation:
+                    # Build detailed violation message
+                    violations = []
+                    if purge_violation:
+                        violations.append(
+                            f"purge ({purge_minutes:.1f}m) < lookback_requirement ({purge_required:.1f}m) "
+                            f"[max_lookback={budget.max_feature_lookback_minutes:.1f}m + buffer={buffer_minutes:.1f}m]"
+                        )
+                    if embargo_violation:
+                        violations.append(
+                            f"embargo ({embargo_minutes:.1f}m) < horizon_requirement ({embargo_required:.1f}m) "
+                            f"[horizon={budget.horizon_minutes:.1f}m + buffer={buffer_minutes:.1f}m]"
+                        )
+                    
+                    msg = f"🚨 LEAKAGE VIOLATION: {'; '.join(violations)}"
+                
+                if policy == "strict":
+                    # Hard-stop: raise exception
+                    raise RuntimeError(msg + " (policy: strict - training blocked)")
+                elif policy == "drop_features":
+                    # Drop features that cause violation, recompute budget
+                    logger.warning(msg + " (policy: drop_features - dropping violating features)")
+                    # Find features with lookback > (purge - buffer)
+                    # Note: purge covers lookback, not lookback+horizon
+                    max_allowed_lookback = purge_minutes - buffer_minutes
+                    violating_features = []
+                    for feat_name in feature_names:
+                        spec_lookback = None
+                        if registry is not None:
+                            try:
+                                metadata = registry.get_feature_metadata(feat_name)
+                                lag_bars = metadata.get('lag_bars')
+                                if lag_bars is not None and lag_bars >= 0:
+                                    spec_lookback = float(lag_bars * detected_interval)
+                            except Exception:
+                                pass
+                        
+                        from TRAINING.utils.leakage_budget import infer_lookback_minutes
+                        lookback = infer_lookback_minutes(
+                            feat_name,
+                            detected_interval,
+                            spec_lookback_minutes=spec_lookback,
+                            registry=registry
+                        )
+                        
+                        if lookback > max_allowed_lookback:
+                            violating_features.append(feat_name)
+                    
+                    # Drop violating features
+                    if violating_features:
+                        logger.warning(f"   Dropping {len(violating_features)} features with lookback > {max_allowed_lookback:.1f}m")
+                        logger.info(f"   Policy: drop_features (auto-drop violating features)")
+                        logger.info(f"   Drop list ({len(violating_features)} features): {', '.join(violating_features[:10])}")
+                        if len(violating_features) > 10:
+                            logger.info(f"   ... and {len(violating_features) - 10} more")
+                        keep_indices = [i for i, name in enumerate(feature_names) if name not in violating_features]
+                        X = X[:, keep_indices]
+                        feature_names = [name for i, name in enumerate(feature_names) if i in keep_indices]
+                        
+                        # Recompute budget on remaining features
+                        budget = compute_budget(
+                            feature_names,
+                            detected_interval,
+                            resolved_config.horizon_minutes if resolved_config else 60.0,
+                            registry=registry
+                        )
+                        resolved_config.feature_lookback_max_minutes = budget.max_feature_lookback_minutes
+                        
+                        # Verify violation is resolved (check both constraints)
+                        buffer_minutes = 5.0
+                        purge_required = budget.max_feature_lookback_minutes + buffer_minutes
+                        embargo_required = budget.horizon_minutes + buffer_minutes
+                        embargo_minutes = resolved_config.embargo_minutes if resolved_config.embargo_minutes is not None else resolved_config.purge_minutes
+                        
+                        if resolved_config.purge_minutes < purge_required or embargo_minutes < embargo_required:
+                            violations = []
+                            if resolved_config.purge_minutes < purge_required:
+                                violations.append(f"purge ({resolved_config.purge_minutes:.1f}m) < {purge_required:.1f}m")
+                            if embargo_minutes < embargo_required:
+                                violations.append(f"embargo ({embargo_minutes:.1f}m) < {embargo_required:.1f}m")
+                            raise RuntimeError(
+                                f"🚨 LEAKAGE VIOLATION PERSISTS after dropping features: {'; '.join(violations)}"
+                            )
+                        logger.info(
+                            f"   ✅ Violation resolved: "
+                            f"purge ({resolved_config.purge_minutes:.1f}m) >= {purge_required:.1f}m, "
+                            f"embargo ({embargo_minutes:.1f}m) >= {embargo_required:.1f}m"
+                        )
+                else:  # policy == "warn"
+                    # Log warning but continue (NOT recommended)
+                    logger.error(msg + " (policy: warn - continuing with violation - NOT RECOMMENDED)")
     
     if X.shape[1] == 0:
         logger.error("❌ FINAL GATEKEEPER: All features were dropped! Cannot train models.")
@@ -4237,6 +4560,53 @@ def evaluate_target_predictability(
         "suspicious_flag": leakage_flag != "OK"
     }
     
+    # CRITICAL: Build LeakageAssessment to prevent contradictory reason strings
+    from TRAINING.utils.leakage_assessment import LeakageAssessment
+    
+    # Determine CV suspicious flag (CV score too high suggests leakage, not just overfitting)
+    cv_suspicious = False
+    if primary_scores:
+        valid_cv_scores = [s for s in primary_scores.values() if s is not None and not np.isnan(s)]
+        if valid_cv_scores:
+            max_cv_score = max(valid_cv_scores)
+            # CV score >= 0.85 is suspicious (too good to be true)
+            cv_suspicious = max_cv_score >= 0.85
+    
+    # Determine overfit_likely flag (perfect train but low CV = classic overfitting)
+    overfit_likely = False
+    if model_metrics:
+        for model_name, metrics in model_metrics.items():
+            if isinstance(metrics, dict):
+                train_acc = metrics.get('training_accuracy')
+                cv_acc = metrics.get('accuracy')
+                train_r2 = metrics.get('training_r2')
+                cv_r2 = metrics.get('r2')
+                
+                # Check if perfect train but low CV (classic overfitting)
+                if train_acc is not None and train_acc >= 0.99:
+                    if cv_acc is not None and cv_acc < 0.75:
+                        overfit_likely = True
+                        break
+                if train_r2 is not None and train_r2 >= 0.99:
+                    if cv_r2 is not None and cv_r2 < 0.50:
+                        overfit_likely = True
+                        break
+    
+    # Find models with AUC > 0.90
+    auc_too_high_models = []
+    if final_task_type == TaskType.BINARY_CLASSIFICATION and model_means:
+        for model_name, score in model_means.items():
+            if score is not None and not np.isnan(score) and score > 0.90:
+                auc_too_high_models.append(model_name)
+    
+    # Build assessment
+    assessment = LeakageAssessment(
+        leak_scan_pass=not summary_leaky_features if 'summary_leaky_features' in locals() else True,
+        cv_suspicious=cv_suspicious,
+        overfit_likely=overfit_likely,
+        auc_too_high_models=auc_too_high_models
+    )
+    
     # Determine status: SUSPICIOUS targets should be excluded from rankings
     # High AUC/R² after auto-fix suggests structural leakage (target construction issue)
     if leakage_flag in ["SUSPICIOUS", "HIGH_SCORE"]:
@@ -4277,6 +4647,20 @@ def evaluate_target_predictability(
     summary_safe_features = len(safe_columns) if 'safe_columns' in locals() else 0
     summary_leaky_features = leaky_features if 'leaky_features' in locals() else []
     
+    # Extract CV splitter info for logging
+    splitter_name = None
+    n_splits_val = None
+    purge_minutes_val = None
+    embargo_minutes_val = None
+    max_lookback_val = None
+    
+    if 'resolved_config' in locals() and resolved_config:
+        purge_minutes_val = resolved_config.purge_minutes
+        embargo_minutes_val = resolved_config.embargo_minutes
+        max_lookback_val = resolved_config.feature_lookback_max_minutes
+        splitter_name = "PurgedTimeSeriesSplit"  # Default for time-series CV
+        n_splits_val = cv_folds if 'cv_folds' in locals() else None
+    
     _log_canonical_summary(
         target_name=target_name,
         target_column=target_column,
@@ -4289,11 +4673,16 @@ def evaluate_target_predictability(
         features_pruned=actual_pruned_feature_count if 'actual_pruned_feature_count' in locals() else (len(feature_names) if feature_names else 0),
         leak_scan_verdict="PASS" if not summary_leaky_features else "FAIL",
         auto_fix_verdict="SKIPPED" if not should_auto_fix else ("RAN" if autofix_info and autofix_info.modified_configs else "NO_CHANGES"),
-        auto_fix_reason=None if should_auto_fix else "overfit_likely; cv_not_suspicious",
+        auto_fix_reason=assessment.auto_fix_reason() if 'assessment' in locals() else None,
         cv_metric=f"{metric_name}={mean_score:.3f}±{std_score:.3f}",
         composite=composite,
         leakage_flag=leakage_flag,
-        cohort_path=None  # Will be set by reproducibility tracker
+        cohort_path=None,  # Will be set by reproducibility tracker
+        splitter_name=splitter_name,
+        purge_minutes=purge_minutes_val,
+        embargo_minutes=embargo_minutes_val,
+        max_feature_lookback_minutes=max_lookback_val,
+        n_splits=n_splits_val
     )
     
     # Legacy summary line (backward compatibility)
@@ -4303,6 +4692,22 @@ def evaluate_target_predictability(
     
     # Store suspicious features in result for summary report
     result.suspicious_features = all_suspicious_features if all_suspicious_features else None
+    
+    # Log top features actually used (for leakage diagnosis)
+    # This helps identify if high-scoring models are using leaky features
+    if 'feature_importances' in locals() and feature_importances and leakage_flag != "OK":
+        logger.info("=" * 60)
+        logger.info("TOP FEATURES USED (for leakage diagnosis)")
+        logger.info("=" * 60)
+        for model_name, importance_dict in feature_importances.items():
+            if isinstance(importance_dict, dict) and importance_dict:
+                # Sort by importance
+                sorted_features = sorted(importance_dict.items(), key=lambda x: x[1], reverse=True)
+                top_20 = sorted_features[:20]
+                logger.info(f"{model_name}: Top 20 features by importance:")
+                for feat_name, importance in top_20:
+                    logger.info(f"  {feat_name}: {importance:.4f}")
+        logger.info("=" * 60)
     
     # Track reproducibility: compare to previous target ranking run
     # This runs regardless of which entry point calls this function
@@ -4345,15 +4750,12 @@ def evaluate_target_predictability(
                     symbols_for_ctx = symbols
                 
                 # Use resolved_config values if available (single source of truth)
+                # CRITICAL: Use feature_lookback_max_minutes from resolved_config (computed from FINAL feature set)
                 if 'resolved_config' in locals() and resolved_config:
                     purge_minutes_val = resolved_config.purge_minutes
                     embargo_minutes_val = resolved_config.embargo_minutes
-                    # Estimate feature lookback from resolved_config
-                    if resolved_config.interval_minutes is not None:
-                        max_lookback_bars = 288  # 1 day of 5m bars
-                        feature_lookback_max = max_lookback_bars * resolved_config.interval_minutes
-                    else:
-                        feature_lookback_max = None
+                    # Use actual computed lookback from final features (post gatekeeper + pruning)
+                    feature_lookback_max = resolved_config.feature_lookback_max_minutes
                 elif 'purge_minutes_val' not in locals() or purge_minutes_val is None:
                     # Fallback: compute from purge_time if available
                     if 'purge_time' in locals() and purge_time is not None:
@@ -4364,12 +4766,21 @@ def evaluate_target_predictability(
                         except Exception:
                             pass
                 
-                # Estimate feature lookback (conservative: 1 day = 288 bars for 5m data)
+                # Fallback: if resolved_config not available, try to compute from final feature_names
                 if 'feature_lookback_max' not in locals() or feature_lookback_max is None:
-                    feature_lookback_max = None
-                    if 'data_interval_minutes' in locals() and data_interval_minutes is not None:
-                        max_lookback_bars = 288  # 1 day of 5m bars
-                        feature_lookback_max = max_lookback_bars * data_interval_minutes
+                    # Try to compute from final feature_names if available
+                    if 'feature_names' in locals() and feature_names and 'data_interval_minutes' in locals() and data_interval_minutes:
+                        from TRAINING.utils.leakage_budget import compute_budget
+                        try:
+                            # Get horizon for budget calculation
+                            horizon = target_horizon_minutes if 'target_horizon_minutes' in locals() else 60.0
+                            budget = compute_budget(feature_names, data_interval_minutes, horizon)
+                            feature_lookback_max = budget.max_feature_lookback_minutes
+                        except Exception:
+                            # Fallback: conservative estimate
+                            feature_lookback_max = None
+                    else:
+                        feature_lookback_max = None
                 
                 # Build RunContext
                 ctx = RunContext(

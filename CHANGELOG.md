@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### Leakage Controls Structural Fixes (2025-12-13) – **NEW**
+- **Unified Leakage Budget Calculator**: Single source of truth for feature lookback calculation (`TRAINING/utils/leakage_budget.py`)
+- **Calendar Feature Classification**: Fixed calendar features (`day_of_week`, `holiday_dummy`, etc.) to resolve to 0m lookback (not 1440m)
+- **Separate Purge/Embargo Validation**: Fixed validation to enforce two separate constraints:
+  - `purge` covers feature lookback
+  - `embargo` covers target horizon
+  - Previously incorrectly required `purge >= lookback + horizon`
+- **Hard-Stop on Violations**: Configurable policy (`strict`/`drop_features`/`warn`) with proper enforcement
+- **LeakageAssessment Dataclass**: Prevents contradictory reason strings like "overfit_likely; cv_not_suspicious"
+- **CV Splitter Logging**: Run summary now shows splitter identity, purge, embargo, and max_feature_lookback_minutes
+- **Policy Explicit Logging**: Active policy and feature drop lists are logged for auditability
+- See [2025-12-13 leakage validation fix](DOCS/03_technical/fixes/2025-12-13-leakage-validation-fix.md) and [implementation status](DOCS/03_technical/architecture/LEAKAGE_CONTROLS_IMPLEMENTATION_STATUS.md) for details
+
 #### Feature Selection Unification & Critical Fixes (2025-12-13) – **NEW**
 - **Shared Ranking Harness**: Feature selection now uses same harness as target ranking, ensuring identical evaluation contracts
 - **Comprehensive Hardening**: Feature selection now has complete parity with target ranking (ghost busters, leak scan, stability tracking, linear models)
@@ -118,6 +131,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 **Recent fixes (2025-12-12 - 2025-12-13):**
+- **Leakage Controls Structural Fixes** (2025-12-13):
+  - Fixed audit and gatekeeper using different lookback calculations (now unified)
+  - Fixed calendar features incorrectly classified as 1440m lookback (now 0m)
+  - Fixed validation incorrectly requiring `purge >= lookback + horizon` (now separate constraints)
+  - Fixed contradictory reason strings ("overfit_likely; cv_not_suspicious")
+  - Fixed missing import (`Any` from typing) in `leakage_budget.py`
+  - Fixed missing import (`create_resolved_config`) in pruning section
+  - Fixed top offenders list showing uncapped values when cap is applied
 - **Feature Selection Critical Fixes** (2025-12-13):
   - Fixed shared harness unpack crashes (tolerant unpack with length checking)
   - Fixed CatBoost treating numeric columns as text/categorical (hard dtype enforcement guardrail)

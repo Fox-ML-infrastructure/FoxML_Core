@@ -391,4 +391,6 @@ CONFIG/backups/**
 TRAINING/tools/check_undefined_names.py
 TRAINING/tools/find_undefined.py
 INTERNAL/
+INTERNAL_EXPERIMENTAL/
+INTERNAL_EXPERIMENTAL/**
 RESULTS/
