@@ -3857,13 +3857,15 @@ def _save_feature_importances(
     if output_dir is None:
         output_dir = _REPO_ROOT / "results"
     
-    # Create directory structure that respects view (SYMBOL_SPECIFIC vs CROSS_SECTIONAL)
+    # Create directory structure in REPRODUCIBILITY/TARGET_RANKING/{view}/{target}/{symbol}/feature_importances/
+    # This aligns with the reproducibility structure and keeps all target ranking outputs together
     target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-    # Include view in path for SYMBOL_SPECIFIC to avoid collisions
-    if view == "SYMBOL_SPECIFIC":
-        importances_dir = output_dir / "target_rankings" / "feature_importances" / target_name_clean / view / symbol
+    repro_base = output_dir.parent / "REPRODUCIBILITY" / "TARGET_RANKING" if output_dir.name == "target_rankings" else output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
+    
+    if view == "SYMBOL_SPECIFIC" and symbol:
+        importances_dir = repro_base / view / target_name_clean / f"symbol={symbol}" / "feature_importances"
     else:
-        importances_dir = output_dir / "target_rankings" / "feature_importances" / target_name_clean / view
+        importances_dir = repro_base / view / target_name_clean / "feature_importances"
     importances_dir.mkdir(parents=True, exist_ok=True)
     
     # Save per-model CSV files
@@ -3897,14 +3899,17 @@ def _save_feature_importances(
         df.to_csv(csv_file, index=False)
         
         # Save stability snapshot (non-invasive hook)
+        # Pass the same repro_base directory so snapshots are saved alongside feature importances
         try:
             from TRAINING.stability.feature_importance import save_snapshot_hook
+            # Use the same base directory structure as feature importances
+            snapshot_output_dir = importances_dir.parent  # Same level as feature_importances/
             save_snapshot_hook(
                 target_name=target_column,
                 method=model_name,
                 importance_dict=importances,
                 universe_id=view,  # Use view parameter (CROSS_SECTIONAL or SYMBOL_SPECIFIC)
-                output_dir=output_dir,
+                output_dir=snapshot_output_dir,  # Save snapshots in same directory structure
                 auto_analyze=None,  # Load from config
             )
         except Exception as e:
@@ -4335,7 +4340,19 @@ def evaluate_target_predictability(
     target_exclusion_dir = None
     
     if output_dir:
-        target_exclusion_dir = Path(output_dir) / "feature_exclusions"
+        # Determine base output directory (RESULTS/{run}/)
+        # output_dir might be: RESULTS/{run}/target_rankings/ or RESULTS/{run}/
+        if output_dir.name == "target_rankings":
+            base_output_dir = output_dir.parent
+        else:
+            base_output_dir = output_dir
+        
+        # Save feature exclusions to REPRODUCIBILITY/TARGET_RANKING/{view}/{target}/feature_exclusions/
+        # This keeps all target ranking outputs together in the reproducibility structure
+        # Note: Exclusions are shared at target level (not per-symbol, not per-cohort)
+        target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+        repro_base = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
+        target_exclusion_dir = repro_base / view / target_name_clean / "feature_exclusions"
         target_exclusion_dir.mkdir(parents=True, exist_ok=True)
         
         # Try to load existing exclusion list first (from RESULTS/{cohort}/{run}/feature_exclusions/)
