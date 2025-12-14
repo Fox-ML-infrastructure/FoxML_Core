@@ -929,6 +929,16 @@ class IntelligentTrainer:
                 else:
                     logger.warning(f"   REPRODUCIBILITY not found at: {repro_check}")
         
+        # Generate telemetry rollups after target ranking completes
+        try:
+            from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+            tracker = ReproducibilityTracker(output_dir=self.output_dir / "target_rankings")
+            run_id = self._run_name.replace("_", "-")  # Use run name as run_id
+            tracker.generate_telemetry_rollups(stage="TARGET_RANKING", run_id=run_id)
+            logger.debug("✅ Generated telemetry rollups for TARGET_RANKING")
+        except Exception as e:
+            logger.debug(f"Failed to generate telemetry rollups: {e}")
+        
         # Save to cache
         if use_cache:
             cache_data = [r.to_dict() for r in rankings]
