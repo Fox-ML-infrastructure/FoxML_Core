@@ -219,6 +219,7 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 - [RESULTS Organization](03_technical/implementation/RESULTS_ORGANIZATION_OPTIONS.md) - **NEW**: RESULTS directory organization by sample size bins (current implementation)
 - [Reproducibility API](03_technical/implementation/REPRODUCIBILITY_API.md) - **NEW**: API reference for reproducibility tracking
 - [Reproducibility Error Handling](03_technical/implementation/REPRODUCIBILITY_ERROR_HANDLING.md) - **NEW**: Error classification and handling guide
+- [Telemetry System](02_reference/changelog/2025-12-14-telemetry-system.md) - **NEW**: Sidecar-based telemetry with view isolation, hierarchical rollups (cohort → view → stage)
 - [Reproducibility Improvements](03_technical/implementation/REPRODUCIBILITY_IMPROVEMENTS.md) - **NEW**: Summary of reproducibility improvements
 - [Reproducibility Self-Test](03_technical/implementation/REPRODUCIBILITY_SELF_TEST.md) - **NEW**: Self-test checklist for validation
 - [Cohort-Aware Implementation](03_technical/implementation/COHORT_AWARE_REPRODUCIBILITY_IMPLEMENTATION.md) - **NEW**: Detailed implementation notes
