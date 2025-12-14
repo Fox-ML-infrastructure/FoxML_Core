@@ -342,9 +342,17 @@ def infer_lookback_minutes(
             elif feature_time_meta.lookback_bars is not None:
                 spec_lookback_minutes = feature_time_meta.lookback_bars * effective_interval_minutes
     
-    # DEBUG: Track execution path for known offenders
+    # DEBUG: Track execution path for known offenders (only if log_mode=debug)
+    # Check log_mode config to determine if we should log per-feature details
+    log_mode = "summary"  # Default
+    try:
+        from CONFIG.config_loader import get_cfg
+        log_mode = get_cfg("safety.leakage_detection.log_mode", default="summary", config_name="safety_config")
+    except Exception:
+        pass
+    
     debug_offenders = ['cci_30', 'rsi_30', 'rsi_21', 'stoch_d_21', 'stoch_k_21', 'mfi_21', 'williams_r_21']
-    debug_mode = feature_name in debug_offenders
+    debug_mode = (log_mode == "debug") and (feature_name in debug_offenders)
     
     # 1) Schema/registry metadata wins (highest priority)
     # CRITICAL: If spec_lookback is 0.0 for an indicator-period feature or _Xd feature, this is likely incorrect metadata
@@ -473,7 +481,7 @@ def infer_lookback_minutes(
         val = float(days_match.group(1))
         lookback = val * 1440.0
         if debug_mode:
-            logger.info(
+            logger.debug(
                 f"   infer_lookback_minutes({feature_name}): matched pattern _{int(val)}d → {lookback:.0f}m"
             )
         return lookback
@@ -501,7 +509,7 @@ def infer_lookback_minutes(
                 if lookback > 0:  # Ensure we got a valid result
                     # DEBUG: Log successful indicator-period match for known offenders
                     if debug_mode:
-                        logger.info(
+                        logger.debug(
                             f"   infer_lookback_minutes({feature_name}): matched pattern {pattern} → "
                             f"{bars} bars * {interval_minutes}m = {lookback}m"
                         )
@@ -888,10 +896,18 @@ def compute_budget(
             if lookback != float("inf"):
                 lookbacks.append(lookback)
             
-            # DEBUG: Log computed lookback for _Xd features and known offenders
+            # DEBUG: Log computed lookback for _Xd features and known offenders (only in debug mode)
+            # Check log_mode config to determine if we should log per-feature details
+            log_mode = "summary"  # Default
+            try:
+                from CONFIG.config_loader import get_cfg
+                log_mode = get_cfg("safety.leakage_detection.log_mode", default="summary", config_name="safety_config")
+            except Exception:
+                pass
+            
             is_xd_feature = bool(re.search(r'_\d+d$', feat_name, re.I))
-            if is_xd_feature or feat_name in ['rsi_30', 'cci_30', 'rsi_21', 'stoch_d_21', 'stoch_k_21', 'mfi_21', 'williams_r_21']:
-                logger.info(
+            if log_mode == "debug" and (is_xd_feature or feat_name in ['rsi_30', 'cci_30', 'rsi_21', 'stoch_d_21', 'stoch_k_21', 'mfi_21', 'williams_r_21']):
+                logger.debug(
                     f"   RECOMPUTE ({stage}): {feat_name} → lookback={lookback:.1f}m "
                     f"(interval={interval_minutes}, spec_lookback={spec_lookback})"
                 )

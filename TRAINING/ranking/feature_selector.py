@@ -302,6 +302,74 @@ def select_features_for_target(
                     feature_names = feature_names_cleaned
                     resolved_config = resolved_config_updated
                     
+                    # CRITICAL: Pre-selection lookback cap enforcement (FS_PRE)
+                    # Store result for telemetry tracking
+                    pre_cap_result = None
+                    # Apply lookback cap BEFORE running importance producers
+                    # This prevents selector from even seeing unsafe features (faster + safer)
+                    from TRAINING.utils.lookback_cap_enforcement import apply_lookback_cap
+                    from CONFIG.config_loader import get_cfg
+                    from TRAINING.common.feature_registry import get_registry
+                    
+                    # Load lookback cap and policy from config
+                    lookback_cap = None
+                    try:
+                        cap_raw = get_cfg("safety.leakage_detection.lookback_budget_minutes", default="auto", config_name="safety_config")
+                        if cap_raw != "auto" and isinstance(cap_raw, (int, float)):
+                            lookback_cap = float(cap_raw)
+                    except Exception:
+                        pass
+                    
+                    policy = "strict"
+                    try:
+                        policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+                    except Exception:
+                        pass
+                    
+                    log_mode = "summary"
+                    try:
+                        log_mode = get_cfg("safety.leakage_detection.log_mode", default="summary", config_name="safety_config")
+                    except Exception:
+                        pass
+                    
+                    if lookback_cap is not None and feature_names:
+                        try:
+                            registry = get_registry()
+                        except Exception:
+                            registry = None
+                        
+                        pre_cap_result = apply_lookback_cap(
+                            features=feature_names,
+                            interval_minutes=detected_interval,
+                            cap_minutes=lookback_cap,
+                            policy=policy,
+                            stage=f"FS_PRE_{view}_{symbol_to_process}" if view == "SYMBOL_SPECIFIC" else f"FS_PRE_{view}",
+                            registry=registry,
+                            feature_time_meta_map=resolved_config.feature_time_meta_map if resolved_config and hasattr(resolved_config, 'feature_time_meta_map') else None,
+                            base_interval_minutes=resolved_config.base_interval_minutes if resolved_config else None,
+                            log_mode=log_mode
+                        )
+                        
+                        # Update feature_names to only include safe features
+                        feature_names = pre_cap_result.safe_features
+                        
+                        # Update X to match (remove columns for quarantined features)
+                        if pre_cap_result.quarantine_count > 0:
+                            # Find indices of safe features
+                            safe_indices = [i for i, f in enumerate(feature_names_cleaned) if f in pre_cap_result.safe_features]
+                            if safe_indices:
+                                X = X[:, safe_indices]
+                            else:
+                                logger.warning(f"All features quarantined for {symbol_to_process}, skipping")
+                                continue
+                        
+                        # Update resolved_config with new lookback max
+                        if resolved_config:
+                            resolved_config.feature_lookback_max_minutes = pre_cap_result.actual_max_lookback
+                    elif feature_names:
+                        # No cap set, but still validate canonical map consistency
+                        logger.debug(f"FS_PRE: No lookback cap set, skipping cap enforcement (view={view}, symbol={symbol_to_process})")
+                    
                     # Extract horizon and create split policy
                     from TRAINING.utils.leakage_filtering import _extract_horizon, _load_leakage_config
                     leakage_config = _load_leakage_config()
@@ -436,6 +504,75 @@ def select_features_for_target(
                         y = y_cleaned
                         feature_names = feature_names_cleaned
                         resolved_config = resolved_config_updated
+                        
+                        # CRITICAL: Pre-selection lookback cap enforcement (FS_PRE)
+                        # Store result for telemetry tracking
+                        pre_cap_result = None
+                        # Apply lookback cap BEFORE running importance producers
+                        from TRAINING.utils.lookback_cap_enforcement import apply_lookback_cap
+                        from CONFIG.config_loader import get_cfg
+                        from TRAINING.common.feature_registry import get_registry
+                        
+                        # Load lookback cap and policy from config
+                        lookback_cap = None
+                        try:
+                            cap_raw = get_cfg("safety.leakage_detection.lookback_budget_minutes", default="auto", config_name="safety_config")
+                            if cap_raw != "auto" and isinstance(cap_raw, (int, float)):
+                                lookback_cap = float(cap_raw)
+                        except Exception:
+                            pass
+                        
+                        policy = "strict"
+                        try:
+                            policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+                        except Exception:
+                            pass
+                        
+                        log_mode = "summary"
+                        try:
+                            log_mode = get_cfg("safety.leakage_detection.log_mode", default="summary", config_name="safety_config")
+                        except Exception:
+                            pass
+                        
+                        if lookback_cap is not None and feature_names:
+                            try:
+                                registry = get_registry()
+                            except Exception:
+                                registry = None
+                            
+                            pre_cap_result = apply_lookback_cap(
+                                features=feature_names,
+                                interval_minutes=detected_interval,
+                                cap_minutes=lookback_cap,
+                                policy=policy,
+                                stage=f"FS_PRE_{view}",
+                                registry=registry,
+                                feature_time_meta_map=resolved_config.feature_time_meta_map if resolved_config and hasattr(resolved_config, 'feature_time_meta_map') else None,
+                                base_interval_minutes=resolved_config.base_interval_minutes if resolved_config else None,
+                                log_mode=log_mode
+                            )
+                            
+                            # Store for telemetry (will be collected later)
+                            # Update feature_names to only include safe features
+                            feature_names = pre_cap_result.safe_features
+                            
+                            # Update X to match (remove columns for quarantined features)
+                            if pre_cap_result.quarantine_count > 0:
+                                # Find indices of safe features
+                                safe_indices = [i for i, f in enumerate(feature_names_cleaned) if f in pre_cap_result.safe_features]
+                                if safe_indices:
+                                    X = X[:, safe_indices]
+                                else:
+                                    logger.warning("All features quarantined, skipping")
+                                    use_shared_harness = False
+                                    # Fall back to per-symbol processing (flag set, will skip rest of shared harness path)
+                            
+                            # Update resolved_config with new lookback max
+                            if resolved_config:
+                                resolved_config.feature_lookback_max_minutes = pre_cap_result.actual_max_lookback
+                        elif feature_names:
+                            # No cap set, but still validate canonical map consistency
+                            logger.debug(f"FS_PRE: No lookback cap set, skipping cap enforcement (view={view})")
                         
                         # Extract horizon for split policy
                         from TRAINING.utils.leakage_filtering import _extract_horizon, _load_leakage_config
@@ -658,6 +795,85 @@ def select_features_for_target(
     )
     
     logger.info(f"✅ Selected {len(selected_features)} features")
+    
+    # CRITICAL: Post-selection lookback cap enforcement (FS_POST)
+    # Apply lookback cap AFTER selection to catch long-lookback features that selection surfaced
+    # This prevents the "pruning surfaced long-lookback" class of bugs
+    if selected_features:
+        from TRAINING.utils.lookback_cap_enforcement import apply_lookback_cap
+        from CONFIG.config_loader import get_cfg
+        from TRAINING.common.feature_registry import get_registry
+        
+        # Load lookback cap and policy from config
+        lookback_cap = None
+        try:
+            cap_raw = get_cfg("safety.leakage_detection.lookback_budget_minutes", default="auto", config_name="safety_config")
+            if cap_raw != "auto" and isinstance(cap_raw, (int, float)):
+                lookback_cap = float(cap_raw)
+        except Exception:
+            pass
+        
+        policy = "strict"
+        try:
+            policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+        except Exception:
+            pass
+        
+        log_mode = "summary"
+        try:
+            log_mode = get_cfg("safety.leakage_detection.log_mode", default="summary", config_name="safety_config")
+        except Exception:
+            pass
+        
+        # Get interval from resolved_config if available, otherwise use default
+        data_interval_minutes = 5.0  # Default
+        if use_shared_harness and 'resolved_config' in locals() and resolved_config:
+            data_interval_minutes = resolved_config.interval_minutes if hasattr(resolved_config, 'interval_minutes') and resolved_config.interval_minutes else 5.0
+        elif explicit_interval:
+            if isinstance(explicit_interval, str):
+                # Parse "5m" -> 5.0
+                from TRAINING.utils.duration_parser import parse_duration_minutes
+                data_interval_minutes = parse_duration_minutes(explicit_interval)
+            else:
+                data_interval_minutes = float(explicit_interval)
+        
+        if lookback_cap is not None:
+            try:
+                registry = get_registry()
+            except Exception:
+                registry = None
+            
+            # Get feature_time_meta_map and base_interval from resolved_config if available
+            feature_time_meta_map = None
+            base_interval_minutes = None
+            if use_shared_harness and 'resolved_config' in locals() and resolved_config:
+                feature_time_meta_map = resolved_config.feature_time_meta_map if hasattr(resolved_config, 'feature_time_meta_map') else None
+                base_interval_minutes = resolved_config.base_interval_minutes if hasattr(resolved_config, 'base_interval_minutes') else None
+            
+            post_cap_result = apply_lookback_cap(
+                features=selected_features,
+                interval_minutes=data_interval_minutes,
+                cap_minutes=lookback_cap,
+                policy=policy,
+                stage=f"FS_POST_{view}",
+                registry=registry,
+                feature_time_meta_map=feature_time_meta_map,
+                base_interval_minutes=base_interval_minutes,
+                log_mode=log_mode
+            )
+            
+            # Store for telemetry (will be collected later)
+            # Update selected_features to only include safe features
+            selected_features = post_cap_result.safe_features
+            
+            # Update summary_df to match (remove rows for quarantined features)
+            if post_cap_result.quarantine_count > 0:
+                summary_df = summary_df[summary_df['feature'].isin(post_cap_result.safe_features)].copy()
+                logger.info(f"✅ Post-selection cap enforcement: {len(post_cap_result.safe_features)} safe features (quarantined {post_cap_result.quarantine_count})")
+            else:
+                logger.debug(f"FS_POST: All {len(selected_features)} selected features passed lookback cap")
+        else:
+            logger.debug(f"FS_POST: No lookback cap set, skipping post-selection cap enforcement (view={view})")
     
     # Save stability snapshot for aggregated feature selection (non-invasive hook)
     try:
@@ -1263,13 +1479,37 @@ def select_features_for_target(
                     elif view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
                         route_type_for_legacy = "INDIVIDUAL"  # SYMBOL_SPECIFIC maps to INDIVIDUAL
                 
+                # Track lookback cap enforcement results (pre and post selection) in telemetry
+                lookback_cap_metadata = {}
+                # Check for pre_cap_result and post_cap_result in function scope
+                # They may not exist if cap wasn't set or if we're in a different code path
+                if 'pre_cap_result' in locals():
+                    pre_result = locals().get('pre_cap_result')
+                    if pre_result:
+                        lookback_cap_metadata['pre_selection'] = {
+                            'quarantine_count': pre_result.quarantine_count,
+                            'actual_max_lookback': pre_result.actual_max_lookback,
+                            'safe_features_count': len(pre_result.safe_features),
+                            'quarantined_features_sample': pre_result.quarantined_features[:10]  # Top 10
+                        }
+                if 'post_cap_result' in locals():
+                    post_result = locals().get('post_cap_result')
+                    if post_result:
+                        lookback_cap_metadata['post_selection'] = {
+                            'quarantine_count': post_result.quarantine_count,
+                            'actual_max_lookback': post_result.actual_max_lookback,
+                            'safe_features_count': len(post_result.safe_features),
+                            'quarantined_features_sample': post_result.quarantined_features[:10]  # Top 10
+                        }
+                
                 additional_data_with_cohort = {
                     "top_feature": summary_df.iloc[0]['feature'] if not summary_df.empty else None,
                     "top_n": top_n or len(selected_features),
                     "view": view,  # FIX: Include view for proper telemetry scoping
                     "symbol": symbol,  # FIX: Include symbol for SYMBOL_SPECIFIC view
                     "route_type": route_type_for_legacy,  # FIX: Map view to route_type
-                    **cohort_additional_data  # Adds n_symbols, date_range, cs_config if available
+                    **cohort_additional_data,  # Adds n_symbols, date_range, cs_config if available
+                    'lookback_cap_enforcement': lookback_cap_metadata if lookback_cap_metadata else None
                 }
                 
                 tracker.log_comparison(

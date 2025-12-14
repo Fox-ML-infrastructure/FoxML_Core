@@ -46,6 +46,11 @@ safety:
   
   # Leakage Detection & Auto-Fix Thresholds
   leakage_detection:
+    # Logging mode for lookback computation
+    # - "summary": One-line summaries per stage (default, less verbose)
+    # - "debug": Per-feature inference traces, pattern matches, recompute details (verbose)
+    log_mode: "summary"  # "summary" | "debug"
+    
     # Leakage policy: how to handle purge/embargo violations
     # - "strict": Hard-stop on violations (raise exception, block training)
     # - "drop_features": Drop violating features, recompute budget, ensure pass
