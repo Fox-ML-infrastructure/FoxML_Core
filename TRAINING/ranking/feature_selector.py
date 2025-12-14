@@ -1637,6 +1637,15 @@ def select_features_for_target(
                     'lookback_cap_enforcement': lookback_cap_metadata if lookback_cap_metadata else None
                 }
                 
+                # Add seed for reproducibility tracking
+                try:
+                    from CONFIG.config_loader import get_cfg
+                    seed = get_cfg("pipeline.determinism.base_seed", default=42)
+                    additional_data_with_cohort['seed'] = seed
+                except Exception:
+                    # Fallback to default if config not available
+                    additional_data_with_cohort['seed'] = 42
+                
                 tracker.log_comparison(
                     stage="feature_selection",
                     item_name=target_column,  # FIX: item_name is just target (view/symbol handled by route_type/symbol params)

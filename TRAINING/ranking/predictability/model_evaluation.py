@@ -6152,6 +6152,15 @@ def evaluate_target_predictability(
                 if 'symbol' in locals() and symbol:
                     additional_data_with_cohort['symbol'] = symbol
                 
+                # Add seed for reproducibility tracking
+                try:
+                    from CONFIG.config_loader import get_cfg
+                    seed = get_cfg("pipeline.determinism.base_seed", default=42)
+                    additional_data_with_cohort['seed'] = seed
+                except Exception:
+                    # Fallback to default if config not available
+                    additional_data_with_cohort['seed'] = 42
+                
                 # FIX: For TARGET_RANKING, view is used as route_type (CROSS_SECTIONAL, SYMBOL_SPECIFIC, LOSO)
                 # This ensures directory structure aligns: TARGET_RANKING/{view}/{target}/{symbol}/cohort={cohort_id}/
                 route_type_for_target_ranking = view if 'view' in locals() and view else None
