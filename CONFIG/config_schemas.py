@@ -32,6 +32,11 @@ class DataConfig:
     """Data loading configuration"""
     timestamp_column: str = "ts"
     bar_interval: Optional[str] = "5m"  # Normalized interval string (e.g., "5m", "15m", "1h")
+    base_interval_minutes: Optional[float] = None  # NEW: Explicit base interval for training grid (overrides bar_interval if set)
+    base_interval_source: str = "auto"  # NEW: "config" (use base_interval_minutes) or "auto" (infer from timestamps)
+    asof_strategy: str = "backward"  # NEW: As-of join strategy (only "backward" supported for now)
+    default_embargo_minutes: float = 0.0  # NEW: Default embargo for features without explicit metadata
+    default_max_staleness_minutes: Optional[float] = None  # NEW: Optional staleness cap (e.g., 1440 for 1-day)
     max_samples_per_symbol: int = 50000
     validation_split: float = 0.2
     random_state: int = 42

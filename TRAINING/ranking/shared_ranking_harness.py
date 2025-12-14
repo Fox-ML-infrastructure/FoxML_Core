@@ -273,36 +273,9 @@ class RankingHarness:
             )
             return None, None, None, None, None, None, detected_interval, None
         
-        # Prepare data based on view
-        if self.view == "SYMBOL_SPECIFIC":
-            # For symbol-specific, prepare single-symbol time series data
-            X, y, feature_names_out, symbols_array, time_vals = prepare_cross_sectional_data_for_ranking(
-                mtf_data, target_column, min_cs=1, max_cs_samples=self.max_cs_samples, feature_names=feature_names
-            )
-        elif self.view == "LOSO":
-            # LOSO: prepare training data (all symbols except validation symbol)
-            X, y, feature_names_out, symbols_array, time_vals = prepare_cross_sectional_data_for_ranking(
-                mtf_data, target_column, min_cs=self.min_cs, max_cs_samples=self.max_cs_samples, feature_names=feature_names
-            )
-            # TODO: Handle validation symbol separately for LOSO
-            logger.warning("LOSO view: Using combined data for now (LOSO-specific CV splitter not yet implemented)")
-        else:
-            # CROSS_SECTIONAL: standard pooled data
-            X, y, feature_names_out, symbols_array, time_vals = prepare_cross_sectional_data_for_ranking(
-                mtf_data, target_column, min_cs=self.min_cs, max_cs_samples=self.max_cs_samples, feature_names=feature_names
-            )
-        
-        # Update feature counts after data preparation
-        features_dropped_nan = 0
-        features_final = features_safe
-        if feature_names_out is not None:
-            features_final = len(feature_names_out)
-            features_dropped_nan = features_safe - features_final
-        
-        # Create resolved_config (same as target ranking)
+        # Create resolved_config EARLY (before data prep) to get feature_time_meta_map for alignment
+        # We'll update feature counts after data prep
         n_symbols_available = len(mtf_data)
-        selected_features = feature_names_out.copy() if feature_names_out else []
-        
         resolved_config = create_resolved_config(
             requested_min_cs=self.min_cs if self.view != "SYMBOL_SPECIFIC" else 1,
             n_symbols_available=n_symbols_available,
@@ -313,13 +286,56 @@ class RankingHarness:
             purge_buffer_bars=5,
             default_purge_minutes=None,  # Loads from safety_config.yaml
             features_safe=features_safe,
-            features_dropped_nan=features_dropped_nan,
-            features_final=len(selected_features),
+            features_dropped_nan=0,  # Will be updated after data prep
+            features_final=features_safe,  # Will be updated after data prep
             view=self.view,
             symbol=self.symbol,
-            feature_names=selected_features,  # Pass feature names for lookback computation
-            recompute_lookback=True  # CRITICAL: Compute feature lookback to auto-adjust purge
+            feature_names=feature_names,  # Pass feature names for feature_time_meta_map building
+            recompute_lookback=True,  # CRITICAL: Compute feature lookback to auto-adjust purge
+            experiment_config=getattr(self, 'experiment_config', None)  # NEW: Pass experiment_config if available
         )
+        
+        # Prepare data based on view (with alignment args from resolved_config)
+        if self.view == "SYMBOL_SPECIFIC":
+            # For symbol-specific, prepare single-symbol time series data
+            X, y, feature_names_out, symbols_array, time_vals = prepare_cross_sectional_data_for_ranking(
+                mtf_data, target_column, min_cs=1, max_cs_samples=self.max_cs_samples, feature_names=feature_names,
+                feature_time_meta_map=resolved_config.feature_time_meta_map,  # NEW: Pass from resolved_config
+                base_interval_minutes=resolved_config.base_interval_minutes  # NEW: Pass from resolved_config
+            )
+        elif self.view == "LOSO":
+            # LOSO: prepare training data (all symbols except validation symbol)
+            X, y, feature_names_out, symbols_array, time_vals = prepare_cross_sectional_data_for_ranking(
+                mtf_data, target_column, min_cs=self.min_cs, max_cs_samples=self.max_cs_samples, feature_names=feature_names,
+                feature_time_meta_map=resolved_config.feature_time_meta_map,  # NEW: Pass from resolved_config
+                base_interval_minutes=resolved_config.base_interval_minutes  # NEW: Pass from resolved_config
+            )
+            # TODO: Handle validation symbol separately for LOSO
+            logger.warning("LOSO view: Using combined data for now (LOSO-specific CV splitter not yet implemented)")
+        else:
+            # CROSS_SECTIONAL: standard pooled data
+            X, y, feature_names_out, symbols_array, time_vals = prepare_cross_sectional_data_for_ranking(
+                mtf_data, target_column, min_cs=self.min_cs, max_cs_samples=self.max_cs_samples, feature_names=feature_names,
+                feature_time_meta_map=resolved_config.feature_time_meta_map,  # NEW: Pass from resolved_config
+                base_interval_minutes=resolved_config.base_interval_minutes  # NEW: Pass from resolved_config
+            )
+        
+        # Update feature counts after data preparation
+        features_dropped_nan = 0
+        features_final = features_safe
+        if feature_names_out is not None:
+            features_final = len(feature_names_out)
+            features_dropped_nan = features_safe - features_final
+        
+        # Update resolved_config with final feature counts (using dataclasses.replace for frozen dataclass)
+        if hasattr(resolved_config, '__dict__'):
+            # ResolvedConfig is not frozen, can update directly
+            resolved_config.features_dropped_nan = features_dropped_nan
+            resolved_config.features_final = features_final
+        else:
+            # If frozen, would need dataclasses.replace, but ResolvedConfig is not frozen
+            resolved_config.features_dropped_nan = features_dropped_nan
+            resolved_config.features_final = features_final
         
         return X, y, feature_names_out, symbols_array, time_vals, mtf_data, detected_interval, resolved_config
     

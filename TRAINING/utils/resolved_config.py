@@ -52,12 +52,17 @@ class ResolvedConfig:
     interval_minutes: Optional[float]  # Converted from Duration at boundary (backward compat)
     horizon_minutes: Optional[float]  # Converted from Duration at boundary (backward compat)
     
-    # Purge/embargo (single source of truth)
+    # Purge/embargo (single source of truth) - REQUIRED FIELDS (must come before defaults)
     # @deprecated: Use Duration objects directly in new code. These float fields are for backward compatibility.
     # NOTE: These are converted from Duration to float minutes at the boundary.
     # Internally, all comparisons use Duration objects (see enforce_purge_audit_rule).
     purge_minutes: float  # @deprecated: Use Duration objects in new code
     embargo_minutes: float  # @deprecated: Use Duration objects in new code
+    
+    # NEW: Base interval for training grid (multi-interval support) - OPTIONAL FIELDS (with defaults)
+    base_interval_minutes: Optional[float] = None  # Base training grid interval (from config or auto-detected)
+    base_interval_source: str = "auto"  # "config" or "auto" (for config trace)
+    default_embargo_minutes: float = 0.0  # Default embargo for features without explicit metadata
     purge_buffer_bars: int = 5
     purge_buffer_minutes: Optional[float] = None
     
@@ -77,6 +82,9 @@ class ResolvedConfig:
     
     # Feature lookback (for audit validation)
     feature_lookback_max_minutes: Optional[float] = None  # Maximum feature lookback in minutes
+    
+    # NEW: Multi-interval feature metadata (for as-of alignment)
+    feature_time_meta_map: Optional[Dict[str, Any]] = None  # Map of feature_name -> FeatureTimeMeta
     
     def __post_init__(self):
         """Compute derived values after initialization."""
@@ -255,7 +263,9 @@ def compute_feature_lookback_max(
     horizon_minutes: Optional[float] = None,
     registry: Optional[Any] = None,
     expected_fingerprint: Optional[str] = None,
-    stage: str = "unknown"
+    stage: str = "unknown",
+    feature_time_meta_map: Optional[Dict[str, Any]] = None,  # NEW: Optional map of feature_name -> FeatureTimeMeta
+    base_interval_minutes: Optional[float] = None  # NEW: Base training grid interval
 ) -> Tuple[Optional[float], List[Tuple[str, float]]]:
     """
     Compute maximum feature lookback from actual feature names.
@@ -271,6 +281,8 @@ def compute_feature_lookback_max(
         max_lookback_cap_minutes: Optional cap for ranking mode (e.g., 240m = 4 hours)
         horizon_minutes: Optional target horizon (for budget calculation)
         registry: Optional feature registry (will be loaded if None)
+        feature_time_meta_map: Optional map of feature_name -> FeatureTimeMeta (for multi-interval support)
+        base_interval_minutes: Optional base training grid interval (for defaulting native_interval)
     
     Returns:
         LookbackResult dataclass (or tuple for backward compatibility if needed)
@@ -290,7 +302,9 @@ def compute_feature_lookback_max(
         horizon_minutes=horizon_minutes,
         registry=registry,
         expected_fingerprint=expected_fingerprint,
-        stage=stage if stage != "unknown" else "resolved_config_wrapper"
+        stage=stage if stage != "unknown" else "resolved_config_wrapper",
+        feature_time_meta_map=feature_time_meta_map,  # NEW: Pass per-feature metadata
+        base_interval_minutes=base_interval_minutes  # NEW: Pass base interval
     )
     # Return the LookbackResult dataclass directly (not a tuple)
     # This maintains compatibility with new code that expects dataclass
@@ -313,7 +327,8 @@ def create_resolved_config(
     view: str = "CROSS_SECTIONAL",
     symbol: Optional[str] = None,
     feature_names: Optional[List[str]] = None,  # NEW: actual feature names for lookback computation
-    recompute_lookback: bool = False  # NEW: if True, recompute from feature_names
+    recompute_lookback: bool = False,  # NEW: if True, recompute from feature_names
+    experiment_config: Optional[Any] = None  # NEW: Optional ExperimentConfig for base_interval_minutes
 ) -> ResolvedConfig:
     """
     Create a ResolvedConfig object with all values computed consistently.
@@ -323,6 +338,53 @@ def create_resolved_config(
     """
     # Compute effective_min_cs
     effective_min_cs = min(requested_min_cs, n_symbols_available)
+    
+    # NEW: Resolve base_interval_minutes from experiment config or auto-detection
+    base_interval_minutes = None
+    base_interval_source = "auto"
+    default_embargo_minutes = 0.0
+    
+    if experiment_config is not None:
+        # Try to get base_interval_minutes from experiment config
+        if hasattr(experiment_config, 'data') and hasattr(experiment_config.data, 'base_interval_minutes'):
+            base_interval_minutes = experiment_config.data.base_interval_minutes
+            base_interval_source = experiment_config.data.base_interval_source or "config"
+            default_embargo_minutes = experiment_config.data.default_embargo_minutes or 0.0
+            
+            # Config trace logging
+            config_path = None
+            try:
+                from CONFIG.config_loader import get_config_path
+                # Try to get experiment config path
+                config_path = get_config_path("experiment_config") if hasattr(experiment_config, 'name') else None
+            except Exception:
+                pass
+            
+            provenance = f"experiment_config.data.base_interval_minutes = {base_interval_minutes if base_interval_minutes is not None else 'None'}"
+            if config_path:
+                provenance += f" (from {config_path})"
+            else:
+                provenance += " (from ExperimentConfig object)"
+            
+            value_str = f"{base_interval_minutes}m" if base_interval_minutes is not None else "None"
+            logger.info(f"📋 CONFIG TRACE (base_interval_minutes): source={base_interval_source}, value={value_str}, {provenance}")
+            
+            # If base_interval_source='config' but base_interval_minutes is None, hard-fail
+            if base_interval_source == 'config' and base_interval_minutes is None:
+                raise ValueError(
+                    f"base_interval_source='config' requires base_interval_minutes to be set in experiment config. "
+                    f"Either set base_interval_minutes or use base_interval_source='auto'."
+                )
+    
+    # If base_interval_minutes not set from config, use auto-detected interval_minutes
+    if base_interval_minutes is None:
+        base_interval_minutes = interval_minutes
+        base_interval_source = "auto"
+        value_str = f"{base_interval_minutes}m" if base_interval_minutes is not None else "None"
+        logger.info(
+            f"📋 CONFIG TRACE (base_interval_minutes): source=auto, value={value_str} "
+            f"(from auto-detected interval_minutes)"
+        )
     
     # Recompute feature_lookback_max from actual features if requested
     if recompute_lookback and feature_names and interval_minutes:
@@ -338,7 +400,9 @@ def create_resolved_config(
         
         lookback_result = compute_feature_lookback_max(
             feature_names, interval_minutes, max_lookback_cap_minutes=max_lookback_cap,
-            stage="create_resolved_config"
+            stage="create_resolved_config",
+            feature_time_meta_map=None,  # TODO: Pass feature_time_meta_map when available
+            base_interval_minutes=base_interval_minutes
         )
         # Handle dataclass return
         if hasattr(lookback_result, 'max_minutes'):
@@ -356,6 +420,89 @@ def create_resolved_config(
             
             feature_lookback_max_minutes = computed_lookback
     
+    # NEW: Build feature_time_meta_map from registry or config (for multi-interval alignment)
+    feature_time_meta_map = None
+    if feature_names and base_interval_minutes is not None:
+        from TRAINING.utils.feature_time_meta import FeatureTimeMeta
+        try:
+            from TRAINING.common.feature_registry import get_registry
+            registry = get_registry()
+        except Exception:
+            registry = None
+        
+        feature_time_meta_map = {}
+        for feat_name in feature_names:
+            # Skip target columns explicitly
+            if any(feat_name.startswith(prefix) for prefix in 
+                   ['fwd_ret_', 'will_peak', 'will_valley', 'mdd_', 'mfe_', 'y_will_',
+                    'tth_', 'p_', 'barrier_', 'hit_']):
+                continue
+            
+            # Try to get metadata from registry
+            native_interval = None
+            embargo = default_embargo_minutes
+            publish_offset = 0.0
+            max_staleness = None
+            lookback_bars = None
+            lookback_minutes = None
+            
+            if registry is not None:
+                try:
+                    metadata = registry.get_feature_metadata(feat_name)
+                    # Extract time semantics from registry if available
+                    # Registry may have fields like: native_interval_minutes, embargo_minutes, etc.
+                    if 'native_interval_minutes' in metadata:
+                        native_interval = metadata['native_interval_minutes']
+                    if 'embargo_minutes' in metadata:
+                        embargo = metadata['embargo_minutes']
+                    if 'publish_offset_minutes' in metadata:
+                        publish_offset = metadata['publish_offset_minutes']
+                    if 'max_staleness_minutes' in metadata:
+                        max_staleness = metadata['max_staleness_minutes']
+                    if 'lag_bars' in metadata and metadata['lag_bars'] is not None:
+                        lookback_bars = metadata['lag_bars']
+                except Exception:
+                    pass
+            
+            # Override with experiment config if available (experiment overrides registry)
+            if experiment_config is not None:
+                # TODO: If experiment config has per-feature time metadata, use it here
+                # For now, use defaults from experiment config
+                if hasattr(experiment_config, 'data'):
+                    if native_interval is None:
+                        native_interval = base_interval_minutes  # Default to base interval
+                    if embargo == default_embargo_minutes:
+                        embargo = experiment_config.data.default_embargo_minutes or default_embargo_minutes
+            
+            # Only create metadata if feature needs alignment (different interval, embargo, or publish_offset)
+            # OR if explicitly requested (for now, create for all features to enable alignment)
+            # In future, we can optimize to only create for features that need it
+            if native_interval is None:
+                native_interval = base_interval_minutes  # Default to base interval
+            
+            # Create FeatureTimeMeta (only if different from base or has embargo/publish_offset)
+            if (native_interval != base_interval_minutes or 
+                embargo != 0.0 or 
+                publish_offset != 0.0 or
+                max_staleness is not None):
+                feature_time_meta_map[feat_name] = FeatureTimeMeta(
+                    name=feat_name,
+                    native_interval_minutes=native_interval,
+                    embargo_minutes=embargo,
+                    publish_offset_minutes=publish_offset,
+                    max_staleness_minutes=max_staleness,
+                    lookback_bars=lookback_bars,
+                    lookback_minutes=lookback_minutes
+                )
+        
+        if feature_time_meta_map:
+            logger.info(
+                f"🔧 Multi-interval metadata: Built {len(feature_time_meta_map)} FeatureTimeMeta entries "
+                f"(from registry + config, experiment overrides registry)"
+            )
+        else:
+            logger.debug("Multi-interval metadata: No features require alignment (all use base interval with zero embargo)")
+    
     # Compute purge/embargo using centralized function
     purge_minutes, embargo_base = derive_purge_embargo(
         horizon_minutes=horizon_minutes,
@@ -368,6 +515,8 @@ def create_resolved_config(
     # CRITICAL FIX: Separate purge and embargo
     # - purge: max(horizon+buffer, feature_lookback_max) - prevents rolling window leakage
     # - embargo: horizon+buffer only - prevents label/horizon overlap (NOT tied to feature lookback)
+    # NOTE: This purge computation may be overridden by CV splitter (which uses final post-prune featureset)
+    # The CV splitter is the authoritative source for purge in train_and_evaluate_models()
     embargo_minutes = embargo_base  # Embargo is NOT affected by feature lookback
     
     # AUDIT VIOLATION FIX: If feature lookback > purge, increase purge to satisfy audit rule
@@ -375,11 +524,17 @@ def create_resolved_config(
     # NOTE: Only purge is affected, NOT embargo
     # Can be disabled via config if features are strictly causal (only use past data)
     purge_include_feature_lookback = True  # Default: conservative (include feature lookback)
+    purge_include_provenance = None
     try:
-        from CONFIG.config_loader import get_cfg
+        from CONFIG.config_loader import get_cfg, get_config_path
         purge_include_feature_lookback = get_cfg("safety.leakage_detection.purge_include_feature_lookback", default=True, config_name="safety_config")
-    except Exception:
-        pass
+        config_path = get_config_path("safety_config")
+        purge_include_provenance = f"safety_config.yaml:{config_path} → safety.leakage_detection.purge_include_feature_lookback = {purge_include_feature_lookback} (default=True)"
+    except Exception as e:
+        purge_include_provenance = f"config lookup failed: {e}"
+    
+    # Log config trace for purge_include_feature_lookback
+    logger.info(f"📋 CONFIG TRACE (purge_include_feature_lookback): {purge_include_provenance}")
     
     if purge_include_feature_lookback and feature_lookback_max_minutes is not None:
         # Use generalized duration-aware audit rule enforcement
@@ -453,5 +608,9 @@ def create_resolved_config(
         features_final=features_final,
         view=view,
         symbol=symbol,
-        feature_lookback_max_minutes=feature_lookback_max_minutes
+        feature_lookback_max_minutes=feature_lookback_max_minutes,
+        base_interval_minutes=base_interval_minutes,  # NEW
+        base_interval_source=base_interval_source,  # NEW
+        default_embargo_minutes=default_embargo_minutes,  # NEW
+        feature_time_meta_map=feature_time_meta_map  # NEW: Multi-interval alignment metadata
     )

@@ -121,6 +121,10 @@ After running canary test, verify:
 - [ ] **Feature shift test passes**: Shifted features → AUC drops
 - [ ] **Top features logged**: For suspicious targets, top 20 features are logged
 - [ ] **Canaries excluded**: Canary targets don't appear in "top targets" rankings
+- [ ] **Sanitizer quarantines long-lookback features**: Check logs for `feature_sanitizer DIAGNOSTIC: N features exceed cap`
+- [ ] **POST_PRUNE invariant check passes**: Check logs for `✅ INVARIANT CHECK (POST_PRUNE): max(canonical_map[features])=X.0m == computed_lookback=X.0m ✓`
+- [ ] **No split-brain**: `POST_GATEKEEPER` and final enforcement show same `actual_max` value
+- [ ] **No late-stage CAP VIOLATION**: Offenders already dropped by sanitizer/gatekeeper
 
 ## If Canaries Pass Without Flags
 

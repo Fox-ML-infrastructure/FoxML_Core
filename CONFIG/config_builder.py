@@ -186,9 +186,56 @@ def load_experiment_config(experiment_name: str) -> ExperimentConfig:
     # Support both max_samples_per_symbol and max_rows_per_symbol (backward compatibility)
     max_samples = data_data.get('max_samples_per_symbol') or data_data.get('max_rows_per_symbol', 50000)
     
+    # NEW: Parse base_interval_minutes and related multi-interval settings
+    # Precedence: base_interval_minutes (explicit) > bar_interval (legacy) > default
+    base_interval_minutes = data_data.get('base_interval_minutes')
+    base_interval_source = data_data.get('base_interval_source', 'auto')  # 'config' or 'auto'
+    
+    # If base_interval_minutes is provided as string (e.g., "5m"), convert to float
+    if base_interval_minutes is not None:
+        if isinstance(base_interval_minutes, str):
+            from TRAINING.utils.data_interval import normalize_interval
+            try:
+                base_interval_minutes = float(normalize_interval(base_interval_minutes))
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid base_interval_minutes format '{base_interval_minutes}'. "
+                    f"Expected: float (minutes) or string like '5m', '15m', '1h'. Error: {e}"
+                )
+        elif isinstance(base_interval_minutes, (int, float)):
+            base_interval_minutes = float(base_interval_minutes)
+        else:
+            raise ValueError(
+                f"base_interval_minutes must be float or string, got {type(base_interval_minutes)}"
+            )
+    
+    # If base_interval_source='config' but base_interval_minutes not provided, hard-fail
+    if base_interval_source == 'config' and base_interval_minutes is None:
+        raise ValueError(
+            f"base_interval_source='config' requires base_interval_minutes to be set. "
+            f"Either set base_interval_minutes in experiment config or use base_interval_source='auto'."
+        )
+    
+    # NEW: Parse embargo and staleness settings
+    default_embargo_minutes = float(data_data.get('default_embargo_minutes', 0.0))
+    default_max_staleness_minutes = data_data.get('default_max_staleness_minutes')
+    if default_max_staleness_minutes is not None:
+        default_max_staleness_minutes = float(default_max_staleness_minutes)
+    
+    asof_strategy = data_data.get('asof_strategy', 'backward')  # Only 'backward' supported for now
+    if asof_strategy != 'backward':
+        raise ValueError(
+            f"asof_strategy must be 'backward' (only supported strategy), got '{asof_strategy}'"
+        )
+    
     data_config = DataConfig(
         timestamp_column=data_data.get('timestamp_column', 'ts'),
         bar_interval=bar_interval,
+        base_interval_minutes=base_interval_minutes,
+        base_interval_source=base_interval_source,
+        asof_strategy=asof_strategy,
+        default_embargo_minutes=default_embargo_minutes,
+        default_max_staleness_minutes=default_max_staleness_minutes,
         max_samples_per_symbol=max_samples,
         validation_split=data_data.get('validation_split', 0.2),
         random_state=data_data.get('random_state', 42)

@@ -137,7 +137,8 @@ def auto_quarantine_long_lookback_features(
     # Compute lookback for all features at once (more efficient)
     from TRAINING.utils.resolved_config import compute_feature_lookback_max
     
-    # Get lookback for all features in one call
+    # CRITICAL: Use canonical map from compute_feature_lookback_max (single source of truth)
+    # Do NOT recompute - use the canonical map directly
     result_all = compute_feature_lookback_max(
         feature_names,
         interval_minutes=interval_minutes,
@@ -145,40 +146,58 @@ def auto_quarantine_long_lookback_features(
         stage="feature_sanitizer"
     )
     max_lookback_all = result_all.max_minutes
-    top_offenders_all = result_all.top_offenders
     
-    # Build lookup dict from top_offenders (contains features with significant lookback)
-    # Note: top_offenders_all only contains top 10, so we need to check all features
-    # Compute lookback for each feature to catch any that exceed threshold
-    feature_lookbacks = []
+    # Extract canonical map from result (the truth - already computed)
+    canonical_map = result_all.canonical_lookback_map if hasattr(result_all, 'canonical_lookback_map') else None
+    
+    # CRITICAL: Normalize feature keys for lookup (canonical map uses normalized keys)
+    from TRAINING.utils.leakage_budget import _feat_key
+    
+    # Build lookback map from canonical map (single source of truth)
+    # Do NOT recompute - use canonical map directly
+    feature_lookback_map = {}
+    unknown_features = []
+    
     for feat_name in feature_names:
-        # Compute lookback for this feature
-        result = compute_feature_lookback_max(
-            [feat_name],
-            interval_minutes=interval_minutes,
-            max_lookback_cap_minutes=None,  # Don't cap - we want the real value
-            stage="feature_sanitizer_per_feature"
-        )
-        max_lookback = result.max_minutes
+        feat_key = _feat_key(feat_name)  # Normalize key
         
-        if max_lookback is not None:
-            feature_lookbacks.append((feat_name, max_lookback))
+        if canonical_map and feat_key in canonical_map:
+            lookback = canonical_map[feat_key]
+            feature_lookback_map[feat_name] = lookback
         else:
-            # Unknown feature - assume safe (minimal lookback)
-            feature_lookbacks.append((feat_name, 0.0))
+            # Feature missing from canonical map - this should not happen
+            # CRITICAL: Unknown lookback = unsafe (inf), not safe (0.0)
+            unknown_features.append(feat_name)
+            feature_lookback_map[feat_name] = float("inf")  # Unknown = unsafe
     
-    # Separate safe and problematic features
+    if unknown_features:
+        logger.warning(
+            f"⚠️ SANITIZER: {len(unknown_features)} features missing from canonical map. "
+            f"Treating as unknown (unsafe). Sample: {unknown_features[:5]}"
+        )
+    
+    # Filter features that exceed threshold (single pass)
     safe_features = []
     quarantined_features = []
     quarantine_reasons = {}
     
-    for feat_name, lookback_minutes in feature_lookbacks:
-        if lookback_minutes > max_safe_lookback_minutes:
+    for feat_name, lookback in feature_lookback_map.items():
+        # CRITICAL: Unknown lookback (inf) must be quarantined (unsafe)
+        # In strict mode, unknown should be hard-fail, but for sanitizer we quarantine
+        if lookback == float("inf"):
+            # Unknown lookback - quarantine (unsafe)
             quarantined_features.append(feat_name)
             quarantine_reasons[feat_name] = {
-                "lookback_minutes": lookback_minutes,
+                "lookback_minutes": None,  # Unknown
                 "max_safe_lookback_minutes": max_safe_lookback_minutes,
-                "reason": f"lookback ({lookback_minutes:.1f}m) exceeds safe threshold ({max_safe_lookback_minutes:.1f}m)"
+                "reason": "unknown lookback (cannot infer - treated as unsafe)"
+            }
+        elif lookback > max_safe_lookback_minutes:
+            quarantined_features.append(feat_name)
+            quarantine_reasons[feat_name] = {
+                "lookback_minutes": lookback,
+                "max_safe_lookback_minutes": max_safe_lookback_minutes,
+                "reason": f"lookback ({lookback:.1f}m) exceeds safe threshold ({max_safe_lookback_minutes:.1f}m)"
             }
         else:
             safe_features.append(feat_name)
@@ -193,17 +212,19 @@ def auto_quarantine_long_lookback_features(
         "reasons": quarantine_reasons
     }
     
-    # Log results
+    # Log results (aggregated summary + small sample)
     if quarantined_features:
+        sample_size = min(5, len(quarantined_features))
+        sample = quarantined_features[:sample_size]
+        sample_str = ', '.join(sample)
+        if len(quarantined_features) > sample_size:
+            sample_str += f", ... ({len(quarantined_features) - sample_size} more)"
+        
         logger.warning(
             f"👻 ACTIVE SANITIZATION: Quarantined {len(quarantined_features)} feature(s) "
-            f"with lookback > {max_safe_lookback_minutes:.1f}m to prevent audit violations"
+            f"with lookback > {max_safe_lookback_minutes:.1f}m to prevent audit violations. "
+            f"Sample: [{sample_str}]"
         )
-        for feat_name in quarantined_features:
-            reason = quarantine_reasons[feat_name]
-            logger.warning(
-                f"   🚫 {feat_name}: {reason['reason']}"
-            )
         logger.info(f"   ✅ {len(safe_features)} safe features remaining")
     else:
         logger.debug(f"✅ Active sanitization: All {len(safe_features)} features passed (lookback <= {max_safe_lookback_minutes:.1f}m)")

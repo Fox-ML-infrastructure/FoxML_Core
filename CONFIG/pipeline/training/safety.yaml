@@ -61,7 +61,10 @@ safety:
     # Lookback budget computation
     # - "auto": Compute from actual final feature set (post-prune or chosen stage)
     # - <number>: Force a cap for experiments (but still log what the true max was)
-    lookback_budget_minutes: "auto"  # Default: auto (compute from actual features)
+    # NOTE: Set to a number (e.g., 240) to enable gatekeeper auto-drop of long-lookback features
+    # If "auto", gatekeeper falls back to purge_derived (circular dependency risk)
+    lookback_budget_minutes: 240  # Default: auto (compute from actual features)
+    # Recommended for small datasets: 240 (4 hours) or 300 (5 hours)
     
     # Buffer added to lookback budget for safety margin
     lookback_buffer_minutes: 5.0  # Default: 5 minutes safety buffer

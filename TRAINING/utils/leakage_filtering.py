@@ -572,7 +572,8 @@ def filter_features_for_target(
     verbose: bool = False,
     use_registry: bool = True,
     data_interval_minutes: int = 5,
-    for_ranking: bool = False  # If True, use more permissive rules (allow basic OHLCV/TA)
+    for_ranking: bool = False,  # If True, use more permissive rules (allow basic OHLCV/TA)
+    dropped_tracker: Optional[Any] = None  # NEW: Optional DroppedFeaturesTracker for telemetry
 ) -> List[str]:
     """
     Filter features that would leak information about the target.
@@ -870,6 +871,45 @@ def filter_features_for_target(
                     f"with lookback > {quarantine_report.get('max_safe_lookback_minutes', 'unknown')}m"
                 )
                 logger.debug(f"    Quarantined features: {quarantined_features}")
+            
+            # NEW: Track sanitizer quarantines for telemetry (if tracker provided)
+            if 'dropped_tracker' in locals() and dropped_tracker is not None:
+                from TRAINING.utils.dropped_features_tracker import DropReason
+                
+                # Create structured reasons from quarantine_report
+                structured_reasons = {}
+                max_safe = quarantine_report.get('max_safe_lookback_minutes', 0.0)
+                reasons_dict = quarantine_report.get('reasons', {})
+                
+                for feat_name in quarantined_features:
+                    reason_info = reasons_dict.get(feat_name, {})
+                    measured_value = reason_info.get('lookback_minutes')
+                    threshold_value = reason_info.get('max_safe_lookback_minutes', max_safe)
+                    human_reason = reason_info.get('reason', f"lookback ({measured_value:.1f}m) exceeds safe threshold ({threshold_value:.1f}m)")
+                    
+                    config_provenance = f"max_safe_lookback_minutes={threshold_value:.1f}m (from config)"
+                    
+                    structured_reasons[feat_name] = DropReason(
+                        reason_code="QUARANTINED_LOOKBACK",
+                        stage="sanitizer",
+                        human_reason=human_reason,
+                        measured_value=measured_value,
+                        threshold_value=threshold_value,
+                        config_provenance=config_provenance
+                    )
+                
+                config_provenance_dict = {
+                    "max_safe_lookback_minutes": max_safe,
+                    "enabled": quarantine_report.get('enabled', True)
+                }
+                
+                dropped_tracker.add_sanitizer_quarantines(
+                    quarantined_features,
+                    structured_reasons,
+                    input_features=safe_columns,  # Before sanitization
+                    output_features=sanitized_features,  # After sanitization
+                    config_provenance=config_provenance_dict
+                )
     except Exception as e:
         # Don't fail if sanitization unavailable - just log and continue
         logger.debug(f"Active sanitization unavailable: {e}")

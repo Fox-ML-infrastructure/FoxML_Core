@@ -1016,6 +1016,10 @@ class ReproducibilityTracker:
                 if bin_info:
                     full_metadata['sample_size_bin'] = bin_info
         
+        # NEW: Add dropped features metadata (if provided)
+        if additional_data and 'dropped_features' in additional_data:
+            full_metadata['dropped_features'] = additional_data['dropped_features']
+        
         # Save metadata.json
         metadata_file = cohort_dir / "metadata.json"
         try:

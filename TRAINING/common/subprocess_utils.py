@@ -39,6 +39,9 @@ def get_safe_subprocess_env() -> Dict[str, str]:
     - "sh: symbol lookup error: sh: undefined symbol: rl_print_keybinding"
     - Process deadlocks/hangs when subprocess calls fail and retry indefinitely
     
+    Also filters LD_LIBRARY_PATH to remove AppImage mount paths that can cause
+    library conflicts (e.g., Cursor AppImage's readline shadowing system libs).
+    
     Returns:
         Environment dictionary with safe settings for subprocess calls
     """
@@ -48,6 +51,24 @@ def get_safe_subprocess_env() -> Dict[str, str]:
     env.setdefault('TERM', 'dumb')  # Disable readline features
     env.setdefault('SHELL', '/usr/bin/bash')  # Use bash instead of sh if available
     env.setdefault('INPUTRC', '/dev/null')  # Disable readline config
+    
+    # CRITICAL: Filter LD_LIBRARY_PATH to remove AppImage mount paths
+    # AppImage mount paths (e.g., /tmp/.mount_Cursor*) can shadow system/conda libs
+    # and cause readline ABI mismatches when subprocesses load libraries
+    ld_path = env.get('LD_LIBRARY_PATH', '')
+    if ld_path:
+        # Split by colon, filter out AppImage mount paths, rejoin
+        paths = ld_path.split(':')
+        filtered_paths = [
+            p for p in paths
+            if p and not p.startswith('/tmp/.mount_')  # Remove AppImage mounts
+        ]
+        if filtered_paths:
+            env['LD_LIBRARY_PATH'] = ':'.join(filtered_paths)
+        else:
+            # If all paths were AppImage mounts, remove LD_LIBRARY_PATH entirely
+            # This lets the system use default library search paths
+            env.pop('LD_LIBRARY_PATH', None)
     
     return env
 

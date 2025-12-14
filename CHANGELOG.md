@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### Single Source of Truth for Lookback Computation (2025-12-13) – **NEW**
+- **Eliminated Split-Brain**: Fixed critical issue where different code paths computed different lookback values for the same feature set
+- **Canonical Lookback Map**: All stages (sanitizer, gatekeeper, POST_PRUNE, POST_GATEKEEPER) now use the same canonical map from `compute_feature_lookback_max()`
+- **POST_PRUNE Invariant Check**: Hard-fail check ensures `max(canonical_map[features]) == computed_lookback` (prevents regression)
+- **Diagnostic Logging**: Gatekeeper/sanitizer now log ALL features exceeding cap (makes split-brain visible)
+- **_Xd Pattern Inference**: Day-suffix features (`_60d`, `_20d`, `_3d`) now correctly inferred to `days * 1440` minutes
+- **Unknown Lookback = Unsafe**: Unknown lookback now treated as `inf` (unsafe), not `0.0` (safe)
+- **Readline Library Conflict Fix**: Fixed subprocess readline conflicts caused by Cursor AppImage's `LD_LIBRARY_PATH`
+- **Results**: Sanitizer quarantines 1440m features upfront, `actual_max=150m <= cap=240m` after pruning, no late-stage CAP VIOLATION
+- See [Single Source of Truth Fix](DOCS/02_reference/changelog/2025-12-13-single-source-of-truth.md) for details
+
 #### Leakage Controls Structural Fixes (2025-12-13) – **NEW**
 - **Unified Leakage Budget Calculator**: Single source of truth for feature lookback calculation (`TRAINING/utils/leakage_budget.py`)
 - **Calendar Feature Classification**: Fixed calendar features (`day_of_week`, `holiday_dummy`, etc.) to resolve to 0m lookback (not 1440m)

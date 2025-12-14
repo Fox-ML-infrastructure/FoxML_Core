@@ -26,7 +26,7 @@ that matches the training pipeline's data structure.
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Set
+from typing import Dict, List, Tuple, Optional, Set, Any
 import logging
 import warnings
 import hashlib
@@ -200,7 +200,9 @@ def prepare_cross_sectional_data_for_ranking(
     target_column: str,
     min_cs: int = 10,
     max_cs_samples: Optional[int] = None,
-    feature_names: Optional[List[str]] = None
+    feature_names: Optional[List[str]] = None,
+    feature_time_meta_map: Optional[Dict[str, Any]] = None,  # NEW: Optional map of feature_name -> FeatureTimeMeta
+    base_interval_minutes: Optional[float] = None  # NEW: Base training grid interval (for alignment)
 ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[List[str]], Optional[np.ndarray], Optional[np.ndarray]]:
     """
     Prepare cross-sectional data for ranking (simplified version of training pipeline).
@@ -239,7 +241,15 @@ def prepare_cross_sectional_data_for_ranking(
         f"max_cs_samples={max_cs_samples}"
     )
     
-    # Combine all symbol data
+    # NEW: Multi-interval alignment support
+    # If feature_time_meta_map and base_interval_minutes are provided, apply alignment
+    use_alignment = (
+        feature_time_meta_map is not None 
+        and base_interval_minutes is not None 
+        and len(feature_time_meta_map) > 0
+    )
+    
+    # Combine all symbol data (this becomes our base dataframe)
     all_data = []
     for symbol, df in mtf_data.items():
         if target_column not in df.columns:
@@ -262,6 +272,99 @@ def prepare_cross_sectional_data_for_ranking(
     
     # Normalize time column name
     time_col = "timestamp" if "timestamp" in combined_df.columns else ("ts" if "ts" in combined_df.columns else None)
+    
+    if use_alignment and time_col is not None:
+        # Import alignment function
+        from TRAINING.utils.feature_alignment import align_features_asof
+        
+        # Separate features by whether they need alignment
+        features_need_alignment = []
+        features_no_alignment = []
+        
+        # Auto-discover features if not provided
+        if feature_names is None:
+            sample_cols = next(iter(mtf_data.values())).columns.tolist()
+            feature_names = [col for col in sample_cols 
+                            if not any(col.startswith(prefix) for prefix in 
+                                     ['fwd_ret_', 'will_peak', 'will_valley', 'mdd_', 'mfe_', 'y_will_',
+                                      'tth_', 'p_', 'barrier_', 'hit_'])
+                            and col not in [time_col, target_column, 'symbol']]
+        
+        for feat_name in feature_names:
+            if feat_name in feature_time_meta_map:
+                meta = feature_time_meta_map[feat_name]
+                native_interval = meta.native_interval_minutes or base_interval_minutes
+                # Need alignment if different interval OR has embargo OR has publish_offset
+                if (native_interval != base_interval_minutes or 
+                    meta.embargo_minutes != 0.0 or 
+                    meta.publish_offset_minutes != 0.0):
+                    features_need_alignment.append(feat_name)
+                else:
+                    features_no_alignment.append(feat_name)
+            else:
+                features_no_alignment.append(feat_name)
+                logger.debug(f"Feature {feat_name} not in feature_time_meta_map - using standard merge")
+        
+        if features_need_alignment:
+            logger.info(
+                f"🔧 Multi-interval alignment: {len(features_need_alignment)} features need alignment "
+                f"(native intervals differ or have embargo/publish_offset), {len(features_no_alignment)} use standard merge"
+            )
+            
+            # Extract feature DataFrames for alignment (from original mtf_data)
+            feature_dfs = {}
+            for feat_name in features_need_alignment:
+                # Combine feature across all symbols
+                feat_data = []
+                for symbol, df in mtf_data.items():
+                    if feat_name in df.columns and time_col in df.columns:
+                        feat_df = df[[time_col, feat_name]].copy()
+                        feat_df['symbol'] = symbol
+                        feat_data.append(feat_df)
+                if feat_data:
+                    feature_dfs[feat_name] = pd.concat(feat_data, ignore_index=True)
+                else:
+                    logger.warning(f"Feature {feat_name} marked for alignment but not found in any symbol - skipping")
+            
+            if feature_dfs:
+                # Use existing combined_df as base (not full cross product)
+                # This is the base grid: all (symbol, timestamp) pairs that exist in the data
+                base_df = combined_df[['symbol', time_col]].drop_duplicates().copy()
+                
+                # Align features onto existing base dataframe
+                aligned_features_df = align_features_asof(
+                    base_df,
+                    feature_dfs,
+                    {k: v for k, v in feature_time_meta_map.items() if k in features_need_alignment},
+                    base_interval_minutes,
+                    timestamp_column=time_col
+                )
+                
+                # Merge aligned features back into combined_df
+                # Drop aligned features from combined_df first (they'll be replaced by aligned versions)
+                cols_to_drop = [f for f in features_need_alignment if f in combined_df.columns]
+                if cols_to_drop:
+                    combined_df = combined_df.drop(columns=cols_to_drop)
+                
+                # Merge aligned features
+                aligned_cols = [f for f in features_need_alignment if f in aligned_features_df.columns]
+                if aligned_cols:
+                    combined_df = combined_df.merge(
+                        aligned_features_df[['symbol', time_col] + aligned_cols],
+                        on=['symbol', time_col],
+                        how='left'
+                    )
+                
+                # Log alignment stats
+                for feat_name in aligned_cols:
+                    null_rate = combined_df[feat_name].isna().mean()
+                    if null_rate > 0:
+                        logger.debug(f"  Aligned {feat_name}: null_rate={null_rate:.1%} (from embargo/staleness)")
+            else:
+                logger.warning("No features found for alignment - falling back to standard merge")
+                use_alignment = False
+        else:
+            use_alignment = False
     
     # CRITICAL: Sort by timestamp IMMEDIATELY after combining
     # This ensures data is always sorted and prevents warnings later

@@ -215,7 +215,10 @@ def _log_canonical_summary(
     purge_minutes: Optional[float] = None,
     embargo_minutes: Optional[float] = None,
     max_feature_lookback_minutes: Optional[float] = None,
-    n_splits: Optional[int] = None
+    n_splits: Optional[int] = None,
+    lookback_budget_minutes: Optional[Union[float, str]] = None,
+    purge_include_feature_lookback: Optional[bool] = None,
+    gatekeeper_threshold_source: Optional[str] = None
 ):
     """
     Log canonical run summary block (one block that can be screenshot for PR comments).
@@ -279,6 +282,28 @@ def _log_canonical_summary(
     if max_feature_lookback_minutes is not None:
         logger.info(f"max_feature_lookback_minutes: {max_feature_lookback_minutes:.1f}m")
     
+    # Config trace for leakage detection settings (CRITICAL for auditability)
+    logger.info("")
+    logger.info("📋 CONFIG TRACE: Leakage Detection Settings")
+    logger.info("-" * 60)
+    if lookback_budget_minutes is not None:
+        if isinstance(lookback_budget_minutes, str):
+            logger.info(f"  lookback_budget_minutes: {lookback_budget_minutes} (source: config)")
+        else:
+            logger.info(f"  lookback_budget_minutes: {lookback_budget_minutes:.1f}m (source: config)")
+    else:
+        logger.info(f"  lookback_budget_minutes: auto (not set, using actual max)")
+    if purge_include_feature_lookback is not None:
+        logger.info(f"  purge_include_feature_lookback: {purge_include_feature_lookback} (source: config)")
+    else:
+        logger.info(f"  purge_include_feature_lookback: N/A (not available)")
+    if gatekeeper_threshold_source is not None:
+        logger.info(f"  gatekeeper_threshold_source: {gatekeeper_threshold_source}")
+    else:
+        logger.info(f"  gatekeeper_threshold_source: N/A (not available)")
+    logger.info("-" * 60)
+    logger.info("")
+    
     if cohort_path:
         logger.info(f"repro: {cohort_path}")
     logger.info("=" * 60)
@@ -288,7 +313,8 @@ def _enforce_final_safety_gate(
     feature_names: List[str],
     resolved_config: Any,
     interval_minutes: float,
-    logger: logging.Logger
+    logger: logging.Logger,
+    dropped_tracker: Optional[Any] = None  # NEW: Optional DroppedFeaturesTracker
 ) -> Tuple[np.ndarray, List[str]]:
     """
     Final Gatekeeper: Enforce safety at the last possible moment.
@@ -332,13 +358,16 @@ def _enforce_final_safety_gate(
     # Load lookback_budget_minutes cap from config (if set)
     # This is the explicit cap that should be enforced
     lookback_budget_cap = None
+    budget_cap_provenance = None
     try:
-        from CONFIG.config_loader import get_cfg
+        from CONFIG.config_loader import get_cfg, get_config_path
         budget_cap_raw = get_cfg("safety.leakage_detection.lookback_budget_minutes", default="auto", config_name="safety_config")
+        config_path = get_config_path("safety_config")
+        budget_cap_provenance = f"safety_config.yaml:{config_path} → safety.leakage_detection.lookback_budget_minutes = {budget_cap_raw} (default='auto')"
         if budget_cap_raw != "auto" and isinstance(budget_cap_raw, (int, float)):
             lookback_budget_cap = float(budget_cap_raw)
-    except Exception:
-        pass
+    except Exception as e:
+        budget_cap_provenance = f"config lookup failed: {e}"
     
     # Define maximum allowed lookback
     # Priority: 1) config cap (lookback_budget_minutes), 2) purge-derived (purge_limit * 0.99)
@@ -348,6 +377,7 @@ def _enforce_final_safety_gate(
         safe_lookback_max = lookback_budget_cap
         safe_lookback_max_source = "budget_cap"
         logger.info(f"🛡️ Gatekeeper threshold: {safe_lookback_max:.1f}m (source: lookback_budget_minutes cap)")
+        logger.info(f"   📋 CONFIG TRACE: {budget_cap_provenance}")
     else:
         # Fallback to purge-derived limit (with 1% safety buffer)
         safe_lookback_max = purge_limit * 0.99
@@ -356,6 +386,7 @@ def _enforce_final_safety_gate(
             f"⚠️ Gatekeeper threshold: {safe_lookback_max:.1f}m (source: purge_derived, purge={purge_limit:.1f}m). "
             f"Consider setting lookback_budget_minutes cap to avoid circular dependency."
         )
+        logger.info(f"   📋 CONFIG TRACE: {budget_cap_provenance}")
     
     dropped_features = []
     dropped_indices = []
@@ -369,38 +400,148 @@ def _enforce_final_safety_gate(
     except Exception:
         pass
     
-    # CRITICAL: Use the SAME lookback calculation as the audit system
-    # Use unified leakage budget calculator to ensure consistency
-    from TRAINING.utils.leakage_budget import infer_lookback_minutes
+    # CRITICAL: Use the EXACT SAME lookback calculation as compute_feature_lookback_max
+    # This ensures gatekeeper sees the same lookbacks as the audit system
+    from TRAINING.utils.leakage_budget import compute_feature_lookback_max
     
-    # Build lookup dict for ALL features using unified calculator
+    # DIAGNOSTIC: Count features with _d suffix (day-based patterns)
+    import re
+    day_suffix_features = [f for f in feature_names if re.search(r'_\d+d$', f, re.I)]
+    logger.info(f"🔍 GATEKEEPER DIAGNOSTIC: Found {len(day_suffix_features)} features with _Xd suffix pattern")
+    if day_suffix_features:
+        logger.info(f"   Sample _Xd features: {day_suffix_features[:5]}")
+    
+    # Build canonical lookback map using the SAME function as compute_feature_lookback_max
+    # This ensures we use the exact same inference logic
+    lookback_result = compute_feature_lookback_max(
+        feature_names,
+        interval_minutes,
+        max_lookback_cap_minutes=lookback_budget_cap,  # Pass cap for consistency
+        registry=registry,
+        stage="GATEKEEPER"
+    )
+    
+    # Extract canonical map from result (if available)
+    canonical_map = lookback_result.canonical_lookback_map if hasattr(lookback_result, 'canonical_lookback_map') else None
+    
+    # CRITICAL: Normalize feature keys for lookup (canonical map uses normalized keys)
+    from TRAINING.utils.leakage_budget import _feat_key
+    
+    # Build lookup dict from canonical map (the truth)
     feature_lookback_dict = {}
+    unknown_features = []
+    missing_from_canonical = []
+    
     for feat_name in feature_names:
-        # Try registry first for explicit metadata
-        spec_lookback = None
-        if registry is not None:
-            try:
-                metadata = registry.get_feature_metadata(feat_name)
-                lag_bars = metadata.get('lag_bars')
-                if lag_bars is not None and lag_bars >= 0:
-                    spec_lookback = float(lag_bars * interval_minutes)
-            except Exception:
-                pass
+        # Normalize key for lookup (canonical map uses normalized keys)
+        normalized_key = _feat_key(feat_name)
         
-        # Use unified infer_lookback_minutes (same as audit)
-        lookback = infer_lookback_minutes(
-            feat_name,
-            interval_minutes,
-            spec_lookback_minutes=spec_lookback,
-            registry=registry,
-            unknown_policy="conservative"
-        )
-        
-        # Skip if unknown_policy="drop" and lookback is inf (shouldn't happen with "conservative")
-        if lookback == float("inf"):
-            feature_lookback_dict[feat_name] = 0.0  # Assume safe if unknown
-        else:
+        if canonical_map and normalized_key in canonical_map:
+            lookback = canonical_map[normalized_key]
             feature_lookback_dict[feat_name] = lookback
+            # DIAGNOSTIC: Log if _Xd feature has 0.0 lookback (this is a bug)
+            if feat_name in day_suffix_features and lookback == 0.0:
+                logger.error(
+                    f"🚨 GATEKEEPER BUG: {feat_name} is _Xd feature but canonical map has lookback=0.0. "
+                    f"This indicates a bug in compute_feature_lookback_max or infer_lookback_minutes."
+                )
+        else:
+            # Feature not in canonical map - this should not happen if compute_feature_lookback_max worked correctly
+            missing_from_canonical.append(feat_name)
+            # CRITICAL: Unknown lookback must be treated as UNSAFE (not 0.0)
+            unknown_features.append(feat_name)
+            # Use infer_lookback_minutes as fallback, but treat inf as unsafe
+            from TRAINING.utils.leakage_budget import infer_lookback_minutes
+            spec_lookback = None
+            if registry is not None:
+                try:
+                    metadata = registry.get_feature_metadata(feat_name)
+                    lag_bars = metadata.get('lag_bars')
+                    if lag_bars is not None and lag_bars >= 0:
+                        spec_lookback = float(lag_bars * interval_minutes)
+                except Exception:
+                    pass
+            
+            lookback = infer_lookback_minutes(
+                feat_name,
+                interval_minutes,
+                spec_lookback_minutes=spec_lookback,
+                registry=registry,
+                unknown_policy="drop"  # CRITICAL: Use "drop" to return inf for unknown (not conservative default)
+            )
+            
+            # CRITICAL FIX: Unknown lookback (inf) must be UNSAFE, not safe
+            if lookback == float("inf"):
+                # In strict mode: raise immediately
+                # In drop mode: treat as exceeding cap (will be dropped)
+                # In warn mode: warn and treat as exceeding cap
+                if over_budget_action == "hard_stop":
+                    raise RuntimeError(
+                        f"🚨 GATEKEEPER: Feature '{feat_name}' has unknown lookback (cannot infer). "
+                        f"In strict mode, unknown lookback is UNSAFE and training is blocked."
+                    )
+                # For drop/warn modes, treat as exceeding cap (will be dropped or warned)
+                feature_lookback_dict[feat_name] = float("inf")  # Mark as unsafe
+            else:
+                feature_lookback_dict[feat_name] = lookback
+                # DIAGNOSTIC: Log if _Xd feature got lookback from fallback (should be in canonical map)
+                if feat_name in day_suffix_features:
+                    logger.warning(
+                        f"⚠️ GATEKEEPER: {feat_name} is _Xd feature but not in canonical map. "
+                        f"Using fallback inference: {lookback:.1f}m"
+                    )
+                # DIAGNOSTIC: Log if _Xd feature got lookback from fallback (should be in canonical map)
+                if feat_name in day_suffix_features:
+                    logger.warning(
+                        f"⚠️ GATEKEEPER: {feat_name} is _Xd feature but not in canonical map. "
+                        f"Using fallback inference: {lookback:.1f}m"
+                    )
+    
+    if missing_from_canonical:
+        logger.warning(
+            f"⚠️ GATEKEEPER: {len(missing_from_canonical)} features missing from canonical map. "
+            f"Sample: {missing_from_canonical[:5]}"
+        )
+    
+    # Log diagnostic: check if _Xd features have correct lookback
+    # Also log top offenders (1440m features) to verify gatekeeper sees them
+    if day_suffix_features:
+        logger.info(f"🔍 GATEKEEPER DIAGNOSTIC: Lookback values for _Xd features:")
+        for feat in day_suffix_features[:5]:
+            lookback_val = feature_lookback_dict.get(feat, "NOT_FOUND")
+            logger.info(f"   {feat}: lookback={lookback_val}")
+    
+    # CRITICAL: Log top offenders (1440m features) to verify gatekeeper sees them
+    # These should appear in the offenders list and get dropped
+    top_offenders_list = []
+    for feat_name, lookback in feature_lookback_dict.items():
+        if lookback > safe_lookback_max:
+            top_offenders_list.append((feat_name, lookback))
+    
+    # Sort by lookback descending
+    top_offenders_list.sort(key=lambda x: x[1], reverse=True)
+    
+    if top_offenders_list:
+        logger.info(
+            f"🔍 GATEKEEPER DIAGNOSTIC: Found {len(top_offenders_list)} features exceeding cap ({safe_lookback_max:.1f}m):"
+        )
+        for feat_name, lookback in top_offenders_list[:10]:  # Top 10
+            logger.info(f"   {feat_name}: lookback={lookback:.1f}m")
+    else:
+        logger.info(f"🔍 GATEKEEPER DIAGNOSTIC: No features exceed cap ({safe_lookback_max:.1f}m)")
+    
+    if unknown_features:
+        logger.warning(
+            f"⚠️ GATEKEEPER: {len(unknown_features)} features not in canonical map (should not happen). "
+            f"Sample: {unknown_features[:5]}"
+        )
+        # Check if any _Xd features are in unknown list (this is a bug)
+        unknown_xd = [f for f in unknown_features if f in day_suffix_features]
+        if unknown_xd:
+            logger.error(
+                f"🚨 GATEKEEPER BUG: {len(unknown_xd)} _Xd features missing from canonical map: {unknown_xd[:5]}. "
+                f"This indicates compute_feature_lookback_max is not including them."
+            )
     
     # Iterate through features in the FINAL dataframe
     for idx, feature_name in enumerate(feature_names):
@@ -408,7 +549,25 @@ def _enforce_final_safety_gate(
         reason = None
         
         # Get lookback from our computed dict (same calculation as audit)
-        lookback_minutes = feature_lookback_dict.get(feature_name, 0.0)
+        # CRITICAL: Missing features must be treated as unsafe (inf), not safe (0.0)
+        # Use None as default, then check for missing
+        lookback_minutes = feature_lookback_dict.get(feature_name)
+        if lookback_minutes is None:
+            # Feature missing from dict - this should not happen, but treat as unsafe
+            logger.error(
+                f"🚨 GATEKEEPER BUG: Feature '{feature_name}' missing from feature_lookback_dict. "
+                f"This indicates a bug in canonical map construction."
+            )
+            lookback_minutes = float("inf")  # Treat as unsafe
+        if lookback_minutes == float("inf"):
+            # Unknown lookback - treat as unsafe (exceeds any cap)
+            should_drop = True
+            reason = "unknown lookback (cannot infer - treated as unsafe)"
+            violating_features.append((feature_name, reason))
+            if over_budget_action == "drop":
+                dropped_features.append((feature_name, reason))
+                dropped_indices.append(idx)
+            continue  # Skip to next feature
         
         # IMPORTANT: Use the SAME precedence as compute_feature_lookback_max()
         # Explicit suffixes take precedence over keyword heuristics
@@ -420,21 +579,35 @@ def _enforce_final_safety_gate(
             re.search(r'_(\d+)d', feature_name, re.I)      # _1d, _3d, etc.
         )
         
-        # Only use keyword heuristics if no explicit suffix found
+        # CRITICAL: Calendar features have 0m lookback and should NEVER be dropped
+        # If lookback is 0.0, it's either a calendar feature or truly instantaneous
+        # In either case, it doesn't violate purge limits
+        # Use the lookback from feature_lookback_dict (already computed correctly)
+        is_calendar_feature = (lookback_minutes == 0.0)
+        
+        # Only use keyword heuristics if no explicit suffix found AND not a calendar feature
         # This prevents false positives like "intraday_seasonality_15m" being dropped
+        # AND prevents calendar features from being misclassified as "daily/24h naming pattern"
         is_daily_name = False
-        if not has_explicit_suffix:
+        if not has_explicit_suffix and not is_calendar_feature:
             # Check for explicit daily patterns (ends with _1d, _24h, starts with daily_, etc.)
+            # EXCLUDE calendar features (they already have 0m lookback)
             is_daily_name = (
                 re.search(r'_1d$|_1D$|_24h$|_24H$|^daily_|_daily$|_1440m', feature_name, re.I) or
                 re.search(r'rolling.*daily|daily.*high|daily.*low', feature_name, re.I) or
                 re.search(r'volatility.*day|vol.*day|volume.*day', feature_name, re.I) or
-                re.search(r'.*day.*', feature_name, re.I)  # Last resort: "day" anywhere
+                (re.search(r'.*day.*', feature_name, re.I) and not is_calendar_feature)  # "day" anywhere, but not calendar
             )
         
         # The Logic: If it violates the purge, KILL IT
         # Use the SAME calculation as audit - if audit sees 1440m, we should too
-        if is_daily_name:
+        # BUT: Calendar features (0m lookback) should never be dropped for "daily/24h naming pattern"
+        # CRITICAL: Unknown lookback (inf) is already handled above - skip to next feature
+        if lookback_minutes == float("inf"):
+            # Should not reach here (handled above), but defensive check
+            continue
+        
+        if is_daily_name and not is_calendar_feature:
             should_drop = True
             reason = "daily/24h naming pattern (no explicit time suffix)"
         elif lookback_minutes > safe_lookback_max:
@@ -495,6 +668,55 @@ def _enforce_final_safety_gate(
         feature_names = [name for idx, name in enumerate(feature_names) if idx not in dropped_indices]
         
         logger.info(f"   ✅ After final gatekeeper: {X.shape[1]} features remaining")
+        
+        # NEW: Track dropped features for telemetry with structured reasons
+        if dropped_tracker is not None:
+            from TRAINING.utils.dropped_features_tracker import DropReason
+            
+            # Capture input/output for stage record
+            input_features_before_gatekeeper = feature_names.copy() if 'feature_names' in locals() else []
+            
+            # Create structured reasons
+            structured_reasons = {}
+            for feat_name, reason_str in dropped_features:
+                # Parse reason string to extract structured info
+                reason_code = "LOOKBACK_CAP"
+                measured_value = None
+                threshold_value = safe_lookback_max
+                
+                # Try to extract lookback value from reason string
+                import re
+                lookback_match = re.search(r'lookback \(([\d.]+)m\)', reason_str)
+                if lookback_match:
+                    measured_value = float(lookback_match.group(1))
+                
+                # Get config provenance
+                config_provenance = f"lookback_budget_minutes={safe_lookback_max:.1f}m (source={safe_lookback_max_source})"
+                
+                structured_reasons[feat_name] = DropReason(
+                    reason_code=reason_code,
+                    stage="gatekeeper",
+                    human_reason=reason_str,
+                    measured_value=measured_value,
+                    threshold_value=threshold_value,
+                    config_provenance=config_provenance
+                )
+            
+            # Get config provenance dict
+            config_provenance_dict = {
+                "safe_lookback_max": safe_lookback_max,
+                "safe_lookback_max_source": safe_lookback_max_source,
+                "purge_limit": purge_limit,
+                "over_budget_action": over_budget_action
+            }
+            
+            dropped_tracker.add_gatekeeper_drops(
+                [name for name, _ in dropped_features],
+                structured_reasons,
+                input_features=input_features_before_gatekeeper,
+                output_features=feature_names,  # After drop
+                config_provenance=config_provenance_dict
+            )
     
     return X, feature_names
 
@@ -512,7 +734,8 @@ def train_and_evaluate_models(
     explicit_interval: Optional[Union[int, str]] = None,  # Explicit interval from config (for consistency)
     experiment_config: Optional[Any] = None,  # Optional ExperimentConfig (for data.bar_interval)
     output_dir: Optional[Path] = None,  # Optional output directory for stability snapshots
-    resolved_config: Optional[Any] = None  # NEW: ResolvedConfig with correct purge/embargo (post-pruning)
+    resolved_config: Optional[Any] = None,  # NEW: ResolvedConfig with correct purge/embargo (post-pruning)
+    dropped_tracker: Optional[Any] = None  # NEW: Optional DroppedFeaturesTracker for telemetry
 ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, float], float, Dict[str, List[Tuple[str, float]]], Dict[str, Dict[str, float]], List[Dict[str, Any]]]:
     """
     Train multiple models and return task-aware metrics + importance magnitude
@@ -652,6 +875,11 @@ def train_and_evaluate_models(
         
         return np.array(scores)
     
+    # NEW: Initialize dropped features tracker for telemetry
+    if dropped_tracker is None:
+        from TRAINING.utils.dropped_features_tracker import DroppedFeaturesTracker
+        dropped_tracker = DroppedFeaturesTracker()
+    
     # ARCHITECTURAL IMPROVEMENT: Pre-prune low-importance features before expensive training
     # This reduces noise and prevents "Curse of Dimensionality" issues
     # Drop features with < 0.01% cumulative importance using a fast LightGBM model
@@ -704,6 +932,24 @@ def train_and_evaluate_models(
                 random_state=prune_seed
             )
             
+            # NEW: Track pruning drops for telemetry with stage record
+            if dropped_tracker is not None and 'dropped_features' in pruning_stats:
+                # Get config provenance
+                config_provenance_dict = {
+                    "cumulative_threshold": cumulative_threshold,
+                    "min_features": min_features,
+                    "n_estimators": n_estimators,
+                    "task_type": task_str
+                }
+                
+                dropped_tracker.add_pruning_drops(
+                    pruning_stats['dropped_features'],
+                    pruning_stats,
+                    input_features=feature_names,
+                    output_features=feature_names_pruned,
+                    config_provenance=config_provenance_dict
+                )
+            
             if pruning_stats.get('dropped_count', 0) > 0:
                 logger.info(f"  ✅ Pruned: {original_feature_count} → {len(feature_names_pruned)} features "
                           f"(dropped {pruning_stats['dropped_count']} low-importance features)")
@@ -721,6 +967,16 @@ def train_and_evaluate_models(
                 # Log feature set transition
                 from TRAINING.utils.cross_sectional_data import _log_feature_set
                 _log_feature_set("PRUNER_SELECTED", feature_names, previous_names=feature_names_before_prune, logger_instance=logger)
+                
+                # CRITICAL: Re-run gatekeeper after pruning (pruning can surface long-lookback features)
+                # Pruning drops low-importance features, which might have been masking long-lookback features
+                # We must re-enforce the lookback cap on the pruned set
+                if resolved_config is not None:
+                    logger.info(f"  🔄 Re-running gatekeeper on pruned feature set (pruning may have surfaced long-lookback features)")
+                    X, feature_names = _enforce_final_safety_gate(
+                        X, feature_names, resolved_config, data_interval_minutes, logger, dropped_tracker=dropped_tracker
+                    )
+                    logger.info(f"  ✅ After post-prune gatekeeper: {len(feature_names)} features remaining")
             else:
                 logger.info(f"  No features pruned (all above threshold)")
                 from TRAINING.utils.cross_sectional_data import _log_feature_set
@@ -847,10 +1103,12 @@ def train_and_evaluate_models(
                 computed_lookback = lookback_result.max_minutes
                 top_offenders = lookback_result.top_offenders
                 lookback_fingerprint = lookback_result.fingerprint
+                canonical_map_from_post_prune = lookback_result.canonical_lookback_map if hasattr(lookback_result, 'canonical_lookback_map') else None
             else:
                 # Tuple return (backward compatibility)
                 computed_lookback, top_offenders = lookback_result
                 lookback_fingerprint = None
+                canonical_map_from_post_prune = None
             
             # Validate fingerprint
             if lookback_fingerprint and lookback_fingerprint != post_prune_fp:
@@ -860,6 +1118,51 @@ def train_and_evaluate_models(
             
             if computed_lookback is not None:
                 feature_lookback_max_minutes = computed_lookback
+                
+                # CRITICAL INVARIANT CHECK: max(lookback_map[features]) == actual_max_from_features
+                # This prevents regression and ensures canonical map consistency
+                if canonical_map_from_post_prune is not None:
+                    from TRAINING.utils.leakage_budget import _feat_key
+                    
+                    # Extract lookbacks for current features from canonical map
+                    feature_lookbacks_from_map = []
+                    for feat_name in feature_names:
+                        feat_key = _feat_key(feat_name)
+                        lookback = canonical_map_from_post_prune.get(feat_key)
+                        if lookback is not None and lookback != float("inf"):
+                            feature_lookbacks_from_map.append(lookback)
+                    
+                    if feature_lookbacks_from_map:
+                        max_from_map = max(feature_lookbacks_from_map)
+                        # Allow small floating-point differences (1.0 minute tolerance)
+                        if abs(max_from_map - computed_lookback) > 1.0:
+                            error_msg = (
+                                f"🚨 INVARIANT VIOLATION (POST_PRUNE): "
+                                f"max(canonical_map[features])={max_from_map:.1f}m != "
+                                f"computed_lookback={computed_lookback:.1f}m. "
+                                f"This indicates canonical map inconsistency. "
+                                f"Feature set: {len(feature_names)} features, "
+                                f"canonical map entries: {len([k for k in canonical_map_from_post_prune.keys() if k in [_feat_key(f) for f in feature_names]])}"
+                            )
+                            logger.error(error_msg)
+                            
+                            # Hard-fail in strict mode
+                            policy = "strict"
+                            try:
+                                from CONFIG.config_loader import get_cfg
+                                policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+                            except Exception:
+                                pass
+                            
+                            if policy == "strict":
+                                raise RuntimeError(error_msg)
+                        else:
+                            logger.debug(
+                                f"✅ INVARIANT CHECK (POST_PRUNE): "
+                                f"max(canonical_map[features])={max_from_map:.1f}m == "
+                                f"computed_lookback={computed_lookback:.1f}m ✓"
+                            )
+                
                 # SANITY CHECK: Verify top_offenders matches reported max and is from current feature set
                 if top_offenders:
                     actual_max_in_list = top_offenders[0][1]
@@ -903,10 +1206,28 @@ def train_and_evaluate_models(
                             if budget_cap_raw != "auto" and isinstance(budget_cap_raw, (int, float)):
                                 budget_cap = float(budget_cap_raw)
                                 if computed_lookback > budget_cap:
-                                    logger.warning(
-                                        f"  ⚠️ POST_PRUNE lookback ({computed_lookback:.1f}m) > budget_cap ({budget_cap:.1f}m). "
-                                        f"Gatekeeper should have dropped {len([f for f, m in top_offenders if m > budget_cap])} features exceeding cap."
+                                    exceeding_features = [(f, m) for f, m in top_offenders if m > budget_cap + 1.0]
+                                    exceeding_count = len(exceeding_features)
+                                    
+                                    # CRITICAL: In strict mode, this is a hard-stop
+                                    policy = "strict"
+                                    try:
+                                        from CONFIG.config_loader import get_cfg
+                                        policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+                                    except Exception:
+                                        pass
+                                    
+                                    error_msg = (
+                                        f"🚨 POST_PRUNE CAP VIOLATION: actual_max={computed_lookback:.1f}m > cap={budget_cap:.1f}m. "
+                                        f"Feature set contains {exceeding_count} features exceeding cap. "
+                                        f"Gatekeeper should have dropped these features. "
+                                        f"Top offenders: {', '.join([f'{f}({m:.0f}m)' for f, m in exceeding_features[:10]])}"
                                     )
+                                    
+                                    if policy == "strict":
+                                        raise RuntimeError(error_msg + " (policy: strict - training blocked)")
+                                    else:
+                                        logger.error(error_msg + " (policy: warn - continuing with violation - NOT RECOMMENDED)")
                         except Exception:
                             pass
             else:
@@ -937,7 +1258,8 @@ def train_and_evaluate_models(
                     view=resolved_config.view,
                     symbol=resolved_config.symbol,
                     feature_names=feature_names,  # Pruned features
-                    recompute_lookback=False  # Already computed above
+                    recompute_lookback=False,  # Already computed above
+                    experiment_config=experiment_config  # NEW: Pass experiment_config for base_interval_minutes
                 )
                 if log_cfg.cv_detail:
                     logger.info(f"  ✅ Resolved config (post-prune): purge={resolved_config.purge_minutes:.1f}m, embargo={resolved_config.embargo_minutes:.1f}m")
@@ -958,13 +1280,52 @@ def train_and_evaluate_models(
                     # CRITICAL: This is the ACTUAL budget for the final feature set
                     # Use lookback_budget_minutes cap (if set) for consistency
                     lookback_budget_cap_for_budget = None
+                    budget_cap_provenance_budget = None
                     try:
-                        from CONFIG.config_loader import get_cfg
+                        from CONFIG.config_loader import get_cfg, get_config_path
                         budget_cap_raw = get_cfg("safety.leakage_detection.lookback_budget_minutes", default="auto", config_name="safety_config")
+                        config_path = get_config_path("safety_config")
+                        budget_cap_provenance_budget = f"safety_config.yaml:{config_path} → safety.leakage_detection.lookback_budget_minutes = {budget_cap_raw} (default='auto')"
                         if budget_cap_raw != "auto" and isinstance(budget_cap_raw, (int, float)):
                             lookback_budget_cap_for_budget = float(budget_cap_raw)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        budget_cap_provenance_budget = f"config lookup failed: {e}"
+                    
+                    # CRITICAL FIX: Use the canonical map from POST_PRUNE to ensure consistency
+                    # POST_PRUNE already computed the canonical map - reuse it instead of recomputing
+                    canonical_map_from_post_prune = None
+                    if 'lookback_result' in locals() and hasattr(lookback_result, 'canonical_lookback_map'):
+                        canonical_map_from_post_prune = lookback_result.canonical_lookback_map
+                    elif 'lookback_result' in locals() and hasattr(lookback_result, 'lookback_map'):
+                        # Backward compatibility
+                        canonical_map_from_post_prune = lookback_result.lookback_map
+                    
+                    # If we don't have the canonical map, we MUST recompute using compute_feature_lookback_max
+                    # to ensure we get the same result as POST_PRUNE
+                    if canonical_map_from_post_prune is None:
+                        logger.warning(
+                            f"⚠️ POST_PRUNE_policy_check: No canonical map available from POST_PRUNE. "
+                            f"Recomputing using compute_feature_lookback_max to ensure consistency."
+                        )
+                        # Recompute using the same function as POST_PRUNE
+                        lookback_result_for_policy = compute_feature_lookback_max(
+                            feature_names,
+                            data_interval_minutes,
+                            max_lookback_cap_minutes=lookback_budget_cap_for_budget,
+                            expected_fingerprint=post_prune_fp if 'post_prune_fp' in locals() else None,
+                            stage="POST_PRUNE_policy_check",
+                            registry=registry
+                        )
+                        if hasattr(lookback_result_for_policy, 'canonical_lookback_map'):
+                            canonical_map_from_post_prune = lookback_result_for_policy.canonical_lookback_map
+                        elif hasattr(lookback_result_for_policy, 'lookback_map'):
+                            canonical_map_from_post_prune = lookback_result_for_policy.lookback_map
+                    
+                    # Log config trace for budget compute
+                    logger.info(f"📋 CONFIG TRACE (POST_PRUNE_policy_check budget): {budget_cap_provenance_budget}")
+                    logger.info(f"   → max_lookback_cap_minutes passed to compute_budget: {lookback_budget_cap_for_budget}")
+                    logger.info(f"   → Computing budget from {len(feature_names)} features, expected fingerprint: {post_prune_fp if 'post_prune_fp' in locals() else 'None'}")
+                    logger.info(f"   → Using canonical map from POST_PRUNE: {'YES' if canonical_map_from_post_prune is not None else 'NO (will recompute)'}")
                     
                     budget, budget_fp, budget_order_fp = compute_budget(
                         feature_names,
@@ -973,8 +1334,14 @@ def train_and_evaluate_models(
                         registry=registry,
                         max_lookback_cap_minutes=lookback_budget_cap_for_budget,  # Pass cap to compute_budget
                         expected_fingerprint=post_prune_fp if 'post_prune_fp' in locals() else None,
-                        stage="POST_PRUNE_policy_check"
+                        stage="POST_PRUNE_policy_check",
+                        canonical_lookback_map=canonical_map_from_post_prune,  # CRITICAL: Use same map as POST_PRUNE
+                        feature_time_meta_map=resolved_config.feature_time_meta_map if resolved_config and hasattr(resolved_config, 'feature_time_meta_map') else None,
+                        base_interval_minutes=resolved_config.base_interval_minutes if resolved_config else None
                     )
+                    
+                    # Log the computed budget for debugging
+                    logger.info(f"   → Budget computed: actual_max={budget.max_feature_lookback_minutes:.1f}m, cap={budget.cap_max_lookback_minutes}, fingerprint={budget_fp}")
                     
                     # CRITICAL: Update resolved_config with the NEW budget (from pruned features)
                     # This ensures budget.actual_max reflects the actual feature set
@@ -1042,6 +1409,16 @@ def train_and_evaluate_models(
                     )
                 except Exception as e:
                     logger.debug(f"Stability snapshot save failed for quick_pruner (non-critical): {e}")
+        except RuntimeError as e:
+            # CRITICAL: Re-raise RuntimeError (strict mode violations, etc.)
+            # These are safety-critical and should not be swallowed
+            if "policy: strict" in str(e) or "training blocked" in str(e):
+                logger.error(f"  🚨 Feature pruning failed with strict policy violation: {e}")
+                raise  # Re-raise - strict mode violations must abort
+            else:
+                # Other RuntimeErrors - log and continue (might be recoverable)
+                logger.warning(f"  Feature pruning failed: {e}, using all features")
+                logger.exception("  Pruning exception details (non-critical):")
         except Exception as e:
             logger.warning(f"  Feature pruning failed: {e}, using all features")
             logger.exception("  Pruning exception details (non-critical):")  # Better error logging
@@ -1155,7 +1532,8 @@ def train_and_evaluate_models(
             view="CROSS_SECTIONAL",  # Default for train_and_evaluate_models
             symbol=None,
             feature_names=feature_names,
-            recompute_lookback=False  # Already computed above
+            recompute_lookback=False,  # Already computed above
+            experiment_config=experiment_config  # NEW: Pass experiment_config for base_interval_minutes
         )
         
         if log_cfg.cv_detail:
@@ -1263,43 +1641,128 @@ def train_and_evaluate_models(
         # Use parameter value (default: 5)
         logger.info(f"  Using data interval from parameter: {data_interval_minutes}m")
     
-    # ARCHITECTURAL FIX: Use resolved_config if provided (has correct purge/embargo post-pruning)
-    # Otherwise compute here (fallback for legacy calls)
-    if resolved_config is not None:
-        purge_minutes_val = resolved_config.purge_minutes
-        embargo_minutes_val = resolved_config.embargo_minutes
-        feature_lookback_max_minutes = None  # Not needed here, already in resolved_config
-        if log_cfg.cv_detail:
-            logger.info(f"  Using purge/embargo from resolved_config: purge={purge_minutes_val:.1f}m, embargo={embargo_minutes_val:.1f}m")
+    # CRITICAL FIX: Recompute purge_minutes from FINAL featureset (post-gatekeeper + post-prune)
+    # The resolved_config.purge_minutes may have been computed from pre-prune featureset
+    # We need to ensure purge is computed from the ACTUAL features used in training
+    from TRAINING.utils.leakage_budget import compute_budget
+    from TRAINING.utils.resolved_config import derive_purge_embargo
+    from TRAINING.utils.cross_sectional_data import _compute_feature_fingerprint
+    
+    # Compute fingerprint of final featureset for validation
+    final_featureset_fp, _ = _compute_feature_fingerprint(feature_names, set_invariant=True)
+    
+    # Get registry and feature_time_meta_map for budget computation
+    registry = None
+    feature_time_meta_map = None
+    try:
+        from TRAINING.common.feature_registry import get_registry
+        registry = get_registry()
+    except Exception:
+        pass
+    
+    # Get feature_time_meta_map from resolved_config if available
+    if resolved_config is not None and hasattr(resolved_config, 'feature_time_meta_map'):
+        feature_time_meta_map = resolved_config.feature_time_meta_map
+    
+    # Compute budget from FINAL featureset (the one actually used in training)
+    # This ensures purge is computed from the correct featureset
+    budget_final, budget_fp, _ = compute_budget(
+        feature_names,
+        data_interval_minutes,
+        target_horizon_minutes if target_horizon_minutes is not None else 60.0,
+        registry=registry,
+        max_lookback_cap_minutes=None,  # Don't cap - we want actual max for purge computation
+        stage="CV_SPLITTER_CREATION",
+        feature_time_meta_map=feature_time_meta_map,
+        base_interval_minutes=resolved_config.base_interval_minutes if resolved_config is not None else None
+    )
+    
+    # Validate fingerprint matches
+    if budget_fp != final_featureset_fp:
+        logger.error(
+            f"🚨 FINGERPRINT MISMATCH (CV_SPLITTER): budget={budget_fp} != final_featureset={final_featureset_fp}. "
+            f"This indicates a bug in feature set tracking."
+        )
     else:
-        # Fallback: compute here (legacy path)
-        from TRAINING.utils.resolved_config import derive_purge_embargo
+        logger.debug(f"✅ CV_SPLITTER: purge computed from fingerprint={budget_fp[:8]} (matches MODEL_TRAIN_INPUT)")
+    
+    # Load purge settings from config
+    if _CONFIG_AVAILABLE:
+        try:
+            purge_buffer_bars = int(get_cfg("pipeline.leakage.purge_buffer_bars", default=5, config_name="pipeline_config"))
+            purge_include_feature_lookback = get_cfg("safety.leakage_detection.purge_include_feature_lookback", default=True, config_name="safety_config")
+        except Exception:
+            purge_buffer_bars = 5
+            purge_include_feature_lookback = True
+    else:
+        purge_buffer_bars = 5
+        purge_include_feature_lookback = True
+    
+    # Compute purge from FINAL featureset lookback
+    # If purge_include_feature_lookback is True, purge must cover feature lookback
+    feature_lookback_max_minutes = budget_final.max_feature_lookback_minutes
+    
+    # Use centralized derivation function (base purge from horizon)
+    purge_minutes_val, embargo_minutes_val = derive_purge_embargo(
+        horizon_minutes=target_horizon_minutes,
+        interval_minutes=data_interval_minutes,
+        feature_lookback_max_minutes=None,  # derive_purge_embargo doesn't use this - we apply it separately below
+        purge_buffer_bars=purge_buffer_bars,
+        default_purge_minutes=85.0
+    )
+    
+    # CRITICAL: Apply purge_include_feature_lookback policy (same logic as create_resolved_config)
+    # If purge_include_feature_lookback=True, purge must be >= feature_lookback_max + interval
+    if purge_include_feature_lookback and feature_lookback_max_minutes is not None:
+        from TRAINING.utils.duration_parser import enforce_purge_audit_rule, format_duration
         
-        # Load purge settings from config
-        if _CONFIG_AVAILABLE:
-            try:
-                purge_buffer_bars = int(get_cfg("pipeline.leakage.purge_buffer_bars", default=5, config_name="pipeline_config"))
-            except Exception:
-                purge_buffer_bars = 5
-        else:
-            purge_buffer_bars = 5  # Safety buffer (5 bars = 25 minutes)
+        purge_in = purge_minutes_val
+        lookback_in = feature_lookback_max_minutes
+        interval_for_rule = data_interval_minutes
         
-        # Estimate feature lookback (conservative: 1 day = 288 bars for 5m data)
-        feature_lookback_max_minutes = None
-        if data_interval_minutes is not None and data_interval_minutes > 0:
-            max_lookback_bars = 288  # 1 day of 5m bars
-            feature_lookback_max_minutes = max_lookback_bars * data_interval_minutes
+        # Enforce audit rule: purge >= lookback_max (with interval-aware rounding)
+        purge_out, min_purge, changed = enforce_purge_audit_rule(
+            purge_in * 60.0,  # Convert minutes to seconds
+            lookback_in * 60.0,  # Convert minutes to seconds
+            interval=interval_for_rule * 60.0 if interval_for_rule is not None else None,
+            buffer_frac=0.01,  # 1% safety buffer
+            strict_greater=True
+        )
         
-        # Use centralized derivation function
-        purge_minutes_val, embargo_minutes_val = derive_purge_embargo(
-            horizon_minutes=target_horizon_minutes,
-            interval_minutes=data_interval_minutes,
-            feature_lookback_max_minutes=feature_lookback_max_minutes,
-            purge_buffer_bars=purge_buffer_bars,
-            default_purge_minutes=85.0
+        if changed:
+            purge_minutes_val = purge_out.to_minutes()
+            logger.info(
+                f"⚠️  CV_SPLITTER: Increased purge from {purge_in:.1f}m to {purge_minutes_val:.1f}m "
+                f"(min required: {format_duration(min_purge)}) to satisfy purge_include_feature_lookback=True. "
+                f"Feature lookback: {lookback_in:.1f}m"
+            )
+    
+    # CRITICAL ASSERT: Verify purge_include_feature_lookback policy is correctly applied
+    if purge_include_feature_lookback and feature_lookback_max_minutes is not None:
+        min_required_purge = feature_lookback_max_minutes + (data_interval_minutes if data_interval_minutes is not None else 5.0)
+        assert purge_minutes_val >= min_required_purge, (
+            f"🚨 BUG: purge_include_feature_lookback=True but purge ({purge_minutes_val:.1f}m) < "
+            f"required ({min_required_purge:.1f}m = lookback {feature_lookback_max_minutes:.1f}m + interval {data_interval_minutes:.1f}m). "
+            f"This indicates the purge_include_feature_lookback logic is not being applied correctly."
         )
     
+    # Log purge computation with fingerprint for validation
+    logger.info(
+        f"📊 CV_SPLITTER: purge_minutes={purge_minutes_val:.1f}m computed from final_featureset "
+        f"(fingerprint={final_featureset_fp[:8]}, actual_max_lookback={feature_lookback_max_minutes:.1f}m, "
+        f"purge_include_feature_lookback={purge_include_feature_lookback}, "
+        f"min_required={feature_lookback_max_minutes + (data_interval_minutes if data_interval_minutes is not None else 5.0):.1f}m if include_lookback=True)"
+    )
+    
     # CRITICAL: Validate purge doesn't exceed data span (hard-stop if invalid)
+    # Check for explicit override config
+    allow_invalid_cv = False
+    try:
+        from CONFIG.config_loader import get_cfg
+        allow_invalid_cv = get_cfg("safety.leakage_detection.cv.allow_invalid_cv", default=False, config_name="safety_config")
+    except Exception:
+        pass
+    
     if time_vals is not None and len(time_vals) > 0:
         time_series = pd.Series(time_vals) if not isinstance(time_vals, pd.Series) else time_vals
         if hasattr(time_series, 'min') and hasattr(time_series, 'max'):
@@ -1322,14 +1785,21 @@ def train_and_evaluate_models(
                     data_span_minutes = (time_max_dt - time_min_dt).total_seconds() / 60.0
                 
                 if purge_minutes_val >= data_span_minutes:
-                    raise RuntimeError(
+                    error_msg = (
                         f"🚨 INVALID CV CONFIGURATION: purge_minutes ({purge_minutes_val:.1f}m) >= data_span ({data_span_minutes:.1f}m). "
                         f"This will produce empty/invalid CV folds. "
                         f"Either: 1) Set lookback_budget_minutes cap to drop long-lookback features, "
                         f"2) Load more data (≥ {purge_minutes_val/1440:.1f} trading days), or "
                         f"3) Disable purge_include_feature_lookback in config."
                     )
+                    if allow_invalid_cv:
+                        logger.error(f"{error_msg} (override: allow_invalid_cv=true - proceeding anyway)")
+                    else:
+                        raise RuntimeError(error_msg)
+            except RuntimeError:
+                raise  # Re-raise RuntimeError (our hard-stop)
             except Exception as e:
+                # Other exceptions (type conversion, etc.) - log but don't hard-stop
                 logger.warning(f"  Failed to validate purge vs data span: {e}, skipping validation")
     
     purge_time = pd.Timedelta(minutes=purge_minutes_val)
@@ -1348,6 +1818,15 @@ def train_and_evaluate_models(
     _log_feature_set("MODEL_TRAIN_INPUT", feature_names, previous_names=None, logger_instance=logger)
     model_train_input_fingerprint, model_train_input_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
     logger.info(f"📊 MODEL_TRAIN_INPUT fingerprint={model_train_input_fingerprint} (n_features={len(feature_names)}, POST_PRUNE)")
+    
+    # CRITICAL: Validate that purge was computed from the same featureset
+    if 'final_featureset_fp' in locals() and final_featureset_fp != model_train_input_fingerprint:
+        logger.error(
+            f"🚨 FINGERPRINT MISMATCH: purge computed from {final_featureset_fp[:8]} but MODEL_TRAIN_INPUT={model_train_input_fingerprint[:8]}. "
+            f"This indicates purge was computed from wrong featureset!"
+        )
+    elif 'final_featureset_fp' in locals():
+        logger.debug(f"✅ Purge fingerprint validation: purge={final_featureset_fp[:8]} == MODEL_TRAIN_INPUT={model_train_input_fingerprint[:8]}")
     
     # Create purged time series split with time-based purging
     # CRITICAL: Validate time_vals alignment and sorting before using time-based purging
@@ -1369,6 +1848,83 @@ def train_and_evaluate_models(
         )
         if log_cfg.cv_detail:
             logger.info(f"  Using PurgedTimeSeriesSplit (TIME-BASED): {cv_folds} folds, purge_time={purge_time}")
+        
+        # CRITICAL: Validate CV folds before training to prevent IndexError
+        # Convert splitter generator to list to inspect all folds
+        all_folds = list(tscv.split(X, y))
+        n_folds_generated = len(all_folds)
+        
+        if n_folds_generated == 0:
+            raise RuntimeError(
+                f"🚨 No CV folds generated. This usually means purge/embargo ({purge_time:.1f}m) is too large "
+                f"relative to data span. Either: 1) Reduce lookback_budget_minutes cap to drop long-lookback features, "
+                f"2) Load more data (≥ {purge_time/1440:.1f} trading days), or "
+                f"3) Disable purge_include_feature_lookback in config."
+            )
+        
+        # Determine if this is a classification task
+        is_binary = task_type == TaskType.BINARY_CLASSIFICATION
+        is_multiclass = task_type == TaskType.MULTICLASS_CLASSIFICATION
+        is_classification = is_binary or is_multiclass
+        
+        # Validate each fold
+        valid_folds = []
+        for fold_idx, (train_idx, test_idx) in enumerate(all_folds):
+            # Check that indices are non-empty
+            if len(train_idx) == 0:
+                logger.warning(f"  ⚠️  Fold {fold_idx + 1}: Empty training set (skipping)")
+                continue
+            if len(test_idx) == 0:
+                logger.warning(f"  ⚠️  Fold {fold_idx + 1}: Empty test set (skipping)")
+                continue
+            
+            # For classification, check that both classes are present in training set
+            if is_classification:
+                train_y = y[train_idx]
+                unique_classes = np.unique(train_y[~np.isnan(train_y)])
+                if len(unique_classes) < 2:
+                    logger.warning(
+                        f"  ⚠️  Fold {fold_idx + 1}: Training set has only {len(unique_classes)} class(es) "
+                        f"(classes: {unique_classes.tolist()}), skipping"
+                    )
+                    continue
+            
+            valid_folds.append((train_idx, test_idx))
+        
+        n_valid_folds = len(valid_folds)
+        
+        if n_valid_folds == 0:
+            raise RuntimeError(
+                f"🚨 No valid CV folds after validation. Generated {n_folds_generated} folds, but all were invalid. "
+                f"This usually means: 1) purge/embargo ({purge_time:.1f}m) is too large relative to data span, "
+                f"2) Target is degenerate (single class or extreme imbalance), or "
+                f"3) Data span is insufficient. "
+                f"Either: 1) Reduce lookback_budget_minutes cap, 2) Load more data, or "
+                f"3) Check target distribution."
+            )
+        
+        if n_valid_folds < n_folds_generated:
+            logger.warning(
+                f"  ⚠️  Only {n_valid_folds}/{n_folds_generated} folds are valid. "
+                f"Proceeding with {n_valid_folds} folds."
+            )
+        
+        # Create a wrapper splitter that only yields valid folds
+        class ValidatedSplitter:
+            def __init__(self, valid_folds):
+                self.valid_folds = valid_folds
+                self.n_splits = len(valid_folds)
+            
+            def split(self, X, y=None, groups=None):
+                for train_idx, test_idx in self.valid_folds:
+                    yield train_idx, test_idx
+            
+            def get_n_splits(self, X=None, y=None, groups=None):
+                return self.n_splits
+        
+        tscv = ValidatedSplitter(valid_folds)
+        if log_cfg.cv_detail:
+            logger.info(f"  ✅ CV fold validation: {n_valid_folds} valid folds (from {n_folds_generated} generated)")
     else:
         # CRITICAL: Row-count based purging is INVALID for panel data (multiple symbols per timestamp)
         # With 50 symbols, 1 bar = 50 rows. Using row counts causes catastrophic leakage.
@@ -3772,12 +4328,24 @@ def evaluate_target_predictability(
         verbose=True,
         use_registry=True,  # Enable registry validation
         data_interval_minutes=detected_interval,
-        for_ranking=True  # Use permissive rules for ranking (allow basic OHLCV/TA)
+        for_ranking=True,  # Use permissive rules for ranking (allow basic OHLCV/TA)
+        dropped_tracker=dropped_tracker if 'dropped_tracker' in locals() else None  # Pass tracker for sanitizer tracking
     )
     
     excluded_count = len(all_columns) - len(safe_columns) - 1  # -1 for target itself
     features_safe = len(safe_columns)
     logger.debug(f"Filtered out {excluded_count} potentially leaking features (kept {features_safe} safe features)")
+    
+    # NEW: Track early filter drops (schema/pattern/registry filtering) - set-based comparison
+    if 'dropped_tracker' in locals() and dropped_tracker is not None and 'all_columns_before_filter' in locals():
+        early_filtered = sorted(list(set(all_columns_before_filter) - set(safe_columns)))
+        if early_filtered:
+            dropped_tracker.add_early_filter_summary(
+                filter_name="schema_pattern_registry",
+                dropped_count=len(early_filtered),
+                top_samples=early_filtered[:10],
+                rule_hits=None  # Could be enhanced to track which rules hit
+            )
     
     # CRITICAL: Check if we have enough features to train
     # Load from config
@@ -3825,12 +4393,17 @@ def evaluate_target_predictability(
     features_dropped_nan = 0
     features_final = features_safe
     
+    # NEW: Track NaN drops - capture BEFORE data prep (set-based comparison)
+    feature_names_before_data_prep = safe_columns.copy() if 'safe_columns' in locals() else []
+    
     # Prepare data based on view
     if view == "SYMBOL_SPECIFIC":
         # For symbol-specific, prepare single-symbol time series data
         # Use same function but with single symbol (min_cs=1 effectively)
         X, y, feature_names, symbols_array, time_vals = prepare_cross_sectional_data_for_ranking(
-            mtf_data, target_column, min_cs=1, max_cs_samples=max_cs_samples, feature_names=safe_columns
+            mtf_data, target_column, min_cs=1, max_cs_samples=max_cs_samples, feature_names=safe_columns,
+            feature_time_meta_map=resolved_config.feature_time_meta_map if resolved_config else None,
+            base_interval_minutes=resolved_config.base_interval_minutes if resolved_config else None
         )
         # Verify we only have one symbol
         unique_symbols = set(symbols_array) if symbols_array is not None else set()
@@ -3923,7 +4496,8 @@ def evaluate_target_predictability(
         view=view,
         symbol=symbol,
         feature_names=selected_features,  # Pass feature names for lookback computation
-        recompute_lookback=True  # CRITICAL: Compute feature lookback to auto-adjust purge
+        recompute_lookback=True,  # CRITICAL: Compute feature lookback to auto-adjust purge
+        experiment_config=experiment_config  # NEW: Pass experiment_config for base_interval_minutes
     )
     
     if log_cfg.cv_detail:
@@ -4124,7 +4698,8 @@ def evaluate_target_predictability(
         feature_names=feature_names,
         resolved_config=resolved_config,
         interval_minutes=detected_interval,
-        logger=logger
+        logger=logger,
+        dropped_tracker=dropped_tracker if 'dropped_tracker' in locals() else None
     )
     
     # CRITICAL: Log POST_GATEKEEPER stage explicitly
@@ -4151,13 +4726,20 @@ def evaluate_target_predictability(
         
         # Load lookback_budget_minutes cap for consistency with gatekeeper
         lookback_budget_cap_for_budget = None
+        budget_cap_provenance_post_gatekeeper = None
         try:
-            from CONFIG.config_loader import get_cfg
+            from CONFIG.config_loader import get_cfg, get_config_path
             budget_cap_raw = get_cfg("safety.leakage_detection.lookback_budget_minutes", default="auto", config_name="safety_config")
+            config_path = get_config_path("safety_config")
+            budget_cap_provenance_post_gatekeeper = f"safety_config.yaml:{config_path} → safety.leakage_detection.lookback_budget_minutes = {budget_cap_raw} (default='auto')"
             if budget_cap_raw != "auto" and isinstance(budget_cap_raw, (int, float)):
                 lookback_budget_cap_for_budget = float(budget_cap_raw)
-        except Exception:
-            pass
+        except Exception as e:
+            budget_cap_provenance_post_gatekeeper = f"config lookup failed: {e}"
+        
+        # Log config trace for budget compute
+        logger.info(f"📋 CONFIG TRACE (POST_GATEKEEPER budget): {budget_cap_provenance_post_gatekeeper}")
+        logger.info(f"   → max_lookback_cap_minutes passed to compute_budget: {lookback_budget_cap_for_budget}")
         
         # Compute budget from FINAL feature set (post gatekeeper)
         # NOTE: MODEL_TRAIN_INPUT fingerprint will be computed later in train_and_evaluate_models AFTER pruning
@@ -4171,6 +4753,79 @@ def evaluate_target_predictability(
             expected_fingerprint=post_gatekeeper_fp,
             stage="POST_GATEKEEPER"
         )
+        
+        # SANITY CHECK: Verify POST_GATEKEEPER max_lookback_minutes respects the cap
+        # CRITICAL: Use the canonical map that was already computed (don't recompute)
+        # The budget was computed using canonical_lookback_map, so we can use that same map
+        if lookback_budget_cap_for_budget is not None:
+            # Get canonical map from the budget computation (it was passed in)
+            # We need to recompute it here since we don't have a reference, but we'll use the same logic
+            # Actually, better: use compute_feature_lookback_max which builds the canonical map correctly
+            from TRAINING.utils.leakage_budget import compute_feature_lookback_max
+            lookback_result = compute_feature_lookback_max(
+                feature_names,
+                detected_interval,
+                max_lookback_cap_minutes=lookback_budget_cap_for_budget,
+                registry=registry,
+                expected_fingerprint=post_gatekeeper_fp,
+                stage="POST_GATEKEEPER_sanity_check"
+            )
+            # CRITICAL: Use the EXACT SAME oracle as final enforcement
+            # This is the single source of truth - if it disagrees, we have split-brain
+            actual_max_from_features = lookback_result.max_minutes if lookback_result.max_minutes is not None else 0.0
+            budget_max = budget.max_feature_lookback_minutes
+            
+            # CRITICAL: Hard-fail on mismatch (split-brain detection)
+            # Both should use the same canonical map, so they MUST agree
+            if abs(actual_max_from_features - budget_max) > 1.0:
+                # This is a real bug - different code paths are computing different lookbacks
+                logger.error(
+                    f"🚨 SPLIT-BRAIN DETECTED (POST_GATEKEEPER): "
+                    f"budget.max={budget_max:.1f}m vs actual_max_from_features={actual_max_from_features:.1f}m. "
+                    f"This indicates different code paths are computing different lookbacks. "
+                    f"Both should use the same canonical map from compute_feature_lookback_max()."
+                )
+                # In strict mode, this is a hard-stop
+                policy = "strict"
+                try:
+                    from CONFIG.config_loader import get_cfg
+                    policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+                except Exception:
+                    pass
+                
+                if policy == "strict":
+                    raise RuntimeError(
+                        f"🚨 SPLIT-BRAIN DETECTED (POST_GATEKEEPER): "
+                        f"budget.max={budget_max:.1f}m vs actual_max_from_features={actual_max_from_features:.1f}m. "
+                        f"This indicates different code paths are computing different lookbacks. "
+                        f"Training blocked until this is fixed."
+                    )
+            
+            # Use actual max from features for the sanity check (the truth)
+            if actual_max_from_features > lookback_budget_cap_for_budget:
+                # CRITICAL: In strict mode, this is a hard-stop (gatekeeper should have caught this)
+                policy = "strict"
+                try:
+                    from CONFIG.config_loader import get_cfg
+                    policy = get_cfg("safety.leakage_detection.policy", default="strict", config_name="safety_config")
+                except Exception:
+                    pass
+                
+                error_msg = (
+                    f"🚨 POST_GATEKEEPER sanity check FAILED: actual_max_from_features={actual_max_from_features:.1f}m > cap={lookback_budget_cap_for_budget:.1f}m. "
+                    f"Gatekeeper should have dropped features exceeding cap."
+                )
+                
+                if policy == "strict":
+                    raise RuntimeError(error_msg + " (policy: strict - training blocked)")
+                else:
+                    logger.error(error_msg + " (policy: warn - continuing with violation - NOT RECOMMENDED)")
+            else:
+                logger.info(
+                    f"✅ POST_GATEKEEPER sanity check PASSED: actual_max_from_features={actual_max_from_features:.1f}m <= cap={lookback_budget_cap_for_budget:.1f}m"
+                )
+        else:
+            logger.debug(f"📊 POST_GATEKEEPER max_lookback: {budget.max_feature_lookback_minutes:.1f}m (no cap set)")
         
         # Validate fingerprint consistency (invariant check)
         if computed_fp != post_gatekeeper_fp:
@@ -4357,6 +5012,14 @@ def evaluate_target_predictability(
                     f"This is expected if features were modified between gatekeeper and train_and_evaluate_models."
                 )
         
+        # NEW: Initialize dropped features tracker for telemetry (EARLY - before any filtering)
+        # This must happen BEFORE filter_features_for_target so sanitizer can track drops
+        from TRAINING.utils.dropped_features_tracker import DroppedFeaturesTracker
+        dropped_tracker = DroppedFeaturesTracker()
+        
+        # NEW: Track early filter drops (schema/pattern/registry) - capture before filter_features_for_target
+        all_columns_before_filter = columns_after_target_exclusions.copy() if 'columns_after_target_exclusions' in locals() else []
+        
         result = train_and_evaluate_models(
             X, y, feature_names, task_type, model_families, multi_model_config,
             target_column=target_column,
@@ -4365,7 +5028,8 @@ def evaluate_target_predictability(
             explicit_interval=explicit_interval,  # Pass explicit interval for consistency
             experiment_config=experiment_config,  # Pass experiment config
             output_dir=output_dir,  # Pass output directory for stability snapshots
-            resolved_config=resolved_config  # Pass resolved config with correct purge/embargo (post-pruning)
+            resolved_config=resolved_config,  # Pass resolved config with correct purge/embargo (post-pruning)
+            dropped_tracker=dropped_tracker  # Pass tracker for telemetry
         )
         
         if result is None or len(result) != 7:
@@ -5238,6 +5902,12 @@ def evaluate_target_predictability(
                                 metrics_with_cohort["pos_rate"] = float(pos_rate)
                     except Exception:
                         pass
+                
+                # NOTE: NaN drops are now tracked immediately after data prep (above), not here
+                
+                # NEW: Add dropped features summary to additional_data for telemetry
+                if 'dropped_tracker' in locals() and dropped_tracker is not None and not dropped_tracker.is_empty():
+                    cohort_additional_data['dropped_features'] = dropped_tracker.get_summary()
                 additional_data_with_cohort = {
                     "n_models": result.n_models,
                     "leakage_flag": result.leakage_flag,

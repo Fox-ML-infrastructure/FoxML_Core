@@ -329,17 +329,60 @@ class FeatureRegistry:
                 'description': 'Auto-inferred: REJECTED - forward return (leaky)'
             }
         
-        # Technical indicators with lookback: rsi_N, sma_N, ema_N
-        indicator_match = re.match(r"^(rsi|sma|ema|macd|bb)_(\d+)$", feature_name)
-        if indicator_match:
-            indicator_type = indicator_match.group(1)
-            lookback = int(indicator_match.group(2))
-            return {
-                'source': 'derived',
-                'lag_bars': lookback,
-                'allowed_horizons': [1, 3, 5, 12, 24, 60] if lookback > 0 else [],
-                'description': f"Auto-inferred: {indicator_type.upper()} with {lookback}-bar lookback"
-            }
+        # Technical indicators with lookback: rsi_N, sma_N, ema_N, cci_N, stoch_k_N, etc.
+        # Use comprehensive pattern matching to catch all indicator-period features
+        # Simple patterns: rsi_30, cci_30, stoch_d_21, etc.
+        simple_patterns = [
+            (r'^(stoch_d|stoch_k|williams_r)_(\d+)$', 2),
+            (r'^(rsi|cci|mfi|atr|adx|macd|bb|mom|std|var)_(\d+)$', 2),
+            (r'^(ret|sma|ema|vol)_(\d+)$', 2),
+        ]
+        for pattern, group_idx in simple_patterns:
+            match = re.match(pattern, feature_name, re.I)
+            if match:
+                lookback = int(match.group(group_idx))
+                indicator_type = match.group(1)
+                return {
+                    'source': 'derived',
+                    'lag_bars': lookback,
+                    'allowed_horizons': [1, 3, 5, 12, 24, 60] if lookback > 0 else [],
+                    'description': f"Auto-inferred: {indicator_type.upper()} with {lookback}-bar lookback"
+                }
+        
+        # Compound indicator patterns: bb_upper_20, bb_lower_20, bb_width_20, bb_percent_b_20
+        compound_patterns = [
+            (r'^bb_(upper|lower|width|percent_b|middle)_(\d+)$', 2),
+            (r'^macd_(signal|hist|diff)_(\d+)$', 2),
+            (r'^(stoch_k|stoch_d|rsi|cci|mfi|atr|adx|mom|std|var)_(fast|slow|wilder|smooth|upper|lower|width)_(\d+)$', 3),
+        ]
+        for pattern, group_idx in compound_patterns:
+            match = re.match(pattern, feature_name, re.I)
+            if match:
+                lookback = int(match.group(group_idx))
+                indicator_type = match.group(1)
+                return {
+                    'source': 'derived',
+                    'lag_bars': lookback,
+                    'allowed_horizons': [1, 3, 5, 12, 24, 60] if lookback > 0 else [],
+                    'description': f"Auto-inferred: {indicator_type.upper()} (compound) with {lookback}-bar lookback"
+                }
+        
+        # Volume/volatility features with period: volume_ema_5, realized_vol_10, etc.
+        vol_patterns = [
+            (r'^volume_(ema|sma)_(\d+)$', 2),
+            (r'^realized_vol_(\d+)$', 1),
+            (r'^vol_(ema|sma|std)_(\d+)$', 2),
+        ]
+        for pattern, group_idx in vol_patterns:
+            match = re.match(pattern, feature_name, re.I)
+            if match:
+                lookback = int(match.group(group_idx))
+                return {
+                    'source': 'derived',
+                    'lag_bars': lookback,
+                    'allowed_horizons': [1, 3, 5, 12, 24, 60] if lookback > 0 else [],
+                    'description': f"Auto-inferred: volume/volatility feature with {lookback}-bar lookback"
+                }
         
         # Time-to-hit features (leaky)
         if re.match(r"^tth_", feature_name):
