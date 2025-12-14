@@ -2076,6 +2076,16 @@ Examples:
                         if not exp_auto_targets:
                             auto_targets = False
                             logger.info(f"📋 Disabled auto_targets from experiment config (using manual targets)")
+                        # Extract max_targets_to_evaluate from experiment config (overrides base config)
+                        exp_max_targets = intel_training.get('max_targets_to_evaluate')
+                        if exp_max_targets is not None:
+                            max_targets_to_evaluate = exp_max_targets
+                            logger.info(f"📋 Using max_targets_to_evaluate={max_targets_to_evaluate} from experiment config")
+                        # Extract top_n_targets from experiment config (overrides base config)
+                        exp_top_n = intel_training.get('top_n_targets')
+                        if exp_top_n is not None:
+                            top_n_targets = exp_top_n
+                            logger.info(f"📋 Using top_n_targets={top_n_targets} from experiment config")
             except Exception as e:
                 logger.debug(f"Could not load intelligent_training from experiment config: {e}")
             
