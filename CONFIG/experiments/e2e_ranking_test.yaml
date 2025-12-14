@@ -27,15 +27,55 @@ target_ranking:
   # LOSO evaluates each symbol by training on all other symbols
   enable_loso: false
 
+# ============================================================================
+# LOOK-AHEAD BIAS FIXES CONFIGURATION (Per-Experiment Control)
+# ============================================================================
+# These flags control look-ahead bias fixes to prevent data leakage
+# All flags default to false for backward compatibility
+# Enable gradually to test impact on model performance
+safety:
+  leakage_detection:
+    lookahead_bias_fixes:
+      # Fix #1: Exclude current bar from rolling windows
+      # When enabled, adds .shift(1) before rolling operations (rolling_mean, rolling_std, etc.)
+      # This prevents features from including the current bar's price, which leaks current information
+      # Default: false (maintains current behavior for backward compatibility)
+      exclude_current_bar_from_rolling: false
+      
+      # Fix #2: Normalize inside CV loops (fit on train, transform test)
+      # When enabled, moves scaler/imputer fitting inside CV loops
+      # This prevents leaking future statistics into training (global normalization leak)
+      # Default: false (maintains current behavior for backward compatibility)
+      # NOTE: This fix requires refactoring call sites to pass train/test separately
+      normalize_inside_cv: false
+
+      # Fix #3: Verify pct_change excludes current bar
+      # When enabled, uses explicit shift for pct_change calculations to ensure current bar is excluded
+      # Default: false (maintains current behavior for backward compatibility)
+      # NOTE: Fix #1 already handles this via shifted columns, but this flag provides explicit verification
+      verify_pct_change_shift: false
+      
+      # Migration mode: controls how fixes are applied and validated
+      # - "off": All fixes disabled (current behavior, default)
+      # - "test": Enable fixes but log differences for comparison
+      # - "warn": Enable fixes and warn on discrepancies
+      # - "enforce": Enable fixes and fail on discrepancies (strict mode)
+      migration_mode: "off"  # Start with "off", then "test" to compare, then "enforce" when validated
+
 # Intelligent training settings
 intelligent_training:
   auto_targets: true
-  top_n_targets: 5
-  max_targets_to_evaluate: 23  # Limit evaluation for faster testing
+  top_n_targets: 6
+  max_targets_to_evaluate: 40  # Limit evaluation for faster testing
   auto_features: true
   top_m_features: 70
   strategy: single_task
   run_leakage_diagnostics: false
+  # Exclude target patterns (targets matching any pattern will be excluded)
+  # Patterns are matched as substrings (e.g., "will_peak" matches "y_will_peak_60m_0.8")
+  exclude_target_patterns:
+    - "will_peak"
+    - "will_valley"
 
 # Feature selection model families
 feature_selection:

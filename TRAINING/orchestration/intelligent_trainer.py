@@ -814,6 +814,40 @@ class IntelligentTrainer:
             logger.error("No targets found")
             return []
         
+        # Filter out excluded target patterns (from experiment config)
+        exclude_patterns = []
+        if self.experiment_config:
+            try:
+                import yaml
+                exp_name = self.experiment_config.name
+                exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                if exp_file.exists():
+                    with open(exp_file, 'r') as f:
+                        exp_yaml = yaml.safe_load(f) or {}
+                    intel_training = exp_yaml.get('intelligent_training', {})
+                    if intel_training:
+                        exclude_patterns = intel_training.get('exclude_target_patterns', [])
+            except Exception as e:
+                logger.debug(f"Could not load exclude_target_patterns from experiment config: {e}")
+        
+        if exclude_patterns:
+            original_count = len(targets_dict)
+            filtered_targets = {}
+            for target_name, target_config in targets_dict.items():
+                # Check if target matches any exclusion pattern
+                excluded = False
+                for pattern in exclude_patterns:
+                    if pattern in target_name:
+                        excluded = True
+                        break
+                if not excluded:
+                    filtered_targets[target_name] = target_config
+            targets_dict = filtered_targets
+            excluded_count = original_count - len(targets_dict)
+            if excluded_count > 0:
+                logger.info(f"📋 Excluded {excluded_count} targets matching patterns: {exclude_patterns}")
+                logger.info(f"📋 Remaining {len(targets_dict)} targets after exclusion")
+        
         # NEW: Build target ranking config from experiment config if available
         if target_ranking_config is None and self.experiment_config and _NEW_CONFIG_AVAILABLE:
             target_ranking_config = build_target_ranking_config(self.experiment_config)
