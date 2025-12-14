@@ -939,10 +939,17 @@ def train_and_evaluate_models(
             expected_fingerprint=current_fp,
             stage="fallback_lookback_compute"
         )
-        computed_lookback = lookback_result.max_minutes
-        top_offenders = lookback_result.top_offenders
+        # Handle dataclass return
+        if hasattr(lookback_result, 'max_minutes'):
+            computed_lookback = lookback_result.max_minutes
+            top_offenders = lookback_result.top_offenders
+            lookback_fingerprint = lookback_result.fingerprint
+        else:
+            # Tuple return (backward compatibility)
+            computed_lookback, top_offenders = lookback_result
+            lookback_fingerprint = None
         
-        # Validate fingerprint
+        # Validate fingerprint (only if we have it)
         if lookback_fingerprint and lookback_fingerprint != current_fp:
             logger.error(
                 f"🚨 FINGERPRINT MISMATCH (fallback): computed={lookback_fingerprint} != expected={current_fp}"
