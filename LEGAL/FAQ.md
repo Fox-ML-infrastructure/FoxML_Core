@@ -24,9 +24,7 @@
 
 ### Q: Can I use the Software for internal evaluation or proof of concept?
 
-**A:** Organizations may evaluate the Software for up to 30 days from initial download for testing and evaluation purposes without a paid license (see `COMMERCIAL_LICENSE.md` Section 2). Continued use after the 30-day evaluation period requires a commercial license.
-
-If you are a business, organization, or institution, you need a commercial license for any organizational use beyond the evaluation period.
+**A:** Business evaluation requires a paid Pilot. No exceptions. If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot ($35k–$75k, credited 100% to Year 1 if converted within 60 days). Academic labs may request a $0 evaluation pilot in writing (subject to approval, non-commercial research only).
 
 ---
 
@@ -152,6 +150,70 @@ See `COMMERCIAL_LICENSE.md` Section 4 ("Reverse Engineering") for complete detai
 ### Q: How do I contact you for licensing questions?
 
 **A:** Email jenn.lewis5789@gmail.com with your inquiry. For physical mail, you must first send an email notification (see `COMMERCIAL_LICENSE.md` Section 24 for complete notice requirements).
+
+---
+
+## Business License Decision Tree
+
+**Q: Does my hedge fund backtest count?**  
+A: Yes. Any use by or for a business requires a commercial license.
+
+**Q: I'm a freelancer doing client work. Do I need a license?**  
+A: Yes. Use for client work is business use, not personal use.
+
+**Q: I'm evaluating it for my company. Is that free?**  
+A: You have 30 days for evaluation. After that, commercial license required.
+
+**Q: I'm a student doing research. Is that free?**  
+A: Only if at a qualifying tax-exempt institution AND research is non-commercial (see LICENSE for full definition).
+
+**Q: I'm a sole proprietor. Is that personal use?**  
+A: No. Sole proprietors using Software for business operations require a commercial license.
+
+---
+
+## Common Excuses (Pre-empted)
+
+**"It's just research."**  
+→ If done by or for an organization, commercial license required.
+
+**"It's internal only."**  
+→ Internal organizational use requires a commercial license.
+
+**"We're not selling it."**  
+→ Revenue generation is not required. Organizational use = commercial license.
+
+**"It's for evaluation."**  
+→ Business evaluation requires a paid Pilot. If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot.
+
+**"It's experimental/non-production."**  
+→ Environment label doesn't matter. Organizational use = commercial license.
+
+**"I'm a contractor, not an employee."**  
+→ Use for client work or in scope of work = commercial license required.
+
+**"I'm using it personally, not for work."**  
+→ If you're a natural person acting solely on your own behalf for non-commercial purposes, that's free. If it's connected to any business activity, commercial license required.
+
+## Common Pressure Tactics (Handled)
+
+**"This should be open source / community-owned."**  
+→ FoxML Core is source-available: free for personal use. Organizational use requires a paid license (including evaluation). This keeps the project sustainable and enables continued development.
+
+**"We can't pay until you prove traction."**  
+→ If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot. If not, no problem.
+
+**"We'll 'evaluate' first" (for months).**  
+→ Business evaluation requires a paid Pilot. No exceptions. If you're a legal entity, you need a license.
+
+**"Your pricing is insane."**  
+→ Commercial licensing is per team/desk and starts in the six figures annually. Fees are specified in Ordering Documents. See `COMMERCIAL.md` for pricing and packages.
+
+**"We'll build it ourselves / fork it."**  
+→ You're free to build your own. You can't use FoxML Core in production without a license. Organizational use requires a paid license regardless of whether you fork the code.
+
+**"If you charge, you won't get adoption."**  
+→ FoxML Core is source-available: free for personal use. Organizational use requires a paid license (including evaluation). This keeps the project sustainable and enables continued development.
 
 ---
 

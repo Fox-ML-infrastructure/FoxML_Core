@@ -2,18 +2,27 @@
 
 ## License
 
-**FoxML Core is source-available.**
+**FoxML Core is source-available. Free for personal use, paid for business.**
 
-- ✅ **Free for:** Personal use and non-commercial academic research (see `LICENSE` for full definition)
+- ✅ **Free for:** Natural persons using Software for personal, non-commercial purposes
 - 💰 **Paid license required for:** Any organizational, institutional, or commercial use
 
-**If an organization uses this, they need a license.**
+**Hard rule:** If you are not a natural person acting solely on your own behalf, you need a business license.
+
+**Examples requiring a commercial license:**
+- Any use by or for a company, university, lab, or organization
+- Freelancers/contractors using it for client work
+- Sole proprietors using it for business operations
+- Employees using it in the scope of their work
+- Any evaluation, pilot, or PoC done by an organization (after 30-day trial)
 
 📧 **jenn.lewis5789@gmail.com** | Subject: `FoxML Core Commercial Licensing`
 
-Commercial licenses typically start in the low five figures annually. All commercial licensing begins with a paid pilot.
+**Business use requires a paid license.** Commercial licensing is per team/desk and starts in the six figures annually. Paid pilot required for organizational evaluation.
 
-**See [`LICENSE`](LICENSE) for full terms.**
+**FoxML Core is source-available: free for personal use. Organizational use requires a paid license (including evaluation). This keeps the project sustainable and enables continued development.**
+
+**→ [Commercial Licensing](COMMERCIAL.md)** | **→ [Free Use Terms](LICENSE)** | **→ [Commercial License](COMMERCIAL_LICENSE.md)**
 
 ---
 
@@ -45,7 +54,7 @@ Commercial licenses typically start in the low five figures annually. All commer
 
 📧 **jenn.lewis5789@gmail.com** | Subject: `FoxML Core Commercial Licensing`
 
-**Commercial licenses typically start in the low five figures annually.** All commercial licensing begins with a paid pilot. See [`LEGAL/SUBSCRIPTIONS.md`](LEGAL/SUBSCRIPTIONS.md) for details.
+**Business use requires a paid license.** Commercial licensing is offered via paid Pilot + Annual License. Typical deployments are enterprise engagements with onboarding, integration support, and maintained release access. Fees are specified in Ordering Documents. See [`LEGAL/SUBSCRIPTIONS.md`](LEGAL/SUBSCRIPTIONS.md) for details.
 
 ---
 

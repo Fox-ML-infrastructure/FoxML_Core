@@ -24,7 +24,7 @@ Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 
 📧 **jenn.lewis5789@gmail.com** | Subject: `FoxML Core Commercial Licensing`
 
-**Commercial licenses typically start in the low five figures annually.** All commercial licensing begins with a paid pilot. See `LEGAL/SUBSCRIPTIONS.md` for details.
+**Commercial licensing is per team/desk and starts in the six figures annually. Paid pilot required for organizational evaluation.** Fees are specified in Ordering Documents. See `COMMERCIAL.md` for pricing and packages. See `LEGAL/SUBSCRIPTIONS.md` for details.
 
 ---
 
@@ -77,31 +77,39 @@ This License covers the use case(s) and scope specified in the Ordering Document
 
 ## 2. GRANT OF LICENSE
 
-**Evaluation License (30-Day Trial Period).**
+**Evaluation License (Paid Pilot Required).**
 
-Notwithstanding the foregoing, Licensor grants Licensee a temporary, royalty-free, non-exclusive license to use the Software for Internal Commercial Use solely for the purpose of evaluation and testing for a period of thirty (30) days from the initial download or first use of the Software ("Evaluation Period"). 
+**Business evaluation requires a paid Pilot. No exceptions.** Organizations may not evaluate the Software without executing a Pilot Order Form and paying applicable Pilot fees.
 
-During the Evaluation Period, Licensee may:
+**If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot. If not, no problem.**
+
+**Exception:** Tax-exempt academic research institutions may request a $0 evaluation pilot by contacting Licensor in writing. Such requests are subject to Licensor's approval and must demonstrate qualifying non-commercial academic research use as defined in `LICENSE`. This exception is limited to non-commercial academic research only.
+
+**Pilot License:**
+Upon execution of a Pilot Order Form and payment of Pilot fees, Licensor grants Licensee a temporary, non-exclusive license to use the Software for Internal Commercial Use solely for the purpose of evaluation and testing for the period specified in the Pilot Order Form (typically 4–6 weeks).
+
+During the Pilot Period, Licensee may:
 - Use the Software for internal evaluation, testing, and proof-of-concept purposes
 - Deploy the Software in development, testing, or staging environments
 - Evaluate the Software's functionality, performance, and suitability for Licensee's business needs
+- Receive Pilot deliverables as specified in the Pilot Order Form (e.g., installation support, integration plan, reproducibility baseline, leakage safety verification)
 
-**Evaluation Period Limitations:**
-- The Evaluation Period is limited to thirty (30) days from initial download or first use
-- Use during the Evaluation Period is limited to evaluation and testing purposes only
-- Production use, revenue-generating activities, or use beyond the Evaluation Period requires a paid Commercial License
-- The Evaluation License does not include support, maintenance, or updates beyond what is publicly available
-- Licensee must comply with all other terms of this License (including restrictions in Section 4) during the Evaluation Period
+**Pilot Period Limitations:**
+- The Pilot Period is limited to the duration specified in the Pilot Order Form
+- Use during the Pilot Period is limited to evaluation and testing purposes only
+- Production use, revenue-generating activities, or use beyond the Pilot Period requires a paid Commercial License
+- Pilot fees are non-refundable but credited 100% toward the first-year Annual License if converted within 60 days of Pilot completion
+- Licensee must comply with all other terms of this License (including restrictions in Section 4) during the Pilot Period
 
 **Transition to Paid License:**
-If Licensee continues to use the Software after the Evaluation Period, Licensee must execute a Commercial License and pay applicable fees. Continued use after the Evaluation Period without a valid Commercial License constitutes unlicensed use and may result in copyright infringement claims and liability for retroactive licensing fees.
+If Licensee continues to use the Software after the Pilot Period, Licensee must execute an Annual License and pay applicable fees. Continued use after the Pilot Period without a valid Commercial License constitutes unlicensed use and may result in copyright infringement claims and liability for retroactive licensing fees.
 
 **Commercial License (After Evaluation Period).**
 
 Subject to payment of applicable fees and execution of a commercial agreement, the Licensor grants the Licensee a non-exclusive, non-transferable, non-sublicensable, worldwide right to:
 
 - Use the Software for Commercial Use
-- Modify the Software for internal commercial use (subject to the restrictions in Section 4), provided that: (i) modifications are limited to configuration, integration, and interface layers, (ii) Licensee may NOT modify the core functionality, algorithms, or architecture of the Software, and (iii) any modifications that alter core functionality require Licensor's prior written consent
+- Modify the Software for internal commercial use (subject to the restrictions in Section 4), provided that: (i) modifications must remain for Licensee's internal use only and may not be redistributed, (ii) Licensee may not publicly redistribute or publish modified versions of the Software's core functionality, algorithms, or architecture, and (iii) any modifications that Licensee wishes to redistribute publicly require Licensor's prior written consent
 - Deploy the Software internally
 - Integrate the Software into proprietary systems, stacks, or workflows
 - Use the Software solely for use by Authorized Users, up to the limits set forth in the applicable Ordering Documents
@@ -144,9 +152,11 @@ The Software is licensed, not sold. As between Licensor and Licensee, Licensor r
 
 **Licensee Developments.**
 
-"Licensee Developments" means Licensee's own configurations, scripts, glue code, and integrations that interface with the Software but do not include any portion of the Software's source code other than code that Licensee is expressly permitted to modify under this License.
+"Licensee Developments" means Licensee's own configurations, scripts, glue code, integrations, and modifications to the Software that interface with or extend the Software but do not include the Software's core source code as originally provided by Licensor.
 
-For clarity, Licensee Developments do not include: (i) modifications to the Software itself, or (ii) any work that would be considered a derivative work of the Software under applicable copyright law. All such modifications and derivative works are owned by Licensor and are licensed back to Licensee only as part of the Software under this License.
+Licensee owns all right, title, and interest in and to Licensee Developments. However, Licensee grants Licensor a non-exclusive, perpetual, irrevocable, worldwide, royalty-free license to use, modify, and incorporate any Licensee Developments (including modifications to the Software) that Licensee makes publicly available or distributes to third parties, without any obligation to Licensee.
+
+For clarity, Licensee retains ownership of modifications made for internal use only. The Software itself and all intellectual property rights therein remain the exclusive property of Licensor.
 
 **Feedback License.** Licensee grants Licensor a non-exclusive, perpetual, irrevocable, worldwide, royalty-free license to use, modify, and incorporate any feedback, suggestions, error reports, or improvements provided by Licensee regarding the Software, without any obligation to Licensee and without giving Licensee ownership of any improvements or modifications made by Licensor.
 
@@ -188,9 +198,7 @@ Licensee retains all ownership rights to data that Licensee inputs into the Soft
 
 Licensee shall not publish or disclose to any third party any benchmark, performance, or comparison tests of the Software without Licensor's prior written consent.
 
-Any breach of this Section 4.1 shall be deemed a Material Breach (as defined in Section 1) of this License and may cause irreparable harm to Licensor, for which monetary damages may be an insufficient remedy. In addition to any other rights and remedies, Licensor shall be entitled to seek injunctive or other equitable relief to prevent or curtail any actual or threatened breach of this Section 4.1.
-
-A Material Breach of Section 4.1 (Benchmarking) shall be grounds for immediate termination by Licensor upon written notice, without a cure period.
+Any breach of this Section 4.1 shall be deemed a Material Breach (as defined in Section 1) of this License. Licensor may seek appropriate remedies for such breach, including but not limited to termination of this License in accordance with Section 5.
 
 ## 5. TERM AND TERMINATION
 
@@ -274,11 +282,11 @@ All versions of the Software (including older versions, legacy versions, and any
 
 Commercial licensing fees are based on the using team/desk size (number of users and environments), usage tier, and selected add-ons.
 
-**Pilot Requirement:** All commercial licensing begins with a paid pilot. Pilot fees are non-refundable but credited toward the first-year annual license upon conversion.
+**Pilot Requirement:** All commercial licensing begins with a paid pilot. Pilot fees are non-refundable but credited 100% toward the first-year annual license if converted within 60 days of Pilot completion.
 
-**Commercial licenses typically start in the low five figures annually, depending on team size and deployment scope.**
+**Fees are set forth in Ordering Documents and are based on team size, deployment scope, and selected services.**
 
-For detailed pricing information, please contact the maintainer:
+For commercial licensing inquiries, please contact:
 
 📧 **jenn.lewis5789@gmail.com**  
 🔗 [LinkedIn](https://www.linkedin.com/in/jennifer-l-3434b3315)
@@ -392,7 +400,7 @@ Licensee agrees to maintain the confidentiality of:
 - Any other information designated as confidential by Licensor
 
 **Pricing Confidentiality.**
-Licensee agrees not to disclose, share, or publish any pricing, fee, or licensing terms to any third party without Licensor's prior written consent. Disclosure of pricing information to competitors, potential customers, or any third party may constitute a Material Breach. Licensee may share pricing information only with its own employees, contractors, or advisors who have a legitimate need to know and who are bound by confidentiality obligations.
+Licensee agrees not to disclose, share, or publish any pricing, fee, or licensing terms to any third party without Licensor's prior written consent. Licensee may share pricing information with its own employees, contractors, or advisors who have a legitimate need to know and who are bound by confidentiality obligations. Unauthorized disclosure of pricing information to competitors or potential customers may constitute a Material Breach.
 
 **Security Requirements:**
 Licensee must implement technical and administrative safeguards to protect the Software and prevent unauthorized access, use, or disclosure. Such safeguards must include, at minimum: (i) access controls limiting Software access to Authorized Users only, (ii) secure storage of Software and related credentials, and (iii) measures to prevent unauthorized copying or distribution. Licensee's failure to implement and maintain such safeguards constitutes a Material Breach.
@@ -429,9 +437,9 @@ Email: jenn.lewis5789@gmail.com
 Subject: Fox Infrastructure Licensing Inquiry
 
 **IMPORTANT — Physical Mail Requirements:**
-- **Email notification required first:** Before sending any physical mail (including certified mail, overnight courier, or any other physical delivery method) to Licensor, the sending party MUST first send an email to licensing@foxml.io with the subject line "Physical Mail Notification" describing the nature of the physical mail and the expected delivery date. Physical mail sent without prior email notification will not be deemed received and will not satisfy any notice requirements under this License.
+- **Email notification required first:** Before sending any physical mail (including certified mail, overnight courier, or any other physical delivery method) to Licensor, the sending party MUST first send an email to jenn.lewis5789@gmail.com with the subject line "Physical Mail Notification" describing the nature of the physical mail and the expected delivery date. Physical mail sent without prior email notification will not be deemed received and will not satisfy any notice requirements under this License.
 - **Registered Agent address prohibited:** Do NOT send mail to any registered agent address or corporate filing address. Mail sent to registered agent addresses will not be accepted and will not be deemed received.
-- **Physical mail address:** Physical mail (if required after email notification) should be sent only to an address that Licensor designates in writing after receiving the email notification. Contact licensing@foxml.io to obtain the appropriate physical mailing address.
+- **Physical mail address:** Physical mail (if required after email notification) should be sent only to an address that Licensor designates in writing after receiving the email notification. Contact jenn.lewis5789@gmail.com to obtain the appropriate physical mailing address.
 
 **To Licensee:**
 The address specified in the Ordering Documents or as otherwise provided by Licensee in writing.

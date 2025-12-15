@@ -165,7 +165,7 @@ Enterprise add-ons are available with defined scope and boundaries:
    - Payment information
    - Commercial License Agreement (CLA) for signature
 
-**Note:** Pilot fees are non-refundable but credited toward the first-year annual license upon conversion.
+**Note:** Pilot fees are non-refundable but credited 100% toward the first-year annual license if converted within 60 days of Pilot completion.
 
 ### 5.2 After Purchase
 

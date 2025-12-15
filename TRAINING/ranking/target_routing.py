@@ -56,10 +56,24 @@ def _compute_target_routing_decisions(
     
     routing_decisions = {}
     
-    # Process each cross-sectional result
+    # Collect all target names (from both CS results and symbol-specific results)
+    # This ensures we process targets even if CS failed but symbol-specific succeeded
+    all_target_names = set()
     for result_cs in results_cs:
-        target_name = result_cs.target_name
-        cs_auc = result_cs.mean_score
+        all_target_names.add(result_cs.target_name)
+    for target_name in results_sym.keys():
+        all_target_names.add(target_name)
+    
+    # Process each target (whether it has CS results or not)
+    for target_name in all_target_names:
+        # Find cross-sectional result if it exists
+        result_cs = None
+        cs_auc = -999.0  # Default to failed score
+        for r in results_cs:
+            if r.target_name == target_name:
+                result_cs = r
+                cs_auc = r.mean_score
+                break
         
         # Get symbol-specific results for this target
         sym_results = results_sym.get(target_name, {})
@@ -89,8 +103,26 @@ def _compute_target_routing_decisions(
             frac_symbols_good = 0.0
             winner_symbols = []
         
+        # Handle case where CS failed (cs_auc = -999.0 or result_cs is None)
+        if result_cs is None or cs_auc == -999.0:
+            # CS failed - check if symbol-specific works
+            if symbol_aucs and max(symbol_aucs) >= T_sym:
+                route = "SYMBOL_SPECIFIC"
+                reason = f"cs_failed (mean_score=-999.0) BUT exists symbol with auc >= {T_sym}"
+                winner_symbols_str = ', '.join(winner_symbols[:5])
+                if len(winner_symbols) > 5:
+                    winner_symbols_str += f", ... ({len(winner_symbols)} total)"
+                reason += f" (winners: {winner_symbols_str})"
+            else:
+                # CS failed and no good symbol-specific results
+                route = "BLOCKED"
+                if symbol_aucs:
+                    reason = f"cs_failed AND max_symbol_auc={max(symbol_aucs):.3f} < {T_sym} (no viable route)"
+                else:
+                    reason = f"cs_failed AND no symbol-specific results (no viable route)"
+        
         # Check for suspicious scores (BLOCKED)
-        if cs_auc >= T_suspicious_cs or (symbol_aucs and max(symbol_aucs) >= T_suspicious_sym):
+        elif cs_auc >= T_suspicious_cs or (symbol_aucs and max(symbol_aucs) >= T_suspicious_sym):
             route = "BLOCKED"
             reason = f"cs_auc={cs_auc:.3f} >= {T_suspicious_cs}" if cs_auc >= T_suspicious_cs else \
                     f"max_symbol_auc={max(symbol_aucs):.3f} >= {T_suspicious_sym}"

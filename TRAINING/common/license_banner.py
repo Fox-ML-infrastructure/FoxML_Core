@@ -48,8 +48,8 @@ def print_license_banner(suppress: bool = False):
         suppress: If True, skip printing the banner (useful for testing or if disabled via config)
     
     The banner includes:
-    - License type (AGPL-3.0)
-    - Commercial use requirements
+    - License type (source-available, free for personal use)
+    - Commercial use requirements (paid pilot required for orgs)
     - Links to legal documentation
     - Contact information for enterprise licensing
     """
@@ -79,40 +79,37 @@ def print_license_banner(suppress: bool = False):
         "",
         "⚠️  BUSINESS USE REQUIRES A COMMERCIAL LICENSE",
         "",
-        "This software is licensed under AGPL-3.0 for personal/academic use.",
-        "Organizations using this software in production or revenue-generating",
-        "environments require a commercial license.",
+        "FoxML Core is source-available: free for personal use.",
+        "Organizational use requires a paid license (including evaluation).",
         "",
         "💰 COMMERCIAL LICENSING:",
-        "Commercial licenses typically start in the low five figures annually,",
-        "depending on team size and deployment scope.",
+        "Commercial licensing is per team/desk and starts in the six",
+        "figures annually. Paid pilot required for organizational evaluation.",
         "",
-        "All commercial licensing begins with a paid pilot. Pilot options and",
-        "annual license tiers are available based on your team size, deployment",
-        "requirements, and usage needs.",
+        "Business evaluation requires a paid Pilot. No exceptions.",
+        "If you're a legal entity, you need a license. If you want to",
+        "evaluate, it's a paid pilot ($35k–$75k, credited 100% to Year 1",
+        "if converted within 60 days).",
         "",
-        "For pricing information, please contact the maintainer:",
+        "For pricing and packages, see COMMERCIAL.md",
+        "For commercial licensing inquiries:",
         "  📧 " + _CONTACT_EMAIL,
         "",
         "Licensing is scoped to the business unit/desk and the authorized",
         "users/environments operating the software, not the parent company's",
         "total headcount.",
         "",
-        "📅 30-DAY EVALUATION PERIOD:",
-        "Commercial organizations may evaluate this software for up to 30 days",
-        "from initial download for testing and evaluation purposes. Continued",
-        "use after the evaluation period requires a commercial license.",
-        "",
         "📄 License: See LICENSE file in repository root",
-        "📋 Commercial Terms: LEGAL/SUBSCRIPTIONS.md",
+        "💰 Commercial Pricing: COMMERCIAL.md",
+        "📋 Commercial Terms: COMMERCIAL_LICENSE.md",
         "📚 Legal Documentation: LEGAL/README.md",
         "📧 Enterprise Licensing: " + _CONTACT_EMAIL,
         "",
         "For complete licensing information, see:",
-        "  - LEGAL/SUBSCRIPTIONS.md (pricing and commercial terms)",
-        "  - LEGAL/LICENSING.md (license details)",
-        "  - LEGAL/COMMERCIAL_USE.md (commercial use guidelines)",
+        "  - COMMERCIAL.md (pricing and packages)",
+        "  - LICENSE (free use terms)",
         "  - COMMERCIAL_LICENSE.md (commercial license terms)",
+        "  - LEGAL/COMMERCIAL_USE.md (commercial use guidelines)",
         "",
         "=" * 60,
         ""

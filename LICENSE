@@ -1,5 +1,6 @@
 FOX ML INFRASTRUCTURE — SOURCE-AVAILABLE LICENSE
-Copyright (c) 2025-2026 Fox ML Infrastructure LLC
+SPDX-License-Identifier: LicenseRef-FoxML-Source-Available-1.0
+SPDX-FileCopyrightText: Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 
 This license governs your use of FoxML Core ("Software"). Source code is 
 publicly available for inspection and study, but organizational use requires 
@@ -8,6 +9,17 @@ a paid commercial license.
 **"Organization" means any legal entity, including but not limited to 
 companies, universities, research labs, non-profits, government entities, 
 and any subdivision or department thereof.**
+
+**Notwithstanding the definition of Organization above, a limited exception 
+is granted for Non-Commercial Academic Research as defined in Section 2 below.**
+
+**HARD RULE: If you are not a natural person acting solely on your own behalf, you need a business license.**
+
+This means:
+- ✅ Natural person using Software for personal, non-commercial purposes → Free
+- ❌ Natural person using Software for any business, client work, or organizational purpose → Commercial license required
+- ❌ Any legal entity (LLC, corporation, partnership, etc.) → Commercial license required
+- ❌ Employee, contractor, or agent acting for an organization → Commercial license required
 
 ---
 
@@ -29,8 +41,7 @@ To obtain a commercial license, contact:
 📧 jenn.lewis5789@gmail.com
 Subject: FoxML Core Commercial Licensing
 
-Commercial licenses typically start in the low five figures annually. All 
-commercial licensing begins with a paid pilot.
+Fees are set forth in Ordering Documents. A paid Pilot is required for all commercial licensing.
 
 ---
 
@@ -38,10 +49,18 @@ commercial licensing begins with a paid pilot.
 
 You may use the Software for free ONLY if:
 
-1. **Personal Use**: Individual use in your personal capacity (not as an 
-   employee, contractor, or agent of any business, organization, or entity; 
-   not for the benefit of any third party; and not in connection with any 
-   commercial activity).
+1. **Personal Use**: Individual use in your personal capacity where:
+   - You are a natural person acting solely on your own behalf
+   - You are NOT using it as an employee, contractor, or agent of any business, organization, or entity
+   - You are NOT using it for the benefit of any third party (including clients, employers, or business partners)
+   - You are NOT using it in connection with any commercial activity (including but not limited to: revenue generation, trading, client delivery, internal operations, fundraising, sponsorship, paid grants, patenting, proprietary datasets/models, or any activity that supports or relates to business operations)
+   - You are NOT a sole proprietor, freelancer, or independent contractor using it for client work or business operations
+   
+   **Explicitly NOT personal use:**
+   - Any use by freelancers, contractors, or consultants for client work
+   - Any use by sole proprietors for business operations
+   - Any "personal" project that supports or relates to business activities
+   - Any use that could reasonably be considered business-related, even if labeled "personal" or "experimental"
 
 2. **Non-Commercial Academic Research**: Use by degree-granting educational 
    or non-profit research institutions that are:
@@ -69,12 +88,32 @@ You may use the Software for free ONLY if:
 
 You may NOT:
 - Use the Software for organizational purposes without a commercial license
-- Redistribute or sell the Software as a standalone product (redistribution 
-  is permitted for personal or non-commercial academic purposes, provided 
-  this license is preserved and no organizational use occurs)
+- Redistribute or sell the Software as a standalone product
+  
+  **Redistribution is permitted ONLY for personal or non-commercial academic 
+  purposes, subject to the following conditions:**
+  - You may create forks or modified versions for personal or non-commercial 
+    academic use
+  - You may publish modified versions for personal or non-commercial academic 
+    purposes, provided this license is preserved in full
+  - You may redistribute source code or binaries, provided this license is 
+    preserved in full
+  - **Redistribution does NOT grant recipients any organizational rights or 
+    commercial use rights**
+  - Recipients must comply with this license independently
+  - Any redistribution to an organization (even if labeled "for evaluation") 
+    constitutes unauthorized organizational use unless the recipient has a 
+    valid commercial license
 - Provide the Software as a hosted service (SaaS/PaaS) without explicit 
   written permission
-- Build competing infrastructure services using the Software
+- Build, market, or operate a substantially similar ML training, telemetry, 
+  reproducibility, or cross-sectional infrastructure platform intended for 
+  commercial use that competes with the Software (a "Competing Infrastructure 
+  Service"). For clarity, using the Software internally for your own trading, 
+  research, or analytics does not constitute a Competing Infrastructure 
+  Service. A Competing Infrastructure Service is a product or service whose 
+  primary purpose is to allow third parties to design, run, or manage their 
+  own ML workflows, experiments, or infrastructure.
 - Remove or alter copyright notices
 
 ---
@@ -99,12 +138,63 @@ DEALINGS IN THE SOFTWARE.
 
 ---
 
+## TERMINATION
+
+Your rights under this license terminate automatically if you violate any 
+term of this license. Upon termination:
+- You must immediately cease all use of the Software
+- You must destroy all copies of the Software in your possession or control
+- All rights granted to you under this license revert to Licensor
+
+Termination does not affect the rights of third parties who received the 
+Software from you in compliance with this license.
+
+---
+
 ## ENFORCEMENT
 
 Unauthorized organizational use of the Software without a valid commercial 
 license constitutes copyright infringement. Licensor reserves all rights and 
 remedies available under copyright law, including injunctive relief, 
 monetary damages, and recovery of attorneys' fees and costs.
+
+---
+
+## GOVERNING LAW AND JURISDICTION
+
+This license is governed by the laws of the State of Delaware, United States, 
+without regard to conflicts of law principles. The United Nations Convention 
+on Contracts for the International Sale of Goods does not apply.
+
+Any disputes arising out of or relating to this license shall be resolved 
+exclusively in the state or federal courts located in Delaware, and you 
+consent to the exclusive jurisdiction and venue of such courts.
+
+---
+
+## SEVERABILITY
+
+If any provision of this license is held to be invalid, illegal, or 
+unenforceable by a court of competent jurisdiction, the remaining provisions 
+shall remain in full force and effect. The invalid, illegal, or unenforceable 
+provision shall be replaced with a valid, legal, and enforceable provision 
+that comes closest to the intent of the original provision.
+
+---
+
+## ENTIRE AGREEMENT
+
+This license constitutes the entire agreement between you and Licensor 
+regarding the Software and supersedes all prior or contemporaneous agreements, 
+understandings, negotiations, and discussions, whether oral or written.
+
+---
+
+## NO WAIVER
+
+No failure or delay by Licensor in exercising any right or remedy under this 
+license shall constitute a waiver of such right or remedy. No waiver of any 
+term of this license shall be effective unless in writing and signed by Licensor.
 
 ---
 
