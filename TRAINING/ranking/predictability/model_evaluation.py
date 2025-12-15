@@ -3333,7 +3333,27 @@ def train_and_evaluate_models(
                 _compute_and_store_metrics('catboost', model, X, y, primary_score, task_type)
                 
                 # CatBoost requires training dataset to compute feature importance
-                importance = model.get_feature_importance(data=X, type='PredictionValuesChange')
+                # FIX: For GPU wrapper, need to access base_model and handle Pool conversion
+                if hasattr(model, 'base_model'):
+                    # Wrapper model - use base model
+                    # For GPU mode, convert X to Pool if needed
+                    if use_gpu and isinstance(X, np.ndarray):
+                        importance_data = Pool(data=X, cat_features=model.cat_features)
+                    else:
+                        importance_data = X
+                    importance = model.base_model.get_feature_importance(data=importance_data, type='PredictionValuesChange')
+                else:
+                    # Direct model (CPU mode)
+                    importance = model.get_feature_importance(data=X, type='PredictionValuesChange')
+                
+                # Store all feature importances for detailed export (same pattern as other models)
+                # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+                if len(importance) > 0:
+                    importance_series = pd.Series(importance, index=feature_names[:len(importance)] if len(importance) <= len(feature_names) else feature_names)
+                    # Reindex to match exact feature_names order (fills missing with 0.0)
+                    importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+                    importance_dict = importance_series.to_dict()
+                    all_feature_importances['catboost'] = importance_dict
             else:
                 importance = np.array([])
             if len(importance) > 0:
