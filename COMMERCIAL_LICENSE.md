@@ -24,7 +24,7 @@ Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 
 📧 **jenn.lewis5789@gmail.com** | Subject: `FoxML Core Commercial Licensing`
 
-**Commercial licensing is per team/desk and starts in the six figures annually. Paid pilot required for organizational evaluation.** Fees are specified in Ordering Documents. See `COMMERCIAL.md` for pricing and packages. See `LEGAL/SUBSCRIPTIONS.md` for details.
+**Commercial licensing is per team/desk and starts in the six figures annually. Paid pilot required for organizational evaluation.** Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages. See `LEGAL/SUBSCRIPTIONS.md` for details.
 
 ---
 
@@ -420,7 +420,7 @@ If any provision of this License is held to be invalid, illegal, or unenforceabl
 This License, together with any separate signed commercial agreement or Statement of Work, constitutes the entire agreement between the parties regarding the subject matter hereof and supersedes all prior or contemporaneous agreements, understandings, negotiations, and discussions, whether oral or written, relating to the Software. No modification, amendment, or waiver of any provision of this License shall be effective unless in writing and signed by both parties.
 
 **Document Hierarchy and Conflicts.**
-This Commercial License (`COMMERCIAL_LICENSE.md`) is the authoritative and controlling document for all commercial licensing terms, definitions, and obligations. In the event of any conflict, contradiction, or inconsistency between this Commercial License and any other document (including but not limited to: `LEGAL/CLA.md`, `DUAL_LICENSE.md`, `LEGAL/SUBSCRIPTIONS.md`, `LEGAL/COMMERCIAL_USE.md`, `LEGAL/LICENSE_ENFORCEMENT.md`, or any other documentation), the terms of this Commercial License shall control and prevail. All definitions, restrictions, and obligations set forth in this Commercial License are binding, and any conflicting statements in other documents are superseded by this License. For the avoidance of doubt, Ordering Documents (as defined in Section 1) may supplement but may not contradict the terms of this License, except as explicitly permitted herein (e.g., regarding fees as set forth in Section 10).
+This Commercial License (`COMMERCIAL_LICENSE.md`) is the authoritative and controlling document for all commercial licensing terms, definitions, and obligations. In the event of any conflict, contradiction, or inconsistency between this Commercial License and any other document (including but not limited to: `LEGAL/CLA.md`, `DOCS/02_reference/licensing/DUAL_LICENSE.md`, `LEGAL/SUBSCRIPTIONS.md`, `LEGAL/COMMERCIAL_USE.md`, `LEGAL/LICENSE_ENFORCEMENT.md`, or any other documentation), the terms of this Commercial License shall control and prevail. All definitions, restrictions, and obligations set forth in this Commercial License are binding, and any conflicting statements in other documents are superseded by this License. For the avoidance of doubt, Ordering Documents (as defined in Section 1) may supplement but may not contradict the terms of this License, except as explicitly permitted herein (e.g., regarding fees as set forth in Section 10).
 
 ## 23. SURVIVAL
 

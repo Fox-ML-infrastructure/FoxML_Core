@@ -2,7 +2,7 @@
 
 This folder contains all files required for the Alpaca paper trading service.
 
-> **Note**: For a comprehensive comparison of ALPACA_trading and IBKR_trading modules, see the main [TRADING_MODULES.md](../TRADING_MODULES.md) documentation.
+> **Note**: For a comprehensive comparison of ALPACA_trading and IBKR_trading modules, see the main [TRADING_MODULES.md](../DOCS/02_reference/trading/TRADING_MODULES.md) documentation.
 
 ## Structure
 

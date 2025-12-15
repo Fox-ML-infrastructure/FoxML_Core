@@ -19,4 +19,4 @@ All documentation has been moved to the DOCS folder:
 
 ## Status
 
-⚠️ **Highly Experimental** - These features are under active testing. See [TESTING_NOTICE.md](../../TESTING_NOTICE.md) for details.
+⚠️ **Highly Experimental** - These features are under active testing. See [TESTING_NOTICE.md](../../../DOCS/02_reference/testing/TESTING_NOTICE.md) for details.

@@ -8,7 +8,7 @@ FoxML Core includes two trading modules:
 - **ALPACA_trading**: Paper trading and backtesting framework
 - **IBKR_trading**: Production live trading system for Interactive Brokers
 
-For a comprehensive overview and comparison, see [TRADING_MODULES.md](../../TRADING_MODULES.md).
+For a comprehensive overview and comparison, see [TRADING_MODULES.md](TRADING_MODULES.md).
 
 ## Directory Structure
 
@@ -39,7 +39,7 @@ For detailed technical documentation, see:
 
 ## Related Documentation
 
-- [Trading Modules Overview](../../TRADING_MODULES.md) - Complete guide to both modules
+- [Trading Modules Overview](TRADING_MODULES.md) - Complete guide to both modules
 - [IBKR Trading README](../../../IBKR_trading/README.md) - Module-specific README
 - [ALPACA Trading README](../../../ALPACA_trading/README.md) - Module-specific README
 

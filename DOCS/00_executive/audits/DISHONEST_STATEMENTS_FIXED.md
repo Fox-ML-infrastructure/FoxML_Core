@@ -8,7 +8,7 @@
 
 **Problem**: 
 - README says "cross-sectional training fully implemented"
-- But `TESTING_NOTICE.md` says "Training Routing System - Currently being tested"
+- But `DOCS/02_reference/testing/TESTING_NOTICE.md` says "Training Routing System - Currently being tested"
 - Contradiction: Can't be both "fully implemented" and "under testing"
 
 **Fix**: 

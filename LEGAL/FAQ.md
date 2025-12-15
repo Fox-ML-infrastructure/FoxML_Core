@@ -207,7 +207,7 @@ A: No. Sole proprietors using Software for business operations require a commerc
 → Business evaluation requires a paid Pilot. No exceptions. If you're a legal entity, you need a license.
 
 **"Your pricing is insane."**  
-→ Commercial licensing is per team/desk and starts in the six figures annually. Fees are specified in Ordering Documents. See `COMMERCIAL.md` for pricing and packages.
+→ Commercial licensing is per team/desk and starts in the six figures annually. Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages.
 
 **"We'll build it ourselves / fork it."**  
 → You're free to build your own. You can't use FoxML Core in production without a license. Organizational use requires a paid license regardless of whether you fork the code.
@@ -222,7 +222,7 @@ A: No. Sole proprietors using Software for business operations require a commerc
 If your question isn't answered here, please review:
 
 - `COMMERCIAL_LICENSE.md` — Complete commercial license terms
-- `DUAL_LICENSE.md` — License selection guide
+- `DOCS/02_reference/licensing/DUAL_LICENSE.md` — License selection guide
 - `LEGAL/SUBSCRIPTIONS.md` — Usage scenarios and definitions
 - `LEGAL/DECISION_MATRIX.md` — Quick reference matrix
 

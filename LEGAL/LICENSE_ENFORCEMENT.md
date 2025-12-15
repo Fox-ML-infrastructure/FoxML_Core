@@ -67,7 +67,7 @@ This document outlines license enforcement procedures, compliance requirements, 
 - You must comply with all license terms (see LICENSE)
 - **Organizational use of public forks still requires a commercial license**
 
-**See `LICENSE` and `DUAL_LICENSE.md` for details on licensing.**
+**See `LICENSE` and `DOCS/02_reference/licensing/DUAL_LICENSE.md` for details on licensing.**
 
 ---
 
@@ -231,7 +231,7 @@ This document outlines license enforcement procedures, compliance requirements, 
 
 - `COMMERCIAL_LICENSE.md` — Commercial license terms
 - `LEGAL/CLA.md` — Commercial License Agreement
-- `DUAL_LICENSE.md` — Dual licensing overview
+- `DOCS/02_reference/licensing/DUAL_LICENSE.md` — Dual licensing overview
 - `LEGAL/SUBSCRIPTIONS.md` — Pricing and licensing process
 - `LEGAL/PRODUCTION_USE_NOTIFICATION.md` — Production use notification form
 - `LEGAL/COMPLIANCE_FAQ.md` — Frequently asked compliance questions

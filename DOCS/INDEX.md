@@ -24,7 +24,7 @@ See each directory's [README](00_executive/README.md) for detailed contents.
 
 ### Project Status & Licensing
 
-- [Version 1.0 Manifest](../FOXML_1.0_MANIFEST.md) - Capability boundary that defines FoxML 1.0
+- [Version 1.0 Manifest](00_executive/product/FOXML_1.0_MANIFEST.md) - Capability boundary that defines FoxML 1.0
 - [Roadmap](02_reference/roadmap/ROADMAP.md) - Current development focus and upcoming work (executive summary)
 - [Detailed Roadmap](02_reference/roadmap/README.md) - **NEW**: Per-date detailed roadmap with component status and priorities
 - [Known Issues & Limitations](02_reference/KNOWN_ISSUES.md) - **NEW**: Features that don't work yet or have limitations
@@ -133,7 +133,7 @@ Complete technical reference for daily use. See [02_reference/README.md](02_refe
 - [Decision Engine Guide](03_technical/implementation/decisioning/DECISION_ENGINE.md) - **NEW**: Complete guide to automated decision-making, policies, and requirements
 - [Bayesian Policy Guide](03_technical/implementation/decisioning/BAYESIAN_POLICY.md) - **NEW**: Thompson sampling over discrete patch templates for adaptive config tuning
 - [Verification Checklist](03_technical/implementation/decisioning/VERIFICATION_CHECKLIST.md) - **NEW**: How to verify decision application works correctly
-- **Status**: Highly experimental, under active testing. See [TESTING_NOTICE.md](../TESTING_NOTICE.md) for details.
+- **Status**: Highly experimental, under active testing. See [TESTING_NOTICE.md](02_reference/testing/TESTING_NOTICE.md) for details.
 - [Training Routing System](02_reference/training_routing/README.md) - **NEW**: Config-driven routing decisions for cross-sectional vs symbol-specific training with automatic plan generation, 2-stage training (CPU→GPU), and one-command end-to-end pipeline
 
 ### API Reference
@@ -270,7 +270,7 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 - [Systemd Deployment](03_technical/operations/SYSTEMD_DEPLOYMENT.md) - Deployment guide
 
 ### Trading Modules ⚠️ STATUS NOTES
-- [Trading Modules Overview](../TRADING_MODULES.md) - **NEW**: Complete guide to ALPACA_trading and IBKR_trading modules
+- [Trading Modules Overview](02_reference/trading/TRADING_MODULES.md) - **NEW**: Complete guide to ALPACA_trading and IBKR_trading modules
   - ⚠️ **ALPACA_trading**: Has minor issues, needs testing and fixes
   - ⚠️ **IBKR_trading**: Untested, requires testing before production use
 - [Trading Reference](02_reference/trading/README.md) - **NEW**: Reference documentation for trading modules
@@ -288,7 +288,7 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 - See [Feature Selection Implementation](03_technical/implementation/FEATURE_SELECTION_GUIDE.md) for implementation details
 
 ### System Documentation
-- [Trading Modules Overview](../TRADING_MODULES.md) - ALPACA and IBKR trading modules documentation
+- [Trading Modules Overview](02_reference/trading/TRADING_MODULES.md) - ALPACA and IBKR trading modules documentation
 - Trading modules (`ALPACA_trading/` and `IBKR_trading/`) provide paper trading and live trading capabilities respectively
 
 ## Documentation Architecture

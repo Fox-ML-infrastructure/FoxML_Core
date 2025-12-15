@@ -38,7 +38,7 @@ Execution modules (`ALPACA_trading` and `IBKR_trading`) have been added back to 
 - 20 documentation files moved to centralized `DOCS/` structure
 - 56 Python files updated with consistent copyright headers
 - Complete trading modules documentation and cross-linking
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-14-execution-modules.md) | [Trading Modules Overview](TRADING_MODULES.md) | [Broker Compliance](LEGAL/BROKER_INTEGRATION_COMPLIANCE.md)
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-14-execution-modules.md) | [Trading Modules Overview](DOCS/02_reference/trading/TRADING_MODULES.md) | [Broker Compliance](LEGAL/BROKER_INTEGRATION_COMPLIANCE.md)
 
 #### Enhanced Drift Tracking (2025-12-14) – **NEW**
 Bulletproof drift tracking with fingerprints, severity tiers, critical metrics, and sanity checks. Can now definitively answer "What changed between baseline and current, and was it data, config, code, or stochasticity?"

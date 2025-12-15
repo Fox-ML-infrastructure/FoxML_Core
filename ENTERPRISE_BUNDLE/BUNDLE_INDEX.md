@@ -97,7 +97,7 @@ These PDFs can be:
 
 All PDFs are generated from Markdown source files in:
 - `../COMMERCIAL_LICENSE.md` (root)
-- `../DUAL_LICENSE.md` (root)
+- `../DOCS/02_reference/licensing/DUAL_LICENSE.md`
 - `../LICENSE` (root - source-available license)
 - `../LEGAL/*.md` (legal directory, including subdirectories)
 
@@ -125,7 +125,7 @@ python SCRIPTS/internal/tools/regenerate_enterprise_pdfs.py --engine pdflatex
 
 The script automatically:
 - Discovers all `.md` files in the `LEGAL/` directory (including subdirectories)
-- Includes root-level legal documents (COMMERCIAL_LICENSE.md, DUAL_LICENSE.md, LICENSE)
+- Includes root-level legal documents (COMMERCIAL_LICENSE.md, LICENSE) and licensing docs (DUAL_LICENSE.md in DOCS/02_reference/licensing/)
 - Handles Unicode characters (emojis, special symbols) by converting them to ASCII equivalents
 - Generates PDFs with consistent formatting
 

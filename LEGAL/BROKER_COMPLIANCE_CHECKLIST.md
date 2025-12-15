@@ -41,7 +41,7 @@ This checklist ensures all broker integration code, documentation, and user-faci
 
 ### Technical Documentation
 
-- [ ] `TRADING_MODULES.md` includes compliance notice
+- [ ] `DOCS/02_reference/trading/TRADING_MODULES.md` includes compliance notice
 - [ ] Broker adapter documentation includes compliance notices
 - [ ] User-facing tutorials include disclaimers
 - [ ] Architecture docs reflect "user-authorized API integration" model

@@ -250,7 +250,7 @@ Enterprise add-ons are available with defined scope and boundaries:
 
 **Academic use is free** for qualifying non-commercial research at tax-exempt institutions (see `LICENSE` for full definition). If your academic institution uses it for organizational purposes, a commercial license is required.
 
-**See `LICENSE` and `DUAL_LICENSE.md` for free use details.**
+**See `LICENSE` and `DOCS/02_reference/licensing/DUAL_LICENSE.md` for free use details.**
 
 ---
 
@@ -293,7 +293,7 @@ Enterprise add-ons are available with defined scope and boundaries:
 - `COMMERCIAL_LICENSE.md` — Complete commercial license terms
 - `LEGAL/CLA.md` — Commercial License Agreement
 - `LEGAL/SUBSCRIPTIONS.md` — Pricing and licensing process
-- `DUAL_LICENSE.md` — Dual licensing overview
+- `DOCS/02_reference/licensing/DUAL_LICENSE.md` — Dual licensing overview
 - `LEGAL/PRODUCTION_USE_NOTIFICATION.md` — Production use notification form
 - `LEGAL/COMPLIANCE_FAQ.md` — Frequently asked questions
 - `LEGAL/LICENSE_ENFORCEMENT.md` — Enforcement procedures

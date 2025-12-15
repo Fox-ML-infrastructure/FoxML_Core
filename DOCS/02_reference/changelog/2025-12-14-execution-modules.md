@@ -31,7 +31,7 @@ Execution modules (`ALPACA_trading` and `IBKR_trading`) have been added back to 
   - Reference docs → `DOCS/02_reference/trading/ibkr/`
 
 - **Created comprehensive trading documentation**:
-  - [`TRADING_MODULES.md`](../../../TRADING_MODULES.md) — Complete guide to both modules
+  - [`TRADING_MODULES.md`](../../trading/TRADING_MODULES.md) — Complete guide to both modules
   - [`DOCS/02_reference/trading/README.md`](../../02_reference/trading/README.md) — Trading reference docs
   - [`DOCS/03_technical/trading/README.md`](../../03_technical/trading/README.md) — Technical docs index
 
@@ -98,7 +98,7 @@ See [`LEGAL/BROKER_INTEGRATION_COMPLIANCE.md`](../../../LEGAL/BROKER_INTEGRATION
 
 ## Related Documentation
 
-- [Trading Modules Overview](../../../TRADING_MODULES.md)
+- [Trading Modules Overview](../../trading/TRADING_MODULES.md)
 - [Broker Integration Compliance](../../../LEGAL/BROKER_INTEGRATION_COMPLIANCE.md)
 - [ALPACA Trading README](../../../ALPACA_trading/README.md)
 - [IBKR Trading README](../../../IBKR_trading/README.md)

@@ -2,7 +2,7 @@
 
 A comprehensive, production-ready framework for intraday trading with 16 machine learning models across 5 horizons (5m, 10m, 15m, 30m, 60m).
 
-> **Note**: For a comprehensive comparison of ALPACA_trading and IBKR_trading modules, see the main [TRADING_MODULES.md](../TRADING_MODULES.md) documentation.
+> **Note**: For a comprehensive comparison of ALPACA_trading and IBKR_trading modules, see the main [TRADING_MODULES.md](../DOCS/02_reference/trading/TRADING_MODULES.md) documentation.
 
 ## ️ Architecture Overview
 
@@ -177,7 +177,7 @@ python run_trading_system.py
 
 ## Documentation
 
-> **Note**: All IBKR trading documentation has been moved to the main `DOCS/` directory. See [TRADING_MODULES.md](../TRADING_MODULES.md) for an overview of both trading modules.
+> **Note**: All IBKR trading documentation has been moved to the main `DOCS/` directory. See [TRADING_MODULES.md](../DOCS/02_reference/trading/TRADING_MODULES.md) for an overview of both trading modules.
 
 ### Architecture & Design
 - **Mathematical Foundations**: [`DOCS/03_technical/trading/architecture/MATHEMATICAL_FOUNDATIONS.md`](../DOCS/03_technical/trading/architecture/MATHEMATICAL_FOUNDATIONS.md)

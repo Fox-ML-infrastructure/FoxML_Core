@@ -30,7 +30,7 @@
 - **Free use:** Personal use and qualifying non-commercial academic research (see `LICENSE` for full definition)
 - **Commercial License:** Required for any organizational use, allows internal commercial use, includes access to private repositories
 
-**See `LICENSE` and `DUAL_LICENSE.md` for complete licensing information.**
+**See `LICENSE` and `DOCS/02_reference/licensing/DUAL_LICENSE.md` for complete licensing information.**
 
 ---
 
@@ -192,7 +192,7 @@
 
 **A:** Yes, for qualifying non-commercial academic research at tax-exempt institutions (see `LICENSE` for full definition). If the university uses it for organizational purposes, a commercial license is required.
 
-**See `DUAL_LICENSE.md` for academic use details.**
+**See `DOCS/02_reference/licensing/DUAL_LICENSE.md` for academic use details.**
 
 ---
 
@@ -303,7 +303,7 @@
 - `LEGAL/LICENSE_ENFORCEMENT.md` — Enforcement procedures
 - `COMMERCIAL_LICENSE.md` — Complete license terms
 - `LEGAL/CLA.md` — Commercial License Agreement
-- `DUAL_LICENSE.md` — Dual licensing overview
+- `DOCS/02_reference/licensing/DUAL_LICENSE.md` — Dual licensing overview
 
 ---
 
@@ -337,7 +337,7 @@
 - `LEGAL/LICENSE_ENFORCEMENT.md` — Enforcement procedures
 - `COMMERCIAL_LICENSE.md` — Complete license terms
 - `LEGAL/CLA.md` — Commercial License Agreement
-- `DUAL_LICENSE.md` — Dual licensing overview
+- `DOCS/02_reference/licensing/DUAL_LICENSE.md` — Dual licensing overview
 - `LEGAL/SUBSCRIPTIONS.md` — Pricing information
 
 ---

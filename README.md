@@ -22,14 +22,14 @@
 
 **FoxML Core is source-available: free for personal use. Organizational use requires a paid license (including evaluation). This keeps the project sustainable and enables continued development.**
 
-**→ [Commercial Licensing](COMMERCIAL.md)** | **→ [Free Use Terms](LICENSE)** | **→ [Commercial License](COMMERCIAL_LICENSE.md)**
+**→ [Commercial Licensing](DOCS/02_reference/commercial/COMMERCIAL.md)** | **→ [Free Use Terms](LICENSE)** | **→ [Commercial License](COMMERCIAL_LICENSE.md)**
 
 ---
 
 > **⚠️ ACTIVE DEVELOPMENT — EXPECT BREAKING CHANGES**  
 > This project is under **heavy active development**. Breaking changes may occur without notice. APIs, configuration schemas, directory structures, and file formats may change between commits. Use at your own risk in production environments. See [ROADMAP.md](DOCS/02_reference/roadmap/ROADMAP.md) for current status and known issues.
 
-> **🎯 Version 1.0 Definition:** See [FOXML_1.0_MANIFEST.md](FOXML_1.0_MANIFEST.md) for the capability boundary that defines what constitutes FoxML 1.0.
+> **🎯 Version 1.0 Definition:** See [FOXML_1.0_MANIFEST.md](DOCS/00_executive/product/FOXML_1.0_MANIFEST.md) for the capability boundary that defines what constitutes FoxML 1.0.
 
 > **📝 See [CHANGELOG.md](CHANGELOG.md) for recent technical and compliance changes.**
 
@@ -161,7 +161,7 @@ Subject: `FoxML Core Commercial Licensing`
 - [`LEGAL/SUBSCRIPTIONS.md`](LEGAL/SUBSCRIPTIONS.md) - Detailed tiers and pricing
 - [`LEGAL/COMMERCIAL_USE.md`](LEGAL/COMMERCIAL_USE.md) - Commercial license terms
 - [`COMMERCIAL_LICENSE.md`](COMMERCIAL_LICENSE.md) - Full commercial license text
-- [`DUAL_LICENSE.md`](DUAL_LICENSE.md) - Dual licensing overview
+- [`DUAL_LICENSE.md`](DOCS/02_reference/licensing/DUAL_LICENSE.md) - Dual licensing overview
 
 ### Quick FAQ
 

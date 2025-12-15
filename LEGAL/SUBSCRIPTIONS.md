@@ -48,7 +48,7 @@ Commercial organizations may evaluate the Software for up to 30 days from initia
 
 **IMPORTANT:** Unauthorized organizational use of the Software without a valid commercial license is copyright infringement and may result in legal claims. If you have used the Software for organizational purposes without a license, you must immediately obtain a commercial license.
 
-**See `LICENSE` for complete free use definition and `DUAL_LICENSE.md` for licensing overview.**
+**See `LICENSE` for complete free use definition and `DOCS/02_reference/licensing/DUAL_LICENSE.md` for licensing overview.**
 
 ---
 

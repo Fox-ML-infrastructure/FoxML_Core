@@ -12,7 +12,7 @@ This directory contains documentation that is **deprecated** or **outdated** but
 
 ### Outdated Status Documents
 
-- **`STATUS_DEBUGGING.md`** - Outdated debugging status (last updated 2025-12-09). Issues mentioned have been resolved. **Replaced by**: Current status in [CHANGELOG.md](../../CHANGELOG.md) and [TESTING_NOTICE.md](../../TESTING_NOTICE.md)
+- **`STATUS_DEBUGGING.md`** - Outdated debugging status (last updated 2025-12-09). Issues mentioned have been resolved. **Replaced by**: Current status in [CHANGELOG.md](../../CHANGELOG.md) and [TESTING_NOTICE.md](../02_reference/testing/TESTING_NOTICE.md)
 
 ## Migration Guide
 

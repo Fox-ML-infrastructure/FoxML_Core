@@ -230,7 +230,7 @@ Subject: `FoxML Core Commercial Licensing`
 ---
 
 **See also:**
-- [`LICENSE`](LICENSE) — Free use terms
-- [`COMMERCIAL_LICENSE.md`](COMMERCIAL_LICENSE.md) — Complete commercial license terms
-- [`ORDER_FORM_TEMPLATE.md`](ORDER_FORM_TEMPLATE.md) — Order Form template
-- [`LEGAL/SUBSCRIPTIONS.md`](LEGAL/SUBSCRIPTIONS.md) — Detailed licensing process
+- [`LICENSE`](../../../LICENSE) — Free use terms
+- [`COMMERCIAL_LICENSE.md`](../../../COMMERCIAL_LICENSE.md) — Complete commercial license terms
+- [`ORDER_FORM_TEMPLATE.md`](ORDER_FORM_TEMPLATE.md) — Order Form template (same directory)
+- [`LEGAL/SUBSCRIPTIONS.md`](../../../LEGAL/SUBSCRIPTIONS.md) — Detailed licensing process
