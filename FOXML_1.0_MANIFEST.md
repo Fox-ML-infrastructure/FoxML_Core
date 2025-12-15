@@ -60,7 +60,7 @@ without manual intervention.
 ## Related Documentation
 
 - [README.md](./README.md) - Project overview and getting started
-- [ROADMAP.md](./ROADMAP.md) - Development roadmap and milestones
+- [ROADMAP.md](DOCS/02_reference/roadmap/ROADMAP.md) - Development roadmap and milestones
 - [DOCS/03_technical/README.md](./DOCS/03_technical/README.md) - Technical documentation
 - [DOCS/03_technical/implementation/REPRODUCIBILITY_STRUCTURE.md](./DOCS/03_technical/implementation/REPRODUCIBILITY_STRUCTURE.md) - Reproducibility architecture
 

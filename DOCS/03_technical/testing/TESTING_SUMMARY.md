@@ -60,7 +60,7 @@ See [Known Issues](../fixes/KNOWN_ISSUES.md) for current issues.
 
 ## Next Steps
 
-Continue daily testing and monitoring. See [ROADMAP](../../../ROADMAP.md) for testing priorities.
+Continue daily testing and monitoring. See [ROADMAP](../../02_reference/roadmap/ROADMAP.md) for testing priorities.
 
 ## See Also
 

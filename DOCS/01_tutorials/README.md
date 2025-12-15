@@ -20,6 +20,7 @@ This directory contains practical, hands-on tutorials that guide users through s
 - **[Advanced Config](configuration/ADVANCED_CONFIG.md)** - Advanced configuration techniques
 
 ### Training
+- **[Training README](training/TRAINING_README.md)** - TRAINING module overview
 - **[Intelligent Training Tutorial](training/INTELLIGENT_TRAINING_TUTORIAL.md)** - Automated pipeline workflow
 - **[Auto Target Ranking](training/AUTO_TARGET_RANKING.md)** - Auto-discover and rank targets
 - **[Model Training Guide](training/MODEL_TRAINING_GUIDE.md)** - Manual training workflow
@@ -29,6 +30,7 @@ This directory contains practical, hands-on tutorials that guide users through s
 - **[Testing Quick Reference](training/TESTING_QUICK_REFERENCE.md)** - Quick testing reference
 
 ### Pipelines
+- **[Data Processing README](pipelines/DATA_PROCESSING_README.md)** - DATA_PROCESSING module overview
 - **[First Pipeline Run](pipelines/FIRST_PIPELINE_RUN.md)** - Run your first pipeline
 - **[Data Processing Walkthrough](pipelines/DATA_PROCESSING_WALKTHROUGH.md)** - Data pipeline guide
 - **[Feature Engineering Tutorial](pipelines/FEATURE_ENGINEERING_TUTORIAL.md)** - Feature creation

@@ -41,6 +41,12 @@ This directory contains detailed technical documentation for developers, researc
 - **[Model Comparisons](benchmarks/MODEL_COMPARISONS.md)** - Model benchmarks
 - **[Dataset Sizing](benchmarks/DATASET_SIZING.md)** - Dataset strategies
 
+### Internal Documentation
+- **[Data Overlap Analysis](internal/DATA_OVERLAP_ANALYSIS.md)** - Analysis of data overlap between target_rankings and REPRODUCIBILITY
+- **[Reorganization Plan](internal/REORGANIZATION_PLAN.md)** - Plan for reorganizing results directory structure
+- **[Reorganization Issues Check](internal/REORGANIZATION_ISSUES_CHECK.md)** - Verification of reorganization changes
+- See [internal/](internal/) for complete list
+
 ### Fixes
 - **[Known Issues](fixes/KNOWN_ISSUES.md)** - Current issues and limitations
 - **[Bug Fixes](fixes/BUG_FIXES.md)** - Fix history

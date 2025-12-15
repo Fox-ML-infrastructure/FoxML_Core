@@ -17,6 +17,8 @@ This directory contains comprehensive reference documentation for developers, ML
 
 ### Configuration
 - **[Configuration System Overview](configuration/README.md)** - Centralized configuration system
+- **[Config README](configuration/CONFIG_README.md)** - CONFIG directory structure and organization
+- **[Config README Defaults](configuration/CONFIG_README_DEFAULTS.md)** - Default configuration values
 - **[Modular Config System](configuration/MODULAR_CONFIG_SYSTEM.md)** - Modular configs and experiment configs
 - **[Feature & Target Configs](configuration/FEATURE_TARGET_CONFIGS.md)** - Feature/target configuration
 - **[Model Configuration](configuration/MODEL_CONFIGURATION.md)** - Model hyperparameters
@@ -45,7 +47,8 @@ This directory contains comprehensive reference documentation for developers, ML
 **Note**: Documentation audits have been moved to [Executive Documentation](../00_executive/audits/README.md) for public transparency.
 
 ### Roadmap
-- **[Roadmap Index](roadmap/README.md)** - Development roadmap and priorities
+- **[Roadmap](roadmap/ROADMAP.md)** - Executive summary and high-level development priorities
+- **[Roadmap Index](roadmap/README.md)** - Detailed per-date roadmap with component status
 
 ### General
 - **[Known Issues](KNOWN_ISSUES.md)** - Current limitations and known issues

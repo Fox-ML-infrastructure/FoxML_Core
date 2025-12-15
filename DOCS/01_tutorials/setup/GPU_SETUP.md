@@ -250,6 +250,6 @@ All GPU settings are in `CONFIG/training_config/gpu_config.yaml`. See:
 
 - [Auto Target Ranking](../../training/AUTO_TARGET_RANKING.md) - How to use GPU-accelerated target ranking
 - [Feature Selection Tutorial](../../training/FEATURE_SELECTION_TUTORIAL.md) - GPU-accelerated feature selection
-- [Roadmap](../../../ROADMAP.md) - See Phase 4 for multi-GPU support timeline
+- [Roadmap](../../02_reference/roadmap/ROADMAP.md) - See Phase 4 for multi-GPU support timeline
 - [Known Issues](../../02_reference/KNOWN_ISSUES.md) - GPU troubleshooting and limitations
 

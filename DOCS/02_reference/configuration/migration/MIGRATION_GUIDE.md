@@ -76,5 +76,5 @@ All old paths are still supported:
 
 ## Questions?
 
-See `CONFIG/README.md` for full documentation.
+See `CONFIG_README.md` for full documentation.
 

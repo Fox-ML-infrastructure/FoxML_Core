@@ -165,5 +165,5 @@
    - Consolidate duplicates
 
 4. **Phase 4: Documentation**
-   - Update CONFIG/README.md with new structure
+   - Update CONFIG_README.md with new structure
    - Document all config files and their purposes

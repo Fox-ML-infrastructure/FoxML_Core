@@ -25,7 +25,7 @@ This document tracks key cross-references between documentation files to ensure 
   - `DOCS/03_technical/refactoring/TRAINING_STRATEGIES.md`
 - **References**:
   - `INDEX.md` - Added to refactoring section
-  - `TRAINING/README.md` - Links to refactoring docs
+  - `01_tutorials/training/TRAINING_README.md` - Links to refactoring docs
   - `changelog/README.md` - Changelog index (refactoring note in general.md)
 - **Module READMEs**:
   - `TRAINING/models/specialized/README.md` - Brief, links to detailed docs
@@ -48,7 +48,7 @@ This document tracks key cross-references between documentation files to ensure 
 - **File**: `CONFIG/logging_config.yaml`
 - **Documented in**:
   - `MODULAR_CONFIG_SYSTEM.md` - Section 5
-  - `CONFIG/README.md` - Directory structure
+  - `02_reference/configuration/CONFIG_README.md` - Directory structure
   - `README.md` (configuration) - Config file list
   - `CONFIG_LOADER_API.md` - API functions
   - `CONFIG_BASICS.md` - Example structure

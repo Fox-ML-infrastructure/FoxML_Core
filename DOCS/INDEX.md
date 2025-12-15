@@ -24,7 +24,8 @@ See each directory's [README](00_executive/README.md) for detailed contents.
 
 ### Project Status & Licensing
 
-- [Roadmap](../ROADMAP.md) - Current development focus and upcoming work (executive summary)
+- [Version 1.0 Manifest](../FOXML_1.0_MANIFEST.md) - Capability boundary that defines FoxML 1.0
+- [Roadmap](02_reference/roadmap/ROADMAP.md) - Current development focus and upcoming work (executive summary)
 - [Detailed Roadmap](02_reference/roadmap/README.md) - **NEW**: Per-date detailed roadmap with component status and priorities
 - [Known Issues & Limitations](02_reference/KNOWN_ISSUES.md) - **NEW**: Features that don't work yet or have limitations
 - [Deterministic Training](00_executive/DETERMINISTIC_TRAINING.md) - SST config system and reproducibility guarantees

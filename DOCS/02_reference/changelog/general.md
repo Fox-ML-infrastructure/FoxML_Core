@@ -255,7 +255,7 @@ See [`DOCS/03_technical/research/LEAKAGE_ANALYSIS.md`](../../03_technical/resear
 - Added branding clarification (FoxML Core vs Fox ML Infrastructure)
 - Refined wording throughout for external/enterprise consumption
 
-See [`ROADMAP.md`](../../../ROADMAP.md) for complete roadmap.
+See [`ROADMAP.md`](../../02_reference/roadmap/ROADMAP.md) for complete roadmap.
 
 **Compliance Documentation Suite**
 
@@ -337,7 +337,7 @@ See [`COMMERCIAL_LICENSE.md`](../../../../COMMERCIAL_LICENSE.md) and [`LEGAL/SUB
 
 ## Documentation
 
-- Roadmap restructured for external consumption (see [`ROADMAP.md`](../../../ROADMAP.md))
+- Roadmap restructured for external consumption (see [`ROADMAP.md`](../../02_reference/roadmap/ROADMAP.md))
 - Modular configuration system documentation (see [`DOCS/02_reference/configuration/MODULAR_CONFIG_SYSTEM.md`](../configuration/MODULAR_CONFIG_SYSTEM.md))
 - Documentation cleanup and consolidation — Integrated old folders, fixed cross-references, reorganized structure
 - Comprehensive cross-linking and navigation improvements

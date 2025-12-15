@@ -1,6 +1,6 @@
 # Roadmap Index
 
-This directory contains detailed roadmap information for FoxML Core. For the executive summary, see [ROADMAP.md](../../../ROADMAP.md).
+This directory contains detailed roadmap information for FoxML Core. For the executive summary, see [ROADMAP.md](ROADMAP.md).
 
 ## Current Status
 
@@ -9,6 +9,6 @@ This directory contains detailed roadmap information for FoxML Core. For the exe
 
 ## Navigation
 
-- [Root Roadmap](../../../ROADMAP.md) - Executive summary and high-level priorities
+- [Roadmap](ROADMAP.md) - Executive summary and high-level priorities
 - [Documentation Index](../../INDEX.md) - Complete documentation navigation
 - [Known Issues & Limitations](../KNOWN_ISSUES.md) - Features that don't work yet or have limitations

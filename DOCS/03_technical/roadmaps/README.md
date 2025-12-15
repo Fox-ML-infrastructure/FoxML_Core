@@ -10,5 +10,5 @@ Development roadmaps and future work plans.
 ## Related Documentation
 
 - [Roadmap Index](../../02_reference/roadmap/README.md) - Development roadmap
-- [ROADMAP.md](../../../ROADMAP.md) - Executive roadmap summary
+- [ROADMAP.md](../../02_reference/roadmap/ROADMAP.md) - Executive roadmap summary
 

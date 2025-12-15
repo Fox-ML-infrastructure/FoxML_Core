@@ -32,10 +32,10 @@ System is production-ready with:
 
 ## Timeline
 
-See [ROADMAP](../../../ROADMAP.md) for detailed timeline and priorities.
+See [ROADMAP](../../02_reference/roadmap/ROADMAP.md) for detailed timeline and priorities.
 
 ## See Also
 
-- [ROADMAP](../../../ROADMAP.md) - Complete roadmap
+- [ROADMAP](../../02_reference/roadmap/ROADMAP.md) - Complete roadmap
 - [Future Work](FUTURE_WORK.md) - Planned features
 

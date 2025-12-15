@@ -35,6 +35,6 @@ Planned features and enhancements. These are aspirational goals, not hard deadli
 
 ## See Also
 
-- [ROADMAP](../../../ROADMAP.md) - Complete roadmap
+- [ROADMAP](../../02_reference/roadmap/ROADMAP.md) - Complete roadmap
 - [Alpha Enhancement Roadmap](ALPHA_ENHANCEMENT_ROADMAP.md) - Enhancement plan
 

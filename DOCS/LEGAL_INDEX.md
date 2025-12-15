@@ -89,6 +89,6 @@ Complete index of all legal, licensing, compliance, and enterprise documentation
 ## Related Documentation
 
 - [Main Documentation Index](INDEX.md) - Complete documentation index
-- [Roadmap](../ROADMAP.md) - Development roadmap
+- [Roadmap](02_reference/roadmap/ROADMAP.md) - Development roadmap
 - [Changelog](../CHANGELOG.md) - Technical changelog
 

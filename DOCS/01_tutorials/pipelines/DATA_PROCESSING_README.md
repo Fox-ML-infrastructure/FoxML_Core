@@ -165,5 +165,5 @@ Ready for model training (TRAINING/)
 - **[Pipeline Reference](../../DOCS/02_reference/systems/PIPELINE_REFERENCE.md)** - Pipeline workflows
 
 ### Other Modules
-- **[TRAINING/](../../TRAINING/README.md)** - Model training using processed features
-- **[CONFIG/](../../CONFIG/README.md)** - Centralized configuration files
+- **[TRAINING](../training/TRAINING_README.md)** - Model training using processed features
+- **[CONFIG](../../02_reference/configuration/CONFIG_README.md)** - Centralized configuration files
