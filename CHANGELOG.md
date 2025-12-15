@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### CatBoost GPU Fixes (2025-12-15) – **NEW**
+Critical fixes for CatBoost GPU mode compatibility and feature importance output.
+- Fixed CatBoost GPU requiring Pool objects instead of numpy arrays (automatic conversion via wrapper)
+- Fixed sklearn clone compatibility for CatBoost wrapper (implements get_params/set_params)
+- Fixed missing CatBoost feature importances in results directory (now saves to catboost_importances.csv)
+- CatBoost GPU training now works correctly with cross-validation
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-15-catboost-gpu-fixes.md)
+
 #### IP Assignment Agreement Signed (2025-12-14) – **NEW**
 IP Assignment Agreement has been signed, legally assigning all intellectual property from Jennifer Lewis (Individual) to Fox ML Infrastructure LLC.
 - ✅ **Legally effective** - All IP now owned by Fox ML Infrastructure LLC
