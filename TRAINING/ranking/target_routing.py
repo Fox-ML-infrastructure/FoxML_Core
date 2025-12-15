@@ -155,20 +155,36 @@ def _save_dual_view_rankings(
     """
     Save dual-view ranking results and routing decisions.
     
+    New structure:
+    - Routing decisions (decision log) → DECISION/TARGET_RANKING/routing_decisions.json
+    - Also save copy to REPRODUCIBILITY/TARGET_RANKING/ for convenience
+    
     Structure:
     REPRODUCIBILITY/TARGET_RANKING/{target}/
       CROSS_SECTIONAL/cohort={cohort_id}/metrics.json
       SYMBOL_SPECIFIC/{symbol}/cohort={cohort_id}/metrics.json
-      routing_decisions.json
+      routing_decisions.json (convenience copy)
+    DECISION/TARGET_RANKING/
+      routing_decisions.json (primary location)
+    
+    Args:
+        output_dir: Base output directory (RESULTS/{run}/), not target_rankings subdirectory
     """
     import json
     from pathlib import Path
     
-    repro_dir = output_dir.parent / "REPRODUCIBILITY" / "TARGET_RANKING"
-    repro_dir.mkdir(parents=True, exist_ok=True)
+    # Determine base output directory (handle both old and new call patterns)
+    if output_dir.name == "target_rankings":
+        base_output_dir = output_dir.parent
+    else:
+        base_output_dir = output_dir
     
-    # Save routing decisions
-    routing_file = repro_dir / "routing_decisions.json"
+    repro_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
+    decision_dir = base_output_dir / "DECISION" / "TARGET_RANKING"
+    repro_dir.mkdir(parents=True, exist_ok=True)
+    decision_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Prepare routing data
     routing_data = {
         'routing_decisions': routing_decisions,
         'summary': {
@@ -179,10 +195,18 @@ def _save_dual_view_rankings(
             'blocked': sum(1 for r in routing_decisions.values() if r['route'] == 'BLOCKED')
         }
     }
-    with open(routing_file, 'w') as f:
-        json.dump(routing_data, f, indent=2, default=str)
     
-    logger.info(f"Saved routing decisions to {routing_file}")
+    # Save to DECISION (primary location - decision log)
+    decision_file = decision_dir / "routing_decisions.json"
+    with open(decision_file, 'w') as f:
+        json.dump(routing_data, f, indent=2, default=str)
+    logger.info(f"Saved routing decisions to {decision_file}")
+    
+    # Also save copy to REPRODUCIBILITY for convenience
+    repro_file = repro_dir / "routing_decisions.json"
+    with open(repro_file, 'w') as f:
+        json.dump(routing_data, f, indent=2, default=str)
+    logger.debug(f"Saved routing decisions copy to {repro_file} (for convenience)")
     
     # Note: Individual view results are already saved by evaluate_target_predictability
     # via reproducibility tracker (with view/symbol metadata in RunContext)

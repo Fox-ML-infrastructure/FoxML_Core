@@ -662,11 +662,16 @@ class IntelligentTrainer:
             except Exception as e2:
                 logger.debug(f"Recursive search also failed: {e2}")
         
-        # Create subdirectories
-        (self.output_dir / "target_rankings").mkdir(exist_ok=True)
+        # Create subdirectories (target_rankings removed - now using DECISION/ and REPRODUCIBILITY/)
         (self.output_dir / "feature_selections").mkdir(exist_ok=True)
         (self.output_dir / "training_results").mkdir(exist_ok=True)
         (self.output_dir / "leakage_diagnostics").mkdir(exist_ok=True)
+        
+        # Create new structure directories
+        (self.output_dir / "DECISION" / "TARGET_RANKING").mkdir(parents=True, exist_ok=True)
+        (self.output_dir / "DECISION" / "FEATURE_SELECTION").mkdir(parents=True, exist_ok=True)
+        (self.output_dir / "REPRODUCIBILITY" / "TARGET_RANKING").mkdir(parents=True, exist_ok=True)
+        (self.output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION").mkdir(parents=True, exist_ok=True)
         
         # Cache paths
         self.target_ranking_cache = self.cache_dir / "target_rankings.json"
@@ -893,7 +898,7 @@ class IntelligentTrainer:
             data_dir=self.data_dir,
             model_families=model_families,
             multi_model_config=multi_model_config,
-            output_dir=self.output_dir / "target_rankings",
+            output_dir=self.output_dir,  # Pass base output_dir (not target_rankings subdir)
             top_n=None,  # Get all rankings for caching
             max_targets_to_evaluate=max_targets_to_evaluate,  # Limit evaluation if specified
             target_ranking_config=target_ranking_config,  # Pass typed config if available
@@ -922,12 +927,15 @@ class IntelligentTrainer:
             else:
                 logger.warning("⚠️  Could not determine N_effective, run will stay in _pending/")
                 logger.warning(f"   Run directory: {self._initial_output_dir}")
-                # Try to help debug - check if REPRODUCIBILITY exists
-                repro_check = self._initial_output_dir / "target_rankings" / "REPRODUCIBILITY"
-                if repro_check.exists():
-                    logger.warning(f"   REPRODUCIBILITY found at: {repro_check}")
+                # Try to help debug - check if REPRODUCIBILITY exists (check both new and old structures)
+                repro_check_new = self._initial_output_dir / "REPRODUCIBILITY"
+                repro_check_old = self._initial_output_dir / "target_rankings" / "REPRODUCIBILITY"
+                if repro_check_new.exists():
+                    logger.warning(f"   REPRODUCIBILITY found at: {repro_check_new}")
+                elif repro_check_old.exists():
+                    logger.warning(f"   REPRODUCIBILITY found at (old structure): {repro_check_old}")
                 else:
-                    logger.warning(f"   REPRODUCIBILITY not found at: {repro_check}")
+                    logger.warning(f"   REPRODUCIBILITY not found at: {repro_check_new} or {repro_check_old}")
         
         # Generate telemetry rollups after target ranking completes
         try:
@@ -1343,10 +1351,13 @@ class IntelligentTrainer:
             routing_decisions = {}
             try:
                 from TRAINING.ranking.target_routing import load_routing_decisions
-                routing_file = self.output_dir / "target_rankings" / "REPRODUCIBILITY" / "TARGET_RANKING" / "routing_decisions.json"
+                # Try new structure first (DECISION), then REPRODUCIBILITY, then old structure
+                routing_file = self.output_dir / "DECISION" / "TARGET_RANKING" / "routing_decisions.json"
                 if not routing_file.exists():
-                    # Try alternative location
                     routing_file = self.output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / "routing_decisions.json"
+                if not routing_file.exists():
+                    # Try old structure (backward compatibility)
+                    routing_file = self.output_dir / "target_rankings" / "REPRODUCIBILITY" / "TARGET_RANKING" / "routing_decisions.json"
                 if routing_file.exists():
                     routing_decisions = load_routing_decisions(routing_file)
                     logger.info(f"Loaded routing decisions for {len(routing_decisions)} targets")

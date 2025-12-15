@@ -57,7 +57,20 @@ def save_feature_selection_rankings(
         symbol: Symbol name (for SYMBOL_SPECIFIC view)
         metadata: Optional metadata dict
     """
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # Determine base output directory (handle both old and new call patterns)
+    if output_dir.name == "feature_selections":
+        base_output_dir = output_dir.parent
+    elif output_dir.parent.name == "feature_selections":
+        base_output_dir = output_dir.parent.parent
+    else:
+        base_output_dir = output_dir.parent if output_dir.name == target_column else output_dir
+    
+    # Create directories
+    target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+    repro_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / target_name_clean
+    decision_dir = base_output_dir / "DECISION" / "FEATURE_SELECTION" / target_name_clean
+    repro_dir.mkdir(parents=True, exist_ok=True)
+    decision_dir.mkdir(parents=True, exist_ok=True)
     
     # Handle empty results
     if summary_df is None or len(summary_df) == 0:
@@ -67,8 +80,8 @@ def save_feature_selection_rankings(
             'rank', 'feature', 'consensus_score', 'n_models_agree', 
             'consensus_pct', 'std_across_models', 'recommendation'
         ])
-        empty_df.to_csv(output_dir / "feature_selection_rankings.csv", index=False)
-        logger.info(f"Saved empty rankings file to {output_dir / 'feature_selection_rankings.csv'}")
+        empty_df.to_csv(repro_dir / "feature_selection_rankings.csv", index=False)
+        logger.info(f"Saved empty rankings file to {repro_dir / 'feature_selection_rankings.csv'}")
         return
     
     # Sort by consensus score
@@ -91,11 +104,12 @@ def save_feature_selection_rankings(
         'recommendation': _get_recommendation(row)
     } for i, (_, row) in enumerate(summary_df_sorted.iterrows())])
     
-    # Save CSV
-    df.to_csv(output_dir / "feature_selection_rankings.csv", index=False)
-    logger.info(f"Saved feature selection rankings to feature_selection_rankings.csv")
+    # Save CSV to REPRODUCIBILITY (reproducibility artifact)
+    csv_path = repro_dir / "feature_selection_rankings.csv"
+    df.to_csv(csv_path, index=False)
+    logger.info(f"Saved feature selection rankings CSV to {csv_path}")
     
-    # Save YAML with recommendations (same format as target ranking)
+    # Save YAML with recommendations to DECISION (decision log)
     yaml_data = {
         'feature_rankings': [
             {
@@ -122,16 +136,18 @@ def save_feature_selection_rankings(
     if metadata:
         yaml_data['metadata'] = metadata
     
-    with open(output_dir / "feature_selection_rankings.yaml", 'w') as f:
+    yaml_path = decision_dir / "feature_prioritization.yaml"
+    with open(yaml_path, 'w') as f:
         yaml.dump(yaml_data, f, default_flow_style=False)
     
-    logger.info(f"Saved YAML to feature_selection_rankings.yaml")
+    logger.info(f"Saved feature prioritization YAML to {yaml_path}")
     
-    # Save selected features list (same as target ranking saves target list)
-    with open(output_dir / "selected_features.txt", "w") as f:
+    # Save selected features list to REPRODUCIBILITY (reproducibility artifact)
+    selected_features_path = repro_dir / "selected_features.txt"
+    with open(selected_features_path, "w") as f:
         for feature in selected_features:
             f.write(f"{feature}\n")
-    logger.info(f"Saved {len(selected_features)} selected features to selected_features.txt")
+    logger.info(f"Saved {len(selected_features)} selected features to {selected_features_path}")
 
 
 def _get_recommendation(row: pd.Series) -> str:

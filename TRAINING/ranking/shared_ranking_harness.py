@@ -166,7 +166,24 @@ class RankingHarness:
         target_exclusion_dir = None
         
         if self.output_dir and target_name:
-            target_exclusion_dir = Path(self.output_dir) / "feature_exclusions"
+            # Determine base output directory (handle both old and new call patterns)
+            base_output_dir = Path(self.output_dir)
+            if base_output_dir.name in ["target_rankings", "feature_selections"]:
+                base_output_dir = base_output_dir.parent
+            
+            # Determine stage based on job_type
+            if self.job_type == "rank_targets":
+                # Save to REPRODUCIBILITY/TARGET_RANKING/{view}/{target}/feature_exclusions/
+                target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+                target_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / self.view / target_name_clean / "feature_exclusions"
+            elif self.job_type == "rank_features":
+                # Save to REPRODUCIBILITY/FEATURE_SELECTION/{target}/feature_exclusions/
+                target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+                target_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / target_name_clean / "feature_exclusions"
+            else:
+                # Fallback to old structure for backward compatibility
+                target_exclusion_dir = base_output_dir / "feature_exclusions"
+            
             target_exclusion_dir.mkdir(parents=True, exist_ok=True)
             
             # Try to load existing exclusion list first

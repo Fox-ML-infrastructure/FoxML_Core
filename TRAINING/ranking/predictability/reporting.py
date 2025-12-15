@@ -174,8 +174,28 @@ def save_rankings(
     results: List[TargetPredictabilityScore],
     output_dir: Path
 ):
-    """Save target predictability rankings"""
-    output_dir.mkdir(parents=True, exist_ok=True)
+    """
+    Save target predictability rankings.
+    
+    New structure:
+    - CSV (reproducibility artifact) → REPRODUCIBILITY/TARGET_RANKING/target_predictability_rankings.csv
+    - YAML (decision log) → DECISION/TARGET_RANKING/target_prioritization.yaml
+    
+    Args:
+        results: List of TargetPredictabilityScore objects
+        output_dir: Base output directory (RESULTS/{run}/), not target_rankings subdirectory
+    """
+    # Determine base output directory (handle both old and new call patterns)
+    if output_dir.name == "target_rankings":
+        base_output_dir = output_dir.parent
+    else:
+        base_output_dir = output_dir
+    
+    # Create directories
+    repro_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
+    decision_dir = base_output_dir / "DECISION" / "TARGET_RANKING"
+    repro_dir.mkdir(parents=True, exist_ok=True)
+    decision_dir.mkdir(parents=True, exist_ok=True)
     
     # Handle empty results
     if not results:
@@ -186,8 +206,8 @@ def save_rankings(
             'mean_score', 'std_score', 'mean_r2', 'std_r2', 'mean_importance',
             'consistency', 'n_models', 'leakage_flag', 'recommendation'
         ])
-        empty_df.to_csv(output_dir / "target_predictability_rankings.csv", index=False)
-        logger.info(f"Saved empty rankings file to {output_dir / 'target_predictability_rankings.csv'}")
+        empty_df.to_csv(repro_dir / "target_predictability_rankings.csv", index=False)
+        logger.info(f"Saved empty rankings file to {repro_dir / 'target_predictability_rankings.csv'}")
         return
     
     # Sort by composite score
@@ -223,11 +243,12 @@ def save_rankings(
             )
         logger.warning("Review these targets - they may have leaked features or be degenerate!")
     
-    # Save CSV
-    df.to_csv(output_dir / "target_predictability_rankings.csv", index=False)
-    logger.info(f"\nSaved rankings to target_predictability_rankings.csv")
+    # Save CSV to REPRODUCIBILITY (reproducibility artifact with per-model scores)
+    csv_path = repro_dir / "target_predictability_rankings.csv"
+    df.to_csv(csv_path, index=False)
+    logger.info(f"\nSaved rankings CSV to {csv_path}")
     
-    # Save YAML with recommendations
+    # Save YAML with recommendations to DECISION (decision log)
     yaml_data = {
         'target_rankings': [
             {
@@ -244,10 +265,11 @@ def save_rankings(
         ]
     }
     
-    with open(output_dir / "target_predictability_rankings.yaml", 'w') as f:
+    yaml_path = decision_dir / "target_prioritization.yaml"
+    with open(yaml_path, 'w') as f:
         yaml.dump(yaml_data, f, default_flow_style=False)
     
-    logger.info(f"Saved YAML to target_predictability_rankings.yaml")
+    logger.info(f"Saved target prioritization YAML to {yaml_path}")
 
 
 def _get_recommendation(score: TargetPredictabilityScore) -> str:
