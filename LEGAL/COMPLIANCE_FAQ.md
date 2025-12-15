@@ -242,10 +242,7 @@
 
 ### Q9.1: How much does a commercial license cost?
 
-**A:** All commercial licensing begins with a paid pilot (non-negotiable):
-- **Pilot (30 days):** $15,000–$30,000 — 1 environment, limited scope, async support
-- **Pilot+ (60–90 days):** $35,000–$90,000 — 2 environments, onboarding calls, tighter success criteria
-- **Credit:** 50–100% of pilot fee applies toward first-year license if converted
+**A:** All commercial licensing begins with a paid pilot (non-negotiable). See `DOCS/02_reference/commercial/COMMERCIAL.md` for detailed pilot options, pricing, and deliverables. Pilot fees are credited 100% toward the first-year annual license if converted within 60 days of Pilot completion.
 
 **Annual license pricing** is based on the using team/desk size (number of users and environments), not total company headcount. **Licensing is scoped to the business unit/desk, not the parent company's total headcount.**
 

@@ -12,7 +12,7 @@
 |----------|----------|-------------------|-------|
 | **Individual personal research** (not for any business purpose) | ✅ | ❌ | Must be in personal capacity, not for any business or organization |
 | **Non-commercial academic research** at degree-granting institution | ✅ | ❌ | Results must not support commercial operations. See `LICENSE` for full definition |
-| **Internal evaluation at a company** | ❌ | ✅ | **ALWAYS requires license** — 30-day evaluation period available (see `COMMERCIAL_LICENSE.md`) |
+| **Internal evaluation at a company** | ❌ | ✅ | **ALWAYS requires license** — paid pilot required (see `COMMERCIAL_LICENSE.md`) |
 | **Proof of concept / pilot project** within a business | ❌ | ✅ | **ALWAYS requires license** — even if experimental or non-revenue |
 | **Development / testing / staging** environments in a business | ❌ | ✅ | **ALWAYS requires license** — any environment within a business context |
 | **Production use** in a business | ❌ | ✅ | **ALWAYS requires license** |
@@ -73,7 +73,7 @@ See `LICENSE` for the complete definition of free use.
 | "Our interns are using it" | ❌ Use by employees/contractors/interns requires commercial license |
 | "We're a non-profit" | ❌ Non-profit status doesn't exempt commercial use — still requires commercial license |
 | "We're a university" | ⚠️ Only non-commercial academic research at degree-granting institutions is exempt — corporate funding or commercial integration requires commercial license |
-| "We'll only use it for 30 days" | ❌ Duration doesn't matter — commercial use requires commercial license from day one |
+| "We'll only use it for evaluation" | ❌ Business evaluation requires a paid pilot — no free trial for commercial use |
 | "It's open source, so it's free" | ❌ Source-available means code is visible, but organizational use requires a commercial license |
 | "We'll contribute back to open source" | ❌ Open source contributions don't exempt commercial use from licensing requirements |
 

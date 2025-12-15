@@ -23,10 +23,10 @@ Commercial license pricing is aligned with enterprise ML infrastructure standard
 
 **Any organizational use requires a commercial license**, regardless of whether the use directly generates revenue, is experimental, is a proof of concept, or is claimed to be "non-commercial" or "research-only." See `COMMERCIAL_LICENSE.md` Section 1 for the complete definition of organizational use.
 
-**30-DAY EVALUATION PERIOD FOR COMMERCIAL USE:**
-Commercial organizations may evaluate the Software for up to 30 days from initial download for testing and evaluation purposes without a paid license. This evaluation period allows organizations to test the Software's functionality, performance, and suitability before committing to a commercial license. Continued use after the 30-day evaluation period requires a commercial license. See `COMMERCIAL_LICENSE.md` Section 2 for complete evaluation license terms.
+**PAID PILOT REQUIRED FOR BUSINESS EVALUATION:**
+Business evaluation requires a paid Pilot. No exceptions. If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot. See `COMMERCIAL_LICENSE.md` Section 2 for complete evaluation license terms.
 
-**FOR THE AVOIDANCE OF DOUBT:** The 30-day evaluation period is for evaluation and testing purposes only. Production use, revenue-generating activities, or use beyond the evaluation period requires a paid commercial license. The 30-day evaluation period described in `LEGAL/SUPPORT_POLICY.md` is for non-commercial evaluation only and is separate from the commercial evaluation period.
+**Exception:** Tax-exempt academic research institutions may request a $0 evaluation pilot by contacting Licensor in writing. Such requests are subject to Licensor's approval and must demonstrate qualifying non-commercial academic research use as defined in `LICENSE`. This exception is limited to non-commercial academic research only.
 
 ### Academic & Personal Use (Free Use)
 
@@ -73,7 +73,7 @@ Commercial organizations may evaluate the Software for up to 30 days from initia
 
 ## Pricing
 
-**Commercial licenses typically start in the low five figures annually, depending on team size and deployment scope.**
+**Commercial licensing is per team/desk and starts in the six figures annually. Paid pilot required for organizational evaluation. Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages.**
 
 For detailed pricing information, please contact the maintainer:
 

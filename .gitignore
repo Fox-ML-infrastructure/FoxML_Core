@@ -30,8 +30,8 @@ SCRIPTS/
 # Lowercase scripts folder (use SCRIPTS/ instead)
 scripts/
 
-# Enterprise bundle - now tracked (PDFs and index)
-# ENTERPRISE_BUNDLE/
+# Enterprise bundle - untracked (PDFs and index)
+ENTERPRISE_BUNDLE/
 
 # Personal notes
 NOTES/

@@ -29,8 +29,9 @@ This includes:
 - Standard commercial protections
 
 **Pricing:**
-- Commercial licenses typically start in the low five figures annually
-- All commercial licensing begins with a paid pilot
+- Commercial licensing is per team/desk and starts in the six figures annually
+- Paid pilot required for organizational evaluation
+- Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages
 - Pricing based on team/desk size, not total company headcount
 
 For licensing inquiries or enterprise partnerships, contact:

@@ -36,7 +36,7 @@
 
 **Note:** Academic research conducted for, funded by, sponsored by, or operationally integrated into a commercial organization requires a commercial license, even if performed by students or interns.
 
-**NO FREE TRIAL FOR COMMERCIAL USE:** There is no grace period, evaluation period, or "free trial" for commercial use. Payment is required from the first day of commercial use. The 30-day evaluation period described in `LEGAL/SUPPORT_POLICY.md` is for non-commercial evaluation only.
+**PAID PILOT REQUIRED FOR BUSINESS EVALUATION:** Business evaluation requires a paid Pilot. No exceptions. If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot. Payment is required from the first day of commercial use.
 
 **See `LEGAL/SUBSCRIPTIONS.md` for complete definitions and usage scenarios.**
 
@@ -95,7 +95,7 @@
 
 ## 4. Pricing
 
-**Commercial licenses typically start in the low five figures annually, depending on team size and deployment scope.**
+**Commercial licensing is per team/desk and starts in the six figures annually. Paid pilot required for organizational evaluation. Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages.**
 
 For detailed pricing information, please contact the maintainer:
 

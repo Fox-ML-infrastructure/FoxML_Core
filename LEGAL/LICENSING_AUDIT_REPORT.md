@@ -32,7 +32,7 @@ Your licensing setup is **strong overall** with comprehensive documentation. How
    - SPDX headers in 220+ files
 
 4. **Enforcement mechanisms**
-   - 30-day evaluation period (trial business license)
+   - Paid pilot required for business evaluation (no free trial)
    - Clear document hierarchy
    - Audit rights defined
 
@@ -127,7 +127,7 @@ A: Yes. Any use by or for a business requires a commercial license.
 A: Yes. Use for client work is business use, not personal use.
 
 **Q: I'm evaluating it for my company. Is that free?**  
-A: You have 30 days for evaluation. After that, commercial license required.
+A: Business evaluation requires a paid Pilot. No exceptions. If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot.
 
 **Q: I'm a student doing research. Is that free?**  
 A: Only if at a qualifying tax-exempt institution AND research is non-commercial (see LICENSE for full definition).
@@ -159,7 +159,7 @@ A: No. Sole proprietors using Software for business operations require a commerc
 - Freelancers/contractors using it for client work
 - Sole proprietors using it for business operations
 - Employees using it in the scope of their work
-- Any evaluation, pilot, or PoC done by an organization (after 30-day trial)
+- Any evaluation, pilot, or PoC done by an organization (paid pilot required)
 
 📧 **jenn.lewis5789@gmail.com** | Subject: `FoxML Core Commercial Licensing`
 
@@ -183,19 +183,11 @@ SPDX-FileCopyrightText: Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 
 ---
 
-### Improvement 4: Add "Trial Business License" Clarification
+### Improvement 4: Paid Pilot Requirement (Already Implemented)
 
-**Current:** You have a 30-day evaluation period, but it's not explicitly called a "trial business license."
+**Current:** Business evaluation requires a paid Pilot. No exceptions.
 
-**Recommendation:** In `COMMERCIAL_LICENSE.md` Section 2, clarify:
-
-```markdown
-**Evaluation License (30-Day Trial Business License).**
-
-This is a **trial business license** for organizations to evaluate the Software. 
-It is NOT a free license for ongoing business use. After 30 days, continued 
-organizational use requires a paid commercial license.
-```
+**Status:** This is correctly implemented in `COMMERCIAL_LICENSE.md` Section 2. Business evaluation requires a paid pilot. No free trial for commercial use.
 
 ---
 
@@ -218,7 +210,7 @@ organizational use requires a paid commercial license.
 → Revenue generation is not required. Organizational use = commercial license.
 
 **"It's for evaluation."**  
-→ 30-day trial available. After that, commercial license required.
+→ Business evaluation requires a paid Pilot. No exceptions. If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot.
 
 **"It's experimental/non-production."**  
 → Environment label doesn't matter. Organizational use = commercial license.
