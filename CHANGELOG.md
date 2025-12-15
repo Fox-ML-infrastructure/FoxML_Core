@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### Execution Modules Added (2025-12-14) – **NEW**
+Execution modules (`ALPACA_trading` and `IBKR_trading`) have been added back to the repository with comprehensive compliance framework and documentation organization.
+- **ALPACA_trading**: Paper trading and backtesting framework (⚠️ has minor issues, needs testing)
+- **IBKR_trading**: Production live trading system for Interactive Brokers (⚠️ untested, requires testing before production use)
+- Comprehensive broker integration compliance framework with legal documentation
+- 20 documentation files moved to centralized `DOCS/` structure
+- 56 Python files updated with consistent copyright headers
+- Complete trading modules documentation and cross-linking
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-14-execution-modules.md) | [Trading Modules Overview](TRADING_MODULES.md) | [Broker Compliance](LEGAL/BROKER_INTEGRATION_COMPLIANCE.md)
+
 #### Enhanced Drift Tracking (2025-12-14) – **NEW**
 Bulletproof drift tracking with fingerprints, severity tiers, critical metrics, and sanity checks. Can now definitively answer "What changed between baseline and current, and was it data, config, code, or stochasticity?"
 - Fingerprints: git commit, config hash, data fingerprint (baseline + current) prove baseline is different

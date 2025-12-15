@@ -120,6 +120,7 @@ Complete technical reference for daily use. See [02_reference/README.md](02_refe
 
 ### Systems Reference
 - [Pipeline Reference](02_reference/systems/PIPELINE_REFERENCE.md) - Data pipelines
+- [Trading Modules Reference](02_reference/trading/README.md) - **NEW**: Reference documentation for ALPACA and IBKR trading modules
 - [Feature Importance Stability](03_technical/implementation/FEATURE_IMPORTANCE_STABILITY.md) - Feature importance stability tracking and analysis system
 - [Feature Filtering Execution Order](03_technical/implementation/FEATURE_FILTERING_EXECUTION_ORDER.md) - Formalized feature filtering hierarchy
 - [Feature Selection Execution Order](03_technical/implementation/FEATURE_SELECTION_EXECUTION_ORDER.md) - Formalized feature selection hierarchy
@@ -268,6 +269,18 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 - [Avoid Long Runs](03_technical/operations/AVOID_LONG_RUNS.md) - Performance tips
 - [Systemd Deployment](03_technical/operations/SYSTEMD_DEPLOYMENT.md) - Deployment guide
 
+### Trading Modules ⚠️ STATUS NOTES
+- [Trading Modules Overview](../TRADING_MODULES.md) - **NEW**: Complete guide to ALPACA_trading and IBKR_trading modules
+  - ⚠️ **ALPACA_trading**: Has minor issues, needs testing and fixes
+  - ⚠️ **IBKR_trading**: Untested, requires testing before production use
+- [Trading Reference](02_reference/trading/README.md) - **NEW**: Reference documentation for trading modules
+- [Trading Technical Docs](03_technical/trading/README.md) - **NEW**: Deep technical documentation for trading modules
+  - **Architecture**: [Mathematical Foundations](03_technical/trading/architecture/MATHEMATICAL_FOUNDATIONS.md), [Optimization Architecture](03_technical/trading/architecture/OPTIMIZATION_ARCHITECTURE.md)
+  - **Implementation**: [Live Trading Integration](03_technical/trading/implementation/LIVE_TRADING_INTEGRATION.md), [C++ Integration](03_technical/trading/implementation/C++_INTEGRATION_SUMMARY.md)
+  - **Testing**: [Testing Plan](03_technical/trading/testing/TESTING_PLAN.md), [Testing Summary](03_technical/trading/testing/TESTING_SUMMARY.md)
+  - **Operations**: [Systemd Deployment](03_technical/trading/operations/SYSTEMD_DEPLOYMENT_PLAN.md), [Performance Optimization](03_technical/trading/operations/PERFORMANCE_OPTIMIZATION_PLAN.md)
+- [Broker Integration Compliance](../LEGAL/BROKER_INTEGRATION_COMPLIANCE.md) - **NEW**: Legal framework for broker integrations
+
 ## Additional Documentation
 
 ### System Specifications
@@ -275,7 +288,8 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 - See [Feature Selection Implementation](03_technical/implementation/FEATURE_SELECTION_GUIDE.md) for implementation details
 
 ### System Documentation
-- Trading integration modules have been removed from the core repository. The system focuses on ML research infrastructure and model training.
+- [Trading Modules Overview](../TRADING_MODULES.md) - ALPACA and IBKR trading modules documentation
+- Trading modules (`ALPACA_trading/` and `IBKR_trading/`) provide paper trading and live trading capabilities respectively
 
 ## Documentation Architecture
 

@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-14 (Execution Modules Added)** — ALPACA_trading and IBKR_trading modules added with compliance framework, documentation organization, copyright headers. ⚠️ ALPACA has minor issues, IBKR is untested  
+  → [View](2025-12-14-execution-modules.md)
+
 - **2025-12-14 (Enhanced Drift Tracking)** — Fingerprints (git commit, config hash, data fingerprint), drift tiers (OK/WARN/ALERT), critical metrics tracking, sanity checks, Parquet files for queryable data  
   → [View](2025-12-14-drift-tracking-enhancements.md)
 

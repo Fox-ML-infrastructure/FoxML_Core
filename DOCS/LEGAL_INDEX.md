@@ -43,7 +43,9 @@ Complete index of all legal, licensing, compliance, and enterprise documentation
 - [Production Use Notification](../LEGAL/PRODUCTION_USE_NOTIFICATION.md) - Production use notification requirements
 
 ### Compliance
-- [Regulatory Disclaimers](../LEGAL/REGULATORY_DISCLAIMERS.md) - **NEW**: Explicit regulatory non-affiliation statements
+- [Regulatory Disclaimers](../LEGAL/REGULATORY_DISCLAIMERS.md) - Explicit regulatory non-affiliation statements
+- [Broker Integration Compliance](../LEGAL/BROKER_INTEGRATION_COMPLIANCE.md) - **NEW**: Complete legal framework for broker integrations (IBKR, Alpaca). Establishes user-authorized API integration model, user responsibilities, and compliance requirements.
+- [Broker Compliance Checklist](../LEGAL/BROKER_COMPLIANCE_CHECKLIST.md) - **NEW**: Quick reference checklist for ensuring broker integration compliance
 - [Compliance FAQ](../LEGAL/COMPLIANCE_FAQ.md) - Frequently asked compliance questions
 - [Export Compliance](../LEGAL/EXPORT_COMPLIANCE.md) - Export control compliance
 - [Release Policy](../LEGAL/RELEASE_POLICY.md) - Software release policy

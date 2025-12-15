@@ -69,6 +69,9 @@ Enterprise-ready documentation for buyers, legal departments, and CTOs:
 - **`ACCEPTABLE_USE_POLICY.md`** — Acceptable Use Policy (AUP): permitted and prohibited uses, compliance requirements
 - **`EXPORT_COMPLIANCE.md`** — Export compliance statement: EAR99 classification, licensee responsibilities, international compliance
 - **`IP_OWNERSHIP_CLARIFICATION.md`** — IP ownership clarification: core platform IP, client-owned IP, custom features, reuse rights
+- **`REGULATORY_DISCLAIMERS.md`** — Regulatory non-affiliation statements: NOT a broker, NOT an investment advisor, NOT providing regulated financial services
+- **`BROKER_INTEGRATION_COMPLIANCE.md`** — **NEW**: Complete legal framework for broker integrations (IBKR, Alpaca). Establishes user-authorized API integration model, user responsibilities, broker-specific compliance, and language requirements
+- **`BROKER_COMPLIANCE_CHECKLIST.md`** — **NEW**: Quick reference checklist for ensuring broker integration compliance in code, documentation, and user-facing materials
 
 **Release & Delivery:**
 - **`RELEASE_POLICY.md`** — Versioning strategy (semantic versioning), release cadence, deprecation policy, and safe migration guidelines
