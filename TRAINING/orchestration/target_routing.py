@@ -105,7 +105,7 @@ def load_target_confidence(output_dir: Path, target_name: str) -> Optional[Dict[
     Load target confidence JSON for a specific target.
     
     Args:
-        output_dir: Base output directory (e.g., feature_selections/{target})
+        output_dir: Target output directory (e.g., REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target})
         target_name: Target column name
     
     Returns:

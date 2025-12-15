@@ -199,13 +199,13 @@ def analyze_all_stability_hook(
     all_metrics = {}
     
     # Determine base output directory (RESULTS/{run}/)
+    # Walk up from REPRODUCIBILITY/FEATURE_SELECTION or REPRODUCIBILITY/TARGET_RANKING structure
     if output_dir:
-        if output_dir.name in ["target_rankings", "feature_selections"]:
-            base_output_dir = output_dir.parent
-        elif output_dir.parent.name in ["target_rankings", "feature_selections"]:
-            base_output_dir = output_dir.parent.parent
-        else:
-            base_output_dir = output_dir.parent if output_dir.parent.exists() else output_dir
+        base_output_dir = output_dir
+        while base_output_dir.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "feature_selections", "target_rankings"]:
+            base_output_dir = base_output_dir.parent
+            if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
+                break
     else:
         # Default: use get_snapshot_base_dir with None (artifacts/feature_importance)
         base_dir = get_snapshot_base_dir(None)

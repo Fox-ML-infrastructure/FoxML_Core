@@ -662,8 +662,7 @@ class IntelligentTrainer:
             except Exception as e2:
                 logger.debug(f"Recursive search also failed: {e2}")
         
-        # Create subdirectories (target_rankings removed - now using DECISION/ and REPRODUCIBILITY/)
-        (self.output_dir / "feature_selections").mkdir(exist_ok=True)
+        # Create subdirectories (target_rankings and feature_selections removed - now using DECISION/ and REPRODUCIBILITY/)
         (self.output_dir / "training_results").mkdir(exist_ok=True)
         (self.output_dir / "leakage_diagnostics").mkdir(exist_ok=True)
         
@@ -1016,8 +1015,9 @@ class IntelligentTrainer:
         if multi_model_config is None and feature_selection_config is None:
             multi_model_config = load_multi_model_config()
         
-        # Select features
-        feature_output_dir = self.output_dir / "feature_selections" / target
+        # Select features - write directly to REPRODUCIBILITY/FEATURE_SELECTION structure
+        target_name_clean = target.replace('/', '_').replace('\\', '_')
+        feature_output_dir = self.output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_name_clean
         
         # Extract explicit_interval from experiment_config for feature selection
         explicit_interval = None
@@ -1706,7 +1706,8 @@ class IntelligentTrainer:
             if multi_model_config:
                 routing_config = multi_model_config.get('confidence', {}).get('routing', {})
             
-            feature_selections_dir = self.output_dir / "feature_selections"
+            # Look for feature selection results in REPRODUCIBILITY/FEATURE_SELECTION structure
+            feature_selections_dir = self.output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION"
             if feature_selections_dir.exists():
                 all_confidence = collect_run_level_confidence_summary(
                     feature_selections_dir=feature_selections_dir,

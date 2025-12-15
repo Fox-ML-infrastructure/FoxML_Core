@@ -429,14 +429,12 @@ def select_features_for_target(
                             from TRAINING.stability.feature_importance import save_snapshot_hook
                             # Build REPRODUCIBILITY path for snapshots (same structure as feature importances)
                             target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-                            # Determine base output directory (RESULTS/{run}/)
-                            # output_dir might be: RESULTS/{run}/feature_selections/{target}/ or RESULTS/{run}/feature_selections/
-                            if output_dir.name == "feature_selections":
-                                base_output_dir = output_dir.parent
-                            elif output_dir.parent.name == "feature_selections":
-                                base_output_dir = output_dir.parent.parent
-                            else:
-                                base_output_dir = output_dir.parent if output_dir.parent.exists() else output_dir
+                            # Determine base output directory (walk up from REPRODUCIBILITY/FEATURE_SELECTION structure)
+                            base_output_dir = output_dir
+                            while base_output_dir.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "feature_selections", "target_rankings"]:
+                                base_output_dir = base_output_dir.parent
+                                if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
+                                    break
                             
                             repro_base = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION"
                             if view == "SYMBOL_SPECIFIC" and symbol_to_process:
@@ -996,14 +994,12 @@ def select_features_for_target(
             
             # Build REPRODUCIBILITY path for snapshots (same structure as feature importances)
             target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-            # Determine base output directory (RESULTS/{run}/)
-            # output_dir might be: RESULTS/{run}/feature_selections/{target}/ or RESULTS/{run}/feature_selections/
-            if output_dir.name == "feature_selections":
-                base_output_dir = output_dir.parent
-            elif output_dir.parent.name == "feature_selections":
-                base_output_dir = output_dir.parent.parent
-            else:
-                base_output_dir = output_dir.parent if output_dir.parent.exists() else output_dir
+            # Determine base output directory (walk up from REPRODUCIBILITY/FEATURE_SELECTION structure)
+            base_output_dir = output_dir
+            while base_output_dir.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "feature_selections", "target_rankings"]:
+                base_output_dir = base_output_dir.parent
+                if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
+                    break
             
             repro_base = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION"
             if view == "SYMBOL_SPECIFIC" and symbol:
@@ -1411,18 +1407,14 @@ def select_features_for_target(
         try:
             from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
             
-            # Use module-specific directory for reproducibility log
-            # output_dir is typically: output_dir_YYYYMMDD_HHMMSS/feature_selections/{target}/
-            # We want to store in feature_selections/ subdirectory for this module
-            if output_dir.name == 'feature_selections' or (output_dir.parent / 'feature_selections').exists():
-                # Already in or can find feature_selections subdirectory
-                if output_dir.name != 'feature_selections':
-                    module_output_dir = output_dir.parent / 'feature_selections'
-                else:
-                    module_output_dir = output_dir
-            else:
-                # Fallback: use output_dir directly (for standalone runs)
-                module_output_dir = output_dir
+            # Use run-level directory for reproducibility tracking
+            # output_dir is now: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
+            # Walk up to find the run-level directory
+            module_output_dir = output_dir
+            while module_output_dir.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "feature_selections", "target_rankings"]:
+                module_output_dir = module_output_dir.parent
+                if not module_output_dir.parent.exists() or module_output_dir.name == "RESULTS":
+                    break
             
             tracker = ReproducibilityTracker(
                 output_dir=module_output_dir,

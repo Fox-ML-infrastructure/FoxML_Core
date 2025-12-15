@@ -177,9 +177,9 @@ class RankingHarness:
                 target_name_clean = target_name.replace('/', '_').replace('\\', '_')
                 target_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / self.view / target_name_clean / "feature_exclusions"
             elif self.job_type == "rank_features":
-                # Save to REPRODUCIBILITY/FEATURE_SELECTION/{target}/feature_exclusions/
+                # Save to REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/feature_exclusions/
                 target_name_clean = target_name.replace('/', '_').replace('\\', '_')
-                target_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / target_name_clean / "feature_exclusions"
+                target_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_name_clean / "feature_exclusions"
             else:
                 # Fallback to old structure for backward compatibility
                 target_exclusion_dir = base_output_dir / "feature_exclusions"

@@ -96,7 +96,8 @@ def generate_routing_plan_after_feature_selection(
         
         # Step 1: Aggregate metrics
         logger.info("Step 1: Aggregating metrics from feature selection outputs...")
-        feature_selections_dir = output_dir / "feature_selections"
+        # Look in REPRODUCIBILITY/FEATURE_SELECTION structure
+        feature_selections_dir = output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION"
         aggregator = MetricsAggregator(feature_selections_dir)
         
         candidates_df = aggregator.aggregate_routing_candidates(

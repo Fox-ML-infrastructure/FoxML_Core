@@ -520,13 +520,14 @@ def compute_cross_sectional_stability(
             universe_id = "ALL"  # Default universe ID for cross-sectional
         
         # Build REPRODUCIBILITY path for snapshots (same structure as feature importances)
-        # Determine base output directory (RESULTS/{run}/)
+        # Determine base output directory (walk up from REPRODUCIBILITY/FEATURE_SELECTION structure)
         repro_base = None
         if output_dir:
-            if output_dir.name == "feature_selections" or (output_dir.parent.name == "feature_selections"):
-                base_output_dir = output_dir.parent if output_dir.name != "feature_selections" else output_dir.parent
-            else:
-                base_output_dir = output_dir.parent if output_dir.parent.exists() else output_dir
+            base_output_dir = output_dir
+            while base_output_dir.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "feature_selections", "target_rankings"]:
+                base_output_dir = base_output_dir.parent
+                if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
+                    break
             
             # Cross-sectional is always CROSS_SECTIONAL view
             target_name_clean = target_column.replace('/', '_').replace('\\', '_')

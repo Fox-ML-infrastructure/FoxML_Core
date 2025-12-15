@@ -57,17 +57,21 @@ def save_feature_selection_rankings(
         symbol: Symbol name (for SYMBOL_SPECIFIC view)
         metadata: Optional metadata dict
     """
-    # Determine base output directory (handle both old and new call patterns)
-    if output_dir.name == "feature_selections":
-        base_output_dir = output_dir.parent
-    elif output_dir.parent.name == "feature_selections":
-        base_output_dir = output_dir.parent.parent
-    else:
-        base_output_dir = output_dir.parent if output_dir.name == target_column else output_dir
+    # Determine base output directory (walk up from REPRODUCIBILITY/FEATURE_SELECTION structure)
+    base_output_dir = output_dir
+    while base_output_dir.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "feature_selections", "target_rankings"]:
+        base_output_dir = base_output_dir.parent
+        if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
+            break
     
     # Create directories
     target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-    repro_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / target_name_clean
+    # Use CROSS_SECTIONAL view structure (default for feature selection)
+    view_dir = view if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
+    if view_dir == "SYMBOL_SPECIFIC" and symbol:
+        repro_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean / f"symbol={symbol}"
+    else:
+        repro_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean
     decision_dir = base_output_dir / "DECISION" / "FEATURE_SELECTION" / target_name_clean
     repro_dir.mkdir(parents=True, exist_ok=True)
     decision_dir.mkdir(parents=True, exist_ok=True)
@@ -205,7 +209,7 @@ def save_dual_view_feature_selections(
     from pathlib import Path
     
     # Determine REPRODUCIBILITY directory (same as target ranking)
-    # output_dir might be: RESULTS/{run_id}/feature_selections/{target}/
+    # output_dir might be: RESULTS/{run_id}/REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
     # We want: RESULTS/{run_id}/REPRODUCIBILITY/FEATURE_SELECTION/
     # Determine base directory for REPRODUCIBILITY (should be at run level)
     # Walk up the directory tree to find the run directory (not a bin directory)
@@ -258,43 +262,38 @@ def save_feature_importances_for_reproducibility(
     Save feature importances in the same structure as target ranking.
     
     Structure (same as target ranking):
-    {output_dir}/feature_selections/feature_importances/
-      {target_column}/
-        {view}/
-          {symbol if SYMBOL_SPECIFIC}/
-            {model_family}_importances.csv
+    REPRODUCIBILITY/FEATURE_SELECTION/{view}/{target_column}/feature_importances/
+      {symbol if SYMBOL_SPECIFIC}/
+        {model_family}_importances.csv
     
     This matches the structure used by target ranking's _save_feature_importances.
     
     Args:
         all_feature_importances: Dict of {model_family: {feature: importance}}
         target_column: Target column name
-        output_dir: Base output directory
+        output_dir: Base output directory (REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/)
         view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
         symbol: Symbol name (for SYMBOL_SPECIFIC view)
     """
     import pandas as pd
     
-    # Determine base directory (same logic as target ranking)
-    # output_dir might be: RESULTS/{run_id}/feature_selections/{target}/
-    # We want: RESULTS/{run_id}/feature_selections/feature_importances/{target}/
-    if output_dir.name == target_column:
-        # output_dir is feature_selections/{target}/
-        base_dir = output_dir.parent
-    elif output_dir.name == 'feature_selections':
-        # output_dir is feature_selections/
-        base_dir = output_dir
-    else:
-        # Fallback: use output_dir directly
-        base_dir = output_dir
+    # Determine base directory (walk up to run level)
+    # output_dir is: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
+    # We want: REPRODUCIBILITY/FEATURE_SELECTION/{view}/{target}/feature_importances/
+    base_dir = output_dir
+    while base_dir.name not in ["FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY"]:
+        base_dir = base_dir.parent
+        if not base_dir.parent.exists() or base_dir.name == "RESULTS":
+            break
     
     target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+    view_dir = view if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
     
     # Create directory structure (same as target ranking)
-    if view == "SYMBOL_SPECIFIC" and symbol:
-        importances_dir = base_dir / "feature_importances" / target_name_clean / view / symbol
+    if view_dir == "SYMBOL_SPECIFIC" and symbol:
+        importances_dir = base_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean / f"symbol={symbol}" / "feature_importances"
     else:
-        importances_dir = base_dir / "feature_importances" / target_name_clean / view
+        importances_dir = base_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean / "feature_importances"
     
     importances_dir.mkdir(parents=True, exist_ok=True)
     

@@ -100,16 +100,19 @@ class MetricsAggregator:
         Returns:
             Dict with metrics or None if not found
         """
-        target_dir = self.output_dir / target
+        # Determine base output directory (walk up from REPRODUCIBILITY/FEATURE_SELECTION)
+        base_output_dir = self.output_dir
+        while base_output_dir.name in ["FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "CROSS_SECTIONAL", "feature_selections", "target_rankings"]:
+            base_output_dir = base_output_dir.parent
+            if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
+                break
         
-        # Try to find CS metrics from various sources
-        # 1. Feature selection outputs
-        fs_dir = target_dir / "feature_selections"
-        if not fs_dir.exists():
-            fs_dir = target_dir
+        target_name_clean = target.replace('/', '_').replace('\\', '_')
+        # Look in REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
+        fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_name_clean
         
-        # Look for model_metadata.json or target_confidence.json
-        metadata_path = fs_dir / "model_metadata.json"
+        # Look for multi_model_metadata.json or target_confidence.json
+        metadata_path = fs_dir / "multi_model_metadata.json"
         confidence_path = fs_dir / "target_confidence.json"
         
         score = None
@@ -189,19 +192,21 @@ class MetricsAggregator:
         Returns:
             Dict with metrics or None if not found
         """
-        target_dir = self.output_dir / target
-        
-        # Look for symbol-specific outputs
-        # Could be in feature_selections/{target}/{symbol}/ or similar
-        symbol_dir = target_dir / symbol
-        fs_dir = target_dir / "feature_selections" / symbol
-        
-        # Try both locations
-        metadata_path = None
-        for path in [fs_dir / "model_metadata.json", symbol_dir / "model_metadata.json"]:
-            if path.exists():
-                metadata_path = path
+        # Determine base output directory (walk up from REPRODUCIBILITY/FEATURE_SELECTION)
+        base_output_dir = self.output_dir
+        while base_output_dir.name in ["FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "SYMBOL_SPECIFIC", "CROSS_SECTIONAL", "feature_selections", "target_rankings"]:
+            base_output_dir = base_output_dir.parent
+            if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
                 break
+        
+        target_name_clean = target.replace('/', '_').replace('\\', '_')
+        # Look in REPRODUCIBILITY/FEATURE_SELECTION/SYMBOL_SPECIFIC/{target}/symbol={symbol}/
+        fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "SYMBOL_SPECIFIC" / target_name_clean / f"symbol={symbol}"
+        
+        # Look for multi_model_metadata.json
+        metadata_path = fs_dir / "multi_model_metadata.json"
+        if not metadata_path.exists():
+            metadata_path = None
         
         score = None
         sample_size = None
@@ -297,13 +302,13 @@ class MetricsAggregator:
                 method = "lightgbm"  # Default per-symbol method
             
             # Determine base output directory (RESULTS/{run}/)
-            # output_dir might be: RESULTS/{run}/target_rankings/ or RESULTS/{run}/feature_selections/
-            if "feature_selections" in str(self.output_dir):
-                base_output_dir = self.output_dir.parent if self.output_dir.name != "feature_selections" else self.output_dir.parent
-            elif "target_rankings" in str(self.output_dir):
-                base_output_dir = self.output_dir.parent if self.output_dir.name != "target_rankings" else self.output_dir.parent
-            else:
-                base_output_dir = self.output_dir.parent if self.output_dir.parent.exists() else self.output_dir
+            # output_dir might be: REPRODUCIBILITY/FEATURE_SELECTION or REPRODUCIBILITY/TARGET_RANKING
+            # Walk up to find the run-level directory
+            base_output_dir = self.output_dir
+            while base_output_dir.name in ["FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "feature_selections", "target_rankings"]:
+                base_output_dir = base_output_dir.parent
+                if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
+                    break
             
             # Determine view and symbol from context
             # For metrics aggregator, we need to search both CROSS_SECTIONAL and SYMBOL_SPECIFIC
