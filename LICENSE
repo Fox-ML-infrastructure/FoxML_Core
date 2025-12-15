@@ -10,16 +10,15 @@ a paid commercial license.
 companies, universities, research labs, non-profits, government entities, 
 and any subdivision or department thereof.**
 
-**Notwithstanding the definition of Organization above, a limited exception 
-is granted for Non-Commercial Academic Research as defined in Section 2 below.**
+**No exceptions. All use requires a commercial license.**
 
-**HARD RULE: If you are not a natural person acting solely on your own behalf, you need a business license.**
+**ALL USE REQUIRES A COMMERCIAL LICENSE.**
 
 This means:
-- ✅ Natural person using Software for personal, non-commercial purposes → Free
-- ❌ Natural person using Software for any business, client work, or organizational purpose → Commercial license required
+- ❌ Any use by any person or entity requires a commercial license
+- ❌ Personal use, business use, academic use, or any other use → Commercial license required
 - ❌ Any legal entity (LLC, corporation, partnership, etc.) → Commercial license required
-- ❌ Employee, contractor, or agent acting for an organization → Commercial license required
+- ❌ Any individual, employee, contractor, or agent → Commercial license required
 
 ---
 
@@ -45,42 +44,20 @@ Fees are set forth in Ordering Documents. A paid Pilot is required for all comme
 
 ---
 
-## FREE USE (No License Required)
+## COMMERCIAL LICENSE REQUIRED
 
-You may use the Software for free ONLY if:
+**All use of this Software requires a paid commercial license from Fox ML Infrastructure LLC.**
 
-1. **Personal Use**: Individual use in your personal capacity where:
-   - You are a natural person acting solely on your own behalf
-   - You are NOT using it as an employee, contractor, or agent of any business, organization, or entity
-   - You are NOT using it for the benefit of any third party (including clients, employers, or business partners)
-   - You are NOT using it in connection with any commercial activity (including but not limited to: revenue generation, trading, client delivery, internal operations, fundraising, sponsorship, paid grants, patenting, proprietary datasets/models, or any activity that supports or relates to business operations)
-   - You are NOT a sole proprietor, freelancer, or independent contractor using it for client work or business operations
-   
-   **Explicitly NOT personal use:**
-   - Any use by freelancers, contractors, or consultants for client work
-   - Any use by sole proprietors for business operations
-   - Any "personal" project that supports or relates to business activities
-   - Any use that could reasonably be considered business-related, even if labeled "personal" or "experimental"
+There are no exceptions. This includes:
+- Personal use by individuals
+- Academic research (commercial or non-commercial)
+- Business use, organizational use, or institutional use
+- Evaluation, testing, development, staging, or production use
+- Any use by any person or entity, regardless of purpose or context
 
-2. **Non-Commercial Academic Research**: Use by degree-granting educational 
-   or non-profit research institutions that are:
-   - Recognized as tax-exempt organizations under applicable law
-   - Not owned, controlled by, or operated for the benefit of any 
-     commercial entity
-   - Where research results are not used to support commercial operations, 
-     trading, revenue-generating activities, or any business purpose
-
-**Explicitly NOT free use:**
-- Any use by or for a company, university lab as an institution, 
-  organization, or legal entity
-- Any internal tooling, deployment, pilot, PoC, or evaluation by an 
-  organization
-- Any sponsored research, corporate-funded research, or research 
-  integrated into commercial operations
-- Any use by employees, contractors, interns, or affiliates in the scope 
-  of their work
-- Any use in development, testing, staging, or production environments 
-  within a business context
+**To obtain a commercial license, contact:**
+📧 jenn.lewis5789@gmail.com
+Subject: FoxML Core Commercial Licensing
 
 ---
 
@@ -121,8 +98,7 @@ You may NOT:
 ## SOURCE CODE ACCESS
 
 Source code is publicly available for inspection and study. This license 
-does not grant any right to use the Software for organizational purposes 
-without a paid commercial license.
+does not grant any right to use the Software without a paid commercial license.
 
 ---
 
@@ -153,8 +129,8 @@ Software from you in compliance with this license.
 
 ## ENFORCEMENT
 
-Unauthorized organizational use of the Software without a valid commercial 
-license constitutes copyright infringement. Licensor reserves all rights and 
+Unauthorized use of the Software without a valid commercial license 
+constitutes copyright infringement. Licensor reserves all rights and 
 remedies available under copyright law, including injunctive relief, 
 monetary damages, and recovery of attorneys' fees and costs.
 

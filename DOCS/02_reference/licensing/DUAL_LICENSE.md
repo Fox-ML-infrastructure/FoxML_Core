@@ -1,6 +1,6 @@
 # FoxML Core – Source-Available License
 
-FoxML Core is **source-available** with a commercial license required for organizational use.
+FoxML Core is **source-available**. All use requires a paid commercial license.
 
 **Document Hierarchy:** In case of any conflict, the full text of `LICENSE` and `COMMERCIAL_LICENSE.md` controls. `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms, definitions, and obligations.
 
@@ -17,9 +17,7 @@ FoxML Core is **source-available** with a commercial license required for organi
 - Any evaluation/pilot done by an organization
 - Any use by employees, contractors, interns, or affiliates in the scope of their work
 
-**Free use is limited to:**
-- Personal use (individual, non-commercial, not for any business purpose)
-- Non-commercial academic research at qualifying tax-exempt institutions (see `LICENSE` for full definition)
+**All use requires a commercial license. No exceptions.**
 
 **Unauthorized organizational use is copyright infringement.**
 
@@ -31,25 +29,18 @@ FoxML Core is **source-available** with a commercial license required for organi
 
 ---
 
-## Free Use (No License Required)
+## Commercial License Required
 
-### Personal Use
+**All use of FoxML Core requires a paid commercial license.**
 
-You may use FoxML Core for free if:
-- You are an individual using it in your personal capacity
-- You are not using it as an employee, contractor, or agent of any business, organization, or entity
-- You are not using it for the benefit of any third party
-- You are not using it in connection with any commercial activity
+There are no exceptions. This includes:
+- Personal use by individuals
+- Academic research (commercial or non-commercial)
+- Business use, organizational use, or institutional use
+- Evaluation, testing, development, staging, or production use
+- Any use by any person or entity, regardless of purpose or context
 
-### Non-Commercial Academic Research
-
-You may use FoxML Core for free if:
-- You are at a degree-granting educational or non-profit research institution
-- The institution is recognized as tax-exempt under applicable law
-- The institution is not owned, controlled by, or operated for the benefit of any commercial entity
-- Research results are not used to support commercial operations, trading, revenue-generating activities, or any business purpose
-
-**See `LICENSE` for the complete definition of free use.**
+**See `LICENSE` for complete license terms.**
 
 ---
 
@@ -71,8 +62,9 @@ This includes:
 - Standard commercial protections
 
 **Pricing:**
-- Commercial licenses typically start in the low five figures annually
-- All commercial licensing begins with a paid pilot
+- Commercial licensing is per team/desk and starts in the six figures annually
+- Paid pilot required for evaluation
+- Fees are specified in Ordering Documents. See `../commercial/COMMERCIAL.md` for pricing and packages
 - Pricing based on team/desk size, not total company headcount
 
 **To obtain a commercial license:**

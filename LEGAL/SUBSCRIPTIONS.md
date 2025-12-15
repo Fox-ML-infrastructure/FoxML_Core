@@ -1,4 +1,4 @@
-> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` controls for free use.
+> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations.
 
 ## Licensing & Access Requests
 
@@ -26,29 +26,18 @@ Commercial license pricing is aligned with enterprise ML infrastructure standard
 **PAID PILOT REQUIRED FOR BUSINESS EVALUATION:**
 Business evaluation requires a paid Pilot. No exceptions. If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot. See `COMMERCIAL_LICENSE.md` Section 2 for complete evaluation license terms.
 
-**Exception:** Tax-exempt academic research institutions may request a $0 evaluation pilot by contacting Licensor in writing. Such requests are subject to Licensor's approval and must demonstrate qualifying non-commercial academic research use as defined in `LICENSE`. This exception is limited to non-commercial academic research only.
+**All use requires a commercial license. No exceptions.**
 
-### Academic & Personal Use (Free Use)
+This includes:
+- Personal use by individuals
+- Academic research (commercial or non-commercial)
+- Business use, organizational use, or institutional use
+- Evaluation, testing, development, staging, or production use
+- Any use by any person or entity, regardless of purpose or context
 
-**"Free use"** (personal use and non-commercial academic research) means:
+**IMPORTANT:** Unauthorized use of the Software without a valid commercial license is copyright infringement and may result in legal claims. If you have used the Software without a license, you must immediately obtain a commercial license.
 
-- Use by an individual in their personal capacity (meaning: not as an employee, contractor, or agent of any business, organization, or other entity; not for the benefit of any third party; and not in connection with any commercial activity, including but not limited to freelance work, consulting, or sole proprietorship activities), or
-- Use by a degree-granting educational or non-profit research institution that is: (i) recognized as a tax-exempt organization under applicable law, (ii) not owned, controlled by, or operated for the benefit of any commercial entity, and (iii) where the research results are not used to support commercial operations, trading, revenue-generating activities, or any business purpose of any commercial organization
-
-**EXPLICIT EXCLUSIONS FROM NON-COMMERCIAL USE:**
-- **Sole proprietorships, freelancers, and independent contractors** — Any use by a sole proprietor, freelancer, or independent contractor, even if claimed to be "personal," requires a commercial license if the Software is used in connection with any business activity, client work, or revenue-generating activity
-- **For-profit educational institutions** — Any use by for-profit universities, bootcamps, training companies, or corporate training programs requires a commercial license
-- **Corporate training and bootcamps** — Any use for corporate training, professional development, bootcamp instruction, or educational services provided by commercial entities requires a commercial license, regardless of whether the training is provided to employees or external students
-- **Corporate research labs** — Any research conducted by, for, or on behalf of a commercial organization requires a commercial license, regardless of whether the research lab has non-profit status or is operated as a separate entity
-- **University research with commercial ties** — Research funded by, sponsored by, or operationally integrated into commercial organizations requires a commercial license, even if performed at a non-profit institution
-- **Development, testing, and staging environments** — Any use in development, testing, staging, quality assurance, or other non-production environments within a business context requires a commercial license, regardless of whether such environments are labeled as "experimental" or "non-production"
-- **Open source contributions** — Contributing code, fixes, or improvements to the open-source version does not exempt Commercial Use (as defined in `COMMERCIAL_LICENSE.md` Section 1) from licensing requirements
-
-**Academic research that is conducted for, funded by, sponsored by, or operationally integrated into a commercial organization's activities requires a commercial license**, even if the research is performed by students, interns, or contractors.
-
-**IMPORTANT:** Unauthorized organizational use of the Software without a valid commercial license is copyright infringement and may result in legal claims. If you have used the Software for organizational purposes without a license, you must immediately obtain a commercial license.
-
-**See `LICENSE` for complete free use definition and `DOCS/02_reference/licensing/DUAL_LICENSE.md` for licensing overview.**
+**See `LICENSE` for complete license terms and `DOCS/02_reference/licensing/DUAL_LICENSE.md` for licensing overview.**
 
 ---
 
@@ -56,8 +45,8 @@ Business evaluation requires a paid Pilot. No exceptions. If you're a legal enti
 
 | Scenario | License Required | Notes |
 |----------|------------------|-------|
-| **Personal / Individual** | Free | Personal study, experimentation, or non-commercial research by an individual (NOT for business, client work, or revenue-generating activities) |
-| **Academic Institution** | Free (if qualifying) | Non-profit, tax-exempt educational institution, research not supporting commercial operations (for-profit universities require commercial license) |
+| **Personal / Individual** | Commercial | All use by individuals requires a commercial license |
+| **Academic Institution** | Commercial | All use by academic institutions requires a commercial license |
 | **Sole Proprietor / Freelancer** | Commercial | Any use in connection with business activity, client work, or revenue generation (even if claimed to be "personal") |
 | **Startup / Small Business** | Commercial | Any business entity, regardless of size, revenue, profitability, or stage (including pre-revenue startups, companies operating at a loss, or companies in development phase) |
 | **Subsidiary / Affiliate** | Commercial | Each legal entity (including subsidiaries, affiliates, and parent companies) must have its own license. A parent company's license does not cover subsidiaries, and vice versa |

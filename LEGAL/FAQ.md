@@ -32,9 +32,7 @@
 
 **A:** No. If they are using the Software in the scope of their work for a business or organization, that constitutes organizational use and requires a commercial license.
 
-Free use is only permitted for:
-- Individual personal research (not for any business purpose)
-- Non-commercial academic research at qualifying tax-exempt institutions (see `LICENSE` for full definition)
+All use requires a commercial license. No exceptions.
 
 **Key point:** Use by employees, contractors, interns, or Affiliates in the scope of their work for a business entity requires a commercial license, regardless of their employment status.
 
@@ -50,7 +48,7 @@ Free use is only permitted for:
 
 **A:** It depends on the context:
 
-- **Non-commercial academic research** at a qualifying tax-exempt educational institution (where results are not used to support commercial operations) → Free use permitted (see `LICENSE`)
+- **All academic research** (commercial or non-commercial) → Commercial license required
 - **Corporate-funded research** or research sponsored by commercial organizations → Commercial license required
 - **For-profit universities** or corporate research labs → Commercial license required
 - **Research that supports commercial operations, trading, or revenue-generating activities** → Commercial license required
@@ -168,7 +166,7 @@ A: Business evaluation requires a paid Pilot. No exceptions. If you're a legal e
 A: Only if at a qualifying tax-exempt institution AND research is non-commercial (see LICENSE for full definition).
 
 **Q: I'm a sole proprietor. Is that personal use?**  
-A: No. Sole proprietors using Software for business operations require a commercial license.
+A: No. All use requires a commercial license, including sole proprietors.
 
 ---
 

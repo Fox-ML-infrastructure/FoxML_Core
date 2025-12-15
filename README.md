@@ -2,12 +2,10 @@
 
 ## License
 
-**FoxML Core is source-available. Free for personal use, paid for business.**
+**FoxML Core is source-available. All use requires a paid commercial license.**
 
-- ✅ **Free for:** Natural persons using Software for personal, non-commercial purposes
-- 💰 **Paid license required for:** Any organizational, institutional, or commercial use
-
-**Hard rule:** If you are not a natural person acting solely on your own behalf, you need a business license.
+- 💰 **Commercial license required for:** All use by any person or entity, regardless of purpose
+- ❌ **No exceptions:** Personal use, academic use, business use, or any other use requires a license
 
 **Examples requiring a commercial license:**
 - Any use by or for a company, university, lab, or organization
@@ -20,9 +18,9 @@
 
 **Business use requires a paid license.** Commercial licensing is per team/desk and starts in the six figures annually. Paid pilot required for organizational evaluation.
 
-**FoxML Core is source-available: free for personal use. Organizational use requires a paid license (including evaluation). This keeps the project sustainable and enables continued development.**
+**FoxML Core is source-available. All use requires a paid commercial license. This keeps the project sustainable and enables continued development.**
 
-**→ [Commercial Licensing](DOCS/02_reference/commercial/COMMERCIAL.md)** | **→ [Free Use Terms](LICENSE)** | **→ [Commercial License](COMMERCIAL_LICENSE.md)**
+**→ [Commercial Licensing](DOCS/02_reference/commercial/COMMERCIAL.md)** | **→ [License Terms](LICENSE)** | **→ [Commercial License](COMMERCIAL_LICENSE.md)**
 
 ---
 
