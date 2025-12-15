@@ -335,12 +335,16 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
             print(f"DEBUG: About to call train_model_comprehensive for {family}")  # Debug print
             
             try:
+                # Normalize family name for capabilities map lookup
+                from TRAINING.training_strategies.utils import normalize_family_name
+                normalized_family = normalize_family_name(family)
+                
                 # Check family capabilities
-                if family not in FAMILY_CAPS:
-                    logger.warning(f"Model family {family} not in capabilities map. Skipping.")
+                if normalized_family not in FAMILY_CAPS:
+                    logger.warning(f"Model family {family} (normalized: {normalized_family}) not in capabilities map. Skipping.")
                     continue
                 
-                caps = FAMILY_CAPS[family]
+                caps = FAMILY_CAPS[normalized_family]
                 logger.info(f"📋 Family capabilities: {caps}")
                 
                 # Check TensorFlow dependency (skip for torch families)
@@ -356,17 +360,18 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                     # If isolated, child process will handle TF import/initialization
                 
                 # Check NGBoost dependency
-                if family == "NGBoost" and not ngboost_available():
-                    logger.warning(f"NGBoost missing → skipping {family}")
+                if normalized_family == "NGBoost" and not ngboost_available():
+                    logger.warning(f"NGBoost missing → skipping {normalized_family}")
                     continue
                 
                 logger.info(f"🚀 [{family}] Starting {family} training...")
                 start_time = _now()
                 
                 # Train model using modular system with routing metadata
+                # Use normalized family name for consistency
                 try:
                     model_result = train_model_comprehensive(
-                        family, X, y, target, strategy, feature_names, caps, routing_meta
+                        normalized_family, X, y, target, strategy, feature_names, caps, routing_meta
                     )
                     elapsed = _now() - start_time
                     logger.info(f"⏱️ [{family}] {family} training completed in {elapsed:.2f} seconds")

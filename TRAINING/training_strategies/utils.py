@@ -343,6 +343,48 @@ SEQUENTIAL_MODELS = [
 # PyTorch sequential families (for better performance)
 TORCH_SEQ_FAMILIES = {"CNN1D", "LSTM", "Transformer", "TabCNN", "TabLSTM", "TabTransformer"}
 
+def normalize_family_name(family: str) -> str:
+    """
+    Normalize model family name to title case for capabilities map lookup.
+    
+    Handles common variations:
+    - lightgbm -> LightGBM
+    - xgboost -> XGBoost
+    - random_forest -> RandomForest
+    - neural_network -> NeuralNetwork
+    - mutual_information -> MutualInformation
+    - univariate_selection -> UnivariateSelection
+    - lasso -> Lasso
+    - catboost -> CatBoost
+    """
+    # Handle special cases first
+    special_cases = {
+        "lightgbm": "LightGBM",
+        "xgboost": "XGBoost",
+        "catboost": "CatBoost",
+        "ngboost": "NGBoost",
+        "random_forest": "RandomForest",
+        "neural_network": "NeuralNetwork",
+        "mutual_information": "MutualInformation",
+        "univariate_selection": "UnivariateSelection",
+        "quantilelightgbm": "QuantileLightGBM",
+        "ftrlproximal": "FTRLProximal",
+        "gmmregime": "GMMRegime",
+        "changepoint": "ChangePoint",
+        "rewardbased": "RewardBased",
+        "metalearning": "MetaLearning",
+        "multitask": "MultiTask",
+    }
+    
+    family_lower = family.lower()
+    if family_lower in special_cases:
+        return special_cases[family_lower]
+    
+    # For others, try title case (handles most cases)
+    # Replace underscores and title case
+    return family.replace("_", "").title()
+
+
 # Family capabilities map (from original script)
 FAMILY_CAPS = {
     "LightGBM": {"nan_ok": True, "needs_tf": False, "experimental": False},
@@ -364,7 +406,14 @@ FAMILY_CAPS = {
     "GAN": {"nan_ok": False, "needs_tf": True, "experimental": True},
     "Ensemble": {"nan_ok": False, "needs_tf": False, "experimental": False},
     "MetaLearning": {"nan_ok": False, "needs_tf": True, "experimental": True},
-    "MultiTask": {"nan_ok": False, "needs_tf": True, "experimental": True}
+    "MultiTask": {"nan_ok": False, "needs_tf": True, "experimental": True},
+    # Additional families (feature selection methods)
+    "Lasso": {"nan_ok": False, "needs_tf": False, "experimental": False},
+    "RandomForest": {"nan_ok": True, "needs_tf": False, "experimental": False},
+    "CatBoost": {"nan_ok": True, "needs_tf": False, "experimental": False},
+    "NeuralNetwork": {"nan_ok": False, "needs_tf": True, "experimental": False, "preprocess_in_family": True},
+    "MutualInformation": {"nan_ok": True, "needs_tf": False, "experimental": False},
+    "UnivariateSelection": {"nan_ok": True, "needs_tf": False, "experimental": False}
 }
 
 
