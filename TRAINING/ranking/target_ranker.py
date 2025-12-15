@@ -775,34 +775,34 @@ def rank_targets(
                     local_symbol_skip_reasons = {}  # {symbol: {reason, n_rows, n_train, n_val, n_pos_train, n_neg_train, n_pos_val, n_neg_val}}
                     
                     for symbol in symbols:
-                            logger.info(f"    Evaluating {target_name} for symbol {symbol}...")
-                            try:
-                                if auto_rerun_enabled and _AUTOFIX_AVAILABLE:
-                                    # Try with view/symbol, fallback to without if not supported
-                                    try:
-                                        result_sym = evaluate_target_with_autofix(
-                                            target_name=target_name,
-                                            target_config=target_config,
-                                            symbols=[symbol],  # Single symbol
-                                            data_dir=data_dir,
-                                            model_families=model_families,
-                                            multi_model_config=multi_model_config,
-                                            output_dir=output_dir,
-                                            min_cs=1,  # Single symbol, min_cs=1
-                                            max_cs_samples=max_cs_samples,
-                                            max_rows_per_symbol=max_rows_per_symbol,
-                                            max_reruns=max_reruns,
-                                            rerun_on_perfect_train_acc=rerun_on_perfect_train_acc,
-                                            rerun_on_high_auc_only=rerun_on_high_auc_only,
-                                            explicit_interval=explicit_interval,
-                                            experiment_config=experiment_config,
-                                            view="SYMBOL_SPECIFIC",
-                                            symbol=symbol
-                                        )
-                                    except TypeError:
-                                        # Fallback: autofix doesn't support view/symbol yet
-                                        logger.debug(f"evaluate_target_with_autofix doesn't support view/symbol for {symbol}, using without")
-                                        result_sym = evaluate_target_with_autofix(
+                        logger.info(f"    Evaluating {target_name} for symbol {symbol}...")
+                        try:
+                            if auto_rerun_enabled and _AUTOFIX_AVAILABLE:
+                                # Try with view/symbol, fallback to without if not supported
+                                try:
+                                    result_sym = evaluate_target_with_autofix(
+                                        target_name=target_name,
+                                        target_config=target_config,
+                                        symbols=[symbol],  # Single symbol
+                                        data_dir=data_dir,
+                                        model_families=model_families,
+                                        multi_model_config=multi_model_config,
+                                        output_dir=output_dir,
+                                        min_cs=1,  # Single symbol, min_cs=1
+                                        max_cs_samples=max_cs_samples,
+                                        max_rows_per_symbol=max_rows_per_symbol,
+                                        max_reruns=max_reruns,
+                                        rerun_on_perfect_train_acc=rerun_on_perfect_train_acc,
+                                        rerun_on_high_auc_only=rerun_on_high_auc_only,
+                                        explicit_interval=explicit_interval,
+                                        experiment_config=experiment_config,
+                                        view="SYMBOL_SPECIFIC",
+                                        symbol=symbol
+                                    )
+                                except TypeError:
+                                    # Fallback: autofix doesn't support view/symbol yet
+                                    logger.debug(f"evaluate_target_with_autofix doesn't support view/symbol for {symbol}, using without")
+                                    result_sym = evaluate_target_with_autofix(
                                         target_name=target_name,
                                         target_config=target_config,
                                         symbols=[symbol],
@@ -819,8 +819,8 @@ def rank_targets(
                                         explicit_interval=explicit_interval,
                                         experiment_config=experiment_config
                                     )
-                                else:
-                                    result_sym = evaluate_target_predictability(
+                            else:
+                                result_sym = evaluate_target_predictability(
                                     target_name=target_name,
                                     target_config=target_config,
                                     symbols=[symbol],  # Single symbol
@@ -835,44 +835,44 @@ def rank_targets(
                                     experiment_config=experiment_config,
                                     view="SYMBOL_SPECIFIC",
                                     symbol=symbol
-                                    )
-                                
-                                # Gate: Skip if result is degenerate (mean_score = -999)
-                                if result_sym.mean_score == -999.0:
-                                    skip_reason = result_sym.status if result_sym.status != "OK" else "degenerate"
-                                    logger.warning(f"    ⚠️  Skipped {target_name} for symbol {symbol}: {skip_reason} (mean_score=-999.0, status={result_sym.status})")
-                                    local_symbol_skip_reasons[symbol] = {
-                                        'reason': skip_reason,
-                                        'status': result_sym.status,
-                                        'leakage_flag': result_sym.leakage_flag,
-                                        'mean_score': result_sym.mean_score
-                                    }
-                                    continue
-                                
-                                logger.info(f"    ✅ {target_name} for {symbol}: mean_score={result_sym.mean_score:.4f}, status={result_sym.status}")
-                                result_sym_dict[symbol] = result_sym
-                            except Exception as e:
-                                skip_reason = f"exception: {type(e).__name__}"
-                                logger.error(f"    ❌ Failed to evaluate {target_name} for symbol {symbol}: {e}", exc_info=True)
+                                )
+                            
+                            # Gate: Skip if result is degenerate (mean_score = -999)
+                            if result_sym.mean_score == -999.0:
+                                skip_reason = result_sym.status if result_sym.status != "OK" else "degenerate"
+                                logger.warning(f"    ⚠️  Skipped {target_name} for symbol {symbol}: {skip_reason} (mean_score=-999.0, status={result_sym.status})")
                                 local_symbol_skip_reasons[symbol] = {
                                     'reason': skip_reason,
-                                    'error': str(e),
-                                    'error_type': type(e).__name__
+                                    'status': result_sym.status,
+                                    'leakage_flag': result_sym.leakage_flag,
+                                    'mean_score': result_sym.mean_score
                                 }
                                 continue
-                        
-                        # Log summary of skip reasons
-                        if local_symbol_skip_reasons:
-                            logger.warning(f"  📋 Symbol-specific skip reasons for {target_name}: {len(local_symbol_skip_reasons)}/{len(symbols)} symbols skipped")
-                            for sym, skip_info in local_symbol_skip_reasons.items():
-                                reason = skip_info.get('reason', 'unknown')
-                                logger.debug(f"    {sym}: {reason}")
-                        
-                        # Store skip reasons for routing decisions (use global symbol_skip_reasons dict)
-                        if local_symbol_skip_reasons:
-                            symbol_skip_reasons[target_name] = local_symbol_skip_reasons
-                        
-                        logger.info(f"  📊 Symbol-specific results for {target_name}: {len(result_sym_dict)}/{len(symbols)} symbols succeeded")
+                            
+                            logger.info(f"    ✅ {target_name} for {symbol}: mean_score={result_sym.mean_score:.4f}, status={result_sym.status}")
+                            result_sym_dict[symbol] = result_sym
+                        except Exception as e:
+                            skip_reason = f"exception: {type(e).__name__}"
+                            logger.error(f"    ❌ Failed to evaluate {target_name} for symbol {symbol}: {e}", exc_info=True)
+                            local_symbol_skip_reasons[symbol] = {
+                                'reason': skip_reason,
+                                'error': str(e),
+                                'error_type': type(e).__name__
+                            }
+                            continue
+                    
+                    # Log summary of skip reasons
+                    if local_symbol_skip_reasons:
+                        logger.warning(f"  📋 Symbol-specific skip reasons for {target_name}: {len(local_symbol_skip_reasons)}/{len(symbols)} symbols skipped")
+                        for sym, skip_info in local_symbol_skip_reasons.items():
+                            reason = skip_info.get('reason', 'unknown')
+                            logger.debug(f"    {sym}: {reason}")
+                    
+                    # Store skip reasons for routing decisions (use global symbol_skip_reasons dict)
+                    if local_symbol_skip_reasons:
+                        symbol_skip_reasons[target_name] = local_symbol_skip_reasons
+                    
+                    logger.info(f"  📊 Symbol-specific results for {target_name}: {len(result_sym_dict)}/{len(symbols)} symbols succeeded")
                 
                 # View C: LOSO evaluation (optional, if enabled)
                 result_loso_dict = {}
