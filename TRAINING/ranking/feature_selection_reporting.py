@@ -211,13 +211,14 @@ def save_dual_view_feature_selections(
     # Walk up the directory tree to find the run directory (not a bin directory)
     repro_base = output_dir
     # Keep going up until we find a directory that's not a module subdirectory or bin directory
-    while repro_base.name in ["feature_selections", "target_rankings", "training_results"] or repro_base.name.startswith("sample_"):
+    while repro_base.name in ["feature_selections", "target_rankings", "training_results", "DECISION", "REPRODUCIBILITY"] or repro_base.name.startswith("sample_"):
         repro_base = repro_base.parent
         # Safety check: don't go above RESULTS directory
         if repro_base.name == "RESULTS" or not repro_base.parent.exists():
             break
     
-    repro_dir = repro_base / "FEATURE_SELECTION"
+    # Use proper REPRODUCIBILITY/FEATURE_SELECTION structure (at run level, not nested)
+    repro_dir = repro_base / "REPRODUCIBILITY" / "FEATURE_SELECTION"
     repro_dir.mkdir(parents=True, exist_ok=True)
     
     # Save cross-sectional results if available
