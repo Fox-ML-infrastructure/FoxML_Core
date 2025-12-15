@@ -97,6 +97,13 @@ warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=UserWarning)
 warnings.filterwarnings('ignore', message='X does not have valid feature names')
 
+# Import logging config utilities for backend verbosity
+try:
+    from CONFIG.logging_config_utils import get_backend_logging_config
+    _LOGGING_CONFIG_AVAILABLE = True
+except ImportError:
+    _LOGGING_CONFIG_AVAILABLE = False
+
 
 # Import shared config cleaner utility
 from TRAINING.utils.config_cleaner import clean_config_for_estimator as _clean_config_for_estimator
@@ -1320,11 +1327,21 @@ def train_model_and_get_importance(
             if gpu_params:
                 cb_config.update(gpu_params)
             
+            # Get CatBoost verbose level from backend config
+            if _LOGGING_CONFIG_AVAILABLE:
+                try:
+                    catboost_backend_cfg = get_backend_logging_config('catboost')
+                    verbose_level = catboost_backend_cfg.native_verbosity
+                except Exception:
+                    verbose_level = 1  # Default to info level
+            else:
+                verbose_level = 1  # Default to info level
+            
             # Clean config using systematic helper (removes duplicates and unknown params)
             # Note: task_type and devices should be valid CatBoost params, so they won't be removed
             extra = {
                 "random_seed": model_seed,
-                "verbose": False,
+                "verbose": verbose_level,  # Use backend config instead of hardcoded False
                 "loss_function": loss_fn
             }
             cb_config = _clean_config_for_estimator(est_cls, cb_config, extra, "catboost")

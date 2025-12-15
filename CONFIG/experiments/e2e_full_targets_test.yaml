@@ -56,6 +56,8 @@ intelligent_training:
   exclude_target_patterns:
     - "will_peak"
     - "will_valley"
+    - "fwd_ret_20d"  # Exclude 20-day targets (require >20 days of data)
+    - "fwd_ret_15d"  # Exclude 15-day targets (require >15 days of data)
 
 # ============================================================================
 # TARGET CONFIGURATION (Legacy/Reference)

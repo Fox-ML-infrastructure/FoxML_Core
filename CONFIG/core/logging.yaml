@@ -39,6 +39,10 @@ logging:
       native_verbosity: 0      # 0=silent, 1=warning, 2=info, 3=debug
       show_sparse_warnings: true
 
+    catboost:
+      native_verbosity: 0      # 0=silent, 1=info, 2=debug, >2=more verbose
+      show_sparse_warnings: true
+
     tensorflow:
       native_verbosity: 1      # 0=silent, 1=filtered, 2=warn, 3=all
       show_sparse_warnings: true

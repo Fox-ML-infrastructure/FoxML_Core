@@ -669,9 +669,11 @@ def train_and_evaluate_models(
     if _LOGGING_CONFIG_AVAILABLE:
         log_cfg = get_module_logging_config('rank_target_predictability')
         lgbm_backend_cfg = get_backend_logging_config('lightgbm')
+        catboost_backend_cfg = get_backend_logging_config('catboost')
     else:
         log_cfg = _DummyLoggingConfig()
         lgbm_backend_cfg = type('obj', (object,), {'native_verbosity': -1, 'show_sparse_warnings': True})()
+        catboost_backend_cfg = type('obj', (object,), {'native_verbosity': 1, 'show_sparse_warnings': True})()
     
     # Initialize return values (ensures we always return 6 values)
     model_metrics = {}
@@ -3141,6 +3143,11 @@ def train_and_evaluate_models(
             if gpu_params and gpu_params.get('task_type') == 'GPU' and log_cfg.gpu_detail:
                 logger.debug(f"  CatBoost final params (sample): task_type={params.get('task_type')}, devices={params.get('devices')}, iterations={params.get('iterations', 'default')}")
             
+            # Set verbose level from backend config (similar to LightGBM)
+            # CatBoost verbose: 0=silent, 1=info, 2=debug, >2=more verbose
+            if 'verbose' not in params:
+                params['verbose'] = catboost_backend_cfg.native_verbosity
+            
             # Choose model class based on target type
             if is_classification_target(y):
                 base_model = cb.CatBoostClassifier(**params)
@@ -3334,26 +3341,51 @@ def train_and_evaluate_models(
                 
                 # CatBoost requires training dataset to compute feature importance
                 # FIX: For GPU wrapper, need to access base_model and handle Pool conversion
-                if hasattr(model, 'base_model'):
-                    # Wrapper model - use base model
-                    # For GPU mode, convert X to Pool if needed
-                    if use_gpu and isinstance(X, np.ndarray):
-                        importance_data = Pool(data=X, cat_features=model.cat_features)
+                # CRITICAL: Always compute and store importance if model trained successfully
+                importance = None
+                try:
+                    if hasattr(model, 'base_model'):
+                        # Wrapper model - use base model
+                        # For GPU mode, convert X to Pool if needed
+                        if use_gpu and isinstance(X, np.ndarray):
+                            importance_data = Pool(data=X, cat_features=model.cat_features)
+                        else:
+                            importance_data = X
+                        importance = model.base_model.get_feature_importance(data=importance_data, type='PredictionValuesChange')
                     else:
-                        importance_data = X
-                    importance = model.base_model.get_feature_importance(data=importance_data, type='PredictionValuesChange')
-                else:
-                    # Direct model (CPU mode)
-                    importance = model.get_feature_importance(data=X, type='PredictionValuesChange')
+                        # Direct model (CPU mode)
+                        importance = model.get_feature_importance(data=X, type='PredictionValuesChange')
+                except Exception as e:
+                    logger.warning(f"  ⚠️  CatBoost feature importance computation failed: {e}")
+                    logger.debug(f"  CatBoost importance error details:", exc_info=True)
+                    # Try fallback: use numpy array directly (might work even in GPU mode)
+                    try:
+                        if hasattr(model, 'base_model'):
+                            importance = model.base_model.get_feature_importance(data=X, type='PredictionValuesChange')
+                        else:
+                            importance = model.get_feature_importance(data=X, type='PredictionValuesChange')
+                        logger.info(f"  ✅ CatBoost importance computed using fallback method")
+                    except Exception as e2:
+                        logger.warning(f"  ⚠️  CatBoost importance fallback also failed: {e2}")
+                        importance = None
                 
                 # Store all feature importances for detailed export (same pattern as other models)
                 # CRITICAL: Align importance to feature_names order to ensure fingerprint match
-                if len(importance) > 0:
+                if importance is not None and len(importance) > 0:
                     importance_series = pd.Series(importance, index=feature_names[:len(importance)] if len(importance) <= len(feature_names) else feature_names)
                     # Reindex to match exact feature_names order (fills missing with 0.0)
                     importance_series = importance_series.reindex(feature_names, fill_value=0.0)
                     importance_dict = importance_series.to_dict()
                     all_feature_importances['catboost'] = importance_dict
+                    logger.debug(f"  ✅ CatBoost feature importance stored: {len(importance_dict)} features")
+                else:
+                    if importance is None:
+                        logger.warning(f"  ⚠️  CatBoost feature importance is None (computation failed)")
+                    else:
+                        logger.warning(f"  ⚠️  CatBoost feature importance is empty (len={len(importance)})")
+                    # Store empty dict to ensure CatBoost appears in output (even if empty)
+                    # This ensures consistency - all models that train should have entries
+                    all_feature_importances['catboost'] = {}
             else:
                 importance = np.array([])
             if len(importance) > 0:

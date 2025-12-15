@@ -148,14 +148,20 @@ class TelemetryWriter:
         run_id: str,
         metrics: Dict[str, Any]
     ) -> None:
-        """Write telemetry_metrics.json with facts for this cohort."""
+        """
+        Write telemetry_metrics.json with facts for this cohort.
+        
+        This is optimized for querying and aggregation (Parquet format).
+        Includes the same metrics as metrics.json but structured for telemetry analysis.
+        """
         telemetry_data = {
             "run_id": run_id,
             "timestamp": datetime.now().isoformat(),
             "metrics": {}
         }
         
-        # Extract telemetry-relevant metrics
+        # Extract telemetry-relevant metrics (same as metrics.json but nested)
+        # The nesting allows for consistent structure across different stages/views
         for key, value in metrics.items():
             if key in ['timestamp', 'cohort_metadata', 'additional_data']:
                 continue
