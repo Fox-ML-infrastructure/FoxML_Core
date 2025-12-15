@@ -24,11 +24,11 @@
 
 ---
 
-### Q1.2: What's the difference between free use and Commercial License?
+### Q1.2: What's the difference between the source-available license and Commercial License?
 
-**A:** 
-- **Free use:** Personal use and qualifying non-commercial academic research (see `LICENSE` for full definition)
-- **Commercial License:** Required for any organizational use, allows internal commercial use, includes access to private repositories
+**A:**
+- **Source-available license:** Code is publicly available for inspection, but all use requires a commercial license
+- **Commercial License:** Required for all use, allows internal commercial use, includes access to private repositories
 
 **See `LICENSE` and `DOCS/02_reference/licensing/DUAL_LICENSE.md` for complete licensing information.**
 
@@ -36,7 +36,7 @@
 
 ### Q1.3: Can I use it for free?
 
-**A:** Yes, for non-commercial academic research (at qualifying institutions) and personal study. Organizational use requires a paid license. See `LICENSE` for the complete definition of free use.
+**A:** No. All use requires a paid commercial license. See `LICENSE` for complete license terms.
 
 **See `LEGAL/SUBSCRIPTIONS.md` for pricing.**
 
@@ -77,9 +77,7 @@
 
 ### Q3.1: Can I modify the code?
 
-**A:**
-- **With free use:** Yes, for personal/non-commercial academic research use
-- **With Commercial License:** Yes, for internal commercial use. You cannot redistribute or publish modifications.
+**A:** Yes, with a Commercial License you may modify for internal commercial use. You cannot redistribute or publish modifications.
 
 **See `COMMERCIAL_LICENSE.md` Section 2 (Grant of License).**
 
@@ -144,9 +142,7 @@
 
 ### Q5.2: Can I publish my modifications?
 
-**A:**
-- **With free use:** Yes, for personal/non-commercial academic research use
-- **With Commercial License:** No, you cannot publish source code derived from the commercial version
+**A:** No, you cannot publish source code derived from the commercial version.
 
 **See `COMMERCIAL_LICENSE.md` Section 4 (Restrictions).**
 
@@ -198,7 +194,7 @@
 
 ### Q7.2: What about student projects?
 
-**A:** Student projects for academic purposes at qualifying institutions are permitted as free use (see `LICENSE`). Commercial use by students (e.g., for startups) requires a commercial license.
+**A:** All use by students requires a commercial license, including academic projects.
 
 **See `LEGAL/COMMERCIAL_USE.md` Section 1.**
 

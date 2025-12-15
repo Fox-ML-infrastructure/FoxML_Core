@@ -40,7 +40,7 @@ All use requires a commercial license. No exceptions.
 
 ### Q: Can some teams use it for free while others use a commercial license?
 
-**A:** No. If any part of your organization uses the Software for organizational purposes, all use within that organization requires a commercial license. Free use is only available for personal use and qualifying non-commercial academic research (see `LICENSE`).
+**A:** No. All use requires a commercial license. No exceptions.
 
 ---
 
@@ -48,7 +48,7 @@ All use requires a commercial license. No exceptions.
 
 **A:** It depends on the context:
 
-- **All academic research** (commercial or non-commercial) → Commercial license required
+- **Non-commercial academic research** at a qualifying tax-exempt educational institution (where results are not used to support commercial operations) → Free use permitted (see `LICENSE`)
 - **Corporate-funded research** or research sponsored by commercial organizations → Commercial license required
 - **For-profit universities** or corporate research labs → Commercial license required
 - **Research that supports commercial operations, trading, or revenue-generating activities** → Commercial license required
@@ -163,10 +163,10 @@ A: Yes. Use for client work is business use, not personal use.
 A: Business evaluation requires a paid Pilot. No exceptions. If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot.
 
 **Q: I'm a student doing research. Is that free?**  
-A: Only if at a qualifying tax-exempt institution AND research is non-commercial (see LICENSE for full definition).
+A: No. All use requires a commercial license, including academic research.
 
 **Q: I'm a sole proprietor. Is that personal use?**  
-A: No. All use requires a commercial license, including sole proprietors.
+A: No. Sole proprietors using Software for business operations require a commercial license.
 
 ---
 
@@ -196,7 +196,7 @@ A: No. All use requires a commercial license, including sole proprietors.
 ## Common Pressure Tactics (Handled)
 
 **"This should be open source / community-owned."**  
-→ FoxML Core is source-available: free for personal use. Organizational use requires a paid license (including evaluation). This keeps the project sustainable and enables continued development.
+→ FoxML Core is source-available. All use requires a paid commercial license. This keeps the project sustainable and enables continued development.
 
 **"We can't pay until you prove traction."**  
 → If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot. If not, no problem.
@@ -211,7 +211,7 @@ A: No. All use requires a commercial license, including sole proprietors.
 → You're free to build your own. You can't use FoxML Core in production without a license. Organizational use requires a paid license regardless of whether you fork the code.
 
 **"If you charge, you won't get adoption."**  
-→ FoxML Core is source-available: free for personal use. Organizational use requires a paid license (including evaluation). This keeps the project sustainable and enables continued development.
+→ FoxML Core is source-available. All use requires a paid commercial license. This keeps the project sustainable and enables continued development.
 
 ---
 

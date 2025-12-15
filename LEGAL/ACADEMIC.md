@@ -4,32 +4,22 @@
 
 ---
 
-## Free Academic Use
+## Commercial License Required for All Academic Use
 
-FoxML Core is **free for qualifying non-commercial academic research** at tax-exempt educational institutions.
+**All academic use of FoxML Core requires a paid commercial license. No exceptions.**
 
-### Qualifying Academic Use
-
-You may use FoxML Core for free if:
-
-- You are at a **degree-granting educational or non-profit research institution**
-- The institution is **recognized as tax-exempt** under applicable law
-- The institution is **not owned, controlled by, or operated for the benefit of any commercial entity**
-- Research results are **not used to support commercial operations, trading, revenue-generating activities, or any business purpose**
-
-### Examples of Free Academic Use
-
-✅ **Permitted:**
-- PhD student research at a public university (non-commercial, not supporting commercial operations)
-- Faculty research at a non-profit institution (not funded by or integrated into commercial operations)
-- Academic coursework and teaching (at qualifying tax-exempt institutions)
-- Non-commercial research publications and papers
+This includes:
+- Research at degree-granting educational institutions
+- Research at non-profit research institutions
+- Academic coursework and teaching
+- Research publications and papers
+- Any use by students, faculty, or staff
 
 ---
 
 ## Academic Use Requiring a Commercial License
 
-### ❌ **NOT Free — Commercial License Required:**
+### ❌ **Commercial License Required for:**
 
 - **Corporate-funded research** — Research funded by, sponsored by, or integrated into commercial organizations
 - **For-profit universities** — Any use by for-profit universities, bootcamps, or training companies
@@ -86,7 +76,7 @@ If the research is corporate-funded or supports commercial operations, a commerc
 1. Is this use by or for a business, organization, or institution? → **License required**
 2. Is this research funded by or integrated into commercial operations? → **License required**
 3. Does this support revenue-generating activities? → **License required**
-4. Is this purely personal or non-commercial academic research at a qualifying tax-exempt institution? → **Free use permitted**
+4. All use requires a commercial license. No exceptions.
 
 **When in doubt, contact us:**
 📧 **jenn.lewis5789@gmail.com**  

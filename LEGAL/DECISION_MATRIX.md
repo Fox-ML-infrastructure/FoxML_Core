@@ -8,10 +8,10 @@
 
 ## Quick Decision Matrix
 
-| Scenario | Free Use | Commercial License | Notes |
-|----------|----------|-------------------|-------|
-| **Individual personal research** (not for any business purpose) | ✅ | ❌ | Must be in personal capacity, not for any business or organization |
-| **Non-commercial academic research** at degree-granting institution | ✅ | ❌ | Results must not support commercial operations. See `LICENSE` for full definition |
+| Scenario | Commercial License | Notes |
+|----------|-------------------|-------|
+| **Individual personal research** | ✅ | All use requires a commercial license |
+| **Academic research** at degree-granting institution | ✅ | All use requires a commercial license |
 | **Internal evaluation at a company** | ❌ | ✅ | **ALWAYS requires license** — paid pilot required (see `COMMERCIAL_LICENSE.md`) |
 | **Proof of concept / pilot project** within a business | ❌ | ✅ | **ALWAYS requires license** — even if experimental or non-revenue |
 | **Development / testing / staging** environments in a business | ❌ | ✅ | **ALWAYS requires license** — any environment within a business context |
@@ -41,11 +41,11 @@
 
 ## Key Principles
 
-### ✅ Free Use is ONLY for:
-1. **Individual personal research** (not for any business purpose)
-2. **Non-commercial academic research** at qualifying tax-exempt institutions (where results don't support commercial operations)
+### ✅ All Use Requires a Commercial License
 
-See `LICENSE` for the complete definition of free use.
+There are no exceptions. All use by any person or entity requires a commercial license.
+
+See `LICENSE` for complete license terms.
 
 ### ❌ Commercial License is REQUIRED for:
 1. **Any use within a business, organization, or commercial entity**
@@ -82,23 +82,13 @@ See `LICENSE` for the complete definition of free use.
 ## Decision Flow
 
 ```
-Are you using this for personal research (not for any business)?
-├─ YES → Free Use ✅
-└─ NO → Continue
+All use requires a commercial license. No exceptions.
 
-Are you at a qualifying tax-exempt educational institution doing non-commercial research?
-├─ YES → Is it funded by or integrated into commercial operations?
-│   ├─ YES → Commercial License Required ❌
-│   └─ NO → Free Use ✅ (see LICENSE for full definition)
-└─ NO → Continue
+Are you using this Software?
+├─ YES → Commercial License Required ✅
+└─ NO → You're not using it, so no license needed
 
-Are you using this within a business, organization, or commercial entity?
-├─ YES → Commercial License Required ❌
-└─ NO → Continue
-
-Are you using this for any business purpose, client work, or revenue-generating activity?
-├─ YES → Commercial License Required ❌
-└─ NO → Review definitions in LICENSE and COMMERCIAL_LICENSE.md Section 1
+Contact jenn.lewis5789@gmail.com to obtain a commercial license.
 ```
 
 **Default rule:** If you're unsure, you almost certainly need a commercial license. When in doubt, contact jenn.lewis5789@gmail.com.
