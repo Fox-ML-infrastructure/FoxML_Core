@@ -93,21 +93,54 @@ class TelemetryWriter:
             baseline_key: Optional baseline key for drift comparison
         """
         if not self.enabled:
+            logger.debug("Telemetry is disabled, skipping write")
             return
         
         cohort_dir = Path(cohort_dir)
+        # Create cohort directory if it doesn't exist (telemetry should still work even if
+        # _save_to_cohort didn't create it yet, or if there's a race condition)
         if not cohort_dir.exists():
-            logger.warning(f"Cohort directory does not exist: {cohort_dir}")
-            return
+            try:
+                cohort_dir.mkdir(parents=True, exist_ok=True)
+                logger.info(f"✅ Created cohort directory for telemetry: {cohort_dir}")
+            except Exception as e:
+                logger.warning(f"⚠️  Failed to create cohort directory {cohort_dir}: {e}")
+                # Fallback: try writing at target level instead
+                if target and view:
+                    fallback_dir = self._get_fallback_telemetry_dir(stage, view, target, symbol)
+                    if fallback_dir:
+                        logger.info(f"📁 Writing telemetry to fallback location: {fallback_dir}")
+                        try:
+                            self._write_telemetry_metrics(fallback_dir, run_id, metrics)
+                            if baseline_key:
+                                self._write_telemetry_drift(
+                                    fallback_dir, stage, view, target, symbol, run_id, metrics, baseline_key
+                                )
+                            logger.info(f"✅ Telemetry written to fallback location: {fallback_dir}")
+                        except Exception as e2:
+                            logger.error(f"❌ Failed to write telemetry to fallback location {fallback_dir}: {e2}")
+                    else:
+                        logger.warning(f"⚠️  Could not determine fallback telemetry directory for stage={stage}, view={view}, target={target}")
+                else:
+                    logger.warning(f"⚠️  Cannot use fallback: missing target or view (target={target}, view={view})")
+                return
         
         # Write telemetry_metrics.json (facts for this cohort)
-        self._write_telemetry_metrics(cohort_dir, run_id, metrics)
+        try:
+            self._write_telemetry_metrics(cohort_dir, run_id, metrics)
+            logger.debug(f"✅ Wrote telemetry_metrics to {cohort_dir}")
+        except Exception as e:
+            logger.warning(f"⚠️  Failed to write telemetry_metrics to {cohort_dir}: {e}")
         
         # Write telemetry_drift.json (comparison to baseline)
         if baseline_key:
-            self._write_telemetry_drift(
-                cohort_dir, stage, view, target, symbol, run_id, metrics, baseline_key
-            )
+            try:
+                self._write_telemetry_drift(
+                    cohort_dir, stage, view, target, symbol, run_id, metrics, baseline_key
+                )
+                logger.debug(f"✅ Wrote telemetry_drift to {cohort_dir}")
+            except Exception as e:
+                logger.warning(f"⚠️  Failed to write telemetry_drift to {cohort_dir}: {e}")
     
     def _write_telemetry_metrics(
         self,
@@ -643,6 +676,46 @@ class TelemetryWriter:
         except Exception as e:
             logger.debug(f"Failed to get git commit: {e}")
         return None
+    
+    def _get_fallback_telemetry_dir(
+        self,
+        stage: str,
+        view: str,
+        target: str,
+        symbol: Optional[str]
+    ) -> Optional[Path]:
+        """
+        Get fallback directory for telemetry when cohort directory doesn't exist.
+        
+        Falls back to target-level directory: REPRODUCIBILITY/{stage}/{view}/{target}/telemetry/
+        """
+        try:
+            repro_dir = self.output_dir / "REPRODUCIBILITY"
+            if not repro_dir.exists():
+                return None
+            
+            stage_dir = repro_dir / stage.upper()
+            if not stage_dir.exists():
+                return None
+            
+            view_dir = stage_dir / view
+            if not view_dir.exists():
+                return None
+            
+            target_dir = view_dir / target
+            if not target_dir.exists():
+                return None
+            
+            # Create telemetry subdirectory at target level
+            telemetry_dir = target_dir / "telemetry"
+            if symbol and view == "SYMBOL_SPECIFIC":
+                telemetry_dir = target_dir / f"symbol={symbol}" / "telemetry"
+            
+            telemetry_dir.mkdir(parents=True, exist_ok=True)
+            return telemetry_dir
+        except Exception as e:
+            logger.debug(f"Failed to get fallback telemetry directory: {e}")
+            return None
     
     def generate_view_rollup(
         self,

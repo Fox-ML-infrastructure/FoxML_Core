@@ -140,29 +140,9 @@ class ReproducibilityTracker:
         self.cohort_aware = self._load_cohort_aware()
         self.n_ratio_threshold = self._load_n_ratio_threshold()
         self.cohort_config_keys = self._load_cohort_config_keys()
-    
-    def _get_repro_base_dir(self) -> Path:
-        """
-        Get the base directory for REPRODUCIBILITY structure.
-        
-        REPRODUCIBILITY should be at the run level, not the module level.
-        If output_dir is a module subdirectory (target_rankings/, feature_selections/, training_results/),
-        go up one level to the run directory. Otherwise, use output_dir itself.
-        
-        Returns:
-            Path to the run-level directory where REPRODUCIBILITY should be created
-        """
-        # Module subdirectories that indicate we need to go up one level
-        module_subdirs = {"target_rankings", "feature_selections", "training_results"}
-        
-        if self.output_dir.name in module_subdirs:
-            # output_dir is a module subdirectory, go up to run level
-            return self.output_dir.parent
-        else:
-            # output_dir is already at run level, use it directly
-            return self.output_dir
         
         # Initialize audit enforcer
+        audit_mode = self._load_audit_mode()
         if _AUDIT_AVAILABLE:
             self.audit_enforcer = AuditEnforcer(mode=audit_mode)
         else:
@@ -184,11 +164,36 @@ class ReproducibilityTracker:
                     baselines=telemetry_config.get("baselines"),
                     drift=telemetry_config.get("drift")
                 )
+                logger.info(f"✅ Telemetry initialized and enabled (output_dir={self._repro_base_dir})")
             else:
                 self.telemetry = None
+                logger.debug("Telemetry is disabled in config")
         except Exception as e:
-            logger.debug(f"Telemetry not available: {e}")
+            logger.warning(f"⚠️  Telemetry not available: {e}")
+            import traceback
+            logger.debug(f"Telemetry initialization traceback: {traceback.format_exc()}")
             self.telemetry = None
+    
+    def _get_repro_base_dir(self) -> Path:
+        """
+        Get the base directory for REPRODUCIBILITY structure.
+        
+        REPRODUCIBILITY should be at the run level, not the module level.
+        If output_dir is a module subdirectory (target_rankings/, feature_selections/, training_results/),
+        go up one level to the run directory. Otherwise, use output_dir itself.
+        
+        Returns:
+            Path to the run-level directory where REPRODUCIBILITY should be created
+        """
+        # Module subdirectories that indicate we need to go up one level
+        module_subdirs = {"target_rankings", "feature_selections", "training_results"}
+        
+        if self.output_dir.name in module_subdirs:
+            # output_dir is a module subdirectory, go up to run level
+            return self.output_dir.parent
+        else:
+            # output_dir is already at run level, use it directly
+            return self.output_dir
     
     def _load_thresholds(self, override: Optional[Dict[str, Dict[str, float]]] = None) -> Dict[str, Dict[str, float]]:
         """Load reproducibility thresholds from config."""
@@ -239,6 +244,17 @@ class ReproducibilityTracker:
             return repro_cfg.get('use_z_score', True)
         except Exception:
             return True  # Default: use z-score
+    
+    def _load_audit_mode(self) -> str:
+        """Load audit mode from config. Defaults to 'off'."""
+        try:
+            from CONFIG.config_loader import get_safety_config
+            safety_cfg = get_safety_config()
+            safety_section = safety_cfg.get('safety', {})
+            repro_cfg = safety_section.get('reproducibility', {})
+            return repro_cfg.get('audit_mode', 'off')
+        except Exception:
+            return 'off'  # Default: audit mode off
     
     def _load_cohort_aware(self) -> bool:
         """
@@ -1090,27 +1106,62 @@ class ReproducibilityTracker:
                 elif route_type == "INDIVIDUAL":
                     view = "SYMBOL_SPECIFIC"
             
-            # Determine target (for TARGET_RANKING stage, item_name is the target)
-            target = item_name if stage_normalized == "TARGET_RANKING" else None
+            # Determine target (for TARGET_RANKING and FEATURE_SELECTION stages, item_name is the target)
+            target = item_name if stage_normalized in ["TARGET_RANKING", "FEATURE_SELECTION"] else None
             
             # Generate baseline key for drift comparison: (stage, view, target[, symbol])
+            # For FEATURE_SELECTION, use route_type as view (CROSS_SECTIONAL or INDIVIDUAL)
             baseline_key = None
-            if view and target:
-                baseline_key = f"{stage_normalized}:{view}:{target}"
-                if symbol and view == "SYMBOL_SPECIFIC":
-                    baseline_key += f":{symbol}"
+            if target:
+                # For TARGET_RANKING, view comes from route_type (CROSS_SECTIONAL, SYMBOL_SPECIFIC)
+                # For FEATURE_SELECTION, route_type is CROSS_SECTIONAL or INDIVIDUAL (maps to view)
+                if stage_normalized == "TARGET_RANKING" and view:
+                    baseline_key = f"{stage_normalized}:{view}:{target}"
+                    if symbol and view == "SYMBOL_SPECIFIC":
+                        baseline_key += f":{symbol}"
+                elif stage_normalized == "FEATURE_SELECTION" and route_type:
+                    # Map route_type to view for FEATURE_SELECTION
+                    fs_view = route_type if route_type in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
+                    baseline_key = f"{stage_normalized}:{fs_view}:{target}"
+                    if symbol and route_type == "INDIVIDUAL":
+                        baseline_key += f":{symbol}"
+            
+            logger.debug(f"📊 Writing telemetry for stage={stage_normalized}, target={target}, view={view}, cohort_dir={cohort_dir}")
             
             # Write telemetry sidecar files in cohort directory
-            self.telemetry.write_cohort_telemetry(
-                cohort_dir=cohort_dir,
-                stage=stage_normalized,
-                view=view or "UNKNOWN",
-                target=target,
-                symbol=symbol,
-                run_id=run_id_clean,
-                metrics=run_data,
-                baseline_key=baseline_key
-            )
+            # Note: telemetry will create cohort_dir if it doesn't exist, or fall back to target level
+            telemetry_written = False
+            try:
+                self.telemetry.write_cohort_telemetry(
+                    cohort_dir=cohort_dir,
+                    stage=stage_normalized,
+                    view=view or "UNKNOWN",
+                    target=target,
+                    symbol=symbol,
+                    run_id=run_id_clean,
+                    metrics=run_data,
+                    baseline_key=baseline_key
+                )
+                telemetry_written = True
+            except Exception as e:
+                logger.warning(f"⚠️  Failed to write telemetry metadata to cohort directory: {e}")
+                import traceback
+                logger.debug(f"Telemetry write traceback: {traceback.format_exc()}")
+            
+            # Safety fallback: If cohort-level write failed and we have target/view info, try target-level write
+            if not telemetry_written and target and view:
+                try:
+                    fallback_dir = self.telemetry._get_fallback_telemetry_dir(stage_normalized, view, target, symbol)
+                    if fallback_dir:
+                        logger.info(f"📁 Attempting telemetry fallback write to: {fallback_dir}")
+                        self.telemetry._write_telemetry_metrics(fallback_dir, run_id_clean, run_data)
+                        if baseline_key:
+                            self.telemetry._write_telemetry_drift(
+                                fallback_dir, stage_normalized, view, target, symbol, run_id_clean, run_data, baseline_key
+                            )
+                        logger.info(f"✅ Telemetry written to fallback location: {fallback_dir}")
+                except Exception as e2:
+                    logger.warning(f"⚠️  Telemetry fallback write also failed: {e2}")
             
             # Aggregate telemetry facts table (append-only, after all cohorts saved)
             # This is called per-cohort, but we'll aggregate at the end of the run
