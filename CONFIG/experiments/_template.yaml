@@ -1,6 +1,13 @@
-# Experiment Config Template
-# Copy this file and rename it to create a new experiment config
+# ============================================================================
+# EXPERIMENT CONFIG TEMPLATE
+# ============================================================================
+# This is a SELF-CONTAINED config file - everything you need is here!
+# Copy this file and rename it to create a new experiment config.
 # Example: cp _template.yaml my_experiment.yaml
+#
+# IMPORTANT: Experiment configs OVERRIDE all other configs (highest priority)
+# You don't need to edit any other files - just this one!
+# ============================================================================
 
 experiment:
   name: my_experiment  # Change this to your experiment name
@@ -9,6 +16,7 @@ experiment:
 # ============================================================================
 # DATA CONFIGURATION
 # ============================================================================
+# All data-related settings - overrides pipeline/training/intelligent.yaml
 data:
   # Data directory (relative to repo root or absolute path)
   data_dir: data/data_labeled_v2/interval=5m
@@ -28,33 +36,28 @@ data:
   # Maximum rows for training (caps training data)
   max_rows_train: 100000
   
-  # Minimum cross-sectional samples (minimum symbols per timestamp)
-  min_cs: 10
+  # Cross-sectional sampling limits
+  max_cs_samples: 10000  # Max cross-sectional samples per timestamp
+  min_cs: 10             # Minimum cross-sectional samples per timestamp
 
 # ============================================================================
 # INTELLIGENT TRAINING CONFIGURATION
 # ============================================================================
+# All target/feature selection and training settings
+# This section OVERRIDES pipeline/training/intelligent.yaml
 intelligent_training:
+  # ========================================================================
+  # TARGET SELECTION
+  # ========================================================================
   # Auto-discover targets from data (true) or use manual_targets list (false)
   auto_targets: true
   
-  # If auto_targets=true: number of top targets to select
+  # If auto_targets=true: number of top targets to SELECT after ranking
   top_n_targets: 10
   
-  # Maximum targets to evaluate (limits evaluation for faster testing)
-  max_targets_to_evaluate: 10
-  
-  # Auto-discover features (true) or use manual_features list (false)
-  auto_features: true
-  
-  # Number of top features to select
-  top_m_features: 50
-  
-  # Training strategy
-  strategy: single_task  # or multi_task, cascade
-  
-  # Run leakage diagnostics (slower but more thorough)
-  run_leakage_diagnostics: false
+  # Maximum targets to EVALUATE during ranking (limits evaluation for faster testing)
+  # Set lower for faster runs, higher for comprehensive evaluation
+  max_targets_to_evaluate: 50
   
   # Manual target list (used when auto_targets=false)
   # Examples:
@@ -64,21 +67,46 @@ intelligent_training:
   #   - y_will_peak_60m_0.8 (peak detection - may repaint)
   #   - y_will_valley_60m_0.8 (valley detection - may repaint)
   # manual_targets: [fwd_ret_60m]
+  
+  # Exclude target patterns (targets matching any pattern will be excluded)
+  # Patterns are matched as substrings (e.g., "will_peak" matches "y_will_peak_60m_0.8")
+  exclude_target_patterns:
+    - "will_peak"   # Exclude peak detection targets (may repaint)
+    - "will_valley" # Exclude valley detection targets (may repaint)
+    # - "fwd_ret_20d"  # Uncomment to exclude 20-day targets
+    # - "fwd_ret_15d"  # Uncomment to exclude 15-day targets
+  
+  # ========================================================================
+  # FEATURE SELECTION
+  # ========================================================================
+  # Auto-discover features (true) or use manual_features list (false)
+  auto_features: true
+  
+  # Number of top features to select per target
+  top_m_features: 50
+  
+  # Manual feature list (used when auto_features=false)
+  # manual_features: [feature1, feature2, ...]
+  
+  # ========================================================================
+  # TRAINING SETTINGS
+  # ========================================================================
+  # Training strategy: single_task, multi_task, cascade
+  strategy: single_task
+  
+  # Run leakage diagnostics (slower but more thorough)
+  run_leakage_diagnostics: false
 
 # ============================================================================
-# TARGET CONFIGURATION (Legacy/Reference)
+# MODEL FAMILIES CONFIGURATION
 # ============================================================================
-targets:
-  # Primary target (for reference, used as fallback if manual_targets not specified)
-  primary: fwd_ret_60m
+# Which models to use for feature selection and training
+# Available: lightgbm, xgboost, random_forest, neural_network, catboost,
+#            lasso, mutual_information, univariate_selection, rfe, boruta,
+#            stability_selection
 
-# ============================================================================
-# FEATURE SELECTION CONFIGURATION
-# ============================================================================
 feature_selection:
   # Model families to use for feature selection
-  # Options: lightgbm, xgboost, random_forest, neural_network, catboost, lasso,
-  #          mutual_information, univariate_selection, rfe, boruta, stability_selection
   model_families:
     - lightgbm
     - xgboost
@@ -89,11 +117,8 @@ feature_selection:
     - mutual_information
     - univariate_selection
 
-# ============================================================================
-# TRAINING CONFIGURATION
-# ============================================================================
 training:
-  # Model families to train (same as feature selection for consistency)
+  # Model families to train (usually same as feature selection)
   model_families:
     - lightgbm
     - xgboost
@@ -103,42 +128,13 @@ training:
     - lasso
     - mutual_information
     - univariate_selection
-
-# ============================================================================
-# DECISION CONFIGURATION (Auto-Config Application)
-# ============================================================================
-decisions:
-  # Application mode: "off" (assist mode only), "dry_run" (show patch), "apply" (auto-apply)
-  apply_mode: "dry_run"  # Start with dry_run, then "apply" when confident
-  
-  # Minimum decision level to apply (0=no action, 1=warning, 2=recommendation, 3=action)
-  min_level_to_apply: 2
-  
-  # Bayesian patch policy (Thompson sampling over discrete patch templates)
-  use_bayesian: true
-  bayesian:
-    # Minimum runs before recommending patches
-    min_runs_for_learning: 5
-    # Minimum P(improve) to auto-apply
-    p_improve_threshold: 0.8
-    # Minimum expected gain to recommend
-    min_expected_gain: 0.01
-    # Reward metric to optimize
-    reward_metric: "cs_auc"
-    # Recency decay factor (higher = more weight on recent runs)
-    recency_decay: 0.95
-    # Decision level thresholds (all config-driven, no hardcoded values)
-    level_3_threshold: 0.8   # P(improve) for auto-apply (level 3)
-    level_3_gain: 0.01        # Expected gain for auto-apply (level 3)
-    level_2_threshold: 0.6    # P(improve) for recommend (level 2)
-    level_2_gain: 0.005       # Expected gain for recommend (level 2)
-    level_1_threshold: 0.4    # P(improve) for warning (level 1)
-    # Baseline window size (number of recent runs for baseline computation)
-    baseline_window: 10
 
 # ============================================================================
 # PARALLEL EXECUTION CONFIGURATION
 # ============================================================================
+# Control parallel execution for faster runs
+# These settings OVERRIDE pipeline/threading.yaml
+
 # Multi-target parallel execution (for faster target evaluation)
 multi_target:
   # Enable parallel target evaluation (ProcessPoolExecutor)
@@ -156,18 +152,47 @@ multi_model_feature_selection:
   parallel_symbols: true
 
 # Threading/parallel worker configuration
-# These override threading_config.yaml settings
+# These override pipeline/threading.yaml settings
 threading:
   parallel:
     # Max workers for ProcessPoolExecutor (CPU-bound tasks like target evaluation)
-    # Set to null for auto-detect, or specific number (e.g., 4)
-    max_workers_process: null  # null = auto-detect
+    # Set to null for auto-detect, or specific number (e.g., 4, 8)
+    max_workers_process: null  # null = auto-detect based on CPU cores
     
     # Max workers for ThreadPoolExecutor (I/O-bound tasks)
     max_workers_thread: null    # null = auto-detect
     
     # Master switch for parallel execution
     enabled: true
+
+# ============================================================================
+# DECISION CONFIGURATION (Auto-Config Application)
+# ============================================================================
+# Control automatic config updates based on run results
+# These settings OVERRIDE pipeline/training/decisions.yaml
+
+decisions:
+  # Application mode: "off" (assist mode only), "dry_run" (show patch), "apply" (auto-apply)
+  apply_mode: "off"  # Start with "off", then "dry_run", then "apply" when confident
+  
+  # Minimum decision level to apply (0=no action, 1=warning, 2=recommendation, 3=action)
+  min_level_to_apply: 2
+  
+  # Bayesian patch policy (Thompson sampling over discrete patch templates)
+  use_bayesian: false  # Set to true to enable automatic config optimization
+  
+  # Bayesian settings (only used if use_bayesian: true)
+  bayesian:
+    # Minimum runs before recommending patches
+    min_runs_for_learning: 5
+    # Minimum P(improve) to auto-apply
+    p_improve_threshold: 0.8
+    # Minimum expected gain to recommend
+    min_expected_gain: 0.01
+    # Reward metric to optimize
+    reward_metric: "cs_auc"
+    # Recency decay factor (higher = more weight on recent runs)
+    recency_decay: 0.95
 
 # ============================================================================
 # NOTES
@@ -178,3 +203,4 @@ threading:
 # - Compare scores: honest baseline (~0.52-0.54) vs repainting targets (~0.70+) to see effect
 # - Set auto_targets: false and specify manual_targets to test specific targets only
 # - Use dry_run mode for decisions first, then apply when confident
+# - All settings here OVERRIDE other config files - you don't need to edit anything else!

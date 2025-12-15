@@ -37,6 +37,15 @@ CONFIG_DIR = Path(__file__).resolve().parent
 # Cache for defaults config (loaded once)
 _DEFAULTS_CACHE = None
 
+def clear_config_cache() -> None:
+    """
+    Clear all config caches to force reload on next access.
+    Useful when config files are modified and you want changes to take effect immediately.
+    """
+    global _DEFAULTS_CACHE
+    _DEFAULTS_CACHE = None
+    logger.info("✅ Cleared config cache - configs will be reloaded on next access")
+
 def load_defaults_config() -> Dict[str, Any]:
     """
     Load global defaults configuration (Single Source of Truth).
