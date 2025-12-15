@@ -1240,6 +1240,7 @@ def train_model_and_get_importance(
     elif model_family == 'catboost':
         try:
             import catboost as cb
+            from catboost import Pool
             # Determine task type
             unique_vals = np.unique(y[~np.isnan(y)])
             is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
@@ -1463,12 +1464,127 @@ def train_model_and_get_importance(
                 logger.debug(f"    catboost: Final config (sample): task_type={cb_config.get('task_type')}, devices={cb_config.get('devices')}")
             
             # Instantiate with cleaned config + explicit params
-            model = est_cls(**cb_config, **extra)
+            base_model = est_cls(**cb_config, **extra)
+            
+            # FIX: When GPU mode is enabled, CatBoost requires Pool objects instead of numpy arrays
+            # Create a wrapper class that converts numpy arrays to Pool objects in fit() method
+            use_gpu = gpu_params and gpu_params.get('task_type') == 'GPU'
+            
+            if use_gpu:
+                # Create a wrapper class that handles Pool conversion for GPU mode
+                # FIX: Make sklearn-compatible by implementing get_params/set_params
+                class CatBoostGPUWrapper:
+                    """Wrapper for CatBoost models that converts numpy arrays to Pool objects when GPU is enabled."""
+                    def __init__(self, base_model=None, cat_features=None, use_gpu=True, _model_class=None, **kwargs):
+                        # If base_model is provided, use it; otherwise create from kwargs (for sklearn cloning)
+                        if base_model is not None:
+                            self.base_model = base_model
+                            # Store the model class for sklearn cloning
+                            self._model_class = type(base_model)
+                        else:
+                            # Recreate base model from kwargs (for sklearn clone)
+                            # Determine model class from loss_function or use stored class
+                            if _model_class is not None:
+                                model_class = _model_class
+                            else:
+                                # Infer from loss_function in kwargs
+                                loss_fn = kwargs.get('loss_function', 'RMSE')
+                                if loss_fn in ['Logloss', 'MultiClass']:
+                                    model_class = cb.CatBoostClassifier
+                                else:
+                                    model_class = cb.CatBoostRegressor
+                            self.base_model = model_class(**kwargs)
+                            self._model_class = model_class
+                        self.cat_features = cat_features or []
+                        self.use_gpu = use_gpu
+                    
+                    def get_params(self, deep=True):
+                        """Get parameters for sklearn compatibility."""
+                        # Get base model params and add wrapper-specific params
+                        params = self.base_model.get_params(deep=deep)
+                        params['cat_features'] = self.cat_features
+                        params['use_gpu'] = self.use_gpu
+                        params['_model_class'] = self._model_class
+                        # Remove base_model from params (it's not a constructor arg)
+                        params.pop('base_model', None)
+                        return params
+                    
+                    def set_params(self, **params):
+                        """Set parameters for sklearn compatibility."""
+                        # Extract wrapper-specific params
+                        cat_features = params.pop('cat_features', None)
+                        use_gpu = params.pop('use_gpu', None)
+                        model_class = params.pop('_model_class', None)
+                        if cat_features is not None:
+                            self.cat_features = cat_features
+                        if use_gpu is not None:
+                            self.use_gpu = use_gpu
+                        if model_class is not None:
+                            self._model_class = model_class
+                        # Update base model params
+                        self.base_model.set_params(**params)
+                        return self
+                    
+                    def fit(self, X, y=None, **kwargs):
+                        """Convert numpy arrays to Pool objects when GPU is enabled."""
+                        # Convert X and y to Pool objects for GPU mode
+                        if isinstance(X, np.ndarray):
+                            train_pool = Pool(data=X, label=y, cat_features=self.cat_features)
+                            return self.base_model.fit(train_pool, **kwargs)
+                        elif isinstance(X, Pool):
+                            # Already a Pool object
+                            return self.base_model.fit(X, y, **kwargs)
+                        else:
+                            # Fallback: try direct fit (for other data types)
+                            return self.base_model.fit(X, y, **kwargs)
+                    
+                    def predict(self, X, **kwargs):
+                        """Delegate predict to base model."""
+                        if isinstance(X, np.ndarray) and self.use_gpu:
+                            # Convert to Pool for consistency, though predict may work with arrays
+                            test_pool = Pool(data=X, cat_features=self.cat_features)
+                            return self.base_model.predict(test_pool, **kwargs)
+                        return self.base_model.predict(X, **kwargs)
+                    
+                    def score(self, X, y, **kwargs):
+                        """Delegate score to base model."""
+                        if isinstance(X, np.ndarray) and self.use_gpu:
+                            test_pool = Pool(data=X, label=y, cat_features=self.cat_features)
+                            return self.base_model.score(test_pool, **kwargs)
+                        return self.base_model.score(X, y, **kwargs)
+                    
+                    def __getattr__(self, name):
+                        """Delegate all other attributes to base model."""
+                        return getattr(self.base_model, name)
+                
+                # Get categorical features from config if specified
+                cat_features = cb_config.get('cat_features', [])
+                if isinstance(cat_features, list) and len(cat_features) > 0:
+                    # If cat_features are column names, convert to indices
+                    if feature_names and isinstance(cat_features[0], str):
+                        cat_feature_indices = [feature_names.index(f) for f in cat_features if f in feature_names]
+                    else:
+                        cat_feature_indices = cat_features
+                else:
+                    cat_feature_indices = []
+                
+                model = CatBoostGPUWrapper(base_model=base_model, cat_features=cat_feature_indices, use_gpu=use_gpu)
+            else:
+                # CPU mode: use model directly (no Pool conversion needed)
+                model = base_model
             
             # Verify GPU was actually set (post-instantiation check)
             if gpu_params and gpu_params.get('task_type') == 'GPU':
                 # Check if model has task_type attribute (CatBoost models expose this)
-                if hasattr(model, 'get_params'):
+                if hasattr(model, 'base_model'):
+                    # Wrapper model - check base model
+                    if hasattr(model.base_model, 'get_params'):
+                        model_params = model.base_model.get_params()
+                        if model_params.get('task_type') != 'GPU':
+                            logger.warning(f"    catboost: Model instantiated but task_type is '{model_params.get('task_type')}', expected 'GPU'")
+                        else:
+                            logger.debug(f"    catboost: Model confirmed using GPU (task_type={model_params.get('task_type')})")
+                elif hasattr(model, 'get_params'):
                     model_params = model.get_params()
                     if model_params.get('task_type') != 'GPU':
                         logger.warning(f"    catboost: Model instantiated but task_type is '{model_params.get('task_type')}', expected 'GPU'")
