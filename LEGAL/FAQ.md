@@ -162,7 +162,7 @@ A: Yes. Any use by or for a business requires a commercial license.
 A: Yes. Use for client work is business use, not personal use.
 
 **Q: I'm evaluating it for my company. Is that free?**  
-A: You have 30 days for evaluation. After that, commercial license required.
+A: Business evaluation requires a paid Pilot. No exceptions. If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot.
 
 **Q: I'm a student doing research. Is that free?**  
 A: Only if at a qualifying tax-exempt institution AND research is non-commercial (see LICENSE for full definition).

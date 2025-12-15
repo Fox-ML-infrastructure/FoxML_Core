@@ -19,7 +19,7 @@ Your licensing setup is **strong overall** with comprehensive documentation. How
 1. **Clear dual-license structure**
    - `LICENSE` (source-available, free use)
    - `COMMERCIAL_LICENSE.md` (commercial terms)
-   - `DUAL_LICENSE.md` (overview)
+   - `DOCS/02_reference/licensing/DUAL_LICENSE.md` (overview)
 
 2. **Comprehensive documentation**
    - `LEGAL/COMMERCIAL_USE.md` (usage guide)
