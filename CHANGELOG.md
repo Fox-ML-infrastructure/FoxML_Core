@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### IP Assignment Agreement Signed (2025-12-14) – **NEW**
+IP Assignment Agreement has been signed, legally assigning all intellectual property from Jennifer Lewis (Individual) to Fox ML Infrastructure LLC.
+- ✅ **Legally effective** - All IP now owned by Fox ML Infrastructure LLC
+- Clean IP ownership structure for enterprise clients and monetization
+- Perpetual and irrevocable assignment
+- Supporting documentation organized in `LEGAL/ip_assignment_docs/`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-14-ip-assignment-signed.md) | [Signed Agreement](LEGAL/IP_ASSIGNMENT_AGREEMENT_SIGNED.pdf)
+
 #### Execution Modules Added (2025-12-14) – **NEW**
 Execution modules (`ALPACA_trading` and `IBKR_trading`) have been added back to the repository with comprehensive compliance framework and documentation organization.
 - **ALPACA_trading**: Paper trading and backtesting framework (⚠️ has minor issues, needs testing)

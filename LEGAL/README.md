@@ -69,6 +69,9 @@ Enterprise-ready documentation for buyers, legal departments, and CTOs:
 - **`ACCEPTABLE_USE_POLICY.md`** — Acceptable Use Policy (AUP): permitted and prohibited uses, compliance requirements
 - **`EXPORT_COMPLIANCE.md`** — Export compliance statement: EAR99 classification, licensee responsibilities, international compliance
 - **`IP_OWNERSHIP_CLARIFICATION.md`** — IP ownership clarification: core platform IP, client-owned IP, custom features, reuse rights
+- **`IP_ASSIGNMENT_AGREEMENT.md`** — **NEW**: IP assignment from individual to LLC (protects personal liability, ensures LLC owns all IP)
+  - **`IP_ASSIGNMENT_AGREEMENT_SIGNED.pdf`** — ✅ **SIGNED** - Legally effective IP assignment (all IP now owned by Fox ML Infrastructure LLC)
+  - **`ip_assignment_docs/`** — Supporting documentation (signing instructions, quick reference guides)
 - **`REGULATORY_DISCLAIMERS.md`** — Regulatory non-affiliation statements: NOT a broker, NOT an investment advisor, NOT providing regulated financial services
 - **`BROKER_INTEGRATION_COMPLIANCE.md`** — **NEW**: Complete legal framework for broker integrations (IBKR, Alpaca). Establishes user-authorized API integration model, user responsibilities, broker-specific compliance, and language requirements
 - **`BROKER_COMPLIANCE_CHECKLIST.md`** — **NEW**: Quick reference checklist for ensuring broker integration compliance in code, documentation, and user-facing materials

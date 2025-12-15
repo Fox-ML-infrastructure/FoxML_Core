@@ -70,6 +70,8 @@ Complete index of all legal, licensing, compliance, and enterprise documentation
 - [Warranty & Liability Addendum](../LEGAL/WARRANTY_LIABILITY_ADDENDUM.md) - Warranty and liability terms
 - [Indemnification](../LEGAL/INDEMNIFICATION.md) - Indemnification terms
 - [IP Assignment Agreement](../LEGAL/IP_ASSIGNMENT_AGREEMENT.md) - **NEW**: IP assignment from individual to LLC (protects personal liability)
+  - [Signed Agreement](../LEGAL/IP_ASSIGNMENT_AGREEMENT_SIGNED.pdf) - ✅ **SIGNED** - Legally effective IP assignment
+  - [Signing Instructions](../LEGAL/ip_assignment_docs/IP_ASSIGNMENT_SIGNING_INSTRUCTIONS.md) - Step-by-step signing guide
 
 ### Risk Assessment
 - [Risk Assessment Matrix](../LEGAL/RISK_ASSESSMENT_MATRIX.md) - Risk assessment framework

@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-14 (IP Assignment Agreement Signed)** — IP Assignment Agreement signed, legally assigning all IP from individual to Fox ML Infrastructure LLC. ✅ Legally effective.  
+  → [View](2025-12-14-ip-assignment-signed.md)
+
 - **2025-12-14 (Execution Modules Added)** — ALPACA_trading and IBKR_trading modules added with compliance framework, documentation organization, copyright headers. ⚠️ ALPACA has minor issues, IBKR is untested  
   → [View](2025-12-14-execution-modules.md)
 
