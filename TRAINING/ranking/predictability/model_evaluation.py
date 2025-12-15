@@ -3176,14 +3176,16 @@ def train_and_evaluate_models(
                                     model_class = cb.CatBoostRegressor
                             self.base_model = model_class(**kwargs)
                             self._model_class = model_class
-                        self.cat_features = cat_features or []
+                        # FIX: Store a copy of the list to avoid mutable reference issues
+                        self.cat_features = list(cat_features) if cat_features else []
                         self.use_gpu = use_gpu
                     
                     def get_params(self, deep=True):
                         """Get parameters for sklearn compatibility."""
                         # Get base model params and add wrapper-specific params
                         params = self.base_model.get_params(deep=deep)
-                        params['cat_features'] = self.cat_features
+                        # FIX: Return a copy of cat_features list to avoid mutable reference issues
+                        params['cat_features'] = list(self.cat_features) if self.cat_features else []
                         params['use_gpu'] = self.use_gpu
                         params['_model_class'] = self._model_class
                         # Remove base_model from params (it's not a constructor arg)
@@ -3197,7 +3199,8 @@ def train_and_evaluate_models(
                         use_gpu = params.pop('use_gpu', None)
                         model_class = params.pop('_model_class', None)
                         if cat_features is not None:
-                            self.cat_features = cat_features
+                            # FIX: Store a copy of the list to avoid mutable reference issues
+                            self.cat_features = list(cat_features) if cat_features else []
                         if use_gpu is not None:
                             self.use_gpu = use_gpu
                         if model_class is not None:
