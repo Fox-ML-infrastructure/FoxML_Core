@@ -65,7 +65,7 @@ Business evaluation requires a paid Pilot. No exceptions. If you're a legal enti
 | **Corporate Research Lab** | Commercial | Research conducted by or for a commercial organization (regardless of non-profit status of lab) |
 | **University Research (Corporate-Funded)** | Commercial | Research funded by, sponsored by, or integrated into commercial operations |
 | **Internal Tools / Dashboards** | Commercial | Any internal use within a business organization (including experimental or non-revenue use) |
-| **Proof of Concept / Pilot** | Commercial | Evaluation or pilot projects within a business context (30-day evaluation period available, see `COMMERCIAL_LICENSE.md`) |
+| **Proof of Concept / Pilot** | Commercial | Evaluation or pilot projects within a business context (paid pilot required, see `COMMERCIAL_LICENSE.md`) |
 | **SaaS / Hosted Service** | Commercial + Custom | Requires explicit written permission and custom licensing terms |
 | **Vendor / Reseller** | Commercial + Custom | Requires separate commercial agreement |
 
