@@ -65,6 +65,7 @@ Step-by-step guides for common tasks. See [01_tutorials/README.md](01_tutorials/
 - [GPU Setup](01_tutorials/setup/GPU_SETUP.md) - **UPDATED**: GPU configuration for target ranking, feature selection, and model training
 
 ### Pipelines
+- [Data Processing README](01_tutorials/pipelines/DATA_PROCESSING_README.md) - DATA_PROCESSING module overview
 - [First Pipeline Run](01_tutorials/pipelines/FIRST_PIPELINE_RUN.md) - Run your first pipeline
 
 ### Development & Architecture
@@ -73,6 +74,7 @@ Step-by-step guides for common tasks. See [01_tutorials/README.md](01_tutorials/
 - [Feature Engineering Tutorial](01_tutorials/pipelines/FEATURE_ENGINEERING_TUTORIAL.md) - Feature creation
 
 ### Training
+- [Training README](01_tutorials/training/TRAINING_README.md) - TRAINING module overview
 - [Intelligent Training Tutorial](01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Automated target ranking, feature selection, training plan generation, and training (includes timestamped outputs and backup system)
 - [Auto Target Ranking](01_tutorials/training/AUTO_TARGET_RANKING.md) - **NEW**: How to auto-discover, rank, and select top targets from your dataset
 - [Training Routing Quick Start](02_reference/training_routing/QUICK_START.md) - **NEW**: Quick start for training routing system and 2-stage training
@@ -142,6 +144,8 @@ Complete technical reference for daily use. See [02_reference/README.md](02_refe
 ### Configuration Reference
 - **[Modular Config System](02_reference/configuration/MODULAR_CONFIG_SYSTEM.md)** - Complete guide to modular configs, experiment configs, typed configs, migration (includes `logging_config.yaml`)
 - [Configuration System Overview](02_reference/configuration/README.md) - Centralized configuration system overview (includes `logging_config.yaml` documentation)
+- [Config README](02_reference/configuration/CONFIG_README.md) - CONFIG directory structure and organization
+- [Config README Defaults](02_reference/configuration/CONFIG_README_DEFAULTS.md) - Default configuration values
 - [Feature & Target Configs](02_reference/configuration/FEATURE_TARGET_CONFIGS.md) - Feature/target configuration guide
 - [Training Pipeline Configs](02_reference/configuration/TRAINING_PIPELINE_CONFIGS.md) - System resources and training behavior
 - [Training Routing Config](02_reference/training_routing/README.md) - **NEW**: Routing policy configuration (`routing_config.yaml`) for cross-sectional vs symbol-specific training decisions. Includes 2-stage training pipeline (CPU models first, then GPU models) and one-command end-to-end flow.
