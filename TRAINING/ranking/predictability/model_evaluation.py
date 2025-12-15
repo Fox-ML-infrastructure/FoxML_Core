@@ -3876,7 +3876,13 @@ def _save_feature_importances(
     # Create directory structure in REPRODUCIBILITY/TARGET_RANKING/{view}/{target}/{symbol}/feature_importances/
     # This aligns with the reproducibility structure and keeps all target ranking outputs together
     target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-    repro_base = output_dir.parent / "REPRODUCIBILITY" / "TARGET_RANKING" if output_dir.name == "target_rankings" else output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
+    # Determine base directory for REPRODUCIBILITY (should be at run level)
+    if output_dir.name == "target_rankings":
+        # output_dir is target_rankings/, go up to run level
+        repro_base = output_dir.parent / "REPRODUCIBILITY" / "TARGET_RANKING"
+    else:
+        # output_dir is already at run level
+        repro_base = output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
     
     if view == "SYMBOL_SPECIFIC" and symbol:
         importances_dir = repro_base / view / target_name_clean / f"symbol={symbol}" / "feature_importances"

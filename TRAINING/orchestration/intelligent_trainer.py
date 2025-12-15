@@ -1158,7 +1158,7 @@ class IntelligentTrainer:
                     cohort_id = temp_tracker._compute_cohort_id(cohort_metadata, route_type=None)
                     
                     # Try to get segment_id from index
-                    repro_dir = self.output_dir.parent / "REPRODUCIBILITY"
+                    repro_dir = self.output_dir / "REPRODUCIBILITY"
                     index_file = repro_dir / "index.parquet"
                     if index_file.exists():
                         try:
@@ -1172,7 +1172,7 @@ class IntelligentTrainer:
                             pass
                 
                 if cohort_id and (decision_apply_mode or decision_dry_run):
-                    repro_dir = self.output_dir.parent / "REPRODUCIBILITY"
+                    repro_dir = self.output_dir / "REPRODUCIBILITY"
                     index_file = repro_dir / "index.parquet"
                     if index_file.exists():
                         engine = DecisionEngine(index_file, apply_mode=decision_apply_mode)
@@ -1745,8 +1745,10 @@ class IntelligentTrainer:
             # Find REPRODUCIBILITY directory
             repro_dir = self.output_dir / "REPRODUCIBILITY"
             if not repro_dir.exists():
-                # Try alternative location (if organized by cohort)
-                repro_dir = self.output_dir.parent / "REPRODUCIBILITY"
+                # Try alternative location (backward compatibility for old structure)
+                # Only check parent if output_dir is a module subdirectory
+                if self.output_dir.name in ["target_rankings", "feature_selections", "training_results"]:
+                    repro_dir = self.output_dir.parent / "REPRODUCIBILITY"
             
             if repro_dir.exists():
                 # Create tracker to access trend summary method

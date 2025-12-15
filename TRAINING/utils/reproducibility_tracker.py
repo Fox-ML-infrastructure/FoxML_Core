@@ -128,6 +128,10 @@ class ReproducibilityTracker:
         self.max_runs_per_item = max_runs_per_item
         self.search_previous_runs = search_previous_runs
         
+        # Helper: Get base directory for REPRODUCIBILITY (should be at run level, not module level)
+        # If output_dir is a module subdirectory, go up one level; otherwise use output_dir itself
+        self._repro_base_dir = self._get_repro_base_dir()
+        
         # Load thresholds from config
         self.thresholds = self._load_thresholds(thresholds)
         self.use_z_score = self._load_use_z_score(use_z_score)
@@ -136,6 +140,27 @@ class ReproducibilityTracker:
         self.cohort_aware = self._load_cohort_aware()
         self.n_ratio_threshold = self._load_n_ratio_threshold()
         self.cohort_config_keys = self._load_cohort_config_keys()
+    
+    def _get_repro_base_dir(self) -> Path:
+        """
+        Get the base directory for REPRODUCIBILITY structure.
+        
+        REPRODUCIBILITY should be at the run level, not the module level.
+        If output_dir is a module subdirectory (target_rankings/, feature_selections/, training_results/),
+        go up one level to the run directory. Otherwise, use output_dir itself.
+        
+        Returns:
+            Path to the run-level directory where REPRODUCIBILITY should be created
+        """
+        # Module subdirectories that indicate we need to go up one level
+        module_subdirs = {"target_rankings", "feature_selections", "training_results"}
+        
+        if self.output_dir.name in module_subdirs:
+            # output_dir is a module subdirectory, go up to run level
+            return self.output_dir.parent
+        else:
+            # output_dir is already at run level, use it directly
+            return self.output_dir
         
         # Initialize audit enforcer
         if _AUDIT_AVAILABLE:
@@ -146,7 +171,7 @@ class ReproducibilityTracker:
                 logger.warning("Audit enforcement not available (RunContext/AuditEnforcer not imported), disabling audit")
         
         # Initialize stats tracking
-        self.stats_file = self.output_dir.parent / "REPRODUCIBILITY" / "stats.json"
+        self.stats_file = self._repro_base_dir / "REPRODUCIBILITY" / "stats.json"
         
         # Initialize telemetry writer (if enabled)
         try:
@@ -154,7 +179,7 @@ class ReproducibilityTracker:
             telemetry_config = load_telemetry_config()
             if telemetry_config.get("enabled", False):
                 self.telemetry = TelemetryWriter(
-                    output_dir=self.output_dir.parent,  # Base output dir (not module-specific)
+                    output_dir=self._repro_base_dir,  # Base output dir (run level, not module-specific)
                     enabled=telemetry_config.get("enabled", True),
                     baselines=telemetry_config.get("baselines"),
                     drift=telemetry_config.get("drift")
@@ -742,7 +767,7 @@ class ReproducibilityTracker:
         Returns:
             Path to cohort directory
         """
-        repro_dir = self.output_dir.parent / "REPRODUCIBILITY"
+        repro_dir = self._repro_base_dir / "REPRODUCIBILITY"
         
         # Normalize stage name to uppercase
         stage_upper = stage.upper().replace("MODEL_TRAINING", "TRAINING")
@@ -1134,7 +1159,7 @@ class ReproducibilityTracker:
             from TRAINING.decisioning.decision_engine import DecisionEngine
             from TRAINING.utils.resolved_config import get_cfg
             
-            repro_dir = self.output_dir.parent / "REPRODUCIBILITY"
+            repro_dir = self._repro_base_dir / "REPRODUCIBILITY"
             index_file = repro_dir / "index.parquet"
             if index_file.exists():
                 # Check if Bayesian policy is enabled
@@ -1332,7 +1357,7 @@ class ReproducibilityTracker:
         cohort_dir: Path
     ) -> None:
         """Update the global index.parquet file."""
-        repro_dir = self.output_dir.parent / "REPRODUCIBILITY"
+        repro_dir = self._repro_base_dir / "REPRODUCIBILITY"
         index_file = repro_dir / "index.parquet"
         
         # Normalize stage
@@ -1594,7 +1619,7 @@ class ReproducibilityTracker:
         model_family: Optional[str] = None
     ) -> Optional[str]:
         """Find matching cohort ID from index.parquet."""
-        repro_dir = self.output_dir.parent / "REPRODUCIBILITY"
+        repro_dir = self._repro_base_dir / "REPRODUCIBILITY"
         index_file = repro_dir / "index.parquet"
         
         if not index_file.exists():
@@ -1768,7 +1793,7 @@ class ReproducibilityTracker:
         Returns:
             Previous run metrics dict or None if no comparable run found
         """
-        repro_dir = self.output_dir.parent / "REPRODUCIBILITY"
+        repro_dir = self._repro_base_dir / "REPRODUCIBILITY"
         index_file = repro_dir / "index.parquet"
         
         if not index_file.exists():
@@ -2194,7 +2219,7 @@ class ReproducibilityTracker:
                 # Compute route_entropy from route history (if we have access to index)
                 route_entropy = None
                 try:
-                    repro_dir = self.output_dir.parent / "REPRODUCIBILITY"
+                    repro_dir = self._repro_base_dir / "REPRODUCIBILITY"
                     index_file = repro_dir / "index.parquet"
                     if index_file.exists():
                         df = pd.read_parquet(index_file)
@@ -2764,7 +2789,7 @@ class ReproducibilityTracker:
                 from TRAINING.utils.trend_analyzer import TrendAnalyzer, SeriesView
                 
                 # Get reproducibility base directory
-                repro_base = cohort_dir.parent.parent.parent if cohort_dir and cohort_dir.exists() else self.output_dir.parent / "REPRODUCIBILITY"
+                repro_base = cohort_dir.parent.parent.parent if cohort_dir and cohort_dir.exists() else self._repro_base_dir / "REPRODUCIBILITY"
                 
                 if repro_base.exists():
                     trend_analyzer = TrendAnalyzer(
@@ -2857,7 +2882,7 @@ class ReproducibilityTracker:
             from TRAINING.utils.trend_analyzer import TrendAnalyzer, SeriesView
             
             # Get reproducibility base directory
-            repro_base = self.output_dir.parent / "REPRODUCIBILITY"
+            repro_base = self._repro_base_dir / "REPRODUCIBILITY"
             if not repro_base.exists():
                 # Try alternative location
                 repro_base = self.output_dir / "REPRODUCIBILITY"
@@ -2941,7 +2966,7 @@ class ReproducibilityTracker:
         if not self.telemetry:
             return
         
-        repro_dir = self.output_dir.parent / "REPRODUCIBILITY"
+        repro_dir = self._repro_base_dir / "REPRODUCIBILITY"
         if not repro_dir.exists():
             repro_dir = self.output_dir / "REPRODUCIBILITY"
         

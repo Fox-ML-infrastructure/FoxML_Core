@@ -207,19 +207,15 @@ def save_dual_view_feature_selections(
     # Determine REPRODUCIBILITY directory (same as target ranking)
     # output_dir might be: RESULTS/{run_id}/feature_selections/{target}/
     # We want: RESULTS/{run_id}/REPRODUCIBILITY/FEATURE_SELECTION/
-    # Handle various output_dir structures
-    if output_dir.name == target_column:
-        # output_dir is feature_selections/{target}/
-        repro_base = output_dir.parent.parent / "REPRODUCIBILITY"
-    elif output_dir.name == 'feature_selections':
-        # output_dir is feature_selections/
-        repro_base = output_dir.parent / "REPRODUCIBILITY"
-    elif (output_dir.parent / 'feature_selections').exists():
-        # output_dir is in a subdirectory of feature_selections
-        repro_base = output_dir.parent.parent / "REPRODUCIBILITY"
-    else:
-        # Fallback: use output_dir's parent
-        repro_base = output_dir.parent / "REPRODUCIBILITY"
+    # Determine base directory for REPRODUCIBILITY (should be at run level)
+    # Walk up the directory tree to find the run directory (not a bin directory)
+    repro_base = output_dir
+    # Keep going up until we find a directory that's not a module subdirectory or bin directory
+    while repro_base.name in ["feature_selections", "target_rankings", "training_results"] or repro_base.name.startswith("sample_"):
+        repro_base = repro_base.parent
+        # Safety check: don't go above RESULTS directory
+        if repro_base.name == "RESULTS" or not repro_base.parent.exists():
+            break
     
     repro_dir = repro_base / "FEATURE_SELECTION"
     repro_dir.mkdir(parents=True, exist_ok=True)

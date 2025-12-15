@@ -176,6 +176,11 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 ### Design
 - [Architecture Deep Dive](03_technical/design/ARCHITECTURE_DEEP_DIVE.md) - System architecture
 - [CLI vs Config Separation](03_technical/design/CLI_CONFIG_SEPARATION.md) - **NEW**: Policy for CLI/Config separation, SST compliance
+
+### Internal Documentation
+- [Data Overlap Analysis](03_technical/internal/DATA_OVERLAP_ANALYSIS.md) - Analysis of data overlap between target_rankings and REPRODUCIBILITY
+- [Reorganization Plan](03_technical/internal/REORGANIZATION_PLAN.md) - Plan for reorganizing results directory structure
+- [Reorganization Issues Check](03_technical/internal/REORGANIZATION_ISSUES_CHECK.md) - Verification of reorganization changes
 - [Mathematical Foundations](03_technical/internal/MATHEMATICAL_FOUNDATIONS.md) - Math background (internal)
 - [Optimization Engine](03_technical/internal/OPTIMIZATION_ENGINE.md) - Optimization design (internal)
 - [C++ Integration](03_technical/internal/C++_INTEGRATION.md) - C++ components (internal)
