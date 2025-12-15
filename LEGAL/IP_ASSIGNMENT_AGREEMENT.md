@@ -1,6 +1,6 @@
 # Intellectual Property Assignment Agreement
 
-**Effective Date:** [DATE TO BE FILLED]  
+**Effective Date:** [FILL IN TODAY'S DATE - e.g., December 14, 2025]  
 **Between:** Jennifer Lewis (Individual) ("Assignor")  
 **And:** Fox ML Infrastructure LLC ("Assignee")
 
@@ -120,11 +120,17 @@ Email: jenn.lewis5789@gmail.com
 
 Fox ML Infrastructure LLC  
 By: _________________________  
-Title: _________________________  
+Title: [Fill in: "Founder", "Managing Member", "Owner", or "Authorized Representative"]  
 Date: _________________________  
 
 ---
 
 **IMPORTANT:** This document must be signed by both parties to be effective. Store signed copies securely.
+
+**Signing Instructions:** Since you are the sole owner of Fox ML Infrastructure LLC, you will sign in two capacities:
+1. As Jennifer Lewis (Individual) - Assignor
+2. As Authorized Representative of Fox ML Infrastructure LLC - Assignee
+
+See `LEGAL/ip_assignment_docs/IP_ASSIGNMENT_SIGNING_INSTRUCTIONS.md` for detailed step-by-step instructions.
 
 **Legal Note:** This is a template. Consult with legal counsel before signing to ensure it meets your specific needs and complies with applicable law.
