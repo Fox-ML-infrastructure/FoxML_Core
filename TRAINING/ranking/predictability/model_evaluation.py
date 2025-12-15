@@ -3176,16 +3176,25 @@ def train_and_evaluate_models(
                                     model_class = cb.CatBoostRegressor
                             self.base_model = model_class(**kwargs)
                             self._model_class = model_class
-                        # FIX: Store a copy of the list to avoid mutable reference issues
-                        self.cat_features = list(cat_features) if cat_features else []
+                        # FIX: For sklearn clone validation, ensure cat_features is set exactly as passed
+                        # If None, use empty list; if already a list, use it directly; otherwise convert
+                        if cat_features is None:
+                            self.cat_features = []
+                        elif isinstance(cat_features, list):
+                            # Already a list - use it directly (sklearn expects this for clone validation)
+                            self.cat_features = cat_features
+                        else:
+                            # Convert to list if it's not already
+                            self.cat_features = list(cat_features)
                         self.use_gpu = use_gpu
                     
                     def get_params(self, deep=True):
                         """Get parameters for sklearn compatibility."""
                         # Get base model params and add wrapper-specific params
                         params = self.base_model.get_params(deep=deep)
-                        # FIX: Return a copy of cat_features list to avoid mutable reference issues
-                        params['cat_features'] = list(self.cat_features) if self.cat_features else []
+                        # FIX: Return cat_features as-is (it's already a list from __init__)
+                        # Sklearn's clone validation requires exact round-trip: get_params() -> __init__(**params) -> get_params()
+                        params['cat_features'] = self.cat_features
                         params['use_gpu'] = self.use_gpu
                         params['_model_class'] = self._model_class
                         # Remove base_model from params (it's not a constructor arg)
@@ -3199,8 +3208,11 @@ def train_and_evaluate_models(
                         use_gpu = params.pop('use_gpu', None)
                         model_class = params.pop('_model_class', None)
                         if cat_features is not None:
-                            # FIX: Store a copy of the list to avoid mutable reference issues
-                            self.cat_features = list(cat_features) if cat_features else []
+                            # FIX: Set exactly as passed (sklearn clone validation requires this)
+                            if isinstance(cat_features, list):
+                                self.cat_features = cat_features
+                            else:
+                                self.cat_features = list(cat_features) if cat_features else []
                         if use_gpu is not None:
                             self.use_gpu = use_gpu
                         if model_class is not None:
