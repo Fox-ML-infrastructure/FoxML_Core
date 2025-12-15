@@ -3318,8 +3318,13 @@ def train_and_evaluate_models(
                 else:
                     raise
             
+            # Fit model and compute importance even if CV failed (NaN score)
+            # Classification targets often fail CV due to degenerate folds, but we can still compute importance
+            # from a model fit on the full dataset
+            model_fitted = False
             if not np.isnan(primary_score):
                 model.fit(X, y)
+                model_fitted = True
                 
                 # Verify GPU is actually being used (post-fit check)
                 if gpu_params and gpu_params.get('task_type') == 'GPU':
@@ -3338,11 +3343,23 @@ def train_and_evaluate_models(
 
                 # Compute and store full task-aware metrics
                 _compute_and_store_metrics('catboost', model, X, y, primary_score, task_type)
-                
-                # CatBoost requires training dataset to compute feature importance
-                # FIX: For GPU wrapper, need to access base_model and handle Pool conversion
-                # CRITICAL: Always compute and store importance if model trained successfully
-                importance = None
+            else:
+                # CV failed (NaN score) - still try to fit and compute importance
+                # This is especially important for classification targets that may fail CV due to degenerate folds
+                # but can still provide useful feature importance from full-dataset fit
+                logger.info(f"  ℹ️  CatBoost CV returned NaN (likely degenerate folds), but fitting on full dataset to compute importance")
+                try:
+                    model.fit(X, y)
+                    model_fitted = True
+                except Exception as e:
+                    logger.warning(f"  ⚠️  CatBoost failed to fit on full dataset: {e}")
+                    model_fitted = False
+            
+            # CatBoost requires training dataset to compute feature importance
+            # FIX: For GPU wrapper, need to access base_model and handle Pool conversion
+            # CRITICAL: Always compute and store importance if model trained successfully (even if CV failed)
+            importance = None
+            if model_fitted:
                 try:
                     if hasattr(model, 'base_model'):
                         # Wrapper model - use base model
@@ -3387,7 +3404,9 @@ def train_and_evaluate_models(
                     # This ensures consistency - all models that train should have entries
                     all_feature_importances['catboost'] = {}
             else:
+                # Model didn't fit - can't compute importance
                 importance = np.array([])
+                all_feature_importances['catboost'] = {}
             if len(importance) > 0:
                 total_importance = np.sum(importance)
                 if total_importance > 0:

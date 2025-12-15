@@ -763,15 +763,18 @@ def rank_targets(
                 if enable_symbol_specific:
                     logger.info(f"  View B: SYMBOL_SPECIFIC (evaluating {len(symbols)} symbols)")
                     
-                    # Gate: Only evaluate if cross-sectional succeeded (no point without baseline)
+                    # Always evaluate symbol-specific, even if cross-sectional failed
+                    # Some targets may work symbol-specifically even if cross-sectional fails
+                    # Routing logic needs symbol-specific results to make decisions (e.g., "SYMBOL_SPECIFIC only: weak CS but some symbols work")
                     if not cs_succeeded:
-                        logger.warning(f"  ⚠️  Skipping symbol-specific evaluation for {target_name} (cross-sectional failed: mean_score={result_cs.mean_score}, status={result_cs.status})")
+                        logger.info(f"  ℹ️  Cross-sectional failed for {target_name} (mean_score={result_cs.mean_score}, status={result_cs.status}), but evaluating symbol-specific anyway (target may work per-symbol)")
                     else:
                         logger.info(f"  ✅ Cross-sectional succeeded for {target_name}, proceeding with symbol-specific evaluation")
-                        # Track per-symbol skip reasons and diagnostics (local to this target evaluation)
-                        local_symbol_skip_reasons = {}  # {symbol: {reason, n_rows, n_train, n_val, n_pos_train, n_neg_train, n_pos_val, n_neg_val}}
-                        
-                        for symbol in symbols:
+                    
+                    # Track per-symbol skip reasons and diagnostics (local to this target evaluation)
+                    local_symbol_skip_reasons = {}  # {symbol: {reason, n_rows, n_train, n_val, n_pos_train, n_neg_train, n_pos_val, n_neg_val}}
+                    
+                    for symbol in symbols:
                             logger.info(f"    Evaluating {target_name} for symbol {symbol}...")
                             try:
                                 if auto_rerun_enabled and _AUTOFIX_AVAILABLE:
