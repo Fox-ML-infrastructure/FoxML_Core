@@ -1049,6 +1049,20 @@ def train_and_evaluate_models(
             # CRITICAL: Convert to EnforcedFeatureSet (SST contract)
             enforced_post_prune = cap_result.to_enforced_set(stage="POST_PRUNE", cap_minutes=effective_cap)
             
+            # PHASE 1: Persist FeatureSet artifact for debugging
+            if output_dir is not None:
+                try:
+                    from TRAINING.utils.feature_set_artifact import create_artifact_from_enforced
+                    artifact = create_artifact_from_enforced(
+                        enforced_post_prune,
+                        stage="POST_PRUNE",
+                        removal_reasons={f: "pruned" for f in set(feature_names) - set(enforced_post_prune.features)}
+                    )
+                    artifact_dir = output_dir / "REPRODUCIBILITY" / "FEATURESET_ARTIFACTS"
+                    artifact.save(artifact_dir)
+                except Exception as e:
+                    logger.debug(f"  ⚠️  Failed to persist POST_PRUNE artifact: {e}")
+            
             # Extract results (for backward compatibility)
             safe_features_post_prune = enforced_post_prune.features  # Use enforced.features (the truth)
             quarantined_post_prune = list(enforced_post_prune.quarantined.keys()) + enforced_post_prune.unknown
@@ -1943,20 +1957,95 @@ def train_and_evaluate_models(
             time_vals = time_series.iloc[sort_idx].values if isinstance(time_series, pd.Series) else time_series[sort_idx]
             logger.info(f"  Sorted data by timestamp (preserving alignment)")
         
-        tscv = PurgedTimeSeriesSplit(
-            n_splits=cv_folds, 
-            purge_overlap_time=purge_time,
-            time_column_values=time_vals
-        )
-        if log_cfg.cv_detail:
-            logger.info(f"  Using PurgedTimeSeriesSplit (TIME-BASED): {cv_folds} folds, purge_time={purge_time}")
+        # PHASE 1: Pre-CV compatibility check for degenerate folds (first-class handling)
+        # Check if target is compatible with CV before creating splitter
+        from TRAINING.utils.target_validation import check_cv_compatibility
+        is_cv_compatible, cv_compatibility_reason = check_cv_compatibility(y, task_type, cv_folds)
+        
+        # Get degenerate fold fallback policy from config
+        cv_degenerate_fallback = "reduce_folds"  # Default
+        cv_min_folds = 2  # Default minimum folds
+        try:
+            from CONFIG.config_loader import get_cfg
+            cv_degenerate_fallback = get_cfg("training.cv_degenerate_fallback", default="reduce_folds", config_name="intelligent_training_config")
+            cv_min_folds = int(get_cfg("training.cv_min_folds", default=2, config_name="intelligent_training_config"))
+        except Exception:
+            pass
+        
+        # Apply fallback policy if target is not CV-compatible
+        original_cv_folds = cv_folds
+        if not is_cv_compatible:
+            logger.info(
+                f"  ℹ️  CV compatibility check: {cv_compatibility_reason}. "
+                f"Using fallback policy: {cv_degenerate_fallback}"
+            )
+            
+            if cv_degenerate_fallback == "reduce_folds":
+                # Reduce folds until compatible or reach minimum
+                while cv_folds > cv_min_folds:
+                    cv_folds -= 1
+                    is_compatible, reason = check_cv_compatibility(y, task_type, cv_folds)
+                    if is_compatible:
+                        logger.info(
+                            f"  ℹ️  Reduced CV folds from {original_cv_folds} to {cv_folds} to handle degenerate target. "
+                            f"Reason: {cv_compatibility_reason}"
+                        )
+                        break
+                    cv_compatibility_reason = reason
+                
+                # If still not compatible at minimum folds, skip CV
+                if cv_folds == cv_min_folds and not check_cv_compatibility(y, task_type, cv_folds)[0]:
+                    logger.info(
+                        f"  ℹ️  Target still degenerate at minimum folds ({cv_min_folds}). "
+                        f"Will skip CV and train on full dataset for importance only."
+                    )
+                    cv_folds = 0  # Signal to skip CV
+            elif cv_degenerate_fallback == "skip_cv":
+                logger.info(
+                    f"  ℹ️  Skipping CV due to degenerate target. "
+                    f"Will train on full dataset for importance only. Reason: {cv_compatibility_reason}"
+                )
+                cv_folds = 0  # Signal to skip CV
+            elif cv_degenerate_fallback == "different_splitter":
+                # For classification, use StratifiedKFold if available
+                logger.info(
+                    f"  ℹ️  Using alternative splitter for degenerate target. "
+                    f"Reason: {cv_compatibility_reason}"
+                )
+                # Note: This would require implementing alternative splitter logic
+                # For now, fall back to reduce_folds
+                cv_folds = max(cv_min_folds, cv_folds - 1)
+                logger.info(f"  ℹ️  Falling back to reduce_folds: {cv_folds} folds")
+        
+        # Create splitter only if we have valid folds
+        skip_cv = False
+        if cv_folds > 0:
+            tscv = PurgedTimeSeriesSplit(
+                n_splits=cv_folds, 
+                purge_overlap_time=purge_time,
+                time_column_values=time_vals
+            )
+            if log_cfg.cv_detail:
+                logger.info(f"  Using PurgedTimeSeriesSplit (TIME-BASED): {cv_folds} folds, purge_time={purge_time}")
+        else:
+            # Skip CV - will train on full dataset
+            tscv = None
+            skip_cv = True
+            logger.info(f"  ℹ️  Skipping CV (degenerate target). Will train on full dataset for importance only.")
         
         # CRITICAL: Validate CV folds before training to prevent IndexError
         # Convert splitter generator to list to inspect all folds
-        all_folds = list(tscv.split(X, y))
-        n_folds_generated = len(all_folds)
+        if skip_cv:
+            # Skip fold validation if CV is skipped
+            all_folds = []
+            n_folds_generated = 0
+            valid_folds = []
+            n_valid_folds = 0
+        else:
+            all_folds = list(tscv.split(X, y))
+            n_folds_generated = len(all_folds)
         
-        if n_folds_generated == 0:
+        if n_folds_generated == 0 and not skip_cv:
             raise RuntimeError(
                 f"🚨 No CV folds generated. This usually means purge/embargo ({purge_time:.1f}m) is too large "
                 f"relative to data span. Either: 1) Reduce lookback_budget_minutes cap to drop long-lookback features, "
@@ -1969,33 +2058,36 @@ def train_and_evaluate_models(
         is_multiclass = task_type == TaskType.MULTICLASS_CLASSIFICATION
         is_classification = is_binary or is_multiclass
         
-        # Validate each fold
-        valid_folds = []
-        for fold_idx, (train_idx, test_idx) in enumerate(all_folds):
-            # Check that indices are non-empty
-            if len(train_idx) == 0:
-                logger.warning(f"  ⚠️  Fold {fold_idx + 1}: Empty training set (skipping)")
-                continue
-            if len(test_idx) == 0:
-                logger.warning(f"  ⚠️  Fold {fold_idx + 1}: Empty test set (skipping)")
-                continue
-            
-            # For classification, check that both classes are present in training set
-            if is_classification:
-                train_y = y[train_idx]
-                unique_classes = np.unique(train_y[~np.isnan(train_y)])
-                if len(unique_classes) < 2:
-                    logger.warning(
-                        f"  ⚠️  Fold {fold_idx + 1}: Training set has only {len(unique_classes)} class(es) "
-                        f"(classes: {unique_classes.tolist()}), skipping"
-                    )
+        # Validate each fold (skip if CV is skipped)
+        if not skip_cv:
+            valid_folds = []
+            for fold_idx, (train_idx, test_idx) in enumerate(all_folds):
+                # Check that indices are non-empty
+                if len(train_idx) == 0:
+                    logger.warning(f"  ⚠️  Fold {fold_idx + 1}: Empty training set (skipping)")
                     continue
+                if len(test_idx) == 0:
+                    logger.warning(f"  ⚠️  Fold {fold_idx + 1}: Empty test set (skipping)")
+                    continue
+                
+                # For classification, check that both classes are present in training set
+                if is_classification:
+                    train_y = y[train_idx]
+                    unique_classes = np.unique(train_y[~np.isnan(train_y)])
+                    if len(unique_classes) < 2:
+                        logger.warning(
+                            f"  ⚠️  Fold {fold_idx + 1}: Training set has only {len(unique_classes)} class(es) "
+                            f"(classes: {unique_classes.tolist()}), skipping"
+                        )
+                        continue
+                
+                valid_folds.append((train_idx, test_idx))
             
-            valid_folds.append((train_idx, test_idx))
+            n_valid_folds = len(valid_folds)
+        else:
+            n_valid_folds = 0
         
-        n_valid_folds = len(valid_folds)
-        
-        if n_valid_folds == 0:
+        if n_valid_folds == 0 and not skip_cv:
             raise RuntimeError(
                 f"🚨 No valid CV folds after validation. Generated {n_folds_generated} folds, but all were invalid. "
                 f"This usually means: 1) purge/embargo ({purge_time:.1f}m) is too large relative to data span, "
@@ -2005,28 +2097,29 @@ def train_and_evaluate_models(
                 f"3) Check target distribution."
             )
         
-        if n_valid_folds < n_folds_generated:
-            logger.warning(
-                f"  ⚠️  Only {n_valid_folds}/{n_folds_generated} folds are valid. "
-                f"Proceeding with {n_valid_folds} folds."
-            )
-        
-        # Create a wrapper splitter that only yields valid folds
-        class ValidatedSplitter:
-            def __init__(self, valid_folds):
-                self.valid_folds = valid_folds
-                self.n_splits = len(valid_folds)
+        if not skip_cv:
+            if n_valid_folds < n_folds_generated:
+                logger.warning(
+                    f"  ⚠️  Only {n_valid_folds}/{n_folds_generated} folds are valid. "
+                    f"Proceeding with {n_valid_folds} folds."
+                )
             
-            def split(self, X, y=None, groups=None):
-                for train_idx, test_idx in self.valid_folds:
-                    yield train_idx, test_idx
+            # Create a wrapper splitter that only yields valid folds
+            class ValidatedSplitter:
+                def __init__(self, valid_folds):
+                    self.valid_folds = valid_folds
+                    self.n_splits = len(valid_folds)
+                
+                def split(self, X, y=None, groups=None):
+                    for train_idx, test_idx in self.valid_folds:
+                        yield train_idx, test_idx
+                
+                def get_n_splits(self, X=None, y=None, groups=None):
+                    return self.n_splits
             
-            def get_n_splits(self, X=None, y=None, groups=None):
-                return self.n_splits
-        
-        tscv = ValidatedSplitter(valid_folds)
-        if log_cfg.cv_detail:
-            logger.info(f"  ✅ CV fold validation: {n_valid_folds} valid folds (from {n_folds_generated} generated)")
+            tscv = ValidatedSplitter(valid_folds)
+            if log_cfg.cv_detail:
+                logger.info(f"  ✅ CV fold validation: {n_valid_folds} valid folds (from {n_folds_generated} generated)")
     else:
         # CRITICAL: Row-count based purging is INVALID for panel data (multiple symbols per timestamp)
         # With 50 symbols, 1 bar = 50 rows. Using row counts causes catastrophic leakage.
@@ -3299,24 +3392,30 @@ def train_and_evaluate_models(
                     f"Consider setting cv_n_jobs=1 for GPU training."
                 )
             
-            try:
-                scores = cross_val_score(model, X, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
-                valid_scores = scores[~np.isnan(scores)]
-                primary_score = valid_scores.mean() if len(valid_scores) > 0 else np.nan
-            except (ValueError, TypeError) as e:
-                error_str = str(e)
-                if "Invalid classes" in error_str or "Expected" in error_str:
-                    logger.debug(f"    CatBoost: Target degenerate in some CV folds")
-                    primary_score = np.nan
-                    model_metrics['catboost'] = {'roc_auc': np.nan} if task_type == TaskType.BINARY_CLASSIFICATION else {'r2': np.nan} if task_type == TaskType.REGRESSION else {'accuracy': np.nan}
-                    model_scores['catboost'] = np.nan
-                elif "Invalid data type" in error_str and "catboost.Pool" in error_str:
-                    # FIX: If Pool conversion failed, log and re-raise with context
-                    logger.error(f"  ❌ CatBoost GPU Pool conversion error: {e}")
-                    logger.error(f"  💡 This may indicate a CatBoost version compatibility issue with GPU mode")
-                    raise
-                else:
-                    raise
+            # PHASE 1: Handle skipped CV (degenerate folds policy)
+            if tscv is None:
+                # CV was skipped due to degenerate target - skip CV and fit on full dataset
+                primary_score = np.nan
+                logger.info(f"  ℹ️  CatBoost: Skipping CV (degenerate target detected pre-CV). Fitting on full dataset for importance only.")
+            else:
+                try:
+                    scores = cross_val_score(model, X, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
+                    valid_scores = scores[~np.isnan(scores)]
+                    primary_score = valid_scores.mean() if len(valid_scores) > 0 else np.nan
+                except (ValueError, TypeError) as e:
+                    error_str = str(e)
+                    if "Invalid classes" in error_str or "Expected" in error_str:
+                        logger.debug(f"    CatBoost: Target degenerate in some CV folds")
+                        primary_score = np.nan
+                        model_metrics['catboost'] = {'roc_auc': np.nan} if task_type == TaskType.BINARY_CLASSIFICATION else {'r2': np.nan} if task_type == TaskType.REGRESSION else {'accuracy': np.nan}
+                        model_scores['catboost'] = np.nan
+                    elif "Invalid data type" in error_str and "catboost.Pool" in error_str:
+                        # FIX: If Pool conversion failed, log and re-raise with context
+                        logger.error(f"  ❌ CatBoost GPU Pool conversion error: {e}")
+                        logger.error(f"  💡 This may indicate a CatBoost version compatibility issue with GPU mode")
+                        raise
+                    else:
+                        raise
             
             # Fit model and compute importance even if CV failed (NaN score)
             # Classification targets often fail CV due to degenerate folds, but we can still compute importance
@@ -5070,6 +5169,20 @@ def evaluate_target_predictability(
     # This is the contract: post-enforcement stages should never see unknowns
     if resolved_config and hasattr(resolved_config, '_gatekeeper_enforced'):
         enforced_gatekeeper = resolved_config._gatekeeper_enforced
+        
+        # PHASE 1: Persist FeatureSet artifact for debugging
+        if output_dir is not None:
+            try:
+                from TRAINING.utils.feature_set_artifact import create_artifact_from_enforced
+                artifact = create_artifact_from_enforced(
+                    enforced_gatekeeper,
+                    stage="POST_GATEKEEPER",
+                    removal_reasons={}
+                )
+                artifact_dir = output_dir / "REPRODUCIBILITY" / "FEATURESET_ARTIFACTS"
+                artifact.save(artifact_dir)
+            except Exception as e:
+                logger.debug(f"  ⚠️  Failed to persist POST_GATEKEEPER artifact: {e}")
         if len(enforced_gatekeeper.unknown) > 0:
             policy = "strict"
             try:
