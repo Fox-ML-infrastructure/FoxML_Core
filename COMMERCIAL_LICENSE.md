@@ -87,6 +87,7 @@ This License covers the use case(s) and scope specified in the Ordering Document
    - No redistribution or sharing with third parties
    - Evaluation purposes only
    - Must request in writing (subject to approval)
+   - **Each organization (including Affiliates) is limited to one 30-day evaluation period. Repeated evaluation requests from the same organization, related entities, or entities under common control are not permitted.**
 
 2. **Paid Pilot:** Organizations may execute a Pilot Order Form and pay applicable Pilot fees ($35,000) for extended evaluation (4–6 weeks). Pilot fees are credited 100% toward the first-year Annual License if converted within 60 days.
 
@@ -178,7 +179,7 @@ Unless explicitly permitted in writing by the Licensor, the Licensee may NOT:
 - Build, market, or operate a Competing Infrastructure Service that uses the Software or any derivative of the Software
 - Use the Software to offer a product or service whose primary purpose is to allow third parties to run their own experiments, models, or workflows on infrastructure powered by the Software
 
-For clarity, Licensee may use the Software to build and operate its own internal trading, research, or analytics systems and to provide outputs (e.g., analytics, reports, trading decisions, predictions, recommendations) to its own clients, provided such clients do not receive direct or indirect access to the Software itself, including but not limited to: (i) access to the Software's APIs, (ii) ability to execute code or workflows within the Software, (iii) access to the Software's user interface, or (iv) any other means of interacting with or controlling the Software. Licensee may provide data inputs to the Software and receive outputs from the Software for delivery to clients, but clients may not themselves interact with the Software.
+For clarity, Licensee may use the Software to build and operate its own internal trading, research, or analytics systems and to provide outputs (e.g., analytics, reports, trading decisions, predictions, recommendations) to its own clients, provided such clients do not receive direct or indirect access to the Software itself, including but not limited to: (i) access to the Software's APIs, (ii) ability to execute code or workflows within the Software, (iii) access to the Software's user interface, (iv) access through wrapper APIs, proxy services, or any other indirect means that allows third parties to use the Software's functionality, or (v) any other means of interacting with or controlling the Software. Licensee may provide data inputs to the Software and receive outputs from the Software for delivery to clients, but clients may not themselves interact with the Software, whether directly or indirectly through any intermediary layer, wrapper, or service.
 
 **Model Training and Resale.**
 
@@ -190,7 +191,7 @@ However, Licensee may not:
 
 (ii) use the Software to build or operate a Competing Infrastructure Service;
 
-(iii) use outputs from the Software (including models, algorithms, predictions, analytics, signals, or trading decisions) to build, train, develop, or operate a Competing Infrastructure Service or any substantially similar platform, product, or service; or
+(iii) use outputs from the Software (including models, algorithms, predictions, analytics, signals, or trading decisions) to build, train, develop, or operate a Competing Infrastructure Service or any substantially similar platform, product, or service, or to train, develop, or create competing models, algorithms, or systems (whether infrastructure services or standalone products) that compete with the Software's purpose or functionality; or
 
 (iv) grant any third party direct or indirect access to the Software or to any models or systems in a way that allows such third party to run its own workflows using the Software.
 
@@ -358,9 +359,11 @@ Subject to the terms of this License and the applicable Ordering Documents, Lice
 
 (a) each such Affiliate is expressly identified in an applicable Ordering Document or other written agreement with Licensor;
 
-(b) Licensee remains fully responsible and liable for such Affiliates' compliance with this License; and
+(b) Licensee remains fully responsible and liable for such Affiliates' compliance with this License;
 
-(c) use by any Affiliate constitutes use by Licensee for purposes of any user, seat, environment, or usage limitations.
+(c) use by any Affiliate constitutes use by Licensee for purposes of any user, seat, environment, or usage limitations; and
+
+(d) "solely for the benefit of Licensee" means the Affiliate's use directly supports Licensee's operations, projects, or business activities as specified in the Ordering Documents. An Affiliate using the Software for its own independent operations, even if those operations indirectly benefit Licensee, must obtain its own separate license.
 
 For the avoidance of doubt, each separate legal entity (including each Affiliate, subsidiary, parent company, or holding company) that wishes to use the Software for its own benefit must obtain its own license (typically via a separate Ordering Document), unless expressly stated otherwise in writing by Licensor. A parent company's license does not cover its subsidiaries, and a subsidiary's license does not cover its parent company or sister subsidiaries. Each legal entity must pay for its own license regardless of corporate structure or ownership relationships.
 
