@@ -91,7 +91,6 @@ All API docs should reference:
 ### Cohort-Aware Reproducibility System
 - **Files**:
   - `DOCS/03_technical/implementation/COHORT_AWARE_REPRODUCIBILITY.md` - Complete guide
-  - `DOCS/03_technical/implementation/COHORT_AWARE_REPRODUCIBILITY_IMPLEMENTATION.md` - Implementation details
   - `DOCS/03_technical/implementation/REPRODUCIBILITY_STRUCTURE.md` - Directory structure guide
   - `DOCS/03_technical/implementation/REPRODUCIBILITY_API.md` - API reference
   - `DOCS/03_technical/implementation/REPRODUCIBILITY_ERROR_HANDLING.md` - Error handling guide

@@ -44,7 +44,8 @@ The platform is **client-hosted software** that runs entirely within the client'
 **Fox ML Infrastructure does not collect usage data or telemetry.**
 
 - **No telemetry** — The platform does not send usage data, analytics, or tracking information to external services
-- **No analytics** — No user behavior tracking, no performance metrics collection, no feature usage tracking
+- **No analytics** — No user behavior tracking, no feature usage tracking sent externally
+- **Local metrics only** — Model performance metrics (ROC-AUC, R², feature importance, drift detection) are stored locally on client infrastructure for reproducibility. These metrics are NOT transmitted externally and are NOT user data - they are ML model performance measurements.
 - **No outbound calls** — The platform does not make outbound network calls (except as configured by the client for data sources)
 - **No embedded trackers** — No third-party tracking scripts, pixels, or analytics tools
 

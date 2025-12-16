@@ -648,8 +648,10 @@ def filter_features_for_target(
                 registry_allowed = registry.get_allowed_features(safe_columns, registry_horizon, verbose=verbose)
                 registry_allowed_set = set(registry_allowed)
                 if verbose:
-                    if target_horizon_bars is not None:
-                        logger.info(f"  Feature registry (ranking mode): {len(registry_allowed)} features explicitly allowed for horizon={target_horizon_bars} bars (unknown features will be allowed if they pass pattern filtering)")
+                    if target_horizon_minutes is not None and target_horizon_bars is not None:
+                        logger.info(f"  Feature registry (ranking mode): {len(registry_allowed)} features explicitly allowed for horizon_minutes={target_horizon_minutes:.1f}m, horizon_bars={target_horizon_bars} bars @ interval={data_interval_minutes:.1f}m (unknown features will be allowed if they pass pattern filtering)")
+                    elif target_horizon_bars is not None:
+                        logger.info(f"  Feature registry (ranking mode): {len(registry_allowed)} features explicitly allowed for horizon_bars={target_horizon_bars} bars @ interval={data_interval_minutes:.1f}m (unknown features will be allowed if they pass pattern filtering)")
                     else:
                         logger.info(f"  Feature registry (ranking mode): {len(registry_allowed)} features explicitly allowed (unknown features will be allowed if they pass pattern filtering)")
             else:
@@ -657,8 +659,10 @@ def filter_features_for_target(
                 registry_allowed = registry.get_allowed_features(safe_columns, registry_horizon, verbose=verbose)
                 registry_allowed_set = set(registry_allowed)
                 if verbose:
-                    if target_horizon_bars is not None:
-                        logger.info(f"  Feature registry: {len(registry_allowed)} features explicitly allowed for horizon={target_horizon_bars} bars")
+                    if target_horizon_minutes is not None and target_horizon_bars is not None:
+                        logger.info(f"  Feature registry: {len(registry_allowed)} features explicitly allowed for horizon_minutes={target_horizon_minutes:.1f}m, horizon_bars={target_horizon_bars} bars @ interval={data_interval_minutes:.1f}m")
+                    elif target_horizon_bars is not None:
+                        logger.info(f"  Feature registry: {len(registry_allowed)} features explicitly allowed for horizon_bars={target_horizon_bars} bars @ interval={data_interval_minutes:.1f}m")
                     else:
                         logger.info(f"  Feature registry: {len(registry_allowed)} features explicitly allowed (horizon extraction failed, using default horizon=1)")
         except Exception as e:

@@ -282,7 +282,13 @@ class RankingHarness:
             target_horizon_bars = None
             if target_horizon_minutes is not None and detected_interval > 0:
                 target_horizon_bars = int(target_horizon_minutes // detected_interval)
-            horizon_info = f"horizon={target_horizon_bars} bars" if target_horizon_bars is not None else "this horizon"
+            # Always log both minutes and bars for clarity
+            if target_horizon_minutes is not None and target_horizon_bars is not None:
+                horizon_info = f"horizon_minutes={target_horizon_minutes:.1f}m, horizon_bars={target_horizon_bars} bars @ interval={detected_interval:.1f}m"
+            elif target_horizon_bars is not None:
+                horizon_info = f"horizon_bars={target_horizon_bars} bars @ interval={detected_interval:.1f}m"
+            else:
+                horizon_info = "this horizon"
             logger.error(
                 f"❌ INSUFFICIENT FEATURES: Only {len(feature_names)} features remain after filtering "
                 f"(minimum required: {MIN_FEATURES_REQUIRED}). "

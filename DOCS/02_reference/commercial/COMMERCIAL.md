@@ -189,11 +189,11 @@ Support is priced separately from the base license. Do not bake unlimited suppor
 - **30-day evaluation:** $0 (strict limits: non-production, no client deliverables, no redistribution)
 - **Paid Pilot:** $35,000 (4–6 weeks, credited 100% to Year 1 if converted within 60 days)
 - **Academic:** May request $0 evaluation pilot (must be requested in writing, subject to approval, non-commercial research only)
-- **Individuals:** Personal use remains free (see `LICENSE`)
+- **Individuals:** Personal use requires a commercial license (see `LICENSE`)
 
 **If you're a legal entity, you need a license. If you want to evaluate beyond the 30-day trial, it's a paid pilot.**
 
-**FoxML Core is source-available: free for personal use and non-commercial academic research. Organizational use requires a paid license. This keeps the project sustainable and enables continued development.**
+**FoxML Core is source-available: free for non-commercial academic research at qualifying tax-exempt institutions. All other use requires a paid license. This keeps the project sustainable and enables continued development.**
 
 ---
 
@@ -267,7 +267,7 @@ A: Pilot fees are non-refundable but credited 100% toward Year 1 Annual License 
 A: You're free to build your own. You can't use FoxML Core in production without a license. Organizational use requires a paid license regardless of whether you fork the code.
 
 **Q: Why isn't this open source?**  
-A: FoxML Core is source-available: free for personal use and non-commercial academic research. Organizational use requires a paid license. This keeps the project sustainable and enables continued development. If you're a legal entity, you need a license.
+A: FoxML Core is source-available: free for non-commercial academic research at qualifying tax-exempt institutions. All other use requires a paid license. This keeps the project sustainable and enables continued development. If you're a legal entity, you need a license.
 
 **Q: Can we modify the core code?**  
 A: Yes. You may modify internally for your own use. Public redistribution of modified core requires written consent.

@@ -151,7 +151,7 @@ This is essential for ML research organizations, quantitative firms, and enterpr
 
 **The public source-available core:**
 
-- **Source-available license** — Available for free personal/academic use (see LICENSE)
+- **Source-available license** — Available for free non-commercial academic research at qualifying tax-exempt institutions (see LICENSE)
 - **Commercial license required** — Organizational use requires a commercial license
 - **Core IP remains owned** — Core platform IP remains the property of Fox ML Infrastructure LLC
 

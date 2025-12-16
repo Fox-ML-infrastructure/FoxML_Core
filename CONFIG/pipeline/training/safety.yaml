@@ -283,9 +283,9 @@ safety:
         top_k: 20                # Number of top features to analyze (default: 20)
         min_snapshots: 2         # Minimum snapshots required for analysis (default: 2)
   
-  # Telemetry System (Cube-based with explicit dimensions and rollups)
-  telemetry:
-    enabled: true  # Enable telemetry collection
+  # Metrics System (Cube-based with explicit dimensions and rollups)
+  metrics:
+    enabled: true  # Enable metrics collection
     
     # Granularity levels (what dimensions to track)
     levels:

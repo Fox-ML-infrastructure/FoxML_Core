@@ -32,7 +32,7 @@
 
 **A:** No. If they are using the Software in the scope of their work for a business or organization, that constitutes organizational use and requires a commercial license.
 
-Organizational use requires a commercial license. Free use is limited to personal use and non-commercial academic research.
+Organizational use requires a commercial license. Free use is limited to non-commercial academic research at qualifying tax-exempt institutions.
 
 **Key point:** Use by employees, contractors, interns, or Affiliates in the scope of their work for a business entity requires a commercial license, regardless of their employment status.
 
@@ -40,7 +40,7 @@ Organizational use requires a commercial license. Free use is limited to persona
 
 ### Q: Can some teams use it for free while others use a commercial license?
 
-**A:** No. Organizational use requires a commercial license. Free use is limited to personal use and non-commercial academic research.
+**A:** No. Organizational use requires a commercial license. Free use is limited to non-commercial academic research at qualifying tax-exempt institutions.
 
 ---
 
@@ -196,7 +196,7 @@ A: No. Sole proprietors using Software for business operations require a commerc
 ## Common Pressure Tactics (Handled)
 
 **"This should be open source / community-owned."**  
-→ FoxML Core is source-available. Free for personal use and non-commercial academic research. Organizational use requires a paid commercial license. This keeps the project sustainable and enables continued development.
+→ FoxML Core is source-available. Free for non-commercial academic research at qualifying tax-exempt institutions. All other use requires a paid commercial license. This keeps the project sustainable and enables continued development.
 
 **"We can't pay until you prove traction."**  
 → Organizations can use a 30-day $0 evaluation (strict limits). Continued evaluation requires a paid Pilot ($35k).
@@ -211,7 +211,7 @@ A: No. Sole proprietors using Software for business operations require a commerc
 → You're free to build your own. You can't use FoxML Core in production without a license. Organizational use requires a paid license regardless of whether you fork the code.
 
 **"If you charge, you won't get adoption."**  
-→ FoxML Core is source-available. Free for personal use and non-commercial academic research. Organizational use requires a paid commercial license. This keeps the project sustainable and enables continued development.
+→ FoxML Core is source-available. Free for non-commercial academic research at qualifying tax-exempt institutions. All other use requires a paid commercial license. This keeps the project sustainable and enables continued development.
 
 ---
 

@@ -232,8 +232,16 @@ def apply_lookback_cap(
                 quarantined_dict[feat_name] = float("inf")
             elif lookback == float("inf"):
                 # Unknown lookback - treat as violation (same as over-cap)
-                if log_mode == "debug":
-                    logger.debug(f"   {stage}: {feat_name} → unknown lookback (quarantined)")
+                # PHASE 1: Stage-aware logging (INFO pre-enforcement, WARNING post-enforcement)
+                is_pre_enforcement = any(stage.startswith(prefix) for prefix in ["SAFE_CANDIDATES", "FS_PRE", "FS_POST"])
+                if is_pre_enforcement:
+                    # Pre-enforcement: Expected, log as INFO
+                    if log_mode == "debug":
+                        logger.debug(f"   {stage}: {feat_name} → unknown lookback (will be quarantined at gatekeeper)")
+                else:
+                    # Post-enforcement: Actual violation, log as WARNING
+                    if log_mode == "debug":
+                        logger.warning(f"   {stage}: {feat_name} → unknown lookback (quarantined - violation)")
                 unknown_features.append(feat_name)
                 quarantined_features.append(feat_name)
                 quarantined_dict[feat_name] = float("inf")
@@ -295,11 +303,19 @@ def apply_lookback_cap(
         # In strict mode, this is already handled (hard-stop above)
         # In drop mode, we've dropped them, so actual_max is correct (finite only)
         # But log both finite max and unknown count for clarity
+        # PHASE 1: Stage-aware logging for unknown features
         if unknown_features:
-            logger.info(
-                f"   📊 {stage}: actual_max_finite={actual_max_lookback:.1f}m, "
-                f"unknown_count={len(unknown_features)} (quarantined)"
-            )
+            is_pre_enforcement = any(stage.startswith(prefix) for prefix in ["SAFE_CANDIDATES", "FS_PRE", "FS_POST"])
+            if is_pre_enforcement:
+                logger.info(
+                    f"   📊 {stage}: actual_max_finite={actual_max_lookback:.1f}m, "
+                    f"unknown_count={len(unknown_features)} (will be quarantined at gatekeeper)"
+                )
+            else:
+                logger.warning(
+                    f"   📊 {stage}: actual_max_finite={actual_max_lookback:.1f}m, "
+                    f"unknown_count={len(unknown_features)} (quarantined - violation)"
+                )
     else:
         # No safe features - create empty budget
         from TRAINING.utils.leakage_budget import LeakageBudget

@@ -6,8 +6,14 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-15 (Consolidated)** — Metrics system rename, seed tracking fixes, feature selection improvements, CatBoost GPU fixes, privacy documentation updates.  
+  → [View](2025-12-15-consolidated.md)
+  
 - **2025-12-15 (CatBoost GPU Fixes)** — Fixed CatBoost GPU mode requiring Pool objects, sklearn clone compatibility, and missing feature importance output. CatBoost GPU training now works correctly and feature importances are saved to results directory.  
   → [View](2025-12-15-catboost-gpu-fixes.md)
+  
+- **2025-12-15 (Metrics Rename)** — Renamed telemetry to metrics throughout codebase. All metrics stored locally - no user data collection.  
+  → [View](2025-12-15-metrics-rename.md)
 
 - **2025-12-14 (IP Assignment Agreement Signed)** — IP Assignment Agreement signed, legally assigning all IP from individual to Fox ML Infrastructure LLC. ✅ Legally effective.  
   → [View](2025-12-14-ip-assignment-signed.md)

@@ -23,7 +23,6 @@ Detailed implementation guides and execution order documentation.
 - **[Reproducibility API](REPRODUCIBILITY_API.md)** - API reference
 - **[Reproducibility Structure](REPRODUCIBILITY_STRUCTURE.md)** - Directory structure guide
 - **[Cohort-Aware Reproducibility](COHORT_AWARE_REPRODUCIBILITY.md)** - Cohort-aware system
-- **[Trend Analyzer Verification](TREND_ANALYZER_VERIFICATION.md)** - Trend analysis verification
 - **[Telemetry System](../02_reference/changelog/2025-12-14-telemetry-system.md)** - **NEW**: Sidecar-based telemetry with view isolation, hierarchical rollups
 
 ### Decision-Making (EXPERIMENTAL)

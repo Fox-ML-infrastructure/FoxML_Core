@@ -294,5 +294,4 @@ strategy.train(X, y_dict, feature_names)
 ## Related Documentation
 
 - `TRAINING_OPTIMIZATION_GUIDE.md`: Detailed explanations
-- `FIRST_BATCH_SPECS_IMPLEMENTATION.md`: Trainer-level changes
 - `first_batch_specs.yaml`: Parameter recommendations

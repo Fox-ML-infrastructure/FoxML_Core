@@ -288,6 +288,4 @@ active_sanitization:
 ## Related Documentation
 
 - [Safety & Leakage Config Guide](../../02_reference/configuration/SAFETY_LEAKAGE_CONFIGS.md) - Configuration reference
-- [Leakage Analysis](../../03_technical/research/LEAKAGE_ANALYSIS.md) - Detailed leakage documentation
-- [Resolved Config Fix](RESOLVED_CONFIG_FIX.md) - How purge/embargo are computed
 - [Feature Lookback Calculation](../../02_reference/configuration/FEATURE_TARGET_CONFIGS.md) - How lookback is computed

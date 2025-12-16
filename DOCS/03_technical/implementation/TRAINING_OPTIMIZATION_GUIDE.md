@@ -283,4 +283,4 @@ print(model.encoder.training)  # Should be False
 - Spec 2: High Regularization for Gradient Boosted Trees
 - Spec 3: Stacking Regressor with Cross-Validation
 - Configuration: `TRAINING/config/first_batch_specs.yaml`
-- Implementation Summary: [First Batch Specs](FIRST_BATCH_SPECS_IMPLEMENTATION.md)
+- 

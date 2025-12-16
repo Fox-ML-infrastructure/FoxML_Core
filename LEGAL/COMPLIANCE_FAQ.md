@@ -17,8 +17,8 @@
 
 **You do NOT need a commercial license for:**
 - Non-commercial academic research (at qualifying institutions, see `LICENSE`)
-- Personal study or learning (individual, non-commercial use)
-- Contributing to the Software in a personal/non-commercial context
+
+**Note:** Personal use (individual, non-commercial) is not permitted under the free license. Individual use requires a commercial license.
 
 **See `LEGAL/COMMERCIAL_USE.md` for detailed guidance.**
 
@@ -27,7 +27,7 @@
 ### Q1.2: What's the difference between the source-available license and Commercial License?
 
 **A:**
-- **Source-available license:** Code is publicly available for inspection. Free for personal use and non-commercial academic research. Organizational use requires a commercial license.
+- **Source-available license:** Code is publicly available for inspection. Free for non-commercial academic research at qualifying tax-exempt institutions. All other use requires a commercial license.
 - **Commercial License:** Required for all use, allows internal commercial use, includes access to private repositories
 
 **See `LICENSE` and `DOCS/02_reference/licensing/DUAL_LICENSE.md` for complete licensing information.**
@@ -36,7 +36,7 @@
 
 ### Q1.3: Can I use it for free?
 
-**A:** Free use is limited to personal use and non-commercial academic research at qualifying tax-exempt institutions. All organizational use requires a paid commercial license. See `LICENSE` for complete license terms.
+**A:** Free use is limited to non-commercial academic research at qualifying tax-exempt institutions. All other use (including personal/individual use) requires a paid commercial license. See `LICENSE` for complete license terms.
 
 **See `LEGAL/SUBSCRIPTIONS.md` for pricing.**
 

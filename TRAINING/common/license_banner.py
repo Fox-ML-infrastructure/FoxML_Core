@@ -48,7 +48,7 @@ def print_license_banner(suppress: bool = False):
         suppress: If True, skip printing the banner (useful for testing or if disabled via config)
     
     The banner includes:
-    - License type (source-available, free for personal use)
+    - License type (source-available, free for non-commercial academic research)
     - Commercial use requirements (paid pilot required for orgs)
     - Links to legal documentation
     - Contact information for enterprise licensing
@@ -77,12 +77,14 @@ def print_license_banner(suppress: bool = False):
         "",
         "LICENSING:",
         "",
-        "✅ FREE: Personal use and non-commercial academic research",
+        "✅ FREE: Non-commercial academic research at qualifying tax-exempt institutions",
         "❌ PAID LICENSE REQUIRED: Any organizational use",
         "",
         "If you're an organization (company, university, lab, or any legal entity),",
         "you need a license — except pure non-commercial academic research at",
         "qualifying tax-exempt institutions.",
+        "",
+        "Note: Personal use (individual, non-commercial) requires a commercial license.",
         "",
         "💰 PRICING:",
         "Starts at $120,000/year per desk/team",

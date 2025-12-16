@@ -7,7 +7,6 @@
 ## The Rule (Model B)
 
 ✅ **FREE:**
-- Personal use (individual, non-commercial, not for any business purpose)
 - Non-commercial academic research at qualifying tax-exempt institutions
 
 ❌ **PAID LICENSE REQUIRED:**
@@ -69,7 +68,7 @@ Subject: `FoxML Core Commercial Licensing`
 
 ## Definitions
 
-**Personal use:** Individual, non-commercial use by a natural person, not for any business purpose. Excludes sole proprietors, freelancers, contractors, or any use in connection with business activities or client work.
+**Note:** Personal use (individual, non-commercial) is not permitted under the free license. Individual use requires a commercial license.
 
 **Non-commercial academic research:** Research conducted at a qualifying tax-exempt educational institution that:
 - Is not funded by, sponsored by, or integrated into commercial operations

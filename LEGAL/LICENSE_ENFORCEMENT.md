@@ -11,7 +11,7 @@ This document outlines license enforcement procedures, compliance requirements, 
 ## 1. Overview
 
 **FoxML Core is source-available:**
-- **Free use** — For personal use and qualifying non-commercial academic research (see `LICENSE`)
+- **Free use** — For qualifying non-commercial academic research at tax-exempt institutions (see `LICENSE`)
 - **Commercial License** — Required for any organizational, commercial, or production use
 
 **If you use this software in production, you MUST have a commercial license.**

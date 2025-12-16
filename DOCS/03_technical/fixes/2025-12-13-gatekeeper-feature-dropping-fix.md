@@ -1,7 +1,7 @@
 # Gatekeeper Feature Dropping and Stale Budget Fix
 
 **Date**: 2025-12-13  
-**Related**: [Lookback Fingerprint Tracking](2025-12-13-lookback-fingerprint-tracking.md) | [Leakage Validation Fix](2025-12-13-leakage-validation-fix.md) | [Leakage Controls Implementation Status](../architecture/LEAKAGE_CONTROLS_IMPLEMENTATION_STATUS.md)
+**Related**: [Lookback Fingerprint Tracking](2025-12-13-lookback-fingerprint-tracking.md) | [Leakage Validation Fix](2025-12-13-leakage-validation-fix.md)
 
 ## Problem
 
