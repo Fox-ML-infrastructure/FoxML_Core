@@ -52,7 +52,7 @@ Your licensing setup is **strong overall** with comprehensive documentation. How
 **HARD RULE: If you are not a natural person acting solely on your own behalf, you need a business license.**
 
 This means:
-- ✅ Natural person using Software for personal, non-commercial purposes → Free
+- ❌ Natural person using Software for personal, non-commercial purposes → Commercial License Required (personal use removed from free license 2025-12-16)
 - ❌ Natural person using Software for any business, client work, or organizational purpose → Commercial license required
 - ❌ Any legal entity (LLC, corporation, partnership, etc.) → Commercial license required
 - ❌ Employee, contractor, or agent acting for an organization → Commercial license required
@@ -148,7 +148,7 @@ A: No. Sole proprietors using Software for business operations require a commerc
 
 **FoxML Core is source-available. Free for non-commercial academic research at qualifying tax-exempt institutions. All other use requires a paid license.**
 
-- ✅ **Free for:** Natural persons using Software for personal, non-commercial purposes
+- ❌ **Free for:** ~~Natural persons using Software for personal, non-commercial purposes~~ → **UPDATED (2025-12-16): Personal use removed, requires commercial license**
 - 💰 **Paid license required for:** Any organizational, institutional, or commercial use
 
 **Hard rule:** If you are not a natural person acting solely on your own behalf, you need a business license.
