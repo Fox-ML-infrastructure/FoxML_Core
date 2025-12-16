@@ -244,7 +244,7 @@ class SimpleFeatureComputer:
         logger.info(f"Computing features for categories: {config_features}")
         
         # Start with basic features
-        features = self._compute_basic_features(scan)
+        features = self._compute_basic_features(scan, lookback_budget_cap_minutes=lookback_budget_cap_minutes)
         
         # Add features based on requested categories
         if "technical" in config_features:
@@ -273,8 +273,15 @@ class SimpleFeatureComputer:
         
         return features
     
-    def _compute_basic_features(self, features: pl.LazyFrame) -> pl.LazyFrame:
-        """Compute basic price and volume features"""
+    def _compute_basic_features(self, features: pl.LazyFrame, lookback_budget_cap_minutes: Optional[float] = None) -> pl.LazyFrame:
+        """
+        Compute basic price and volume features
+        
+        Args:
+            features: Input LazyFrame
+            lookback_budget_cap_minutes: Optional lookback budget cap in minutes.
+                If provided, long-window features (20d/60d) will be skipped if cap < window_size.
+        """
         # Get base columns with optional shift to exclude current bar
         close_col = self._get_base_column(pl.col("close"))
         volume_col = self._get_base_column(pl.col("volume"))
@@ -285,7 +292,27 @@ class SimpleFeatureComputer:
         # The verify_pct_change flag allows explicit manual calculation for verification/testing
         returns_expr = close_col.pct_change() if not self._fix_config.get('verify_pct_change', False) else (close_col / close_col.shift(1) - 1)
         
-        return features.with_columns([
+        # PHASE 2: Feature generation alignment - skip long-window families when cap < window_size
+        # Load lookback cap from config if not provided
+        if lookback_budget_cap_minutes is None:
+            try:
+                from CONFIG.config_loader import get_cfg
+                budget_cap_raw = get_cfg("safety.leakage_detection.lookback_budget_minutes", default="auto", config_name="safety_config")
+                if budget_cap_raw != "auto" and isinstance(budget_cap_raw, (int, float)):
+                    lookback_budget_cap_minutes = float(budget_cap_raw)
+            except Exception:
+                pass  # Keep as None if config not available
+        
+        # Check if we should skip 60d features (60 days = 86400 minutes)
+        # Note: ret_60m and vol_60m are 60 MINUTES, not 60 days, so they're fine
+        skip_60d_features = False
+        if lookback_budget_cap_minutes is not None:
+            if lookback_budget_cap_minutes < 60 * 1440:  # 60 days
+                skip_60d_features = True
+                logger.debug(f"  ⚡ Skipping 60d features in basic features (lookback_budget_cap={lookback_budget_cap_minutes:.1f}m < 60d={60*1440}m)")
+        
+        # Build feature columns conditionally
+        feature_columns = [
             # Basic price features
             (pl.col("high") - pl.col("low")).alias("range_frac").cast(pl.Float32),
             (pl.col("close") / pl.col("open") - 1).alias("ret_oc").cast(pl.Float32),
@@ -323,22 +350,33 @@ class SimpleFeatureComputer:
             close_col.pct_change(20).alias("returns_20d").cast(pl.Float32),
             
             # Volatility (use returns_expr for rolling_std to ensure shift is applied)
+            # Note: vol_60m is 60 MINUTES (not days), so it's fine
             returns_expr.rolling_std(5).alias("vol_5m").cast(pl.Float32),
             returns_expr.rolling_std(15).alias("vol_15m").cast(pl.Float32),
             returns_expr.rolling_std(30).alias("vol_30m").cast(pl.Float32),
             returns_expr.rolling_std(60).alias("vol_60m").cast(pl.Float32),
             returns_expr.rolling_std(20).alias("volatility_20d").cast(pl.Float32),
-            returns_expr.rolling_std(60).alias("volatility_60d").cast(pl.Float32),
-            
-            # Momentum
+        ]
+        
+        # Add 60d volatility conditionally
+        if not skip_60d_features:
+            feature_columns.append(returns_expr.rolling_std(60).alias("volatility_60d").cast(pl.Float32))
+        
+        # Momentum
+        feature_columns.extend([
             close_col.pct_change(1).alias("mom_1d").cast(pl.Float32),
             close_col.pct_change(3).alias("mom_3d").cast(pl.Float32),
             close_col.pct_change(5).alias("mom_5d").cast(pl.Float32),
             close_col.pct_change(10).alias("mom_10d").cast(pl.Float32),
             close_col.pct_change(5).alias("price_momentum_5d").cast(pl.Float32),
             close_col.pct_change(20).alias("price_momentum_20d").cast(pl.Float32),
-            close_col.pct_change(60).alias("price_momentum_60d").cast(pl.Float32),
         ])
+        
+        # Add 60d momentum conditionally
+        if not skip_60d_features:
+            feature_columns.append(close_col.pct_change(60).alias("price_momentum_60d").cast(pl.Float32))
+        
+        return features.with_columns(feature_columns)
     
     def _compute_technical_features(self, features: pl.LazyFrame) -> pl.LazyFrame:
         """Compute technical indicators using simple, direct expressions"""
