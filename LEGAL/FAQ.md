@@ -191,7 +191,7 @@ A: No. Sole proprietors using Software for business operations require a commerc
 → Use for client work or in scope of work = commercial license required.
 
 **"I'm using it personally, not for work."**  
-→ If you're a natural person acting solely on your own behalf for non-commercial purposes, that's free. If it's connected to any business activity, commercial license required.
+→ Personal use (individual, non-commercial) requires a commercial license. Free use is limited to non-commercial academic research at qualifying tax-exempt institutions.
 
 ## Common Pressure Tactics (Handled)
 
