@@ -145,7 +145,7 @@ Subject: `FoxML Core Commercial Licensing`
 A: It depends. **Pure non-commercial academic research** at a qualifying tax-exempt institution: no license needed. **Institutional use, sponsored/industry work, or internal tooling**: yes, you need a commercial license. See definitions above.
 
 **Q: Can I use it for free?**  
-A: Only for personal use (individual, non-commercial) or non-commercial academic research at qualifying institutions. Any organizational use requires a commercial license.
+A: Only for non-commercial academic research at qualifying tax-exempt institutions. All other use (including personal/individual use) requires a commercial license.
 
 **Q: What if I just want to evaluate it?**  
 A: Organizations can use a **30-day $0 evaluation** (strict limits: non-production, no client deliverables). Continued evaluation requires a **paid Pilot ($35k)**.

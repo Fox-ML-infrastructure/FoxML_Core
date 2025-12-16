@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 logger.propagate = True
 
 # Schema version for reproducibility files
-REPRODUCIBILITY_SCHEMA_VERSION = 1
+REPRODUCIBILITY_SCHEMA_VERSION = 2  # v2: Tagged unions for ambiguous nulls
 
 
 class Stage(str, Enum):
@@ -86,6 +86,136 @@ def _get_main_logger():
     # Fallback to root logger (always has handlers if logging is configured)
     root_logger = logging.getLogger()
     return root_logger
+
+
+# Tagged union helpers for schema v2 (eliminates ambiguous nulls)
+def make_tagged_scalar(value: Any) -> Dict[str, Any]:
+    """Create a tagged scalar value."""
+    return {"kind": "scalar", "value": value}
+
+
+def make_tagged_not_applicable(reason: str) -> Dict[str, Any]:
+    """Create a tagged 'not applicable' value."""
+    return {"kind": "not_applicable", "reason": reason}
+
+
+def make_tagged_per_target_feature(
+    ref_path: Optional[str] = None,
+    ref_sha256: Optional[str] = None,
+    rollup: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """Create a tagged 'per-target-feature' value with optional reference and rollup."""
+    result = {"kind": "per_target_feature"}
+    if ref_path:
+        result["ref"] = {"path": ref_path}
+        if ref_sha256:
+            result["ref"]["sha256"] = ref_sha256
+    if rollup:
+        result["rollup"] = rollup
+    return result
+
+
+def make_tagged_auto(value: Optional[Any] = None) -> Dict[str, Any]:
+    """Create a tagged 'auto' value (computed automatically)."""
+    result = {"kind": "auto"}
+    if value is not None:
+        result["value"] = value
+    return result
+
+
+def make_tagged_not_computed(reason: Optional[str] = None) -> Dict[str, Any]:
+    """Create a tagged 'not computed' value."""
+    result = {"kind": "not_computed"}
+    if reason:
+        result["reason"] = reason
+    return result
+
+
+def make_tagged_omitted() -> None:
+    """Return None to indicate field should be omitted (cleanest JSON)."""
+    return None
+
+
+# Helper functions to extract scalar values from tagged unions (for backward compatibility)
+def extract_scalar_from_tagged(value: Any, default: Any = None) -> Any:
+    """
+    Extract scalar value from tagged union or return value as-is if already scalar.
+    
+    Handles both schema v1 (scalar/null) and v2 (tagged union) formats.
+    
+    Args:
+        value: Tagged union dict or scalar value
+        default: Default value if not applicable or not computed
+    
+    Returns:
+        Scalar value or default
+    """
+    if value is None:
+        return default
+    
+    # If it's a dict with "kind" key, it's a tagged union (schema v2)
+    if isinstance(value, dict) and "kind" in value:
+        kind = value.get("kind")
+        if kind == "scalar":
+            return value.get("value", default)
+        elif kind == "auto":
+            return value.get("value", default)
+        elif kind == "per_target_feature":
+            # For per-target-feature, return rollup median if available, else default
+            rollup = value.get("rollup", {})
+            if rollup and "p50" in rollup:
+                return rollup["p50"]
+            elif rollup and "min" in rollup:
+                return rollup["min"]  # Conservative: use min
+            return default
+        elif kind in ["not_applicable", "not_computed"]:
+            return default
+        else:
+            # Unknown kind, return default
+            return default
+    
+    # Already a scalar (schema v1 or direct value)
+    return value
+
+
+def extract_embargo_minutes(metadata: Dict[str, Any], cv_details: Optional[Dict[str, Any]] = None) -> Optional[float]:
+    """
+    Extract embargo_minutes from metadata, handling both v1 and v2 schemas.
+    
+    For v2 per-target-feature, returns rollup median if available.
+    """
+    if cv_details is None:
+        cv_details = metadata.get("cv_details", {})
+    
+    embargo_raw = cv_details.get("embargo_minutes") or metadata.get("embargo_minutes")
+    result = extract_scalar_from_tagged(embargo_raw)
+    
+    # Convert to float if numeric
+    if result is not None:
+        try:
+            return float(result)
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+def extract_folds(metadata: Dict[str, Any], cv_details: Optional[Dict[str, Any]] = None) -> Optional[int]:
+    """
+    Extract folds from metadata, handling both v1 and v2 schemas.
+    """
+    if cv_details is None:
+        cv_details = metadata.get("cv_details", {})
+    
+    folds_raw = cv_details.get("folds") or cv_details.get("cv_folds") or metadata.get("cv_folds")
+    result = extract_scalar_from_tagged(folds_raw)
+    
+    # Convert to int if numeric
+    if result is not None:
+        try:
+            return int(result)
+        except (ValueError, TypeError):
+            return None
+    return None
 
 
 class ReproducibilityTracker:
@@ -926,6 +1056,7 @@ class ReproducibilityTracker:
         
         # Build full metadata with schema version and explicit IDs
         # For TARGET_RANKING, include view metadata
+        # Schema v2: Use tagged unions for ambiguous nulls (omit non-applicable fields)
         full_metadata = {
             "schema_version": REPRODUCIBILITY_SCHEMA_VERSION,
             "cohort_id": cohort_id,
@@ -934,8 +1065,6 @@ class ReproducibilityTracker:
             "route_type": route_type.upper() if route_type else None,
             "view": (additional_data.get('view') if additional_data else None) if stage_normalized == "TARGET_RANKING" else None,  # Add view for TARGET_RANKING
             "target": item_name,
-            "symbol": symbol,
-            "model_family": model_family,
             "N_effective": cohort_metadata.get('N_effective_cs', 0),
             "n_symbols": cohort_metadata.get('n_symbols', 0),
             "symbols": symbols_list,  # Sorted, deduplicated list of symbols
@@ -952,6 +1081,20 @@ class ReproducibilityTracker:
             "git_commit": self._get_git_commit(),
             "created_at": datetime.now().isoformat()
         }
+        
+        # Schema v2: Omit non-applicable fields instead of null
+        # Only include symbol if route_type is INDIVIDUAL or SYMBOL_SPECIFIC
+        route_normalized = route_type.upper() if route_type else None
+        if symbol and (route_normalized == "INDIVIDUAL" or 
+                      (stage_normalized == "TARGET_RANKING" and additional_data and 
+                       additional_data.get('view') in ['SYMBOL_SPECIFIC', 'LOSO'])):
+            full_metadata["symbol"] = symbol
+        # Otherwise omit (cross-sectional doesn't have a single symbol)
+        
+        # Only include model_family if specified
+        if model_family:
+            full_metadata["model_family"] = model_family
+        # Otherwise omit (not applicable for multi-model or unspecified)
         
         # Add audit-grade fields: data fingerprint and per-symbol stats
         if cohort_metadata.get('data_fingerprint'):
@@ -996,14 +1139,67 @@ class ReproducibilityTracker:
                 except Exception:
                     pass
             
+            # Schema v2: embargo_minutes as tagged union
             if 'embargo_minutes' in additional_data:
-                cv_details['embargo_minutes'] = additional_data['embargo_minutes']
+                embargo_val = additional_data['embargo_minutes']
+                if embargo_val is None:
+                    # Check if embargo is per-target-feature (has feature_time_meta_map)
+                    if 'feature_time_meta_map' in additional_data and additional_data['feature_time_meta_map']:
+                        # Per-target-feature: store reference to artifact
+                        embargo_map_path = None
+                        embargo_map_sha256 = None
+                        # Try to find embargo map artifact
+                        if 'embargo_map_path' in additional_data:
+                            embargo_map_path = additional_data['embargo_map_path']
+                        if 'embargo_map_sha256' in additional_data:
+                            embargo_map_sha256 = additional_data['embargo_map_sha256']
+                        
+                        # Compute rollup stats if available
+                        rollup = None
+                        if embargo_map_path or embargo_map_sha256:
+                            # Try to compute rollup from feature_time_meta_map
+                            embargo_values = []
+                            for feat_meta in additional_data['feature_time_meta_map'].values():
+                                if hasattr(feat_meta, 'embargo_minutes'):
+                                    embargo_values.append(feat_meta.embargo_minutes)
+                            if embargo_values:
+                                import numpy as np
+                                rollup = {
+                                    "min": float(np.min(embargo_values)),
+                                    "p50": float(np.median(embargo_values)),
+                                    "max": float(np.max(embargo_values)),
+                                    "unique_count": len(set(embargo_values))
+                                }
+                        
+                        cv_details['embargo_minutes'] = make_tagged_per_target_feature(
+                            ref_path=embargo_map_path,
+                            ref_sha256=embargo_map_sha256,
+                            rollup=rollup
+                        )
+                    else:
+                        # Not applicable (no CV or no embargo needed)
+                        cv_details['embargo_minutes'] = make_tagged_not_applicable(reason="no_cv_or_no_embargo")
+                else:
+                    # Scalar value
+                    cv_details['embargo_minutes'] = make_tagged_scalar(embargo_val)
             
-            # Number of folds
+            # Schema v2: folds as tagged union
             if 'cv_folds' in additional_data:
-                cv_details['folds'] = additional_data['cv_folds']
+                folds_val = additional_data['cv_folds']
             elif 'n_splits' in additional_data:
-                cv_details['folds'] = additional_data['n_splits']
+                folds_val = additional_data['n_splits']
+            else:
+                folds_val = None
+            
+            if folds_val is not None:
+                # Check if it was auto-computed
+                if 'cv_folds_auto' in additional_data and additional_data.get('cv_folds_auto', False):
+                    cv_details['folds'] = make_tagged_auto(value=folds_val)
+                else:
+                    cv_details['folds'] = make_tagged_scalar(folds_val)
+            elif 'cv_skipped' in additional_data and additional_data['cv_skipped']:
+                cv_details['folds'] = make_tagged_not_applicable(reason="cv_disabled")
+            # Otherwise omit (not computed yet)
             
             # Fold boundaries hash
             if 'fold_boundaries' in additional_data:
@@ -1541,8 +1737,9 @@ class ReproducibilityTracker:
         n_features_selected = metrics.get("n_features_selected") or metrics.get("n_selected") or n_features_post_prune
         
         # Temporal safety (purge/embargo)
+        # Schema v2: Extract scalar from tagged unions (backward compatible with v1)
         purge_minutes_used = cv_details.get("purge_minutes") or metadata.get("purge_minutes")
-        embargo_minutes_used = cv_details.get("embargo_minutes") or metadata.get("embargo_minutes")
+        embargo_minutes_used = extract_embargo_minutes(metadata, cv_details)
         
         # Feature stability metrics (if available)
         jaccard_topK = metrics.get("jaccard_top_k") or metrics.get("jaccard_topK")
@@ -1552,7 +1749,8 @@ class ReproducibilityTracker:
         # Operational metrics
         runtime_sec = metrics.get("runtime_sec") or metrics.get("train_time_sec") or metrics.get("wall_clock_time")
         peak_ram_mb = metrics.get("peak_ram_mb") or metrics.get("peak_memory_mb")
-        cv_folds_executed = cv_details.get("folds") or cv_details.get("cv_folds") or metadata.get("cv_folds")
+        # Schema v2: Extract scalar from tagged unions (backward compatible with v1)
+        cv_folds_executed = extract_folds(metadata, cv_details)
         
         # Identity fields (categorical, not regressed)
         data_fingerprint = metadata.get("data_fingerprint")

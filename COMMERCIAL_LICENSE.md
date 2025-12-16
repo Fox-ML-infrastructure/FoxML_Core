@@ -71,7 +71,7 @@ Non-commercial academic or personal research use is permitted only as described 
 
 **Note:** Unauthorized organizational use may constitute copyright infringement. This is not legal advice; see `LICENSE` and this document for complete terms.
 
-This Commercial License is required for any organizational use of the Software. Free use is limited to personal use and qualifying non-commercial academic research as defined in `LICENSE`.
+This Commercial License is required for any organizational use of the Software. Free use is limited to qualifying non-commercial academic research at tax-exempt institutions as defined in `LICENSE`.
 
 **License Scope and Expansion.**
 This License covers the use case(s) and scope specified in the Ordering Documents. If Licensee expands its use of the Software beyond the scope originally licensed (for example: adding new use cases, expanding to additional business units, increasing seat count beyond purchased Seats, or changing deployment model), Licensee must notify Licensor and may be required to pay additional fees or obtain an amended license. Expansion of use without proper licensing constitutes a Material Breach.
@@ -150,7 +150,7 @@ No sublicensing rights are granted unless explicitly permitted in a separate SOW
 
 **Free Use Unaffected.**
 
-Personal use and qualifying non-commercial academic research use remain free as defined in `LICENSE`. This Commercial License does not limit or restrict free use rights.
+Qualifying non-commercial academic research use remains free as defined in `LICENSE`. This Commercial License does not limit or restrict free use rights.
 
 **IMPORTANT — Open Source Contribution Does Not Exempt Organizational Use:**
 Contributing code, fixes, or improvements to the Software does not exempt Licensee from the requirement to obtain a commercial license for any organizational use. Contributing is separate from and does not affect commercial licensing requirements. Any organizational use requires a commercial license regardless of whether Licensee has contributed to the Software.

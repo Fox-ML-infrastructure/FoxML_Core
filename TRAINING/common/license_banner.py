@@ -48,7 +48,7 @@ def print_license_banner(suppress: bool = False):
         suppress: If True, skip printing the banner (useful for testing or if disabled via config)
     
     The banner includes:
-    - License type (source-available, free for personal use)
+    - License type (source-available, free for non-commercial academic research)
     - Commercial use requirements (paid pilot required for orgs)
     - Links to legal documentation
     - Contact information for enterprise licensing

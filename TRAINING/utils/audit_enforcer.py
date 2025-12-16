@@ -167,7 +167,10 @@ class AuditEnforcer:
         cv_details = metadata.get("cv_details", {})
         horizon = cv_details.get("horizon_minutes") or metadata.get("horizon_minutes")
         purge = cv_details.get("purge_minutes") or metadata.get("purge_minutes")
-        embargo = cv_details.get("embargo_minutes") or metadata.get("embargo_minutes")
+        
+        # Schema v2: Extract scalar from tagged union (backward compatible with v1)
+        from TRAINING.utils.reproducibility_tracker import extract_embargo_minutes
+        embargo = extract_embargo_minutes(metadata, cv_details)
         
         if horizon is None:
             return  # Can't validate without horizon
@@ -202,7 +205,10 @@ class AuditEnforcer:
         """
         cv_details = metadata.get("cv_details", {})
         purge_raw = cv_details.get("purge_minutes") or metadata.get("purge_minutes")
-        embargo_raw = cv_details.get("embargo_minutes") or metadata.get("embargo_minutes")
+        
+        # Schema v2: Extract scalar from tagged union (backward compatible with v1)
+        from TRAINING.utils.reproducibility_tracker import extract_embargo_minutes
+        embargo_raw = extract_embargo_minutes(metadata, cv_details)
         lookback_raw = cv_details.get("feature_lookback_max_minutes") or metadata.get("feature_lookback_max_minutes")
         
         if lookback_raw is None:

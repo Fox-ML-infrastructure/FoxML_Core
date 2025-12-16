@@ -267,7 +267,7 @@ A: Pilot fees are non-refundable but credited 100% toward Year 1 Annual License 
 A: You're free to build your own. You can't use FoxML Core in production without a license. Organizational use requires a paid license regardless of whether you fork the code.
 
 **Q: Why isn't this open source?**  
-A: FoxML Core is source-available: free for personal use and non-commercial academic research. Organizational use requires a paid license. This keeps the project sustainable and enables continued development. If you're a legal entity, you need a license.
+A: FoxML Core is source-available: free for non-commercial academic research at qualifying tax-exempt institutions. All other use requires a paid license. This keeps the project sustainable and enables continued development. If you're a legal entity, you need a license.
 
 **Q: Can we modify the core code?**  
 A: Yes. You may modify internally for your own use. Public redistribution of modified core requires written consent.

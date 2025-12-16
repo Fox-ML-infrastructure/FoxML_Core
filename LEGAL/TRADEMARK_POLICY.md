@@ -87,7 +87,7 @@ These trademarks are protected under applicable trademark laws.
 
 ### 5.1 Free Use License
 
-**Free users (personal/academic):**
+**Free users (academic research only):**
 - May reference "Fox ML Infrastructure" in compliance with license attribution requirements
 - Must include copyright notices and license text
 - Must comply with this trademark policy
