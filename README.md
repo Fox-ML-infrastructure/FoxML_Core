@@ -69,6 +69,7 @@ FoxML Core provides:
 - **Single Source of Truth (SST)** config system - all 20 model families use config-driven hyperparameters
 - **Multi-model training systems** with 20+ model families (GPU-accelerated)
 - **Reproducibility tracking** with end-to-end reproducibility verification
+- **Local metrics tracking** - Model performance metrics (ROC-AUC, R², feature importance) stored locally for reproducibility. No external data transmission, no user data collection.
 
 **For detailed capabilities:** See [Architecture Overview](DOCS/00_executive/ARCHITECTURE_OVERVIEW.md)
 

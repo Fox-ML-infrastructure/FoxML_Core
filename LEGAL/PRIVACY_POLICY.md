@@ -35,6 +35,7 @@ This Privacy Policy covers:
 
 - ❌ **No personal information** — We do not collect names, email addresses, or contact information
 - ❌ **No usage data** — We do not collect usage statistics, analytics, or telemetry
+- ✅ **Local metrics only** — Model performance metrics (ROC-AUC, R², etc.) are stored locally on your infrastructure for reproducibility. These are NOT transmitted externally and are NOT user data collection.
 - ❌ **No location data** — We do not collect IP addresses, geolocation, or device information
 - ❌ **No trading data** — We do not collect trading signals, positions, or financial data
 - ❌ **No model data** — We do not collect model outputs, predictions, or results
@@ -48,7 +49,8 @@ This Privacy Policy covers:
 
 - ❌ **Cookies** — No cookies, tracking pixels, or web beacons
 - ❌ **Analytics** — No Google Analytics, Mixpanel, or similar services
-- ❌ **Telemetry** — No usage telemetry or performance monitoring
+- ❌ **Telemetry** — No usage telemetry or performance monitoring sent externally
+- ✅ **Local metrics** — Model performance metrics are tracked locally for reproducibility (ROC-AUC, feature importance, etc.). These stay on your infrastructure and are never transmitted.
 - ❌ **Third-party trackers** — No embedded tracking scripts or services
 
 ---

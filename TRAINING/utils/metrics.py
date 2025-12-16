@@ -1,10 +1,16 @@
 """
 Metrics System (Sidecar-based, View-Isolated)
 
-Writes metrics as sidecar files next to existing artifacts (metadata.json, metrics.json, audit_report.json).
-Metrics follows the exact same directory structure as existing artifacts.
+Writes model performance metrics as sidecar files next to existing artifacts (metadata.json, metrics.json, audit_report.json).
+All metrics are stored locally on your infrastructure - no data is transmitted externally.
+
+IMPORTANT: This system tracks MODEL PERFORMANCE METRICS only (e.g., ROC-AUC, R², feature importance).
+It does NOT collect user data, personal information, or any data that leaves your infrastructure.
+All metrics files are written to local disk in your REPRODUCIBILITY/ directory structure.
 
 Key principles:
+- Local-only: All metrics stored on your infrastructure, never transmitted externally
+- Model performance tracking: Tracks ML model metrics (scores, feature importance, drift detection)
 - View isolation: CROSS_SECTIONAL drift only compares to CROSS_SECTIONAL baselines
 - SYMBOL_SPECIFIC drift only compares to SYMBOL_SPECIFIC baselines
 - Sidecar placement: metrics files live in same cohort folder as existing JSONs
@@ -25,7 +31,11 @@ logger = logging.getLogger(__name__)
 
 class MetricsWriter:
     """
-    Writes metrics as sidecar files in cohort directories.
+    Writes model performance metrics as sidecar files in cohort directories.
+    
+    LOCAL-ONLY: All metrics are written to local disk. No data is transmitted externally.
+    This system tracks MODEL PERFORMANCE METRICS (ROC-AUC, R², feature importance, etc.)
+    for reproducibility and drift detection. It does NOT collect user data.
     
     PHASE 2: Unified canonical schema - single source of truth for metrics.
     
@@ -49,6 +59,9 @@ class MetricsWriter:
       "mean_score": ...,
       ... (all metrics as flat keys)
     }
+    
+    Privacy: All metrics are stored locally in REPRODUCIBILITY/ directory.
+    No network calls, no external transmission, no user data collection.
     """
     
     def __init__(

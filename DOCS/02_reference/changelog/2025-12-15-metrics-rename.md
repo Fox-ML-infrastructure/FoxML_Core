@@ -10,8 +10,13 @@ Renamed the telemetry system to "metrics" throughout the codebase for better bra
 
 The term "telemetry" can have negative connotations in some contexts (associated with data collection, privacy concerns). Renaming to "metrics" provides:
 - **Better branding**: "Metrics" is more neutral and professional
-- **Clearer semantics**: "Metrics" directly describes what the system tracks
+- **Clearer semantics**: "Metrics" directly describes what the system tracks (model performance metrics)
 - **Industry standard**: "Metrics" is the standard term in ML/MLOps contexts
+- **Privacy clarity**: Makes it clear this tracks model performance, not user data
+
+**IMPORTANT**: This system tracks MODEL PERFORMANCE METRICS only (e.g., ROC-AUC, R², feature importance).
+All metrics are stored locally on your infrastructure - no data is transmitted externally.
+This is NOT user data collection - it's model performance tracking for reproducibility and drift detection.
 
 ---
 
