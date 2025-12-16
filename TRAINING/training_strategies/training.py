@@ -190,8 +190,9 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                            min_cs: int = 10,
                                            max_cs_samples: int = None,
                                            max_rows_train: int = None,
-                                           target_features: Dict[str, List[str]] = None,
-                                           target_families: Optional[Dict[str, List[str]]] = None) -> Dict[str, Any]:
+                                           target_features: Dict[str, Any] = None,
+                                           target_families: Optional[Dict[str, List[str]]] = None,
+                                           routing_decisions: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Train models for a specific interval using comprehensive approach (replicates original script)."""
     
     logger.info(f"🎯 Training models for interval: {interval}")
@@ -237,24 +238,420 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         prep_start = _t.time()
         
         # Use selected features for this target if provided
+        # Handle different structures: list, dict (symbol-specific), or structured dict (BOTH route)
         selected_features = None
-        if target_features and target in target_features:
-            selected_features = target_features[target]
-            # Validate selected_features is a list/iterable
-            if selected_features is not None:
-                if not isinstance(selected_features, (list, tuple)):
-                    logger.warning(f"selected_features for {target} is not a list/tuple (type: {type(selected_features)}), converting...")
-                    try:
-                        selected_features = list(selected_features)
-                    except Exception as e:
-                        logger.error(f"Failed to convert selected_features to list: {e}")
-                        selected_features = None
-                elif len(selected_features) == 0:
-                    logger.warning(f"selected_features for {target} is empty, will auto-discover features")
-                    selected_features = None
-                else:
-                    logger.info(f"Using {len(selected_features)} selected features for {target}")
+        route_info = routing_decisions.get(target, {}) if routing_decisions else {}
+        route = route_info.get('route', 'CROSS_SECTIONAL')
         
+        if target_features and target in target_features:
+            target_feat_data = target_features[target]
+            
+            # Handle different structures based on route
+            if route == 'BLOCKED':
+                # BLOCKED targets should be skipped entirely
+                logger.warning(f"Skipping {target} (BLOCKED: {route_info.get('reason', 'suspicious score')})")
+                results['failed_targets'].append(target)
+                results['failed_reasons'][target] = f"BLOCKED: {route_info.get('reason', 'suspicious score')}"
+                continue
+            elif route == 'CROSS_SECTIONAL':
+                # Simple list of features
+                selected_features = target_feat_data
+                if selected_features is not None:
+                    if not isinstance(selected_features, (list, tuple)):
+                        logger.warning(f"selected_features for {target} is not a list/tuple (type: {type(selected_features)}), converting...")
+                        try:
+                            selected_features = list(selected_features)
+                        except Exception as e:
+                            logger.error(f"Failed to convert selected_features to list: {e}")
+                            selected_features = None
+                    elif len(selected_features) == 0:
+                        logger.warning(f"selected_features for {target} is empty, will auto-discover features")
+                        selected_features = None
+                    else:
+                        logger.info(f"Using {len(selected_features)} cross-sectional features for {target}")
+            elif route == 'SYMBOL_SPECIFIC':
+                # Dict mapping symbol -> list of features
+                # Train separate models per symbol (not cross-sectional)
+                if isinstance(target_feat_data, dict):
+                    # Will handle per-symbol training below
+                    logger.info(f"SYMBOL_SPECIFIC route: will train {len(target_feat_data)} separate models (one per symbol)")
+                else:
+                    logger.warning(f"Expected dict for SYMBOL_SPECIFIC route, got {type(target_feat_data)}")
+                    # Fallback: skip this target
+                    results['failed_targets'].append(target)
+                    results['failed_reasons'][target] = f"SYMBOL_SPECIFIC route requires dict, got {type(target_feat_data)}"
+                    continue
+            elif route == 'BOTH':
+                # Structured dict: {'cross_sectional': [...], 'symbol_specific': {symbol: [...]}}
+                if isinstance(target_feat_data, dict) and 'cross_sectional' in target_feat_data:
+                    # Use cross-sectional features for now (can extend to ensemble later)
+                    selected_features = target_feat_data['cross_sectional']
+                    if selected_features and isinstance(selected_features, (list, tuple)):
+                        logger.info(f"Using {len(selected_features)} cross-sectional features for {target} (BOTH route - using CS for now)")
+                    else:
+                        logger.warning(f"Cross-sectional features not found in BOTH structure for {target}")
+                        selected_features = None
+                else:
+                    # Fallback: treat as simple list
+                    selected_features = target_feat_data
+                    if selected_features and not isinstance(selected_features, (list, tuple)):
+                        logger.warning(f"BOTH route but unexpected structure, treating as list")
+                        try:
+                            selected_features = list(selected_features)
+                        except Exception:
+                            selected_features = None
+            else:
+                # Unknown route, try to extract as list
+                selected_features = target_feat_data
+                if selected_features and not isinstance(selected_features, (list, tuple)):
+                    logger.warning(f"Unknown route {route}, attempting to convert features to list")
+                    try:
+                        selected_features = list(selected_features) if selected_features else None
+                    except Exception as e:
+                        logger.error(f"Failed to convert features to list: {e}")
+                        selected_features = None
+        
+        # Handle SYMBOL_SPECIFIC route separately (per-symbol training)
+        if route == 'SYMBOL_SPECIFIC' and isinstance(target_feat_data, dict):
+            # Train separate models for each symbol
+            logger.info(f"🔄 Training per-symbol models for {target} ({len(target_feat_data)} symbols)")
+            
+            for symbol, symbol_features in target_feat_data.items():
+                if symbol not in mtf_data:
+                    logger.warning(f"Skipping {symbol} for {target}: symbol not in mtf_data")
+                    continue
+                
+                if not isinstance(symbol_features, (list, tuple)) or len(symbol_features) == 0:
+                    logger.warning(f"Skipping {symbol} for {target}: no features available")
+                    continue
+                
+                logger.info(f"  📊 Training {symbol} with {len(symbol_features)} features")
+                
+                # Prepare data for this symbol only
+                symbol_mtf_data = {symbol: mtf_data[symbol]}
+                X, y, feature_names, symbols_arr, indices, feat_cols, time_vals, routing_meta = prepare_training_data_cross_sectional(
+                    symbol_mtf_data, target, feature_names=symbol_features, min_cs=1, max_cs_samples=max_cs_samples
+                )
+                
+                if X is None or len(X) == 0:
+                    logger.warning(f"❌ Failed to prepare data for {target}:{symbol}")
+                    continue
+                
+                # Apply row cap if needed
+                if max_rows_train and len(X) > max_rows_train:
+                    from TRAINING.common.determinism import BASE_SEED, stable_seed_from
+                    downsample_seed = stable_seed_from([target, symbol, 'downsample'])
+                    rng = np.random.RandomState(downsample_seed)
+                    idx = rng.choice(len(X), max_rows_train, replace=False)
+                    X, y = X[idx], y[idx]
+                    if time_vals is not None: time_vals = time_vals[idx]
+                    if symbols_arr is not None: symbols_arr = symbols_arr[idx]
+                    logger.info(f"✂️ Downsampled {symbol} to max_rows_train={max_rows_train}")
+                
+                # Extract routing info
+                if isinstance(routing_meta, dict) and 'spec' in routing_meta:
+                    logger.info(f"[Routing] {symbol}: Using task spec: {routing_meta['spec']}")
+                else:
+                    from TRAINING.target_router import route_target
+                    route_info = route_target(target)
+                    routing_meta = {
+                        'target_name': target,
+                        'spec': route_info['spec'],
+                        'sample_weights': None,
+                        'group_sizes': None
+                    }
+                
+                # Train models for this symbol
+                symbol_results = {}
+                for family in target_families:
+                    try:
+                        logger.info(f"  🤖 Training {family} for {target}:{symbol}")
+                        model_result = train_model_comprehensive(
+                            family, X, y, target, strategy, feature_names,
+                            caps={}, routing_meta=routing_meta
+                        )
+                        
+                        if model_result is not None and model_result.get('success', False):
+                            symbol_results[family] = model_result
+                            
+                            # Save model with symbol-specific path
+                            family_dir = Path(output_dir) / family
+                            symbol_target_dir = family_dir / target / symbol
+                            symbol_target_dir.mkdir(parents=True, exist_ok=True)
+                            
+                            # Get the trained model from strategy manager
+                            strategy_manager = model_result.get('strategy_manager')
+                            if strategy_manager and hasattr(strategy_manager, 'models'):
+                                models = strategy_manager.models
+                                
+                                # Import model wrapper for saving compatibility
+                                from TRAINING.common.model_wrapper import wrap_model_for_saving, get_model_saving_info
+                                
+                                # Save each model component
+                                for model_name, model in models.items():
+                                    # Wrap model for saving compatibility
+                                    wrapped_model = wrap_model_for_saving(model, family)
+                                    
+                                    # Get saving info
+                                    save_info = get_model_saving_info(wrapped_model)
+                                    
+                                    # Determine file extensions based on model type
+                                    if save_info['is_lightgbm']:  # LightGBM
+                                        model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.txt"
+                                        wrapped_model.save_model(str(model_path))
+                                        logger.info(f"  💾 LightGBM model saved: {model_path}")
+                                        
+                                    elif save_info['is_tensorflow']:  # TensorFlow/Keras
+                                        model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.keras"
+                                        wrapped_model.save(str(model_path))
+                                        logger.info(f"  💾 Keras model saved: {model_path}")
+                                        
+                                    elif save_info['is_pytorch']:  # PyTorch models
+                                        model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.pt"
+                                        import torch
+                                        
+                                        # Extract the actual PyTorch model
+                                        if hasattr(wrapped_model, 'core') and hasattr(wrapped_model.core, 'model'):
+                                            torch_model = wrapped_model.core.model
+                                        elif hasattr(wrapped_model, 'model'):
+                                            torch_model = wrapped_model.model
+                                        else:
+                                            torch_model = wrapped_model
+                                        
+                                        # Save state dict + metadata
+                                        torch.save({
+                                            "state_dict": torch_model.state_dict(),
+                                            "config": getattr(wrapped_model, "config", {}),
+                                            "arch": family,
+                                            "input_shape": X.shape
+                                        }, str(model_path))
+                                        logger.info(f"  💾 PyTorch model saved: {model_path}")
+                                        
+                                    else:  # Scikit-learn models
+                                        model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.joblib"
+                                        wrapped_model.save(str(model_path))
+                                        logger.info(f"  💾 Scikit-learn model saved: {model_path}")
+                                    
+                                    # Save preprocessors if available
+                                    if wrapped_model.scaler is not None:
+                                        scaler_path = symbol_target_dir / f"{family.lower()}_mtf_b0_scaler.joblib"
+                                        joblib.dump(wrapped_model.scaler, scaler_path)
+                                        logger.info(f"  💾 Scaler saved: {scaler_path}")
+                                    
+                                    if wrapped_model.imputer is not None:
+                                        imputer_path = symbol_target_dir / f"{family.lower()}_mtf_b0_imputer.joblib"
+                                        joblib.dump(wrapped_model.imputer, imputer_path)
+                                        logger.info(f"  💾 Imputer saved: {imputer_path}")
+                                    
+                                    # Save metadata (match cross-sectional format)
+                                    def _pkg_ver(pkg_name):
+                                        try:
+                                            import importlib.metadata
+                                            return importlib.metadata.version(pkg_name)
+                                        except:
+                                            try:
+                                                return __import__(pkg_name).__version__
+                                            except:
+                                                return "unknown"
+                                    
+                                    if save_info['is_lightgbm']:  # LightGBM - JSON format
+                                        meta_path = symbol_target_dir / "meta_b0.json"
+                                        import json
+                                        metadata = {
+                                            "family": family,
+                                            "target": target,
+                                            "symbol": symbol,
+                                            "min_cs": 1,  # Per-symbol training doesn't use min_cs
+                                            "features": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
+                                            "feature_names": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
+                                            "n_features": len(feature_names),
+                                            "package_versions": {
+                                                "numpy": _pkg_ver("numpy"),
+                                                "pandas": _pkg_ver("pandas"),
+                                                "sklearn": _pkg_ver("sklearn"),
+                                                "lightgbm": _pkg_ver("lightgbm"),
+                                                "xgboost": _pkg_ver("xgboost"),
+                                                "tensorflow": _pkg_ver("tensorflow"),
+                                                "ngboost": _pkg_ver("ngboost"),
+                                            },
+                                            "cli_args": {
+                                                "min_cs": 1,
+                                                "max_cs_samples": max_cs_samples,
+                                                "cs_normalize": "per_ts_split",
+                                                "cs_block": 32,
+                                                "cs_winsor_p": 0.01,
+                                                "cs_ddof": 1,
+                                                "batch_id": 0,
+                                                "families": [family],
+                                                "symbol": symbol
+                                            },
+                                            "n_rows_train": len(X),
+                                            "n_rows_val": 0,
+                                            "train_timestamps": int(np.unique(time_vals).size) if time_vals is not None else len(X),
+                                            "val_timestamps": 0,
+                                            "time_col": None,
+                                            "val_start_ts": None,
+                                            "metrics": {
+                                                "mean_IC": 0.0,
+                                                "mean_RankIC": 0.0,
+                                                "IC_IR": 0.0,
+                                                "n_times": 0,
+                                                "hit_rate": 0.0,
+                                                "skipped_timestamps": 0,
+                                                "total_timestamps": 0
+                                            },
+                                            "routing": {
+                                                "route": "SYMBOL_SPECIFIC",
+                                                "symbol": symbol,
+                                                "view": "SYMBOL_SPECIFIC"
+                                            }
+                                        }
+                                        
+                                        # Add CV scores if available
+                                        if strategy_manager and hasattr(strategy_manager, 'cv_scores'):
+                                            cv_scores = strategy_manager.cv_scores
+                                            if cv_scores and len(cv_scores) > 0:
+                                                metadata["cv_scores"] = [float(s) for s in cv_scores]
+                                                metadata["cv_mean"] = float(np.mean(cv_scores))
+                                                metadata["cv_std"] = float(np.std(cv_scores))
+                                        
+                                        with open(meta_path, 'w') as f:
+                                            json.dump(metadata, f, indent=2)
+                                        logger.info(f"  💾 Metadata saved: {meta_path}")
+                                    
+                                    else:  # Other model types - save as JSON too
+                                        meta_path = symbol_target_dir / "meta_b0.json"
+                                        import json
+                                        metadata = {
+                                            "family": family,
+                                            "target": target,
+                                            "symbol": symbol,
+                                            "min_cs": 1,
+                                            "features": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
+                                            "feature_names": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
+                                            "n_features": len(feature_names),
+                                            "n_rows_train": len(X),
+                                            "train_timestamps": int(np.unique(time_vals).size) if time_vals is not None else len(X),
+                                            "routing": {
+                                                "route": "SYMBOL_SPECIFIC",
+                                                "symbol": symbol,
+                                                "view": "SYMBOL_SPECIFIC"
+                                            }
+                                        }
+                                        
+                                        # Add CV scores if available
+                                        if strategy_manager and hasattr(strategy_manager, 'cv_scores'):
+                                            cv_scores = strategy_manager.cv_scores
+                                            if cv_scores and len(cv_scores) > 0:
+                                                metadata["cv_scores"] = [float(s) for s in cv_scores]
+                                                metadata["cv_mean"] = float(np.mean(cv_scores))
+                                                metadata["cv_std"] = float(np.std(cv_scores))
+                                        
+                                        with open(meta_path, 'w') as f:
+                                            json.dump(metadata, f, indent=2)
+                                        logger.info(f"  💾 Metadata saved: {meta_path}")
+                            else:
+                                # Fallback: save model directly if no strategy_manager
+                                model_path = symbol_target_dir / "model.joblib"
+                                import joblib
+                                joblib.dump(model_result.get('model'), model_path)
+                                logger.info(f"  ✅ Saved {family} model for {target}:{symbol} to {model_path}")
+                                
+                                # Save basic metadata
+                                meta_path = symbol_target_dir / "meta_b0.json"
+                                import json
+                                metadata = {
+                                    "family": family,
+                                    "target": target,
+                                    "symbol": symbol,
+                                    "n_features": len(feature_names) if feature_names else 0,
+                                    "n_rows_train": len(X),
+                                    "routing": {
+                                        "route": "SYMBOL_SPECIFIC",
+                                        "symbol": symbol,
+                                        "view": "SYMBOL_SPECIFIC"
+                                    }
+                                }
+                                with open(meta_path, 'w') as f:
+                                    json.dump(metadata, f, indent=2)
+                                logger.info(f"  💾 Basic metadata saved: {meta_path}")
+                            
+                            # Track reproducibility for symbol-specific model
+                            if output_dir:
+                                try:
+                                    from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+                                    from TRAINING.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
+                                    
+                                    module_output_dir = Path(output_dir)
+                                    if module_output_dir.name != 'training_results':
+                                        module_output_dir = module_output_dir.parent / 'training_results'
+                                    
+                                    tracker = ReproducibilityTracker(
+                                        output_dir=module_output_dir,
+                                        search_previous_runs=True
+                                    )
+                                    
+                                    # Extract metrics
+                                    strategy_manager = model_result.get('strategy_manager')
+                                    metrics = {}
+                                    if strategy_manager and hasattr(strategy_manager, 'cv_scores'):
+                                        cv_scores = strategy_manager.cv_scores
+                                        if cv_scores and len(cv_scores) > 0:
+                                            metrics = {
+                                                "metric_name": "CV Score",
+                                                "mean_score": float(np.mean(cv_scores)),
+                                                "std_score": float(np.std(cv_scores)),
+                                                "composite_score": float(np.mean(cv_scores))
+                                            }
+                                    
+                                    if metrics:
+                                        cohort_metadata = extract_cohort_metadata(
+                                            X=X,
+                                            symbols=[symbol],
+                                            time_vals=time_vals,
+                                            mtf_data=symbol_mtf_data,
+                                            min_cs=1,
+                                            max_cs_samples=max_cs_samples
+                                        )
+                                        cohort_metrics, cohort_additional_data = format_for_reproducibility_tracker(cohort_metadata)
+                                        
+                                        metrics_with_cohort = {**metrics, **cohort_metrics}
+                                        additional_data_with_cohort = {
+                                            "strategy": strategy,
+                                            "n_features": len(feature_names) if feature_names else 0,
+                                            "model_family": family,
+                                            "symbol": symbol,
+                                            **cohort_additional_data
+                                        }
+                                        
+                                        tracker.log_comparison(
+                                            stage="model_training",
+                                            item_name=f"{target}:{symbol}:{family}",
+                                            metrics=metrics_with_cohort,
+                                            additional_data=additional_data_with_cohort,
+                                            symbol=symbol
+                                        )
+                                except Exception as e:
+                                    logger.warning(f"Reproducibility tracking failed for {family}:{target}:{symbol}: {e}")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to train {family} for {target}:{symbol}: {e}")
+                        import traceback
+                        logger.debug(f"Full traceback for {family}:{symbol}:\n{traceback.format_exc()}")
+                
+                # Store symbol results
+                if symbol_results:
+                    if target not in results['models']:
+                        results['models'][target] = {}
+                    results['models'][target][symbol] = symbol_results
+                    logger.info(f"  ✅ Completed {symbol}: {len(symbol_results)} models trained")
+                else:
+                    logger.warning(f"  ⚠️ No models trained for {target}:{symbol}")
+            
+            # Skip the cross-sectional training path for SYMBOL_SPECIFIC
+            continue
+        
+        # Cross-sectional training (for CROSS_SECTIONAL or BOTH routes)
+        # Note: BLOCKED targets are skipped earlier in the loop
         X, y, feature_names, symbols, indices, feat_cols, time_vals, routing_meta = prepare_training_data_cross_sectional(
             mtf_data, target, feature_names=selected_features, min_cs=min_cs, max_cs_samples=max_cs_samples
         )

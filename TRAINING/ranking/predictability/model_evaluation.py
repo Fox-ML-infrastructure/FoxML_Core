@@ -949,8 +949,14 @@ def train_and_evaluate_models(
                     purge_violation = purge_minutes < purge_required
                     
                     # Constraint 2: embargo must cover target horizon
-                    embargo_required = budget.horizon_minutes + buffer_minutes
-                    embargo_violation = embargo_minutes < embargo_required
+                    # Guard: horizon_minutes may be None (e.g., for some target types)
+                    if budget.horizon_minutes is not None:
+                        embargo_required = budget.horizon_minutes + buffer_minutes
+                        embargo_violation = embargo_minutes < embargo_required
+                    else:
+                        # If horizon is None, skip embargo validation (not applicable)
+                        embargo_violation = False
+                        embargo_required = None
                     
                     if purge_violation or embargo_violation:
                         violations = []
@@ -971,7 +977,10 @@ def train_and_evaluate_models(
                             raise RuntimeError(msg + " (policy: strict - training blocked)")
                         elif policy == "warn":
                             logger.error(msg + " (policy: warn - continuing with violation - NOT RECOMMENDED)")
-                        # Note: drop_features policy already handled in gatekeeper, so we just warn here, create_resolved_config
+                        # Note: drop_features policy already handled in gatekeeper, so we just warn here
+                    elif embargo_required is None:
+                        # Log that embargo validation was skipped due to missing horizon
+                        logger.debug(f"   ℹ️  Embargo validation skipped: horizon_minutes is None (not applicable for this target type)")
             
             # Get n_symbols_available from mtf_data
             n_symbols_available = len(mtf_data) if 'mtf_data' in locals() else 1
@@ -1421,8 +1430,14 @@ def train_and_evaluate_models(
                     purge_violation = purge_minutes < purge_required
                     
                     # Constraint 2: embargo must cover target horizon
-                    embargo_required = budget.horizon_minutes + buffer_minutes
-                    embargo_violation = embargo_minutes < embargo_required
+                    # Guard: horizon_minutes may be None (e.g., for some target types)
+                    if budget.horizon_minutes is not None:
+                        embargo_required = budget.horizon_minutes + buffer_minutes
+                        embargo_violation = embargo_minutes < embargo_required
+                    else:
+                        # If horizon is None, skip embargo validation (not applicable)
+                        embargo_violation = False
+                        embargo_required = None
                     
                     if purge_violation or embargo_violation:
                         violations = []
@@ -1444,6 +1459,9 @@ def train_and_evaluate_models(
                         elif policy == "warn":
                             logger.error(msg + " (policy: warn - continuing with violation - NOT RECOMMENDED)")
                         # Note: drop_features policy already handled in gatekeeper, so we just warn here
+                    elif embargo_required is None:
+                        # Log that embargo validation was skipped due to missing horizon
+                        logger.debug(f"   ℹ️  Embargo validation skipped: horizon_minutes is None (not applicable for this target type)")
             
             # Save stability snapshot for quick pruning (non-invasive hook)
             # Only save if output_dir is available (optional feature)
@@ -5399,8 +5417,14 @@ def evaluate_target_predictability(
                 purge_violation = purge_minutes < purge_required
                 
                 # Constraint 2: embargo must cover target horizon
-                embargo_required = budget.horizon_minutes + buffer_minutes
-                embargo_violation = embargo_minutes < embargo_required
+                # Guard: horizon_minutes may be None (e.g., for some target types)
+                if budget.horizon_minutes is not None:
+                    embargo_required = budget.horizon_minutes + buffer_minutes
+                    embargo_violation = embargo_minutes < embargo_required
+                else:
+                    # If horizon is None, skip embargo validation (not applicable)
+                    embargo_violation = False
+                    embargo_required = None
                 
                 if purge_violation or embargo_violation:
                     # Build detailed violation message
@@ -5483,14 +5507,22 @@ def evaluate_target_predictability(
                         # Verify violation is resolved (check both constraints)
                         buffer_minutes = 5.0
                         purge_required = budget.max_feature_lookback_minutes + buffer_minutes
-                        embargo_required = budget.horizon_minutes + buffer_minutes
                         embargo_minutes = resolved_config.embargo_minutes if resolved_config.embargo_minutes is not None else resolved_config.purge_minutes
                         
-                        if resolved_config.purge_minutes < purge_required or embargo_minutes < embargo_required:
+                        # Guard: horizon_minutes may be None (e.g., for some target types)
+                        if budget.horizon_minutes is not None:
+                            embargo_required = budget.horizon_minutes + buffer_minutes
+                            embargo_violation = embargo_minutes < embargo_required
+                        else:
+                            # If horizon is None, skip embargo validation (not applicable)
+                            embargo_violation = False
+                            embargo_required = None
+                        
+                        if resolved_config.purge_minutes < purge_required or embargo_violation:
                             violations = []
                             if resolved_config.purge_minutes < purge_required:
                                 violations.append(f"purge ({resolved_config.purge_minutes:.1f}m) < {purge_required:.1f}m")
-                            if embargo_minutes < embargo_required:
+                            if embargo_violation:
                                 violations.append(f"embargo ({embargo_minutes:.1f}m) < {embargo_required:.1f}m")
                             raise RuntimeError(
                                 f"🚨 LEAKAGE VIOLATION PERSISTS after dropping features: {'; '.join(violations)}"

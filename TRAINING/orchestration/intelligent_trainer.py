@@ -1339,8 +1339,40 @@ class IntelligentTrainer:
         
         logger.info(f"📋 Selected {len(targets)} targets: {', '.join(targets[:5])}{'...' if len(targets) > 5 else ''}")
         
+        # Step 1.5: Apply training plan filter BEFORE feature selection (if available)
+        # This avoids wasting time selecting features for targets that will be filtered out
+        filtered_targets = targets
+        filtered_symbols_by_target = {t: self.symbols for t in targets}
+        training_plan = None
+        training_plan_dir = None
+        
+        # Check if training plan exists (from previous run or generated earlier)
+        potential_plan_dir = self.output_dir / "METRICS" / "training_plan"
+        if potential_plan_dir.exists():
+            training_plan_dir = potential_plan_dir
+            try:
+                from TRAINING.orchestration.training_plan_consumer import (
+                    apply_training_plan_filter,
+                    load_training_plan
+                )
+                training_plan = load_training_plan(training_plan_dir)
+                if training_plan:
+                    filtered_targets, filtered_symbols_by_target = apply_training_plan_filter(
+                        targets=targets,
+                        symbols=self.symbols,
+                        training_plan_dir=training_plan_dir,
+                        use_cs_plan=True,
+                        use_symbol_plan=True
+                    )
+                    if len(filtered_targets) < len(targets):
+                        logger.info(f"📋 Training plan filter applied BEFORE feature selection: {len(targets)} → {len(filtered_targets)} targets")
+            except Exception as e:
+                logger.debug(f"Could not apply training plan filter before feature selection: {e}, will filter after")
+                filtered_targets = targets
+        
         # Step 2: Feature selection (per target if auto_features)
         # CRITICAL: Use same view as target ranking for consistency
+        # Only select features for filtered_targets to avoid waste
         target_features = {}
         if auto_features and features is None:
             logger.info("="*80)
@@ -1364,7 +1396,8 @@ class IntelligentTrainer:
             except Exception as e:
                 logger.debug(f"Could not load routing decisions: {e}, using CROSS_SECTIONAL for all targets")
             
-            for target in targets:
+            # Only select features for filtered targets (avoids waste)
+            for target in filtered_targets:
                 # Determine view from routing decision
                 route_info = routing_decisions.get(target, {})
                 route = route_info.get('route', 'CROSS_SECTIONAL')
@@ -1373,8 +1406,9 @@ class IntelligentTrainer:
                 if not routing_decisions or target not in routing_decisions:
                     route = 'CROSS_SECTIONAL'
                 
-                if route == 'CROSS_SECTIONAL' or route == 'BOTH':
-                    # Cross-sectional feature selection
+                # Handle different route types
+                if route == 'CROSS_SECTIONAL':
+                    # Cross-sectional feature selection only
                     target_features[target] = self.select_features_auto(
                         target=target,
                         top_m=top_m_features,
@@ -1382,15 +1416,13 @@ class IntelligentTrainer:
                         view="CROSS_SECTIONAL",
                         symbol=None
                     )
-                
-                if route == 'SYMBOL_SPECIFIC' or route == 'BOTH':
-                    # Symbol-specific feature selection (for winner symbols or all symbols)
+                elif route == 'SYMBOL_SPECIFIC':
+                    # Symbol-specific feature selection only
                     winner_symbols = route_info.get('winner_symbols', self.symbols)
                     if not winner_symbols:
                         # Fallback: use all symbols if no winners specified
                         winner_symbols = self.symbols
-                    if target not in target_features:
-                        target_features[target] = {}
+                    target_features[target] = {}
                     for symbol in winner_symbols:
                         target_features[target][symbol] = self.select_features_auto(
                             target=target,
@@ -1399,20 +1431,45 @@ class IntelligentTrainer:
                             view="SYMBOL_SPECIFIC",
                             symbol=symbol
                         )
-                
-                if route == 'BLOCKED':
+                elif route == 'BOTH':
+                    # Both cross-sectional and symbol-specific
+                    # Store in a structured format: {'cross_sectional': [...], 'symbol_specific': {symbol: [...]}}
+                    cs_features = self.select_features_auto(
+                        target=target,
+                        top_m=top_m_features,
+                        use_cache=use_cache,
+                        view="CROSS_SECTIONAL",
+                        symbol=None
+                    )
+                    winner_symbols = route_info.get('winner_symbols', self.symbols)
+                    if not winner_symbols:
+                        winner_symbols = self.symbols
+                    symbol_features = {}
+                    for symbol in winner_symbols:
+                        symbol_features[symbol] = self.select_features_auto(
+                            target=target,
+                            top_m=top_m_features,
+                            use_cache=use_cache,
+                            view="SYMBOL_SPECIFIC",
+                            symbol=symbol
+                        )
+                    target_features[target] = {
+                        'cross_sectional': cs_features,
+                        'symbol_specific': symbol_features,
+                        'route': 'BOTH'
+                    }
+                elif route == 'BLOCKED':
                     logger.warning(f"Skipping feature selection for {target} (BLOCKED: {route_info.get('reason', 'suspicious score')})")
                     # Don't select features for blocked targets - skip this target
-                    if target not in target_features:
-                        target_features[target] = []  # Empty list to avoid KeyError downstream
+                    target_features[target] = []  # Empty list to avoid KeyError downstream
         elif features:
-            # Use same features for all targets
-            for target in targets:
+            # Use same features for all filtered targets
+            for target in filtered_targets:
                 target_features[target] = features
         
         # Step 2.5: Generate training routing plan (if feature selection completed)
-        training_plan_dir = None
-        if target_features:
+        # Note: training_plan_dir may already be set from Step 1.5
+        if target_features and not training_plan_dir:
             try:
                 from TRAINING.orchestration.routing_integration import generate_routing_plan_after_feature_selection
                 routing_plan = generate_routing_plan_after_feature_selection(
@@ -1434,10 +1491,13 @@ class IntelligentTrainer:
         logger.info("STEP 3: Model Training")
         logger.info("="*80)
         
-        # Apply training plan filter if available
-        filtered_targets = targets
-        filtered_symbols_by_target = {t: self.symbols for t in targets}  # Default: all symbols per target
-        training_plan = None
+        # Apply training plan filter if available (may have been applied earlier)
+        # If not already filtered, try to filter now
+        if training_plan_dir is None:
+            # Try to find training plan directory
+            potential_plan_dir = self.output_dir / "METRICS" / "training_plan"
+            if potential_plan_dir.exists():
+                training_plan_dir = potential_plan_dir
         
         if training_plan_dir:
             try:
@@ -1491,9 +1551,18 @@ class IntelligentTrainer:
                                     logger.debug(f"Error logging symbol filter for {target}: {e}")
                             
                             # Update target_features to only include filtered targets - safely
+                            # Also exclude BLOCKED targets (they have empty feature lists)
                             if isinstance(target_features, dict):
                                 try:
-                                    target_features = {t: f for t, f in target_features.items() if t in filtered_targets}
+                                    filtered_target_features = {}
+                                    for t, f in target_features.items():
+                                        if t in filtered_targets:
+                                            # Skip BLOCKED targets (empty list) and targets with no features
+                                            if isinstance(f, list) and len(f) == 0:
+                                                logger.debug(f"Skipping {t} from target_features (BLOCKED or no features)")
+                                                continue
+                                            filtered_target_features[t] = f
+                                    target_features = filtered_target_features
                                 except Exception as e:
                                     logger.warning(f"Failed to filter target_features: {e}, keeping original")
                         except Exception as e:
@@ -1614,15 +1683,46 @@ class IntelligentTrainer:
         logger.info(f"Model families: {len(families_list)} families")
         if target_features:
             logger.info(f"Using selected features per target (top {top_m_features} per target)")
-            # Log feature counts per target
-            for target, feat_list in list(target_features.items())[:3]:
-                logger.info(f"  {target}: {len(feat_list)} features")
+            # Log feature counts per target (handle different structures)
+            for target, feat_data in list(target_features.items())[:3]:
+                if isinstance(feat_data, list):
+                    logger.info(f"  {target}: {len(feat_data)} features (CROSS_SECTIONAL)")
+                elif isinstance(feat_data, dict):
+                    if 'cross_sectional' in feat_data and 'symbol_specific' in feat_data:
+                        # BOTH route
+                        cs_count = len(feat_data['cross_sectional']) if isinstance(feat_data['cross_sectional'], list) else 0
+                        sym_count = len(feat_data['symbol_specific']) if isinstance(feat_data['symbol_specific'], dict) else 0
+                        logger.info(f"  {target}: {cs_count} CS features + {sym_count} symbol-specific sets (BOTH)")
+                    else:
+                        # SYMBOL_SPECIFIC route
+                        sym_count = len(feat_data) if isinstance(feat_data, dict) else 0
+                        total_feat_count = sum(len(v) if isinstance(v, list) else 0 for v in feat_data.values()) if isinstance(feat_data, dict) else 0
+                        logger.info(f"  {target}: {total_feat_count} features across {sym_count} symbols (SYMBOL_SPECIFIC)")
+                else:
+                    logger.info(f"  {target}: {type(feat_data).__name__} structure")
             if len(target_features) > 3:
                 logger.info(f"  ... and {len(target_features) - 3} more targets")
         
-        # Pass selected features to training pipeline
+        # Pass selected features and routing decisions to training pipeline
         # If target_features is empty, training will auto-discover features
         features_to_use = target_features if target_features else None
+        
+        # Pass routing decisions to training so it knows which view to use
+        routing_decisions_for_training = {}
+        try:
+            from TRAINING.ranking.target_routing import load_routing_decisions
+            # Try new structure first (DECISION), then REPRODUCIBILITY, then old structure
+            routing_file = self.output_dir / "DECISION" / "TARGET_RANKING" / "routing_decisions.json"
+            if not routing_file.exists():
+                routing_file = self.output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / "routing_decisions.json"
+            if not routing_file.exists():
+                # Try old structure (backward compatibility)
+                routing_file = self.output_dir / "target_rankings" / "REPRODUCIBILITY" / "TARGET_RANKING" / "routing_decisions.json"
+            if routing_file.exists():
+                routing_decisions_for_training = load_routing_decisions(routing_file)
+                logger.info(f"Loaded routing decisions for training: {len(routing_decisions_for_training)} targets")
+        except Exception as e:
+            logger.debug(f"Could not load routing decisions for training: {e}")
         
         # Call the training function
         logger.info("Starting model training...")
@@ -1637,7 +1737,8 @@ class IntelligentTrainer:
             max_cs_samples=max_cs_samples,
             max_rows_train=max_rows_train,
             target_features=features_to_use,
-            target_families=target_families_map if target_families_map else None  # Per-target families from plan
+            target_families=target_families_map if target_families_map else None,  # Per-target families from plan
+            routing_decisions=routing_decisions_for_training  # Pass routing decisions
         )
         
         logger.info("="*80)
