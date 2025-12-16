@@ -1496,6 +1496,13 @@ def select_features_for_target(
                     # Telemetry must be scoped by: target, view (CROSS_SECTIONAL vs SYMBOL_SPECIFIC), and symbol
                     # CRITICAL: For CROSS_SECTIONAL, symbol must be None to prevent history forking
                     symbol_for_ctx = symbol if view == "SYMBOL_SPECIFIC" else None
+                    # Get seed from config for reproducibility
+                    try:
+                        from CONFIG.config_loader import get_cfg
+                        seed_value = get_cfg("pipeline.determinism.base_seed", default=42)
+                    except Exception:
+                        seed_value = 42
+                    
                     ctx_to_use = RunContext(
                         stage="FEATURE_SELECTION",
                         target_name=target_column,
@@ -1511,7 +1518,7 @@ def select_features_for_target(
                         cv_folds=None,
                         fold_timestamps=None,
                         data_interval_minutes=None,
-                        seed=None,
+                        seed=seed_value,
                         view=view,  # FIX: Set view for proper telemetry scoping (CROSS_SECTIONAL vs SYMBOL_SPECIFIC)
                         symbol=symbol_for_ctx  # FIX: Set symbol for SYMBOL_SPECIFIC view only (None for CROSS_SECTIONAL to prevent history forking)
                     )
@@ -1540,6 +1547,13 @@ def select_features_for_target(
                         # FIX: Ensure view and symbol are set for proper telemetry scoping
                         # CRITICAL: For CROSS_SECTIONAL, symbol must be None to prevent history forking
                         symbol_for_ctx = symbol if view == "SYMBOL_SPECIFIC" else None
+                        # Get seed from config for reproducibility (same as above)
+                        try:
+                            from CONFIG.config_loader import get_cfg
+                            seed_value = get_cfg("pipeline.determinism.base_seed", default=42)
+                        except Exception:
+                            seed_value = 42
+                        
                         ctx_minimal = RunContext(
                             stage="FEATURE_SELECTION",
                             target_name=target_column,
@@ -1553,6 +1567,7 @@ def select_features_for_target(
                             purge_minutes=None,
                             embargo_minutes=None,
                             data_interval_minutes=None,
+                            seed=seed_value,
                             cv_splitter=None,
                             view=view,  # FIX: Set view for proper telemetry scoping
                             symbol=symbol_for_ctx  # FIX: Set symbol for SYMBOL_SPECIFIC view only (None for CROSS_SECTIONAL)

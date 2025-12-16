@@ -6172,6 +6172,13 @@ def evaluate_target_predictability(
                     else:
                         feature_lookback_max = None
                 
+                # Get seed from config for reproducibility
+                try:
+                    from CONFIG.config_loader import get_cfg
+                    seed_value = get_cfg("pipeline.determinism.base_seed", default=42)
+                except Exception:
+                    seed_value = 42
+                
                 # Build RunContext
                 ctx = RunContext(
                     X=cohort_context.get('X') if 'cohort_context' in locals() and cohort_context else None,
@@ -6192,7 +6199,8 @@ def evaluate_target_predictability(
                     feature_lookback_max_minutes=feature_lookback_max,
                     data_interval_minutes=data_interval_minutes if 'data_interval_minutes' in locals() else None,
                     stage="target_ranking",
-                    output_dir=output_dir
+                    output_dir=output_dir,
+                    seed=seed_value
                 )
                 # Add view and symbol to RunContext if available
                 if 'view' in locals():
