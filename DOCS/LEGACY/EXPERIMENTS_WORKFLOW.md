@@ -253,4 +253,3 @@ Solution:
 - [Experiments Implementation](../../03_technical/implementation/EXPERIMENTS_IMPLEMENTATION.md) - Implementation details
 - [Training Optimization](../../03_technical/implementation/TRAINING_OPTIMIZATION_GUIDE.md) - Optimization guide
 - [Feature Selection Implementation](../../03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Feature selection guide
-- [First Batch Specs](../../03_technical/implementation/FIRST_BATCH_SPECS_IMPLEMENTATION.md) - Trainer-level changes

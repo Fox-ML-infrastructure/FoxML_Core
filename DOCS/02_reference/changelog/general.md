@@ -217,7 +217,7 @@ See [`DOCS/02_reference/configuration/MODULAR_CONFIG_SYSTEM.md`](../configuratio
   - Compares feature importances between full vs. safe feature sets
   - Identifies suspicious features with high importance in full model but low in safe model
 
-See [`DOCS/03_technical/research/LEAKAGE_ANALYSIS.md`](../../03_technical/research/LEAKAGE_ANALYSIS.md) and [`DOCS/02_reference/configuration/SAFETY_LEAKAGE_CONFIGS.md`](../configuration/SAFETY_LEAKAGE_CONFIGS.md) for complete documentation.
+See [`DOCS/02_reference/configuration/SAFETY_LEAKAGE_CONFIGS.md`](../configuration/SAFETY_LEAKAGE_CONFIGS.md) for complete documentation.
 
 ### Documentation & Legal
 

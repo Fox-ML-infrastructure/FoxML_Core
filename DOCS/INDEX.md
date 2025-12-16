@@ -30,7 +30,6 @@ See each directory's [README](00_executive/README.md) for detailed contents.
 - [Known Issues & Limitations](02_reference/KNOWN_ISSUES.md) - **NEW**: Features that don't work yet or have limitations
 - [Deterministic Training](00_executive/DETERMINISTIC_TRAINING.md) - SST config system and reproducibility guarantees
 - [Audit Reports](00_executive/audits/README.md) - **NEW**: Quality assurance audits, documentation accuracy checks, and technical audits (public transparency)
-- [Documentation Review Statement](00_executive/audits/DOCUMENTATION_REVIEW.md) - **NEW**: Initial documentation review completed
 - [Changelog](../CHANGELOG.md) - Recent technical and compliance changes (quick overview)
 - [Changelog Index](02_reference/changelog/README.md) - Per-day detailed changelogs with file paths and config references
 - [Licensing & Subscriptions](../LEGAL/SUBSCRIPTIONS.md) - AGPL vs commercial usage and subscription tiers
@@ -165,7 +164,6 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 
 ### Research
 - [Intelligence Layer Overview](03_technical/research/INTELLIGENCE_LAYER.md) - Complete overview of intelligent training pipeline decision-making and automation
-- [Leakage Analysis](03_technical/research/LEAKAGE_ANALYSIS.md) - Leakage research
 - [Leakage Controls Evaluation](03_technical/architecture/LEAKAGE_CONTROLS_EVALUATION.md) - Leakage controls structural evaluation
 - [SST Enforcement Design](03_technical/implementation/training_utils/SST_ENFORCEMENT_DESIGN.md) - **NEW**: EnforcedFeatureSet contract eliminates split-brain across all training paths
 - [Leakage Canary Test Guide](03_technical/testing/LEAKAGE_CANARY_TEST_GUIDE.md) - Pipeline integrity validation
@@ -193,16 +191,12 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 
 ### Fixes
 - [Known Issues](03_technical/fixes/KNOWN_ISSUES.md) - Current issues
-- [Bug Fixes](03_technical/fixes/BUG_FIXES.md) - Fix history
 - [Migration Notes](03_technical/fixes/MIGRATION_NOTES.md) - Migration guide
-- [TensorFlow Executable Stack Fix](03_technical/fixes/TENSORFLOW_EXECUTABLE_STACK_FIX.md) - Fix for libtensorflow_cc.so executable stack error
 - **Feature Selection and Config Fixes (2025-12-14)** – **NEW**:
   - [Feature Selection and Config Fixes Changelog](02_reference/changelog/2025-12-14-feature-selection-and-config-fixes.md) - Complete detailed changelog
   - **Status**: ✅ All fixes implemented and tested
   - **Fixes**: UnboundLocalError for np (11 model families), missing import, unpacking error, routing diagnostics, experiment config loading, target exclusion, lookback enforcement
 - **Look-Ahead Bias Fixes (2025-12-14)** – **NEW**:
-  - [Look-Ahead Bias Fix Plan](03_technical/fixes/LOOKAHEAD_BIAS_FIX_PLAN.md) - Complete analysis of 4 critical look-ahead bias issues and required fixes
-  - [Safe Implementation Plan](03_technical/fixes/LOOKAHEAD_BIAS_SAFE_IMPLEMENTATION.md) - Feature flag-based implementation strategy with gradual rollout plan
   - **Status**: ✅ All fixes implemented (behind feature flags, default: OFF)
   - **Fixes**: Rolling windows exclude current bar, CV-based normalization, pct_change verification, feature renaming
 - **Feature Selection Critical Fixes (2025-12-13)**:
@@ -218,16 +212,10 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 ### Implementation
 - [Feature Selection Implementation](03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Feature selection implementation details (see also [Ranking and Selection Consistency](01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) for unified pipeline behavior)
 - [Training Optimization](03_technical/implementation/TRAINING_OPTIMIZATION_GUIDE.md) - Training optimization guide
-- [SST Enforcement Design](03_technical/implementation/training_utils/SST_ENFORCEMENT_DESIGN.md) - **NEW**: EnforcedFeatureSet contract, type boundary wiring, boundary assertions (provably split-brain free across all training paths)
-- [SST Implementation Coverage](03_technical/implementation/training_utils/SST_IMPLEMENTATION_COVERAGE.md) - **NEW**: Complete coverage matrix for SST enforcement across all training paths
-- [Type Boundary Wiring](03_technical/implementation/training_utils/TYPE_BOUNDARY_WIRING_COMPLETE.md) - **NEW**: Type boundary wiring implementation details
-- [Boundary Assertions](03_technical/implementation/training_utils/BOUNDARY_ASSERTIONS_COMPLETE.md) - **NEW**: Boundary assertion implementation details
 - [Duration System](03_technical/implementation/training_utils/DURATION_SYSTEM_FINAL.md) - Duration parsing and schema system
-- [Single Source of Truth](03_technical/implementation/training_utils/SINGLE_SOURCE_OF_TRUTH_COMPLETE.md) - SST implementation for lookback computation
 - [Parallel Execution](03_technical/implementation/PARALLEL_EXECUTION.md) - Parallel execution infrastructure for target ranking and feature selection
 - [Reproducibility Tracking](03_technical/implementation/REPRODUCIBILITY_TRACKING.md) - Automatic reproducibility verification across pipeline stages
 - [Cohort-Aware Reproducibility](03_technical/implementation/COHORT_AWARE_REPRODUCIBILITY.md) - **NEW**: Cohort-aware reproducibility system with sample-adjusted drift detection
-- [Trend Analyzer Verification](03_technical/implementation/TREND_ANALYZER_VERIFICATION.md) - **NEW**: Trend analysis system verification guide (target ranking, feature selection, cross-sectional ranking)
 - [Reproducibility Structure](03_technical/implementation/REPRODUCIBILITY_STRUCTURE.md) - Complete directory structure guide with REPRODUCIBILITY organization
 - [RESULTS Organization](03_technical/implementation/RESULTS_ORGANIZATION_OPTIONS.md) - **NEW**: RESULTS directory organization by sample size bins (current implementation)
 - [Reproducibility API](03_technical/implementation/REPRODUCIBILITY_API.md) - **NEW**: API reference for reproducibility tracking
@@ -236,9 +224,6 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 - [Telemetry System](02_reference/changelog/2025-12-14-telemetry-system.md) - **NEW**: Sidecar-based telemetry with view isolation, hierarchical rollups (cohort → view → stage)
 - [Reproducibility Improvements](03_technical/implementation/REPRODUCIBILITY_IMPROVEMENTS.md) - **NEW**: Summary of reproducibility improvements
 - [Reproducibility Self-Test](03_technical/implementation/REPRODUCIBILITY_SELF_TEST.md) - **NEW**: Self-test checklist for validation
-- [Cohort-Aware Implementation](03_technical/implementation/COHORT_AWARE_REPRODUCIBILITY_IMPLEMENTATION.md) - **NEW**: Detailed implementation notes
-- [Safe Target Pattern](03_technical/implementation/SAFE_TARGET_PATTERN_IMPLEMENTATION.md) - Safe target pattern implementation
-- [First Batch Specs](03_technical/implementation/FIRST_BATCH_SPECS_IMPLEMENTATION.md) - First batch specifications
 - [Strategy Updates](03_technical/implementation/STRATEGY_UPDATES.md) - Training strategy updates
 - ⚠️ **Legacy**: [Experiments Implementation](../LEGACY/EXPERIMENTS_IMPLEMENTATION.md) - **DEPRECATED**: See [Intelligent Training Tutorial](../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) instead
 - [Pressure Test Plan](03_technical/implementation/PRESSURE_TEST_PLAN.md) - Testing plan
