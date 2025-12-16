@@ -4798,7 +4798,13 @@ def evaluate_target_predictability(
         MIN_FEATURES_REQUIRED = 2
     
     if len(safe_columns) < MIN_FEATURES_REQUIRED:
-        horizon_info = f"horizon={target_horizon_bars} bars" if target_horizon_bars is not None else "this horizon"
+        # Always log both minutes and bars for clarity
+        if target_horizon_minutes is not None and target_horizon_bars is not None:
+            horizon_info = f"horizon_minutes={target_horizon_minutes:.1f}m, horizon_bars={target_horizon_bars} bars @ interval={detected_interval:.1f}m"
+        elif target_horizon_bars is not None:
+            horizon_info = f"horizon_bars={target_horizon_bars} bars @ interval={detected_interval:.1f}m"
+        else:
+            horizon_info = "this horizon"
         logger.error(
             f"❌ INSUFFICIENT FEATURES: Only {len(safe_columns)} features remain after filtering "
             f"(minimum required: {MIN_FEATURES_REQUIRED}). "

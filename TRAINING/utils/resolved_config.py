@@ -153,6 +153,9 @@ class ResolvedConfig:
             "features_final": self.features_final,
             "view": self.view,
             "symbol": self.symbol,
+            # NEW: Base interval for replayability (auto-detected or from config)
+            "base_interval_minutes": self.base_interval_minutes,
+            "base_interval_source": self.base_interval_source,
         }
 
 
