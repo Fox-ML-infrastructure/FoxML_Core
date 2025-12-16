@@ -153,26 +153,26 @@ class ReproducibilityTracker:
         # Initialize stats tracking
         self.stats_file = self._repro_base_dir / "REPRODUCIBILITY" / "stats.json"
         
-        # Initialize telemetry writer (if enabled)
+        # Initialize metrics writer (if enabled)
         try:
-            from TRAINING.utils.telemetry import TelemetryWriter, load_telemetry_config
-            telemetry_config = load_telemetry_config()
-            if telemetry_config.get("enabled", False):
-                self.telemetry = TelemetryWriter(
+            from TRAINING.utils.metrics import MetricsWriter, load_metrics_config
+            metrics_config = load_metrics_config()
+            if metrics_config.get("enabled", False):
+                self.metrics = MetricsWriter(
                     output_dir=self._repro_base_dir,  # Base output dir (run level, not module-specific)
-                    enabled=telemetry_config.get("enabled", True),
-                    baselines=telemetry_config.get("baselines"),
-                    drift=telemetry_config.get("drift")
+                    enabled=metrics_config.get("enabled", True),
+                    baselines=metrics_config.get("baselines"),
+                    drift=metrics_config.get("drift")
                 )
-                logger.info(f"✅ Telemetry initialized and enabled (output_dir={self._repro_base_dir})")
+                logger.info(f"✅ Metrics initialized and enabled (output_dir={self._repro_base_dir})")
             else:
-                self.telemetry = None
-                logger.debug("Telemetry is disabled in config")
+                self.metrics = None
+                logger.debug("Metrics is disabled in config")
         except Exception as e:
-            logger.warning(f"⚠️  Telemetry not available: {e}")
+            logger.warning(f"⚠️  Metrics not available: {e}")
             import traceback
-            logger.debug(f"Telemetry initialization traceback: {traceback.format_exc()}")
-            self.telemetry = None
+            logger.debug(f"Metrics initialization traceback: {traceback.format_exc()}")
+            self.metrics = None
     
     def _get_repro_base_dir(self) -> Path:
         """
@@ -592,7 +592,7 @@ class ReproducibilityTracker:
         - view="CROSS_SECTIONAL" → route_type="CROSS_SECTIONAL"
         - view="SYMBOL_SPECIFIC" → route_type="INDIVIDUAL"
         
-        This ensures telemetry is scoped correctly (features compared per-target, per-view, per-symbol).
+        This ensures metrics is scoped correctly (features compared per-target, per-view, per-symbol).
         
         Returns:
             "CROSS_SECTIONAL", "INDIVIDUAL", or None
@@ -1096,8 +1096,8 @@ class ReproducibilityTracker:
             self._increment_error_counter("write_failures", "IO_ERROR")
             raise  # Re-raise to prevent silent failure
         
-        # Write telemetry sidecar files (if enabled)
-        if self.telemetry:
+        # Write metrics sidecar files (if enabled)
+        if self.metrics:
             # Determine view from route_type
             view = None
             if route_type:
@@ -1126,13 +1126,13 @@ class ReproducibilityTracker:
                     if symbol and route_type == "INDIVIDUAL":
                         baseline_key += f":{symbol}"
             
-            logger.debug(f"📊 Writing telemetry for stage={stage_normalized}, target={target}, view={view}, cohort_dir={cohort_dir}")
+            logger.debug(f"📊 Writing metrics for stage={stage_normalized}, target={target}, view={view}, cohort_dir={cohort_dir}")
             
-            # Write telemetry sidecar files in cohort directory
-            # Note: telemetry will create cohort_dir if it doesn't exist, or fall back to target level
-            telemetry_written = False
+            # Write metrics sidecar files in cohort directory
+            # Note: metrics will create cohort_dir if it doesn't exist, or fall back to target level
+            metrics_written = False
             try:
-                self.telemetry.write_cohort_telemetry(
+                self.metrics.write_cohort_metrics(
                     cohort_dir=cohort_dir,
                     stage=stage_normalized,
                     view=view or "UNKNOWN",
@@ -1142,33 +1142,33 @@ class ReproducibilityTracker:
                     metrics=run_data,
                     baseline_key=baseline_key
                 )
-                telemetry_written = True
+                metrics_written = True
             except Exception as e:
-                logger.warning(f"⚠️  Failed to write telemetry metadata to cohort directory: {e}")
+                logger.warning(f"⚠️  Failed to write metrics metadata to cohort directory: {e}")
                 import traceback
-                logger.debug(f"Telemetry write traceback: {traceback.format_exc()}")
+                logger.debug(f"Metrics write traceback: {traceback.format_exc()}")
             
             # Safety fallback: If cohort-level write failed and we have target/view info, try target-level write
-            if not telemetry_written and target and view:
+            if not metrics_written and target and view:
                 try:
-                    fallback_dir = self.telemetry._get_fallback_telemetry_dir(stage_normalized, view, target, symbol)
+                    fallback_dir = self.metrics._get_fallback_metrics_dir(stage_normalized, view, target, symbol)
                     if fallback_dir:
-                        logger.info(f"📁 Attempting telemetry fallback write to: {fallback_dir}")
-                        self.telemetry._write_telemetry_metrics(fallback_dir, run_id_clean, run_data)
+                        logger.info(f"📁 Attempting metrics fallback write to: {fallback_dir}")
+                        self.metrics._write_metrics(fallback_dir, run_id_clean, run_data, stage=stage_normalized, reproducibility_mode="COHORT_AWARE")
                         if baseline_key:
-                            self.telemetry._write_telemetry_drift(
+                            self.metrics._write_drift(
                                 fallback_dir, stage_normalized, view, target, symbol, run_id_clean, run_data, baseline_key
                             )
-                        logger.info(f"✅ Telemetry written to fallback location: {fallback_dir}")
+                        logger.info(f"✅ Metrics written to fallback location: {fallback_dir}")
                 except Exception as e2:
-                    logger.warning(f"⚠️  Telemetry fallback write also failed: {e2}")
+                    logger.warning(f"⚠️  Metrics fallback write also failed: {e2}")
             
-            # Aggregate telemetry facts table (append-only, after all cohorts saved)
+            # Aggregate metrics facts table (append-only, after all cohorts saved)
             # This is called per-cohort, but we'll aggregate at the end of the run
             # For now, we'll aggregate on-demand or at end of stage
         
-        # Save metrics.json
-        metrics_file = cohort_dir / "metrics.json"
+        # PHASE 2: Unified schema - build metrics_data for _update_index (always needed)
+        # Metrics writer writes metrics.json/parquet, but we still need metrics_data for index
         metrics_data = {
             "run_id": run_id_clean,
             "timestamp": datetime.now().isoformat(),
@@ -1177,21 +1177,34 @@ class ReproducibilityTracker:
             **{k: v for k, v in run_data.items() 
                if k not in ['timestamp', 'cohort_metadata', 'additional_data']}
         }
-        try:
-            with open(metrics_file, 'w') as f:
-                json.dump(metrics_data, f, indent=2)
-                f.flush()  # Ensure immediate write
-                os.fsync(f.fileno())  # Force write to disk
-            # Log at INFO level so it's visible
-            main_logger = _get_main_logger()
-            if main_logger != logger:
-                main_logger.info(f"✅ Reproducibility: Saved metrics.json to {metrics_file.name} in {metrics_file.parent.name}/")
-            else:
-                logger.info(f"✅ Reproducibility: Saved metrics.json to {metrics_file.name} in {metrics_file.parent.name}/")
-        except (IOError, OSError) as e:
-            logger.warning(f"Failed to save metrics.json to {metrics_file}: {e}, error_type=IO_ERROR")
-            self._increment_error_counter("write_failures", "IO_ERROR")
-            raise  # Re-raise to prevent silent failure
+        
+        # PHASE 2: Only write as fallback if metrics failed and we don't have metrics.json yet
+        metrics_file = cohort_dir / "metrics.json"
+        if not metrics_file.exists() and not metrics_written:
+            # Fallback: write metrics.json using unified canonical schema
+            try:
+                with open(metrics_file, 'w') as f:
+                    json.dump(metrics_data, f, indent=2, default=str)
+                    f.flush()  # Ensure immediate write
+                    os.fsync(f.fileno())  # Force write to disk
+                # Also write metrics.parquet for consistency
+                try:
+                    import pandas as pd
+                    df_metrics = pd.DataFrame([metrics_data])
+                    metrics_parquet = cohort_dir / "metrics.parquet"
+                    df_metrics.to_parquet(metrics_parquet, index=False, engine='pyarrow', compression='snappy')
+                except Exception as e_parquet:
+                    logger.debug(f"Failed to write metrics.parquet fallback: {e_parquet}")
+                # Log at INFO level so it's visible
+                main_logger = _get_main_logger()
+                if main_logger != logger:
+                    main_logger.info(f"✅ Reproducibility: Saved metrics.json (fallback) to {metrics_file.name} in {metrics_file.parent.name}/")
+                else:
+                    logger.info(f"✅ Reproducibility: Saved metrics.json (fallback) to {metrics_file.name} in {metrics_file.parent.name}/")
+            except (IOError, OSError) as e:
+                logger.warning(f"Failed to save metrics.json (fallback) to {metrics_file}: {e}, error_type=IO_ERROR")
+                self._increment_error_counter("write_failures", "IO_ERROR")
+                # Don't raise - metrics might have written it, or we'll try again
         
         # Update index.parquet
         try:
@@ -2142,7 +2155,7 @@ class ReproducibilityTracker:
                     if route_type:
                         route_type = route_type.upper()  # Normalize to uppercase
                 elif stage.upper() == "FEATURE_SELECTION":
-                    # FIX: Map view to route_type for FEATURE_SELECTION (ensures proper telemetry scoping)
+                    # FIX: Map view to route_type for FEATURE_SELECTION (ensures proper metrics scoping)
                     view = additional_data.get("view") if additional_data else None
                     if view:
                         if view.upper() == "CROSS_SECTIONAL":
@@ -2706,7 +2719,7 @@ class ReproducibilityTracker:
         
         # Add view metadata for TARGET_RANKING
         # FIX: Add view to additional_data for both TARGET_RANKING and FEATURE_SELECTION
-        # This ensures proper telemetry scoping (features compared per-target, per-view, per-symbol)
+        # This ensures proper metrics scoping (features compared per-target, per-view, per-symbol)
         if hasattr(ctx, 'view') and ctx.view:
             additional_data["view"] = ctx.view
         # Also add symbol for SYMBOL_SPECIFIC/INDIVIDUAL views
@@ -2717,7 +2730,7 @@ class ReproducibilityTracker:
         metrics_with_cohort = {**metrics, **cohort_metrics}
         
         # 4. Load previous run metadata for comparison
-        # FIX: For FEATURE_SELECTION, map view to route_type (ensures proper telemetry scoping)
+        # FIX: For FEATURE_SELECTION, map view to route_type (ensures proper metrics scoping)
         route_type_for_cohort = ctx.route_type if hasattr(ctx, 'route_type') else None
         if ctx.stage == "target_ranking" and hasattr(ctx, 'view') and ctx.view:
             route_type_for_cohort = ctx.view
@@ -3000,13 +3013,13 @@ class ReproducibilityTracker:
             logger.debug(f"Could not generate trend summary: {e}")
             return {"status": "error", "error": str(e)}
     
-    def generate_telemetry_rollups(
+    def generate_metrics_rollups(
         self,
         stage: str,
         run_id: str
     ) -> None:
         """
-        Generate view-level and stage-level telemetry rollups.
+        Generate view-level and stage-level metrics rollups.
         
         Should be called after all cohorts for a stage are saved.
         
@@ -3014,7 +3027,7 @@ class ReproducibilityTracker:
             stage: Pipeline stage (TARGET_RANKING, FEATURE_SELECTION, etc.)
             run_id: Current run identifier
         """
-        if not self.telemetry:
+        if not self.metrics:
             return
         
         repro_dir = self._repro_base_dir / "REPRODUCIBILITY"
@@ -3032,14 +3045,14 @@ class ReproducibilityTracker:
         for view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
             view_dir = stage_dir / view
             if view_dir.exists():
-                self.telemetry.generate_view_rollup(view_dir, stage.upper(), view, run_id)
+                self.metrics.generate_view_rollup(view_dir, stage.upper(), view, run_id)
         
         # Generate stage-level rollup
-        self.telemetry.generate_stage_rollup(stage_dir, stage.upper(), run_id)
+        self.metrics.generate_stage_rollup(stage_dir, stage.upper(), run_id)
         
-        # Aggregate telemetry facts table (append to Parquet)
+        # Aggregate metrics facts table (append to Parquet)
         try:
-            from TRAINING.utils.telemetry import aggregate_telemetry_facts
-            aggregate_telemetry_facts(repro_dir)
+            from TRAINING.utils.metrics import aggregate_metrics_facts
+            aggregate_metrics_facts(repro_dir)
         except Exception as e:
-            logger.debug(f"Failed to aggregate telemetry facts table: {e}")
+            logger.debug(f"Failed to aggregate metrics facts table: {e}")

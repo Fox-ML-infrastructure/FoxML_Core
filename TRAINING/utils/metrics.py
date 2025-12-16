@@ -1,18 +1,19 @@
 """
-Telemetry System (Sidecar-based, View-Isolated)
+Metrics System (Sidecar-based, View-Isolated)
 
-Writes telemetry as sidecar files next to existing artifacts (metadata.json, metrics.json, audit_report.json).
-Telemetry follows the exact same directory structure as existing artifacts.
+Writes metrics as sidecar files next to existing artifacts (metadata.json, metrics.json, audit_report.json).
+Metrics follows the exact same directory structure as existing artifacts.
 
 Key principles:
 - View isolation: CROSS_SECTIONAL drift only compares to CROSS_SECTIONAL baselines
 - SYMBOL_SPECIFIC drift only compares to SYMBOL_SPECIFIC baselines
-- Sidecar placement: telemetry files live in same cohort folder as existing JSONs
+- Sidecar placement: metrics files live in same cohort folder as existing JSONs
 - Hierarchical rollups: per-target/symbol → view-level → stage-level
 """
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Union
 from datetime import datetime
@@ -22,14 +23,32 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-class TelemetryWriter:
+class MetricsWriter:
     """
-    Writes telemetry as sidecar files in cohort directories.
+    Writes metrics as sidecar files in cohort directories.
+    
+    PHASE 2: Unified canonical schema - single source of truth for metrics.
     
     Structure:
-    - Sidecar files in each cohort folder: telemetry_metrics.json, telemetry_drift.json, telemetry_trend.json
-    - View-level rollups: CROSS_SECTIONAL/telemetry_rollup.json, SYMBOL_SPECIFIC/telemetry_rollup.json
-    - Stage-level container: TARGET_RANKING/telemetry_rollup.json
+    - Sidecar files in each cohort folder: 
+      * metrics.json (canonical flat schema, human-readable)
+      * metrics.parquet (same schema, wide format, queryable)
+      * metrics_drift.json (comparison to baseline)
+      * metrics_trend.json (temporal trends)
+    - View-level rollups: CROSS_SECTIONAL/metrics_rollup.json, SYMBOL_SPECIFIC/metrics_rollup.json
+    - Stage-level container: TARGET_RANKING/metrics_rollup.json
+    
+    Canonical schema (metrics.json/parquet):
+    {
+      "run_id": "...",
+      "timestamp": "...",
+      "stage": "...",
+      "reproducibility_mode": "COHORT_AWARE",
+      "item_name": "...",
+      "metric_name": "...",
+      "mean_score": ...,
+      ... (all metrics as flat keys)
+    }
     """
     
     def __init__(
@@ -40,11 +59,11 @@ class TelemetryWriter:
         drift: Optional[Dict[str, Any]] = None
     ):
         """
-        Initialize telemetry writer.
+        Initialize metrics writer.
         
         Args:
             output_dir: Base output directory (REPRODUCIBILITY/ is under this)
-            enabled: Whether telemetry is enabled
+            enabled: Whether metrics is enabled
             baselines: Baseline configuration (previous_run, rolling_window_k, last_good_run)
             drift: Drift detection configuration
         """
@@ -68,7 +87,7 @@ class TelemetryWriter:
         if drift:
             self.drift.update(drift)
     
-    def write_cohort_telemetry(
+    def write_cohort_metrics(
         self,
         cohort_dir: Path,
         stage: str,
@@ -80,7 +99,7 @@ class TelemetryWriter:
         baseline_key: Optional[str] = None
     ) -> None:
         """
-        Write telemetry sidecar files for a cohort.
+        Write metrics sidecar files for a cohort.
         
         Args:
             cohort_dir: Path to cohort directory (where metadata.json, metrics.json live)
@@ -93,113 +112,137 @@ class TelemetryWriter:
             baseline_key: Optional baseline key for drift comparison
         """
         if not self.enabled:
-            logger.debug("Telemetry is disabled, skipping write")
+            logger.debug("Metrics is disabled, skipping write")
             return
         
         cohort_dir = Path(cohort_dir)
-        # Create cohort directory if it doesn't exist (telemetry should still work even if
+        # Create cohort directory if it doesn't exist (metrics should still work even if
         # _save_to_cohort didn't create it yet, or if there's a race condition)
         if not cohort_dir.exists():
             try:
                 cohort_dir.mkdir(parents=True, exist_ok=True)
-                logger.info(f"✅ Created cohort directory for telemetry: {cohort_dir}")
+                logger.info(f"✅ Created cohort directory for metrics: {cohort_dir}")
             except Exception as e:
                 logger.warning(f"⚠️  Failed to create cohort directory {cohort_dir}: {e}")
                 # Fallback: try writing at target level instead
                 if target and view:
-                    fallback_dir = self._get_fallback_telemetry_dir(stage, view, target, symbol)
+                    fallback_dir = self._get_fallback_metrics_dir(stage, view, target, symbol)
                     if fallback_dir:
-                        logger.info(f"📁 Writing telemetry to fallback location: {fallback_dir}")
+                        logger.info(f"📁 Writing metrics to fallback location: {fallback_dir}")
                         try:
-                            self._write_telemetry_metrics(fallback_dir, run_id, metrics)
+                            self._write_metrics(fallback_dir, run_id, metrics, stage=stage, reproducibility_mode="COHORT_AWARE")
                             if baseline_key:
-                                self._write_telemetry_drift(
+                                self._write_drift(
                                     fallback_dir, stage, view, target, symbol, run_id, metrics, baseline_key
                                 )
-                            logger.info(f"✅ Telemetry written to fallback location: {fallback_dir}")
+                            logger.info(f"✅ Metrics written to fallback location: {fallback_dir}")
                         except Exception as e2:
-                            logger.error(f"❌ Failed to write telemetry to fallback location {fallback_dir}: {e2}")
+                            logger.error(f"❌ Failed to write metrics to fallback location {fallback_dir}: {e2}")
                     else:
-                        logger.warning(f"⚠️  Could not determine fallback telemetry directory for stage={stage}, view={view}, target={target}")
+                        logger.warning(f"⚠️  Could not determine fallback metrics directory for stage={stage}, view={view}, target={target}")
                 else:
                     logger.warning(f"⚠️  Cannot use fallback: missing target or view (target={target}, view={view})")
                 return
         
-        # Write telemetry_metrics.json (facts for this cohort)
+        # Write metrics.json and metrics.parquet (unified canonical schema)
         try:
-            self._write_telemetry_metrics(cohort_dir, run_id, metrics)
-            logger.debug(f"✅ Wrote telemetry_metrics to {cohort_dir}")
+            self._write_metrics(
+                cohort_dir, run_id, metrics, 
+                stage=stage, 
+                reproducibility_mode="COHORT_AWARE"
+            )
+            logger.debug(f"✅ Wrote unified metrics to {cohort_dir}")
         except Exception as e:
-            logger.warning(f"⚠️  Failed to write telemetry_metrics to {cohort_dir}: {e}")
+            logger.warning(f"⚠️  Failed to write metrics to {cohort_dir}: {e}")
         
-        # Write telemetry_drift.json (comparison to baseline)
+        # Write metrics_drift.json (comparison to baseline)
         if baseline_key:
             try:
-                self._write_telemetry_drift(
+                self._write_drift(
                     cohort_dir, stage, view, target, symbol, run_id, metrics, baseline_key
                 )
-                logger.debug(f"✅ Wrote telemetry_drift to {cohort_dir}")
+                logger.debug(f"✅ Wrote metrics_drift to {cohort_dir}")
             except Exception as e:
-                logger.warning(f"⚠️  Failed to write telemetry_drift to {cohort_dir}: {e}")
+                logger.warning(f"⚠️  Failed to write metrics_drift to {cohort_dir}: {e}")
     
-    def _write_telemetry_metrics(
+    def _write_metrics(
         self,
         cohort_dir: Path,
         run_id: str,
-        metrics: Dict[str, Any]
+        metrics: Dict[str, Any],
+        stage: Optional[str] = None,
+        reproducibility_mode: str = "COHORT_AWARE"
     ) -> None:
         """
-        Write telemetry_metrics.json with facts for this cohort.
+        Write metrics.json and metrics.parquet with unified canonical schema.
         
-        This is optimized for querying and aggregation (Parquet format).
-        Includes the same metrics as metrics.json but structured for telemetry analysis.
+        PHASE 2: Unified schema - single source of truth for metrics.
+        - metrics.json: Human-readable JSON (flat structure)
+        - metrics.parquet: Queryable Parquet (same schema, wide format)
+        
+        Schema (canonical):
+        {
+          "run_id": "...",
+          "timestamp": "...",
+          "stage": "...",
+          "reproducibility_mode": "COHORT_AWARE",
+          "item_name": "...",
+          "metric_name": "...",
+          "mean_score": ...,
+          "std_score": ...,
+          ... (all other metrics as flat keys)
+        }
         """
-        telemetry_data = {
+        # Build canonical flat schema (same as reproducibility_tracker metrics.json)
+        metrics_data = {
             "run_id": run_id,
             "timestamp": datetime.now().isoformat(),
-            "metrics": {}
+            "reproducibility_mode": reproducibility_mode,
         }
         
-        # Extract telemetry-relevant metrics (same as metrics.json but nested)
-        # The nesting allows for consistent structure across different stages/views
+        # Add stage if provided
+        if stage:
+            metrics_data["stage"] = stage
+        
+        # Add all metrics as flat keys (exclude metadata fields)
         for key, value in metrics.items():
             if key in ['timestamp', 'cohort_metadata', 'additional_data']:
                 continue
             
-            # Convert to float if numeric
-            if isinstance(value, (int, float)):
-                telemetry_data["metrics"][key] = float(value)
+            # Convert to appropriate type
+            if isinstance(value, (int, float, np.integer, np.floating)):
+                metrics_data[key] = float(value)
+            elif isinstance(value, (bool, np.bool_)):
+                metrics_data[key] = bool(value)
+            elif isinstance(value, (str, type(None))):
+                metrics_data[key] = value
             elif isinstance(value, (list, dict)):
-                # Store complex values as-is (for now)
-                telemetry_data["metrics"][key] = value
+                # Store complex values as-is (JSON serializable)
+                metrics_data[key] = value
             else:
-                # Store other types as string representation
-                telemetry_data["metrics"][key] = str(value)
+                # Convert other types to string
+                metrics_data[key] = str(value)
         
-        metrics_file_json = cohort_dir / "telemetry_metrics.json"
-        metrics_file_parquet = cohort_dir / "telemetry_metrics.parquet"
+        metrics_file_json = cohort_dir / "metrics.json"
+        metrics_file_parquet = cohort_dir / "metrics.parquet"
+        
         try:
-            # Write JSON (human-readable)
+            # Write JSON (human-readable, canonical format)
             with open(metrics_file_json, 'w') as f:
-                json.dump(telemetry_data, f, indent=2)
+                json.dump(metrics_data, f, indent=2, default=str)
+                f.flush()
+                os.fsync(f.fileno())  # Force write to disk
             
-            # Write Parquet (queryable, long format)
-            # Flatten metrics dict into DataFrame
-            parquet_rows = [{
-                "run_id": run_id,
-                "timestamp": telemetry_data.get("timestamp"),
-                "metric_name": k,
-                "metric_value": v if isinstance(v, (int, float)) else None,
-                "metric_value_str": str(v) if not isinstance(v, (int, float)) else None
-            } for k, v in telemetry_data.get("metrics", {}).items()]
+            # Write Parquet (queryable, wide format - same schema as JSON)
+            # Convert to DataFrame with one row (wide format, not long format)
+            df_metrics = pd.DataFrame([metrics_data])
+            df_metrics.to_parquet(metrics_file_parquet, index=False, engine='pyarrow', compression='snappy')
             
-            if parquet_rows:
-                df_metrics = pd.DataFrame(parquet_rows)
-                df_metrics.to_parquet(metrics_file_parquet, index=False, engine='pyarrow', compression='snappy')
+            logger.debug(f"✅ Wrote unified metrics (JSON + Parquet) to {cohort_dir}")
         except Exception as e:
-            logger.warning(f"Failed to write telemetry_metrics to {cohort_dir}: {e}")
+            logger.warning(f"Failed to write metrics to {cohort_dir}: {e}")
     
-    def _write_telemetry_drift(
+    def _write_drift(
         self,
         cohort_dir: Path,
         stage: str,
@@ -211,7 +254,7 @@ class TelemetryWriter:
         baseline_key: str
     ) -> None:
         """
-        Write telemetry_drift.json comparing current run to baseline.
+        Write metrics_drift.json comparing current run to baseline.
         
         Enhanced with fingerprints, drift tiers, critical metrics, and sanity checks.
         Baseline key format: (stage, view, target[, symbol])
@@ -242,13 +285,11 @@ class TelemetryWriter:
             return
         
         # Load baseline metrics and metadata
-        baseline_metrics_file = baseline_cohort_dir / "telemetry_metrics.json"
+        # PHASE 2: Unified schema - use metrics.json as canonical
+        baseline_metrics_file = baseline_cohort_dir / "metrics.json"
         if not baseline_metrics_file.exists():
-            # Fallback to metrics.json
-            baseline_metrics_file = baseline_cohort_dir / "metrics.json"
-            if not baseline_metrics_file.exists():
-                logger.debug(f"Baseline metrics not found: {baseline_metrics_file}")
-                return
+            logger.debug(f"Baseline metrics not found: {baseline_metrics_file}")
+            return
         
         # Load baseline metadata for fingerprints
         baseline_metadata_file = baseline_cohort_dir / "metadata.json"
@@ -411,8 +452,8 @@ class TelemetryWriter:
                             }
             
             # Write drift files (JSON for human-readable, Parquet for queryable)
-            drift_file_json = cohort_dir / "telemetry_drift.json"
-            drift_file_parquet = cohort_dir / "telemetry_drift.parquet"
+            drift_file_json = cohort_dir / "metrics_drift.json"
+            drift_file_parquet = cohort_dir / "metrics_drift.parquet"
             try:
                 # Write JSON (human-readable)
                 with open(drift_file_json, 'w') as f:
@@ -461,7 +502,7 @@ class TelemetryWriter:
                     df_drift = pd.DataFrame(parquet_rows)
                     df_drift.to_parquet(drift_file_parquet, index=False, engine='pyarrow', compression='snappy')
             except Exception as e:
-                logger.warning(f"Failed to write telemetry_drift files to {cohort_dir}: {e}")
+                logger.warning(f"Failed to write metrics_drift files to {cohort_dir}: {e}")
             
         except Exception as e:
             logger.warning(f"Failed to compute drift for {cohort_dir}: {e}")
@@ -683,7 +724,7 @@ class TelemetryWriter:
             logger.debug(f"Failed to get git commit: {e}")
         return None
     
-    def _get_fallback_telemetry_dir(
+    def _get_fallback_metrics_dir(
         self,
         stage: str,
         view: str,
@@ -691,9 +732,9 @@ class TelemetryWriter:
         symbol: Optional[str]
     ) -> Optional[Path]:
         """
-        Get fallback directory for telemetry when cohort directory doesn't exist.
+        Get fallback directory for metrics when cohort directory doesn't exist.
         
-        Falls back to target-level directory: REPRODUCIBILITY/{stage}/{view}/{target}/telemetry/
+        Falls back to target-level directory: REPRODUCIBILITY/{stage}/{view}/{target}/metrics/
         """
         try:
             repro_dir = self.output_dir / "REPRODUCIBILITY"
@@ -712,15 +753,15 @@ class TelemetryWriter:
             if not target_dir.exists():
                 return None
             
-            # Create telemetry subdirectory at target level
-            telemetry_dir = target_dir / "telemetry"
+            # Create metrics subdirectory at target level
+            metrics_dir = target_dir / "metrics"
             if symbol and view == "SYMBOL_SPECIFIC":
-                telemetry_dir = target_dir / f"symbol={symbol}" / "telemetry"
+                metrics_dir = target_dir / f"symbol={symbol}" / "metrics"
             
-            telemetry_dir.mkdir(parents=True, exist_ok=True)
-            return telemetry_dir
+            metrics_dir.mkdir(parents=True, exist_ok=True)
+            return metrics_dir
         except Exception as e:
-            logger.debug(f"Failed to get fallback telemetry directory: {e}")
+            logger.debug(f"Failed to get fallback metrics directory: {e}")
             return None
     
     def generate_view_rollup(
@@ -731,7 +772,7 @@ class TelemetryWriter:
         run_id: str
     ) -> None:
         """
-        Generate view-level rollup (CROSS_SECTIONAL/telemetry_rollup.json or SYMBOL_SPECIFIC/telemetry_rollup.json).
+        Generate view-level rollup (CROSS_SECTIONAL/metrics_rollup.json or SYMBOL_SPECIFIC/metrics_rollup.json).
         
         Args:
             view_dir: Path to view directory (CROSS_SECTIONAL or SYMBOL_SPECIFIC)
@@ -762,7 +803,7 @@ class TelemetryWriter:
         # For CROSS_SECTIONAL: iterate per-target directories
         if view == "CROSS_SECTIONAL":
             for target_dir in view_dir.iterdir():
-                if not target_dir.is_dir() or target_dir.name.startswith("telemetry"):
+                if not target_dir.is_dir() or target_dir.name.startswith("metrics"):
                     continue
                 
                 target_name = target_dir.name
@@ -777,12 +818,14 @@ class TelemetryWriter:
                 
                 if cohort_dirs:
                     latest_cohort = cohort_dirs[0]
-                    metrics_file = latest_cohort / "telemetry_metrics.json"
+                    metrics_file = latest_cohort / "metrics.json"
                     if metrics_file.exists():
                         try:
                             with open(metrics_file, 'r') as f:
                                 target_data = json.load(f)
-                                target_metrics = target_data.get("metrics", {})
+                                # PHASE 2: Unified schema - flat structure, no nested "metrics" key
+                                target_metrics = {k: v for k, v in target_data.items() 
+                                                 if k not in ['run_id', 'timestamp', 'stage', 'reproducibility_mode']}
                                 rollup_data["targets"][target_name] = target_metrics
                                 all_metrics.append(target_metrics)
                         except Exception as e:
@@ -791,7 +834,7 @@ class TelemetryWriter:
         # For SYMBOL_SPECIFIC: iterate per-target, then per-symbol
         elif view == "SYMBOL_SPECIFIC":
             for target_dir in view_dir.iterdir():
-                if not target_dir.is_dir() or target_dir.name.startswith("telemetry"):
+                if not target_dir.is_dir() or target_dir.name.startswith("metrics"):
                     continue
                 
                 target_name = target_dir.name
@@ -811,12 +854,14 @@ class TelemetryWriter:
                     
                     if cohort_dirs:
                         latest_cohort = cohort_dirs[0]
-                        metrics_file = latest_cohort / "telemetry_metrics.json"
+                        metrics_file = latest_cohort / "metrics.json"
                         if metrics_file.exists():
                             try:
                                 with open(metrics_file, 'r') as f:
                                     symbol_data = json.load(f)
-                                    symbol_metrics = symbol_data.get("metrics", {})
+                                    # PHASE 2: Unified schema - flat structure, no nested "metrics" key
+                                    symbol_metrics = {k: v for k, v in symbol_data.items() 
+                                                     if k not in ['run_id', 'timestamp', 'stage', 'reproducibility_mode']}
                                     
                                     if target_name not in rollup_data["targets"]:
                                         rollup_data["targets"][target_name] = {}
@@ -848,8 +893,8 @@ class TelemetryWriter:
                     }
         
         # Write rollup files (JSON for human-readable, Parquet for queryable)
-        rollup_file_json = view_dir / "telemetry_rollup.json"
-        rollup_file_parquet = view_dir / "telemetry_rollup.parquet"
+        rollup_file_json = view_dir / "metrics_rollup.json"
+        rollup_file_parquet = view_dir / "metrics_rollup.parquet"
         try:
             # Write JSON rollup
             with open(rollup_file_json, 'w') as f:
@@ -913,7 +958,7 @@ class TelemetryWriter:
         run_id: str
     ) -> None:
         """
-        Generate stage-level container rollup (TARGET_RANKING/telemetry_rollup.json).
+        Generate stage-level container rollup (TARGET_RANKING/metrics_rollup.json).
         
         This is a container that references view-level rollups, no drift mixing.
         """
@@ -935,7 +980,7 @@ class TelemetryWriter:
         for view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
             view_dir = stage_dir / view
             if view_dir.exists():
-                view_rollup_file = view_dir / "telemetry_rollup.json"
+                view_rollup_file = view_dir / "metrics_rollup.json"
                 if view_rollup_file.exists():
                     try:
                         with open(view_rollup_file, 'r') as f:
@@ -944,8 +989,8 @@ class TelemetryWriter:
                         logger.debug(f"Failed to load view rollup for {view}: {e}")
         
         # Write stage rollup files (JSON for human-readable, Parquet for queryable)
-        rollup_file_json = stage_dir / "telemetry_rollup.json"
-        rollup_file_parquet = stage_dir / "telemetry_rollup.parquet"
+        rollup_file_json = stage_dir / "metrics_rollup.json"
+        rollup_file_parquet = stage_dir / "metrics_rollup.parquet"
         try:
             # Write JSON rollup
             with open(rollup_file_json, 'w') as f:
@@ -990,24 +1035,55 @@ class TelemetryWriter:
             logger.warning(f"Failed to write stage rollup to {rollup_file_json}: {e}")
 
 
-def load_telemetry_config() -> Dict[str, Any]:
-    """Load telemetry configuration from safety.yaml."""
+def load_metrics_config() -> Dict[str, Any]:
+    """Load metrics configuration from safety.yaml.
+    
+    Backward compatible: checks safety.metrics.* first, falls back to safety.telemetry.*
+    """
     try:
         from CONFIG.config_loader import get_cfg
+        # Try new path first (safety.metrics.*)
+        enabled = get_cfg("safety.metrics.enabled", default=None, config_name="safety_config")
+        if enabled is None:
+            # Fallback to old path (safety.telemetry.*) for backward compatibility
+            enabled = get_cfg("safety.telemetry.enabled", default=True, config_name="safety_config")
+        
+        # Baselines
+        prev_run = get_cfg("safety.metrics.baselines.previous_run", default=None, config_name="safety_config")
+        if prev_run is None:
+            prev_run = get_cfg("safety.telemetry.baselines.previous_run", default=True, config_name="safety_config")
+        
+        rolling_k = get_cfg("safety.metrics.baselines.rolling_window_k", default=None, config_name="safety_config")
+        if rolling_k is None:
+            rolling_k = get_cfg("safety.telemetry.baselines.rolling_window_k", default=10, config_name="safety_config")
+        
+        last_good = get_cfg("safety.metrics.baselines.last_good_run", default=None, config_name="safety_config")
+        if last_good is None:
+            last_good = get_cfg("safety.telemetry.baselines.last_good_run", default=True, config_name="safety_config")
+        
+        # Drift
+        psi_thresh = get_cfg("safety.metrics.drift.psi_threshold", default=None, config_name="safety_config")
+        if psi_thresh is None:
+            psi_thresh = get_cfg("safety.telemetry.drift.psi_threshold", default=0.2, config_name="safety_config")
+        
+        ks_thresh = get_cfg("safety.metrics.drift.ks_threshold", default=None, config_name="safety_config")
+        if ks_thresh is None:
+            ks_thresh = get_cfg("safety.telemetry.drift.ks_threshold", default=0.1, config_name="safety_config")
+        
         return {
-            "enabled": get_cfg("safety.telemetry.enabled", default=True, config_name="safety_config"),
+            "enabled": enabled,
             "baselines": {
-                "previous_run": get_cfg("safety.telemetry.baselines.previous_run", default=True, config_name="safety_config"),
-                "rolling_window_k": get_cfg("safety.telemetry.baselines.rolling_window_k", default=10, config_name="safety_config"),
-                "last_good_run": get_cfg("safety.telemetry.baselines.last_good_run", default=True, config_name="safety_config")
+                "previous_run": prev_run,
+                "rolling_window_k": rolling_k,
+                "last_good_run": last_good
             },
             "drift": {
-                "psi_threshold": get_cfg("safety.telemetry.drift.psi_threshold", default=0.2, config_name="safety_config"),
-                "ks_threshold": get_cfg("safety.telemetry.drift.ks_threshold", default=0.1, config_name="safety_config")
+                "psi_threshold": psi_thresh,
+                "ks_threshold": ks_thresh
             }
         }
     except Exception as e:
-        logger.warning(f"Failed to load telemetry config: {e}, using defaults")
+        logger.warning(f"Failed to load metrics config: {e}, using defaults")
         return {
             "enabled": True,
             "baselines": {"previous_run": True, "rolling_window_k": 10, "last_good_run": True},
@@ -1015,40 +1091,40 @@ def load_telemetry_config() -> Dict[str, Any]:
         }
 
 
-def aggregate_telemetry_facts(
+def aggregate_metrics_facts(
     repro_dir: Path,
     facts_file: Optional[Path] = None
 ) -> pd.DataFrame:
     """
-    Aggregate all telemetry_metrics.json files into a Parquet facts table.
+    Aggregate all metrics.json files into a Parquet facts table.
     
     This creates/updates a long-format Parquet table with explicit dimensions:
     - run_id, stage, view, target, symbol, universe_id, cohort_id
     - All metric values as separate columns
     
-    Structure matches current telemetry tracking exactly.
+    Structure matches current metrics tracking exactly.
     
     Args:
         repro_dir: REPRODUCIBILITY directory root
-        facts_file: Optional path to facts table (defaults to repro_dir/telemetry_facts.parquet)
+        facts_file: Optional path to facts table (defaults to repro_dir/metrics_facts.parquet)
     
     Returns:
-        DataFrame with all telemetry facts
+        DataFrame with all metrics facts
     """
     if facts_file is None:
-        facts_file = repro_dir / "telemetry_facts.parquet"
+        facts_file = repro_dir / "metrics_facts.parquet"
     
     repro_dir = Path(repro_dir)
     if not repro_dir.exists():
         logger.warning(f"REPRODUCIBILITY directory does not exist: {repro_dir}")
         return pd.DataFrame()
     
-    # Collect all telemetry_metrics.json files
+    # Collect all metrics.json files (unified canonical schema)
     rows = []
     
     # Walk REPRODUCIBILITY structure
     for stage_dir in repro_dir.iterdir():
-        if not stage_dir.is_dir() or stage_dir.name in ["artifact_index.parquet", "telemetry_facts.parquet", "stats.json"]:
+        if not stage_dir.is_dir() or stage_dir.name in ["artifact_index.parquet", "metrics_facts.parquet", "stats.json"]:
             continue
         
         stage = stage_dir.name
@@ -1099,11 +1175,11 @@ def aggregate_telemetry_facts(
                                     continue
                                 
                                 cohort_id = cohort_path.name.replace("cohort=", "")
-                                telemetry_file = cohort_path / "telemetry_metrics.json"
+                                metrics_file = cohort_path / "metrics.json"
                                 
-                                if telemetry_file.exists():
-                                    row = _extract_telemetry_row(
-                                        telemetry_file, stage, view, target, symbol, 
+                                if metrics_file.exists():
+                                    row = _extract_metrics_row(
+                                        metrics_file, stage, view, target, symbol, 
                                         cohort_id, universe_id
                                     )
                                     if row:
@@ -1115,9 +1191,9 @@ def aggregate_telemetry_facts(
                             continue
                         
                         cohort_id = cohort_path.name.replace("cohort=", "")
-                        telemetry_file = cohort_path / "telemetry_metrics.json"
+                        metrics_file = cohort_path / "metrics.json"
                         
-                        if telemetry_file.exists():
+                        if metrics_file.exists():
                             # Try to extract universe_id from metadata
                             metadata_file = cohort_path / "metadata.json"
                             if metadata_file.exists():
@@ -1128,15 +1204,15 @@ def aggregate_telemetry_facts(
                                 except Exception:
                                     pass
                             
-                            row = _extract_telemetry_row(
-                                telemetry_file, stage, view, target, symbol,
+                            row = _extract_metrics_row(
+                                metrics_file, stage, view, target, symbol,
                                 cohort_id, universe_id
                             )
                             if row:
                                 rows.append(row)
     
     if not rows:
-        logger.debug("No telemetry metrics found to aggregate")
+        logger.debug("No metrics found to aggregate")
         return pd.DataFrame()
     
     # Create DataFrame
@@ -1160,15 +1236,15 @@ def aggregate_telemetry_facts(
     try:
         facts_file.parent.mkdir(parents=True, exist_ok=True)
         df.to_parquet(facts_file, index=False, engine='pyarrow', compression='snappy')
-        logger.info(f"✅ Aggregated {len(df)} telemetry facts to {facts_file}")
+        logger.info(f"✅ Aggregated {len(df)} metrics facts to {facts_file}")
     except Exception as e:
-        logger.warning(f"Failed to save telemetry facts table: {e}")
+        logger.warning(f"Failed to save metrics facts table: {e}")
     
     return df
 
 
-def _extract_telemetry_row(
-    telemetry_file: Path,
+def _extract_metrics_row(
+    metrics_file: Path,
     stage: str,
     view: str,
     target: str,
@@ -1177,13 +1253,15 @@ def _extract_telemetry_row(
     universe_id: Optional[str]
 ) -> Optional[Dict[str, Any]]:
     """
-    Extract a single row from telemetry_metrics.json for facts table.
+    Extract a single row from metrics.json (unified canonical schema) for facts table.
+    
+    PHASE 2: Updated to handle flat schema (no nested "metrics" key).
     
     Returns:
         Dict with dimensions and metrics, or None if extraction fails
     """
     try:
-        with open(telemetry_file, 'r') as f:
+        with open(metrics_file, 'r') as f:
             data = json.load(f)
         
         # Extract dimensions
@@ -1198,13 +1276,16 @@ def _extract_telemetry_row(
             'cohort_id': cohort_id
         }
         
-        # Extract metrics (flatten nested metrics dict)
-        metrics = data.get('metrics', {})
-        for key, value in metrics.items():
+        # PHASE 2: Extract metrics from flat schema (all keys except dimension keys)
+        dimension_keys = {'run_id', 'timestamp', 'stage', 'reproducibility_mode'}
+        for key, value in data.items():
+            if key in dimension_keys:
+                continue  # Skip dimension keys
+            
             # Convert to appropriate type
-            if isinstance(value, (int, float)):
+            if isinstance(value, (int, float, np.integer, np.floating)):
                 row[key] = float(value)
-            elif isinstance(value, bool):
+            elif isinstance(value, (bool, np.bool_)):
                 row[key] = bool(value)
             elif isinstance(value, str):
                 row[key] = str(value)
@@ -1216,5 +1297,5 @@ def _extract_telemetry_row(
         
         return row
     except Exception as e:
-        logger.debug(f"Failed to extract telemetry row from {telemetry_file}: {e}")
+        logger.debug(f"Failed to extract metrics row from {metrics_file}: {e}")
         return None
