@@ -22,11 +22,11 @@ Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 - Personal use (individual, non-commercial, not for any business purpose)
 - Non-commercial academic research at qualifying tax-exempt institutions (see `LICENSE` for full definition)
 
-**Unauthorized organizational use is copyright infringement.**
+**Note:** Unauthorized organizational use may constitute copyright infringement. This is not legal advice; see `LICENSE` and this document for complete terms.
 
 📧 **jenn.lewis5789@gmail.com** | Subject: `FoxML Core Commercial Licensing`
 
-**Commercial licensing is per team/desk and starts at $120,000/year. Paid pilot required for organizational evaluation (after 30-day $0 evaluation period).** Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages. See `LEGAL/SUBSCRIPTIONS.md` for details.
+**Commercial licensing is per team/desk and starts at $120,000/year. Evaluation: 30-day $0 evaluation (strict limits), then paid Pilot ($35k) required for continued evaluation.** Fees are specified in Ordering Documents. See `LEGAL/QUICK_REFERENCE.md` for pricing summary and `LEGAL/SUBSCRIPTIONS.md` for details.
 
 ---
 
@@ -70,7 +70,7 @@ This Commercial License is intended for organizations (including companies, univ
 
 Non-commercial academic or personal research use is permitted only as described in `LICENSE`. Any Organizational Use requires this Commercial License, regardless of whether the environment is labeled "non-production," "evaluation," "pilot," "experimental," "non-revenue," or similar.
 
-**Unauthorized organizational use is copyright infringement.**
+**Note:** Unauthorized organizational use may constitute copyright infringement. This is not legal advice; see `LICENSE` and this document for complete terms.
 
 This Commercial License is required for any organizational use of the Software. Free use is limited to personal use and qualifying non-commercial academic research as defined in `LICENSE`.
 

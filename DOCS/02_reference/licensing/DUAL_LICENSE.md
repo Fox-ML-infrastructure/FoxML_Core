@@ -21,7 +21,7 @@ FoxML Core is **source-available**. Free for personal use and non-commercial aca
 - Personal use (individual, non-commercial, not for any business purpose)
 - Non-commercial academic research at qualifying tax-exempt institutions (see `LICENSE` for full definition)
 
-**Unauthorized organizational use is copyright infringement.**
+**Note:** Unauthorized organizational use may constitute copyright infringement. This is not legal advice; see `LICENSE` and `COMMERCIAL_LICENSE.md` for complete terms.
 
 📧 **jenn.lewis5789@gmail.com** | Subject: `FoxML Core Commercial Licensing`
 

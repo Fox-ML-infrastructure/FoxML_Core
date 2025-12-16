@@ -39,7 +39,7 @@ Organizations can use a 30-day $0 evaluation (strict limits: non-production, no 
 - Any evaluation/pilot done by an organization
 - Any use by employees, contractors, interns, or affiliates in the scope of their work
 
-**IMPORTANT:** Unauthorized organizational use of the Software without a valid commercial license is copyright infringement and may result in legal claims. If you have used the Software without a license, you must immediately obtain a commercial license.
+**IMPORTANT:** Unauthorized organizational use of the Software without a valid commercial license may constitute copyright infringement and may result in legal claims. If you have used the Software without a license, you must immediately obtain a commercial license. This is not legal advice; see `COMMERCIAL_LICENSE.md` for complete terms.
 
 **See `LICENSE` for complete license terms and `DOCS/02_reference/licensing/DUAL_LICENSE.md` for licensing overview.**
 
@@ -67,7 +67,7 @@ Organizations can use a 30-day $0 evaluation (strict limits: non-production, no 
 
 ## Pricing
 
-**Commercial licensing is per team/desk and starts at $120,000/year. Paid pilot required for organizational evaluation (after 30-day $0 evaluation period). Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages.**
+**Commercial licensing is per team/desk and starts at $120,000/year. Evaluation: 30-day $0 evaluation (strict limits), then paid Pilot ($35k) required for continued evaluation.** Fees are specified in Ordering Documents. See `LEGAL/QUICK_REFERENCE.md` for pricing summary.
 
 **Licensed Unit Definition:**
 - **One "Desk/Team"** = up to **N** named users (authorized individuals)

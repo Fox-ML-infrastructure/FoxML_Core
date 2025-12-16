@@ -31,7 +31,7 @@ This includes:
 **Pricing:**
 - Commercial licensing is per team/desk and starts at $120,000/year
 - 30-day $0 evaluation available (strict limits). Paid pilot required for continued evaluation
-- Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages
+- Fees are specified in Ordering Documents. See `LEGAL/QUICK_REFERENCE.md` for pricing summary and `LEGAL/SUBSCRIPTIONS.md` for details
 - Pricing based on team/desk size, not total company headcount
 
 For licensing inquiries or enterprise partnerships, contact:

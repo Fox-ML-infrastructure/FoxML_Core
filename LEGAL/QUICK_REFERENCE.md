@@ -12,8 +12,10 @@
 
 ❌ **PAID LICENSE REQUIRED:**
 - Any organizational use (companies, universities, labs, any legal entity)
+  - **Exception:** Pure non-commercial academic research at qualifying tax-exempt institutions (see definitions below)
 - Any use by employees, contractors, interns in scope of their work
 - Any use supporting revenue, operations, or internal tooling
+- Institutional deployment (even at non-profit universities)
 
 ---
 
@@ -56,13 +58,26 @@ Subject: `FoxML Core Commercial Licensing`
 
 ## Document Hierarchy (if you need details)
 
-1. **This file** (`LEGAL/QUICK_REFERENCE.md`) — Quick summary
-2. **`COMMERCIAL_LICENSE.md`** — Authoritative commercial license terms
-3. **`LICENSE`** — Free use terms
-4. **`DOCS/02_reference/commercial/COMMERCIAL.md`** — Pricing & packages
-5. **`LEGAL/SUBSCRIPTIONS.md`** — Detailed licensing process
+1. **This file** (`LEGAL/QUICK_REFERENCE.md`) — Quick summary (start here)
+2. **`LEGAL/SUBSCRIPTIONS.md`** — Detailed licensing process and pricing
+3. **`COMMERCIAL_LICENSE.md`** — Authoritative commercial license terms
+4. **`LICENSE`** — Free use terms
 
 **Everything else is supplementary. If it contradicts the above, the above wins.**
+
+---
+
+## Definitions
+
+**Personal use:** Individual, non-commercial use by a natural person, not for any business purpose. Excludes sole proprietors, freelancers, contractors, or any use in connection with business activities or client work.
+
+**Non-commercial academic research:** Research conducted at a qualifying tax-exempt educational institution that:
+- Is not funded by, sponsored by, or integrated into commercial operations
+- Does not generate revenue or support revenue-generating activities
+- Is conducted solely for academic or research purposes
+- Does not involve internal tooling, operational systems, or client deliverables
+
+**Organizational use:** Any use by or for a legal entity (company, university, lab, etc.), including institutional deployment, internal tooling, or any use by employees/contractors in scope of their work.
 
 ---
 

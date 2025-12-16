@@ -205,7 +205,7 @@ A: No. Sole proprietors using Software for business operations require a commerc
 → Organizations can use a 30-day $0 evaluation (strict limits). Continued evaluation requires a paid Pilot ($35k).
 
 **"Your pricing is insane."**  
-→ Commercial licensing is per team/desk and starts at $120,000/year. Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages.
+→ Commercial licensing is per team/desk and starts at $120,000/year. See `LEGAL/QUICK_REFERENCE.md` for pricing summary and `LEGAL/SUBSCRIPTIONS.md` for details.
 
 **"We'll build it ourselves / fork it."**  
 → You're free to build your own. You can't use FoxML Core in production without a license. Organizational use requires a paid license regardless of whether you fork the code.
