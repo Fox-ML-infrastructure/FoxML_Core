@@ -14,158 +14,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
-#### Metrics System Rename (2025-12-15) – **NEW**
-Renamed telemetry system to metrics throughout the codebase for better branding and clarity. All functionality remains the same with full backward compatibility.
-- Renamed `telemetry.py` → `metrics.py`, `TelemetryWriter` → `MetricsWriter`
-- Updated config section: `safety.telemetry` → `safety.metrics` (backward compatible)
-- Updated file outputs: `telemetry_metrics.json` → `metrics.json`, `telemetry_drift.json` → `metrics_drift.json`, etc.
-- Updated all method names: `write_cohort_telemetry()` → `write_cohort_metrics()`, etc.
-- Backward compatibility: Code checks `safety.metrics.*` first, falls back to `safety.telemetry.*` for existing configs
-- No breaking changes: All existing functionality preserved
+#### 2025-12-15 Updates
+- **Metrics System Rename**: Renamed telemetry to metrics throughout codebase for better branding. All metrics stored locally - no user data collection, no external transmission.
+- **Seed Tracking Fix**: Fixed missing seed field in metadata.json for full reproducibility tracking.
+- **Feature Selection Improvements**: Output structure refactor, model family normalization, experiment config documentation.
+- **CatBoost GPU Fixes**: Critical fixes for GPU mode compatibility and feature importance output.
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-15-consolidated.md)
 
-#### Seed Tracking in Metadata (2025-12-15) – **NEW**
-Fixed missing seed field in metadata.json for target ranking and feature selection runs. Seed is now properly extracted from config (`pipeline.determinism.base_seed`) and included in all reproducibility metadata.
-- Seed now included in `metadata.json` for both CROSS_SECTIONAL and SYMBOL_SPECIFIC views
-- Seed extracted from config and set on RunContext before logging
-- Ensures full reproducibility tracking across all stages (target ranking, feature selection)
-- Fixes issue where metadata.json showed `seed: null` for cross-sectional runs
+#### 2025-12-14 Updates
+- **IP Assignment Signed**: All IP legally assigned to Fox ML Infrastructure LLC. ✅ Legally effective.
+- **Execution Modules**: ALPACA_trading and IBKR_trading modules added with compliance framework. ⚠️ ALPACA has minor issues, IBKR untested.
+- **Enhanced Drift Tracking**: Fingerprints, drift tiers (OK/WARN/ALERT), critical metrics, sanity checks, Parquet files.
+→ [Detailed Changelogs](DOCS/02_reference/changelog/README.md#december)
 
-#### Feature Selection Output Structure Refactor (2025-12-15) – **NEW**
-Refactored feature selection output to write directly to all-caps folder structure (FEATURE_SELECTION/) instead of legacy `feature_selections/` folder.
-- Removed intermediate `feature_selections/` folder structure
-- Output now writes directly to `REPRODUCIBILITY/FEATURE_SELECTION/` structure
-- Cleaner directory organization aligned with target ranking structure
-- Improved consistency across all reproducibility outputs
+#### 2025-12-14 Updates (continued)
+- **Metrics System**: Sidecar-based metrics with view isolation, hierarchical rollups, local-only storage. [Renamed from Telemetry on 2025-12-15]
+- **Feature Selection Fixes**: Critical bug fixes for feature selection pipeline, experiment config loading, target exclusion.
+- **Look-Ahead Bias Fixes**: Comprehensive data leakage fixes behind feature flags (default: OFF).
+→ [Detailed Changelogs](DOCS/02_reference/changelog/README.md#december)
 
-#### Model Family Name Normalization (2025-12-15) – **NEW**
-Fixed model family name normalization for capabilities map lookup to ensure consistent family name handling across the system.
-- Normalized model family names for reliable capabilities map lookup
-- Prevents lookup failures due to case/format inconsistencies
+#### 2025-12-13 Updates
+- **SST Enforcement Design**: Provably split-brain free system with EnforcedFeatureSet contract.
+- **Single Source of Truth**: Eliminated split-brain in lookback computation.
+- **Leakage Controls**: Unified leakage budget calculator, fingerprint tracking system.
+- **Feature Selection Unification**: Shared ranking harness, comprehensive hardening.
+- **Duration System**: Generalized duration parsing with interval-aware strictness.
+- **Config Consolidation**: Major CONFIG directory restructure, config trace logging.
+→ [Detailed Changelogs](DOCS/02_reference/changelog/README.md#december)
 
-#### Experiment Config Documentation (2025-12-15) – **NEW**
-Made experiment configs self-contained with comprehensive documentation and clear structure.
-- Experiment configs now include detailed inline documentation
-- Self-contained configs reduce need to cross-reference multiple files
-- Improved clarity for experiment configuration
-
-#### Symbol-Specific Evaluation Fixes (2025-12-15) – **NEW**
-Fixed indentation and evaluation loop issues for symbol-specific target ranking, enabling proper SYMBOL_SPECIFIC evaluation.
-- Fixed indentation bug in symbol-specific evaluation loop
-- Enabled SYMBOL_SPECIFIC evaluation for classification targets
-- Fixed CatBoost importance extraction for symbol-specific runs
-- Improved CatBoost verbosity and feature importance snapshot generation
-
-#### CatBoost GPU Fixes (2025-12-15) – **NEW**
-Critical fixes for CatBoost GPU mode compatibility and feature importance output.
-- Fixed CatBoost GPU requiring Pool objects instead of numpy arrays (automatic conversion via wrapper)
-- Fixed sklearn clone compatibility for CatBoost wrapper (implements get_params/set_params)
-- Fixed missing CatBoost feature importances in results directory (now saves to catboost_importances.csv)
-- CatBoost GPU training now works correctly with cross-validation
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-15-catboost-gpu-fixes.md)
-
-#### IP Assignment Agreement Signed (2025-12-14) – **NEW**
-IP Assignment Agreement has been signed, legally assigning all intellectual property from Jennifer Lewis (Individual) to Fox ML Infrastructure LLC.
-- ✅ **Legally effective** - All IP now owned by Fox ML Infrastructure LLC
-- Clean IP ownership structure for enterprise clients and monetization
-- Perpetual and irrevocable assignment
-- Supporting documentation organized in `LEGAL/ip_assignment_docs/`
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-14-ip-assignment-signed.md) | [Signed Agreement](LEGAL/IP_ASSIGNMENT_AGREEMENT_SIGNED.pdf)
-
-#### Execution Modules Added (2025-12-14) – **NEW**
-Execution modules (`ALPACA_trading` and `IBKR_trading`) have been added back to the repository with comprehensive compliance framework and documentation organization.
-- **ALPACA_trading**: Paper trading and backtesting framework (⚠️ has minor issues, needs testing)
-- **IBKR_trading**: Production live trading system for Interactive Brokers (⚠️ untested, requires testing before production use)
-- Comprehensive broker integration compliance framework with legal documentation
-- 20 documentation files moved to centralized `DOCS/` structure
-- 56 Python files updated with consistent copyright headers
-- Complete trading modules documentation and cross-linking
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-14-execution-modules.md) | [Trading Modules Overview](DOCS/02_reference/trading/TRADING_MODULES.md) | [Broker Compliance](LEGAL/BROKER_INTEGRATION_COMPLIANCE.md)
-
-#### Enhanced Drift Tracking (2025-12-14) – **NEW**
-Bulletproof drift tracking with fingerprints, severity tiers, critical metrics, and sanity checks. Can now definitively answer "What changed between baseline and current, and was it data, config, code, or stochasticity?"
-- Fingerprints: git commit, config hash, data fingerprint (baseline + current) prove baseline is different
-- Drift tiers: OK/WARN/ALERT with configurable thresholds (stricter for critical metrics)
-- Critical metrics: Automatically tracks label_window, horizon, leakage flags, cv_scheme_id, etc.
-- Sanity checks: Detects self-comparison and suspiciously identical runs
-- Parquet files: Queryable long-format data alongside JSON for efficient cross-run analysis
-- Zero handling: Explicit `rel_delta_status` for zero baselines (no ambiguous nulls)
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-14-drift-tracking-enhancements.md)
-
-#### Metrics System (2025-12-14) [Renamed from Telemetry on 2025-12-15]
-Sidecar-based metrics system with view isolation. Metrics files live alongside existing artifacts in cohort directories, enabling per-target, per-symbol, and per-cross-sectional drift tracking.
-- Sidecar files: `metrics.json` + `.parquet`, `metrics_drift.json` + `.parquet`, `metrics_trend.json` in each cohort folder
-- View-level rollups: `CROSS_SECTIONAL/metrics_rollup.json` + `.parquet`, `SYMBOL_SPECIFIC/metrics_rollup.json` + `.parquet`
-- Stage-level container: `TARGET_RANKING/metrics_rollup.json` + `.parquet`
-- View isolation: CS drift only compares to CS baselines, SS only to SS (baseline key: `stage:view:target[:symbol]`)
-- Config-driven: All behavior controlled by `safety.metrics` section (backward compatible with `safety.telemetry`)
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-14-telemetry-system.md) | [Rename Details](DOCS/02_reference/changelog/2025-12-15-metrics-rename.md)
-
-#### Feature Selection and Config Fixes (2025-12-14)
-Critical bug fixes for feature selection pipeline, experiment config loading, and target exclusion. Resolves cascading failures preventing feature selection from running.
-- Fixed UnboundLocalError for `np` (11 model families now working)
-- Fixed missing import and unpacking errors in shared harness
-- Added honest routing diagnostics with per-symbol skip reasons
-- Fixed experiment config loading (`max_targets_to_evaluate`, `top_n_targets`)
-- Added target pattern exclusion (`exclude_target_patterns`)
-- Fixed `hour_of_day` unknown lookback violation
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-14-feature-selection-and-config-fixes.md)
-
-#### Look-Ahead Bias Fixes (2025-12-14) – **NEW**
-Comprehensive fixes for data leakage in feature engineering and model training. All fixes behind feature flags (default: OFF) for safe gradual rollout.
-- Fix #1: Rolling windows exclude current bar
-- Fix #2: CV-based normalization support
-- Fix #3: pct_change() verification
-- Fix #4: Feature renaming (beta_20d → volatility_20d_returns)
-- Additional: Enhanced symbol-specific logging, fixed feature selection bug
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-14-lookahead-bias-fixes.md) | [Fix Plan](DOCS/03_technical/fixes/LOOKAHEAD_BIAS_FIX_PLAN.md)
-
-#### SST Enforcement Design Implementation (2025-12-13) – **NEW**
-Provably split-brain free system with EnforcedFeatureSet contract, type boundary wiring, and boundary assertions across all training paths.
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-13-sst-enforcement-design.md)
-
-#### Single Source of Truth for Lookback Computation (2025-12-13)
-Eliminated split-brain in lookback computation with canonical map, POST_PRUNE invariant check, and diagnostic logging.
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-13-single-source-of-truth.md)
-
-#### Leakage Controls Structural Fixes (2025-12-13) – **NEW**
-Unified leakage budget calculator, calendar feature classification, separate purge/embargo validation, fingerprint tracking system.
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-13.md) | [Leakage Validation Fix](DOCS/03_technical/fixes/2025-12-13-leakage-validation-fix.md)
-
-#### Feature Selection Unification & Critical Fixes (2025-12-13) – **NEW**
-Shared ranking harness, comprehensive hardening, critical fixes for CatBoost dtype, RFE, linear models, stability tracking.
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-13-feature-selection-unification.md)
-
-#### Generalized Duration Parsing System (2025-12-13) – **NEW**
-New duration parsing system with interval-aware strictness and fail-closed policy.
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-13-duration-system.md)
-
-#### Documentation Organization (2025-12-13) – **NEW**
-Index files, config migration docs, audit documentation organization, cross-linking fixes.
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-13.md)
-
-#### Config Path Consolidation & Config Trace System (2025-12-13) – **NEW**
-Major CONFIG directory restructure, comprehensive config trace logging, max samples fix.
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-13.md)
-
-#### License & Commercial Use Banner (2025-12-12) – **NEW**
-Professional startup banner with licensing information and 30-day evaluation period notice.
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-12.md)
-
-#### GPU Acceleration (2025-12-12) – **NEW**
-GPU support for XGBoost, CatBoost, and LightGBM with config-driven settings.
-→ [GPU Setup Guide](DOCS/01_tutorials/setup/GPU_SETUP.md) | [Detailed Changelog](DOCS/02_reference/changelog/2025-12-12.md)
-
-#### Experiment Configuration System (2025-12-12) – **NEW**
-Reusable experiment configurations with auto target discovery.
-→ [Experiment Config Guide](DOCS/01_tutorials/configuration/EXPERIMENT_CONFIG_GUIDE.md)
-
-#### Active Sanitization (Ghost Buster) (2025-12-12) – **NEW**
-Proactive feature quarantine system that automatically removes problematic features before training.
-→ [Active Sanitization Guide](DOCS/03_technical/implementation/ACTIVE_SANITIZATION.md)
-
-#### Critical Bug Fixes (2025-12-12) – **FIXED**
-Mutual Information SST compliance, XGBoost 3.1+ GPU compatibility, CatBoost GPU verification, process deadlock fix.
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-12.md)
+#### 2025-12-12 Updates
+- **GPU Acceleration**: GPU support for XGBoost, CatBoost, and LightGBM.
+- **Experiment Configuration**: Reusable experiment configs with auto target discovery.
+- **Active Sanitization**: Proactive feature quarantine system.
+- **License Banner**: Professional startup banner with licensing information.
+- **Critical Bug Fixes**: Mutual Information SST compliance, XGBoost 3.1+ GPU compatibility.
+→ [Detailed Changelogs](DOCS/02_reference/changelog/README.md#december)
 
 ---
 
