@@ -1049,17 +1049,18 @@ def train_and_evaluate_models(
             # CRITICAL: Convert to EnforcedFeatureSet (SST contract)
             enforced_post_prune = cap_result.to_enforced_set(stage="POST_PRUNE", cap_minutes=effective_cap)
             
-            # PHASE 1: Persist FeatureSet artifact for debugging
+            # PHASE 2: Create and store FeatureSet artifact for reuse (eliminates recomputation)
+            post_prune_artifact = None
             if output_dir is not None:
                 try:
                     from TRAINING.utils.feature_set_artifact import create_artifact_from_enforced
-                    artifact = create_artifact_from_enforced(
+                    post_prune_artifact = create_artifact_from_enforced(
                         enforced_post_prune,
                         stage="POST_PRUNE",
                         removal_reasons={f: "pruned" for f in set(feature_names) - set(enforced_post_prune.features)}
                     )
                     artifact_dir = output_dir / "REPRODUCIBILITY" / "FEATURESET_ARTIFACTS"
-                    artifact.save(artifact_dir)
+                    post_prune_artifact.save(artifact_dir)
                 except Exception as e:
                     logger.debug(f"  ⚠️  Failed to persist POST_PRUNE artifact: {e}")
             
@@ -1336,10 +1337,14 @@ def train_and_evaluate_models(
                     except Exception as e:
                         budget_cap_provenance_budget = f"config lookup failed: {e}"
                     
-                    # CRITICAL FIX: Use the canonical map from POST_PRUNE to ensure consistency
-                    # POST_PRUNE already computed the canonical map - reuse it instead of recomputing
+                    # PHASE 2: Reuse POST_PRUNE artifact to eliminate recomputation
                     canonical_map_from_post_prune = None
-                    if 'lookback_result' in locals() and hasattr(lookback_result, 'canonical_lookback_map'):
+                    if 'post_prune_artifact' in locals() and post_prune_artifact is not None:
+                        # Use canonical map from artifact (single source of truth)
+                        canonical_map_from_post_prune = post_prune_artifact.canonical_lookback_map
+                        logger.debug(f"  ✅ POST_PRUNE_policy_check: Reusing canonical map from POST_PRUNE artifact (n_features={len(post_prune_artifact.features)})")
+                    elif 'lookback_result' in locals() and hasattr(lookback_result, 'canonical_lookback_map'):
+                        # Fallback: use from lookback_result (backward compatibility)
                         canonical_map_from_post_prune = lookback_result.canonical_lookback_map
                     elif 'lookback_result' in locals() and hasattr(lookback_result, 'lookback_map'):
                         # Backward compatibility
@@ -1349,7 +1354,7 @@ def train_and_evaluate_models(
                     # to ensure we get the same result as POST_PRUNE
                     if canonical_map_from_post_prune is None:
                         logger.warning(
-                            f"⚠️ POST_PRUNE_policy_check: No canonical map available from POST_PRUNE. "
+                            f"⚠️ POST_PRUNE_policy_check: No canonical map available from POST_PRUNE artifact. "
                             f"Recomputing using compute_feature_lookback_max to ensure consistency."
                         )
                         # Recompute using the same function as POST_PRUNE
@@ -1366,11 +1371,12 @@ def train_and_evaluate_models(
                         elif hasattr(lookback_result_for_policy, 'lookback_map'):
                             canonical_map_from_post_prune = lookback_result_for_policy.lookback_map
                     
-                    # Log config trace for budget compute
-                    logger.info(f"📋 CONFIG TRACE (POST_PRUNE_policy_check budget): {budget_cap_provenance_budget}")
-                    logger.info(f"   → max_lookback_cap_minutes passed to compute_budget: {lookback_budget_cap_for_budget}")
-                    logger.info(f"   → Computing budget from {len(feature_names)} features, expected fingerprint: {post_prune_fp if 'post_prune_fp' in locals() else 'None'}")
-                    logger.info(f"   → Using canonical map from POST_PRUNE: {'YES' if canonical_map_from_post_prune is not None else 'NO (will recompute)'}")
+                    # Log config trace for budget compute (only if not using artifact)
+                    if 'post_prune_artifact' not in locals() or post_prune_artifact is None:
+                        logger.info(f"📋 CONFIG TRACE (POST_PRUNE_policy_check budget): {budget_cap_provenance_budget}")
+                        logger.info(f"   → max_lookback_cap_minutes passed to compute_budget: {lookback_budget_cap_for_budget}")
+                        logger.info(f"   → Computing budget from {len(feature_names)} features, expected fingerprint: {post_prune_fp if 'post_prune_fp' in locals() else 'None'}")
+                        logger.info(f"   → Using canonical map from POST_PRUNE: {'YES' if canonical_map_from_post_prune is not None else 'NO (will recompute)'}")
                     
                     budget, budget_fp, budget_order_fp = compute_budget(
                         feature_names,
@@ -1380,7 +1386,7 @@ def train_and_evaluate_models(
                         max_lookback_cap_minutes=lookback_budget_cap_for_budget,  # Pass cap to compute_budget
                         expected_fingerprint=post_prune_fp if 'post_prune_fp' in locals() else None,
                         stage="POST_PRUNE_policy_check",
-                        canonical_lookback_map=canonical_map_from_post_prune,  # CRITICAL: Use same map as POST_PRUNE
+                        canonical_lookback_map=canonical_map_from_post_prune,  # CRITICAL: Use same map as POST_PRUNE (from artifact if available)
                         feature_time_meta_map=resolved_config.feature_time_meta_map if resolved_config and hasattr(resolved_config, 'feature_time_meta_map') else None,
                         base_interval_minutes=resolved_config.base_interval_minutes if resolved_config else None
                     )

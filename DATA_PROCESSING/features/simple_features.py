@@ -231,8 +231,16 @@ class SimpleFeatureComputer:
             ]
         }
     
-    def compute_features(self, scan: pl.LazyFrame, config_features: List[str]) -> pl.LazyFrame:
-        """Compute features using simple, direct expressions"""
+    def compute_features(self, scan: pl.LazyFrame, config_features: List[str], lookback_budget_cap_minutes: Optional[float] = None) -> pl.LazyFrame:
+        """
+        Compute features using simple, direct expressions
+        
+        Args:
+            scan: Input LazyFrame
+            config_features: List of feature categories to compute
+            lookback_budget_cap_minutes: Optional lookback budget cap in minutes.
+                If provided, long-window features (20d/60d) will be skipped if cap < window_size.
+        """
         logger.info(f"Computing features for categories: {config_features}")
         
         # Start with basic features
@@ -255,7 +263,7 @@ class SimpleFeatureComputer:
             features = self._compute_time_features(features)
         
         if "cross_sectional" in config_features:
-            features = self._compute_cross_sectional_features(features)
+            features = self._compute_cross_sectional_features(features, lookback_budget_cap_minutes=lookback_budget_cap_minutes)
         
         if "non_linear" in config_features:
             features = self._compute_interaction_features(features)
@@ -650,40 +658,87 @@ class SimpleFeatureComputer:
             self._holiday_effect(pl.col("ts"), "holiday").alias("holiday_effect").cast(pl.Float32),
         ])
     
-    def _compute_cross_sectional_features(self, features: pl.LazyFrame) -> pl.LazyFrame:
-        """Compute cross-sectional features"""
+    def _compute_cross_sectional_features(self, features: pl.LazyFrame, lookback_budget_cap_minutes: Optional[float] = None) -> pl.LazyFrame:
+        """
+        Compute cross-sectional features
+        
+        Args:
+            features: Input LazyFrame
+            lookback_budget_cap_minutes: Optional lookback budget cap in minutes.
+                If provided, long-window features (20d/60d) will be skipped if cap < window_size.
+                If None, will try to load from config.
+                This prevents generating features that will always be dropped by the gatekeeper.
+        """
         # Get base column with optional shift to exclude current bar
         close_col = self._get_base_column(pl.col("close"))
         
         # For pct_change rolling operations, use shifted close_col
         returns_expr = close_col.pct_change() if not self._fix_config.get('verify_pct_change', False) else (close_col / close_col.shift(1) - 1)
         
-        return features.with_columns([
-            # Relative performance (simplified - would need market data for full implementation)
+        # PHASE 2: Feature generation alignment - skip long-window families when cap < window_size
+        # Load lookback cap from config if not provided
+        if lookback_budget_cap_minutes is None:
+            try:
+                from CONFIG.config_loader import get_cfg
+                budget_cap_raw = get_cfg("safety.leakage_detection.lookback_budget_minutes", default="auto", config_name="safety_config")
+                if budget_cap_raw != "auto" and isinstance(budget_cap_raw, (int, float)):
+                    lookback_budget_cap_minutes = float(budget_cap_raw)
+            except Exception:
+                pass  # Keep as None if config not available
+        
+        # Convert days to minutes for comparison (assuming 1440 minutes per day)
+        # 20 days = 20 * 1440 = 28800 minutes
+        # 60 days = 60 * 1440 = 86400 minutes
+        skip_20d_features = False
+        skip_60d_features = False
+        
+        if lookback_budget_cap_minutes is not None:
+            # Skip 20d features if cap < 20 days
+            if lookback_budget_cap_minutes < 20 * 1440:
+                skip_20d_features = True
+                logger.debug(f"  ⚡ Skipping 20d features (lookback_budget_cap={lookback_budget_cap_minutes:.1f}m < 20d={20*1440}m)")
+            # Skip 60d features if cap < 60 days
+            if lookback_budget_cap_minutes < 60 * 1440:
+                skip_60d_features = True
+                logger.debug(f"  ⚡ Skipping 60d features (lookback_budget_cap={lookback_budget_cap_minutes:.1f}m < 60d={60*1440}m)")
+        
+        # Build feature columns conditionally
+        feature_columns = [
+            # Relative performance (always include 5d)
             close_col.pct_change(5).alias("relative_performance_5d").cast(pl.Float32),
-            close_col.pct_change(20).alias("relative_performance_20d").cast(pl.Float32),
-            close_col.pct_change(60).alias("relative_performance_60d").cast(pl.Float32),
-            
-            # Sector momentum (simplified - would need sector data for full implementation)
-            close_col.pct_change(5).alias("sector_momentum_5d").cast(pl.Float32),
-            close_col.pct_change(20).alias("sector_momentum_20d").cast(pl.Float32),
-            
-            # Market cap decile (simplified - would need market cap data for full implementation)
-            pl.lit(5).alias("market_cap_decile").cast(pl.Int16),  # Placeholder
-            
-            # Volatility of returns (20-day rolling std of returns)
-            # FIX #4: Renamed from "beta_20d" - these are NOT beta/correlation, just volatility
-            # True beta would require: cov(stock_returns, market_returns) / var(market_returns)
-            # True correlation would require: corr(stock_returns, market_returns)
-            returns_expr.rolling_std(20).alias("volatility_20d_returns").cast(pl.Float32),
-            returns_expr.rolling_std(60).alias("volatility_60d_returns").cast(pl.Float32),
-            
-            # Legacy aliases for backward compatibility (deprecated - use volatility_*_returns instead)
-            returns_expr.rolling_std(20).alias("beta_20d").cast(pl.Float32),
-            returns_expr.rolling_std(60).alias("beta_60d").cast(pl.Float32),
-            returns_expr.rolling_std(20).alias("market_correlation_20d").cast(pl.Float32),
-            returns_expr.rolling_std(60).alias("market_correlation_60d").cast(pl.Float32),
-        ])
+        ]
+        
+        # Add 20d/60d features conditionally
+        if not skip_20d_features:
+            feature_columns.append(close_col.pct_change(20).alias("relative_performance_20d").cast(pl.Float32))
+        if not skip_60d_features:
+            feature_columns.append(close_col.pct_change(60).alias("relative_performance_60d").cast(pl.Float32))
+        
+        # Sector momentum
+        feature_columns.append(close_col.pct_change(5).alias("sector_momentum_5d").cast(pl.Float32))
+        if not skip_20d_features:
+            feature_columns.append(close_col.pct_change(20).alias("sector_momentum_20d").cast(pl.Float32))
+        
+        # Market cap decile (simplified - would need market cap data for full implementation)
+        feature_columns.append(pl.lit(5).alias("market_cap_decile").cast(pl.Int16))  # Placeholder
+        
+        # Volatility of returns (20-day rolling std of returns)
+        # FIX #4: Renamed from "beta_20d" - these are NOT beta/correlation, just volatility
+        # True beta would require: cov(stock_returns, market_returns) / var(market_returns)
+        # True correlation would require: corr(stock_returns, market_returns)
+        if not skip_20d_features:
+            feature_columns.append(returns_expr.rolling_std(20).alias("volatility_20d_returns").cast(pl.Float32))
+            # Legacy aliases
+            feature_columns.append(returns_expr.rolling_std(20).alias("beta_20d").cast(pl.Float32))
+            feature_columns.append(returns_expr.rolling_std(20).alias("market_correlation_20d").cast(pl.Float32))
+        
+        if not skip_60d_features:
+            feature_columns.append(returns_expr.rolling_std(60).alias("volatility_60d_returns").cast(pl.Float32))
+            # Legacy aliases
+            feature_columns.append(returns_expr.rolling_std(60).alias("beta_60d").cast(pl.Float32))
+            feature_columns.append(returns_expr.rolling_std(60).alias("market_correlation_60d").cast(pl.Float32))
+        
+        return features.with_columns(feature_columns)
     
     def _compute_interaction_features(self, features: pl.LazyFrame) -> pl.LazyFrame:
         """Compute interaction features"""

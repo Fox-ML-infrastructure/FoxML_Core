@@ -16,10 +16,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 """
-Minimal FeatureSet Artifact (Phase 1)
+FeatureSet Artifact (Phase 1 + Phase 2)
 
 Single canonical artifact per stage for debugging and reproducibility.
-This is a minimal implementation - full artifact passing will be Phase 2.
+Phase 1: Persist to disk for debugging
+Phase 2: Pass through pipeline to eliminate recomputation
 """
 
 import json
@@ -35,7 +36,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class FeatureSetArtifact:
     """
-    Minimal FeatureSet artifact for persistence and debugging.
+    FeatureSet artifact for persistence, debugging, and pipeline integration.
     
     Phase 1: Persist to disk for debugging
     Phase 2: Pass through pipeline to eliminate recomputation
@@ -49,10 +50,22 @@ class FeatureSetArtifact:
     stage: str  # Stage name (e.g., "POST_GATEKEEPER", "POST_PRUNE")
     removal_reasons: Dict[str, str]  # Feature → reason (quarantined, pruned, etc.)
     timestamp: str  # ISO timestamp when artifact was created
+    # Phase 2: Optional budget and config (for full integration)
+    budget: Optional[Any] = None  # LeakageBudget object (optional, for full integration)
+    resolved_config: Optional[Any] = None  # ResolvedConfig object (optional, for full integration)
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
-        return asdict(self)
+        """
+        Convert to dictionary for JSON serialization.
+        
+        Note: budget and resolved_config are not serialized (they're complex objects).
+        They should be recomputed from features if needed after loading.
+        """
+        data = asdict(self)
+        # Remove non-serializable fields
+        data.pop('budget', None)
+        data.pop('resolved_config', None)
+        return data
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'FeatureSetArtifact':
