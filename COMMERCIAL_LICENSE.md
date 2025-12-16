@@ -175,9 +175,11 @@ For clarity, Licensee retains ownership of modifications made for internal use o
 Unless explicitly permitted in writing by the Licensor, the Licensee may NOT:
 
 - Distribute or sell the Software or derivatives as a standalone product
-- Provide the Software, or any Competing Infrastructure Service built using the Software, as a hosted or managed service to third parties (including SaaS, PaaS, or multi-tenant platforms)
+- Provide the Software, or any Competing Infrastructure Service built using the Software, as a hosted or managed service to third parties (including SaaS, PaaS, or multi-tenant platforms) **without explicit written permission from Licensor**
 - Build, market, or operate a Competing Infrastructure Service that uses the Software or any derivative of the Software
 - Use the Software to offer a product or service whose primary purpose is to allow third parties to run their own experiments, models, or workflows on infrastructure powered by the Software
+- **Monetize, resell, or commercialize any derivative work, wrapper, API layer, or modification of the Software without Licensor's prior written consent**
+- **Package, repackage, or redistribute the Software (or any portion thereof) as part of any commercial product, service, or offering without a valid commercial license and explicit written permission**
 
 For clarity, Licensee may use the Software to build and operate its own internal trading, research, or analytics systems and to provide outputs (e.g., analytics, reports, trading decisions, predictions, recommendations) to its own clients, provided such clients do not receive direct or indirect access to the Software itself, including but not limited to: (i) access to the Software's APIs, (ii) ability to execute code or workflows within the Software, (iii) access to the Software's user interface, (iv) access through wrapper APIs, proxy services, or any other indirect means that allows third parties to use the Software's functionality, or (v) any other means of interacting with or controlling the Software. Licensee may provide data inputs to the Software and receive outputs from the Software for delivery to clients, but clients may not themselves interact with the Software, whether directly or indirectly through any intermediary layer, wrapper, or service.
 
@@ -244,8 +246,11 @@ Upon termination of this Commercial License:
 - within thirty (30) days of termination, Licensee must provide Licensor with written certification signed by an authorized officer of Licensee confirming that all copies have been destroyed or disabled,
 - any continued Commercial Use without a valid license will constitute unlicensed use and violation of Licensor's copyright.
 
-**Copyright Infringement.**
-Commercial use of the Software without a valid commercial license constitutes copyright infringement under applicable law. Licensor reserves all rights and remedies available under copyright law, including but not limited to: injunctive relief, monetary damages, statutory damages, and recovery of attorneys' fees and costs. Licensee acknowledges that unauthorized commercial use may result in liability for copyright infringement in addition to breach of contract claims.
+**Copyright Infringement and Enforcement.**
+Commercial use of the Software without a valid commercial license constitutes copyright infringement under applicable law. Licensor reserves all rights and remedies available under copyright law, including but not limited to: injunctive relief, monetary damages, statutory damages (up to $150,000 per work infringed under U.S. Copyright Act), and recovery of attorneys' fees and costs. Licensee acknowledges that unauthorized commercial use may result in liability for copyright infringement in addition to breach of contract claims.
+
+**Enforcement Actions.**
+Licensor actively monitors for unauthorized use, including but not limited to: public code audits, GitHub fork analysis, compliance audits, and third-party reports. Violations will be pursued through appropriate legal channels. For suspected violations, contact: jenn.lewis5789@gmail.com | Subject: `License Compliance Inquiry`. Self-reporting within 30 days of discovery may result in reduced penalties (typically limited to retroactive licensing fees plus a compliance fee of up to 25% of retroactive fees, rather than full enforcement actions).
 
 Termination of this Commercial License does not terminate any rights Licensee may have for free use as defined in `LICENSE`.
 
