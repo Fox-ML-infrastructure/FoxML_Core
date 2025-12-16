@@ -113,6 +113,11 @@ You may NOT:
   analytics, signals, or trading decisions) to build, train, develop, or 
   operate a Competing Infrastructure Service or any substantially similar 
   platform, product, or service.
+- Reverse engineer, decompile, disassemble, or otherwise attempt to derive 
+  or access the source code, underlying ideas, algorithms, file formats, or 
+  non-public APIs of the Software, or any trade secrets embodied therein, 
+  except to the extent expressly permitted by applicable law notwithstanding 
+  a contractual restriction
 - Remove or alter copyright notices
 
 ---
