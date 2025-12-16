@@ -106,6 +106,10 @@ You may NOT:
   Service. A Competing Infrastructure Service is a product or service whose 
   primary purpose is to allow third parties to design, run, or manage their 
   own ML workflows, experiments, or infrastructure.
+- Use outputs from the Software (including models, algorithms, predictions, 
+  analytics, signals, or trading decisions) to build, train, develop, or 
+  operate a Competing Infrastructure Service or any substantially similar 
+  platform, product, or service.
 - Remove or alter copyright notices
 
 ---
