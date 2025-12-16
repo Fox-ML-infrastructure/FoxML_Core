@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-16 (Feature Selection Structure)** — Organized feature selection outputs to match target ranking layout. Eliminated scattered files and nested REPRODUCIBILITY directories.
+  → [View](2025-12-16-feature-selection-structure.md)
+
 - **2025-12-15 (Consolidated)** — Metrics system rename, seed tracking fixes, feature selection improvements, CatBoost GPU fixes, privacy documentation updates.  
   → [View](2025-12-15-consolidated.md)
   

@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-16 Updates
+- **Feature Selection Structure**: Organized feature selection outputs to match target ranking layout (feature_importances/, metadata/, artifacts/). Eliminated scattered files and nested REPRODUCIBILITY directories.
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-16-feature-selection-structure.md)
+
 #### 2025-12-15 Updates
 - **Metrics System Rename**: Renamed telemetry to metrics throughout codebase for better branding. All metrics stored locally - no user data collection, no external transmission.
 - **Seed Tracking Fix**: Fixed missing seed field in metadata.json for full reproducibility tracking.
