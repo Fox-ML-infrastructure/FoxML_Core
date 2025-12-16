@@ -1,8 +1,10 @@
-# Telemetry System Implementation (2025-12-14)
+# Metrics System Implementation (2025-12-14) [Renamed from Telemetry on 2025-12-15]
 
 ## Summary
 
-Implemented a sidecar-based telemetry system with view isolation. Telemetry files live alongside existing artifacts (metadata.json, metrics.json, audit_report.json) in cohort directories, following the exact same directory structure. View isolation ensures CROSS_SECTIONAL drift only compares to CROSS_SECTIONAL baselines, and SYMBOL_SPECIFIC drift only compares to SYMBOL_SPECIFIC baselines.
+Implemented a sidecar-based metrics system with view isolation. Metrics files live alongside existing artifacts (metadata.json, metrics.json, audit_report.json) in cohort directories, following the exact same directory structure. View isolation ensures CROSS_SECTIONAL drift only compares to CROSS_SECTIONAL baselines, and SYMBOL_SPECIFIC drift only compares to SYMBOL_SPECIFIC baselines.
+
+**Note:** This system was renamed from "telemetry" to "metrics" on 2025-12-15. See [Metrics System Rename](2025-12-15-metrics-rename.md) for details. All references in this document use the original "telemetry" terminology for historical accuracy.
 
 ---
 
@@ -18,7 +20,7 @@ Implemented a sidecar-based telemetry system with view isolation. Telemetry file
 - `telemetry_trend.json` - Optional trend analysis (after N runs)
 
 **Files Changed:**
-- `TRAINING/utils/telemetry.py` (new file)
+- `TRAINING/utils/metrics.py` (new file, originally named `telemetry.py`, renamed 2025-12-15)
 - `TRAINING/utils/reproducibility_tracker.py` (integration)
 
 **Structure:**

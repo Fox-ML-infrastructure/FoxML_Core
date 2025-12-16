@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### Metrics System Rename (2025-12-15) – **NEW**
+Renamed telemetry system to metrics throughout the codebase for better branding and clarity. All functionality remains the same with full backward compatibility.
+- Renamed `telemetry.py` → `metrics.py`, `TelemetryWriter` → `MetricsWriter`
+- Updated config section: `safety.telemetry` → `safety.metrics` (backward compatible)
+- Updated file outputs: `telemetry_metrics.json` → `metrics.json`, `telemetry_drift.json` → `metrics_drift.json`, etc.
+- Updated all method names: `write_cohort_telemetry()` → `write_cohort_metrics()`, etc.
+- Backward compatibility: Code checks `safety.metrics.*` first, falls back to `safety.telemetry.*` for existing configs
+- No breaking changes: All existing functionality preserved
+
 #### Seed Tracking in Metadata (2025-12-15) – **NEW**
 Fixed missing seed field in metadata.json for target ranking and feature selection runs. Seed is now properly extracted from config (`pipeline.determinism.base_seed`) and included in all reproducibility metadata.
 - Seed now included in `metadata.json` for both CROSS_SECTIONAL and SYMBOL_SPECIFIC views
@@ -82,14 +91,14 @@ Bulletproof drift tracking with fingerprints, severity tiers, critical metrics, 
 - Zero handling: Explicit `rel_delta_status` for zero baselines (no ambiguous nulls)
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-14-drift-tracking-enhancements.md)
 
-#### Telemetry System (2025-12-14)
-Sidecar-based telemetry system with view isolation. Telemetry files live alongside existing artifacts in cohort directories, enabling per-target, per-symbol, and per-cross-sectional drift tracking.
-- Sidecar files: `telemetry_metrics.json` + `.parquet`, `telemetry_drift.json` + `.parquet`, `telemetry_trend.json` in each cohort folder
-- View-level rollups: `CROSS_SECTIONAL/telemetry_rollup.json` + `.parquet`, `SYMBOL_SPECIFIC/telemetry_rollup.json` + `.parquet`
-- Stage-level container: `TARGET_RANKING/telemetry_rollup.json` + `.parquet`
+#### Metrics System (2025-12-14) [Renamed from Telemetry on 2025-12-15]
+Sidecar-based metrics system with view isolation. Metrics files live alongside existing artifacts in cohort directories, enabling per-target, per-symbol, and per-cross-sectional drift tracking.
+- Sidecar files: `metrics.json` + `.parquet`, `metrics_drift.json` + `.parquet`, `metrics_trend.json` in each cohort folder
+- View-level rollups: `CROSS_SECTIONAL/metrics_rollup.json` + `.parquet`, `SYMBOL_SPECIFIC/metrics_rollup.json` + `.parquet`
+- Stage-level container: `TARGET_RANKING/metrics_rollup.json` + `.parquet`
 - View isolation: CS drift only compares to CS baselines, SS only to SS (baseline key: `stage:view:target[:symbol]`)
-- Config-driven: All behavior controlled by `safety.telemetry` section
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-14-telemetry-system.md)
+- Config-driven: All behavior controlled by `safety.metrics` section (backward compatible with `safety.telemetry`)
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-14-telemetry-system.md) | [Rename Details](DOCS/02_reference/changelog/2025-12-15-metrics-rename.md)
 
 #### Feature Selection and Config Fixes (2025-12-14)
 Critical bug fixes for feature selection pipeline, experiment config loading, and target exclusion. Resolves cascading failures preventing feature selection from running.
