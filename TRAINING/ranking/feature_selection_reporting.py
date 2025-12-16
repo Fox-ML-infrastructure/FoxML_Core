@@ -277,23 +277,32 @@ def save_feature_importances_for_reproducibility(
     """
     import pandas as pd
     
-    # Determine base directory (walk up to run level)
+    # Determine base directory (walk up to FEATURE_SELECTION level)
     # output_dir is: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
     # We want: REPRODUCIBILITY/FEATURE_SELECTION/{view}/{target}/feature_importances/
     base_dir = output_dir
-    while base_dir.name not in ["FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY"]:
+    while base_dir.name not in ["FEATURE_SELECTION", "TARGET_RANKING"]:
         base_dir = base_dir.parent
-        if not base_dir.parent.exists() or base_dir.name == "RESULTS":
+        if not base_dir.parent.exists() or base_dir.name in ["RESULTS", "REPRODUCIBILITY"]:
             break
+    
+    # If we're already at FEATURE_SELECTION level, use it directly
+    # Otherwise, if we hit REPRODUCIBILITY, go back down
+    if base_dir.name == "REPRODUCIBILITY":
+        # We went too far up, go back to FEATURE_SELECTION
+        base_dir = base_dir / "FEATURE_SELECTION"
+    elif base_dir.name != "FEATURE_SELECTION":
+        # We're at run level, construct path
+        base_dir = base_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION"
     
     target_name_clean = target_column.replace('/', '_').replace('\\', '_')
     view_dir = view if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
     
-    # Create directory structure (same as target ranking)
+    # Create directory structure (same as target ranking) - feature_importances/ at target level
     if view_dir == "SYMBOL_SPECIFIC" and symbol:
-        importances_dir = base_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean / f"symbol={symbol}" / "feature_importances"
+        importances_dir = base_dir / view_dir / target_name_clean / f"symbol={symbol}" / "feature_importances"
     else:
-        importances_dir = base_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean / "feature_importances"
+        importances_dir = base_dir / view_dir / target_name_clean / "feature_importances"
     
     importances_dir.mkdir(parents=True, exist_ok=True)
     

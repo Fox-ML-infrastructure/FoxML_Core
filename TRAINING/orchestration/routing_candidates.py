@@ -49,7 +49,11 @@ def load_feature_selection_metadata(
         Metadata dict or None if not found
     """
     target_dir = feature_selections_dir / target_column
-    metadata_file = target_dir / "multi_model_metadata.json"
+    # Updated structure: metadata/ subdirectory
+    metadata_file = target_dir / "metadata" / "multi_model_metadata.json"
+    # Fallback to old location for backward compatibility
+    if not metadata_file.exists():
+        metadata_file = target_dir / "multi_model_metadata.json"
     
     if not metadata_file.exists():
         return None
@@ -77,7 +81,11 @@ def load_cross_sectional_stability(
         Stability dict or None if not found
     """
     target_dir = feature_selections_dir / target_column
-    stability_file = target_dir / "cross_sectional_stability_metadata.json"
+    # Updated structure: metadata/ subdirectory
+    stability_file = target_dir / "metadata" / "cross_sectional_stability_metadata.json"
+    # Fallback to old location for backward compatibility
+    if not stability_file.exists():
+        stability_file = target_dir / "cross_sectional_stability_metadata.json"
     
     if not stability_file.exists():
         return None
@@ -341,6 +349,7 @@ def build_routing_candidates(
         logger.info(f"✅ Saved routing candidates JSON: {json_path}")
     
     return df
+
 
 
 

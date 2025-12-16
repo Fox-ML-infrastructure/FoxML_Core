@@ -436,7 +436,22 @@ def select_features_for_target(
                                 if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
                                     break
                             
-                            repro_base = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION"
+                            # Determine FEATURE_SELECTION base (avoid nested REPRODUCIBILITY)
+                            # output_dir is already at: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
+                            # Walk up to FEATURE_SELECTION level
+                            repro_base = base_output_dir
+                            while repro_base.name not in ["FEATURE_SELECTION", "TARGET_RANKING"]:
+                                repro_base = repro_base.parent
+                                if not repro_base.parent.exists() or repro_base.name in ["RESULTS", "REPRODUCIBILITY"]:
+                                    break
+                            
+                            # If we hit REPRODUCIBILITY, go back down to FEATURE_SELECTION
+                            if repro_base.name == "REPRODUCIBILITY":
+                                repro_base = repro_base / "FEATURE_SELECTION"
+                            elif repro_base.name != "FEATURE_SELECTION":
+                                # We're at run level, construct path
+                                repro_base = repro_base / "REPRODUCIBILITY" / "FEATURE_SELECTION"
+                            
                             if view == "SYMBOL_SPECIFIC" and symbol_to_process:
                                 snapshot_base_dir = repro_base / view / target_name_clean / f"symbol={symbol_to_process}"
                             else:
@@ -1383,11 +1398,13 @@ def select_features_for_target(
         except Exception as e:
             logger.debug(f"Stability analysis failed (non-critical): {e}")
         
-        # Save CS stability metadata separately (similar to model_metadata.json)
+        # Save CS stability metadata separately → metadata/ (matching target ranking structure)
         if cs_stability_results is not None and output_dir:
             try:
                 import json
-                cs_metadata_file = output_dir / "cross_sectional_stability_metadata.json"
+                metadata_dir = output_dir / "metadata"
+                metadata_dir.mkdir(parents=True, exist_ok=True)
+                cs_metadata_file = metadata_dir / "cross_sectional_stability_metadata.json"
                 cs_metadata = {
                     "target_column": target_column,
                     "universe_id": "ALL",

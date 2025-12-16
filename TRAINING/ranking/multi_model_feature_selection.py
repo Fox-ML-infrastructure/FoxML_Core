@@ -3288,20 +3288,46 @@ def save_multi_model_results(
     output_dir: Path,
     metadata: Dict[str, Any]
 ):
-    """Save multi-model feature selection results"""
+    """Save multi-model feature selection results
+    
+    Structure matches target ranking layout:
+    REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
+      feature_importances/
+        {model}_importances.csv
+        feature_importance_multi_model.csv
+        feature_importance_with_boruta_debug.csv
+        model_agreement_matrix.csv
+      metadata/
+        target_confidence.json
+        target_routing.json
+        cross_sectional_stability_metadata.json
+        multi_model_metadata.json
+      artifacts/
+        selected_features.txt
+      DECISION/
+      REPRODUCIBILITY/
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # 1. Selected features list
-    with open(output_dir / "selected_features.txt", "w") as f:
+    # Create organized subdirectories (matching target ranking structure)
+    importances_dir = output_dir / "feature_importances"  # Match target ranking
+    metadata_dir = output_dir / "metadata"
+    artifacts_dir = output_dir / "artifacts"
+    importances_dir.mkdir(parents=True, exist_ok=True)
+    metadata_dir.mkdir(parents=True, exist_ok=True)
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    
+    # 1. Selected features list → artifacts/
+    with open(artifacts_dir / "selected_features.txt", "w") as f:
         for feature in selected_features:
             f.write(f"{feature}\n")
-    logger.info(f"✅ Saved {len(selected_features)} features to selected_features.txt")
+    logger.info(f"✅ Saved {len(selected_features)} features to {artifacts_dir / 'selected_features.txt'}")
     
-    # 2. Detailed summary CSV (includes all columns including Boruta gatekeeper)
-    summary_df.to_csv(output_dir / "feature_importance_multi_model.csv", index=False)
-    logger.info(f"✅ Saved detailed multi-model summary to feature_importance_multi_model.csv")
+    # 2. Detailed summary CSV (includes all columns including Boruta gatekeeper) → feature_importances/
+    summary_df.to_csv(importances_dir / "feature_importance_multi_model.csv", index=False)
+    logger.info(f"✅ Saved detailed multi-model summary to {importances_dir / 'feature_importance_multi_model.csv'}")
     
-    # 2b. Explicit debug view: Boruta gatekeeper effect analysis
+    # 2b. Explicit debug view: Boruta gatekeeper effect analysis → feature_importances/
     # This is a stable, named file for quick inspection of Boruta's impact
     debug_columns = [
         'feature',
@@ -3320,18 +3346,20 @@ def save_multi_model_results(
     if available_debug_columns:
         debug_df = summary_df[available_debug_columns].copy()
         debug_df = debug_df.sort_values('consensus_score', ascending=False)  # Sort by final score
-        debug_df.to_csv(output_dir / "feature_importance_with_boruta_debug.csv", index=False)
-        logger.info(f"✅ Saved Boruta gatekeeper debug view to feature_importance_with_boruta_debug.csv")
+        debug_df.to_csv(importances_dir / "feature_importance_with_boruta_debug.csv", index=False)
+        logger.info(f"✅ Saved Boruta gatekeeper debug view to {importances_dir / 'feature_importance_with_boruta_debug.csv'}")
     
-    # 3. Per-model-family breakdowns
+    # 3. Per-model-family breakdowns → feature_importances/ (matching target ranking naming)
     for family_name in summary_df.columns:
         if family_name.endswith('_score') and family_name not in ['consensus_score']:
             family_df = summary_df[['feature', family_name]].copy()
             family_df = family_df.sort_values(family_name, ascending=False)
-            family_csv = output_dir / f"importance_{family_name.replace('_score', '')}.csv"
+            # Match target ranking naming: {model}_importances.csv
+            model_name = family_name.replace('_score', '')
+            family_csv = importances_dir / f"{model_name}_importances.csv"
             family_df.to_csv(family_csv, index=False)
     
-    # 4. Model agreement matrix
+    # 4. Model agreement matrix → feature_importances/
     model_families = list(set(r.model_family for r in all_results))
     agreement_matrix = pd.DataFrame(
         index=selected_features[:20],  # Top 20 for readability
@@ -3348,17 +3376,17 @@ def save_multi_model_results(
                 else:
                     agreement_matrix.loc[feature, result.model_family] = max(current, score)
     
-    agreement_matrix.to_csv(output_dir / "model_agreement_matrix.csv")
-    logger.info(f"✅ Saved model agreement matrix")
+    agreement_matrix.to_csv(importances_dir / "model_agreement_matrix.csv")
+    logger.info(f"✅ Saved model agreement matrix to {importances_dir / 'model_agreement_matrix.csv'}")
     
-    # 5. Metadata JSON
+    # 5. Metadata JSON → metadata/
     metadata['n_selected_features'] = len(selected_features)
     metadata['n_total_results'] = len(all_results)
     metadata['model_families_used'] = list(set(r.model_family for r in all_results))
 
-    with open(output_dir / "multi_model_metadata.json", "w") as f:
+    with open(metadata_dir / "multi_model_metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
-    logger.info(f"✅ Saved metadata")
+    logger.info(f"✅ Saved metadata to {metadata_dir / 'multi_model_metadata.json'}")
     
     # 6. Family status tracking JSON (for debugging broken models)
     if 'family_statuses' in metadata and metadata['family_statuses']:
@@ -3408,13 +3436,13 @@ def save_multi_model_results(
         for family_summary in status_summary.values():
             family_summary['error_types'] = list(family_summary['error_types'])
         
-        # Save detailed status file
-        with open(output_dir / "model_family_status.json", "w") as f:
+        # Save detailed status file → metadata/
+        with open(metadata_dir / "model_family_status.json", "w") as f:
             json.dump({
                 'summary': status_summary,
                 'detailed': family_statuses
             }, f, indent=2)
-        logger.info(f"✅ Saved model family status tracking to model_family_status.json")
+        logger.info(f"✅ Saved model family status tracking to {metadata_dir / 'model_family_status.json'}")
         
         # Log summary (only hard failures, not soft fallbacks)
         failed_families = [f for f, s in status_summary.items() if s['failed'] > 0]
@@ -3449,7 +3477,7 @@ def save_multi_model_results(
                 top_k=None  # Will use config or default
             )
             
-            with open(output_dir / "target_confidence.json", "w") as f:
+            with open(metadata_dir / "target_confidence.json", "w") as f:
                 json.dump(confidence_metrics, f, indent=2)
             
             # Log confidence summary
@@ -3462,7 +3490,7 @@ def save_multi_model_results(
             else:
                 logger.info(f"✅ Target {target_name}: confidence={confidence}")
             
-            logger.info(f"✅ Saved target confidence metrics to target_confidence.json")
+            logger.info(f"✅ Saved target confidence metrics to {metadata_dir / 'target_confidence.json'}")
     except Exception as e:
         logger.warning(f"Failed to compute target confidence metrics: {e}")
         logger.debug("Confidence computation requires model_families_config in metadata", exc_info=True)
@@ -3660,14 +3688,14 @@ def main():
                    f"std={row['std_across_models']:6.2f}")
     
     logger.info(f"\n📁 Output files:")
-    logger.info(f"  • {args.output_dir}/selected_features.txt")
-    logger.info(f"  • {args.output_dir}/feature_importance_multi_model.csv")
-    logger.info(f"  • {args.output_dir}/feature_importance_with_boruta_debug.csv")
-    logger.info(f"  • {args.output_dir}/model_agreement_matrix.csv")
-    logger.info(f"  • {args.output_dir}/target_confidence.json")
-    logger.info(f"  • {args.output_dir}/multi_model_metadata.json")
-    logger.info(f"  • {args.output_dir}/model_family_status.json (family status tracking)")
-    logger.info(f"  • {args.output_dir}/importance_<family>.csv (per-family)")
+    logger.info(f"  • {args.output_dir}/artifacts/selected_features.txt")
+    logger.info(f"  • {args.output_dir}/feature_importances/feature_importance_multi_model.csv")
+    logger.info(f"  • {args.output_dir}/feature_importances/feature_importance_with_boruta_debug.csv")
+    logger.info(f"  • {args.output_dir}/feature_importances/model_agreement_matrix.csv")
+    logger.info(f"  • {args.output_dir}/feature_importances/<model>_importances.csv (per-model)")
+    logger.info(f"  • {args.output_dir}/metadata/target_confidence.json")
+    logger.info(f"  • {args.output_dir}/metadata/multi_model_metadata.json")
+    logger.info(f"  • {args.output_dir}/metadata/model_family_status.json (family status tracking)")
     
     return 0
 

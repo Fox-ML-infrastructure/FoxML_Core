@@ -199,13 +199,22 @@ def save_target_routing_metadata(
     """
     Save routing decision metadata alongside confidence metrics.
     
+    Structure matches target ranking layout:
+    REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
+      metadata/
+        target_routing.json
+    
     Args:
-        output_dir: Target-specific output directory
+        output_dir: Target-specific output directory (REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/)
         target_name: Target column name
         conf: Confidence metrics
         routing: Routing decision from classify_target_from_confidence()
     """
-    routing_path = output_dir / "target_routing.json"
+    # Create metadata subdirectory (matching target ranking structure)
+    metadata_dir = output_dir / "metadata"
+    metadata_dir.mkdir(parents=True, exist_ok=True)
+    
+    routing_path = metadata_dir / "target_routing.json"
     routing_data = {
         'target_name': target_name,
         'confidence': conf,
@@ -215,5 +224,5 @@ def save_target_routing_metadata(
     with open(routing_path, "w") as f:
         json.dump(routing_data, f, indent=2)
     
-    logger.debug(f"Saved routing metadata for {target_name}")
+    logger.debug(f"Saved routing metadata for {target_name} to {routing_path}")
 
