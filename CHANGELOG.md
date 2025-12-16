@@ -14,6 +14,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### Seed Tracking in Metadata (2025-12-15) – **NEW**
+Fixed missing seed field in metadata.json for target ranking and feature selection runs. Seed is now properly extracted from config (`pipeline.determinism.base_seed`) and included in all reproducibility metadata.
+- Seed now included in `metadata.json` for both CROSS_SECTIONAL and SYMBOL_SPECIFIC views
+- Seed extracted from config and set on RunContext before logging
+- Ensures full reproducibility tracking across all stages (target ranking, feature selection)
+- Fixes issue where metadata.json showed `seed: null` for cross-sectional runs
+
+#### Feature Selection Output Structure Refactor (2025-12-15) – **NEW**
+Refactored feature selection output to write directly to all-caps folder structure (FEATURE_SELECTION/) instead of legacy `feature_selections/` folder.
+- Removed intermediate `feature_selections/` folder structure
+- Output now writes directly to `REPRODUCIBILITY/FEATURE_SELECTION/` structure
+- Cleaner directory organization aligned with target ranking structure
+- Improved consistency across all reproducibility outputs
+
+#### Model Family Name Normalization (2025-12-15) – **NEW**
+Fixed model family name normalization for capabilities map lookup to ensure consistent family name handling across the system.
+- Normalized model family names for reliable capabilities map lookup
+- Prevents lookup failures due to case/format inconsistencies
+
+#### Experiment Config Documentation (2025-12-15) – **NEW**
+Made experiment configs self-contained with comprehensive documentation and clear structure.
+- Experiment configs now include detailed inline documentation
+- Self-contained configs reduce need to cross-reference multiple files
+- Improved clarity for experiment configuration
+
+#### Symbol-Specific Evaluation Fixes (2025-12-15) – **NEW**
+Fixed indentation and evaluation loop issues for symbol-specific target ranking, enabling proper SYMBOL_SPECIFIC evaluation.
+- Fixed indentation bug in symbol-specific evaluation loop
+- Enabled SYMBOL_SPECIFIC evaluation for classification targets
+- Fixed CatBoost importance extraction for symbol-specific runs
+- Improved CatBoost verbosity and feature importance snapshot generation
+
 #### CatBoost GPU Fixes (2025-12-15) – **NEW**
 Critical fixes for CatBoost GPU mode compatibility and feature importance output.
 - Fixed CatBoost GPU requiring Pool objects instead of numpy arrays (automatic conversion via wrapper)
