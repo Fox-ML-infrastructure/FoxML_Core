@@ -127,7 +127,7 @@ A: Yes. Any use by or for a business requires a commercial license.
 A: Yes. Use for client work is business use, not personal use.
 
 **Q: I'm evaluating it for my company. Is that free?**  
-A: Business evaluation requires a paid Pilot. No exceptions. If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot.
+A: Organizations can use a 30-day $0 evaluation (strict limits). Continued evaluation beyond 30 days requires a paid Pilot ($35k).
 
 **Q: I'm a student doing research. Is that free?**  
 A: Only if at a qualifying tax-exempt institution AND research is non-commercial (see LICENSE for full definition).
@@ -185,9 +185,9 @@ SPDX-FileCopyrightText: Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 
 ### Improvement 4: Paid Pilot Requirement (Already Implemented)
 
-**Current:** Business evaluation requires a paid Pilot. No exceptions.
+**Current:** Organizations can use a 30-day $0 evaluation (strict limits). Continued evaluation beyond 30 days requires a paid Pilot ($35k).
 
-**Status:** This is correctly implemented in `COMMERCIAL_LICENSE.md` Section 2. Business evaluation requires a paid pilot. No free trial for commercial use.
+**Status:** This is correctly implemented in `COMMERCIAL_LICENSE.md` Section 2. Organizations can use a 30-day $0 evaluation, then a paid pilot is required for continued evaluation.
 
 ---
 
@@ -210,7 +210,7 @@ SPDX-FileCopyrightText: Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 → Revenue generation is not required. Organizational use = commercial license.
 
 **"It's for evaluation."**  
-→ Business evaluation requires a paid Pilot. No exceptions. If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot.
+→ Organizations can use a 30-day $0 evaluation (strict limits). Continued evaluation requires a paid Pilot ($35k).
 
 **"It's experimental/non-production."**  
 → Environment label doesn't matter. Organizational use = commercial license.

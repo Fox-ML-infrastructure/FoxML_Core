@@ -3,22 +3,22 @@ SPDX-License-Identifier: LicenseRef-FoxML-Source-Available-1.0
 SPDX-FileCopyrightText: Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 
 This license governs your use of FoxML Core ("Software"). Source code is 
-publicly available for inspection and study, but organizational use requires 
-a paid commercial license.
+publicly available for inspection and study. **Free use is limited to personal 
+use and non-commercial academic research. Organizational use requires a paid 
+commercial license.**
 
 **"Organization" means any legal entity, including but not limited to 
 companies, universities, research labs, non-profits, government entities, 
 and any subdivision or department thereof.**
 
-**No exceptions. All use requires a commercial license.**
+**Free Use (No License Required):**
+- ✅ Personal use (individual, non-commercial, not for any business purpose)
+- ✅ Non-commercial academic research at qualifying tax-exempt institutions (see definition below)
 
-**ALL USE REQUIRES A COMMERCIAL LICENSE.**
-
-This means:
-- ❌ Any use by any person or entity requires a commercial license
-- ❌ Personal use, business use, academic use, or any other use → Commercial license required
-- ❌ Any legal entity (LLC, corporation, partnership, etc.) → Commercial license required
-- ❌ Any individual, employee, contractor, or agent → Commercial license required
+**Commercial License Required:**
+- ❌ Any organizational use (companies, universities, labs, or any legal entity)
+- ❌ Any use by employees, contractors, interns, or affiliates in the scope of their work
+- ❌ Any use supporting revenue, operations, services, or internal tooling
 
 ---
 
@@ -44,20 +44,40 @@ Fees are set forth in Ordering Documents. A paid Pilot is required for all comme
 
 ---
 
+## FREE USE TERMS
+
+**Personal Use:**
+Personal use means use by an individual person for their own non-commercial purposes, 
+not in connection with any business, organization, or revenue-generating activity.
+
+**Non-Commercial Academic Research:**
+Non-commercial academic research means research conducted at a qualifying tax-exempt 
+educational institution (as defined under applicable tax law) that:
+- Is not funded by, sponsored by, or integrated into commercial operations
+- Does not generate revenue or support revenue-generating activities
+- Is conducted solely for academic or research purposes
+- Does not involve internal tooling, operational systems, or client deliverables
+
+**Organizational use, even by academic institutions, requires a commercial license.**
+
+---
+
 ## COMMERCIAL LICENSE REQUIRED
 
-**All use of this Software requires a paid commercial license from Fox ML Infrastructure LLC.**
+**Organizational use of this Software requires a paid commercial license from Fox ML Infrastructure LLC.**
 
-There are no exceptions. This includes:
-- Personal use by individuals
-- Academic research (commercial or non-commercial)
-- Business use, organizational use, or institutional use
-- Evaluation, testing, development, staging, or production use
-- Any use by any person or entity, regardless of purpose or context
+This includes:
+- Any use by or for a company, university, lab, or other organization
+- Any internal evaluation, pilots, PoCs, dev/staging, or production use
+- Any use supporting revenue, operations, services, or internal tooling
+- Any use by employees, contractors, interns, or affiliates in the scope of their work
+- Any evaluation, testing, development, staging, or production use within an organizational context
 
 **To obtain a commercial license, contact:**
 📧 jenn.lewis5789@gmail.com
 Subject: FoxML Core Commercial Licensing
+
+Fees are set forth in Ordering Documents. A paid Pilot is required for all commercial licensing (after 30-day $0 evaluation period).
 
 ---
 
@@ -97,8 +117,9 @@ You may NOT:
 
 ## SOURCE CODE ACCESS
 
-Source code is publicly available for inspection and study. This license 
-does not grant any right to use the Software without a paid commercial license.
+Source code is publicly available for inspection and study. Free use is limited 
+to personal use and non-commercial academic research as defined above. 
+Organizational use requires a paid commercial license.
 
 ---
 

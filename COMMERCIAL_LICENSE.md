@@ -16,13 +16,17 @@ Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 - Any evaluation/pilot done by an organization
 - Any use by employees, contractors, interns, or affiliates in the scope of their work
 
-**All use requires a commercial license. No exceptions.**
+**Organizational use requires a commercial license.**
+
+**Free use is limited to:**
+- Personal use (individual, non-commercial, not for any business purpose)
+- Non-commercial academic research at qualifying tax-exempt institutions (see `LICENSE` for full definition)
 
 **Unauthorized organizational use is copyright infringement.**
 
 📧 **jenn.lewis5789@gmail.com** | Subject: `FoxML Core Commercial Licensing`
 
-**Commercial licensing is per team/desk and starts in the six figures annually. Paid pilot required for organizational evaluation.** Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages. See `LEGAL/SUBSCRIPTIONS.md` for details.
+**Commercial licensing is per team/desk and starts at $120,000/year. Paid pilot required for organizational evaluation (after 30-day $0 evaluation period).** Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages. See `LEGAL/SUBSCRIPTIONS.md` for details.
 
 ---
 
@@ -75,13 +79,21 @@ This License covers the use case(s) and scope specified in the Ordering Document
 
 ## 2. GRANT OF LICENSE
 
-**Evaluation License (Paid Pilot Required).**
+**Evaluation License.**
 
-**Business evaluation requires a paid Pilot. No exceptions.** Organizations may not evaluate the Software without executing a Pilot Order Form and paying applicable Pilot fees.
+**Organizational evaluation options:**
 
-**If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot. If not, no problem.**
+1. **30-Day Evaluation ($0):** Organizations may evaluate the Software for 30 days without a paid license, subject to strict limitations:
+   - Non-production use only (no client deliverables, no revenue-generating activities)
+   - No redistribution or sharing with third parties
+   - Evaluation purposes only
+   - Must request in writing (subject to approval)
 
-**Exception:** Tax-exempt academic research institutions may request a $0 evaluation pilot by contacting Licensor in writing. Such requests are subject to Licensor's approval and must demonstrate qualifying non-commercial academic research use as defined in `LICENSE`. This exception is limited to non-commercial academic research only.
+2. **Paid Pilot:** Organizations may execute a Pilot Order Form and pay applicable Pilot fees ($35,000) for extended evaluation (4–6 weeks). Pilot fees are credited 100% toward the first-year Annual License if converted within 60 days.
+
+3. **Academic Exception:** Tax-exempt academic research institutions may request a $0 evaluation pilot by contacting Licensor in writing. Such requests are subject to Licensor's approval and must demonstrate qualifying non-commercial academic research use as defined in `LICENSE`. This exception is limited to non-commercial academic research only.
+
+**If you're a legal entity, you need a license for continued use beyond the 30-day evaluation period.**
 
 **Pilot License:**
 Upon execution of a Pilot Order Form and payment of Pilot fees, Licensor grants Licensee a temporary, non-exclusive license to use the Software for Internal Commercial Use solely for the purpose of evaluation and testing for the period specified in the Pilot Order Form (typically 4–6 weeks).

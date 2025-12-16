@@ -311,7 +311,7 @@ git pull origin main  # Pull any client-specific updates
 - Same-business-day response
 - Scheduled support calls
 - Priority engineering resources
-- Pricing: $60,000–$120,000/month (see `LEGAL/SUBSCRIPTIONS.md` for complete pricing tiers)
+- Pricing: $60,000–$120,000/year (see `LEGAL/SUBSCRIPTIONS.md` for complete pricing tiers)
 
 **Premium Support (Add-on):**
 - White-glove service

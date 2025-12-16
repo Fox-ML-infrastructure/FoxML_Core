@@ -24,18 +24,22 @@ Commercial license pricing is aligned with enterprise ML infrastructure standard
 **Any organizational use requires a commercial license**, regardless of whether the use directly generates revenue, is experimental, is a proof of concept, or is claimed to be "non-commercial" or "research-only." See `COMMERCIAL_LICENSE.md` Section 1 for the complete definition of organizational use.
 
 **PAID PILOT REQUIRED FOR BUSINESS EVALUATION:**
-Business evaluation requires a paid Pilot. No exceptions. If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot. See `COMMERCIAL_LICENSE.md` Section 2 for complete evaluation license terms.
+Organizations can use a 30-day $0 evaluation (strict limits: non-production, no client deliverables). Continued evaluation beyond 30 days requires a paid Pilot ($35k, credited 100% to Year 1 if converted within 60 days). See `COMMERCIAL_LICENSE.md` Section 2 for complete evaluation license terms.
 
-**All use requires a commercial license. No exceptions.**
+**Organizational use requires a commercial license.**
 
-This includes:
-- Personal use by individuals
-- Academic research (commercial or non-commercial)
-- Business use, organizational use, or institutional use
-- Evaluation, testing, development, staging, or production use
-- Any use by any person or entity, regardless of purpose or context
+**Free use is limited to:**
+- Personal use (individual, non-commercial, not for any business purpose)
+- Non-commercial academic research at qualifying tax-exempt institutions (see `LICENSE` for full definition)
 
-**IMPORTANT:** Unauthorized use of the Software without a valid commercial license is copyright infringement and may result in legal claims. If you have used the Software without a license, you must immediately obtain a commercial license.
+**Organizational use includes:**
+- Any use by or for a company, university, lab, or other organization
+- Any internal evaluation, pilots, PoCs, dev/staging, or production use
+- Any use supporting revenue, operations, services, or internal tooling
+- Any evaluation/pilot done by an organization
+- Any use by employees, contractors, interns, or affiliates in the scope of their work
+
+**IMPORTANT:** Unauthorized organizational use of the Software without a valid commercial license is copyright infringement and may result in legal claims. If you have used the Software without a license, you must immediately obtain a commercial license.
 
 **See `LICENSE` for complete license terms and `DOCS/02_reference/licensing/DUAL_LICENSE.md` for licensing overview.**
 
@@ -45,8 +49,9 @@ This includes:
 
 | Scenario | License Required | Notes |
 |----------|------------------|-------|
-| **Personal / Individual** | Commercial | All use by individuals requires a commercial license |
-| **Academic Institution** | Commercial | All use by academic institutions requires a commercial license |
+| **Personal / Individual (Non-Commercial)** | Free | Personal use (individual, non-commercial, not for any business purpose) is free |
+| **Non-Commercial Academic Research** | Free | Qualifying non-commercial academic research at tax-exempt institutions (see `LICENSE`) |
+| **Academic Institution (Organizational Use)** | Commercial | Institutional use, sponsored/industry work, or internal tooling requires a commercial license |
 | **Sole Proprietor / Freelancer** | Commercial | Any use in connection with business activity, client work, or revenue generation (even if claimed to be "personal") |
 | **Startup / Small Business** | Commercial | Any business entity, regardless of size, revenue, profitability, or stage (including pre-revenue startups, companies operating at a loss, or companies in development phase) |
 | **Subsidiary / Affiliate** | Commercial | Each legal entity (including subsidiaries, affiliates, and parent companies) must have its own license. A parent company's license does not cover subsidiaries, and vice versa |
@@ -62,7 +67,13 @@ This includes:
 
 ## Pricing
 
-**Commercial licensing is per team/desk and starts in the six figures annually. Paid pilot required for organizational evaluation. Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages.**
+**Commercial licensing is per team/desk and starts at $120,000/year. Paid pilot required for organizational evaluation (after 30-day $0 evaluation period). Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages.**
+
+**Licensed Unit Definition:**
+- **One "Desk/Team"** = up to **N** named users (authorized individuals)
+- **Environments:** dev/staging/prod allowed under the same desk license
+- **Affiliates/contractors:** Allowed if assigned to that desk, counted as users
+- **Scope:** Single legal entity or specific business unit (explicitly defined in Order Form)
 
 For detailed pricing information, please contact the maintainer:
 

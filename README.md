@@ -2,23 +2,23 @@
 
 ## License
 
-**FoxML Core is source-available. All use requires a paid commercial license.**
+**FoxML Core is source-available. Free for personal use and non-commercial academic research. Organizational use requires a paid commercial license.**
 
-- 💰 **Commercial license required for:** All use by any person or entity, regardless of purpose
-- ❌ **No exceptions:** Personal use, academic use, business use, or any other use requires a license
+- ✅ **Free use:** Personal use (individual, non-commercial) and non-commercial academic research at qualifying tax-exempt institutions
+- 💰 **Commercial license required for:** Any organizational use, including companies, universities, labs, or any legal entity
 
 **Examples requiring a commercial license:**
 - Any use by or for a company, university, lab, or organization
 - Freelancers/contractors using it for client work
 - Sole proprietors using it for business operations
 - Employees using it in the scope of their work
-- Any evaluation, pilot, or PoC done by an organization (after 30-day trial)
+- Any evaluation, pilot, or PoC done by an organization (after 30-day evaluation period)
 
 📧 **jenn.lewis5789@gmail.com** | Subject: `FoxML Core Commercial Licensing`
 
-**Business use requires a paid license.** Commercial licensing is per team/desk and starts in the six figures annually. Paid pilot required for organizational evaluation.
+**Organizational use requires a paid license.** Commercial licensing is per team/desk and starts at $120,000/year. Paid pilot required for organizational evaluation.
 
-**FoxML Core is source-available. All use requires a paid commercial license. This keeps the project sustainable and enables continued development.**
+**FoxML Core is source-available: free for personal use and non-commercial academic research. Organizational use requires a paid commercial license. This keeps the project sustainable and enables continued development.**
 
 **→ [Commercial Licensing](DOCS/02_reference/commercial/COMMERCIAL.md)** | **→ [License Terms](LICENSE)** | **→ [Commercial License](COMMERCIAL_LICENSE.md)**
 
@@ -130,7 +130,7 @@ Commercial licensing gives your organization the right to:
 
 **Pricing:**
 
-**Commercial licenses typically start in the low five figures annually, depending on team size and deployment scope.**
+**Commercial licenses start at $120,000/year per desk/team, depending on team size and deployment scope.**
 
 For detailed pricing information, please contact the maintainer:
 
@@ -156,10 +156,10 @@ All commercial licensing begins with a paid pilot. Pilot options and annual lice
 Subject: `FoxML Core Commercial Licensing`
 
 **For complete licensing information:**
-- [`LEGAL/SUBSCRIPTIONS.md`](LEGAL/SUBSCRIPTIONS.md) - Detailed tiers and pricing
-- [`LEGAL/COMMERCIAL_USE.md`](LEGAL/COMMERCIAL_USE.md) - Commercial license terms
+- [`LEGAL/QUICK_REFERENCE.md`](LEGAL/QUICK_REFERENCE.md) - ⭐ **Quick one-page summary** (start here)
+- [`DOCS/02_reference/commercial/COMMERCIAL.md`](DOCS/02_reference/commercial/COMMERCIAL.md) - Pricing & packages
 - [`COMMERCIAL_LICENSE.md`](COMMERCIAL_LICENSE.md) - Full commercial license text
-- [`DUAL_LICENSE.md`](DOCS/02_reference/licensing/DUAL_LICENSE.md) - Dual licensing overview
+- [`LEGAL/SUBSCRIPTIONS.md`](LEGAL/SUBSCRIPTIONS.md) - Detailed licensing process
 
 ### Quick FAQ
 

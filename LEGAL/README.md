@@ -1,5 +1,7 @@
 # Legal & Licensing Documentation
 
+> **⚠️ START HERE:** [`QUICK_REFERENCE.md`](QUICK_REFERENCE.md) — One-page summary of licensing rules, pricing, and contact info. Everything you need in 30 seconds.
+
 > **Document Hierarchy:** This directory contains guidance documents. In case of any conflict, `COMMERCIAL_LICENSE.md` (located in repository root) is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` controls for free use.
 
 This directory contains all legal, licensing, and contracting documentation for Fox ML Infrastructure.
@@ -30,6 +32,7 @@ This directory is organized into the following structure:
 
 ### 📁 Root Level — Licensing Documents
 
+- **`QUICK_REFERENCE.md`** — ⭐ **START HERE** — One-page summary (rules, pricing, contact)
 - **`LICENSING.md`** — Overview of the source-available licensing model (Free use and Commercial License)
 - **`../COMMERCIAL_LICENSE.md`** — Commercial License terms and conditions (located in repository root)
 - **`CLA.md`** — Commercial License Agreement (CLA) for organizational use

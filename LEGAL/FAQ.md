@@ -24,7 +24,7 @@
 
 ### Q: Can I use the Software for internal evaluation or proof of concept?
 
-**A:** Business evaluation requires a paid Pilot. No exceptions. If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot ($35k–$75k, credited 100% to Year 1 if converted within 60 days). Academic labs may request a $0 evaluation pilot in writing (subject to approval, non-commercial research only).
+**A:** Organizations can use a 30-day $0 evaluation (strict limits: non-production, no client deliverables). Continued evaluation beyond 30 days requires a paid Pilot ($35k, credited 100% to Year 1 if converted within 60 days). Academic labs may request a $0 evaluation pilot in writing (subject to approval, non-commercial research only).
 
 ---
 
@@ -32,7 +32,7 @@
 
 **A:** No. If they are using the Software in the scope of their work for a business or organization, that constitutes organizational use and requires a commercial license.
 
-All use requires a commercial license. No exceptions.
+Organizational use requires a commercial license. Free use is limited to personal use and non-commercial academic research.
 
 **Key point:** Use by employees, contractors, interns, or Affiliates in the scope of their work for a business entity requires a commercial license, regardless of their employment status.
 
@@ -40,7 +40,7 @@ All use requires a commercial license. No exceptions.
 
 ### Q: Can some teams use it for free while others use a commercial license?
 
-**A:** No. All use requires a commercial license. No exceptions.
+**A:** No. Organizational use requires a commercial license. Free use is limited to personal use and non-commercial academic research.
 
 ---
 
@@ -160,10 +160,10 @@ A: Yes. Any use by or for a business requires a commercial license.
 A: Yes. Use for client work is business use, not personal use.
 
 **Q: I'm evaluating it for my company. Is that free?**  
-A: Business evaluation requires a paid Pilot. No exceptions. If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot.
+A: Organizations can use a 30-day $0 evaluation (strict limits). Continued evaluation beyond 30 days requires a paid Pilot ($35k). If you're a legal entity, you need a license for continued use.
 
 **Q: I'm a student doing research. Is that free?**  
-A: No. All use requires a commercial license, including academic research.
+A: It depends. Non-commercial academic research at qualifying tax-exempt institutions is free. If the research is corporate-funded, sponsored, or integrated into commercial operations, a commercial license is required. See `LICENSE` for the complete definition of free academic use.
 
 **Q: I'm a sole proprietor. Is that personal use?**  
 A: No. Sole proprietors using Software for business operations require a commercial license.
@@ -182,7 +182,7 @@ A: No. Sole proprietors using Software for business operations require a commerc
 → Revenue generation is not required. Organizational use = commercial license.
 
 **"It's for evaluation."**  
-→ Business evaluation requires a paid Pilot. If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot.
+→ Organizations can use a 30-day $0 evaluation (strict limits). Continued evaluation requires a paid Pilot ($35k).
 
 **"It's experimental/non-production."**  
 → Environment label doesn't matter. Organizational use = commercial license.
@@ -196,22 +196,22 @@ A: No. Sole proprietors using Software for business operations require a commerc
 ## Common Pressure Tactics (Handled)
 
 **"This should be open source / community-owned."**  
-→ FoxML Core is source-available. All use requires a paid commercial license. This keeps the project sustainable and enables continued development.
+→ FoxML Core is source-available. Free for personal use and non-commercial academic research. Organizational use requires a paid commercial license. This keeps the project sustainable and enables continued development.
 
 **"We can't pay until you prove traction."**  
-→ If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot. If not, no problem.
+→ Organizations can use a 30-day $0 evaluation (strict limits). Continued evaluation requires a paid Pilot ($35k).
 
 **"We'll 'evaluate' first" (for months).**  
-→ Business evaluation requires a paid Pilot. No exceptions. If you're a legal entity, you need a license.
+→ Organizations can use a 30-day $0 evaluation (strict limits). Continued evaluation requires a paid Pilot ($35k).
 
 **"Your pricing is insane."**  
-→ Commercial licensing is per team/desk and starts in the six figures annually. Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages.
+→ Commercial licensing is per team/desk and starts at $120,000/year. Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages.
 
 **"We'll build it ourselves / fork it."**  
 → You're free to build your own. You can't use FoxML Core in production without a license. Organizational use requires a paid license regardless of whether you fork the code.
 
 **"If you charge, you won't get adoption."**  
-→ FoxML Core is source-available. All use requires a paid commercial license. This keeps the project sustainable and enables continued development.
+→ FoxML Core is source-available. Free for personal use and non-commercial academic research. Organizational use requires a paid commercial license. This keeps the project sustainable and enables continued development.
 
 ---
 

@@ -29,8 +29,8 @@ This includes:
 - Standard commercial protections
 
 **Pricing:**
-- Commercial licensing is per team/desk and starts in the six figures annually
-- Paid pilot required for organizational evaluation
+- Commercial licensing is per team/desk and starts at $120,000/year
+- 30-day $0 evaluation available (strict limits). Paid pilot required for continued evaluation
 - Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages
 - Pricing based on team/desk size, not total company headcount
 

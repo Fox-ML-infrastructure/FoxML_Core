@@ -4,16 +4,18 @@
 
 ---
 
-## Commercial License Required for All Academic Use
+## Academic Use Licensing
 
-**All academic use of FoxML Core requires a paid commercial license. No exceptions.**
+**Free use is limited to non-commercial academic research at qualifying tax-exempt institutions.**
+
+**All other academic use requires a paid commercial license.**
 
 This includes:
-- Research at degree-granting educational institutions
-- Research at non-profit research institutions
-- Academic coursework and teaching
-- Research publications and papers
-- Any use by students, faculty, or staff
+- Corporate-funded or sponsored research
+- Research integrated into commercial operations
+- Institutional deployment (internal tooling, dashboards, operational systems)
+- For-profit universities or corporate training programs
+- Any use supporting revenue-generating activities
 
 ---
 
@@ -73,10 +75,10 @@ If the research is corporate-funded or supports commercial operations, a commerc
 ## How to Determine if You Need a License
 
 **Ask yourself:**
-1. Is this use by or for a business, organization, or institution? → **License required**
-2. Is this research funded by or integrated into commercial operations? → **License required**
-3. Does this support revenue-generating activities? → **License required**
-4. All use requires a commercial license. No exceptions.
+1. Is this non-commercial academic research at a qualifying tax-exempt institution? → **Free use permitted** (see `LICENSE`)
+2. Is this use by or for a business, organization, or institution? → **License required**
+3. Is this research funded by or integrated into commercial operations? → **License required**
+4. Does this support revenue-generating activities? → **License required**
 
 **When in doubt, contact us:**
 📧 **jenn.lewis5789@gmail.com**  

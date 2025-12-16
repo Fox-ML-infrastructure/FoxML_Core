@@ -36,7 +36,7 @@
 
 **Note:** Academic research conducted for, funded by, sponsored by, or operationally integrated into a commercial organization requires a commercial license, even if performed by students or interns.
 
-**PAID PILOT REQUIRED FOR BUSINESS EVALUATION:** Business evaluation requires a paid Pilot. No exceptions. If you're a legal entity, you need a license. If you want to evaluate, it's a paid pilot. Payment is required from the first day of commercial use.
+**EVALUATION POLICY:** Organizations can use a 30-day $0 evaluation (strict limits: non-production, no client deliverables, no redistribution). Continued evaluation beyond 30 days requires a paid Pilot ($35k, credited 100% to Year 1 if converted within 60 days). Payment is required for continued use after the evaluation period.
 
 **See `LEGAL/SUBSCRIPTIONS.md` for complete definitions and usage scenarios.**
 
@@ -95,7 +95,7 @@
 
 ## 4. Pricing
 
-**Commercial licensing is per team/desk and starts in the six figures annually. Paid pilot required for organizational evaluation. Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages.**
+**Commercial licensing is per team/desk and starts at $120,000/year. Paid pilot required for organizational evaluation (after 30-day $0 evaluation period). Fees are specified in Ordering Documents. See `DOCS/02_reference/commercial/COMMERCIAL.md` for pricing and packages.**
 
 For detailed pricing information, please contact the maintainer:
 

@@ -1,6 +1,6 @@
 # FoxML Core – Source-Available License
 
-FoxML Core is **source-available**. All use requires a paid commercial license.
+FoxML Core is **source-available**. Free for personal use and non-commercial academic research. Organizational use requires a paid commercial license.
 
 **Document Hierarchy:** In case of any conflict, the full text of `LICENSE` and `COMMERCIAL_LICENSE.md` controls. `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms, definitions, and obligations.
 
@@ -17,28 +17,30 @@ FoxML Core is **source-available**. All use requires a paid commercial license.
 - Any evaluation/pilot done by an organization
 - Any use by employees, contractors, interns, or affiliates in the scope of their work
 
-**All use requires a commercial license. No exceptions.**
+**Free use is limited to:**
+- Personal use (individual, non-commercial, not for any business purpose)
+- Non-commercial academic research at qualifying tax-exempt institutions (see `LICENSE` for full definition)
 
 **Unauthorized organizational use is copyright infringement.**
 
 📧 **jenn.lewis5789@gmail.com** | Subject: `FoxML Core Commercial Licensing`
 
-**Commercial licensing is per team/desk and starts in the six figures annually. Paid pilot required for organizational evaluation.** Fees are specified in Ordering Documents. See `../commercial/COMMERCIAL.md` for pricing and packages. See `../../../LEGAL/SUBSCRIPTIONS.md` for details.
+**Commercial licensing is per team/desk and starts at $120,000/year. Paid pilot required for organizational evaluation (after 30-day $0 evaluation period).** Fees are specified in Ordering Documents. See `../commercial/COMMERCIAL.md` for pricing and packages. See `../../../LEGAL/SUBSCRIPTIONS.md` for details.
 
-**FoxML Core is source-available: free for personal use. Organizational use requires a paid license (including evaluation). This keeps the project sustainable and enables continued development.**
+**FoxML Core is source-available: free for personal use and non-commercial academic research. Organizational use requires a paid license. This keeps the project sustainable and enables continued development.**
 
 ---
 
 ## Commercial License Required
 
-**All use of FoxML Core requires a paid commercial license.**
+**Organizational use of FoxML Core requires a paid commercial license.**
 
-There are no exceptions. This includes:
-- Personal use by individuals
-- Academic research (commercial or non-commercial)
-- Business use, organizational use, or institutional use
-- Evaluation, testing, development, staging, or production use
-- Any use by any person or entity, regardless of purpose or context
+This includes:
+- Any use by or for a company, university, lab, or other organization
+- Any internal evaluation, pilots, PoCs, dev/staging, or production use
+- Any use supporting revenue, operations, services, or internal tooling
+- Any use by employees, contractors, interns, or affiliates in the scope of their work
+- Any evaluation, testing, development, staging, or production use within an organizational context
 
 **See `LICENSE` for complete license terms.**
 
@@ -62,8 +64,8 @@ This includes:
 - Standard commercial protections
 
 **Pricing:**
-- Commercial licensing is per team/desk and starts in the six figures annually
-- Paid pilot required for evaluation
+- Commercial licensing is per team/desk and starts at $120,000/year
+- Paid pilot required for evaluation (after 30-day $0 evaluation period)
 - Fees are specified in Ordering Documents. See `../commercial/COMMERCIAL.md` for pricing and packages
 - Pricing based on team/desk size, not total company headcount
 

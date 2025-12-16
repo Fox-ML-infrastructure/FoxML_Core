@@ -10,8 +10,9 @@
 
 | Scenario | Commercial License | Notes |
 |----------|-------------------|-------|
-| **Individual personal research** | ✅ | All use requires a commercial license |
-| **Academic research** at degree-granting institution | ✅ | All use requires a commercial license |
+| **Individual personal research (non-commercial)** | ❌ | ✅ Free — Personal use is free |
+| **Non-commercial academic research** at qualifying tax-exempt institution | ❌ | ✅ Free — See `LICENSE` for definition |
+| **Academic research with corporate funding** | ❌ | ✅ | Commercial license required |
 | **Internal evaluation at a company** | ❌ | ✅ | **ALWAYS requires license** — paid pilot required (see `COMMERCIAL_LICENSE.md`) |
 | **Proof of concept / pilot project** within a business | ❌ | ✅ | **ALWAYS requires license** — even if experimental or non-revenue |
 | **Development / testing / staging** environments in a business | ❌ | ✅ | **ALWAYS requires license** — any environment within a business context |
@@ -41,11 +42,14 @@
 
 ## Key Principles
 
-### ✅ All Use Requires a Commercial License
+### ✅ Free Use (No License Required)
 
-There are no exceptions. All use by any person or entity requires a commercial license.
+- Personal use (individual, non-commercial, not for any business purpose)
+- Non-commercial academic research at qualifying tax-exempt institutions
 
-See `LICENSE` for complete license terms.
+See `LICENSE` for complete definition of free use.
+
+### ❌ Commercial License Required for Organizational Use
 
 ### ❌ Commercial License is REQUIRED for:
 1. **Any use within a business, organization, or commercial entity**
@@ -73,7 +77,7 @@ See `LICENSE` for complete license terms.
 | "Our interns are using it" | ❌ Use by employees/contractors/interns requires commercial license |
 | "We're a non-profit" | ❌ Non-profit status doesn't exempt commercial use — still requires commercial license |
 | "We're a university" | ⚠️ Only non-commercial academic research at degree-granting institutions is exempt — corporate funding or commercial integration requires commercial license |
-| "We'll only use it for evaluation" | ❌ Business evaluation requires a paid pilot — no free trial for commercial use |
+| "We'll only use it for evaluation" | ⚠️ 30-day $0 evaluation available (strict limits). Continued evaluation requires a paid pilot ($35k) |
 | "It's open source, so it's free" | ❌ Source-available means code is visible, but organizational use requires a commercial license |
 | "We'll contribute back to open source" | ❌ Open source contributions don't exempt commercial use from licensing requirements |
 
@@ -82,11 +86,10 @@ See `LICENSE` for complete license terms.
 ## Decision Flow
 
 ```
-All use requires a commercial license. No exceptions.
-
 Are you using this Software?
-├─ YES → Commercial License Required ✅
-└─ NO → You're not using it, so no license needed
+├─ Personal use (individual, non-commercial)? → ✅ Free (no license needed)
+├─ Non-commercial academic research at qualifying institution? → ✅ Free (no license needed)
+└─ Organizational use (company, university, lab, etc.)? → ❌ Commercial License Required ✅
 
 Contact jenn.lewis5789@gmail.com to obtain a commercial license.
 ```
