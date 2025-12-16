@@ -17,8 +17,8 @@
 
 **You do NOT need a commercial license for:**
 - Non-commercial academic research (at qualifying institutions, see `LICENSE`)
-- Personal study or learning (individual, non-commercial use)
-- Contributing to the Software in a personal/non-commercial context
+
+**Note:** Personal use (individual, non-commercial) is not permitted under the free license. Individual use requires a commercial license.
 
 **See `LEGAL/COMMERCIAL_USE.md` for detailed guidance.**
 

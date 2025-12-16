@@ -29,7 +29,6 @@ Organizations can use a 30-day $0 evaluation (strict limits: non-production, no 
 **Organizational use requires a commercial license.**
 
 **Free use is limited to:**
-- Personal use (individual, non-commercial, not for any business purpose)
 - Non-commercial academic research at qualifying tax-exempt institutions (see `LICENSE` for full definition)
 
 **Organizational use includes:**
@@ -49,7 +48,7 @@ Organizations can use a 30-day $0 evaluation (strict limits: non-production, no 
 
 | Scenario | License Required | Notes |
 |----------|------------------|-------|
-| **Personal / Individual (Non-Commercial)** | Free | Personal use (individual, non-commercial, not for any business purpose) is free |
+| **Personal / Individual (Non-Commercial)** | Commercial | Personal use (individual, non-commercial) requires a commercial license |
 | **Non-Commercial Academic Research** | Free | Qualifying non-commercial academic research at tax-exempt institutions (see `LICENSE`) |
 | **Academic Institution (Organizational Use)** | Commercial | Institutional use, sponsored/industry work, or internal tooling requires a commercial license |
 | **Sole Proprietor / Freelancer** | Commercial | Any use in connection with business activity, client work, or revenue generation (even if claimed to be "personal") |

@@ -6,9 +6,10 @@ FoxML Core is **source-available** with a commercial license required for organi
 
 ## Free Use (No License Required)
 
-**Personal use and non-commercial academic research** are free:
-- Individual use in personal capacity (not for any business purpose)
+**Non-commercial academic research** is free:
 - Non-commercial academic research at qualifying tax-exempt institutions
+
+**Note:** Personal use (individual, non-commercial) is not permitted under the free license. Individual use requires a commercial license.
 
 **See `LICENSE` for the complete definition of free use.**
 

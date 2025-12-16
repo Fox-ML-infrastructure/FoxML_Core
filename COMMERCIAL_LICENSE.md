@@ -19,7 +19,6 @@ Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 **Organizational use requires a commercial license.**
 
 **Free use is limited to:**
-- Personal use (individual, non-commercial, not for any business purpose)
 - Non-commercial academic research at qualifying tax-exempt institutions (see `LICENSE` for full definition)
 
 **Note:** Unauthorized organizational use may constitute copyright infringement. This is not legal advice; see `LICENSE` and this document for complete terms.

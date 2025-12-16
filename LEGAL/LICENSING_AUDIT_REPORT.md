@@ -83,14 +83,13 @@ This software is provided "AS IS", WITHOUT WARRANTY OF ANY KIND.
 
 ---
 
-### Gap 3: "Personal Use" Definition Could Be Stronger
+### Gap 3: "Personal Use" Removed (2025-12-16)
 
-**Issue:** Your definition of "Personal Use" (LICENSE lines 41-44) is good but could explicitly exclude:
-- Freelancers/contractors doing client work
-- Sole proprietors using it for business
-- "Personal" projects that support business activities
+**Status:** Personal use has been removed from the free license. All individual use now requires a commercial license.
 
-**Fix:** Strengthen the Personal Use definition in `LICENSE`:
+**Previous Issue:** The definition of "Personal Use" could have been exploited by freelancers/contractors doing client work, sole proprietors using it for business, or "personal" projects that support business activities.
+
+**Resolution:** Personal use has been completely removed. Free use is now limited to non-commercial academic research at qualifying tax-exempt institutions only.
 
 ```markdown
 1. **Personal Use**: Individual use in your personal capacity where:
@@ -147,7 +146,7 @@ A: No. Sole proprietors using Software for business operations require a commerc
 ```markdown
 ## License
 
-**FoxML Core is source-available. Free for personal use, paid for business.**
+**FoxML Core is source-available. Free for non-commercial academic research at qualifying tax-exempt institutions. All other use requires a paid license.**
 
 - ✅ **Free for:** Natural persons using Software for personal, non-commercial purposes
 - 💰 **Paid license required for:** Any organizational, institutional, or commercial use
@@ -226,7 +225,7 @@ SPDX-FileCopyrightText: Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 ### Critical (Do First)
 - [ ] Add "natural person" hard rule to `LICENSE` (after line 10)
 - [ ] Create root `NOTICE` file
-- [ ] Strengthen "Personal Use" definition in `LICENSE`
+- [x] ~~Strengthen "Personal Use" definition in `LICENSE`~~ → **RESOLVED (2025-12-16): Personal use removed entirely**
 
 ### Recommended (Do Soon)
 - [ ] Add "Business License Decision Tree" to `LEGAL/FAQ.md`
@@ -247,7 +246,7 @@ SPDX-FileCopyrightText: Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 **Your licensing is 85% complete and production-ready.** The three critical gaps are easy fixes that will:
 1. Close the "natural person" loophole
 2. Add industry-standard NOTICE file
-3. Strengthen personal use definition
+3. ~~Strengthen personal use definition~~ → **RESOLVED (2025-12-16): Personal use removed entirely**
 
 **Estimated time to fix:** 2-3 hours for all critical + recommended items.
 

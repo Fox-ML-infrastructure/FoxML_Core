@@ -2,12 +2,14 @@
 
 ## License (TL;DR)
 
-**FoxML Core is source-available. Free for personal use and non-commercial academic research. Organizational use requires a paid commercial license.**
+**FoxML Core is source-available. Free for non-commercial academic research at qualifying tax-exempt institutions. All other use requires a paid commercial license.**
 
 ### Decision Rule
 
 **If you're an organization (company, university, lab, or any legal entity), you need a license — except:**
 - Pure non-commercial academic research at qualifying tax-exempt institutions (see definitions below)
+
+**Individual use (personal, non-commercial) requires a commercial license.**
 
 **Evaluation:** Organizations can use a **30-day $0 evaluation** (strict limits: non-production, no client deliverables). Continued evaluation requires a **paid Pilot ($35k, credited to Year 1)**.
 
@@ -21,7 +23,7 @@
 
 ### Definitions
 
-**Personal use:** Individual, non-commercial use by a natural person, not for any business purpose. Excludes sole proprietors, freelancers, contractors, or any use in connection with business activities or client work.
+**Note:** Personal use (individual, non-commercial) is not permitted under the free license. Individual use requires a commercial license.
 
 **Non-commercial academic research:** Research conducted at a qualifying tax-exempt educational institution that:
 - Is not funded by, sponsored by, or integrated into commercial operations

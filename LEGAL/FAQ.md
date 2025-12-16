@@ -32,7 +32,7 @@
 
 **A:** No. If they are using the Software in the scope of their work for a business or organization, that constitutes organizational use and requires a commercial license.
 
-Organizational use requires a commercial license. Free use is limited to personal use and non-commercial academic research.
+Organizational use requires a commercial license. Free use is limited to non-commercial academic research at qualifying tax-exempt institutions.
 
 **Key point:** Use by employees, contractors, interns, or Affiliates in the scope of their work for a business entity requires a commercial license, regardless of their employment status.
 
@@ -40,7 +40,7 @@ Organizational use requires a commercial license. Free use is limited to persona
 
 ### Q: Can some teams use it for free while others use a commercial license?
 
-**A:** No. Organizational use requires a commercial license. Free use is limited to personal use and non-commercial academic research.
+**A:** No. Organizational use requires a commercial license. Free use is limited to non-commercial academic research at qualifying tax-exempt institutions.
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` controls for free use.
 
-> **Commercial Licensees Only:** This document applies only to customers with a valid commercial license. free users are not eligible for the policies, services, or terms described here.
+> **Commercial Licensees Only:** This document applies only to customers with a valid commercial license. Free academic users are not eligible for the policies, services, or terms described here.
 
 > **No Rights Granted:** This document does not grant any license rights. All rights and restrictions are defined solely in `COMMERCIAL_LICENSE.md`.
 

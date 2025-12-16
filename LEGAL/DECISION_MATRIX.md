@@ -10,7 +10,7 @@
 
 | Scenario | Commercial License | Notes |
 |----------|-------------------|-------|
-| **Individual personal research (non-commercial)** | ❌ | ✅ Free — Personal use is free |
+| **Individual personal research (non-commercial)** | ❌ | ❌ Commercial License Required — Personal use requires a commercial license |
 | **Non-commercial academic research** at qualifying tax-exempt institution | ❌ | ✅ Free — See `LICENSE` for definition |
 | **Academic research with corporate funding** | ❌ | ✅ | Commercial license required |
 | **Internal evaluation at a company** | ❌ | ✅ | **ALWAYS requires license** — paid pilot required (see `COMMERCIAL_LICENSE.md`) |
@@ -44,7 +44,7 @@
 
 ### ✅ Free Use (No License Required)
 
-- Personal use (individual, non-commercial, not for any business purpose)
+- Note: Personal use (individual, non-commercial) requires a commercial license
 - Non-commercial academic research at qualifying tax-exempt institutions
 
 See `LICENSE` for complete definition of free use.
@@ -87,7 +87,7 @@ See `LICENSE` for complete definition of free use.
 
 ```
 Are you using this Software?
-├─ Personal use (individual, non-commercial)? → ✅ Free (no license needed)
+├─ Personal use (individual, non-commercial)? → ❌ Commercial License Required
 ├─ Non-commercial academic research at qualifying institution? → ✅ Free (no license needed)
 └─ Organizational use (company, university, lab, etc.)? → ❌ Commercial License Required ✅
 
