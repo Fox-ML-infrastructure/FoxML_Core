@@ -1362,6 +1362,62 @@ class ReproducibilityTracker:
             # Aggregate metrics facts table (append-only, after all cohorts saved)
             # This is called per-cohort, but we'll aggregate at the end of the run
             # For now, we'll aggregate on-demand or at end of stage
+            
+            # PHASE 3: Diff telemetry (first-class change tracking)
+            try:
+                from TRAINING.utils.diff_telemetry import DiffTelemetry
+                
+                # Determine base output directory for telemetry
+                # Walk up from cohort_dir to find run-level directory
+                base_output_dir = Path(cohort_dir)
+                while base_output_dir.name not in ["RESULTS"] and base_output_dir.parent.exists():
+                    base_output_dir = base_output_dir.parent
+                    if base_output_dir.name == "RESULTS":
+                        break
+                
+                # If we're still in REPRODUCIBILITY or a subdirectory, walk up more
+                if base_output_dir.name not in ["RESULTS"]:
+                    # Try to find RESULTS directory
+                    temp_dir = base_output_dir
+                    for _ in range(5):  # Limit depth
+                        if temp_dir.name == "RESULTS":
+                            base_output_dir = temp_dir
+                            break
+                        if not temp_dir.parent.exists():
+                            break
+                        temp_dir = temp_dir.parent
+                
+                # If we couldn't find RESULTS, use the output_dir from tracker
+                if base_output_dir.name != "RESULTS":
+                    base_output_dir = self.output_dir
+                
+                # Initialize telemetry (creates TELEMETRY directory if needed)
+                telemetry = DiffTelemetry(output_dir=base_output_dir)
+                
+                # Extract experiment_id if available
+                experiment_id = None
+                if additional_data and 'experiment_id' in additional_data:
+                    experiment_id = additional_data['experiment_id']
+                elif run_data.get('additional_data') and 'experiment_id' in run_data.get('additional_data', {}):
+                    experiment_id = run_data['additional_data']['experiment_id']
+                
+                # Add experiment_id to additional_data if not present
+                if experiment_id and additional_data and 'experiment_id' not in additional_data:
+                    additional_data = additional_data.copy()
+                    additional_data['experiment_id'] = experiment_id
+                
+                # Finalize run with diff telemetry
+                telemetry.finalize_run(
+                    stage=stage_normalized,
+                    run_data=run_data,
+                    cohort_dir=cohort_dir,
+                    cohort_metadata=cohort_metadata,
+                    additional_data=additional_data
+                )
+            except Exception as e:
+                logger.debug(f"Diff telemetry failed (non-critical): {e}")
+                import traceback
+                logger.debug(f"Diff telemetry traceback: {traceback.format_exc()}")
         
         # PHASE 2: Unified schema - build metrics_data for _update_index (always needed)
         # Metrics writer writes metrics.json/parquet, but we still need metrics_data for index
