@@ -19,6 +19,8 @@
 
 **For complete licensing information:** [`LEGAL/QUICK_REFERENCE.md`](LEGAL/QUICK_REFERENCE.md) (one-page summary) | [`COMMERCIAL_LICENSE.md`](COMMERCIAL_LICENSE.md) (full terms)
 
+**📋 Strategic Licensing Roadmap:** See [`LEGAL/ROADMAP_BOUNDARIES.md`](LEGAL/ROADMAP_BOUNDARIES.md) for licensing evolution strategy. **v1.x is the last fully open window** — core remains open, production layer will require commercial license in v2.0+.
+
 ---
 
 ### Definitions
@@ -136,6 +138,8 @@ Subject: `FoxML Core Commercial Licensing`
 - [`LEGAL/SUBSCRIPTIONS.md`](LEGAL/SUBSCRIPTIONS.md) - Detailed licensing process
 - [`COMMERCIAL_LICENSE.md`](COMMERCIAL_LICENSE.md) - Full commercial license text
 - [`LICENSE`](LICENSE) - Free use terms
+- [`LEGAL/ROADMAP_BOUNDARIES.md`](LEGAL/ROADMAP_BOUNDARIES.md) - ⚠️ **Strategic licensing roadmap** (v1.x last fully open window)
+- [`LEGAL/GRADUATED_CLOSE_MODEL.md`](LEGAL/GRADUATED_CLOSE_MODEL.md) - Graduated close model details
 
 ---
 

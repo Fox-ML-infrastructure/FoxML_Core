@@ -61,8 +61,18 @@ Subject: `FoxML Core Commercial Licensing`
 2. **`LEGAL/SUBSCRIPTIONS.md`** — Detailed licensing process and pricing
 3. **`COMMERCIAL_LICENSE.md`** — Authoritative commercial license terms
 4. **`LICENSE`** — Free use terms
+5. **`LEGAL/ROADMAP_BOUNDARIES.md`** — ⚠️ **Strategic licensing roadmap** (v1.x last fully open window)
+6. **`LEGAL/GRADUATED_CLOSE_MODEL.md`** — Graduated close model details
 
 **Everything else is supplementary. If it contradicts the above, the above wins.**
+
+---
+
+## ⚠️ Strategic Licensing Roadmap
+
+**v1.x is the last fully open window.** Core training infrastructure remains open for validation. Production orchestration layer will require commercial license in v2.0+.
+
+**See [`LEGAL/ROADMAP_BOUNDARIES.md`](ROADMAP_BOUNDARIES.md) for complete details.**
 
 ---
 

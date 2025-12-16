@@ -9,6 +9,8 @@ Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 
 **If an organization uses this, they need a license.**
 
+**📋 Strategic Licensing Roadmap:** v1.x is the last fully open window. Core training infrastructure remains open; production orchestration layer will require commercial license in v2.0+. See `LEGAL/ROADMAP_BOUNDARIES.md` for complete details.
+
 **Organizational Use includes:**
 - Any use by or for a company, university, lab, or other organization
 - Any internal evaluation, pilots, PoCs, dev/staging, or production use
