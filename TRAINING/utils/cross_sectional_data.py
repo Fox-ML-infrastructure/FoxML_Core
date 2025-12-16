@@ -160,6 +160,7 @@ def load_mtf_data_for_ranking(
         Dictionary mapping symbol -> DataFrame
     """
     mtf_data = {}
+    dropped_symbols = []  # Track dropped symbols with reasons
     
     for symbol in symbols:
         # Try different possible file locations (matching training pipeline)
@@ -179,6 +180,16 @@ def load_mtf_data_for_ranking(
             try:
                 df = pd.read_parquet(symbol_file)
                 
+                # Check for empty DataFrame
+                if df.empty:
+                    dropped_symbols.append({
+                        'symbol': symbol,
+                        'reason': 'empty_dataframe',
+                        'details': 'File exists but contains no rows'
+                    })
+                    logger.warning(f"Dropping {symbol}: empty DataFrame")
+                    continue
+                
                 # Apply row limit if specified (most recent rows)
                 if max_rows_per_symbol and len(df) > max_rows_per_symbol:
                     df = df.tail(max_rows_per_symbol)
@@ -187,11 +198,44 @@ def load_mtf_data_for_ranking(
                 mtf_data[symbol] = df
                 logger.debug(f"Loaded {symbol}: {df.shape}")
             except Exception as e:
+                dropped_symbols.append({
+                    'symbol': symbol,
+                    'reason': 'load_error',
+                    'details': str(e)
+                })
                 logger.error(f"Error loading {symbol}: {e}")
         else:
+            dropped_symbols.append({
+                'symbol': symbol,
+                'reason': 'file_not_found',
+                'details': f'Tried: {possible_paths}'
+            })
             logger.warning(f"File not found for {symbol}. Tried: {possible_paths}")
     
-    logger.info(f"Loaded {len(mtf_data)} symbols: {list(mtf_data.keys())}")
+    # Log loader contract (requested vs loaded)
+    n_requested = len(symbols)
+    n_loaded = len(mtf_data)
+    loaded_symbols = list(mtf_data.keys())
+    
+    logger.info(f"📦 Loader contract: requested={n_requested} symbols → loaded={n_loaded} symbols")
+    logger.info(f"   Loaded symbols: {loaded_symbols}")
+    
+    if dropped_symbols:
+        logger.warning(f"   Dropped {len(dropped_symbols)} symbols:")
+        for drop_info in dropped_symbols:
+            logger.warning(f"     - {drop_info['symbol']}: {drop_info['reason']} ({drop_info['details']})")
+    
+    # Store loader contract in mtf_data metadata (for later use)
+    if mtf_data:
+        # Attach metadata as a special key (will be filtered out during processing)
+        mtf_data['__loader_contract__'] = {
+            'requested_symbols': symbols,
+            'loaded_symbols': loaded_symbols,
+            'n_requested': n_requested,
+            'n_loaded': n_loaded,
+            'dropped_symbols': dropped_symbols
+        }
+    
     return mtf_data
 
 
@@ -219,7 +263,7 @@ def prepare_cross_sectional_data_for_ranking(
     """
     if not mtf_data:
         logger.error("No data provided")
-        return (None,) * 5
+        return (None,) * 6
     
     # Default max_cs_samples to match training pipeline
     if max_cs_samples is None:
@@ -228,10 +272,99 @@ def prepare_cross_sectional_data_for_ranking(
     
     logger.info(f"🎯 Building cross-sectional data for target: {target_column}")
     
-    # Compute effective_min_cs upfront for consistent logging
+    # Extract loader contract if available (and remove from mtf_data)
+    loader_contract = mtf_data.pop('__loader_contract__', None)
+    
+    # CRITICAL: Always log symbol load report (requested vs loaded vs dropped)
+    # This prevents confusion and makes regressions obvious
     n_symbols_available = len(mtf_data)
+    loaded_symbols_list = list(mtf_data.keys())
+    
+    if loader_contract:
+        n_requested = loader_contract['n_requested']
+        requested_symbols_list = loader_contract.get('requested_symbols', [])
+        dropped_symbols = loader_contract.get('dropped_symbols', [])
+        
+        # Build structured symbol load report
+        logger.info(f"📦 Symbol load report:")
+        logger.info(f"   Requested: {n_requested} symbols {requested_symbols_list}")
+        logger.info(f"   Loaded: {n_symbols_available} symbols {loaded_symbols_list}")
+        
+        if dropped_symbols:
+            dropped_dict = {d['symbol']: d.get('reason', 'unknown') for d in dropped_symbols}
+            logger.warning(f"   Dropped: {len(dropped_symbols)} symbols {dropped_dict}")
+        else:
+            logger.info(f"   Dropped: 0 symbols")
+    else:
+        # Fallback: if loader contract not available, still log what we have
+        logger.info(f"📦 Symbol load report:")
+        logger.info(f"   Requested: unknown (loader contract not available)")
+        logger.info(f"   Loaded: {n_symbols_available} symbols {loaded_symbols_list}")
+        logger.warning(f"   Dropped: unknown (loader contract not available)")
+        # Create minimal loader contract for error messages
+        loader_contract = {
+            'requested_symbols': [],
+            'n_requested': None,
+            'loaded_symbols': loaded_symbols_list,
+            'n_loaded': n_symbols_available,
+            'dropped_symbols': []
+        }
+    
+    # CRITICAL: Enforce min_cs BEFORE building cross-sectional data
+    # Cross-sectional ranking with n_symbols < min_cs should hard-stop, not degrade silently
+    # 
+    # IMPORTANT DISTINCTION:
+    #   - This check enforces: "N symbols loaded overall" (global availability)
+    #   - Later, per-timestamp filtering enforces: "effective cross-sectional width per timestamp"
+    #   - The hard-stop prevents "only 1 symbol total", while per-timestamp sampling enforces cross-sectional width
+    # 
+    # NOTE: For LOSO view:
+    #   - This function is called with mtf_data containing (N-1) training symbols (validation symbol excluded)
+    #   - The check is applied to the training set size (N-1), which is correct
+    #   - We need at least min_cs symbols loaded in the training set (global availability)
+    #   - Per-timestamp filtering (below) ensures each timestamp has >= effective_min_cs symbols present
+    #   - The validation symbol is loaded separately with min_cs=1 (see evaluate_target_predictability)
+    # 
+    # For CROSS_SECTIONAL view:
+    #   - This function is called with mtf_data containing all N symbols
+    #   - The check ensures we have at least min_cs symbols loaded overall (global availability)
+    #   - Per-timestamp filtering (below) ensures each timestamp has >= effective_min_cs symbols present
+    if n_symbols_available < min_cs:
+        error_msg = (
+            f"CROSS_SECTIONAL mode requires >= {min_cs} symbols, but only {n_symbols_available} loaded. "
+            f"Loaded symbols: {loaded_symbols_list}. "
+            f"This would silently degrade into single-symbol time series masquerading as cross-sectional ranking. "
+            f"Use SYMBOL_SPECIFIC mode for single-symbol ranking, or ensure sufficient symbols are available."
+        )
+        # Always include dropped symbols info if available
+        if loader_contract and loader_contract.get('dropped_symbols'):
+            dropped_dict = {d['symbol']: d.get('reason', 'unknown') for d in loader_contract['dropped_symbols']}
+            error_msg += f" Dropped symbols: {dropped_dict}"
+        elif loader_contract and loader_contract.get('requested_symbols'):
+            # If we have requested list, show what was requested but not loaded
+            requested_set = set(loader_contract['requested_symbols'])
+            loaded_set = set(loaded_symbols_list)
+            missing = requested_set - loaded_set
+            if missing:
+                error_msg += f" Missing from requested list: {sorted(missing)}"
+        
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    
+    # Compute effective_min_cs (should equal min_cs now, but keep for consistency)
     effective_min_cs = min(min_cs, n_symbols_available)
-    min_cs_reason = f"only_{n_symbols_available}_symbols_loaded" if effective_min_cs < min_cs else "requested"
+    min_cs_reason = "requested"  # Always requested now (we hard-stop if insufficient)
+    
+    # Determine resolved mode (for telemetry and logging)
+    if n_symbols_available == 1:
+        resolved_mode = "SINGLE_SYMBOL_TS"  # Should not happen due to check above, but track for safety
+        mode_reason = "n_symbols=1"
+    elif n_symbols_available < 10:
+        resolved_mode = "CROSS_SECTIONAL"  # Small panel
+        mode_reason = f"n_symbols={n_symbols_available} (small panel)"
+    else:
+        resolved_mode = "CROSS_SECTIONAL"  # Full panel
+        mode_reason = f"n_symbols={n_symbols_available} (full panel)"
     
     # Log requested vs effective (single authoritative line)
     logger.info(
@@ -240,6 +373,7 @@ def prepare_cross_sectional_data_for_ranking(
         f"(reason={min_cs_reason}, n_symbols={n_symbols_available}), "
         f"max_cs_samples={max_cs_samples}"
     )
+    logger.info(f"📋 Resolved mode: {resolved_mode} (reason: {mode_reason})")
     
     # NEW: Multi-interval alignment support
     # If feature_time_meta_map and base_interval_minutes are provided, apply alignment
@@ -262,7 +396,7 @@ def prepare_cross_sectional_data_for_ranking(
     
     if not all_data:
         logger.error(f"Target '{target_column}' not found in any symbol")
-        return (None,) * 5
+        return (None,) * 6
     
     # CRITICAL: Ensure we have a time column for panel data validation
     # Without timestamps, we cannot use time-based purging and will cause data leakage
@@ -381,7 +515,7 @@ def prepare_cross_sectional_data_for_ranking(
         
         if len(combined_df) == 0:
             logger.warning(f"No data after min_cs filter - all timestamps have < {effective_min_cs} symbols")
-            return (None,) * 5
+            return (None,) * 6
         
         # Apply cross-sectional sampling per timestamp
         # CRITICAL: Shuffle symbols within each timestamp to avoid bias
@@ -434,7 +568,7 @@ def prepare_cross_sectional_data_for_ranking(
         logger.error("CRITICAL: No time column found in panel data. Time-based purging is REQUIRED.")
         logger.error("  Panel data structure: multiple symbols per timestamp means row-count purging is invalid.")
         logger.error("  Example: With 50 symbols, 1 bar = 50 rows. Purging 17 rows = ~20 seconds, not 60 minutes!")
-        return (None,) * 5
+        return (None,) * 6
     
     # Auto-discover features if not provided
     if feature_names is None:
@@ -448,7 +582,7 @@ def prepare_cross_sectional_data_for_ranking(
     # Extract target
     if target_column not in combined_df.columns:
         logger.error(f"Target '{target_column}' not in combined data")
-        return (None,) * 5
+        return (None,) * 6
     
     y = combined_df[target_column].values
     y = pd.Series(y).replace([np.inf, -np.inf], np.nan).values
@@ -503,7 +637,7 @@ def prepare_cross_sectional_data_for_ranking(
     # Check if we have any features left
     if len(feature_names) == 0:
         logger.error("❌ No features remaining after filtering - cannot train models")
-        return (None,) * 5
+        return (None,) * 6
     
     # Warn if very few features (may cause training issues)
     if len(feature_names) < 5:
@@ -519,7 +653,7 @@ def prepare_cross_sectional_data_for_ranking(
     # Check if we have any data
     if X.shape[0] == 0:
         logger.error("Feature matrix is empty - no data to process")
-        return (None,) * 5
+        return (None,) * 6
     
     # Clean data: remove rows with invalid target or too many NaN features
     target_valid = ~np.isnan(y) & np.isfinite(y)
@@ -543,7 +677,7 @@ def prepare_cross_sectional_data_for_ranking(
         logger.error(f"  Features: {X.shape[0]} rows, {X.shape[1]} cols, {feature_valid.sum()} valid rows")
         if X.shape[0] > 0:
             logger.error(f"  Feature NaN: {np.isnan(X).sum()} total, mean per row: {feature_nan_ratio.mean():.2%}")
-        return (None,) * 5
+        return (None,) * 6
     
     X_clean = X[valid_mask]
     y_clean = y[valid_mask]
@@ -572,5 +706,21 @@ def prepare_cross_sectional_data_for_ranking(
     logger.info(f"   Removed {len(X) - len(X_clean)} rows due to cleaning")
     logger.info(f"   ⚠️  Note: NaN values preserved for CV-safe imputation (no leakage)")
     
-    return X_clean, y_clean, feature_names, symbols_clean, time_vals
+    # Store resolved mode and loader contract in a metadata dict (for telemetry)
+    # This will be extracted by callers and passed to reproducibility tracker
+    resolved_config = {
+        'resolved_data_mode': resolved_mode,
+        'mode_reason': mode_reason,
+        'n_symbols_loaded': n_symbols_available,
+        'min_cs_required': min_cs,
+        'effective_min_cs': effective_min_cs,
+        'loader_contract': loader_contract
+    }
+    
+    # Attach to mtf_data for callers to extract (non-intrusive)
+    # Callers can access via: resolved_config = mtf_data.get('__resolved_config__')
+    # But we don't have mtf_data in return, so we'll need to pass this separately
+    # For now, log it and callers can extract from logs or we'll add it to return later
+    
+    return X_clean, y_clean, feature_names, symbols_clean, time_vals, resolved_config
 

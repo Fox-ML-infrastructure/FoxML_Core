@@ -99,9 +99,9 @@ class RankingHarness:
         feature_names: Optional[List[str]] = None
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[List[str]], 
                Optional[np.ndarray], Optional[np.ndarray], Optional[Dict[str, pd.DataFrame]], 
-               Optional[float], Optional[Any]]:
+               Optional[float], Optional[Any], Optional[Dict[str, Any]]]:
         """
-        Build panel data (X, y, feature_names, symbols_array, time_vals, mtf_data, detected_interval, resolved_config).
+        Build panel data (X, y, feature_names, symbols_array, time_vals, mtf_data, detected_interval, resolved_config, resolved_data_config).
         
         This is the same data build logic used by target ranking, including:
         - Target-conditional exclusions
@@ -321,14 +321,14 @@ class RankingHarness:
         # Prepare data based on view (with alignment args from resolved_config)
         if self.view == "SYMBOL_SPECIFIC":
             # For symbol-specific, prepare single-symbol time series data
-            X, y, feature_names_out, symbols_array, time_vals = prepare_cross_sectional_data_for_ranking(
+            X, y, feature_names_out, symbols_array, time_vals, resolved_data_config = prepare_cross_sectional_data_for_ranking(
                 mtf_data, target_column, min_cs=1, max_cs_samples=self.max_cs_samples, feature_names=feature_names,
                 feature_time_meta_map=resolved_config.feature_time_meta_map,  # NEW: Pass from resolved_config
                 base_interval_minutes=resolved_config.base_interval_minutes  # NEW: Pass from resolved_config
             )
         elif self.view == "LOSO":
             # LOSO: prepare training data (all symbols except validation symbol)
-            X, y, feature_names_out, symbols_array, time_vals = prepare_cross_sectional_data_for_ranking(
+            X, y, feature_names_out, symbols_array, time_vals, resolved_data_config = prepare_cross_sectional_data_for_ranking(
                 mtf_data, target_column, min_cs=self.min_cs, max_cs_samples=self.max_cs_samples, feature_names=feature_names,
                 feature_time_meta_map=resolved_config.feature_time_meta_map,  # NEW: Pass from resolved_config
                 base_interval_minutes=resolved_config.base_interval_minutes  # NEW: Pass from resolved_config
@@ -337,7 +337,7 @@ class RankingHarness:
             logger.warning("LOSO view: Using combined data for now (LOSO-specific CV splitter not yet implemented)")
         else:
             # CROSS_SECTIONAL: standard pooled data
-            X, y, feature_names_out, symbols_array, time_vals = prepare_cross_sectional_data_for_ranking(
+            X, y, feature_names_out, symbols_array, time_vals, resolved_data_config = prepare_cross_sectional_data_for_ranking(
                 mtf_data, target_column, min_cs=self.min_cs, max_cs_samples=self.max_cs_samples, feature_names=feature_names,
                 feature_time_meta_map=resolved_config.feature_time_meta_map,  # NEW: Pass from resolved_config
                 base_interval_minutes=resolved_config.base_interval_minutes  # NEW: Pass from resolved_config
@@ -360,7 +360,7 @@ class RankingHarness:
             resolved_config.features_dropped_nan = features_dropped_nan
             resolved_config.features_final = features_final
         
-        return X, y, feature_names_out, symbols_array, time_vals, mtf_data, detected_interval, resolved_config
+        return X, y, feature_names_out, symbols_array, time_vals, mtf_data, detected_interval, resolved_config, resolved_data_config
     
     def split_policy(
         self,

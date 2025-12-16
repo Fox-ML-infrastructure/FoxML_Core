@@ -4880,7 +4880,7 @@ def evaluate_target_predictability(
     if view == "SYMBOL_SPECIFIC":
         # For symbol-specific, prepare single-symbol time series data
         # Use same function but with single symbol (min_cs=1 effectively)
-        X, y, feature_names, symbols_array, time_vals = prepare_cross_sectional_data_for_ranking(
+        X, y, feature_names, symbols_array, time_vals, resolved_data_config = prepare_cross_sectional_data_for_ranking(
             mtf_data, target_column, min_cs=1, max_cs_samples=max_cs_samples, feature_names=safe_columns,
             feature_time_meta_map=resolved_config.feature_time_meta_map if resolved_config else None,
             base_interval_minutes=resolved_config.base_interval_minutes if resolved_config else None
@@ -4891,12 +4891,12 @@ def evaluate_target_predictability(
             logger.warning(f"SYMBOL_SPECIFIC view expected 1 symbol, got {len(unique_symbols)}: {unique_symbols}")
     elif view == "LOSO":
         # LOSO: prepare training data (all symbols except validation symbol)
-        X_train, y_train, feature_names_train, symbols_array_train, time_vals_train = prepare_cross_sectional_data_for_ranking(
+        X_train, y_train, feature_names_train, symbols_array_train, time_vals_train, resolved_data_config_train = prepare_cross_sectional_data_for_ranking(
             mtf_data, target_column, min_cs=min_cs, max_cs_samples=max_cs_samples, feature_names=safe_columns
         )
         # Load validation symbol data separately
         validation_mtf_data = load_mtf_data_for_ranking(data_dir, [validation_symbol], max_rows_per_symbol=max_rows_per_symbol)
-        X_val, y_val, feature_names_val, symbols_array_val, time_vals_val = prepare_cross_sectional_data_for_ranking(
+        X_val, y_val, feature_names_val, symbols_array_val, time_vals_val, resolved_data_config_val = prepare_cross_sectional_data_for_ranking(
             validation_mtf_data, target_column, min_cs=1, max_cs_samples=None, feature_names=safe_columns
         )
         # For LOSO, we'll use a special CV that trains on X_train and validates on X_val
@@ -4910,7 +4910,7 @@ def evaluate_target_predictability(
         time_vals = time_vals_train
     else:
         # CROSS_SECTIONAL: standard pooled data
-        X, y, feature_names, symbols_array, time_vals = prepare_cross_sectional_data_for_ranking(
+        X, y, feature_names, symbols_array, time_vals, resolved_data_config = prepare_cross_sectional_data_for_ranking(
             mtf_data, target_column, min_cs=min_cs, max_cs_samples=max_cs_samples, feature_names=safe_columns
         )
     
@@ -6479,6 +6479,13 @@ def evaluate_target_predictability(
                 # NEW: Add dropped features summary to additional_data for telemetry
                 if 'dropped_tracker' in locals() and dropped_tracker is not None and not dropped_tracker.is_empty():
                     cohort_additional_data['dropped_features'] = dropped_tracker.get_summary()
+                
+                # Add resolved_data_config (mode, loader contract) to additional_data for telemetry
+                if 'resolved_data_config' in locals() and resolved_data_config:
+                    cohort_additional_data['resolved_data_mode'] = resolved_data_config.get('resolved_data_mode')
+                    cohort_additional_data['mode_reason'] = resolved_data_config.get('mode_reason')
+                    cohort_additional_data['loader_contract'] = resolved_data_config.get('loader_contract')
+                
                 additional_data_with_cohort = {
                     "n_models": result.n_models,
                     "leakage_flag": result.leakage_flag,

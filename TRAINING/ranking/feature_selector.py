@@ -273,8 +273,9 @@ def select_features_for_target(
                     
                     if actual_len >= 8:
                         X, y, feature_names, symbols_array, time_vals, mtf_data, detected_interval, resolved_config = build_result[:8]
-                        if actual_len > 8:
-                            logger.warning(f"build_panel returned {actual_len} values (expected 6-8), using first 8. Extra: {build_result[8:]}")
+                        resolved_data_config = build_result[8] if actual_len > 8 else None
+                        if actual_len > 9:
+                            logger.warning(f"build_panel returned {actual_len} values (expected 6-9), using first 9. Extra: {build_result[9:]}")
                     elif actual_len >= 6:
                         # Fallback for older signature (6 values)
                         X, y, feature_names, symbols_array, time_vals, mtf_data = build_result[:6]
@@ -1669,6 +1670,12 @@ def select_features_for_target(
                 except Exception:
                     # Fallback to default if config not available
                     additional_data_with_cohort['seed'] = 42
+                
+                # Add resolved_data_config (mode, loader contract) to additional_data for telemetry
+                if 'resolved_data_config' in locals() and resolved_data_config:
+                    additional_data_with_cohort['resolved_data_mode'] = resolved_data_config.get('resolved_data_mode')
+                    additional_data_with_cohort['mode_reason'] = resolved_data_config.get('mode_reason')
+                    additional_data_with_cohort['loader_contract'] = resolved_data_config.get('loader_contract')
                 
                 tracker.log_comparison(
                     stage="feature_selection",
