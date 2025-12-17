@@ -141,6 +141,8 @@ Subject: `FoxML Core Commercial Licensing`
 - [`LEGAL/ROADMAP_BOUNDARIES.md`](LEGAL/ROADMAP_BOUNDARIES.md) - ⚠️ **Strategic licensing roadmap** (v1.x last fully open window)
 - [`LEGAL/GRADUATED_CLOSE_MODEL.md`](LEGAL/GRADUATED_CLOSE_MODEL.md) - Graduated close model details
 
+**⚠️ Contact Policy: Never send direct mail to any registered business address. All points of contact must be conducted via email (jenn.lewis5789@gmail.com) until stated otherwise.**
+
 ---
 
 ## Quick FAQ
