@@ -337,10 +337,17 @@ class NormalizedSnapshot:
 @dataclass
 class DiffResult:
     """Result of diffing two snapshots."""
-    prev_run_id: str
+    prev_run_id: Optional[str]  # Previous run ID (None if no previous run)
     current_run_id: str
     comparable: bool
     comparability_reason: Optional[str] = None
+    
+    # Previous run metadata (for auditability and validation)
+    prev_timestamp: Optional[str] = None  # When the previous run happened
+    prev_snapshot_seq: Optional[int] = None  # Sequence number of previous snapshot
+    prev_stage: Optional[str] = None  # Stage of previous run (should match current)
+    prev_view: Optional[str] = None  # View of previous run (should match current)
+    comparison_source: Optional[str] = None  # Where previous run was found: "same_run", "snapshot_index", "comparison_group_directory", or None if no previous run
     
     # Change detection
     changed_keys: List[str] = field(default_factory=list)  # Canonical paths
@@ -2365,6 +2372,11 @@ class DiffTelemetry:
             prev_run_id=prev_snapshot.run_id,
             current_run_id=current_snapshot.run_id,
             comparable=True,
+            prev_timestamp=prev_snapshot.timestamp,
+            prev_snapshot_seq=prev_snapshot.snapshot_seq,
+            prev_stage=prev_snapshot.stage,
+            prev_view=prev_snapshot.view,
+            comparison_source=getattr(prev_snapshot, '_comparison_source', None),  # Set by find_previous_comparable
             changed_keys=changed_keys,
             severity=severity,
             severity_reason=severity_reason,
@@ -2717,18 +2729,18 @@ class DiffTelemetry:
                                             if snap.view != snapshot.view:
                                                 continue
                                             
-                                            # Only add if same comparison_group (exactly the same runs)
-                                            if (snap.comparison_group and 
-                                                snap.comparison_group.to_key() == group_key):
-                                                comparable, reason = self._check_comparability(snapshot, snap)
-                                                if comparable:
-                                                    # CRITICAL: Verify the snapshot file actually exists in the cohort directory
-                                                    # This prevents comparing against stale/removed snapshots
-                                                    if hasattr(self, 'run_dir') and self.run_dir:
-                                                        # Try to find the cohort directory for this snapshot
-                                                        # We can't easily reconstruct the exact path, but we can verify
-                                                        # the snapshot was saved by checking if it's in a valid run directory
-                                                        candidates.append((snap.timestamp, snap))
+                                                    # Only add if same comparison_group (exactly the same runs)
+                                                    if (snap.comparison_group and 
+                                                        snap.comparison_group.to_key() == group_key):
+                                                        comparable, reason = self._check_comparability(snapshot, snap)
+                                                        if comparable:
+                                                            # Mark source for auditability
+                                                            # Determine if from comparison group directory or snapshot_index
+                                                            if bin_dir.name.startswith("cg-"):
+                                                                snap._comparison_source = "comparison_group_directory"
+                                                            else:
+                                                                snap._comparison_source = "snapshot_index"
+                                                            candidates.append((snap.timestamp, snap))
                                         except Exception as e:
                                             logger.debug(f"Failed to deserialize snapshot from {run_snapshot_index}: {e}")
                                             continue
