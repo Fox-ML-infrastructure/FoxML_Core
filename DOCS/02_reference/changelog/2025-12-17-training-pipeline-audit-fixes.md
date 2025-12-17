@@ -233,6 +233,26 @@ grep -R "Total jobs: 0" logs/ || echo "✅ No 0-job plans (should error)"
 
 ---
 
+### 11) Diff Telemetry Severity Logic Fix ✅
+
+**Problem:** Severity was incorrectly set to "minor" when `total_changes=0`, `changed_keys=[]`, `patch=[]`, and `metric_deltas={}`. The bug was that `all()` on an empty list returns `True`, causing the "metrics only" check to incorrectly return MINOR.
+
+**Solution:**
+- Made severity **purely derived** from the report (SST-style)
+- Added `severity_reason` field to explain why severity was set
+- Fixed logic: `total_changes==0` and `metric_deltas_count==0` → `severity="none"` (not "minor")
+- `comparable=false` → `severity="critical"` with `severity_reason`
+- Only excluded factors changed → `severity="minor"` with `excluded_factors_summary`
+- Output/metric changes → `severity="major"`
+- Only input/process changes → `severity="minor"`
+
+**Files Changed:**
+- `TRAINING/utils/diff_telemetry.py` (`_determine_severity`, `DiffResult` dataclass, `compute_diff`)
+
+**Outcome:** Severity is now consistent with the actual changes. No more "minor" severity when nothing changed. `severity_reason` explains every severity assignment.
+
+---
+
 ## Related Documentation
 
 - [Consolidated Fix Summary](../../../docs/audit/fix-training-pipeline-audit-fixes.md)

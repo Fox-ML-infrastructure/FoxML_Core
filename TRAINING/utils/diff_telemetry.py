@@ -340,6 +340,7 @@ class DiffResult:
     # Change detection
     changed_keys: List[str] = field(default_factory=list)  # Canonical paths
     severity: ChangeSeverity = ChangeSeverity.NONE
+    severity_reason: Optional[str] = None  # CRITICAL: Explain why severity was set
     
     # Summary
     summary: Dict[str, Any] = field(default_factory=dict)
@@ -2021,20 +2022,29 @@ class DiffTelemetry:
         comparable, reason = self._check_comparability(current_snapshot, prev_snapshot)
         
         if not comparable:
-            # CRITICAL: Even when not comparable, return stable shape with excluded_factors present
+            # CRITICAL: If not comparable, severity must be CRITICAL with reason
             return DiffResult(
                 prev_run_id=prev_snapshot.run_id,
                 current_run_id=current_snapshot.run_id,
                 comparable=False,
                 comparability_reason=reason,
+                severity=ChangeSeverity.CRITICAL,
+                severity_reason=f"Runs are not comparable: {reason}",
                 excluded_factors_changed={},  # Empty but present (stable shape)
-                summary={'excluded_factors_summary': None}  # Empty but present (stable shape)
+                summary={
+                    'total_changes': 0,
+                    'input_changes': 0,
+                    'process_changes': 0,
+                    'output_changes': 0,
+                    'metric_deltas_count': 0,
+                    'excluded_factors_changed': False,
+                    'excluded_factors_summary': None
+                }
             )
         
         # Compute changes
         changed_keys = []
         patch = []
-        severity = ChangeSeverity.NONE
         
         # Diff inputs
         input_changes = self._diff_dict(
@@ -2074,9 +2084,6 @@ class DiffTelemetry:
             current_snapshot, prev_snapshot
         )
         
-        # Determine severity
-        severity = self._determine_severity(changed_keys, input_changes, process_changes)
-        
         # Build summary with readable excluded factors summary
         excluded_summary = self._format_excluded_factors_summary(excluded_factors_changed)
         
@@ -2090,12 +2097,25 @@ class DiffTelemetry:
             'excluded_factors_summary': excluded_summary  # Human-readable summary
         }
         
+        # CRITICAL: Determine severity purely from the report (SST-style)
+        severity, severity_reason = self._determine_severity(
+            changed_keys=changed_keys,
+            input_changes=input_changes,
+            process_changes=process_changes,
+            output_changes=output_changes,
+            metric_deltas=metric_deltas,
+            excluded_factors_changed=excluded_factors_changed,
+            excluded_factors_summary=excluded_summary,
+            summary=summary
+        )
+        
         return DiffResult(
             prev_run_id=prev_snapshot.run_id,
             current_run_id=current_snapshot.run_id,
             comparable=True,
             changed_keys=changed_keys,
             severity=severity,
+            severity_reason=severity_reason,
             summary=summary,
             excluded_factors_changed=excluded_factors_changed,
             patch=patch,
@@ -2285,10 +2305,35 @@ class DiffTelemetry:
         self,
         changed_keys: List[str],
         input_changes: Dict,
-        process_changes: Dict
-    ) -> ChangeSeverity:
-        """Determine severity of changes."""
-        # Critical: hard invariants
+        process_changes: Dict,
+        output_changes: Dict,
+        metric_deltas: Dict[str, Dict[str, float]],
+        excluded_factors_changed: Dict[str, Any],
+        excluded_factors_summary: Optional[str],
+        summary: Dict[str, Any]
+    ) -> Tuple[ChangeSeverity, str]:
+        """
+        Determine severity of changes (SST-style: purely derived from report).
+        
+        Returns:
+            Tuple of (severity, reason)
+        """
+        total_changes = summary.get('total_changes', len(changed_keys))
+        output_changes_count = summary.get('output_changes', len(output_changes.get('keys', [])))
+        metric_deltas_count = summary.get('metric_deltas_count', len(metric_deltas))
+        input_changes_count = summary.get('input_changes', len(input_changes.get('keys', [])))
+        process_changes_count = summary.get('process_changes', len(process_changes.get('keys', [])))
+        has_excluded_factors = summary.get('excluded_factors_changed', bool(excluded_factors_changed))
+        
+        # CRITICAL FIX: If no changes at all, severity must be NONE
+        if total_changes == 0 and metric_deltas_count == 0:
+            if has_excluded_factors and excluded_factors_summary:
+                # Only excluded factors changed (hyperparams, seeds, versions)
+                return ChangeSeverity.MINOR, f"Only excluded factors changed: {excluded_factors_summary}"
+            else:
+                return ChangeSeverity.NONE, "No changes detected"
+        
+        # Critical: hard invariants (data, target, features, split, leakage)
         critical_paths = [
             'inputs.data', 'inputs.target', 'inputs.features.feature_fingerprint',
             'process.split', 'process.leakage'
@@ -2297,27 +2342,45 @@ class DiffTelemetry:
         for key in changed_keys:
             for critical in critical_paths:
                 if key.startswith(critical):
-                    return ChangeSeverity.CRITICAL
+                    return ChangeSeverity.CRITICAL, f"Critical change detected in {key}"
         
-        # Major: important config
+        # Major: important config OR output/metric changes
         major_paths = [
             'inputs.config', 'process.training', 'process.environment'
         ]
         
+        # Check for output changes or metric deltas (these indicate model behavior changed)
+        if output_changes_count > 0 or metric_deltas_count > 0:
+            if metric_deltas_count > 0:
+                return ChangeSeverity.MAJOR, f"Output/metric changes detected: {metric_deltas_count} metric deltas, {output_changes_count} output changes"
+            else:
+                return ChangeSeverity.MAJOR, f"Output changes detected: {output_changes_count} output changes"
+        
+        # Check for major config paths
         for key in changed_keys:
             for major in major_paths:
                 if key.startswith(major):
-                    return ChangeSeverity.MAJOR
+                    return ChangeSeverity.MAJOR, f"Major config change detected in {key}"
         
-        # Minor: metrics only
-        if all(key.startswith('outputs.metrics') for key in changed_keys):
-            return ChangeSeverity.MINOR
+        # Minor: only input/process changes (not output/metrics), OR only excluded factors
+        if has_excluded_factors and excluded_factors_summary and total_changes == 0:
+            # Only excluded factors changed (already handled above, but double-check)
+            return ChangeSeverity.MINOR, f"Only excluded factors changed: {excluded_factors_summary}"
         
-        # Default to major if mixed
+        # Minor: only metrics in changed_keys (but no metric_deltas - this is edge case)
+        if changed_keys and all(key.startswith('outputs.metrics') for key in changed_keys) and metric_deltas_count == 0:
+            return ChangeSeverity.MINOR, f"Only metric metadata changed (no actual metric deltas): {len(changed_keys)} keys"
+        
+        # Minor: only input/process changes (no output/metric changes)
+        if (input_changes_count > 0 or process_changes_count > 0) and output_changes_count == 0 and metric_deltas_count == 0:
+            return ChangeSeverity.MINOR, f"Only input/process changes: {input_changes_count} input, {process_changes_count} process"
+        
+        # Default to major if we have changes but don't fit above categories
         if changed_keys:
-            return ChangeSeverity.MAJOR
+            return ChangeSeverity.MAJOR, f"Mixed changes detected: {total_changes} total changes across inputs/process/outputs"
         
-        return ChangeSeverity.NONE
+        # Fallback (shouldn't reach here if logic is correct)
+        return ChangeSeverity.NONE, "No changes detected (fallback)"
     
     def find_previous_comparable(
         self,
@@ -2699,13 +2762,24 @@ class DiffTelemetry:
             diff = self.compute_diff(snapshot, prev_snapshot)
         else:
             # First run / no previous run: return stable shape with empty excluded factors
+            # CRITICAL: If not comparable, severity must be CRITICAL with reason
             diff = DiffResult(
                 prev_run_id=None,  # Use None instead of "none" for clarity
                 current_run_id=snapshot.run_id,
                 comparable=False,
                 comparability_reason="No previous comparable run found",
+                severity=ChangeSeverity.CRITICAL,
+                severity_reason="No previous comparable run found - cannot determine changes",
                 excluded_factors_changed={},  # Empty but present
-                summary={'excluded_factors_summary': None}  # Empty but present
+                summary={
+                    'total_changes': 0,
+                    'input_changes': 0,
+                    'process_changes': 0,
+                    'output_changes': 0,
+                    'metric_deltas_count': 0,
+                    'excluded_factors_changed': False,
+                    'excluded_factors_summary': None
+                }
             )
         
         # Get or establish baseline (stored per-cohort for exact matching)
