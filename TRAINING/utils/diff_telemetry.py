@@ -1049,7 +1049,7 @@ class DiffTelemetry:
         
         # CRITICAL: Compute output digests for artifact/metric determinism verification
         # These prove that outputs are identical across reruns (full determinism claim)
-        metrics_sha256 = self._compute_metrics_digest(outputs, resolved_metadata)
+        metrics_sha256 = self._compute_metrics_digest(outputs, resolved_metadata, cohort_dir)
         artifacts_manifest_sha256 = self._compute_artifacts_manifest_digest(cohort_dir, stage)
         predictions_sha256 = self._compute_predictions_digest(cohort_dir, stage)
         
@@ -1873,18 +1873,39 @@ class DiffTelemetry:
     def _compute_metrics_digest(
         self,
         outputs: Dict[str, Any],
-        resolved_metadata: Optional[Dict[str, Any]]
+        resolved_metadata: Optional[Dict[str, Any]],
+        cohort_dir: Optional[Path]
     ) -> Optional[str]:
         """
         Compute SHA256 digest of metrics for determinism verification.
         
         This proves that metrics are identical across reruns with same inputs/process.
+        
+        Metrics can be in:
+        1. outputs['metrics'] (from run_data)
+        2. resolved_metadata['metrics'] (from metadata.json)
+        3. metrics.json file in cohort_dir (most common for TARGET_RANKING/FEATURE_SELECTION)
         """
         metrics_data = outputs.get('metrics', {})
         
-        # Also check resolved_metadata for metrics if outputs.metrics is empty
+        # Check resolved_metadata for metrics if outputs.metrics is empty
         if not metrics_data and resolved_metadata:
             metrics_data = resolved_metadata.get('metrics', {})
+        
+        # CRITICAL: If still empty, try reading from metrics.json file in cohort_dir
+        if not metrics_data and cohort_dir:
+            metrics_file = Path(cohort_dir) / "metrics.json"
+            if metrics_file.exists():
+                try:
+                    with open(metrics_file, 'r') as f:
+                        metrics_json = json.load(f)
+                    # Extract key metrics (exclude diff_telemetry, run_id, timestamp for stable hash)
+                    metrics_data = {
+                        k: v for k, v in metrics_json.items()
+                        if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode', 'stage', 'item_name']
+                    }
+                except Exception as e:
+                    logger.debug(f"Failed to read metrics.json from {cohort_dir}: {e}")
         
         if not metrics_data:
             return None
@@ -1904,25 +1925,63 @@ class DiffTelemetry:
         
         This proves that artifacts (feature_importances.parquet, etc.) are identical across reruns.
         Creates a manifest of artifact files with their sizes and modification times.
+        
+        Artifacts are stored at the target level (one level up from cohort directory):
+        - TARGET_RANKING: REPRODUCIBILITY/TARGET_RANKING/{view}/{target}/feature_importances/, target_confidence.json
+        - FEATURE_SELECTION: REPRODUCIBILITY/FEATURE_SELECTION/{view}/{target}/feature_importances/, selected_features.txt, target_confidence.json
+        - TRAINING: REPRODUCIBILITY/TRAINING/{view}/{target}/model_family={family}/cohort={cohort_id}/ (artifacts in cohort dir)
         """
         if not cohort_dir or not cohort_dir.exists():
             return None
         
+        # For TARGET_RANKING and FEATURE_SELECTION, artifacts are at target level (one level up from cohort)
+        # For TRAINING, artifacts are in the cohort directory itself
+        if stage in ['TARGET_RANKING', 'FEATURE_SELECTION']:
+            # Go up one level from cohort={cohort_id} to target level
+            target_dir = cohort_dir.parent
+        else:
+            # TRAINING: artifacts are in cohort directory
+            target_dir = cohort_dir
+        
         # Define artifact file patterns by stage
         artifact_patterns = {
-            'TARGET_RANKING': ['feature_importances.parquet', 'target_confidence.json'],
-            'FEATURE_SELECTION': ['feature_importances.parquet', 'feature_prioritization.yaml', 'selected_features.txt'],
-            'TRAINING': ['model_hash.txt', 'meta_*.json']  # Model artifacts
+            'TARGET_RANKING': [
+                ('target_confidence.json', target_dir),  # At target level
+                ('feature_importances', target_dir / 'feature_importances')  # Directory with CSV files
+            ],
+            'FEATURE_SELECTION': [
+                ('selected_features.txt', target_dir),  # At target level
+                ('target_confidence.json', target_dir),  # At target level
+                ('feature_importances', target_dir / 'feature_importances')  # Directory with CSV files
+            ],
+            'TRAINING': [
+                ('model_hash.txt', cohort_dir),  # In cohort directory
+                ('meta_*.json', cohort_dir)  # In cohort directory
+            ]
         }
         
         patterns = artifact_patterns.get(stage, [])
         manifest = []
         
-        for pattern in patterns:
-            # Handle glob patterns
-            if '*' in pattern:
-                import glob
-                matches = list(cohort_dir.glob(pattern))
+        for pattern, search_dir in patterns:
+            if not search_dir or not search_dir.exists():
+                continue
+            
+            if pattern == 'feature_importances':
+                # Special case: hash all CSV files in feature_importances directory
+                if search_dir.is_dir():
+                    csv_files = sorted(search_dir.glob('*.csv'))
+                    for csv_file in csv_files:
+                        if csv_file.is_file():
+                            stat = csv_file.stat()
+                            manifest.append({
+                                'path': f'feature_importances/{csv_file.name}',
+                                'size': stat.st_size,
+                                'mtime': stat.st_mtime
+                            })
+            elif '*' in pattern:
+                # Handle glob patterns
+                matches = list(search_dir.glob(pattern))
                 for match in sorted(matches):
                     if match.is_file():
                         stat = match.stat()
@@ -1933,7 +1992,7 @@ class DiffTelemetry:
                         })
             else:
                 # Exact file match
-                file_path = cohort_dir / pattern
+                file_path = search_dir / pattern
                 if file_path.exists() and file_path.is_file():
                     stat = file_path.stat()
                     manifest.append({
