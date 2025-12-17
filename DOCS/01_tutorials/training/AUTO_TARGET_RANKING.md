@@ -146,8 +146,9 @@ After running, you'll find:
 
 ```
 RESULTS/
-  sample_500k-1M/
-    target_ranking_test_YYYYMMDD_HHMMSS/
+  runs/
+    cg-{hash}_n-{size}_fam-{family}/
+      target_ranking_test_YYYYMMDD_HHMMSS/
       target_rankings/
         ranking_summary.json          # Overall ranking summary
         cross_sectional_rankings.json  # Cross-sectional view rankings

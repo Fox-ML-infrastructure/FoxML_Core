@@ -51,19 +51,12 @@ The system is automatically integrated via `ReproducibilityTracker._save_to_coho
 
 Runs are **automatically organized** by comparison group metadata after the first snapshot is created.
 
-**Initial Location** (before first snapshot):
+**Current Structure** (as of 2025-12-16):
 ```
 RESULTS/
-  sample_5k-10k/                  # Sample size bin (temporary organization)
-    {run_name}/
-      ...
-```
-
-**Final Location** (after first snapshot):
-```
-RESULTS/
-  {comparison_group_dir}/          # Organized by all outcome-influencing metadata
-    {run_name}/
+  runs/                            # All runs organized by comparison group
+    {comparison_group_dir}/        # Organized by all outcome-influencing metadata
+      {run_name}/
       REPRODUCIBILITY/
         METRICS/
           snapshot_index.json      # Run-specific snapshot index
@@ -82,14 +75,17 @@ RESULTS/
 ```
 
 **Comparison Group Directory Naming:**
-- Format: `{exp}-{experiment_id}_data-{hash}_task-{hash}_n-{N_effective}_family-{model_family}_features-{hash}`
-- Example: `n-5000_family-lightgbm_features-abc12345`
-- Filesystem-safe: Special characters are sanitized, length is limited to 200 chars
-- Human-readable: All outcome-influencing metadata is visible in the directory name
+- Format: `cg-{hash}_n-{sample_size}_fam-{model_family}` (compact, readable)
+- Example: `cg-abc123def456_n-5000_fam-lightgbm`
+- Single 12-character hash of full comparison group key (all outcome-influencing metadata)
+- Includes `n-{sample_size}` and `fam-{model_family}` for quick human identification
+- Filesystem-safe: Special characters are sanitized
 
-**Automatic Organization:**
-- Runs start in sample size bins (or `_pending/` if N_effective is unknown)
-- On first snapshot creation, the run is automatically moved to the comparison group directory
+**Run Organization:**
+- Runs are organized by comparison group **at startup** (when config is loaded)
+- Comparison group directory is computed from available metadata (data_dir, symbols, min_cs, max_cs_samples, n_effective, routing_signature)
+- Runs are created directly in `RESULTS/runs/{comparison_group_dir}/{run_name}/`
+- Fallback: If comparison group cannot be computed at startup, runs may start in sample size bins or `_pending/`, then move after first snapshot
 - This ensures runs with exactly the same metadata are stored together for easy auditing
 
 ## What Gets Tracked

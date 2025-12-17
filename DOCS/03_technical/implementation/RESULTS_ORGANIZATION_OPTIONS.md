@@ -1,32 +1,30 @@
 # RESULTS Directory Organization
 
-## Current Implementation (2025-12-12)
+## Current Implementation (2025-12-16)
 
-**Structure: Sample Size Bins**
+**Structure: Comparison Group Organization**
 
 ```
 RESULTS/
-  sample_25k-50k/            # All runs with 25,000-50,000 samples
-    test_run_20251212_012021/
-    test_run_20251212_020000/
-    ...
-  sample_50k-100k/           # All runs with 50,000-100,000 samples
-    ...
-  sample_500k-1M/            # All runs with 500,000-1,000,000 samples
-    test_e2e_ranking_unified_20251212_012021/
-    ...
+  runs/                      # All runs organized by comparison group metadata
+    cg-abc123def456_n-5000_fam-lightgbm/    # Comparison group directory
+      test_run_20251216_012021/
+      test_run_20251216_020000/
+      ...
+    cg-def456ghi789_n-25000_fam-xgboost/
+      ...
 ```
 
 **Why This Structure?**
 
-This organization makes it **easy to compare runs with similar cross-sectional sample sizes**, which is the primary use case for reproducibility and trend analysis.
+Runs are organized by **all outcome-influencing metadata** (dataset, task, routing, model family, feature set, split protocol) using a comparison group key. This ensures that only truly comparable runs are grouped together, enabling strict audit-grade comparisons.
 
 **Benefits:**
-- ✅ **Easy comparison**: All ~25k runs are in `sample_25k-50k/` - perfect for comparing similar experiments
-- ✅ **Trend analysis friendly**: Series won't fragment when `N_effective` jitters by a few hundred samples
-- ✅ **Cleaner structure**: Only 9 top-level directories (one per bin) instead of hundreds of numeric directories
-- ✅ **Human navigable**: "Show me all ~25k runs" → go to `sample_25k-50k/`
-- ✅ **Audit-grade**: Bin boundaries are unambiguous, versioned, and stored in metadata
+- ✅ **Strict comparability**: Only runs with identical outcome-influencing metadata are grouped together
+- ✅ **Audit-grade**: Comparison group key includes fingerprints for config, data, features, targets, and split protocol
+- ✅ **Prevents fold drift**: Split protocol signature includes `split_seed` and `fold_assignment_hash`
+- ✅ **Human navigable**: Directory names include `n-{sample_size}` and `fam-{model_family}` for quick identification
+- ✅ **Clean structure**: All runs under `RESULTS/runs/` keeps root directory clean
 
 **Bins:**
 - `sample_0-5k`: 0 <= N < 5,000

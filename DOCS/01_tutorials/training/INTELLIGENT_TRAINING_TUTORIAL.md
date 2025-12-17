@@ -374,13 +374,14 @@ See [Config Basics](../configuration/CONFIG_BASICS.md) for how to modify these s
 
 ## Output Structure
 
-**Note**: All runs are automatically organized in the `RESULTS/` directory by sample size bins. Output directories are automatically timestamped by default (format: `YYYYMMDD_HHMMSS`) to make runs distinguishable.
+**Note**: All runs are automatically organized in the `RESULTS/runs/` directory by comparison group metadata (dataset, task, routing, model family, feature set, split protocol). Output directories are automatically timestamped by default (format: `YYYYMMDD_HHMMSS`) to make runs distinguishable.
 
 **Directory Organization**:
 ```
 RESULTS/
-└── sample_25k-50k/                     # All runs with 25,000-50,000 samples
-    └── {run_name}_YYYYMMDD_HHMMSS/
+└── runs/                                # All runs organized by comparison group
+    └── cg-{hash}_n-{size}_fam-{family}/  # Comparison group directory
+        └── {run_name}_YYYYMMDD_HHMMSS/
         ├── target_rankings/
         │   ├── target_predictability_rankings.csv
         │   └── feature_importances/
@@ -417,29 +418,27 @@ RESULTS/
                 └── {target}.json
 ```
 
-**Sample Size Bins**:
-- `sample_0-5k`: 0-5,000 samples
-- `sample_5k-10k`: 5,000-10,000 samples
-- `sample_10k-25k`: 10,000-25,000 samples
-- `sample_25k-50k`: 25,000-50,000 samples
-- `sample_50k-100k`: 50,000-100,000 samples
-- `sample_100k-250k`: 100,000-250,000 samples
-- `sample_250k-500k`: 250,000-500,000 samples
-- `sample_500k-1M`: 500,000-1,000,000 samples
-- `sample_1M+`: 1,000,000+ samples
+**Comparison Group Organization:**
+- Runs are organized by **all outcome-influencing metadata** (dataset, task, routing, model family, feature set, split protocol)
+- Directory format: `cg-{hash}_n-{sample_size}_fam-{model_family}`
+  - `cg-{hash}`: 12-character hash of full comparison group key
+  - `n-{sample_size}`: Human-readable sample size (e.g., `n-5000`, `n-25000`)
+  - `fam-{model_family}`: Model family (e.g., `fam-lightgbm`, `fam-xgboost`)
+- Example: `cg-abc123def456_n-5000_fam-lightgbm/`
 
 **Benefits**:
-- **Easy comparison**: All runs with similar sample sizes are grouped together (e.g., all ~25k runs in `sample_25k-50k/`)
-- **Trend analysis friendly**: Series won't fragment when `N_effective` varies slightly
-- **Clean structure**: Only 9 top-level directories instead of hundreds
-- **Audit-grade**: Bin boundaries are unambiguous, versioned, and stored in `metadata.json`
-- **Early estimation**: System estimates `N_effective` during initialization to avoid `_pending/` directories
-- **Integrated backups**: Config backups stored with run artifacts
-- **Complete metadata**: Each run includes full symbol list, bin info, and data characteristics
+- **Strict comparability**: Only runs with identical outcome-influencing metadata are grouped together
+- **Audit-grade**: Comparison group key includes fingerprints for config, data, features, targets, and split protocol
+- **Prevents fold drift**: Split protocol signature includes `split_seed` and `fold_assignment_hash`
+- **Human navigable**: Directory names include sample size and model family for quick identification
+- **Clean structure**: All runs under `RESULTS/runs/` keeps root directory clean
+- **Early organization**: Comparison group computed at startup, runs created directly in final location
 
 **Finding Runs**:
-- **By sample size**: `ls RESULTS/sample_25k-50k/`
-- **By exact N_effective**: Query `REPRODUCIBILITY/index.parquet`
+- **By comparison group**: `ls RESULTS/runs/cg-*/`
+- **By sample size**: `ls RESULTS/runs/*_n-5000_*/`
+- **By model family**: `ls RESULTS/runs/*_fam-lightgbm/`
+- **By exact metadata**: Query `REPRODUCIBILITY/index.parquet`
 - **By date**: Query `REPRODUCIBILITY/index.parquet` filtered by `created_at`
 - **By cohort**: Query `REPRODUCIBILITY/index.parquet` filtered by `cohort_id`
 
