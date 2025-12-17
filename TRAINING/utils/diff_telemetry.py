@@ -2839,21 +2839,36 @@ class DiffTelemetry:
                     se_ratio = abs(delta_abs) / se  # How many SEs is this delta?
                     
                     # Generate noise explanation for statistical context
+                    # We'll use a placeholder that will be replaced with exact serialized value
+                    # This ensures the explanation matches the exact value in delta_abs field
+                    delta_abs_abs = abs(delta_abs)
                     if abs(z_score) < 0.25:
-                        noise_explanation = (
-                            f"Delta ({abs(delta_abs):.6f}) is {se_ratio:.4f}× the standard error (SE≈{se:.4f}). "
-                            f"This is statistically insignificant - well within expected run-to-run variability."
+                        noise_explanation_template = (
+                            "Delta ({DELTA_ABS}) is {se_ratio:.4f}× the standard error (SE≈{se:.4f}). "
+                            "This is statistically insignificant - well within expected run-to-run variability."
                         )
                     elif abs(z_score) < 1.0:
-                        noise_explanation = (
-                            f"Delta ({abs(delta_abs):.6f}) is {se_ratio:.4f}× the standard error (SE≈{se:.4f}). "
-                            f"This is a minor change but still within expected variability."
+                        noise_explanation_template = (
+                            "Delta ({DELTA_ABS}) is {se_ratio:.4f}× the standard error (SE≈{se:.4f}). "
+                            "This is a minor change but still within expected variability."
                         )
                     else:
-                        noise_explanation = (
-                            f"Delta ({abs(delta_abs):.6f}) is {se_ratio:.4f}× the standard error (SE≈{se:.4f}). "
-                            f"This exceeds expected variability and may indicate a real change."
+                        noise_explanation_template = (
+                            "Delta ({DELTA_ABS}) is {se_ratio:.4f}× the standard error (SE≈{se:.4f}). "
+                            "This exceeds expected variability and may indicate a real change."
                         )
+                    # Store template for later replacement with exact serialized value
+                    noise_explanation = noise_explanation_template.format(
+                        DELTA_ABS="{DELTA_ABS}",  # Placeholder
+                        se_ratio=se_ratio,
+                        se=se
+                    )
+                
+                # Check if values differ (after rounding for comparison)
+                # Round to 6 decimal places for comparison (same as serialization)
+                prev_rounded = round(prev_float, 6)
+                curr_rounded = round(curr_float, 6)
+                differs = prev_rounded != curr_rounded
                 
                 # Check if delta is significant (above tolerance)
                 abs_change = abs(delta_abs)
@@ -2884,24 +2899,39 @@ class DiffTelemetry:
                 # Only include significant deltas (above tolerance)
                 # This prevents spam from zero-delta entries like pos_rate, n_models that never change
                 if is_significant:
+                    # Serialize delta_abs first to get exact value for explanation
+                    delta_abs_serialized = round(delta_abs, 6)
+                    
                     delta_entry = {
-                        'delta_abs': round(delta_abs, 6),
+                        'delta_abs': delta_abs_serialized,
                         'delta_pct': round(delta_pct, 4),  # More precision for percentage
-                        'prev': round(prev_float, 6),
-                        'curr': round(curr_float, 6),
-                        'z_score': round(z_score, 4) if z_score is not None else None,
+                        'prev': prev_rounded,
+                        'curr': curr_rounded,
+                        'differs': differs,  # prev != curr (after rounding)
+                        'changed': is_significant,  # abs(delta) > max(abs_tol, rel_tol*abs(prev))
                         'impact_label': impact_label,
                         'abs_tol': abs_tol,
-                        'rel_tol': rel_tol,
-                        'changed': True  # All entries in metric_deltas are significant
+                        'rel_tol': rel_tol
                     }
                     
                     # Add statistical context if available
                     if se is not None and se > 0:
                         delta_entry['se'] = round(se, 6)  # Standard error
                         delta_entry['se_ratio'] = round(se_ratio, 4) if se_ratio is not None else None
+                        # Label z_score as a proxy (using AUC SE for all metrics)
+                        delta_entry['z_score'] = round(z_score, 4) if z_score is not None else None
+                        delta_entry['z_score_basis'] = "auc_se_proxy"  # Using std_score/sqrt(n_models) as proxy for all metrics
                         if noise_explanation:
-                            delta_entry['noise_explanation'] = noise_explanation
+                            # Use exact serialized value in explanation to avoid formatting bugs
+                            # Replace placeholder with exact serialized value
+                            delta_entry['noise_explanation'] = noise_explanation.replace(
+                                "{DELTA_ABS}",
+                                str(delta_abs_serialized)
+                            )
+                    else:
+                        # No SE available, so no z_score
+                        delta_entry['z_score'] = None
+                        delta_entry['z_score_basis'] = None
                     
                     deltas[key] = delta_entry
             except (ValueError, TypeError, ZeroDivisionError):
@@ -3433,11 +3463,35 @@ class DiffTelemetry:
             metric_deltas_file = cohort_dir / "metric_deltas.json"
             # Use relative path from cohort_dir for portability
             metric_deltas_file_path = "metric_deltas.json"
+            
+            # Extract identifiers from cohort_dir path or snapshot
+            # Path structure: .../STAGE/VIEW/item_name/cohort=.../
+            stage = diff.prev_stage or "UNKNOWN"
+            view = diff.prev_view or "UNKNOWN"
+            item_name = "UNKNOWN"
+            # Try to extract from cohort_dir path
+            try:
+                parts = Path(cohort_dir).parts
+                for i, part in enumerate(parts):
+                    if part in ['TARGET_RANKING', 'FEATURE_SELECTION', 'TRAINING']:
+                        stage = part
+                        if i + 1 < len(parts) and parts[i+1] in ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC', 'LOSO', 'INDIVIDUAL']:
+                            view = parts[i+1]
+                            if i + 2 < len(parts) and not parts[i+2].startswith('cohort='):
+                                item_name = parts[i+2]
+                                break
+            except Exception:
+                pass
+            
             # Structure: keyed by metric name with full delta info
             metric_deltas_data = {
                 'run_id': diff.current_run_id,
                 'prev_run_id': diff.prev_run_id,
                 'timestamp': datetime.now().isoformat(),
+                # Identifiers for downstream joining
+                'stage': stage,
+                'view': view,
+                'item_name': item_name,
                 'metric_deltas': diff.metric_deltas,
                 'summary': {
                     'total_metrics': len(diff.metric_deltas),
