@@ -1682,6 +1682,36 @@ def select_features_for_target(
                     additional_data_with_cohort['mode_reason'] = resolved_data_config.get('mode_reason')
                     additional_data_with_cohort['loader_contract'] = resolved_data_config.get('loader_contract')
                 
+                # Add fields needed for enhanced metadata (matching target ranking)
+                if selected_features:
+                    additional_data_with_cohort['feature_names'] = selected_features
+                
+                # Add data interval for data_source metadata
+                if 'detected_interval' in locals() and detected_interval is not None:
+                    additional_data_with_cohort['data_interval_minutes'] = detected_interval
+                elif explicit_interval:
+                    # Convert explicit_interval to minutes if it's a string like "5m"
+                    try:
+                        if isinstance(explicit_interval, str) and explicit_interval.endswith('m'):
+                            additional_data_with_cohort['data_interval_minutes'] = float(explicit_interval[:-1])
+                        elif isinstance(explicit_interval, (int, float)):
+                            additional_data_with_cohort['data_interval_minutes'] = float(explicit_interval)
+                    except Exception:
+                        pass
+                
+                # Add feature registry hash if available (for comparable_key)
+                try:
+                    from TRAINING.common.feature_registry import get_registry
+                    registry = get_registry()
+                    if registry and selected_features:
+                        # Compute hash from feature names (sorted for stability)
+                        feature_names_sorted = sorted([str(f) for f in selected_features])
+                        feature_registry_str = "|".join(feature_names_sorted)
+                        import hashlib
+                        additional_data_with_cohort['feature_registry_hash'] = hashlib.sha256(feature_registry_str.encode()).hexdigest()[:16]
+                except Exception:
+                    pass
+                
                 tracker.log_comparison(
                     stage="feature_selection",
                     item_name=target_column,  # FIX: item_name is just target (view/symbol handled by route_type/symbol params)
