@@ -253,6 +253,31 @@ grep -R "Total jobs: 0" logs/ || echo "✅ No 0-job plans (should error)"
 
 ---
 
+### 12) Output Digests for Full Determinism Verification ✅
+
+**Problem:** The diff telemetry system could verify that inputs/process were identical across reruns, but couldn't prove that outputs/metrics/artifacts were also identical. This left a gap in the full determinism claim.
+
+**Solution:**
+- Added three output digest fields to `NormalizedSnapshot`:
+  - `metrics_sha256`: SHA256 of metrics dict (proves metric determinism)
+  - `artifacts_manifest_sha256`: SHA256 of artifacts manifest (proves artifact determinism)
+  - `predictions_sha256`: SHA256 of predictions (if available, proves prediction determinism)
+- Implemented digest computation:
+  - `_compute_metrics_digest()`: Hashes normalized metrics dict from outputs/resolved_metadata
+  - `_compute_artifacts_manifest_digest()`: Creates manifest of artifact files (feature_importances.parquet, etc.) with sizes/mtimes, hashes manifest
+  - `_compute_predictions_digest()`: Hashes predictions files if they exist (with size optimization for large files)
+- Updated diff logic to check output digests:
+  - If any digest differs → `severity="critical"` with reason "non-determinism detected"
+  - Added `output_digest_changes` to diff summary for visibility
+- Digest computation happens during snapshot normalization (uses `cohort_dir` to scan for artifacts)
+
+**Files Changed:**
+- `TRAINING/utils/diff_telemetry.py` (`NormalizedSnapshot`, `normalize_snapshot`, `compute_diff`, `_determine_severity`, digest computation methods)
+
+**Outcome:** Full determinism verification - can now prove that outputs/metrics/artifacts are identical across reruns with same inputs/process. Non-deterministic outputs are flagged as CRITICAL severity.
+
+---
+
 ## Related Documentation
 
 - [Consolidated Fix Summary](../../../docs/audit/fix-training-pipeline-audit-fixes.md)

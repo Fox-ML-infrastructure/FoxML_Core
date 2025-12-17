@@ -271,6 +271,11 @@ class NormalizedSnapshot:
     feature_fingerprint: Optional[str] = None
     target_fingerprint: Optional[str] = None
     
+    # Output digests (for artifact/metric determinism verification)
+    metrics_sha256: Optional[str] = None  # SHA256 of metrics dict (proves metric determinism)
+    artifacts_manifest_sha256: Optional[str] = None  # SHA256 of artifacts manifest (proves artifact determinism)
+    predictions_sha256: Optional[str] = None  # SHA256 of predictions (if available, proves prediction determinism)
+    
     # Fingerprint source descriptions (for auditability)
     fingerprint_sources: Dict[str, str] = field(default_factory=dict)
     # e.g., {"fold_assignment_hash": "hash over row_id→fold_id mapping"}
@@ -623,6 +628,9 @@ class DiffTelemetry:
             data_fingerprint=data.get('data_fingerprint'),
             feature_fingerprint=data.get('feature_fingerprint'),
             target_fingerprint=data.get('target_fingerprint'),
+            metrics_sha256=data.get('metrics_sha256'),  # May be None for old snapshots
+            artifacts_manifest_sha256=data.get('artifacts_manifest_sha256'),  # May be None for old snapshots
+            predictions_sha256=data.get('predictions_sha256'),  # May be None for old snapshots
             fingerprint_sources=data.get('fingerprint_sources', {}),
             inputs=data.get('inputs', {}),
             process=data.get('process', {}),
@@ -1039,6 +1047,12 @@ class DiffTelemetry:
         # Normalize outputs
         outputs = self._normalize_outputs(run_data, additional_data)
         
+        # CRITICAL: Compute output digests for artifact/metric determinism verification
+        # These prove that outputs are identical across reruns (full determinism claim)
+        metrics_sha256 = self._compute_metrics_digest(outputs, resolved_metadata)
+        artifacts_manifest_sha256 = self._compute_artifacts_manifest_digest(cohort_dir, stage)
+        predictions_sha256 = self._compute_predictions_digest(cohort_dir, stage)
+        
         # Build fingerprint source descriptions (for auditability)
         fingerprint_sources = {}
         if ctx.fold_assignment_hash:
@@ -1058,6 +1072,9 @@ class DiffTelemetry:
             data_fingerprint=data_fp,
             feature_fingerprint=feature_fp,
             target_fingerprint=target_fp,
+            metrics_sha256=metrics_sha256,
+            artifacts_manifest_sha256=artifacts_manifest_sha256,
+            predictions_sha256=predictions_sha256,
             fingerprint_sources=fingerprint_sources,
             inputs=inputs,
             process=process,
@@ -1853,6 +1870,150 @@ class DiffTelemetry:
         
         return outputs
     
+    def _compute_metrics_digest(
+        self,
+        outputs: Dict[str, Any],
+        resolved_metadata: Optional[Dict[str, Any]]
+    ) -> Optional[str]:
+        """
+        Compute SHA256 digest of metrics for determinism verification.
+        
+        This proves that metrics are identical across reruns with same inputs/process.
+        """
+        metrics_data = outputs.get('metrics', {})
+        
+        # Also check resolved_metadata for metrics if outputs.metrics is empty
+        if not metrics_data and resolved_metadata:
+            metrics_data = resolved_metadata.get('metrics', {})
+        
+        if not metrics_data:
+            return None
+        
+        # Normalize metrics dict for stable hashing (sort keys, round floats)
+        normalized = self._normalize_value_for_hash(metrics_data)
+        json_str = json.dumps(normalized, sort_keys=True, default=str)
+        return hashlib.sha256(json_str.encode()).hexdigest()
+    
+    def _compute_artifacts_manifest_digest(
+        self,
+        cohort_dir: Optional[Path],
+        stage: str
+    ) -> Optional[str]:
+        """
+        Compute SHA256 digest of artifacts manifest for determinism verification.
+        
+        This proves that artifacts (feature_importances.parquet, etc.) are identical across reruns.
+        Creates a manifest of artifact files with their sizes and modification times.
+        """
+        if not cohort_dir or not cohort_dir.exists():
+            return None
+        
+        # Define artifact file patterns by stage
+        artifact_patterns = {
+            'TARGET_RANKING': ['feature_importances.parquet', 'target_confidence.json'],
+            'FEATURE_SELECTION': ['feature_importances.parquet', 'feature_prioritization.yaml', 'selected_features.txt'],
+            'TRAINING': ['model_hash.txt', 'meta_*.json']  # Model artifacts
+        }
+        
+        patterns = artifact_patterns.get(stage, [])
+        manifest = []
+        
+        for pattern in patterns:
+            # Handle glob patterns
+            if '*' in pattern:
+                import glob
+                matches = list(cohort_dir.glob(pattern))
+                for match in sorted(matches):
+                    if match.is_file():
+                        stat = match.stat()
+                        manifest.append({
+                            'path': match.name,
+                            'size': stat.st_size,
+                            'mtime': stat.st_mtime
+                        })
+            else:
+                # Exact file match
+                file_path = cohort_dir / pattern
+                if file_path.exists() and file_path.is_file():
+                    stat = file_path.stat()
+                    manifest.append({
+                        'path': pattern,
+                        'size': stat.st_size,
+                        'mtime': stat.st_mtime
+                    })
+        
+        if not manifest:
+            return None
+        
+        # Sort manifest for stable hashing
+        manifest_sorted = sorted(manifest, key=lambda x: x['path'])
+        json_str = json.dumps(manifest_sorted, sort_keys=True, default=str)
+        return hashlib.sha256(json_str.encode()).hexdigest()
+    
+    def _compute_predictions_digest(
+        self,
+        cohort_dir: Optional[Path],
+        stage: str
+    ) -> Optional[str]:
+        """
+        Compute SHA256 digest of predictions for determinism verification.
+        
+        This proves that predictions are identical across reruns.
+        Currently, predictions may not be stored in cohort directories for all stages.
+        """
+        if not cohort_dir or not cohort_dir.exists():
+            return None
+        
+        # Check for predictions files (if they exist)
+        predictions_files = []
+        for pattern in ['predictions.parquet', 'predictions.csv', 'predictions.json']:
+            file_path = cohort_dir / pattern
+            if file_path.exists() and file_path.is_file():
+                # For large files, hash first N bytes + size instead of full content
+                # This is a compromise for performance while still detecting changes
+                stat = file_path.stat()
+                if stat.st_size > 10 * 1024 * 1024:  # > 10MB
+                    # Hash first 1MB + size + mtime
+                    with open(file_path, 'rb') as f:
+                        first_mb = f.read(1024 * 1024)
+                    content_hash = hashlib.sha256(
+                        first_mb + str(stat.st_size).encode() + str(stat.st_mtime).encode()
+                    ).hexdigest()
+                else:
+                    # Hash full file for smaller files
+                    with open(file_path, 'rb') as f:
+                        content_hash = hashlib.sha256(f.read()).hexdigest()
+                
+                predictions_files.append({
+                    'path': pattern,
+                    'size': stat.st_size,
+                    'hash': content_hash
+                })
+        
+        if not predictions_files:
+            return None
+        
+        # Sort for stable hashing
+        predictions_sorted = sorted(predictions_files, key=lambda x: x['path'])
+        json_str = json.dumps(predictions_sorted, sort_keys=True, default=str)
+        return hashlib.sha256(json_str.encode()).hexdigest()
+    
+    def _normalize_value_for_hash(self, val: Any) -> Any:
+        """Normalize value for hashing (round floats, sort lists, etc.)."""
+        if isinstance(val, float):
+            if np.isnan(val) or np.isinf(val):
+                return None
+            return round(val, 6)
+        elif isinstance(val, (list, tuple)):
+            try:
+                return sorted([self._normalize_value_for_hash(v) for v in val])
+            except TypeError:
+                return [self._normalize_value_for_hash(v) for v in val]
+        elif isinstance(val, dict):
+            return {k: self._normalize_value_for_hash(v) for k, v in sorted(val.items())}
+        else:
+            return val
+    
     def save_snapshot(
         self,
         snapshot: NormalizedSnapshot,
@@ -2079,6 +2240,16 @@ class DiffTelemetry:
             current_snapshot.outputs
         )
         
+        # CRITICAL: Check output digests for artifact/metric determinism
+        # If digests differ, this indicates non-deterministic outputs even with same inputs/process
+        output_digest_changes = []
+        if prev_snapshot.metrics_sha256 != current_snapshot.metrics_sha256:
+            output_digest_changes.append("metrics_sha256")
+        if prev_snapshot.artifacts_manifest_sha256 != current_snapshot.artifacts_manifest_sha256:
+            output_digest_changes.append("artifacts_manifest_sha256")
+        if prev_snapshot.predictions_sha256 != current_snapshot.predictions_sha256:
+            output_digest_changes.append("predictions_sha256")
+        
         # Extract excluded factors (hyperparameters, seeds, versions) for reporting
         excluded_factors_changed = self._extract_excluded_factor_changes(
             current_snapshot, prev_snapshot
@@ -2094,7 +2265,8 @@ class DiffTelemetry:
             'output_changes': len(output_changes['keys']),
             'metric_deltas_count': len(metric_deltas),
             'excluded_factors_changed': bool(excluded_factors_changed),
-            'excluded_factors_summary': excluded_summary  # Human-readable summary
+            'excluded_factors_summary': excluded_summary,  # Human-readable summary
+            'output_digest_changes': output_digest_changes  # List of changed output digests
         }
         
         # CRITICAL: Determine severity purely from the report (SST-style)
@@ -2324,6 +2496,15 @@ class DiffTelemetry:
         input_changes_count = summary.get('input_changes', len(input_changes.get('keys', [])))
         process_changes_count = summary.get('process_changes', len(process_changes.get('keys', [])))
         has_excluded_factors = summary.get('excluded_factors_changed', bool(excluded_factors_changed))
+        output_digest_changes = summary.get('output_digest_changes', [])
+        
+        # CRITICAL: Check output digests first - if they differ, this is a CRITICAL non-determinism issue
+        # This indicates outputs/metrics/artifacts are not identical across reruns despite same inputs/process
+        if output_digest_changes:
+            return ChangeSeverity.CRITICAL, (
+                f"Output digests differ (non-determinism detected): {', '.join(output_digest_changes)}. "
+                f"This indicates outputs/metrics/artifacts are not identical across reruns despite same inputs/process."
+            )
         
         # CRITICAL FIX: If no changes at all, severity must be NONE
         if total_changes == 0 and metric_deltas_count == 0:
