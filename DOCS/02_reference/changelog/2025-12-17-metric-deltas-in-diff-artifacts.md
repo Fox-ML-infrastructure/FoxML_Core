@@ -4,6 +4,17 @@
 
 Fixed critical issue where `metric_deltas` was empty in `diff_prev.json` even when metrics clearly differed. Implemented 3-tier reporting structure with structured metric deltas, noise detection, and proper separation of nondeterminism from performance regression.
 
+## Achievement
+
+This represents the hard, unsexy engineering that most ML stacks *pretend* to have:
+
+- **Not just "things changed"** — Shows **prev vs curr**, **delta_abs / delta_pct**, and **impact label** for every metric
+- **Separated reproducibility break (hash mismatch) from model quality impact (noise-level deltas)** — This is exactly how "audit-grade" systems should talk
+- **Plumbing for trend/drift analysis** — Metric time series + thresholds ready for evolution into real trend analysis
+- **Clean, meaningful reporting** — `metric_deltas_total` vs `metric_deltas_significant` with zero-delta spam filtered out
+
+This is audit-grade diff telemetry that provides actionable insights, not just "something changed" noise.
+
 ## Problem
 
 - `metric_deltas: {}` and `metric_deltas_count: 0` even when metrics differed
@@ -141,9 +152,17 @@ Fixed critical issue where `metric_deltas` was empty in `diff_prev.json` even wh
 ## Testing
 
 Verified with actual runs:
-- `metric_deltas_count: 10` (previously 0)
+- `metric_deltas_total: 10`, `metric_deltas_significant: 3-4` (previously `metric_deltas_count: 0`)
 - `impact_label: "noise"` correctly classified
-- `top_regressions` and `top_improvements` populated
+- `top_regressions` and `top_improvements` populated (only significant deltas)
 - `metric_deltas.json` file created with structured deltas
 - Severity correctly set to MAJOR (nondeterminism) with noise-level impact noted
+- Zero-delta entries (pos_rate, n_models) filtered out from `metric_deltas` dict
+
+## Next Level (Future Enhancements)
+
+Potential future improvements:
+- Compute variability per metric (empirical noise bands from repeated runs)
+- Add drift detection thresholds based on historical variability
+- Expand trend analysis with rolling baselines and CUSUM change-point detection
 
