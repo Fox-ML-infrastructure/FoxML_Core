@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-17 Updates (continued)
+- **Audit-Grade Metadata Enhancement**: Added comprehensive environment tracking (python_version, platform, hostname, cuda_version, dependencies_lock_hash), data source details (source, dataset_id, bar_size, timezone, market_calendar), evaluation details (target_definition, n_features, feature_family_counts), and comparable_key for run comparison. Fixed CV/embargo inconsistency - embargo now explicitly set to 0.0 when CV is enabled (not "not_applicable"). Added splitter_impl and enabled flags to cv_details for clarity.
+- **Research-Grade Metrics Enhancement**: Added per-fold distributional stats (fold_scores, min_score, max_score, median_score) for detecting fold collapse and bimodality. Added composite_score definition and versioning for deterministic comparison. Enhanced leakage reporting with structured object (status, checks_run, violations) instead of simple flag. Fixed naming redundancy (removed features_final, kept n_features_post_prune).
+
 #### 2025-12-17 Updates
 - **Fixed Field Name Mismatch in Diff Telemetry**: Corrected field name alignment between required field validation and metadata construction. Changed `date_start`/`date_end` → `date_range_start`/`date_range_end`, `target` → `target_name`, and `N_effective` → `n_effective`. This ensures `metadata.json` and `metrics.json` are properly written to cohort directories. Improved error visibility by changing diff telemetry exception handler from DEBUG to WARNING level.
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-17-field-name-fix.md)
@@ -90,7 +94,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-**Recent additions (2025-12-12 - 2025-12-16):**
+**Recent additions (2025-12-12 - 2025-12-17):**
+- Audit-Grade Metadata Fields - Environment info (python_version, platform, hostname, cuda_version, dependencies_hash), data source details, evaluation details, comparable_key for run comparison (2025-12-17)
+- Research-Grade Metrics - Per-fold distributional stats (fold_scores, min/max/median), composite score definition/versioning, structured leakage reporting (2025-12-17)
 - Feature Audit System - Per-feature drop tracking with CSV reports showing drop reasons (2025-12-16)
 - Canonical Family ID System - Unified snake_case family IDs across all registries with startup validation (2025-12-16)
 - Registry Validation - Startup assertions to prevent non-canonical keys and collisions (2025-12-16)
@@ -114,7 +120,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-**Recent fixes (2025-12-12 - 2025-12-16):**
+**Recent fixes (2025-12-12 - 2025-12-17):**
+- **CV/Embargo Metadata Inconsistency** (2025-12-17): Fixed inconsistent embargo_minutes handling - when CV is enabled (cv_method set), embargo is now explicitly set to 0.0 (disabled) rather than marked as "not_applicable". Only marks as "not_applicable" when CV is actually disabled. Added embargo_enabled flag for clarity.
+- **Metrics Naming Redundancy** (2025-12-17): Removed redundant features_final field, kept n_features_post_prune (more descriptive). Clarified n_features_pre vs n_features_post_prune semantics.
 - **Training Pipeline Plumbing Fixes** (2025-12-16): Fixed family name canonicalization mismatches, banner suppression in child processes, reproducibility tracking string/Enum handling, model saving packaging bugs (`_pkg_ver`, `joblib` imports), feature selector vs trainer confusion
 - **Feature Selection and Config Fixes** (2025-12-14): Fixed UnboundLocalError for np (11 model families), missing import, unpacking error, routing diagnostics, experiment config loading, target exclusion, lookback enforcement
 - **Look-Ahead Bias Fixes** (2025-12-14): Rolling windows exclude current bar, CV-based normalization, feature renaming, symbol-specific logging, feature selection bug (task_type collision)

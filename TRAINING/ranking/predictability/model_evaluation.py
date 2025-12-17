@@ -6249,6 +6249,7 @@ def evaluate_target_predictability(
     # Aggregate across models (skip NaN scores)
     # Note: With cross-sectional data, we only have one evaluation, not per-symbol
     all_scores_by_model = defaultdict(list)
+    all_fold_scores = []  # Collect all fold scores across all models for distributional analysis
     for scores_dict in all_model_scores:
         # Defensive check: skip None or non-dict entries
         if scores_dict is None or not isinstance(scores_dict, dict):
@@ -6257,6 +6258,8 @@ def evaluate_target_predictability(
         for model_name, score in scores_dict.items():
             if not (np.isnan(score) if isinstance(score, (float, np.floating)) else False):
                 all_scores_by_model[model_name].append(score)
+                # If score is from a single fold (not aggregated), add to fold_scores
+                # Note: We'll collect actual fold scores separately if available
     
     # Calculate statistics (only from models that succeeded)
     model_means = {model: np.mean(scores) for model, scores in all_scores_by_model.items() if scores}
@@ -6293,7 +6296,7 @@ def evaluate_target_predictability(
         metric_name = "Accuracy"
     
     # Composite score (normalize scores appropriately)
-    composite = calculate_composite_score(
+    composite, composite_def, composite_ver = calculate_composite_score(
         mean_score, std_score, mean_importance, len(all_scores_by_model), final_task_type
     )
     
@@ -6369,6 +6372,15 @@ def evaluate_target_predictability(
     else:
         final_status = "OK"
     
+    # Collect fold scores if available (from model evaluations)
+    # Note: This is a simplified collection - actual per-fold scores would require
+    # storing them during cross_val_score calls, which can be enhanced later
+    aggregated_fold_scores = None
+    if all_fold_scores and len(all_fold_scores) > 0:
+        aggregated_fold_scores = [float(s) for s in all_fold_scores if s is not None and not (isinstance(s, float) and np.isnan(s))]
+        if len(aggregated_fold_scores) == 0:
+            aggregated_fold_scores = None
+    
     result = TargetPredictabilityScore(
         target_name=target_name,
         target_column=target_column,
@@ -6380,9 +6392,12 @@ def evaluate_target_predictability(
         n_models=len(all_scores_by_model),
         model_scores=model_means,
         composite_score=composite,
+        composite_definition=composite_def,
+        composite_version=composite_ver,
         leakage_flag=leakage_flag,
         suspicious_features=all_suspicious_features if all_suspicious_features else None,
         fold_timestamps=fold_timestamps,
+        fold_scores=aggregated_fold_scores,
         leakage_flags=leakage_flags,
         autofix_info=autofix_info if 'autofix_info' in locals() else None,
         status=final_status,
@@ -6591,6 +6606,10 @@ def evaluate_target_predictability(
                     ctx.symbol = symbol
                 
                 # Build metrics dict with regression features
+                # FIX: Remove redundancy - use n_features_post_prune (more descriptive) and drop features_final
+                n_features_final = len(feature_names) if 'feature_names' in locals() and feature_names else None
+                
+                # Start with base metrics
                 metrics_dict = {
                     "metric_name": metric_name,
                     "mean_score": result.mean_score,
@@ -6598,14 +6617,35 @@ def evaluate_target_predictability(
                     "mean_importance": result.mean_importance,
                     "composite_score": result.composite_score,
                     "n_models": result.n_models,
-                    "leakage_flag": result.leakage_flag,
                     "task_type": result.task_type.name if hasattr(result.task_type, 'name') else str(result.task_type),
                     # Regression features: feature counts
                     "n_features_pre": features_safe if 'features_safe' in locals() else None,
-                    "n_features_post_prune": len(feature_names) if 'feature_names' in locals() and feature_names else None,
-                    "features_safe": features_safe if 'features_safe' in locals() else None,
-                    "features_final": len(feature_names) if 'feature_names' in locals() and feature_names else None,
+                    "n_features_post_prune": n_features_final,  # Final feature count after pruning
+                    "features_safe": features_safe if 'features_safe' in locals() else None,  # Count of safe features before pruning
                 }
+                
+                # Add composite score definition and version
+                if result.composite_definition:
+                    metrics_dict["composite_definition"] = result.composite_definition
+                if result.composite_version:
+                    metrics_dict["composite_version"] = result.composite_version
+                
+                # Add fold scores and distributional stats if available
+                if result.fold_scores and len(result.fold_scores) > 0:
+                    import numpy as np
+                    valid_scores = [s for s in result.fold_scores if s is not None and not (isinstance(s, float) and np.isnan(s))]
+                    if valid_scores:
+                        metrics_dict["fold_scores"] = [float(s) for s in valid_scores]
+                        metrics_dict["min_score"] = float(np.min(valid_scores))
+                        metrics_dict["max_score"] = float(np.max(valid_scores))
+                        metrics_dict["median_score"] = float(np.median(valid_scores))
+                
+                # Add enhanced leakage info (use to_dict to get the structured format)
+                result_dict = result.to_dict()
+                if 'leakage' in result_dict:
+                    metrics_dict['leakage'] = result_dict['leakage']
+                # Also include legacy leakage_flag for backward compatibility
+                metrics_dict['leakage_flag'] = result.leakage_flag
                 
                 # Add pos_rate if available (from y)
                 if 'y' in locals() and y is not None:

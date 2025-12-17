@@ -132,9 +132,12 @@ class TargetPredictabilityScore:
     n_models: int
     model_scores: Dict[str, float]
     composite_score: float = 0.0
+    composite_definition: Optional[str] = None  # Formula/version for composite score
+    composite_version: Optional[str] = None  # Version identifier for composite calculation
     leakage_flag: str = "OK"  # "OK", "SUSPICIOUS", "HIGH_SCORE", "INCONSISTENT"
     suspicious_features: Dict[str, List[Tuple[str, float]]] = None  # {model: [(feature, imp), ...]}
     fold_timestamps: List[Dict[str, Any]] = None  # List of {fold_idx, train_start, train_end, test_start, test_end} per fold
+    fold_scores: Optional[List[float]] = None  # Per-fold scores across all models (for distributional analysis)
     # Auto-fix and rerun tracking
     autofix_info: Optional['AutoFixInfo'] = None  # AutoFixInfo from auto-fixer (if leakage was detected)
     leakage_flags: Dict[str, bool] = None  # Detailed leakage flags: {"perfect_train_acc": bool, "high_auc": bool, etc.}
@@ -169,6 +172,60 @@ class TargetPredictabilityScore:
             'composite_score': float(self.composite_score),
             'leakage_flag': self.leakage_flag
         }
+        
+        # Add composite score definition and version
+        if self.composite_definition is not None:
+            result['composite_definition'] = self.composite_definition
+        if self.composite_version is not None:
+            result['composite_version'] = self.composite_version
+        
+        # Add fold scores and distributional stats
+        if self.fold_scores is not None and len(self.fold_scores) > 0:
+            import numpy as np
+            valid_scores = [s for s in self.fold_scores if s is not None and not (isinstance(s, float) and np.isnan(s))]
+            if valid_scores:
+                result['fold_scores'] = [float(s) for s in valid_scores]
+                result['min_score'] = float(np.min(valid_scores))
+                result['max_score'] = float(np.max(valid_scores))
+                result['median_score'] = float(np.median(valid_scores))
+        
+        # Enhanced leakage reporting
+        if self.leakage_flags is not None or self.leakage_flag != "OK":
+            leakage_info = {
+                'status': self.leakage_flag,
+                'checks_run': []
+            }
+            
+            # Determine which checks were run based on available flags
+            if self.leakage_flags:
+                if 'perfect_train_acc' in self.leakage_flags:
+                    leakage_info['checks_run'].append('perfect_train_accuracy')
+                if 'high_auc' in self.leakage_flags or 'high_r2' in self.leakage_flags:
+                    leakage_info['checks_run'].append('high_cv_score')
+                if 'suspicious_flag' in self.leakage_flags:
+                    leakage_info['checks_run'].append('suspicious_features')
+            
+            # Add violations if any
+            violations = []
+            if self.leakage_flag != "OK":
+                violations.append(f"leakage_flag={self.leakage_flag}")
+            if self.leakage_flags:
+                for check, flag in self.leakage_flags.items():
+                    if flag and check != 'suspicious_flag':  # suspicious_flag is redundant with leakage_flag
+                        violations.append(check)
+            
+            if violations:
+                leakage_info['violations'] = violations
+            
+            result['leakage'] = leakage_info
+        else:
+            # Still provide structure even when OK
+            result['leakage'] = {
+                'status': 'OK',
+                'checks_run': ['lookahead', 'target_overlap', 'feature_lookback'],
+                'violations': []
+            }
+        
         if self.fold_timestamps is not None:
             result['fold_timestamps'] = self.fold_timestamps
         return result

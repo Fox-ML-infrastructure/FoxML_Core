@@ -124,15 +124,18 @@ def calculate_composite_score(
     mean_importance: float,
     n_models: int,
     task_type: TaskType = TaskType.REGRESSION
-) -> float:
+) -> Tuple[float, str, str]:
     """
-    Calculate composite predictability score
+    Calculate composite predictability score with definition and version
     
     Components:
     - Mean score: Higher is better (R² for regression, ROC-AUC/Accuracy for classification)
     - Consistency: Lower std is better
     - Importance magnitude: Higher is better
     - Model agreement: More models = more confidence
+    
+    Returns:
+        Tuple of (composite_score, definition, version)
     """
     
     # Normalize components based on task type
@@ -147,6 +150,8 @@ def calculate_composite_score(
         else:
             penalty = abs(mean_score) * 0.67
             importance_component = mean_importance * max(0.5, 1.0 - penalty)
+        
+        definition = "0.50 * score_component + 0.25 * consistency_component + 0.25 * importance_component * (1 + model_bonus)"
     else:
         # Classification: ROC-AUC and Accuracy are already 0-1
         score_component = mean_score  # Already 0-1
@@ -154,6 +159,8 @@ def calculate_composite_score(
         
         # Score-weighted importance (similar logic but for 0-1 scores)
         importance_component = mean_importance * (1.0 + mean_score)
+        
+        definition = "0.50 * score_component + 0.25 * consistency_component + 0.25 * importance_component * (1 + model_bonus)"
     
     # Weighted average
     composite = (
@@ -166,6 +173,8 @@ def calculate_composite_score(
     model_bonus = min(0.1, n_models * 0.02)
     composite = composite * (1.0 + model_bonus)
     
-    return composite
+    version = "v1"
+    
+    return composite, definition, version
 
 

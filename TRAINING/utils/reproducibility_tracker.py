@@ -26,6 +26,9 @@ import logging
 import hashlib
 import traceback
 import os
+import sys
+import platform
+import socket
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
@@ -51,6 +54,188 @@ logger.propagate = True
 
 # Schema version for reproducibility files
 REPRODUCIBILITY_SCHEMA_VERSION = 2  # v2: Tagged unions for ambiguous nulls
+
+
+def collect_environment_info() -> Dict[str, Any]:
+    """
+    Collect environment information for audit-grade metadata.
+    
+    Returns:
+        Dict with python_version, platform, hostname, cuda_version, dependencies_hash
+    """
+    env_info = {
+        "python_version": sys.version.split()[0],  # e.g., "3.10.12"
+        "platform": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "machine": platform.machine(),
+            "processor": platform.processor()
+        }
+    }
+    
+    # Hostname (optional, may fail in some environments)
+    try:
+        env_info["hostname"] = socket.gethostname()
+    except Exception:
+        pass
+    
+    # CUDA version (if available)
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["nvcc", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            # Extract version from nvcc output
+            for line in result.stdout.split('\n'):
+                if 'release' in line.lower():
+                    import re
+                    match = re.search(r'release\s+(\d+\.\d+)', line, re.I)
+                    if match:
+                        env_info["cuda_version"] = match.group(1)
+                        break
+    except Exception:
+        pass
+    
+    # GPU name (if available)
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            env_info["gpu_name"] = result.stdout.strip().split('\n')[0]
+    except Exception:
+        pass
+    
+    # Dependencies lock hash (hash of requirements.txt or environment.yml)
+    deps_hash = None
+    repo_root = Path(__file__).parent.parent.parent.parent
+    for lock_file in ["requirements.txt", "environment.yml", "poetry.lock", "uv.lock"]:
+        lock_path = repo_root / lock_file
+        if lock_path.exists():
+            try:
+                with open(lock_path, 'rb') as f:
+                    deps_hash = hashlib.sha256(f.read()).hexdigest()[:16]
+                    env_info["dependencies_lock_file"] = lock_file
+                    break
+            except Exception:
+                pass
+    
+    if deps_hash:
+        env_info["dependencies_lock_hash"] = deps_hash
+    
+    return env_info
+
+
+def compute_comparable_key(
+    stage: str,
+    target_name: str,
+    route_type: Optional[str],
+    view: Optional[str],
+    symbol: Optional[str],
+    date_range_start: Optional[str],
+    date_range_end: Optional[str],
+    cv_details: Optional[Dict[str, Any]],
+    feature_registry_hash: Optional[str],
+    label_definition_hash: Optional[str],
+    min_cs: Optional[int],
+    max_cs_samples: Optional[int],
+    universe_id: Optional[str]
+) -> str:
+    """
+    Compute a comparable key for run comparison.
+    
+    Runs with the same comparable_key should produce similar results
+    (allowing for acceptable variance from randomness).
+    
+    Args:
+        stage: Pipeline stage
+        target_name: Target name
+        route_type: Route type (CROSS_SECTIONAL, INDIVIDUAL, etc.)
+        view: View type (for TARGET_RANKING)
+        symbol: Symbol (for SYMBOL_SPECIFIC)
+        date_range_start: Start timestamp
+        date_range_end: End timestamp
+        cv_details: CV configuration details
+        feature_registry_hash: Feature registry hash
+        label_definition_hash: Label definition hash
+        min_cs: Minimum cross-sectional samples
+        max_cs_samples: Maximum cross-sectional samples
+        universe_id: Universe identifier
+    
+    Returns:
+        Hex hash of comparable key (16 chars)
+    """
+    parts = []
+    
+    # Core identity
+    parts.append(f"stage={stage}")
+    parts.append(f"target={target_name}")
+    
+    # Route/view
+    if route_type:
+        parts.append(f"route={route_type}")
+    if view:
+        parts.append(f"view={view}")
+    if symbol:
+        parts.append(f"symbol={symbol}")
+    
+    # Data range
+    if date_range_start:
+        parts.append(f"start={date_range_start}")
+    if date_range_end:
+        parts.append(f"end={date_range_end}")
+    
+    # Universe/split config
+    if universe_id:
+        parts.append(f"universe={universe_id}")
+    if min_cs is not None:
+        parts.append(f"min_cs={min_cs}")
+    if max_cs_samples is not None:
+        parts.append(f"max_cs={max_cs_samples}")
+    
+    # CV config (critical for comparability)
+    if cv_details:
+        cv_parts = []
+        if 'cv_method' in cv_details:
+            cv_parts.append(f"method={cv_details['cv_method']}")
+        if 'horizon_minutes' in cv_details:
+            cv_parts.append(f"horizon={cv_details['horizon_minutes']}")
+        if 'purge_minutes' in cv_details:
+            cv_parts.append(f"purge={cv_details['purge_minutes']}")
+        # Embargo: extract scalar value if tagged
+        embargo_val = cv_details.get('embargo_minutes')
+        if embargo_val:
+            if isinstance(embargo_val, dict) and embargo_val.get('kind') == 'scalar':
+                cv_parts.append(f"embargo={embargo_val['value']}")
+            elif isinstance(embargo_val, (int, float)):
+                cv_parts.append(f"embargo={embargo_val}")
+        # Folds: extract scalar value if tagged
+        folds_val = cv_details.get('folds')
+        if folds_val:
+            if isinstance(folds_val, dict) and folds_val.get('kind') == 'scalar':
+                cv_parts.append(f"folds={folds_val['value']}")
+            elif isinstance(folds_val, (int, float)):
+                cv_parts.append(f"folds={folds_val}")
+        if cv_parts:
+            parts.append(f"cv:{'|'.join(cv_parts)}")
+    
+    # Feature and label definitions
+    if feature_registry_hash:
+        parts.append(f"features={feature_registry_hash}")
+    if label_definition_hash:
+        parts.append(f"label={label_definition_hash}")
+    
+    # Compute hash
+    key_str = "|".join(parts)
+    return hashlib.sha256(key_str.encode()).hexdigest()[:16]
 
 
 class Stage(str, Enum):
@@ -1179,12 +1364,23 @@ class ReproducibilityTracker:
             cv_details = {}
             
             # CV method and parameters
+            cv_enabled = True
             if 'cv_method' in additional_data:
                 cv_details['cv_method'] = additional_data['cv_method']
+                if additional_data['cv_method'] in ('none', None):
+                    cv_enabled = False
             elif 'cv_scheme' in additional_data:
                 cv_details['cv_method'] = additional_data['cv_scheme']
+                if additional_data['cv_scheme'] in ('none', None):
+                    cv_enabled = False
+            elif 'cv_skipped' in additional_data and additional_data['cv_skipped']:
+                cv_enabled = False
+                cv_details['cv_method'] = 'none'
             else:
                 cv_details['cv_method'] = 'purged_kfold'  # Default assumption
+            
+            # Add explicit enabled flag
+            cv_details['enabled'] = cv_enabled
             
             # Horizon, purge, embargo
             if 'horizon_minutes' in additional_data:
@@ -1211,6 +1407,8 @@ class ReproducibilityTracker:
                     pass
             
             # Schema v2: embargo_minutes as tagged union
+            # FIX: If CV is enabled (cv_method is set), embargo should be explicitly set to 0 if None,
+            # not marked as "not_applicable". Only mark as "not_applicable" if CV is actually disabled.
             if 'embargo_minutes' in additional_data:
                 embargo_val = additional_data['embargo_minutes']
                 if embargo_val is None:
@@ -1248,11 +1446,25 @@ class ReproducibilityTracker:
                             rollup=rollup
                         )
                     else:
-                        # Not applicable (no CV or no embargo needed)
-                        cv_details['embargo_minutes'] = make_tagged_not_applicable(reason="no_cv_or_no_embargo")
+                        # CRITICAL FIX: If CV method is set (CV is enabled), embargo should be explicitly 0,
+                        # not "not_applicable". Only mark as "not_applicable" if CV is actually disabled.
+                        cv_method = cv_details.get('cv_method', '')
+                        cv_skipped = additional_data.get('cv_skipped', False)
+                        if cv_method and cv_method != 'none' and not cv_skipped:
+                            # CV is enabled but embargo is None -> explicitly set to 0 (disabled)
+                            cv_details['embargo_minutes'] = make_tagged_scalar(0.0)
+                            cv_details['embargo_enabled'] = False
+                        else:
+                            # CV is disabled or not applicable
+                            cv_details['embargo_minutes'] = make_tagged_not_applicable(reason="cv_disabled_or_not_applicable")
                 else:
                     # Scalar value
                     cv_details['embargo_minutes'] = make_tagged_scalar(embargo_val)
+                    # If embargo is explicitly set (non-zero), mark as enabled
+                    if embargo_val != 0:
+                        cv_details['embargo_enabled'] = True
+                    else:
+                        cv_details['embargo_enabled'] = False
             
             # Schema v2: folds as tagged union
             if 'cv_folds' in additional_data:
@@ -1305,6 +1517,12 @@ class ReproducibilityTracker:
             elif 'target_config_hash' in additional_data:
                 cv_details['label_definition_hash'] = additional_data['target_config_hash']
             
+            # Splitter implementation (if available)
+            if 'splitter_impl' in additional_data:
+                cv_details['splitter_impl'] = additional_data['splitter_impl']
+            elif 'cv_splitter_class' in additional_data:
+                cv_details['splitter_impl'] = additional_data['cv_splitter_class']
+            
             if cv_details:
                 full_metadata['cv_details'] = cv_details
         
@@ -1327,9 +1545,10 @@ class ReproducibilityTracker:
                 pass
         
         # Add sample size bin metadata (for directory organization, NOT series identity)
-        # Compute from N_effective if not provided, ensuring consistency
+        # Compute from n_effective if not provided, ensuring consistency
         # This allows backward compatibility and binning scheme versioning
-        n_effective = full_metadata.get('N_effective')
+        # CRITICAL: Use 'n_effective' (new field name), not 'N_effective' (old field name)
+        n_effective = full_metadata.get('n_effective') or full_metadata.get('N_effective')  # Support both for backwards compat
         if n_effective and n_effective > 0:
             # Use provided bin info if available, otherwise compute from N_effective
             if additional_data and 'sample_size_bin' in additional_data:
@@ -1344,6 +1563,134 @@ class ReproducibilityTracker:
         # NEW: Add dropped features metadata (if provided)
         if additional_data and 'dropped_features' in additional_data:
             full_metadata['dropped_features'] = additional_data['dropped_features']
+        
+        # NEW: Add environment information (audit-grade metadata)
+        try:
+            env_info = collect_environment_info()
+            if env_info:
+                full_metadata['environment'] = env_info
+        except Exception as e:
+            logger.debug(f"Failed to collect environment info: {e}")
+        
+        # NEW: Add data source details (if available)
+        data_source_info = {}
+        if additional_data:
+            if 'data_source' in additional_data:
+                data_source_info['source'] = additional_data['data_source']
+            if 'dataset_id' in additional_data:
+                data_source_info['dataset_id'] = additional_data['dataset_id']
+            elif 'dataset_manifest_hash' in additional_data:
+                data_source_info['dataset_manifest_hash'] = additional_data['dataset_manifest_hash']
+            if 'bar_size' in additional_data:
+                data_source_info['bar_size'] = additional_data['bar_size']
+            elif 'data_interval_minutes' in additional_data:
+                data_source_info['bar_size'] = f"{additional_data['data_interval_minutes']}m"
+            elif 'timeframe' in additional_data:
+                data_source_info['bar_size'] = additional_data['timeframe']
+            if 'timezone' in additional_data:
+                data_source_info['timezone'] = additional_data['timezone']
+            if 'market_calendar' in additional_data:
+                data_source_info['market_calendar'] = additional_data['market_calendar']
+            elif 'session_filters' in additional_data:
+                data_source_info['session_filters'] = additional_data['session_filters']
+        
+        if data_source_info:
+            full_metadata['data_source'] = data_source_info
+        
+        # NEW: Add evaluation details
+        evaluation_info = {}
+        if additional_data:
+            if 'target_definition' in additional_data:
+                evaluation_info['target_definition'] = additional_data['target_definition']
+            elif 'target_config' in additional_data:
+                # Store a hash or summary of target config
+                try:
+                    target_config = additional_data['target_config']
+                    if isinstance(target_config, dict):
+                        target_config_str = json.dumps(target_config, sort_keys=True)
+                        evaluation_info['target_config_hash'] = hashlib.sha256(target_config_str.encode()).hexdigest()[:16]
+                except Exception:
+                    pass
+            
+            # Feature counts
+            if 'feature_names' in additional_data:
+                feature_names = additional_data['feature_names']
+                if isinstance(feature_names, (list, tuple)):
+                    evaluation_info['n_features'] = len(feature_names)
+                    # Count features by family (if feature names follow a pattern)
+                    family_counts = {}
+                    for feat_name in feature_names:
+                        # Common pattern: family_feature or family__feature
+                        parts = str(feat_name).split('_', 1)
+                        if len(parts) >= 1:
+                            family = parts[0]
+                            family_counts[family] = family_counts.get(family, 0) + 1
+                    if family_counts:
+                        evaluation_info['feature_family_counts'] = family_counts
+            
+            if 'feature_registry_version' in additional_data:
+                evaluation_info['feature_registry_version'] = additional_data['feature_registry_version']
+        
+        if evaluation_info:
+            full_metadata['evaluation'] = evaluation_info
+        
+        # NEW: Compute comparable_key for run comparison
+        try:
+            comparable_key = compute_comparable_key(
+                stage=stage_normalized,
+                target_name=item_name,
+                route_type=full_metadata.get('route_type'),
+                view=full_metadata.get('view'),
+                symbol=full_metadata.get('symbol'),
+                date_range_start=full_metadata.get('date_range_start'),
+                date_range_end=full_metadata.get('date_range_end'),
+                cv_details=full_metadata.get('cv_details'),
+                feature_registry_hash=full_metadata.get('feature_registry_hash'),
+                label_definition_hash=full_metadata.get('cv_details', {}).get('label_definition_hash') if full_metadata.get('cv_details') else None,
+                min_cs=full_metadata.get('min_cs'),
+                max_cs_samples=full_metadata.get('max_cs_samples'),
+                universe_id=full_metadata.get('universe_id')
+            )
+            if comparable_key:
+                full_metadata['comparable_key'] = comparable_key
+        except Exception as e:
+            logger.debug(f"Failed to compute comparable_key: {e}")
+        
+        # CRITICAL: Initialize telemetry if not already initialized
+        # Telemetry is needed for diff tracking and should be available for all runs
+        if 'telemetry' not in locals() or telemetry is None:
+            try:
+                from TRAINING.utils.diff_telemetry import DiffTelemetry
+                
+                # Determine base output directory for telemetry
+                # Walk up from cohort_dir to find run-level directory
+                base_output_dir = Path(cohort_dir)
+                while base_output_dir.name not in ["RESULTS"] and base_output_dir.parent.exists():
+                    base_output_dir = base_output_dir.parent
+                    if base_output_dir.name == "RESULTS":
+                        break
+                
+                # If we're still in REPRODUCIBILITY or a subdirectory, walk up more
+                if base_output_dir.name not in ["RESULTS"]:
+                    # Try to find RESULTS directory
+                    temp_dir = base_output_dir
+                    for _ in range(5):  # Limit depth
+                        if temp_dir.name == "RESULTS":
+                            base_output_dir = temp_dir
+                            break
+                        if not temp_dir.parent.exists():
+                            break
+                        temp_dir = temp_dir.parent
+                
+                # If we couldn't find RESULTS, use the output_dir from tracker
+                if base_output_dir.name != "RESULTS":
+                    base_output_dir = self._repro_base_dir
+                
+                # Initialize telemetry (creates TELEMETRY directory if needed)
+                telemetry = DiffTelemetry(output_dir=base_output_dir)
+            except Exception as e:
+                logger.debug(f"Failed to initialize telemetry: {e}")
+                telemetry = None
         
         # CRITICAL: Call finalize_run() BEFORE adding diff_telemetry to full_metadata
         # This ensures snapshot/diff computation uses the exact same resolved_metadata that will be written
@@ -2630,7 +2977,8 @@ class ReproducibilityTracker:
         additional_data: Optional[Dict[str, Any]] = None,
         route_type: Optional[str] = None,
         symbol: Optional[str] = None,
-        model_family: Optional[str] = None
+        model_family: Optional[str] = None,
+        cohort_metadata: Optional[Dict[str, Any]] = None  # NEW: Allow passing pre-extracted cohort_metadata
     ) -> None:
         """
         Compare current run to previous run and log the comparison for reproducibility verification.
@@ -2654,36 +3002,39 @@ class ReproducibilityTracker:
         """
         try:
             # Extract cohort metadata if available
-            try:
-                cohort_metadata = self._extract_cohort_metadata(metrics, additional_data)
-                # Cohort-aware mode is the default - use it if enabled and metadata is available
-                use_cohort_aware = self.cohort_aware and cohort_metadata is not None
-                if self.cohort_aware and not use_cohort_aware:
-                    # Use INFO level so it's visible - this is important for debugging
-                    main_logger = _get_main_logger()
-                    msg = (f"⚠️  Reproducibility: Cohort-aware mode enabled (default) but insufficient metadata for {stage}:{item_name}. "
-                           f"Falling back to legacy mode. "
-                           f"Metrics keys: {list(metrics.keys())}, "
-                           f"Additional data keys: {list(additional_data.keys()) if additional_data else 'None'}. "
-                           f"To enable cohort-aware mode, pass N_effective_cs, n_symbols, date_range, and cs_config in metrics/additional_data.")
-                    if main_logger != logger:
-                        main_logger.info(msg)
-                    else:
-                        logger.info(msg)
-                elif use_cohort_aware:
-                    # Log when cohort-aware mode is successfully used
-                    main_logger = _get_main_logger()
-                    n_info = f"N={cohort_metadata.get('N_effective_cs', '?')}, symbols={cohort_metadata.get('n_symbols', '?')}"
-                    msg = f"✅ Reproducibility: Using cohort-aware mode for {stage}:{item_name} ({n_info})"
-                    if main_logger != logger:
-                        main_logger.debug(msg)
-                    else:
-                        logger.debug(msg)
-            except Exception as e:
-                logger.warning(f"Failed to extract cohort metadata for {stage}:{item_name}: {e}. Falling back to legacy mode.")
-                logger.debug(f"Cohort metadata extraction traceback: {traceback.format_exc()}")
-                cohort_metadata = None
-                use_cohort_aware = False
+            # CRITICAL: If cohort_metadata is already provided (e.g., from log_run()), use it directly
+            # This avoids redundant extraction and ensures we use the same metadata that was extracted from RunContext
+            if cohort_metadata is None:
+                try:
+                    cohort_metadata = self._extract_cohort_metadata(metrics, additional_data)
+                except Exception as e:
+                    logger.warning(f"Failed to extract cohort metadata for {stage}:{item_name}: {e}. Falling back to legacy mode.")
+                    logger.debug(f"Cohort metadata extraction traceback: {traceback.format_exc()}")
+                    cohort_metadata = None
+            
+            # Cohort-aware mode is the default - use it if enabled and metadata is available
+            use_cohort_aware = self.cohort_aware and cohort_metadata is not None
+            if self.cohort_aware and not use_cohort_aware:
+                # Use INFO level so it's visible - this is important for debugging
+                main_logger = _get_main_logger()
+                msg = (f"⚠️  Reproducibility: Cohort-aware mode enabled (default) but insufficient metadata for {stage}:{item_name}. "
+                       f"Falling back to legacy mode. "
+                       f"Metrics keys: {list(metrics.keys())}, "
+                       f"Additional data keys: {list(additional_data.keys()) if additional_data else 'None'}. "
+                       f"To enable cohort-aware mode, pass N_effective_cs, n_symbols, date_range, and cs_config in metrics/additional_data.")
+                if main_logger != logger:
+                    main_logger.info(msg)
+                else:
+                    logger.info(msg)
+            elif use_cohort_aware:
+                # Log when cohort-aware mode is successfully used
+                main_logger = _get_main_logger()
+                n_info = f"N={cohort_metadata.get('N_effective_cs', '?')}, symbols={cohort_metadata.get('n_symbols', '?')}"
+                msg = f"✅ Reproducibility: Using cohort-aware mode for {stage}:{item_name} ({n_info})"
+                if main_logger != logger:
+                    main_logger.debug(msg)
+                else:
+                    logger.debug(msg)
             
             # Extract route_type, symbol, model_family
             # Use provided parameters if available, otherwise extract from additional_data
@@ -3403,13 +3754,16 @@ class ReproducibilityTracker:
         # even if log_comparison fails. log_comparison itself has exception handling, but
         # we want to be defensive here.
         try:
+            # CRITICAL: Pass the already-extracted cohort_metadata directly to log_comparison()
+            # This ensures we use the same metadata that was extracted from RunContext, avoiding redundant extraction
             self.log_comparison(
                 stage=ctx.stage,
                 item_name=ctx.target_name or ctx.target_column or "unknown",
                 metrics=metrics_with_cohort,
                 additional_data=additional_data,
                 route_type=route_type_for_log,  # Use view for TARGET_RANKING
-                symbol=ctx.symbol
+                symbol=ctx.symbol,
+                cohort_metadata=cohort_metadata  # Pass pre-extracted cohort_metadata from RunContext
             )
         except Exception as e:
             # log_comparison should never raise (it has its own exception handling),
@@ -3461,6 +3815,7 @@ class ReproducibilityTracker:
                 # This ensures metadata.json and metrics.json are always written
                 try:
                     # Build minimal metadata from available data
+                    # CRITICAL: Use NEW field names to match finalize_run() expectations
                     minimal_metadata = {
                         "schema_version": REPRODUCIBILITY_SCHEMA_VERSION,
                         "cohort_id": cohort_id,
@@ -3468,11 +3823,11 @@ class ReproducibilityTracker:
                         "stage": ctx.stage,
                         "route_type": route_type_for_cohort_dir,
                         "view": ctx.view if hasattr(ctx, 'view') else None,
-                        "target": ctx.target_name or ctx.target_column or "unknown",
-                        "N_effective": cohort_metadata.get('N_effective_cs', 0) if cohort_metadata else 0,
+                        "target_name": ctx.target_name or ctx.target_column or "unknown",  # Changed from "target" to "target_name"
+                        "n_effective": cohort_metadata.get('N_effective_cs', 0) if cohort_metadata else 0,  # Changed from "N_effective" to "n_effective"
                         "n_symbols": cohort_metadata.get('n_symbols', 0) if cohort_metadata else 0,
-                        "date_start": cohort_metadata.get('date_range', {}).get('start_ts') if cohort_metadata else None,
-                        "date_end": cohort_metadata.get('date_range', {}).get('end_ts') if cohort_metadata else None,
+                        "date_range_start": cohort_metadata.get('date_range', {}).get('start_ts') if cohort_metadata else None,  # Changed from "date_start" to "date_range_start"
+                        "date_range_end": cohort_metadata.get('date_range', {}).get('end_ts') if cohort_metadata else None,  # Changed from "date_end" to "date_range_end"
                         "created_at": datetime.now().isoformat()
                     }
                     
