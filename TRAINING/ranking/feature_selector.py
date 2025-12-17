@@ -1717,6 +1717,28 @@ def select_features_for_target(
         except Exception:
             pass  # Non-critical summary logging
     
+    # Generate metrics rollups after feature selection completes (if output_dir provided)
+    if output_dir:
+        try:
+            from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+            from datetime import datetime
+            
+            # Find the REPRODUCIBILITY directory
+            repro_dir = output_dir / "REPRODUCIBILITY"
+            if not repro_dir.exists() and output_dir.parent.exists():
+                repro_dir = output_dir.parent / "REPRODUCIBILITY"
+            
+            if repro_dir.exists():
+                # Use output_dir parent as base (where RESULTS/runs/ typically is)
+                base_dir = output_dir.parent if (output_dir / "REPRODUCIBILITY").exists() else output_dir
+                tracker = ReproducibilityTracker(output_dir=base_dir)
+                # Generate run_id from output_dir name or timestamp
+                run_id = output_dir.name if output_dir.name else datetime.now().strftime("%Y%m%d_%H%M%S")
+                tracker.generate_metrics_rollups(stage="FEATURE_SELECTION", run_id=run_id)
+                logger.debug("✅ Generated metrics rollups for FEATURE_SELECTION")
+        except Exception as e:
+            logger.debug(f"Failed to generate metrics rollups: {e}")
+    
     return selected_features, summary_df
 
 

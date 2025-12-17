@@ -3698,6 +3698,27 @@ def main():
     logger.info(f"  • {args.output_dir}/metadata/multi_model_metadata.json")
     logger.info(f"  • {args.output_dir}/metadata/model_family_status.json (family status tracking)")
     
+    # Generate metrics rollups after all feature selections complete
+    try:
+        from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+        from datetime import datetime
+        
+        # Find the REPRODUCIBILITY directory
+        repro_dir = args.output_dir / "REPRODUCIBILITY"
+        if not repro_dir.exists() and args.output_dir.parent.exists():
+            repro_dir = args.output_dir.parent / "REPRODUCIBILITY"
+        
+        if repro_dir.exists():
+            # Use output_dir parent as base (where RESULTS/runs/ typically is)
+            base_dir = args.output_dir.parent if (args.output_dir / "REPRODUCIBILITY").exists() else args.output_dir
+            tracker = ReproducibilityTracker(output_dir=base_dir)
+            # Generate run_id from output_dir name or timestamp
+            run_id = args.output_dir.name if args.output_dir.name else datetime.now().strftime("%Y%m%d_%H%M%S")
+            tracker.generate_metrics_rollups(stage="FEATURE_SELECTION", run_id=run_id)
+            logger.debug("✅ Generated metrics rollups for FEATURE_SELECTION")
+    except Exception as e:
+        logger.debug(f"Failed to generate metrics rollups: {e}")
+    
     return 0
 
 
