@@ -3061,6 +3061,11 @@ class DiffTelemetry:
                 current_run_id=snapshot.run_id,
                 comparable=False,
                 comparability_reason="No previous comparable run found",
+                prev_timestamp=None,
+                prev_snapshot_seq=None,
+                prev_stage=None,
+                prev_view=None,
+                comparison_source=None,
                 severity=ChangeSeverity.CRITICAL,
                 severity_reason="No previous comparable run found - cannot determine changes",
                 excluded_factors_changed={},  # Empty but present
