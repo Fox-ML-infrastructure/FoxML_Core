@@ -1892,12 +1892,33 @@ class DiffTelemetry:
         if not metrics_data and resolved_metadata:
             metrics_data = resolved_metadata.get('metrics', {})
         
-        # CRITICAL: If still empty, try reading from metrics.json file in cohort_dir
+        # CRITICAL: If still empty, try reading from metrics files in cohort_dir
+        # Prefer metrics.parquet (canonical format) if it exists, otherwise fall back to metrics.json
         if not metrics_data and cohort_dir:
-            metrics_file = Path(cohort_dir) / "metrics.json"
-            if metrics_file.exists():
+            cohort_path = Path(cohort_dir)
+            metrics_parquet = cohort_path / "metrics.parquet"
+            metrics_json_file = cohort_path / "metrics.json"
+            
+            # Try parquet first (canonical format)
+            if metrics_parquet.exists():
                 try:
-                    with open(metrics_file, 'r') as f:
+                    import pandas as pd
+                    df_metrics = pd.read_parquet(metrics_parquet)
+                    # Convert to dict (should be single row)
+                    if len(df_metrics) > 0:
+                        metrics_dict = df_metrics.iloc[0].to_dict()
+                        # Extract key metrics (exclude diff_telemetry, run_id, timestamp for stable hash)
+                        metrics_data = {
+                            k: v for k, v in metrics_dict.items()
+                            if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode', 'stage', 'item_name']
+                        }
+                except Exception as e:
+                    logger.debug(f"Failed to read metrics.parquet from {cohort_dir}: {e}")
+            
+            # Fall back to JSON if parquet doesn't exist or failed
+            if not metrics_data and metrics_json_file.exists():
+                try:
+                    with open(metrics_json_file, 'r') as f:
                         metrics_json = json.load(f)
                     # Extract key metrics (exclude diff_telemetry, run_id, timestamp for stable hash)
                     metrics_data = {
