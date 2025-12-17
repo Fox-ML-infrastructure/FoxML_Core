@@ -29,6 +29,7 @@ import os
 import sys
 import platform
 import socket
+import fcntl
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
@@ -130,6 +131,29 @@ def collect_environment_info() -> Dict[str, Any]:
     
     if deps_hash:
         env_info["dependencies_lock_hash"] = deps_hash
+    
+    # Collect library versions (CRITICAL: for comparability)
+    library_versions = {}
+    critical_libs = [
+        'pandas', 'numpy', 'scipy', 'scikit-learn', 'sklearn',
+        'lightgbm', 'xgboost', 'catboost',
+        'torch', 'tensorflow', 'keras',
+        'joblib', 'polars'
+    ]
+    
+    for lib_name in critical_libs:
+        try:
+            # Handle scikit-learn vs sklearn naming
+            import_name = 'sklearn' if lib_name == 'scikit-learn' else lib_name
+            mod = __import__(import_name)
+            if hasattr(mod, '__version__'):
+                library_versions[lib_name] = mod.__version__
+        except (ImportError, AttributeError):
+            # Library not installed or no version attribute
+            pass
+    
+    if library_versions:
+        env_info["library_versions"] = library_versions
     
     return env_info
 
@@ -1634,6 +1658,46 @@ class ReproducibilityTracker:
         if evaluation_info:
             full_metadata['evaluation'] = evaluation_info
         
+        # NEW: Add training information (hyperparameters, train_seed) for TRAINING and FEATURE_SELECTION stages
+        # CRITICAL: This is needed for comparability - different HPs/seeds = different outcomes
+        # FEATURE_SELECTION also uses models (LightGBM, etc.) with hyperparameters that affect feature selection
+        if stage_normalized in ["TRAINING", "FEATURE_SELECTION"] and additional_data:
+            training_info = {}
+            
+            # Extract train_seed (distinct from split_seed)
+            train_seed = (
+                additional_data.get('train_seed') or
+                additional_data.get('seed') or
+                run_data.get('train_seed') or
+                run_data.get('seed')
+            )
+            if train_seed is not None:
+                try:
+                    training_info['train_seed'] = int(train_seed)
+                except (ValueError, TypeError):
+                    pass
+            
+            # Extract hyperparameters from training config
+            hyperparameters = {}
+            if 'training' in additional_data and isinstance(additional_data['training'], dict):
+                training_config = additional_data['training']
+                # Extract all hyperparameters (exclude model_family, strategy, seeds - those are handled separately)
+                excluded_keys = {'model_family', 'strategy', 'split_seed', 'train_seed', 'seed'}
+                for key, value in training_config.items():
+                    if key not in excluded_keys and value is not None:
+                        hyperparameters[key] = value
+            elif 'hyperparameters' in additional_data:
+                # Direct hyperparameters dict
+                hp_dict = additional_data['hyperparameters']
+                if isinstance(hp_dict, dict):
+                    hyperparameters = hp_dict
+            
+            if hyperparameters:
+                training_info['hyperparameters'] = hyperparameters
+            
+            if training_info:
+                full_metadata['training'] = training_info
+        
         # NEW: Compute comparable_key for run comparison
         try:
             comparable_key = compute_comparable_key(
@@ -1689,7 +1753,9 @@ class ReproducibilityTracker:
                 # Initialize telemetry (creates TELEMETRY directory if needed)
                 telemetry = DiffTelemetry(output_dir=base_output_dir)
             except Exception as e:
-                logger.debug(f"Failed to initialize telemetry: {e}")
+                logger.warning(f"⚠️  Failed to initialize diff telemetry: {e}")
+                import traceback
+                logger.debug(f"Telemetry initialization traceback: {traceback.format_exc()}")
                 telemetry = None
         
         # CRITICAL: Call finalize_run() BEFORE adding diff_telemetry to full_metadata
@@ -1728,7 +1794,7 @@ class ReproducibilityTracker:
                         additional_data = {}
                     additional_data['diff_telemetry'] = diff_telemetry_data
             except Exception as e:
-                logger.debug(f"Diff telemetry failed (non-critical): {e}")
+                logger.warning(f"⚠️  Diff telemetry failed (non-critical): {e}")
                 import traceback
                 logger.debug(f"Diff telemetry traceback: {traceback.format_exc()}")
         
@@ -3581,7 +3647,8 @@ class ReproducibilityTracker:
     def log_run(
         self,
         ctx: Any,  # RunContext (using Any to avoid circular import issues)
-        metrics: Dict[str, Any]
+        metrics: Dict[str, Any],
+        additional_data_override: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Automated audit-grade reproducibility tracking using RunContext.
@@ -3661,8 +3728,13 @@ class ReproducibilityTracker:
             "feature_lookback_max_minutes": ctx.feature_lookback_max_minutes,
             "data_interval_minutes": ctx.data_interval_minutes,
             "feature_names": ctx.feature_names,
-            "seed": ctx.seed
+            "seed": ctx.seed,
+            "train_seed": ctx.seed  # Also pass as train_seed for FEATURE_SELECTION/TRAINING
         }
+        
+        # Merge additional_data_override if provided (e.g., hyperparameters for FEATURE_SELECTION)
+        if additional_data_override:
+            additional_data.update(additional_data_override)
         
         # Add fold timestamps if available
         if ctx.fold_timestamps:

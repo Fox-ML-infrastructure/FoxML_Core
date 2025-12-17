@@ -649,6 +649,7 @@ This allows comparing runs across different timestamped output directories while
    - **Previous run search**: Enabled - searches parent directories for previous runs
    - **Reproducibility**: Uses `BASE_SEED` from determinism system, generates deterministic seeds per model/symbol/target combination. Per-symbol debug logs show base_seed, n_features, n_samples, and detected_interval for fine-grained verification
    - **Per-model tracking**: Stores per-model reproducibility stats (delta_score, Jaccard@K, importance_corr) in `model_metadata.json`. Compact logging: stable = INFO, unstable = WARNING. Symbol-level summaries show reproducibility status across all families. See [Feature Selection Tutorial](../../01_tutorials/training/FEATURE_SELECTION_TUTORIAL.md) for details.
+   - **Reproducibility Requirements (2025-12-17)**: FEATURE_SELECTION now tracks hyperparameters, train_seed, and library versions for full reproducibility. Runs are only comparable if they have identical hyperparameters, train_seed, and library versions (same requirements as TRAINING stage). Hyperparameters are extracted from `model_families_config` (primary model family, usually LightGBM). See [Comparability Requirements](../../telemetry/COMPARABILITY_REQUIREMENTS.md) for complete details.
 
 3. **Model Training** (`TRAINING/training_strategies/training.py`)
    - **Function**: Training loop in `train_models_for_interval_comprehensive()`

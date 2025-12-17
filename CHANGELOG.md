@@ -16,6 +16,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-17 Updates (Licensing & Reproducibility)
+- **Licensing Model Reverted**: Returned to **AGPL v3 + Commercial** dual licensing model. The brief "source-available, tax-exempt universities only" model was a mistake and has been reverted. All documentation updated to reflect standard dual-license model. Sorry for any confusion during the transition.
+- **Documentation Restructure**: README.md restructured to be builder-first with minimal licensing notice. All commercial details moved to `LEGAL/LICENSING.md` for better audience separation (builders vs. buyers).
+- **FEATURE_SELECTION Reproducibility Enhancement**: 
+  - Integrated hyperparameters, train_seed, and library versions tracking into FEATURE_SELECTION stage
+  - FEATURE_SELECTION now has same reproducibility requirements as TRAINING stage
+  - Hyperparameters extracted from `model_families_config` (primary model family, usually LightGBM)
+  - `train_seed` tracked from config (`pipeline.determinism.base_seed`)
+  - Library versions collected via `collect_environment_info()` and stored in `environment.library_versions`
+  - All three factors (hyperparameters, train_seed, library_versions) now included in comparison group for FEATURE_SELECTION
+  - Runs with different hyperparameters, train_seed, or library versions are no longer considered comparable
+  - Fixed `lib_sig` UnboundLocalError by initializing to None for all stages
+  - Fixed `fcntl` import errors in both `reproducibility_tracker.py` and `diff_telemetry.py`
+  - Updated `log_run` API to accept `additional_data_override` parameter for passing hyperparameters
+  - Legacy API path (`log_comparison`) also extracts and passes hyperparameters via `additional_data['training']`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-17-feature-selection-reproducibility.md)
+
 #### 2025-12-17 Updates (continued)
 - **Audit-Grade Metadata Enhancement**: Added comprehensive environment tracking (python_version, platform, hostname, cuda_version, dependencies_lock_hash), data source details (source, dataset_id, bar_size, timezone, market_calendar), evaluation details (target_definition, n_features, feature_family_counts), and comparable_key for run comparison. Fixed CV/embargo inconsistency - embargo now explicitly set to 0.0 when CV is enabled (not "not_applicable"). Added splitter_impl and enabled flags to cv_details for clarity.
 - **Research-Grade Metrics Enhancement**: Added per-fold distributional stats (fold_scores, min_score, max_score, median_score) for detecting fold collapse and bimodality. Added composite_score definition and versioning for deterministic comparison. Enhanced leakage reporting with structured object (status, checks_run, violations) instead of simple flag. Fixed naming redundancy (removed features_final, kept n_features_post_prune).

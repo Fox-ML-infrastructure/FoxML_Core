@@ -162,7 +162,7 @@ A: Yes. Use for client work is business use, not personal use.
 A: Organizations can use a 30-day $0 evaluation (strict limits). Continued evaluation beyond 30 days requires a paid Pilot ($35k). If you're a legal entity, you need a license for continued use.
 
 **Q: I'm a student doing research. Is that free?**  
-A: It depends. Non-commercial academic research at qualifying tax-exempt institutions is free. If the research is corporate-funded, sponsored, or integrated into commercial operations, a commercial license is required. See `LICENSE` for the complete definition of free academic use.
+A: Academic research can use AGPL v3 if the project can comply with AGPL copyleft requirements (must publish modifications if deployed as a service). If the research is corporate-funded, sponsored, or requires proprietary modifications, a commercial license is required. See `LEGAL/ACADEMIC.md` for complete academic use guidance.
 
 **Q: I'm a sole proprietor. Is that personal use?**  
 A: No. Sole proprietors using Software for business operations require a commercial license.
@@ -190,12 +190,12 @@ A: No. Sole proprietors using Software for business operations require a commerc
 → Use for client work or in scope of work = commercial license required.
 
 **"I'm using it personally, not for work."**  
-→ Personal use (individual, non-commercial) requires a commercial license. Free use is limited to non-commercial academic research at qualifying tax-exempt institutions.
+→ Personal use (individual, non-commercial) can use AGPL v3 if you can comply with AGPL copyleft requirements. If you deploy as a service, you must publish modifications unless you have a commercial license.
 
 ## Common Pressure Tactics (Handled)
 
 **"This should be open source / community-owned."**  
-→ FoxML Core is source-available. Free for non-commercial academic research at qualifying tax-exempt institutions. All other use requires a paid commercial license. This keeps the project sustainable and enables continued development.
+→ FoxML Core is dual-licensed: AGPL v3 + Commercial. AGPL v3 is available for open research, experimentation, and projects that can comply with AGPL copyleft. Commercial licenses are required for proprietary deployments, production systems, or any use where AGPL compliance is not possible.
 
 **"We can't pay until you prove traction."**  
 → Organizations can use a 30-day $0 evaluation (strict limits). Continued evaluation requires a paid Pilot ($35k).
@@ -210,7 +210,7 @@ A: No. Sole proprietors using Software for business operations require a commerc
 → You're free to build your own. You can't use FoxML Core in production without a license. Organizational use requires a paid license regardless of whether you fork the code.
 
 **"If you charge, you won't get adoption."**  
-→ FoxML Core is source-available. Free for non-commercial academic research at qualifying tax-exempt institutions. All other use requires a paid commercial license. This keeps the project sustainable and enables continued development.
+→ FoxML Core is dual-licensed: AGPL v3 + Commercial. AGPL v3 is available for open research, experimentation, and projects that can comply with AGPL copyleft. Commercial licenses are required for proprietary deployments, production systems, or any use where AGPL compliance is not possible.
 
 ---
 

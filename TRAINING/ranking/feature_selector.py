@@ -1480,6 +1480,27 @@ def select_features_for_target(
                 from TRAINING.utils.run_context import RunContext
                 from TRAINING.utils.cohort_metadata_extractor import extract_cohort_metadata
                 
+                # Extract hyperparameters from model_families_config for FEATURE_SELECTION
+                # CRITICAL: Different hyperparameters = different features selected
+                # This needs to be available for both shared harness and fallback paths
+                additional_data_override = {}
+                if model_families_config:
+                    # Find primary model family (usually lightgbm or first enabled)
+                    enabled_families = [f for f, cfg in model_families_config.items() 
+                                      if isinstance(cfg, dict) and cfg.get('enabled', False)]
+                    if enabled_families:
+                        primary_family = 'lightgbm' if 'lightgbm' in enabled_families else enabled_families[0]
+                        if primary_family in model_families_config:
+                            family_config = model_families_config[primary_family]
+                            if isinstance(family_config, dict) and 'config' in family_config:
+                                hp_config = family_config['config']
+                                # Copy all hyperparameters (exclude non-hyperparameter keys)
+                                excluded_keys = {'verbose', 'verbosity', 'objective', 'metric', 'device', 'gpu_device_id'}
+                                training_config = {k: v for k, v in hp_config.items() 
+                                                  if k not in excluded_keys and v is not None}
+                                if training_config:
+                                    additional_data_override['training'] = training_config
+                
                 # Use RunContext from shared harness if available, otherwise build from available data
                 if use_shared_harness and 'ctx' in locals():
                     # Use the RunContext created by the shared harness (has all required fields)
@@ -1560,8 +1581,9 @@ def select_features_for_target(
                 
                 # Use automated log_run API (includes trend analysis)
                 # FIX: Pass RunContext to log_run (required for COHORT_AWARE mode)
+                # Pass hyperparameters via additional_data_override
                 try:
-                    audit_result = tracker.log_run(ctx_to_use, metrics_dict)
+                    audit_result = tracker.log_run(ctx_to_use, metrics_dict, additional_data_override=additional_data_override)
                 except Exception as e:
                     # If COHORT_AWARE fails due to missing fields, fall back to legacy mode
                     if "Missing required fields" in str(e) or "COHORT_AWARE" in str(e):
@@ -1672,9 +1694,62 @@ def select_features_for_target(
                     from CONFIG.config_loader import get_cfg
                     seed = get_cfg("pipeline.determinism.base_seed", default=42)
                     additional_data_with_cohort['seed'] = seed
+                    additional_data_with_cohort['train_seed'] = seed  # Also pass as train_seed for FEATURE_SELECTION
                 except Exception:
                     # Fallback to default if config not available
                     additional_data_with_cohort['seed'] = 42
+                    additional_data_with_cohort['train_seed'] = 42
+                
+                # Extract hyperparameters from model_families_config for reproducibility tracking
+                # CRITICAL: Different hyperparameters = different features selected
+                if model_families_config:
+                    # Collect hyperparameters from all enabled model families
+                    # Since we use multiple models, we'll collect all unique hyperparameters
+                    # and create a combined dict (or use the primary model's config)
+                    training_config = {}
+                    primary_family = None
+                    
+                    # Find primary model family (usually lightgbm or first enabled)
+                    enabled_families = [f for f, cfg in model_families_config.items() 
+                                      if isinstance(cfg, dict) and cfg.get('enabled', False)]
+                    if enabled_families:
+                        # Prefer lightgbm as primary, otherwise use first enabled
+                        if 'lightgbm' in enabled_families:
+                            primary_family = 'lightgbm'
+                        else:
+                            primary_family = enabled_families[0]
+                        
+                        # Extract hyperparameters from primary family's config
+                        if primary_family in model_families_config:
+                            family_config = model_families_config[primary_family]
+                            if isinstance(family_config, dict) and 'config' in family_config:
+                                hp_config = family_config['config']
+                                # Copy all hyperparameters (exclude non-hyperparameter keys)
+                                excluded_keys = {'verbose', 'verbosity', 'objective', 'metric', 'device', 'gpu_device_id'}
+                                for key, value in hp_config.items():
+                                    if key not in excluded_keys and value is not None:
+                                        training_config[key] = value
+                    
+                    # If we have hyperparameters, add them to additional_data
+                    if training_config:
+                        additional_data_with_cohort['training'] = training_config
+                elif multi_model_config and isinstance(multi_model_config, dict):
+                    # Fallback: try to extract from multi_model_config
+                    # This is a legacy format, but try to extract hyperparameters if available
+                    if 'model_families' in multi_model_config:
+                        families = multi_model_config['model_families']
+                        if isinstance(families, dict):
+                            # Try to get lightgbm config
+                            if 'lightgbm' in families and isinstance(families['lightgbm'], dict):
+                                lgb_config = families['lightgbm'].get('config', {})
+                                if isinstance(lgb_config, dict):
+                                    training_config = {}
+                                    excluded_keys = {'verbose', 'verbosity', 'objective', 'metric'}
+                                    for key, value in lgb_config.items():
+                                        if key not in excluded_keys and value is not None:
+                                            training_config[key] = value
+                                    if training_config:
+                                        additional_data_with_cohort['training'] = training_config
                 
                 # Add resolved_data_config (mode, loader contract) to additional_data for telemetry
                 if 'resolved_data_config' in locals() and resolved_data_config:

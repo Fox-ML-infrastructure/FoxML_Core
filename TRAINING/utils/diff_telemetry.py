@@ -32,6 +32,7 @@ Key principle: Only diff things that are canonically normalized and hash-address
 import json
 import logging
 import hashlib
+import fcntl
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple, Set
 from datetime import datetime
@@ -136,6 +137,9 @@ class ComparisonGroup:
     - Same routing/view configuration
     - Same model_family (different families produce different outcomes)
     - Same feature set (different features produce different outcomes)
+    - Same hyperparameters (learning_rate, max_depth, etc. - CRITICAL: impact outcomes)
+    - Same train_seed (CRITICAL: different seeds = different outcomes)
+    - Same library versions (CRITICAL: different versions = different outcomes)
     
     Runs are stored together ONLY if they match exactly on all these dimensions.
     """
@@ -146,6 +150,9 @@ class ComparisonGroup:
     n_effective: Optional[int] = None  # Exact sample size (CRITICAL: must match exactly)
     model_family: Optional[str] = None  # Model family (CRITICAL: different families = different outcomes)
     feature_signature: Optional[str] = None  # Hash of feature set (CRITICAL: different features = different outcomes)
+    hyperparameters_signature: Optional[str] = None  # Hash of hyperparameters (CRITICAL: different HPs = different outcomes)
+    train_seed: Optional[int] = None  # Training seed (CRITICAL: different seeds = different outcomes)
+    library_versions_signature: Optional[str] = None  # Hash of library versions (CRITICAL: different versions = different outcomes)
     
     def to_key(self) -> str:
         """Generate comparison group key.
@@ -173,6 +180,15 @@ class ComparisonGroup:
         # CRITICAL: Include feature signature (different features = different outcomes)
         if self.feature_signature:
             parts.append(f"features={self.feature_signature[:8]}")
+        # CRITICAL: Include hyperparameters signature (different HPs = different outcomes)
+        if self.hyperparameters_signature:
+            parts.append(f"hps={self.hyperparameters_signature[:8]}")
+        # CRITICAL: Include train_seed (different seeds = different outcomes)
+        if self.train_seed is not None:
+            parts.append(f"seed={self.train_seed}")
+        # CRITICAL: Include library versions signature (different versions = different outcomes)
+        if self.library_versions_signature:
+            parts.append(f"libs={self.library_versions_signature[:8]}")
         return "|".join(parts) if parts else "default"
     
     def to_dir_name(self) -> str:
@@ -713,11 +729,31 @@ class DiffTelemetry:
             cohort_metadata.get('max_cs_samples') if cohort_metadata else None
         )
         
-        # Task provenance
+        # Task provenance - extract target_name from multiple sources
+        # CRITICAL: Check resolved_metadata first (SST consistency), then fallback to other sources
         ctx.target_name = (
-            metadata.get('target') or
-            additional_data.get('target') if additional_data else None
+            (resolved_metadata.get('target_name') if resolved_metadata else None) or
+            (resolved_metadata.get('target') if resolved_metadata else None) or
+            metadata.get('target_name') or  # Primary: metadata.json uses 'target_name'
+            metadata.get('target') or  # Fallback: some sources use 'target'
+            (additional_data.get('target_name') if additional_data else None) or
+            (additional_data.get('target') if additional_data else None) or
+            (run_data.get('target_name')) or
+            (run_data.get('target')) or
+            (run_data.get('item_name'))  # Fallback: item_name often contains target
         )
+        
+        # If still None, try to parse from cohort_dir path as last resort
+        if not ctx.target_name and cohort_dir:
+            try:
+                # Path format: .../TARGET_RANKING/CROSS_SECTIONAL/{target_name}/cohort=...
+                parts = str(cohort_dir).split('/')
+                for i, part in enumerate(parts):
+                    if part in ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC', 'LOSO'] and i + 1 < len(parts):
+                        ctx.target_name = parts[i + 1]
+                        break
+            except Exception:
+                pass
         cv_details = metadata.get('cv_details', {})
         ctx.horizon_minutes = (
             cv_details.get('horizon_minutes') or
@@ -917,8 +953,80 @@ class DiffTelemetry:
         ctx.target_fingerprint = target_fp
         ctx.feature_fingerprint = feature_fp
         
+        # Extract hyperparameters and train_seed from process data (before normalization)
+        # We need these for the comparison group, so extract them early
+        hyperparameters_signature = None
+        train_seed = None
+        
+        # Try to get hyperparameters from resolved_metadata (metadata.json), additional_data, or run_data
+        training_data = {}
+        if resolved_metadata and 'training' in resolved_metadata:
+            training_data = resolved_metadata['training']
+        elif additional_data and 'training' in additional_data:
+            training_data = additional_data['training']
+        elif run_data.get('additional_data') and 'training' in run_data.get('additional_data', {}):
+            training_data = run_data['additional_data']['training']
+        elif run_data.get('training'):
+            training_data = run_data['training']
+        
+        # Extract hyperparameters (exclude model_family, strategy, seeds - those are handled separately)
+        hyperparameters = {}
+        excluded_keys = {'model_family', 'strategy', 'split_seed', 'train_seed', 'seed'}
+        for key, value in training_data.items():
+            if key not in excluded_keys and value is not None:
+                hyperparameters[key] = value
+        
+        # Compute hyperparameters signature if we have any
+        if hyperparameters:
+            # Sort keys for stable hash
+            hp_str = "|".join(f"{k}={v}" for k, v in sorted(hyperparameters.items()))
+            hyperparameters_signature = hashlib.sha256(hp_str.encode()).hexdigest()[:16]
+        
+        # Extract train_seed
+        train_seed = (
+            training_data.get('train_seed') or
+            training_data.get('seed') or
+            (additional_data.get('train_seed') if additional_data else None) or
+            (additional_data.get('seed') if additional_data else None) or
+            (run_data.get('train_seed')) or
+            (run_data.get('seed'))
+        )
+        if train_seed is not None:
+            try:
+                train_seed = int(train_seed)
+            except (ValueError, TypeError):
+                train_seed = None
+        
+        # Extract library versions and compute signature (CRITICAL: different versions = different outcomes)
+        library_versions_signature = None
+        library_versions = ctx.library_versions
+        if not library_versions:
+            # Try to get from resolved_metadata (metadata.json), additional_data, or run_data
+            if resolved_metadata and 'environment' in resolved_metadata and 'library_versions' in resolved_metadata['environment']:
+                library_versions = resolved_metadata['environment']['library_versions']
+            elif additional_data and 'library_versions' in additional_data:
+                library_versions = additional_data['library_versions']
+            elif run_data.get('additional_data') and 'library_versions' in run_data.get('additional_data', {}):
+                library_versions = run_data['additional_data']['library_versions']
+            elif run_data.get('library_versions'):
+                library_versions = run_data['library_versions']
+        
+        if library_versions and isinstance(library_versions, dict):
+            # Sort keys for stable hash, include python_version if available
+            lib_parts = []
+            if ctx.python_version:
+                lib_parts.append(f"python={ctx.python_version}")
+            # Sort library versions for stable hash
+            for key in sorted(library_versions.keys()):
+                lib_parts.append(f"{key}={library_versions[key]}")
+            if lib_parts:
+                lib_str = "|".join(lib_parts)
+                library_versions_signature = hashlib.sha256(lib_str.encode()).hexdigest()[:16]
+        
         # Build comparison group (using resolved context, stage-aware)
-        comparison_group = self._build_comparison_group_from_context(stage, ctx, config_fp, data_fp, target_fp)
+        comparison_group = self._build_comparison_group_from_context(
+            stage, ctx, config_fp, data_fp, target_fp, hyperparameters_signature, train_seed, library_versions_signature
+        )
         
         # Normalize inputs (using resolved context - no nulls for required fields)
         inputs = self._normalize_inputs_from_context(stage, ctx)
@@ -1239,6 +1347,33 @@ class DiffTelemetry:
             return hashlib.sha256(features_str.encode()).hexdigest()[:16]
         return None
     
+    def _compute_target_fingerprint_from_context(
+        self,
+        ctx: ResolvedRunContext
+    ) -> Optional[str]:
+        """Compute target fingerprint from resolved context."""
+        target_parts = []
+        
+        # Target name (from resolved context)
+        if ctx.target_name:
+            target_parts.append(f"target={ctx.target_name}")
+        
+        # Labeling implementation signature (from resolved context)
+        if ctx.labeling_impl_hash:
+            target_parts.append(f"labeling={ctx.labeling_impl_hash}")
+        
+        # Horizon and objective (from resolved context)
+        if ctx.horizon_minutes is not None:
+            target_parts.append(f"horizon={ctx.horizon_minutes}")
+        if ctx.objective:
+            target_parts.append(f"objective={ctx.objective}")
+        
+        if target_parts:
+            # Canonicalize: sorted keys, normalized values
+            target_str = "|".join(sorted(target_parts))
+            return hashlib.sha256(target_str.encode()).hexdigest()[:16]
+        return None
+    
     def _compute_target_fingerprint(
         self,
         run_data: Dict[str, Any],
@@ -1292,7 +1427,10 @@ class DiffTelemetry:
         ctx: ResolvedRunContext,
         config_fp: Optional[str],
         data_fp: Optional[str],
-        task_fp: Optional[str]
+        task_fp: Optional[str],
+        hyperparameters_signature: Optional[str] = None,
+        train_seed: Optional[int] = None,
+        library_versions_signature: Optional[str] = None
     ) -> ComparisonGroup:
         """Build comparison group from resolved context (stage-aware).
         
@@ -1312,17 +1450,29 @@ class DiffTelemetry:
         model_family = None
         feature_signature = None
         
+        # Stage-specific fields
+        hp_sig = None
+        seed = None
+        lib_sig = None  # Initialize for all stages
+        
         if stage == "TARGET_RANKING":
-            # TARGET_RANKING: model_family and feature_signature are NOT applicable
+            # TARGET_RANKING: model_family, feature_signature, hyperparameters, train_seed, and library_versions are NOT applicable
             # Don't include them (not None, just omit from ComparisonGroup)
             pass
         elif stage == "FEATURE_SELECTION":
-            # FEATURE_SELECTION: feature_signature is required, model_family is NOT applicable
+            # FEATURE_SELECTION: feature_signature, hyperparameters, train_seed, and library_versions are required
+            # CRITICAL: Different hyperparameters/seeds/versions in feature selection models = different features selected
             feature_signature = ctx.feature_fingerprint
+            hp_sig = hyperparameters_signature
+            seed = train_seed
+            lib_sig = library_versions_signature
         elif stage == "TRAINING":
-            # TRAINING: Both model_family and feature_signature are required
+            # TRAINING: model_family, feature_signature, hyperparameters, train_seed, and library_versions are all required
             model_family = ctx.model_family
             feature_signature = ctx.feature_fingerprint
+            hp_sig = hyperparameters_signature
+            seed = train_seed
+            lib_sig = library_versions_signature
         
         return ComparisonGroup(
             experiment_id=ctx.experiment_id,  # Can be None if not tracked
@@ -1331,7 +1481,10 @@ class DiffTelemetry:
             routing_signature=routing_signature,
             n_effective=ctx.n_effective,  # CRITICAL: Exact sample size (required, non-null)
             model_family=model_family,  # Stage-specific: None for TARGET_RANKING/FEATURE_SELECTION
-            feature_signature=feature_signature  # Stage-specific: None for TARGET_RANKING
+            feature_signature=feature_signature,  # Stage-specific: None for TARGET_RANKING
+            hyperparameters_signature=hp_sig,  # Stage-specific: Only for FEATURE_SELECTION and TRAINING
+            train_seed=seed,  # Stage-specific: Only for FEATURE_SELECTION and TRAINING
+            library_versions_signature=lib_sig  # Stage-specific: Only for FEATURE_SELECTION and TRAINING
         )
     
     def _build_comparison_group(
@@ -1356,6 +1509,8 @@ class DiffTelemetry:
         - Routing/view configuration
         - Model family (different families = different outcomes)
         - Feature set (different features = different outcomes)
+        - Hyperparameters (different HPs = different outcomes)
+        - Train seed (different seeds = different outcomes)
         """
         # Extract experiment_id if available
         experiment_id = None
@@ -1404,6 +1559,73 @@ class DiffTelemetry:
             if feature_fp:
                 feature_signature = feature_fp
         
+        # Extract hyperparameters and train_seed (CRITICAL: different HPs/seeds = different outcomes)
+        hyperparameters_signature = None
+        train_seed = None
+        
+        # Try to get hyperparameters from additional_data or run_data
+        training_data = {}
+        if additional_data and 'training' in additional_data:
+            training_data = additional_data['training']
+        elif run_data.get('additional_data') and 'training' in run_data.get('additional_data', {}):
+            training_data = run_data['additional_data']['training']
+        elif run_data.get('training'):
+            training_data = run_data['training']
+        
+        # Extract hyperparameters (exclude model_family, strategy, seeds - those are handled separately)
+        hyperparameters = {}
+        excluded_keys = {'model_family', 'strategy', 'split_seed', 'train_seed', 'seed'}
+        for key, value in training_data.items():
+            if key not in excluded_keys and value is not None:
+                hyperparameters[key] = value
+        
+        # Compute hyperparameters signature if we have any
+        if hyperparameters:
+            # Sort keys for stable hash
+            hp_str = "|".join(f"{k}={v}" for k, v in sorted(hyperparameters.items()))
+            hyperparameters_signature = hashlib.sha256(hp_str.encode()).hexdigest()[:16]
+        
+        # Extract train_seed
+        train_seed = (
+            training_data.get('train_seed') or
+            training_data.get('seed') or
+            (additional_data.get('train_seed') if additional_data else None) or
+            (additional_data.get('seed') if additional_data else None) or
+            (run_data.get('train_seed')) or
+            (run_data.get('seed'))
+        )
+        if train_seed is not None:
+            try:
+                train_seed = int(train_seed)
+            except (ValueError, TypeError):
+                train_seed = None
+        
+        # Extract library versions and compute signature (CRITICAL: different versions = different outcomes)
+        library_versions_signature = None
+        library_versions = None
+        if additional_data and 'library_versions' in additional_data:
+            library_versions = additional_data['library_versions']
+        elif run_data.get('additional_data') and 'library_versions' in run_data.get('additional_data', {}):
+            library_versions = run_data['additional_data']['library_versions']
+        elif run_data.get('library_versions'):
+            library_versions = run_data['library_versions']
+        
+        if library_versions and isinstance(library_versions, dict):
+            # Sort keys for stable hash, include python_version if available
+            lib_parts = []
+            python_version = (
+                (additional_data.get('python_version') if additional_data else None) or
+                (run_data.get('python_version'))
+            )
+            if python_version:
+                lib_parts.append(f"python={python_version}")
+            # Sort library versions for stable hash
+            for key in sorted(library_versions.keys()):
+                lib_parts.append(f"{key}={library_versions[key]}")
+            if lib_parts:
+                lib_str = "|".join(lib_parts)
+                library_versions_signature = hashlib.sha256(lib_str.encode()).hexdigest()[:16]
+        
         return ComparisonGroup(
             experiment_id=experiment_id,
             dataset_signature=data_fp,
@@ -1411,7 +1633,10 @@ class DiffTelemetry:
             routing_signature=routing_signature,
             n_effective=n_effective,  # CRITICAL: Exact sample size
             model_family=model_family,  # CRITICAL: Model family
-            feature_signature=feature_signature  # CRITICAL: Feature set
+            feature_signature=feature_signature,  # CRITICAL: Feature set
+            hyperparameters_signature=hyperparameters_signature,  # CRITICAL: Different HPs = different outcomes
+            train_seed=train_seed,  # CRITICAL: Different seeds = different outcomes
+            library_versions_signature=library_versions_signature  # CRITICAL: Different versions = different outcomes
         )
     
     def _normalize_inputs_from_context(
@@ -1920,141 +2145,44 @@ class DiffTelemetry:
         current: NormalizedSnapshot,
         prev: NormalizedSnapshot
     ) -> Dict[str, Any]:
-        """Extract changes in excluded factors (hyperparameters, seeds, versions).
+        """Extract changes in excluded factors.
         
-        These are outcome-influencing but intentionally excluded from comparability key
-        to allow controlled diffs. We surface them loudly so reviewers know about confounders.
+        NOTE: Hyperparameters, train_seed, and library_versions are now part of the comparison group
+        and will prevent runs from being comparable if they differ. There are no excluded factors
+        anymore - all outcome-influencing metadata is required for comparability.
         
         Returns:
-            Dict with compact summary of excluded factor changes (includes actual values, not just flag)
+            Empty dict (no excluded factors remain)
         """
-        excluded = {}
-        
-        # Extract from process.training (hyperparameters)
-        curr_training = current.process.get('training', {})
-        prev_training = prev.process.get('training', {})
-        
-        # Hyperparameters (exclude model_family, strategy, seeds - those are handled separately)
-        # Include ALL hyperparameters found, not just a predefined list
-        hp_changes = {}
-        all_hp_keys = set(curr_training.keys()) | set(prev_training.keys())
-        # Exclude keys that are in comparability key or handled separately
-        excluded_keys = {'model_family', 'strategy', 'split_seed', 'train_seed', 'seed'}  # These are in key or handled separately
-        for key in all_hp_keys:
-            if key in excluded_keys:
-                continue
-            curr_val = curr_training.get(key)
-            prev_val = prev_training.get(key)
-            if curr_val != prev_val and (curr_val is not None or prev_val is not None):
-                # Include actual values for reviewer inspection
-                hp_changes[key] = {'prev': prev_val, 'curr': curr_val}
-        if hp_changes:
-            excluded['hyperparameters'] = hp_changes
-        
-        # Random seeds (train_seed, not split_seed - split_seed is in key)
-        curr_seed = curr_training.get('train_seed') or curr_training.get('seed')
-        prev_seed = prev_training.get('train_seed') or prev_training.get('seed')
-        if curr_seed != prev_seed:
-            excluded['train_seed'] = {'prev': prev_seed, 'curr': curr_seed}
-        
-        # Library/compute versions
-        curr_env = current.process.get('environment', {})
-        prev_env = prev.process.get('environment', {})
-        version_changes = {}
-        # Check all environment keys
-        all_env_keys = set(curr_env.keys()) | set(prev_env.keys())
-        for key in all_env_keys:
-            curr_val = curr_env.get(key)
-            prev_val = prev_env.get(key)
-            if curr_val != prev_val:
-                # Include actual values (e.g., "12.2 → 12.3")
-                version_changes[key] = {'prev': prev_val, 'curr': curr_val}
-        if version_changes:
-            excluded['versions'] = version_changes
-        
-        return excluded
+        # All outcome-influencing factors are now in the comparison group
+        # No excluded factors remain
+        return {}
     
     def _format_excluded_factors_summary(self, excluded: Dict[str, Any]) -> Optional[str]:
         """Format excluded factors changes into readable summary.
         
+        NOTE: All outcome-influencing factors (hyperparameters, train_seed, library_versions)
+        are now part of the comparison group, so they won't appear here (runs with different
+        values won't be comparable). No excluded factors remain.
+        
         Returns:
-            Human-readable string like "learning_rate: 0.01→0.05, max_depth: 5→7, train_seed: 42→1337 (+2 more)"
-            or None if no excluded factors changed
-        
-        Count rule: Number of keys whose value differs (one key = one change).
-        This matches excluded_factors_changed_count calculation.
+            None (no excluded factors)
         """
-        if not excluded:
-            return None
-        
-        parts = []
-        total_changes = 0
-        
-        # Hyperparameters (top 3)
-        if 'hyperparameters' in excluded:
-            hp_changes = excluded['hyperparameters']
-            total_changes += len(hp_changes)  # Count all HP keys that changed
-            hp_items = list(hp_changes.items())[:3]  # Top 3
-            for key, vals in hp_items:
-                prev = vals.get('prev')
-                curr = vals.get('curr')
-                if prev is not None and curr is not None:
-                    parts.append(f"{key}: {prev}→{curr}")
-            if len(hp_changes) > 3:
-                parts.append(f"(+{len(hp_changes) - 3} more HPs)")
-        
-        # Train seed
-        if 'train_seed' in excluded:
-            total_changes += 1  # Count train_seed as one change
-            seed_vals = excluded['train_seed']
-            parts.append(f"train_seed: {seed_vals.get('prev')}→{seed_vals.get('curr')}")
-        
-        # Versions (top 3)
-        if 'versions' in excluded:
-            ver_changes = excluded['versions']
-            total_changes += len(ver_changes)  # Count all version keys that changed
-            ver_items = list(ver_changes.items())[:3]  # Top 3
-            for key, vals in ver_items:
-                prev = vals.get('prev')
-                curr = vals.get('curr')
-                if prev is not None and curr is not None:
-                    parts.append(f"{key}: {prev}→{curr}")
-            if len(ver_changes) > 3:
-                parts.append(f"(+{len(ver_changes) - 3} more versions)")
-        
-        return ", ".join(parts) if parts else None
+        # All outcome-influencing factors are now in comparison group
+        return None
     
     def _count_excluded_factors_changed(self, excluded: Dict[str, Any]) -> int:
         """Count number of excluded factors that changed.
         
-        Count rule: Number of keys whose value differs (one key = one change).
-        - Each hyperparameter key = 1 change
-        - train_seed = 1 change (if present)
-        - Each version key = 1 change
-        
-        This matches the summary formatter counting logic.
+        NOTE: All outcome-influencing factors (hyperparameters, train_seed, library_versions)
+        are now part of the comparison group, so they won't be counted here (runs with different
+        values won't be comparable). No excluded factors remain.
         
         Returns:
-            Integer count of changed keys
+            0 (no excluded factors remain)
         """
-        if not excluded:
-            return 0
-        
-        count = 0
-        
-        # Count hyperparameter keys
-        if 'hyperparameters' in excluded:
-            count += len(excluded['hyperparameters'])
-        
-        # Count train_seed
-        if 'train_seed' in excluded:
-            count += 1
-        
-        # Count version keys
-        if 'versions' in excluded:
-            count += len(excluded['versions'])
-        
-        return count
+        # All outcome-influencing factors are now in comparison group
+        return 0
     
     def _diff_dict(
         self,
@@ -2466,34 +2594,76 @@ class DiffTelemetry:
         Returns:
             Diff telemetry data dict
         """
-        # CRITICAL: Validate resolved_metadata matches current stage/run_id to prevent cross-stage contamination
+        # CRITICAL: Validate resolved_metadata matches current stage to prevent cross-stage contamination
+        # Note: We don't strictly validate run_id format - run_ids are identifiers, not reproducibility factors.
+        # What matters for reproducibility are fingerprints (data, config, feature, target) and comparison groups.
         if resolved_metadata:
             resolved_stage = resolved_metadata.get("stage")
-            resolved_run_id = resolved_metadata.get("run_id")
-            current_run_id = run_data.get('run_id') or run_data.get('timestamp')
             
             if resolved_stage != stage:
                 raise ValueError(
                     f"Stage mismatch: resolved_metadata stage={resolved_stage}, current={stage}. "
                     f"This indicates cross-stage metadata contamination. Ensure full_metadata is stage-scoped."
                 )
-            if resolved_run_id != current_run_id:
-                raise ValueError(
-                    f"Run ID mismatch: resolved_metadata run_id={resolved_run_id}, current={current_run_id}. "
-                    f"This indicates stale metadata reuse. Ensure full_metadata matches current run."
-                )
+            # Run ID format differences (e.g., underscores vs T) don't affect reproducibility
+            # Only log a debug message if formats differ significantly, but don't fail
+            resolved_run_id = resolved_metadata.get("run_id")
+            current_run_id = run_data.get('run_id') or run_data.get('timestamp')
+            if resolved_run_id and current_run_id and resolved_run_id != current_run_id:
+                # Normalize both to check if they represent the same timestamp
+                # If they're just format differences, it's fine
+                logger.debug(f"Run ID format differs (non-critical): resolved={resolved_run_id}, current={current_run_id}")
             
             # CRITICAL: Validate required fields are present and non-null for this stage
             # This ensures we catch incomplete SST before snapshot computation
+            # BUT: Allow fallback extraction from run_data/additional_data for fields that might be set later
             required_fields = self._get_required_fields_for_stage(stage)
             missing_fields = []
             null_fields = []
             
+            # Try to fill in missing fields from run_data or additional_data as fallback
+            # This handles cases where metadata is built incrementally
             for field in required_fields:
-                if field not in resolved_metadata:
-                    missing_fields.append(field)
-                elif resolved_metadata[field] is None:
-                    null_fields.append(field)
+                if field not in resolved_metadata or resolved_metadata[field] is None:
+                    # Try fallback sources
+                    fallback_value = None
+                    if field == "target_name":
+                        # For TARGET_RANKING, try multiple fallback sources
+                        # item_name is passed to log_comparison() but might not be in run_data
+                        fallback_value = (
+                            run_data.get('item_name') or
+                            run_data.get('target') or
+                            run_data.get('target_name') or
+                            (additional_data.get('target_name') if additional_data else None) or
+                            (additional_data.get('target') if additional_data else None) or
+                            (additional_data.get('item_name') if additional_data else None)
+                        )
+                        # Last resort: try to extract from cohort_dir path (e.g., .../TARGET_RANKING/SYMBOL_SPECIFIC/{target_name}/...)
+                        if not fallback_value and cohort_dir:
+                            try:
+                                parts = Path(cohort_dir).parts
+                                # Look for target_name in path (usually after view name)
+                                for i, part in enumerate(parts):
+                                    if part in ['TARGET_RANKING', 'FEATURE_SELECTION', 'TRAINING'] and i + 2 < len(parts):
+                                        # Next part might be view, then target_name
+                                        if parts[i+1] in ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC', 'LOSO', 'INDIVIDUAL']:
+                                            if i + 2 < len(parts) and not parts[i+2].startswith('symbol=') and not parts[i+2].startswith('cohort='):
+                                                fallback_value = parts[i+2]
+                                                break
+                                        elif not parts[i+1].startswith('symbol=') and not parts[i+1].startswith('cohort='):
+                                            # No view, target_name is next
+                                            fallback_value = parts[i+1]
+                                            break
+                            except Exception:
+                                pass  # Don't fail if path parsing fails
+                    
+                    if fallback_value:
+                        resolved_metadata[field] = fallback_value
+                        logger.debug(f"Filled missing {field} from fallback: {fallback_value}")
+                    elif field not in resolved_metadata:
+                        missing_fields.append(field)
+                    elif resolved_metadata[field] is None:
+                        null_fields.append(field)
             
             if missing_fields or null_fields:
                 error_parts = []

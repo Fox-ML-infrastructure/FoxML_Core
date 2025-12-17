@@ -1,12 +1,10 @@
 # Notice
 
-**Sorry about advertising before full functionality — still learning.**
+**Licensing Update (2025-12-17):** FoxML Core is back to **AGPL v3 + Commercial** dual licensing. Sorry about any confusion during the brief licensing model change — that was a mistake, and we've reverted to the standard dual-license model. Everything is working again.
 
-This project is under active development. Some features may be incomplete, have bugs, or change without notice. We're working hard to make everything production-ready, but we're still learning and iterating.
+**AGPL v3** is available for open research, experimentation, and projects that can comply with AGPL copyleft requirements. **Commercial licenses** are required for proprietary, internal, or production deployments.
 
-If you encounter issues or have feedback, please reach out. We appreciate your patience as we continue to improve.
-
-Thank you for your understanding.
+See [`LEGAL/LICENSING.md`](LEGAL/LICENSING.md) for complete licensing information.
 
 ---
 

@@ -2,11 +2,12 @@ FoxML Core
 Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 All rights reserved.
 
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
 Dual-licensed: AGPL v3 + Commercial. AGPL v3 available for open research and projects that can comply with copyleft. Commercial license required for proprietary deployments. See LICENSE (AGPL v3) and COMMERCIAL_LICENSE.md.
 
 ⚠️ STRATEGIC LICENSING ROADMAP: v1.x is the last fully open window. Core remains open; production layer will require commercial license in v2.0+. See LEGAL/ROADMAP_BOUNDARIES.md for details.
 
-ENFORCEMENT: Licensor actively monitors for unauthorized use. Violations will be pursued through appropriate legal channels. For compliance: jenn.lewis5789@gmail.com | Subject: `License Compliance Inquiry`.
-
-This software is provided "AS IS", WITHOUT WARRANTY OF ANY KIND.
-See LICENSE for complete terms and conditions.
+For licensing inquiries: jenn.lewis5789@gmail.com | Subject: `FoxML Core Commercial Licensing`
