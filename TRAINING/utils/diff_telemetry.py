@@ -2742,6 +2742,7 @@ class DiffTelemetry:
                                 try:
                                     with open(run_snapshot_index) as f:
                                         data = json.load(f)
+                                    
                                     for key, snap_data in data.items():
                                         # Handle both old format (run_id key) and new format (run_id:stage key)
                                         if ':' in key:
@@ -2811,9 +2812,9 @@ class DiffTelemetry:
                                         except Exception as e:
                                             logger.debug(f"Failed to deserialize snapshot from {run_snapshot_index}: {e}")
                                             continue
-                            except Exception as e:
-                                logger.debug(f"Failed to read snapshot index {run_snapshot_index}: {e}")
-                                continue
+                                except Exception as e:
+                                    logger.debug(f"Failed to read snapshot index {run_snapshot_index}: {e}")
+                                    continue
         
         if not candidates:
             return None
