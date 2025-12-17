@@ -433,6 +433,9 @@ RESULTS/
 - **Human navigable**: Directory names include sample size and model family for quick identification
 - **Clean structure**: All runs under `RESULTS/runs/` keeps root directory clean
 - **Early organization**: Comparison group computed at startup, runs created directly in final location
+- **Concurrency-safe**: Snapshot sequence numbers assigned under lock, prevents race conditions
+- **Robust ordering**: Monotonic sequence numbers ensure correct "previous run" selection
+- **Same-run protection**: Multiple checkpoints ensure runs never compare against themselves
 
 **Finding Runs**:
 - **By comparison group**: `ls RESULTS/runs/cg-*/`

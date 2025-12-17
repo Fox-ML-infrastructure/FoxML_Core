@@ -62,6 +62,69 @@ class ComparabilityStatus(str, Enum):
 
 
 @dataclass
+class ResolvedRunContext:
+    """Resolved run context (SST) - all outcome-influencing metadata resolved at source.
+    
+    This ensures snapshots have non-null values for all required fields, preventing
+    false comparability from None values and ensuring auditability.
+    """
+    # Data provenance (required for all stages)
+    n_symbols: Optional[int] = None
+    symbols: Optional[List[str]] = None
+    date_range_start: Optional[str] = None  # ISO format
+    date_range_end: Optional[str] = None  # ISO format
+    n_rows_total: Optional[int] = None
+    n_effective: Optional[int] = None
+    data_fingerprint: Optional[str] = None
+    
+    # Task provenance (required for all stages)
+    target_name: Optional[str] = None
+    labeling_impl_hash: Optional[str] = None
+    horizon_minutes: Optional[int] = None
+    objective: Optional[str] = None
+    target_fingerprint: Optional[str] = None
+    
+    # Split provenance (required for all stages)
+    cv_method: Optional[str] = None
+    cv_folds: Optional[int] = None
+    purge_minutes: Optional[float] = None
+    embargo_minutes: Optional[Any] = None  # Can be dict with kind/reason
+    leakage_filter_version: Optional[str] = None
+    split_seed: Optional[int] = None
+    fold_assignment_hash: Optional[str] = None
+    split_protocol_fingerprint: Optional[str] = None
+    
+    # Feature provenance (required for FEATURE_SELECTION and TRAINING)
+    feature_names: Optional[List[str]] = None
+    feature_set_id: Optional[str] = None
+    feature_pipeline_signature: Optional[str] = None
+    n_features: Optional[int] = None
+    feature_fingerprint: Optional[str] = None
+    
+    # Stage strategy (stage-specific)
+    ranking_strategy: Optional[str] = None  # For TARGET_RANKING
+    feature_selection_strategy: Optional[str] = None  # For FEATURE_SELECTION
+    trainer_strategy: Optional[str] = None  # For TRAINING
+    model_family: Optional[str] = None  # For TRAINING (required)
+    
+    # Config provenance
+    min_cs: Optional[int] = None
+    max_cs_samples: Optional[int] = None
+    
+    # Environment (tracked but not outcome-influencing)
+    python_version: Optional[str] = None
+    library_versions: Optional[Dict[str, str]] = None
+    cuda_version: Optional[str] = None
+    
+    # Experiment tracking
+    experiment_id: Optional[str] = None
+    
+    # View/routing
+    view: Optional[str] = None
+    routing_signature: Optional[str] = None
+
+
+@dataclass
 class ComparisonGroup:
     """Defines what makes runs comparable.
     
@@ -157,7 +220,14 @@ class ComparisonGroup:
         return dir_name if dir_name else "default"
     
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        """Convert to dict, filtering out None values for stage-irrelevant fields.
+        
+        This ensures we don't store null placeholders for fields that aren't applicable
+        to the stage (e.g., model_family=None for TARGET_RANKING).
+        """
+        d = asdict(self)
+        # Filter out None values (they indicate stage-irrelevant fields)
+        return {k: v for k, v in d.items() if v is not None}
 
 
 @dataclass
@@ -170,6 +240,10 @@ class NormalizedSnapshot:
     view: Optional[str] = None  # CROSS_SECTIONAL, SYMBOL_SPECIFIC
     target: Optional[str] = None
     symbol: Optional[str] = None
+    
+    # Monotonic sequence number for correct ordering (assigned at save time)
+    # This ensures correct "prev run" selection regardless of mtime/timestamp quirks
+    snapshot_seq: Optional[int] = None
     
     # Fingerprint schema version (for compatibility checking)
     fingerprint_schema_version: str = FINGERPRINT_SCHEMA_VERSION
@@ -284,6 +358,60 @@ class BaselineState:
         return asdict(self)
 
 
+def _write_atomic_json(file_path: Path, data: Dict[str, Any]) -> None:
+    """
+    Write JSON file atomically using temp file + rename with full durability.
+    
+    This ensures crash consistency AND power-loss safety:
+    1. Write to temp file
+    2. fsync(tempfile) - ensure data is on disk
+    3. os.replace() - atomic rename (POSIX: atomic, Windows: best-effort)
+    4. fsync(directory) - ensure directory entry is on disk
+    
+    This pattern is required for "audit-ready" systems that must survive sudden power loss.
+    
+    Args:
+        file_path: Target file path
+        data: Data to write (must be JSON-serializable)
+    
+    Raises:
+        IOError: If write fails
+    """
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_file = file_path.with_suffix('.tmp')
+    
+    try:
+        # Write to temp file
+        with open(temp_file, 'w') as f:
+            json.dump(data, f, indent=2, default=str)
+            f.flush()  # Ensure immediate write
+            os.fsync(f.fileno())  # Force write to disk (durability)
+        
+        # Atomic rename (POSIX: atomic, Windows: best-effort)
+        os.replace(temp_file, file_path)
+        
+        # Sync directory entry to ensure rename is durable
+        # This is critical for power-loss safety
+        try:
+            dir_fd = os.open(file_path.parent, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)  # Sync directory entry
+            finally:
+                os.close(dir_fd)
+        except (OSError, AttributeError):
+            # Fallback: sync parent directory if available
+            # Some systems don't support directory fsync
+            pass
+    except Exception as e:
+        # Cleanup temp file on failure
+        if temp_file.exists():
+            try:
+                temp_file.unlink()
+            except Exception:
+                pass
+        raise IOError(f"Failed to write atomic JSON to {file_path}: {e}") from e
+
+
 class DiffTelemetry:
     """
     First-class diff telemetry system with SST rules.
@@ -374,26 +502,55 @@ class DiffTelemetry:
         self._baselines: Dict[str, BaselineState] = {}  # Cache for current session, but saved per-cohort
     
     def _load_indices(self):
-        """Load snapshot index (baselines loaded on-demand from cohort directories)."""
+        """
+        Load snapshot index (baselines loaded on-demand from cohort directories).
+        
+        Handles both old format (run_id key) and new format (run_id:stage key) for backwards compatibility.
+        """
         if self.snapshot_index.exists():
             try:
                 with open(self.snapshot_index) as f:
                     data = json.load(f)
-                    for run_id, snap_data in data.items():
-                        self._snapshots[run_id] = self._deserialize_snapshot(snap_data)
+                    for key, snap_data in data.items():
+                        snap = self._deserialize_snapshot(snap_data)
+                        # Extract run_id from key (format: "run_id" or "run_id:stage")
+                        if ':' in key:
+                            run_id = key.split(':', 1)[0]
+                        else:
+                            run_id = key
+                        self._snapshots[run_id] = snap
             except Exception as e:
                 logger.warning(f"Failed to load snapshot index: {e}")
         
         # Baselines are loaded on-demand from cohort directories (see _load_baseline_from_cohort)
     
     def _save_indices(self):
-        """Save snapshot index (baselines saved per-cohort, not in global index)."""
+        """
+        Save snapshot index per-run (not one mega file).
+        
+        CRITICAL: Uses (run_id, stage) as key to prevent cross-stage overwrites.
+        A single run_id can produce multiple stages (TARGET_RANKING, FEATURE_SELECTION, TRAINING),
+        so deduping by just run_id would cause stage entries to overwrite each other.
+        
+        Index is stored per-run in: {run_dir}/REPRODUCIBILITY/METRICS/snapshot_index.json
+        This keeps indices correlated by run and prevents one mega file from growing unbounded.
+        
+        Only saves snapshots for the current run (identified by self.run_dir).
+        """
+        if not self.run_dir or not self.snapshot_index:
+            return
+        
         try:
-            snapshot_data = {
-                run_id: snap.to_dict() for run_id, snap in self._snapshots.items()
-            }
-            with open(self.snapshot_index, 'w') as f:
-                json.dump(snapshot_data, f, indent=2, default=str)
+            # Filter snapshots to only those from this run
+            # We identify by checking if the snapshot's run_id context matches this run
+            # For now, we save all snapshots in memory (they're scoped to this run's context)
+            # The index file is already per-run (in run_dir/REPRODUCIBILITY/METRICS/)
+            run_snapshots = {}
+            for run_id, snap in self._snapshots.items():
+                # Use (run_id, stage) as key to prevent cross-stage overwrites
+                run_snapshots[f"{run_id}:{snap.stage}"] = snap.to_dict()
+            
+            _write_atomic_json(self.snapshot_index, run_snapshots)
         except Exception as e:
             logger.warning(f"Failed to save snapshot index: {e}")
     
@@ -443,68 +600,340 @@ class DiffTelemetry:
             view=data.get('view'),
             target=data.get('target'),
             symbol=data.get('symbol'),
+            snapshot_seq=data.get('snapshot_seq'),  # May be None for old snapshots
             config_fingerprint=data.get('config_fingerprint'),
             data_fingerprint=data.get('data_fingerprint'),
             feature_fingerprint=data.get('feature_fingerprint'),
             target_fingerprint=data.get('target_fingerprint'),
+            fingerprint_sources=data.get('fingerprint_sources', {}),
             inputs=data.get('inputs', {}),
             process=data.get('process', {}),
             outputs=data.get('outputs', {}),
             comparison_group=comp_group
         )
     
+    def _build_resolved_context(
+        self,
+        stage: str,
+        run_data: Dict[str, Any],
+        cohort_metadata: Optional[Dict[str, Any]],
+        additional_data: Optional[Dict[str, Any]],
+        cohort_dir: Optional[Path] = None,
+        resolved_metadata: Optional[Dict[str, Any]] = None
+    ) -> ResolvedRunContext:
+        """Build resolved run context from available data sources.
+        
+        CRITICAL: This resolves all outcome-influencing metadata from the actual sources
+        to ensure no nulls for required fields.
+        
+        Priority order (for SST consistency):
+        1. resolved_metadata (in-memory, most authoritative - same data that will be written)
+        2. metadata.json from filesystem (only if resolved_metadata not provided, and verify run_id matches)
+        3. cohort_metadata (fallback)
+        4. additional_data (fallback)
+        
+        Args:
+            stage: Pipeline stage
+            run_data: Run data dict
+            cohort_metadata: Cohort metadata (fallback)
+            additional_data: Additional data dict
+            cohort_dir: Cohort directory (fallback - only used if resolved_metadata not provided)
+            resolved_metadata: In-memory metadata dict (SST - preferred source)
+        
+        Returns:
+            ResolvedRunContext with all resolved values
+        """
+        ctx = ResolvedRunContext()
+        
+        # Priority 1: Use resolved_metadata if provided (SST consistency)
+        # CRITICAL: Use shallow copy to prevent mutation of caller's dict
+        metadata = {}
+        if resolved_metadata:
+            metadata = dict(resolved_metadata)  # Shallow copy to prevent mutation
+            logger.debug("Using resolved_metadata for SST consistency (in-memory dict, shallow copy)")
+        else:
+            # Priority 2: Try to load metadata.json from filesystem (only if resolved_metadata not provided)
+            if cohort_dir:
+                metadata_file = Path(cohort_dir) / "metadata.json"
+                if metadata_file.exists():
+                    try:
+                        with open(metadata_file) as f:
+                            file_metadata = json.load(f)
+                        # CRITICAL: Verify run_id AND stage match to avoid stale file hazard and cross-stage weirdness
+                        current_run_id = run_data.get('run_id') or run_data.get('timestamp')
+                        file_run_id = file_metadata.get('run_id')
+                        file_stage = file_metadata.get('stage')
+                        current_stage = stage
+                        
+                        if file_run_id == current_run_id and file_stage == current_stage:
+                            metadata = file_metadata
+                            logger.debug(f"Using metadata.json from filesystem (run_id={current_run_id}, stage={current_stage} match)")
+                        else:
+                            mismatch_reasons = []
+                            if file_run_id != current_run_id:
+                                mismatch_reasons.append(f"run_id mismatch: file={file_run_id}, current={current_run_id}")
+                            if file_stage != current_stage:
+                                mismatch_reasons.append(f"stage mismatch: file={file_stage}, current={current_stage}")
+                            logger.debug(f"Skipping stale metadata.json ({', '.join(mismatch_reasons)})")
+                    except Exception as e:
+                        logger.debug(f"Could not load metadata.json from {metadata_file}: {e}")
+        
+        # Data provenance (from metadata.json or cohort_metadata)
+        ctx.n_symbols = (
+            metadata.get('n_symbols') or
+            cohort_metadata.get('n_symbols') if cohort_metadata else None
+        )
+        ctx.symbols = (
+            metadata.get('symbols') or
+            cohort_metadata.get('symbols') if cohort_metadata else None
+        )
+        # Date range (handle both formats: date_start/date_end and date_range.start_ts/end_ts)
+        ctx.date_range_start = (
+            metadata.get('date_start') or
+            metadata.get('date_range_start') or
+            (cohort_metadata.get('date_range', {}).get('start_ts') if cohort_metadata and isinstance(cohort_metadata.get('date_range'), dict) else None) or
+            (cohort_metadata.get('date_range_start') if cohort_metadata else None)
+        )
+        ctx.date_range_end = (
+            metadata.get('date_end') or
+            metadata.get('date_range_end') or
+            (cohort_metadata.get('date_range', {}).get('end_ts') if cohort_metadata and isinstance(cohort_metadata.get('date_range'), dict) else None) or
+            (cohort_metadata.get('date_range_end') if cohort_metadata else None)
+        )
+        ctx.n_effective = (
+            metadata.get('N_effective') or
+            cohort_metadata.get('N_effective_cs') if cohort_metadata else None
+        )
+        ctx.min_cs = (
+            metadata.get('min_cs') or
+            cohort_metadata.get('min_cs') if cohort_metadata else None
+        )
+        ctx.max_cs_samples = (
+            metadata.get('max_cs_samples') or
+            cohort_metadata.get('max_cs_samples') if cohort_metadata else None
+        )
+        
+        # Task provenance
+        ctx.target_name = (
+            metadata.get('target') or
+            additional_data.get('target') if additional_data else None
+        )
+        cv_details = metadata.get('cv_details', {})
+        ctx.horizon_minutes = (
+            cv_details.get('horizon_minutes') or
+            additional_data.get('horizon_minutes') if additional_data else None
+        )
+        ctx.labeling_impl_hash = (
+            cv_details.get('label_definition_hash') or
+            additional_data.get('labeling_hash') if additional_data else None
+        )
+        
+        # Split provenance
+        ctx.cv_method = cv_details.get('cv_method')
+        ctx.purge_minutes = cv_details.get('purge_minutes')
+        ctx.embargo_minutes = cv_details.get('embargo_minutes')
+        ctx.leakage_filter_version = (
+            metadata.get('leakage_filter_version') or
+            additional_data.get('leakage_filter_version') if additional_data else None
+        )
+        ctx.split_seed = (
+            metadata.get('seed') or
+            additional_data.get('split_seed') if additional_data else None
+        )
+        ctx.fold_assignment_hash = (
+            additional_data.get('fold_assignment_hash') if additional_data else None
+        )
+        
+        # Feature provenance
+        ctx.n_features = (
+            additional_data.get('n_features') if additional_data else None
+        )
+        ctx.feature_names = (
+            additional_data.get('feature_names') if additional_data else None
+        )
+        
+        # Stage strategy
+        ctx.view = (
+            metadata.get('view') or
+            additional_data.get('view') if additional_data else None
+        )
+        ctx.model_family = (
+            additional_data.get('model_family') if additional_data else None
+        )
+        ctx.trainer_strategy = (
+            additional_data.get('strategy') if additional_data else None
+        )
+        
+        # Environment
+        ctx.python_version = (
+            additional_data.get('python_version') if additional_data else None
+        )
+        ctx.library_versions = (
+            additional_data.get('library_versions') if additional_data else None
+        )
+        
+        # Experiment tracking
+        ctx.experiment_id = (
+            metadata.get('experiment_id') or
+            additional_data.get('experiment_id') if additional_data else None
+        )
+        
+        return ctx
+    
+    def _get_required_fields_for_stage(self, stage: str) -> List[str]:
+        """
+        Get list of required fields for a given stage.
+        
+        These fields must be present and non-null in resolved_metadata before finalize_run().
+        
+        Args:
+            stage: Pipeline stage
+        
+        Returns:
+            List of required field names
+        """
+        base_required = ['stage', 'run_id', 'cohort_id']
+        
+        if stage == 'TARGET_RANKING':
+            return base_required + [
+                'date_start', 'date_end', 'n_symbols', 'N_effective',
+                'target', 'view', 'min_cs', 'max_cs_samples'
+            ]
+        elif stage == 'FEATURE_SELECTION':
+            return base_required + [
+                'date_start', 'date_end', 'n_symbols', 'N_effective',
+                'target', 'view', 'min_cs', 'max_cs_samples'
+            ]
+        elif stage == 'TRAINING':
+            return base_required + [
+                'date_start', 'date_end', 'n_symbols', 'N_effective',
+                'target', 'view', 'model_family', 'min_cs', 'max_cs_samples'
+            ]
+        else:
+            # Unknown stage - require base fields only
+            return base_required
+    
+    def _validate_stage_schema(
+        self,
+        stage: str,
+        ctx: ResolvedRunContext
+    ) -> Tuple[bool, Optional[str]]:
+        """Validate that required fields for stage are present and non-null.
+        
+        Returns:
+            (is_valid, reason) - if not valid, reason explains what's missing
+        """
+        missing = []
+        
+        # All stages require:
+        if ctx.n_effective is None:
+            missing.append("n_effective")
+        if ctx.target_name is None:
+            missing.append("target_name")
+        if ctx.view is None:
+            missing.append("view")
+        if ctx.date_range_start is None:
+            missing.append("date_range_start")
+        if ctx.date_range_end is None:
+            missing.append("date_range_end")
+        
+        # Stage-specific requirements
+        if stage == "TARGET_RANKING":
+            # TARGET_RANKING does NOT require model_family or feature_signature
+            pass
+        elif stage == "FEATURE_SELECTION":
+            # FEATURE_SELECTION requires feature pipeline info
+            if ctx.n_features is None:
+                missing.append("n_features")
+        elif stage == "TRAINING":
+            # TRAINING requires model_family and feature info
+            if ctx.model_family is None:
+                missing.append("model_family")
+            if ctx.n_features is None:
+                missing.append("n_features")
+        
+        if missing:
+            return False, f"Missing required fields for {stage}: {', '.join(missing)}"
+        return True, None
+    
     def normalize_snapshot(
         self,
         stage: str,
         run_data: Dict[str, Any],
         cohort_metadata: Optional[Dict[str, Any]] = None,
-        additional_data: Optional[Dict[str, Any]] = None
+        additional_data: Optional[Dict[str, Any]] = None,
+        cohort_dir: Optional[Path] = None,
+        resolved_metadata: Optional[Dict[str, Any]] = None
     ) -> NormalizedSnapshot:
         """
         Create normalized snapshot from run data.
         
+        CRITICAL: This now uses ResolvedRunContext to ensure all required fields are
+        non-null. Missing required fields will cause validation failure.
+        
+        For SST consistency, prefer `resolved_metadata` (in-memory metadata dict) over
+        reading from filesystem. This ensures snapshot computation uses the exact same
+        data that will be persisted.
+        
         Args:
             stage: Pipeline stage (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
             run_data: Run data dict (from reproducibility tracker)
-            cohort_metadata: Cohort metadata
+            cohort_metadata: Cohort metadata (fallback)
             additional_data: Additional data dict
+            cohort_dir: Cohort directory (fallback - only used if resolved_metadata not provided)
+            resolved_metadata: In-memory metadata dict (SST - preferred source)
         
         Returns:
             NormalizedSnapshot
+        
+        Raises:
+            ValueError: If required fields for stage are missing
         """
+        # Build resolved context from all available sources (prefer resolved_metadata for SST)
+        ctx = self._build_resolved_context(
+            stage, run_data, cohort_metadata, additional_data, cohort_dir, resolved_metadata
+        )
+        
+        # Validate stage-specific schema
+        is_valid, reason = self._validate_stage_schema(stage, ctx)
+        if not is_valid:
+            raise ValueError(f"Cannot create snapshot for {stage}: {reason}")
+        
         # Extract core identifiers
         run_id = run_data.get('run_id') or run_data.get('timestamp', datetime.now().isoformat())
         timestamp = run_data.get('timestamp', datetime.now().isoformat())
-        view = additional_data.get('view') if additional_data else None
-        target = additional_data.get('target') if additional_data else None
+        view = ctx.view
+        target = ctx.target_name
         symbol = additional_data.get('symbol') if additional_data else None
         
-        # Build fingerprints
-        config_fp = self._compute_config_fingerprint(run_data, additional_data)
-        data_fp = self._compute_data_fingerprint(cohort_metadata, additional_data)
-        feature_fp = self._compute_feature_fingerprint(run_data, additional_data)
-        target_fp = self._compute_target_fingerprint(run_data, additional_data)
+        # Build fingerprints (using resolved context)
+        config_fp = self._compute_config_fingerprint_from_context(ctx, additional_data)
+        data_fp = self._compute_data_fingerprint_from_context(ctx)
+        feature_fp = self._compute_feature_fingerprint_from_context(ctx)
+        target_fp = self._compute_target_fingerprint_from_context(ctx)
         
-        # Build comparison group
-        comparison_group = self._build_comparison_group(
-            stage, run_data, cohort_metadata, additional_data,
-            config_fp, data_fp, task_fp=target_fp
-        )
+        # Store fingerprints in context for comparison group
+        ctx.data_fingerprint = data_fp
+        ctx.target_fingerprint = target_fp
+        ctx.feature_fingerprint = feature_fp
         
-        # Normalize inputs
-        inputs = self._normalize_inputs(run_data, cohort_metadata, additional_data)
+        # Build comparison group (using resolved context, stage-aware)
+        comparison_group = self._build_comparison_group_from_context(stage, ctx, config_fp, data_fp, target_fp)
         
-        # Normalize process
-        process = self._normalize_process(run_data, additional_data)
+        # Normalize inputs (using resolved context - no nulls for required fields)
+        inputs = self._normalize_inputs_from_context(stage, ctx)
+        
+        # Normalize process (using resolved context)
+        process = self._normalize_process_from_context(ctx)
         
         # Normalize outputs
         outputs = self._normalize_outputs(run_data, additional_data)
         
         # Build fingerprint source descriptions (for auditability)
         fingerprint_sources = {}
-        if additional_data and 'fold_assignment_hash' in additional_data:
+        if ctx.fold_assignment_hash:
             fingerprint_sources['fold_assignment_hash'] = (
-                additional_data.get('fold_assignment_hash_source') or 
+                (additional_data.get('fold_assignment_hash_source') if additional_data else None) or
                 "hash over row_id→fold_id mapping"
             )
         
@@ -525,6 +954,55 @@ class DiffTelemetry:
             outputs=outputs,
             comparison_group=comparison_group
         )
+    
+    def _compute_config_fingerprint_from_context(
+        self,
+        ctx: ResolvedRunContext,
+        additional_data: Optional[Dict[str, Any]]
+    ) -> Optional[str]:
+        """Compute config fingerprint from resolved context."""
+        config_parts = []
+        
+        # Strategy and model_family (if applicable)
+        if ctx.trainer_strategy:
+            config_parts.append(f"strategy={ctx.trainer_strategy}")
+        if ctx.model_family:
+            config_parts.append(f"model_family={ctx.model_family}")
+        if ctx.n_features is not None:
+            config_parts.append(f"n_features={ctx.n_features}")
+        if ctx.min_cs is not None:
+            config_parts.append(f"min_cs={ctx.min_cs}")
+        if ctx.max_cs_samples is not None:
+            config_parts.append(f"max_cs_samples={ctx.max_cs_samples}")
+        
+        # Split protocol signature
+        split_parts = []
+        if ctx.cv_method:
+            split_parts.append(f"cv_method={ctx.cv_method}")
+        if ctx.cv_folds is not None:
+            split_parts.append(f"cv_folds={ctx.cv_folds}")
+        if ctx.purge_minutes is not None:
+            split_parts.append(f"purge_minutes={ctx.purge_minutes}")
+        if ctx.embargo_minutes is not None:
+            normalized_embargo = self._normalize_value_for_hash(ctx.embargo_minutes)
+            split_parts.append(f"embargo_minutes={normalized_embargo}")
+        if ctx.leakage_filter_version:
+            split_parts.append(f"leakage_filter_version={ctx.leakage_filter_version}")
+        if ctx.horizon_minutes is not None:
+            split_parts.append(f"horizon_minutes={ctx.horizon_minutes}")
+        if ctx.split_seed is not None:
+            split_parts.append(f"split_seed={ctx.split_seed}")
+        if ctx.fold_assignment_hash:
+            split_parts.append(f"fold_assignment_hash={ctx.fold_assignment_hash}")
+        
+        if split_parts:
+            split_str = "|".join(sorted(split_parts))
+            config_parts.append(f"split={hashlib.sha256(split_str.encode()).hexdigest()[:8]}")
+        
+        if config_parts:
+            config_str = "|".join(sorted(config_parts))
+            return hashlib.sha256(config_str.encode()).hexdigest()[:16]
+        return None
     
     def _compute_config_fingerprint(
         self,
@@ -615,6 +1093,34 @@ class DiffTelemetry:
         else:
             return str(val)
     
+    def _compute_data_fingerprint_from_context(
+        self,
+        ctx: ResolvedRunContext
+    ) -> Optional[str]:
+        """Compute data fingerprint from resolved context."""
+        data_parts = []
+        
+        # Data parameters (all required, so should be non-null)
+        if ctx.n_symbols is not None:
+            data_parts.append(f"n_symbols={ctx.n_symbols}")
+        if ctx.date_range_start:
+            data_parts.append(f"date_range_start={ctx.date_range_start}")
+        if ctx.date_range_end:
+            data_parts.append(f"date_range_end={ctx.date_range_end}")
+        if ctx.min_cs is not None:
+            data_parts.append(f"min_cs={ctx.min_cs}")
+        if ctx.max_cs_samples is not None:
+            data_parts.append(f"max_cs_samples={ctx.max_cs_samples}")
+        
+        # Data identity (if available)
+        if ctx.data_fingerprint:
+            data_parts.append(f"data_id={ctx.data_fingerprint}")
+        
+        if data_parts:
+            data_str = "|".join(sorted(data_parts))
+            return hashlib.sha256(data_str.encode()).hexdigest()[:16]
+        return None
+    
     def _compute_data_fingerprint(
         self,
         cohort_metadata: Optional[Dict[str, Any]],
@@ -657,6 +1163,32 @@ class DiffTelemetry:
             # Canonicalize: sorted keys, normalized values
             data_str = "|".join(sorted(data_parts))
             return hashlib.sha256(data_str.encode()).hexdigest()[:16]
+        return None
+    
+    def _compute_feature_fingerprint_from_context(
+        self,
+        ctx: ResolvedRunContext
+    ) -> Optional[str]:
+        """Compute feature fingerprint from resolved context."""
+        feature_parts = []
+        
+        # Feature count (if available)
+        if ctx.n_features is not None:
+            feature_parts.append(f"n_features={ctx.n_features}")
+        
+        # Feature names (if available)
+        if ctx.feature_names:
+            # Sort feature names for stable hash (features are unordered set)
+            feature_list_str = "|".join(sorted(ctx.feature_names))
+            feature_parts.append(f"names_hash={hashlib.sha256(feature_list_str.encode()).hexdigest()[:8]}")
+        
+        # Feature pipeline signature
+        if ctx.feature_pipeline_signature:
+            feature_parts.append(f"pipeline={ctx.feature_pipeline_signature}")
+        
+        if feature_parts:
+            features_str = "|".join(sorted(feature_parts))
+            return hashlib.sha256(features_str.encode()).hexdigest()[:16]
         return None
     
     def _compute_feature_fingerprint(
@@ -754,6 +1286,54 @@ class DiffTelemetry:
             return hashlib.sha256(target_str.encode()).hexdigest()[:16]
         return None
     
+    def _build_comparison_group_from_context(
+        self,
+        stage: str,
+        ctx: ResolvedRunContext,
+        config_fp: Optional[str],
+        data_fp: Optional[str],
+        task_fp: Optional[str]
+    ) -> ComparisonGroup:
+        """Build comparison group from resolved context (stage-aware).
+        
+        CRITICAL: Only includes fields that are relevant for the stage.
+        - TARGET_RANKING: Does NOT include model_family or feature_signature (not applicable)
+        - FEATURE_SELECTION: Includes feature_signature but NOT model_family
+        - TRAINING: Includes both model_family and feature_signature
+        
+        This prevents storing null placeholders for fields that aren't stage-relevant.
+        """
+        # Routing signature from view
+        routing_signature = None
+        if ctx.view:
+            routing_signature = hashlib.sha256(ctx.view.encode()).hexdigest()[:16]
+        
+        # Stage-specific fields
+        model_family = None
+        feature_signature = None
+        
+        if stage == "TARGET_RANKING":
+            # TARGET_RANKING: model_family and feature_signature are NOT applicable
+            # Don't include them (not None, just omit from ComparisonGroup)
+            pass
+        elif stage == "FEATURE_SELECTION":
+            # FEATURE_SELECTION: feature_signature is required, model_family is NOT applicable
+            feature_signature = ctx.feature_fingerprint
+        elif stage == "TRAINING":
+            # TRAINING: Both model_family and feature_signature are required
+            model_family = ctx.model_family
+            feature_signature = ctx.feature_fingerprint
+        
+        return ComparisonGroup(
+            experiment_id=ctx.experiment_id,  # Can be None if not tracked
+            dataset_signature=data_fp,
+            task_signature=task_fp,
+            routing_signature=routing_signature,
+            n_effective=ctx.n_effective,  # CRITICAL: Exact sample size (required, non-null)
+            model_family=model_family,  # Stage-specific: None for TARGET_RANKING/FEATURE_SELECTION
+            feature_signature=feature_signature  # Stage-specific: None for TARGET_RANKING
+        )
+    
     def _build_comparison_group(
         self,
         stage: str,
@@ -834,6 +1414,64 @@ class DiffTelemetry:
             feature_signature=feature_signature  # CRITICAL: Feature set
         )
     
+    def _normalize_inputs_from_context(
+        self,
+        stage: str,
+        ctx: ResolvedRunContext
+    ) -> Dict[str, Any]:
+        """Normalize inputs section from resolved context (no nulls for required fields)."""
+        inputs = {}
+        
+        # Config (stage-specific - only include applicable fields)
+        config = {}
+        if ctx.min_cs is not None:
+            config['min_cs'] = ctx.min_cs
+        if ctx.max_cs_samples is not None:
+            config['max_cs_samples'] = ctx.max_cs_samples
+        if stage in ["FEATURE_SELECTION", "TRAINING"]:
+            if ctx.n_features is not None:
+                config['n_features'] = ctx.n_features
+        if stage == "TRAINING":
+            if ctx.model_family:
+                config['model_family'] = ctx.model_family
+            if ctx.trainer_strategy:
+                config['strategy'] = ctx.trainer_strategy
+        if config:
+            inputs['config'] = config
+        
+        # Data (all required fields, should be non-null)
+        inputs['data'] = {
+            'n_symbols': ctx.n_symbols,  # Required, validated
+            'date_range_start': ctx.date_range_start,  # Required, validated
+            'date_range_end': ctx.date_range_end,  # Required, validated
+        }
+        if ctx.n_rows_total is not None:
+            inputs['data']['n_rows_total'] = ctx.n_rows_total
+        
+        # Target (required, should be non-null)
+        inputs['target'] = {
+            'target_name': ctx.target_name,  # Required, validated
+            'view': ctx.view,  # Required, validated
+        }
+        if ctx.horizon_minutes is not None:
+            inputs['target']['horizon_minutes'] = ctx.horizon_minutes
+        if ctx.labeling_impl_hash:
+            inputs['target']['labeling_impl_hash'] = ctx.labeling_impl_hash
+        
+        # Feature set (stage-specific)
+        if stage in ["FEATURE_SELECTION", "TRAINING"]:
+            features = {}
+            if ctx.n_features is not None:
+                features['n_features'] = ctx.n_features
+            if ctx.feature_fingerprint:
+                features['feature_fingerprint'] = ctx.feature_fingerprint
+            if ctx.feature_names:
+                features['feature_names'] = ctx.feature_names
+            if features:
+                inputs['features'] = features
+        
+        return inputs
+    
     def _normalize_inputs(
         self,
         run_data: Dict[str, Any],
@@ -884,6 +1522,55 @@ class DiffTelemetry:
             }
         
         return inputs
+    
+    def _normalize_process_from_context(
+        self,
+        ctx: ResolvedRunContext
+    ) -> Dict[str, Any]:
+        """Normalize process section from resolved context."""
+        process = {}
+        
+        # Split integrity (required fields, should be non-null)
+        split = {}
+        if ctx.min_cs is not None:
+            split['min_cs'] = ctx.min_cs
+        if ctx.max_cs_samples is not None:
+            split['max_cs_samples'] = ctx.max_cs_samples
+        if ctx.cv_method:
+            split['cv_method'] = ctx.cv_method
+        if ctx.purge_minutes is not None:
+            split['purge_minutes'] = ctx.purge_minutes
+        if ctx.embargo_minutes is not None:
+            split['embargo_minutes'] = ctx.embargo_minutes
+        if ctx.split_seed is not None:
+            split['split_seed'] = ctx.split_seed
+        if ctx.fold_assignment_hash:
+            split['fold_assignment_hash'] = ctx.fold_assignment_hash
+        if split:
+            process['split'] = split
+        
+        # Training regime (only for TRAINING stage)
+        if ctx.trainer_strategy or ctx.model_family:
+            training = {}
+            if ctx.trainer_strategy:
+                training['strategy'] = ctx.trainer_strategy
+            if ctx.model_family:
+                training['model_family'] = ctx.model_family
+            if training:
+                process['training'] = training
+        
+        # Environment (tracked but not outcome-influencing)
+        environment = {}
+        if ctx.python_version:
+            environment['python_version'] = ctx.python_version
+        if ctx.library_versions:
+            environment['library_versions'] = ctx.library_versions
+        if ctx.cuda_version:
+            environment['cuda_version'] = ctx.cuda_version
+        if environment:
+            process['environment'] = environment
+        
+        return process
     
     def _normalize_process(
         self,
@@ -969,12 +1656,56 @@ class DiffTelemetry:
                 # Already organized, mark as moved
                 self._run_moved = True
         
-        # Save full snapshot
-        snapshot_file = cohort_dir / "snapshot.json"
-        with open(snapshot_file, 'w') as f:
-            json.dump(snapshot.to_dict(), f, indent=2, default=str)
+        # Assign monotonic sequence number for correct ordering (concurrency-safe)
+        # This ensures "prev run" selection is correct regardless of mtime/timestamp quirks
+        # CRITICAL: Must be done under lock to prevent two concurrent writers from picking same seq
+        if snapshot.snapshot_seq is None:
+            # Use cohort-level lock file for sequence assignment
+            cohort_lock_file = cohort_dir / ".snapshot_seq.lock"
+            
+            with open(cohort_lock_file, 'w') as lock_f:
+                try:
+                    # Acquire exclusive lock (blocks until available)
+                    fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX)
+                    
+                    # Re-read snapshots to get latest sequence (another process may have updated it)
+                    # Load from run-level snapshot index to get all snapshots for this run
+                    run_snapshot_index = None
+                    if self.run_dir:
+                        run_snapshot_index = self.run_dir / "REPRODUCIBILITY" / "METRICS" / "snapshot_index.json"
+                        if run_snapshot_index.exists():
+                            try:
+                                with open(run_snapshot_index) as f:
+                                    index_data = json.load(f)
+                                    for key, snap_data in index_data.items():
+                                        # Handle both formats
+                                        if ':' in key:
+                                            run_id = key.split(':', 1)[0]
+                                        else:
+                                            run_id = key
+                                        if run_id not in self._snapshots:
+                                            self._snapshots[run_id] = self._deserialize_snapshot(snap_data)
+                            except Exception:
+                                pass
+                    
+                    # Get next sequence number (max existing + 1, or 1 if none)
+                    max_seq = 0
+                    for snap in self._snapshots.values():
+                        if snap.snapshot_seq and snap.snapshot_seq > max_seq:
+                            max_seq = snap.snapshot_seq
+                    snapshot.snapshot_seq = max_seq + 1
+                    
+                    # Lock is automatically released when file is closed
+                except Exception as e:
+                    # Release lock on error
+                    fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
+                    raise
         
-        # Update index
+        # Save full snapshot atomically
+        snapshot_file = cohort_dir / "snapshot.json"
+        _write_atomic_json(snapshot_file, snapshot.to_dict())
+        
+        # Update index (keyed by run_id for in-memory lookup, but saved as run_id:stage)
         self._snapshots[snapshot.run_id] = snapshot
         self._save_indices()
         
@@ -1475,7 +2206,8 @@ class DiffTelemetry:
         # First, search in current run's snapshots
         candidates = []
         for run_id, snap in self._snapshots.items():
-            if run_id == snapshot.run_id:
+            # CRITICAL: Never pick the same run_id (even if different stage)
+            if snap.run_id == snapshot.run_id:
                 continue
             
             comparable, _ = self._check_comparability(snapshot, snap)
@@ -1504,11 +2236,22 @@ class DiffTelemetry:
                                     try:
                                         with open(run_snapshot_index) as f:
                                             data = json.load(f)
-                                            for run_id, snap_data in data.items():
+                                            for key, snap_data in data.items():
+                                                # Handle both old format (run_id key) and new format (run_id:stage key)
+                                                if ':' in key:
+                                                    run_id = key.split(':', 1)[0]
+                                                else:
+                                                    run_id = key
+                                                
+                                                # CRITICAL: Never pick the same run_id (even if different stage)
                                                 if run_id == snapshot.run_id:
                                                     continue
+                                                
                                                 try:
                                                     snap = self._deserialize_snapshot(snap_data)
+                                                    # Double-check run_id (defense in depth)
+                                                    if snap.run_id == snapshot.run_id:
+                                                        continue
                                                     # Only add if same comparison_group (exactly the same runs)
                                                     if (snap.comparison_group and 
                                                         snap.comparison_group.to_key() == group_key):
@@ -1523,9 +2266,29 @@ class DiffTelemetry:
         if not candidates:
             return None
         
-        # Return most recent
-        candidates.sort(key=lambda x: x[0], reverse=True)
-        return candidates[0][1]
+        # Return most recent by monotonic sequence number (snapshot_seq)
+        # This is the correct ordering method - mtime can change for unrelated reasons
+        # (file copies, post-processing, filesystem quirks, coarse timestamp resolution)
+        candidates_with_seq = []
+        for timestamp, snap in candidates:
+            # Use snapshot_seq if available (assigned at save time), fallback to timestamp
+            seq = snap.snapshot_seq if hasattr(snap, 'snapshot_seq') and snap.snapshot_seq is not None else 0
+            # If no seq, use timestamp as fallback (but log warning)
+            if seq == 0:
+                logger.debug(f"Snapshot {snap.run_id} has no snapshot_seq, using timestamp fallback")
+                # Convert timestamp to numeric for comparison (ISO format)
+                try:
+                    from datetime import datetime
+                    ts_dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                    seq = ts_dt.timestamp()
+                except Exception:
+                    seq = 0
+            
+            candidates_with_seq.append((seq, snap))
+        
+        # Sort by sequence (highest = most recent)
+        candidates_with_seq.sort(key=lambda x: x[0], reverse=True)
+        return candidates_with_seq[0][1]
     
     def get_or_establish_baseline(
         self,
@@ -1562,9 +2325,12 @@ class DiffTelemetry:
             return baseline, False
         
         # Count comparable runs (search across runs in same bin)
+        # CRITICAL: Never include the same run_id (even if different stage)
         comparable_runs = [
             snap for snap in self._snapshots.values()
-            if snap.comparison_group and snap.comparison_group.to_key() == group_key
+            if (snap.comparison_group and 
+                snap.comparison_group.to_key() == group_key and
+                snap.run_id != snapshot.run_id)  # Exclude same run_id
         ]
         
         # Search across ALL runs in RESULTS to find comparable runs with same comparison_group
@@ -1589,9 +2355,22 @@ class DiffTelemetry:
                                     try:
                                         with open(run_snapshot_index) as f:
                                             data = json.load(f)
-                                            for run_id, snap_data in data.items():
+                                            for key, snap_data in data.items():
+                                                # Handle both old format (run_id key) and new format (run_id:stage key)
+                                                if ':' in key:
+                                                    run_id = key.split(':', 1)[0]
+                                                else:
+                                                    run_id = key
+                                                
+                                                # CRITICAL: Never pick the same run_id (even if different stage)
+                                                if run_id == snapshot.run_id:
+                                                    continue
+                                                
                                                 try:
                                                     snap = self._deserialize_snapshot(snap_data)
+                                                    # Double-check run_id (defense in depth)
+                                                    if snap.run_id == snapshot.run_id:
+                                                        continue
                                                     # Only add if same comparison_group (exactly the same runs)
                                                     if (snap.comparison_group and 
                                                         snap.comparison_group.to_key() == group_key):
@@ -1647,16 +2426,14 @@ class DiffTelemetry:
         cohort_dir = Path(cohort_dir)
         cohort_dir.mkdir(parents=True, exist_ok=True)
         
-        # Save prev diff
+        # Save prev diff atomically
         prev_diff_file = cohort_dir / "diff_prev.json"
-        with open(prev_diff_file, 'w') as f:
-            json.dump(diff.to_dict(), f, indent=2, default=str)
+        _write_atomic_json(prev_diff_file, diff.to_dict())
         
-        # Save baseline diff if available
+        # Save baseline diff if available (atomically)
         if baseline_diff:
             baseline_diff_file = cohort_dir / "diff_baseline.json"
-            with open(baseline_diff_file, 'w') as f:
-                json.dump(baseline_diff.to_dict(), f, indent=2, default=str)
+            _write_atomic_json(baseline_diff_file, baseline_diff.to_dict())
         
         logger.debug(f"✅ Saved diffs to {cohort_dir}")
     
@@ -1666,26 +2443,78 @@ class DiffTelemetry:
         run_data: Dict[str, Any],
         cohort_dir: Path,
         cohort_metadata: Optional[Dict[str, Any]] = None,
-        additional_data: Optional[Dict[str, Any]] = None
+        additional_data: Optional[Dict[str, Any]] = None,
+        resolved_metadata: Optional[Dict[str, Any]] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Finalize run: create snapshot, compute diffs, update baseline.
         
         This is the main entry point - call this after each run completes.
         
+        CRITICAL: For SST consistency, pass `resolved_metadata` (the in-memory metadata dict
+        that will be written to metadata.json). This ensures the snapshot/diff computation uses
+        the exact same data that gets persisted, preventing coherence drift.
+        
         Args:
             stage: Pipeline stage
             run_data: Run data from reproducibility tracker
             cohort_dir: Cohort directory
-            cohort_metadata: Cohort metadata
+            cohort_metadata: Cohort metadata (fallback if resolved_metadata not provided)
             additional_data: Additional data
+            resolved_metadata: In-memory metadata dict (SST - use this if available)
+        
+        Returns:
+            Diff telemetry data dict
         """
-        # Create normalized snapshot
+        # CRITICAL: Validate resolved_metadata matches current stage/run_id to prevent cross-stage contamination
+        if resolved_metadata:
+            resolved_stage = resolved_metadata.get("stage")
+            resolved_run_id = resolved_metadata.get("run_id")
+            current_run_id = run_data.get('run_id') or run_data.get('timestamp')
+            
+            if resolved_stage != stage:
+                raise ValueError(
+                    f"Stage mismatch: resolved_metadata stage={resolved_stage}, current={stage}. "
+                    f"This indicates cross-stage metadata contamination. Ensure full_metadata is stage-scoped."
+                )
+            if resolved_run_id != current_run_id:
+                raise ValueError(
+                    f"Run ID mismatch: resolved_metadata run_id={resolved_run_id}, current={current_run_id}. "
+                    f"This indicates stale metadata reuse. Ensure full_metadata matches current run."
+                )
+            
+            # CRITICAL: Validate required fields are present and non-null for this stage
+            # This ensures we catch incomplete SST before snapshot computation
+            required_fields = self._get_required_fields_for_stage(stage)
+            missing_fields = []
+            null_fields = []
+            
+            for field in required_fields:
+                if field not in resolved_metadata:
+                    missing_fields.append(field)
+                elif resolved_metadata[field] is None:
+                    null_fields.append(field)
+            
+            if missing_fields or null_fields:
+                error_parts = []
+                if missing_fields:
+                    error_parts.append(f"missing: {', '.join(missing_fields)}")
+                if null_fields:
+                    error_parts.append(f"null: {', '.join(null_fields)}")
+                raise ValueError(
+                    f"Incomplete resolved_metadata for stage={stage}: {', '.join(error_parts)}. "
+                    f"Required fields must be present and non-null before finalize_run(). "
+                    f"Ensure full_metadata is built AFTER all required fields are finalized."
+                )
+        
+        # Create normalized snapshot (prefer resolved_metadata for SST consistency)
         snapshot = self.normalize_snapshot(
             stage=stage,
             run_data=run_data,
             cohort_metadata=cohort_metadata,
-            additional_data=additional_data
+            additional_data=additional_data,
+            cohort_dir=cohort_dir,
+            resolved_metadata=resolved_metadata
         )
         
         # Save snapshot

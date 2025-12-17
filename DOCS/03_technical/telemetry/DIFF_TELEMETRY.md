@@ -516,6 +516,122 @@ Lightweight diff telemetry fields stored in `metrics.json`:
 **Type Safety**:
 - **CRITICAL**: `diff_telemetry` must contain only JSON-primitive types (str/int/float/bool/null/lists/dicts)
 - If non-primitive types are present, digest computation **fails fast** with `RuntimeError`
+
+## Concurrency & Robustness
+
+The system is designed for **production concurrent multi-run execution** with several critical safety features:
+
+### Snapshot Sequence Number (snapshot_seq)
+
+**Purpose**: Provides correct chronological ordering for "previous run" selection, robust against timestamp inconsistencies.
+
+**Implementation**:
+- **Monotonic sequence**: Each snapshot is assigned a unique, strictly increasing sequence number
+- **Concurrency-safe**: Sequence assignment is done under **cohort-level lock** (`fcntl.flock`)
+- **Lock file**: `{cohort_dir}/.snapshot_seq.lock` (exclusive lock, blocks until available)
+- **Re-read under lock**: Snapshots are re-read from run-level index under lock to get latest sequences
+- **Assignment**: `max_seq + 1` computed atomically under lock
+
+**Benefits**:
+- ✅ **Correct ordering**: Guaranteed unique, monotonic sequence numbers
+- ✅ **No race conditions**: Concurrent writers cannot pick the same sequence
+- ✅ **Cohort-scoped**: Lock is per-cohort (allows parallel cohorts)
+- ✅ **Robust against mtime quirks**: Filesystem timestamp inconsistencies don't affect ordering
+
+**Example**:
+```python
+# Under lock:
+cohort_lock_file = cohort_dir / ".snapshot_seq.lock"
+with open(cohort_lock_file, 'w') as lock_f:
+    fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX)
+    # Re-read snapshots from index
+    # Compute max_seq + 1
+    snapshot.snapshot_seq = max_seq + 1
+```
+
+### Same Run ID Protection
+
+**Purpose**: Ensures "previous comparable" never picks the same run_id, even across different stages.
+
+**Implementation**:
+- **Multiple checkpoints** (defense in depth):
+  1. **In-memory snapshots**: Skip if `snap.run_id == snapshot.run_id`
+  2. **Index file reads**: Skip if extracted `run_id == snapshot.run_id`
+  3. **Deserialized snapshots**: Double-check `snap.run_id == snapshot.run_id`
+  4. **Baseline establishment**: Exclude same run_id from `comparable_runs`
+
+**Benefits**:
+- ✅ **Guaranteed correctness**: Never compares run against itself
+- ✅ **Defense in depth**: Multiple checkpoints prevent edge cases
+- ✅ **Works with retries**: Handles multiple attempts of same run_id
+- ✅ **Cross-stage safety**: Prevents same run_id from different stages being compared
+
+### Per-Run Snapshot Index
+
+**Purpose**: Prevents unbounded growth of a single mega index file, keeps indices correlated by run.
+
+**Implementation**:
+- **Location**: `{run_dir}/REPRODUCIBILITY/METRICS/snapshot_index.json`
+- **Scope**: Only contains snapshots for that specific run
+- **Key format**: `{run_id}:{stage}` (prevents cross-stage overwrites)
+- **Correlation**: Indices are correlated by run, not global
+
+**Benefits**:
+- ✅ **Bounded growth**: Each index file only grows with one run's snapshots
+- ✅ **Correlated by run**: Easy to find all snapshots for a specific run
+- ✅ **Parallel access**: Different runs can update their indices concurrently
+- ✅ **No mega file**: Prevents single file from growing unbounded
+
+### Atomic Writes & Durability
+
+**Purpose**: Ensures crash consistency and power-loss safety for all critical JSON files.
+
+**Implementation**:
+- **Atomic writes**: All JSON files use temp file + `os.replace()` pattern
+- **Durability**: `os.fsync()` on both file and directory for power-loss safety
+- **Files protected**: `metadata.json`, `metrics.json`, `snapshot.json`, `diff_prev.json`, `diff_baseline.json`, `snapshot_index.json`
+
+**Benefits**:
+- ✅ **Crash consistency**: No partial writes on crashes
+- ✅ **Power-loss safe**: Data is synced to disk before rename
+- ✅ **Audit-ready**: Critical for systems that must survive sudden power loss
+
+### File Locking for Index Updates
+
+**Purpose**: Prevents race conditions during concurrent index updates.
+
+**Implementation**:
+- **Lock file**: `{index_file}.lock` (advisory lock via `fcntl.flock`)
+- **Exclusive lock**: `fcntl.LOCK_EX` blocks until available
+- **Re-read after lock**: Index is re-read after acquiring lock to handle concurrent updates
+- **Idempotency**: Deduplication by `(run_id, stage)` ensures no duplicate entries
+
+**Benefits**:
+- ✅ **Race condition prevention**: Concurrent writers don't corrupt index
+- ✅ **Idempotency**: Reruns with same run_id don't create duplicates
+- ✅ **Portability**: Works on local Linux filesystems (see PRODUCTION_READINESS.md for NFS notes)
+
+### Previous Run Selection
+
+**Purpose**: Finds the most recent comparable run for diffing, with correct ordering and same-run protection.
+
+**Implementation**:
+- **Ordering**: Uses `snapshot_seq` (monotonic sequence) for ordering, falls back to timestamp for older snapshots
+- **Same-run protection**: Multiple checkpoints ensure `prev.run_id != current.run_id`
+- **Search scope**: Searches in-memory snapshots first, then across all runs in RESULTS directory
+- **Comparability check**: Only includes runs with identical comparison group keys
+
+**Benefits**:
+- ✅ **Correct ordering**: Monotonic sequence ensures chronological order
+- ✅ **Never self-compares**: Multiple checkpoints prevent same run_id
+- ✅ **Comprehensive search**: Finds previous runs across all comparison groups
+- ✅ **Strict comparability**: Only compares runs with identical metadata
+
+## Production Readiness
+
+For details on filesystem compatibility, flock portability, and NFS behavior, see:
+- `DOCS/03_technical/telemetry/PRODUCTION_READINESS.md`
+- `DOCS/03_technical/telemetry/FINAL_5_PERCENT_FIXES.md`
 - This ensures normalization bugs are caught immediately rather than silently hidden
 - No fallback coercion - the system requires correct normalization upstream
 

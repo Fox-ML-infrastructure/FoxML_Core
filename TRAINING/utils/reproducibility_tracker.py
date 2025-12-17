@@ -199,6 +199,60 @@ def extract_embargo_minutes(metadata: Dict[str, Any], cv_details: Optional[Dict[
     return None
 
 
+def _write_atomic_json(file_path: Path, data: Dict[str, Any]) -> None:
+    """
+    Write JSON file atomically using temp file + rename with full durability.
+    
+    This ensures crash consistency AND power-loss safety:
+    1. Write to temp file
+    2. fsync(tempfile) - ensure data is on disk
+    3. os.replace() - atomic rename (POSIX: atomic, Windows: best-effort)
+    4. fsync(directory) - ensure directory entry is on disk
+    
+    This pattern is required for "audit-ready" systems that must survive sudden power loss.
+    
+    Args:
+        file_path: Target file path
+        data: Data to write (must be JSON-serializable)
+    
+    Raises:
+        IOError: If write fails
+    """
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_file = file_path.with_suffix('.tmp')
+    
+    try:
+        # Write to temp file
+        with open(temp_file, 'w') as f:
+            json.dump(data, f, indent=2)
+            f.flush()  # Ensure immediate write
+            os.fsync(f.fileno())  # Force write to disk (durability)
+        
+        # Atomic rename (POSIX: atomic, Windows: best-effort)
+        os.replace(temp_file, file_path)
+        
+        # Sync directory entry to ensure rename is durable
+        # This is critical for power-loss safety
+        try:
+            dir_fd = os.open(file_path.parent, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)  # Sync directory entry
+            finally:
+                os.close(dir_fd)
+        except (OSError, AttributeError):
+            # Fallback: sync parent directory if available
+            # Some systems don't support directory fsync
+            pass
+    except Exception as e:
+        # Cleanup temp file on failure
+        if temp_file.exists():
+            try:
+                temp_file.unlink()
+            except Exception:
+                pass
+        raise IOError(f"Failed to write atomic JSON to {file_path}: {e}") from e
+
+
 def extract_folds(metadata: Dict[str, Any], cv_details: Optional[Dict[str, Any]] = None) -> Optional[int]:
     """
     Extract folds from metadata, handling both v1 and v2 schemas.
@@ -1291,6 +1345,46 @@ class ReproducibilityTracker:
         if additional_data and 'dropped_features' in additional_data:
             full_metadata['dropped_features'] = additional_data['dropped_features']
         
+        # CRITICAL: Call finalize_run() BEFORE adding diff_telemetry to full_metadata
+        # This ensures snapshot/diff computation uses the exact same resolved_metadata that will be written
+        # Pass full_metadata (without diff_telemetry) as resolved_metadata for SST consistency
+        diff_telemetry_data = None
+        if telemetry:
+            try:
+                # Extract experiment_id if available
+                experiment_id = None
+                if additional_data and 'experiment_id' in additional_data:
+                    experiment_id = additional_data['experiment_id']
+                elif run_data.get('additional_data') and 'experiment_id' in run_data.get('additional_data', {}):
+                    experiment_id = run_data['additional_data']['experiment_id']
+                
+                # Add experiment_id to additional_data if not present
+                if experiment_id and additional_data and 'experiment_id' not in additional_data:
+                    additional_data = additional_data.copy()
+                    additional_data['experiment_id'] = experiment_id
+                
+                # CRITICAL: Pass full_metadata (without diff_telemetry) as resolved_metadata for SST consistency
+                # This ensures snapshot/diff computation uses the exact same data that will be written to metadata.json
+                # full_metadata is already built above (lines 1077-1292), we just haven't added diff_telemetry yet
+                diff_telemetry_data = telemetry.finalize_run(
+                    stage=stage_normalized,
+                    run_data=run_data,
+                    cohort_dir=cohort_dir,
+                    cohort_metadata=cohort_metadata,
+                    additional_data=additional_data,
+                    resolved_metadata=full_metadata  # CRITICAL: Pass in-memory metadata for SST consistency
+                )
+                
+                # Store diff telemetry data for integration into metadata/metrics
+                if diff_telemetry_data:
+                    if additional_data is None:
+                        additional_data = {}
+                    additional_data['diff_telemetry'] = diff_telemetry_data
+            except Exception as e:
+                logger.debug(f"Diff telemetry failed (non-critical): {e}")
+                import traceback
+                logger.debug(f"Diff telemetry traceback: {traceback.format_exc()}")
+        
         # NEW: Add diff telemetry to metadata (full audit trail)
         # CRITICAL: diff_telemetry is optional - older runs may not have it
         if additional_data and 'diff_telemetry' in additional_data:
@@ -1360,13 +1454,10 @@ class ReproducibilityTracker:
             
             full_metadata['diff_telemetry'] = diff_telemetry_blob
         
-        # Save metadata.json
+        # Save metadata.json atomically (temp file + rename for crash consistency)
         metadata_file = cohort_dir / "metadata.json"
         try:
-            with open(metadata_file, 'w') as f:
-                json.dump(full_metadata, f, indent=2)
-                f.flush()  # Ensure immediate write
-                os.fsync(f.fileno())  # Force write to disk
+            _write_atomic_json(metadata_file, full_metadata)
             # Log at INFO level so it's visible
             main_logger = _get_main_logger()
             if main_logger != logger:
@@ -1498,13 +1589,19 @@ class ReproducibilityTracker:
                     additional_data = additional_data.copy()
                     additional_data['experiment_id'] = experiment_id
                 
-                # Finalize run with diff telemetry
+                # CRITICAL: Use existing full_metadata (built at line 1077) for SST consistency
+                # This ensures snapshot/diff computation uses the exact same data that gets written to metadata.json
+                # full_metadata is already built above with all outcome-influencing fields
+                # We just haven't added diff_telemetry to it yet (that happens after finalize_run())
+                
+                # Finalize run with diff telemetry (pass resolved_metadata for SST consistency)
                 diff_telemetry_data = telemetry.finalize_run(
                     stage=stage_normalized,
                     run_data=run_data,
                     cohort_dir=cohort_dir,
                     cohort_metadata=cohort_metadata,
-                    additional_data=additional_data
+                    additional_data=additional_data,
+                    resolved_metadata=full_metadata  # CRITICAL: Use same full_metadata as will be written to metadata.json
                 )
                 
                 # Store diff telemetry data for integration into metadata/metrics
@@ -1531,12 +1628,9 @@ class ReproducibilityTracker:
         # PHASE 2: Only write as fallback if metrics failed and we don't have metrics.json yet
         metrics_file = cohort_dir / "metrics.json"
         if not metrics_file.exists() and not metrics_written:
-            # Fallback: write metrics.json using unified canonical schema
+            # Fallback: write metrics.json using unified canonical schema (atomically)
             try:
-                with open(metrics_file, 'w') as f:
-                    json.dump(metrics_data, f, indent=2, default=str)
-                    f.flush()  # Ensure immediate write
-                    os.fsync(f.fileno())  # Force write to disk
+                _write_atomic_json(metrics_file, metrics_data)
                 # Also write metrics.parquet for consistency
                 try:
                     import pandas as pd
@@ -2003,22 +2097,64 @@ class ReproducibilityTracker:
         new_df = pd.DataFrame([new_row])
         df = pd.concat([df, new_df], ignore_index=True)
         
-        # Remove duplicates (keep latest)
+        # Remove duplicates (keep latest) - idempotency: same run_id+phase will be deduped
         df = df.drop_duplicates(
             subset=["phase", "mode", "target", "symbol", "model_family", "cohort_id", "run_id"],
             keep="last"
         )
         
-        # Save
+        # Save with file locking for concurrency safety
         try:
             index_file.parent.mkdir(parents=True, exist_ok=True)
-            df.to_parquet(index_file, index=False)
-            # Parquet files are automatically flushed, but ensure directory is synced
-            if hasattr(os, 'sync'):
+            
+            # Use file locking to prevent race conditions
+            # Create lock file (same directory, different extension)
+            lock_file = index_file.with_suffix('.lock')
+            
+            with open(lock_file, 'w') as lock_f:
                 try:
-                    os.sync()  # Sync filesystem (if available)
-                except AttributeError:
-                    pass  # os.sync not available on all systems
+                    # Acquire exclusive lock (blocks until available)
+                    fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX)
+                    
+                    # Re-read index in case another process updated it while we were waiting
+                    if index_file.exists():
+                        try:
+                            df_existing = pd.read_parquet(index_file)
+                            # Merge with existing data (dedupe by run_id + phase for idempotency)
+                            # This ensures reruns with same run_id don't create duplicate entries
+                            df = pd.concat([df_existing, df], ignore_index=True)
+                            # Dedupe by (run_id, phase) - keep last (most recent) entry
+                            df = df.drop_duplicates(subset=['run_id', 'phase'], keep='last')
+                            
+                            # Additional safety: if same run_id+phase exists, log debug
+                            existing_mask = (
+                                (df_existing['run_id'] == new_row['run_id']) &
+                                (df_existing['phase'] == new_row['phase'])
+                            )
+                            if existing_mask.any():
+                                logger.debug(
+                                    f"Idempotency: Updating existing index entry for "
+                                    f"run_id={new_row['run_id']}, phase={new_row['phase']}"
+                                )
+                        except Exception:
+                            # If read fails, use our new data
+                            pass
+                    
+                    # Write updated index
+                    df.to_parquet(index_file, index=False)
+                    
+                    # Parquet files are automatically flushed, but ensure directory is synced
+                    if hasattr(os, 'sync'):
+                        try:
+                            os.sync()  # Sync filesystem (if available)
+                        except AttributeError:
+                            pass  # os.sync not available on all systems
+                    
+                    # Lock is automatically released when file is closed
+                except Exception as e:
+                    # Release lock on error
+                    fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
+                    raise
         except Exception as e:
             error_type = "IO_ERROR" if isinstance(e, (IOError, OSError)) else "SERIALIZATION_ERROR" if isinstance(e, (json.JSONDecodeError, TypeError)) else "UNKNOWN_ERROR"
             logger.warning(f"Failed to save index.parquet to {index_file}: {e}, error_type={error_type}")
