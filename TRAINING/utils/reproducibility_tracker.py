@@ -1729,7 +1729,9 @@ class ReproducibilityTracker:
         
         # CRITICAL: Initialize telemetry if not already initialized
         # Telemetry is needed for diff tracking and should be available for all runs
-        if 'telemetry' not in locals() or telemetry is None:
+        # Check if telemetry exists as instance variable or needs to be created
+        telemetry = getattr(self, '_telemetry', None)
+        if telemetry is None:
             try:
                 from TRAINING.utils.diff_telemetry import DiffTelemetry
                 
@@ -1759,11 +1761,14 @@ class ReproducibilityTracker:
                 
                 # Initialize telemetry (creates TELEMETRY directory if needed)
                 telemetry = DiffTelemetry(output_dir=base_output_dir)
+                # Store as instance variable for reuse
+                self._telemetry = telemetry
             except Exception as e:
                 logger.warning(f"⚠️  Failed to initialize diff telemetry: {e}")
                 import traceback
                 logger.debug(f"Telemetry initialization traceback: {traceback.format_exc()}")
                 telemetry = None
+                self._telemetry = None
         
         # CRITICAL: Call finalize_run() BEFORE adding diff_telemetry to full_metadata
         # This ensures snapshot/diff computation uses the exact same resolved_metadata that will be written
