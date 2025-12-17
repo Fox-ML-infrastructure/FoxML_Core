@@ -2001,33 +2001,63 @@ class DiffTelemetry:
                     csv_files = sorted(search_dir.glob('*.csv'))
                     for csv_file in csv_files:
                         if csv_file.is_file():
-                            stat = csv_file.stat()
-                            manifest.append({
-                                'path': f'feature_importances/{csv_file.name}',
-                                'size': stat.st_size,
-                                'mtime': stat.st_mtime
-                            })
+                            # Hash file contents instead of using mtime (volatile)
+                            try:
+                                with open(csv_file, 'rb') as f:
+                                    content_hash = hashlib.sha256(f.read()).hexdigest()
+                                manifest.append({
+                                    'path': f'feature_importances/{csv_file.name}',
+                                    'content_sha256': content_hash
+                                })
+                            except Exception as e:
+                                logger.debug(f"Failed to hash {csv_file}: {e}")
+                                # Fallback to size only (no mtime)
+                                stat = csv_file.stat()
+                                manifest.append({
+                                    'path': f'feature_importances/{csv_file.name}',
+                                    'size': stat.st_size
+                                })
             elif '*' in pattern:
                 # Handle glob patterns
                 matches = list(search_dir.glob(pattern))
                 for match in sorted(matches):
                     if match.is_file():
-                        stat = match.stat()
-                        manifest.append({
-                            'path': match.name,
-                            'size': stat.st_size,
-                            'mtime': stat.st_mtime
-                        })
+                        # Hash file contents instead of using mtime (volatile)
+                        try:
+                            with open(match, 'rb') as f:
+                                content_hash = hashlib.sha256(f.read()).hexdigest()
+                            manifest.append({
+                                'path': match.name,
+                                'content_sha256': content_hash
+                            })
+                        except Exception as e:
+                            logger.debug(f"Failed to hash {match}: {e}")
+                            # Fallback to size only (no mtime)
+                            stat = match.stat()
+                            manifest.append({
+                                'path': match.name,
+                                'size': stat.st_size
+                            })
             else:
                 # Exact file match
                 file_path = search_dir / pattern
                 if file_path.exists() and file_path.is_file():
-                    stat = file_path.stat()
-                    manifest.append({
-                        'path': pattern,
-                        'size': stat.st_size,
-                        'mtime': stat.st_mtime
-                    })
+                    # Hash file contents instead of using mtime (volatile)
+                    try:
+                        with open(file_path, 'rb') as f:
+                            content_hash = hashlib.sha256(f.read()).hexdigest()
+                        manifest.append({
+                            'path': pattern,
+                            'content_sha256': content_hash
+                        })
+                    except Exception as e:
+                        logger.debug(f"Failed to hash {file_path}: {e}")
+                        # Fallback to size only (no mtime)
+                        stat = file_path.stat()
+                        manifest.append({
+                            'path': pattern,
+                            'size': stat.st_size
+                        })
         
         if not manifest:
             return None
@@ -2687,20 +2717,31 @@ class DiffTelemetry:
             
             if results_dir.name == "RESULTS":
                 # Search both sample_* bins and comparison group directories (cg-*)
-                for bin_dir in results_dir.iterdir():
-                    if not bin_dir.is_dir():
-                        continue
-                    
-                    # Search all runs in this bin/directory
-                    for run_subdir in bin_dir.iterdir():
-                        if not run_subdir.is_dir() or run_subdir.name == "METRICS":
+                # Handle both old structure (RESULTS/sample_*/) and new structure (RESULTS/runs/cg-*/)
+                search_dirs = []
+                runs_dir = results_dir / "runs"
+                if runs_dir.exists() and runs_dir.is_dir():
+                    # New structure: RESULTS/runs/cg-*/
+                    search_dirs = [runs_dir]
+                else:
+                    # Old structure: RESULTS/sample_*/ or RESULTS/cg-*/
+                    search_dirs = [results_dir]
+                
+                for base_dir in search_dirs:
+                    for bin_dir in base_dir.iterdir():
+                        if not bin_dir.is_dir():
                             continue
                         
-                        run_snapshot_index = run_subdir / "REPRODUCIBILITY" / "METRICS" / "snapshot_index.json"
-                        if run_snapshot_index.exists():
-                            try:
-                                with open(run_snapshot_index) as f:
-                                    data = json.load(f)
+                        # Search all runs in this bin/directory
+                        for run_subdir in bin_dir.iterdir():
+                            if not run_subdir.is_dir() or run_subdir.name == "METRICS":
+                                continue
+                            
+                            run_snapshot_index = run_subdir / "REPRODUCIBILITY" / "METRICS" / "snapshot_index.json"
+                            if run_snapshot_index.exists():
+                                try:
+                                    with open(run_snapshot_index) as f:
+                                        data = json.load(f)
                                     for key, snap_data in data.items():
                                         # Handle both old format (run_id key) and new format (run_id:stage key)
                                         if ':' in key:

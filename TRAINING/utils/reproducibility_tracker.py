@@ -1736,28 +1736,38 @@ class ReproducibilityTracker:
                 from TRAINING.utils.diff_telemetry import DiffTelemetry
                 
                 # Determine base output directory for telemetry
-                # Walk up from cohort_dir to find run-level directory
+                # CRITICAL: Find the run directory (contains REPRODUCIBILITY), not just RESULTS
+                # The run directory is needed so DiffTelemetry can create snapshot_index.json in the right place
                 base_output_dir = Path(cohort_dir)
-                while base_output_dir.name not in ["RESULTS"] and base_output_dir.parent.exists():
-                    base_output_dir = base_output_dir.parent
-                    if base_output_dir.name == "RESULTS":
-                        break
+                run_dir = None
                 
-                # If we're still in REPRODUCIBILITY or a subdirectory, walk up more
-                if base_output_dir.name not in ["RESULTS"]:
-                    # Try to find RESULTS directory
-                    temp_dir = base_output_dir
-                    for _ in range(5):  # Limit depth
+                # Walk up from cohort_dir to find the run directory (has REPRODUCIBILITY subdirectory)
+                temp_dir = base_output_dir
+                for _ in range(10):  # Limit depth
+                    if (temp_dir / "REPRODUCIBILITY").exists():
+                        run_dir = temp_dir
+                        break
+                    if not temp_dir.parent.exists():
+                        break
+                    temp_dir = temp_dir.parent
+                
+                # If we found a run directory, use it; otherwise fall back to finding RESULTS
+                if run_dir:
+                    base_output_dir = run_dir
+                else:
+                    # Fallback: walk up to find RESULTS directory
+                    temp_dir = Path(cohort_dir)
+                    for _ in range(10):
                         if temp_dir.name == "RESULTS":
                             base_output_dir = temp_dir
                             break
                         if not temp_dir.parent.exists():
                             break
                         temp_dir = temp_dir.parent
-                
-                # If we couldn't find RESULTS, use the output_dir from tracker
-                if base_output_dir.name != "RESULTS":
-                    base_output_dir = self._repro_base_dir
+                    
+                    # If we couldn't find RESULTS, use the output_dir from tracker
+                    if base_output_dir.name != "RESULTS":
+                        base_output_dir = self._repro_base_dir
                 
                 # Initialize telemetry (creates TELEMETRY directory if needed)
                 telemetry = DiffTelemetry(output_dir=base_output_dir)
