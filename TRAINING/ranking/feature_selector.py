@@ -1072,8 +1072,11 @@ def select_features_for_target(
     except Exception as e:
         logger.debug(f"Could not load mtf_data for cohort metadata: {e}")
     
+    # Check if cross-sectional ranking is enabled and we have enough symbols
+    min_cs_required = cs_config.get('min_cs', 10) if cs_config.get('enabled', False) else None
     if (cs_config.get('enabled', False) and 
-        len(symbols) >= cs_config.get('min_symbols', 5)):
+        min_cs_required is not None and
+        len(symbols) >= min_cs_required):
         
         try:
             from TRAINING.ranking.cross_sectional_feature_ranker import (
@@ -1091,7 +1094,7 @@ def select_features_for_target(
                 symbols=symbols,
                 data_dir=data_dir,
                 model_families=cs_config.get('model_families', ['lightgbm']),
-                min_cs=cs_config.get('min_cs', 10),
+                min_cs=min_cs_required,
                 max_cs_samples=cs_config.get('max_cs_samples', 1000),
                 normalization=cs_config.get('normalization'),
                 model_configs=cs_config.get('model_configs'),
@@ -1166,6 +1169,19 @@ def select_features_for_target(
                 logger.debug(f"CS stability tracking failed (non-critical): {e}")
                 cs_stability_results = None
                 
+        except ValueError as e:
+            # Handle insufficient symbols gracefully
+            error_msg = str(e)
+            if "requires >=" in error_msg and "symbols" in error_msg:
+                logger.warning(
+                    f"Cross-sectional ranking skipped: insufficient symbols "
+                    f"(have {len(symbols)}, need {min_cs_required}). "
+                    f"Falling back to symbol-specific ranking only."
+                )
+            else:
+                logger.warning(f"Cross-sectional ranking failed: {e}", exc_info=True)
+            summary_df['cs_importance_score'] = 0.0
+            summary_df['feature_category'] = 'SYMBOL_ONLY'  # Mark as symbol-only when CS fails
         except Exception as e:
             logger.warning(f"Cross-sectional ranking failed: {e}", exc_info=True)
             summary_df['cs_importance_score'] = 0.0

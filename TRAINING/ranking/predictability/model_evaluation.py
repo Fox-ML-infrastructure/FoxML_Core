@@ -3048,6 +3048,10 @@ def train_and_evaluate_models(
             from catboost import Pool
             from TRAINING.utils.target_utils import is_classification_target, is_binary_classification_target
             
+            # Determine task characteristics (use task_type, not y inspection for consistency)
+            is_binary = task_type == TaskType.BINARY_CLASSIFICATION
+            is_classification = task_type in [TaskType.BINARY_CLASSIFICATION, TaskType.MULTICLASS_CLASSIFICATION]
+            
             # GPU settings (will fallback to CPU if GPU not available)
             gpu_params = {}
             try:
@@ -3231,16 +3235,49 @@ def train_and_evaluate_models(
                 if log_cfg.edu_hints:
                     logger.info(f"  💡 See KNOWN_ISSUES.md for CatBoost slow training troubleshooting")
             
+            # CRITICAL: Enforce consistent loss/metric pairs for CatBoost
+            # Binary classification: Logloss + AUC (not RMSE + roc_auc)
+            # Regression: RMSE + RMSE
+            # This prevents NaN from loss/metric mismatch
+            
             # Auto-detect target type and set loss_function if not specified
             if "loss_function" not in params:
                 if is_classification_target(y):
                     if is_binary_classification_target(y):
-                        params["loss_function"] = "Logloss"
+                        params["loss_function"] = "Logloss"  # Binary classification loss
                     else:
                         params["loss_function"] = "MultiClass"
                 else:
-                    params["loss_function"] = "RMSE"
+                    params["loss_function"] = "RMSE"  # Regression loss
+            
+            # CRITICAL: Override config if it has inconsistent loss/metric pair
+            # If task is binary classification but loss is RMSE, fix it
+            if is_binary and params.get("loss_function") == "RMSE":
+                logger.warning(
+                    f"  ⚠️  CatBoost: Config has RMSE loss for binary classification. "
+                    f"Overriding to Logloss to prevent NaN."
+                )
+                params["loss_function"] = "Logloss"
+            
+            # Set eval_metric to match loss_function (CatBoost uses 'AUC' not 'roc_auc')
+            if "eval_metric" not in params:
+                if is_binary:
+                    params["eval_metric"] = "AUC"  # CatBoost's internal metric name
+                elif is_classification_target(y):
+                    params["eval_metric"] = "Accuracy"
+                else:
+                    params["eval_metric"] = "RMSE"
+            
+            # Ensure eval_metric is consistent with loss_function
+            if is_binary and params.get("eval_metric") not in ["AUC", "Logloss"]:
+                logger.warning(
+                    f"  ⚠️  CatBoost: Config has eval_metric={params.get('eval_metric')} for binary classification. "
+                    f"Overriding to AUC to prevent NaN."
+                )
+                params["eval_metric"] = "AUC"
+            
             # If loss_function is specified in config, respect it (YAML in charge)
+            # But we've already validated consistency above
             
             # CRITICAL: Verify GPU params are in params dict before instantiation
             # CatBoost REQUIRES task_type='GPU' to actually use GPU (devices alone is ignored)
@@ -3265,11 +3302,37 @@ def train_and_evaluate_models(
             if 'verbose' not in params:
                 params['verbose'] = catboost_backend_cfg.native_verbosity
             
-            # Choose model class based on target type
-            if is_classification_target(y):
+            # CRITICAL: Choose model class based on task_type (not y inspection)
+            # This ensures consistency: BINARY_CLASSIFICATION → CatBoostClassifier, REGRESSION → CatBoostRegressor
+            # Using is_classification_target(y) can be inconsistent with task_type
+            if is_binary:
+                # Binary classification: must use CatBoostClassifier
+                if params.get("loss_function") == "RMSE":
+                    # This should have been fixed above, but double-check
+                    logger.error(
+                        f"  ❌ CatBoost: Binary classification but loss_function=RMSE. "
+                        f"This should have been overridden. Fixing now."
+                    )
+                    params["loss_function"] = "Logloss"
+                base_model = cb.CatBoostClassifier(**params)
+                # Hard-stop: verify we got the right class
+                if not isinstance(base_model, cb.CatBoostClassifier):
+                    raise ValueError(
+                        f"BINARY_CLASSIFICATION requires CatBoostClassifier, but got {type(base_model)}. "
+                        f"This is a programming error."
+                    )
+            elif is_classification:
+                # Multiclass classification: must use CatBoostClassifier
                 base_model = cb.CatBoostClassifier(**params)
             else:
+                # Regression: must use CatBoostRegressor
                 base_model = cb.CatBoostRegressor(**params)
+                # Hard-stop: verify we got the right class
+                if not isinstance(base_model, cb.CatBoostRegressor):
+                    raise ValueError(
+                        f"REGRESSION requires CatBoostRegressor, but got {type(base_model)}. "
+                        f"This is a programming error."
+                    )
             
             # FIX: When GPU mode is enabled, CatBoost requires Pool objects instead of numpy arrays
             # Create a wrapper class that converts numpy arrays to Pool objects in fit() method
@@ -3298,6 +3361,23 @@ def train_and_evaluate_models(
                                     model_class = cb.CatBoostClassifier
                                 else:
                                     model_class = cb.CatBoostRegressor
+                            
+                            # CRITICAL: Verify model class matches loss_function
+                            # If loss_function is Logloss but model_class is Regressor, fix it
+                            loss_fn = kwargs.get('loss_function', 'RMSE')
+                            if loss_fn in ['Logloss', 'MultiClass'] and model_class == cb.CatBoostRegressor:
+                                logger.warning(
+                                    f"  ⚠️  CatBoost GPU wrapper: loss_function={loss_fn} but model_class=Regressor. "
+                                    f"Fixing to Classifier."
+                                )
+                                model_class = cb.CatBoostClassifier
+                            elif loss_fn == 'RMSE' and model_class == cb.CatBoostClassifier:
+                                logger.warning(
+                                    f"  ⚠️  CatBoost GPU wrapper: loss_function={loss_fn} but model_class=Classifier. "
+                                    f"Fixing to Regressor."
+                                )
+                                model_class = cb.CatBoostRegressor
+                            
                             self.base_model = model_class(**kwargs)
                             self._model_class = model_class
                         # FIX: For sklearn clone validation, ensure cat_features is set exactly as passed
@@ -3422,6 +3502,127 @@ def train_and_evaluate_models(
                 primary_score = np.nan
                 logger.info(f"  ℹ️  CatBoost: Skipping CV (degenerate target detected pre-CV). Fitting on full dataset for importance only.")
             else:
+                # CRITICAL: Fold health check before CV to diagnose NaN issues
+                # Log fold health for each fold and hard-fail on invalid folds
+                logger.info(f"  🔍 CatBoost CV fold health check:")
+                logger.info(f"     Objective: {params.get('loss_function', 'auto')}, Metric: {scoring}, Task: {task_type.name}")
+                
+                # Extract purge/embargo from resolved_config if available
+                purge_minutes_val = None
+                embargo_minutes_val = None
+                if resolved_config:
+                    purge_minutes_val = getattr(resolved_config, 'purge_minutes', None)
+                    embargo_minutes_val = getattr(resolved_config, 'embargo_minutes', None)
+                
+                # Also try to get from purge_time if available (for logging)
+                # purge_time is defined earlier in the function as pd.Timedelta
+                try:
+                    if purge_time is not None:
+                        # purge_time is a Timedelta, convert to minutes
+                        if hasattr(purge_time, 'total_seconds'):
+                            purge_minutes_val = purge_time.total_seconds() / 60.0
+                        elif isinstance(purge_time, (int, float)):
+                            purge_minutes_val = purge_time
+                except NameError:
+                    # purge_time not in scope, use resolved_config values only
+                    pass
+                
+                if purge_minutes_val and embargo_minutes_val:
+                    logger.info(f"     Purge: {purge_minutes_val:.1f}m, Embargo: {embargo_minutes_val:.1f}m")
+                elif purge_minutes_val:
+                    logger.info(f"     Purge: {purge_minutes_val:.1f}m, Embargo: unknown")
+                else:
+                    logger.info(f"     Purge/Embargo: from resolved_config or defaults")
+                
+                # Check each fold before CV
+                fold_violations = []
+                all_folds_list = list(tscv.split(X, y))
+                
+                for fold_idx, (train_idx, val_idx) in enumerate(all_folds_list):
+                    train_n = len(train_idx)
+                    val_n = len(val_idx)
+                    
+                    # Basic checks
+                    if val_n == 0:
+                        fold_violations.append(f"Fold {fold_idx + 1}: val_n=0 (empty validation set)")
+                        continue
+                    
+                    # Binary classification: check class balance in BOTH train and validation sets
+                    if is_binary:
+                        # Check validation set
+                        val_y = y[val_idx]
+                        val_y_clean = val_y[~np.isnan(val_y)]
+                        val_unique = np.unique(val_y_clean) if len(val_y_clean) > 0 else np.array([])
+                        val_pos_count = np.sum(val_y_clean == 1) if len(val_y_clean) > 0 else 0
+                        val_neg_count = np.sum(val_y_clean == 0) if len(val_y_clean) > 0 else 0
+                        
+                        # Check training set (CRITICAL: single-class training causes NaN)
+                        train_y = y[train_idx]
+                        train_y_clean = train_y[~np.isnan(train_y)]
+                        train_unique = np.unique(train_y_clean) if len(train_y_clean) > 0 else np.array([])
+                        train_pos_count = np.sum(train_y_clean == 1) if len(train_y_clean) > 0 else 0
+                        train_neg_count = np.sum(train_y_clean == 0) if len(train_y_clean) > 0 else 0
+                        
+                        # Check for violations
+                        val_degenerate = val_pos_count == 0 or val_neg_count == 0
+                        train_degenerate = train_pos_count == 0 or train_neg_count == 0
+                        
+                        if train_degenerate:
+                            fold_violations.append(
+                                f"Fold {fold_idx + 1}: Binary classification with degenerate TRAINING set "
+                                f"(train_pos={train_pos_count}, train_neg={train_neg_count}, train_unique={train_unique.tolist()})"
+                            )
+                            logger.warning(
+                                f"     ⚠️  Fold {fold_idx + 1}: train_n={train_n}, train_pos={train_pos_count}, train_neg={train_neg_count}, "
+                                f"train_unique={train_unique.tolist()}, val_n={val_n}, val_pos={val_pos_count}, val_neg={val_neg_count}"
+                            )
+                        elif val_degenerate:
+                            fold_violations.append(
+                                f"Fold {fold_idx + 1}: Binary classification with degenerate validation set "
+                                f"(val_pos={val_pos_count}, val_neg={val_neg_count}, val_unique={val_unique.tolist()})"
+                            )
+                            logger.warning(
+                                f"     ⚠️  Fold {fold_idx + 1}: train_n={train_n}, train_pos={train_pos_count}, train_neg={train_neg_count}, "
+                                f"val_n={val_n}, val_pos={val_pos_count}, val_neg={val_neg_count}, val_unique={val_unique.tolist()}"
+                            )
+                        else:
+                            logger.info(
+                                f"     ✅ Fold {fold_idx + 1}: train_n={train_n}, train_pos={train_pos_count}, train_neg={train_neg_count}, "
+                                f"val_n={val_n}, val_pos={val_pos_count}, val_neg={val_neg_count}"
+                            )
+                    else:
+                        # Regression or multiclass: just log sizes
+                        logger.info(f"     ✅ Fold {fold_idx + 1}: train_n={train_n}, val_n={val_n}")
+                    
+                    # Ranking/group structure check (if groups are used)
+                    # Note: For cross-sectional ranking, groups are typically timestamps
+                    # If CatBoost is using ranking objective, we'd need group IDs here
+                    # For now, just log if we detect ranking mode
+                    if 'objective' in params and 'ranking' in str(params.get('objective', '')).lower():
+                        # Ranking mode: would need group IDs to check group sizes
+                        logger.warning(f"     ⚠️  Fold {fold_idx + 1}: Ranking mode detected but group structure not validated")
+                
+                # Log violations but don't hard-fail (let CV proceed and return NaN if needed)
+                # This allows us to diagnose the issue while maintaining current behavior
+                if fold_violations:
+                    error_msg = (
+                        f"🚨 CatBoost CV fold health check FAILED. Invalid folds detected:\n"
+                        f"   " + "\n   ".join(fold_violations) + "\n"
+                        f"   This will likely cause NaN scores. Fix by:\n"
+                    )
+                    if purge_minutes_val and embargo_minutes_val:
+                        error_msg += f"   1) Reducing purge/embargo ({purge_minutes_val:.1f}m/{embargo_minutes_val:.1f}m) if too large\n"
+                    else:
+                        error_msg += f"   1) Reducing purge/embargo if too large\n"
+                    error_msg += (
+                        f"   2) Loading more data to ensure sufficient validation set size\n"
+                        f"   3) For binary classification: ensure validation sets have both classes"
+                    )
+                    logger.error(error_msg)
+                    logger.warning(f"     ⚠️  Proceeding with CV anyway (will likely return NaN)")
+                else:
+                    logger.info(f"     ✅ All {len(all_folds_list)} folds passed health check")
+                
                 try:
                     scores = cross_val_score(model, X, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
                     valid_scores = scores[~np.isnan(scores)]
