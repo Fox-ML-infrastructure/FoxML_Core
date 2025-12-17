@@ -1387,7 +1387,8 @@ class ReproducibilityTracker:
         
         # NEW: Add diff telemetry to metadata (full audit trail)
         # CRITICAL: diff_telemetry is optional - older runs may not have it
-        if additional_data and 'diff_telemetry' in additional_data:
+        # CRITICAL: Only process if diff_telemetry_data was successfully computed (not None)
+        if additional_data and 'diff_telemetry' in additional_data and diff_telemetry_data is not None:
             diff_telemetry = additional_data['diff_telemetry']
             snapshot = diff_telemetry.get('snapshot', {})
             diff = diff_telemetry.get('diff', {})
@@ -1445,14 +1446,26 @@ class ReproducibilityTracker:
                 diff_telemetry_blob['diff_telemetry_digest'] = digest
             except (TypeError, ValueError) as e:
                 # Non-JSON-primitive types detected - this is a normalization bug
+                # CRITICAL: Don't raise - still write metadata.json without diff_telemetry rather than failing completely
                 logger.error(f"diff_telemetry contains non-JSON-primitive types (normalization bug): {e}")
                 logger.error("Cannot compute diff_telemetry_digest - diff_telemetry must contain only JSON-primitive types")
-                raise RuntimeError(f"diff_telemetry normalization failed: {e}") from e
+                logger.error("Writing metadata.json without diff_telemetry to prevent complete failure")
+                # Clear diff_telemetry_blob so it's not added to metadata
+                diff_telemetry_blob = None
             except Exception as e:
+                # CRITICAL: Don't raise - still write metadata.json without diff_telemetry rather than failing completely
                 logger.error(f"Unexpected error computing diff_telemetry_digest: {e}")
-                raise
+                logger.error("Writing metadata.json without diff_telemetry to prevent complete failure")
+                # Clear diff_telemetry_blob so it's not added to metadata
+                diff_telemetry_blob = None
             
-            full_metadata['diff_telemetry'] = diff_telemetry_blob
+            # CRITICAL: Only add diff_telemetry if blob was successfully created (not None)
+            # If digest computation failed, diff_telemetry_blob is set to None and we skip it
+            # This ensures metadata.json is still written even if diff telemetry has issues
+            if diff_telemetry_blob is not None and 'diff_telemetry_digest' in diff_telemetry_blob:
+                full_metadata['diff_telemetry'] = diff_telemetry_blob
+            else:
+                logger.warning("Skipping diff_telemetry in metadata.json due to computation failure")
         
         # Save metadata.json atomically (temp file + rename for crash consistency)
         metadata_file = cohort_dir / "metadata.json"
@@ -3130,8 +3143,73 @@ class ReproducibilityTracker:
                         logger.warning(f"Failed to compute drift for {stage}:{item_name}: {e}")
                         logger.debug(f"Drift computation traceback: {traceback.format_exc()}")
             else:
-                self.save_run(stage, item_name, metrics, additional_data)
-                self._increment_mode_counter("LEGACY")
+                # CRITICAL: Even in legacy mode, try to write metadata.json and metrics.json to cohort directory
+                # This ensures files are written for both CROSS_SECTIONAL and SYMBOL_SPECIFIC views
+                # Build minimal cohort metadata from available data
+                minimal_cohort_metadata = {}
+                if metrics:
+                    # Try to extract N_effective from metrics
+                    n_effective = metrics.get('N_effective_cs') or metrics.get('n_samples') or metrics.get('sample_size')
+                    if n_effective:
+                        minimal_cohort_metadata['N_effective_cs'] = int(n_effective)
+                
+                if additional_data:
+                    n_symbols = additional_data.get('n_symbols')
+                    if n_symbols:
+                        minimal_cohort_metadata['n_symbols'] = int(n_symbols)
+                    
+                    # Extract date range if available
+                    date_range = {}
+                    if 'date_range' in additional_data:
+                        date_range = additional_data['date_range']
+                    elif 'start_ts' in additional_data or 'end_ts' in additional_data:
+                        date_range = {
+                            'start_ts': additional_data.get('start_ts'),
+                            'end_ts': additional_data.get('end_ts')
+                        }
+                    if date_range:
+                        minimal_cohort_metadata['date_range'] = date_range
+                    
+                    # Extract cs_config if available
+                    if 'cs_config' in additional_data:
+                        minimal_cohort_metadata['cs_config'] = additional_data['cs_config']
+                    elif 'min_cs' in additional_data or 'max_cs_samples' in additional_data:
+                        minimal_cohort_metadata['cs_config'] = {
+                            'min_cs': additional_data.get('min_cs'),
+                            'max_cs_samples': additional_data.get('max_cs_samples'),
+                            'leakage_filter_version': additional_data.get('leakage_filter_version', 'v1')
+                        }
+                
+                # If we have minimal cohort metadata, try to write to cohort directory
+                if minimal_cohort_metadata.get('N_effective_cs'):
+                    try:
+                        # Compute cohort_id from minimal metadata
+                        minimal_cohort_id = self._compute_cohort_id(minimal_cohort_metadata, route_type)
+                        run_data = {
+                            "timestamp": datetime.now().isoformat(),
+                            "stage": stage,
+                            "item_name": item_name,
+                            **{k: float(v) if isinstance(v, (int, float)) else v 
+                               for k, v in metrics.items()},
+                            "cohort_metadata": minimal_cohort_metadata
+                        }
+                        if additional_data:
+                            run_data["additional_data"] = additional_data
+                        
+                        # Try to write to cohort directory (even with minimal metadata)
+                        self._save_to_cohort(stage, item_name, minimal_cohort_id, minimal_cohort_metadata, run_data, route_type, symbol, model_family, additional_data)
+                        self._increment_mode_counter("LEGACY_WITH_COHORT_WRITE")
+                        logger.info(f"📊 Reproducibility: Wrote metadata.json/metrics.json to cohort directory (legacy mode with minimal metadata)")
+                    except Exception as e:
+                        # If cohort write fails, fall back to legacy save_run
+                        logger.warning(f"Failed to write to cohort directory in legacy mode: {e}. Falling back to legacy save_run.")
+                        logger.debug(f"Cohort write traceback: {traceback.format_exc()}")
+                        self.save_run(stage, item_name, metrics, additional_data)
+                        self._increment_mode_counter("LEGACY")
+                else:
+                    # No cohort metadata available - use legacy save_run
+                    self.save_run(stage, item_name, metrics, additional_data)
+                    self._increment_mode_counter("LEGACY")
         except Exception as e:
             # Final safety net - ensure log_comparison never raises
             error_type = "IO_ERROR" if isinstance(e, (IOError, OSError)) else "SERIALIZATION_ERROR" if isinstance(e, (json.JSONDecodeError, TypeError)) else "UNKNOWN_ERROR"
