@@ -360,18 +360,43 @@ Stored in `{cohort_dir}/metadata.json` under `diff_telemetry` key:
 ### Metrics.json (Lightweight Queryable Fields)
 
 Stored in `{cohort_dir}/metrics.json` under `diff_telemetry` key:
-- **Lightweight**: Flags, counts, summaries only
+- **Lightweight**: Flags, counts, summaries only (derived from metadata.json)
 - **Purpose**: Fast queries and aggregation without cardinality blowups
+- **Derived**: Can be regenerated from metadata.json if needed
+- **Not authoritative**: Always refer to metadata.json for truth
 - **Structure**: See "Metrics Integration" section below
 
-### Count Rule
+### Count Rule (Precise Definition)
 
-`excluded_factors_changed_count` counts the **number of keys whose value differs** (one key = one change):
-- Each hyperparameter key = 1 change
+**PRECISE DEFINITION**: `excluded_factors_changed_count` counts the **number of leaf keys whose value differs** (one key = one change).
+
+This is the canonical counting rule used consistently across:
+- Summary formatter ("(+N more)" display)
+- Metrics integration (`excluded_factors_changed_count` in metrics.json)
+- Diff result summary
+
+**Counting Rules:**
+- Each hyperparameter key = 1 change (e.g., `learning_rate`, `max_depth`, `n_estimators`)
 - `train_seed` = 1 change (if present)
-- Each version key = 1 change
+- Each top-level version key = 1 change (`python_version`, `cuda_version`, `library_versions`)
 
-This matches the summary formatter counting logic, ensuring consistency between count and summary display.
+**Example:**
+```json
+{
+  "hyperparameters": {
+    "learning_rate": {"prev": 0.01, "curr": 0.05},
+    "max_depth": {"prev": 5, "curr": 7}
+  },
+  "train_seed": {"prev": 42, "curr": 1337},
+  "versions": {
+    "python_version": {"prev": "3.9.0", "curr": "3.10.0"},
+    "cuda_version": {"prev": "12.2", "curr": "12.3"}
+  }
+}
+```
+**Count = 5** (2 hyperparameters + 1 train_seed + 2 version keys)
+
+This ensures consistency between count and summary formatter display.
 
 ### Accessing Diffs
 
@@ -445,14 +470,19 @@ Full diff telemetry is stored in `metadata.json` under `diff_telemetry` key:
         "train_seed": {"prev": 42, "curr": 1337},
         "versions": { ... }
       }
-    }
+    },
+    "diff_telemetry_digest": "abc123def4567890abcdef1234567890abcdef1234567890abcdef1234567890"  // Full SHA256 hash of this blob (64 hex chars, 256 bits)
   }
 }
 ```
 
-## Metrics Integration
+**Note**: `diff_telemetry_digest` is computed from the full `diff_telemetry` blob (excluding the digest field itself) using SHA256 of canonical JSON. See "Diff Telemetry Digest Algorithm" section below for exact specification.
 
-Lightweight diff telemetry is stored in `metrics.json` under `diff_telemetry` key:
+## Metrics Integration (Derived Layer)
+
+**IMPORTANT**: These fields are **derived from metadata.json** (SST). They are lightweight, queryable signals for dashboards/alerts. If metrics need regeneration, derive from metadata.json.
+
+Lightweight diff telemetry fields stored in `metrics.json`:
 
 ```json
 {
@@ -460,12 +490,69 @@ Lightweight diff telemetry is stored in `metrics.json` under `diff_telemetry` ke
     "comparable": 1,
     "excluded_factors_changed": 1,
     "excluded_factors_changed_count": 5,
-    "excluded_factors_summary": "learning_rate: 0.01→0.05, max_depth: 5→7, train_seed: 42→1337 (+2 more)"
+    "excluded_factors_summary": "learning_rate: 0.01→0.05, max_depth: 5→7, train_seed: 42→1337 (+2 more)",
+    "diff_telemetry_digest": "abc123def4567890abcdef1234567890abcdef1234567890abcdef1234567890"  // Copy from metadata.json (for cross-checking)
   }
 }
 ```
 
-**Note**: Full payloads (excluded_factors.changes, comparison_group, fingerprints) are **not** included in metrics to keep cardinality low. Use metadata.json for full audit trail.
+**Key Points:**
+- **Derived from metadata.json**: These fields are extracted from the full audit trail
+- **Not authoritative**: Always refer to metadata.json for truth
+- **Regenerable**: Can be recomputed from metadata.json if needed
+- **Integrity verification**: `diff_telemetry_digest` is stored in **both** metadata.json and metrics.json, allowing cross-checking that metrics correspond to metadata without recomputing
+- **No full payloads**: Full `excluded_factors.changes`, `comparison_group`, and `fingerprints` are **not** included in metrics to keep cardinality low. Use metadata.json for full audit trail.
+
+### Diff Telemetry Digest Algorithm
+
+**Purpose**: Prove that metrics.json corresponds to metadata.json without recomputing.
+
+**Algorithm**:
+1. **Input**: The full `diff_telemetry` blob from metadata.json (all fields: fingerprint_schema_version, comparison_group, fingerprints, comparability, excluded_factors)
+2. **Canonicalization**: Serialize to JSON with:
+   - `sort_keys=True` (deterministic key ordering)
+   - **Strict JSON-primitive-only**: Only `str`, `int`, `float`, `bool`, `None`, `list`, `dict` are allowed
+   - UTF-8 encoding
+   - **Fail-fast**: Raises `RuntimeError` if non-primitive types are detected (indicates normalization bug upstream)
+3. **Hashing**: SHA256 hash of the canonical JSON string
+4. **Digest**: Full SHA256 hash (64 hexadecimal characters, 256 bits of entropy, maximum collision resistance)
+
+**Type Safety**:
+- **CRITICAL**: `diff_telemetry` must contain only JSON-primitive types (str/int/float/bool/null/lists/dicts)
+- If non-primitive types are present, digest computation **fails fast** with `RuntimeError`
+- This ensures normalization bugs are caught immediately rather than silently hidden
+- No fallback coercion - the system requires correct normalization upstream
+
+**Storage**:
+- **metadata.json**: Digest is computed and stored as `diff_telemetry.diff_telemetry_digest`
+- **metrics.json**: Digest is **copied** from metadata.json (not recomputed) for cross-checking
+
+**Verification**:
+```python
+import hashlib
+import json
+
+# Load metadata
+with open('metadata.json') as f:
+    metadata = json.load(f)
+diff_telemetry = metadata['diff_telemetry']
+
+# Extract digest
+stored_digest = diff_telemetry.pop('diff_telemetry_digest', None)
+
+# Recompute (strict - will raise if non-primitive types present)
+canonical_json = json.dumps(diff_telemetry, sort_keys=True)
+computed_digest = hashlib.sha256(canonical_json.encode('utf-8')).hexdigest()
+
+# Verify
+assert stored_digest == computed_digest, "Digest mismatch - metadata may have been modified"
+```
+
+**Why This Matters**:
+- Prevents "why did my digest differ?" questions by documenting exact algorithm
+- Allows verification that metrics.json corresponds to metadata.json
+- Enables detection of corruption or accidental modification
+- Provides integrity guarantee without requiring full payload in metrics
 
 ## Backwards Compatibility
 

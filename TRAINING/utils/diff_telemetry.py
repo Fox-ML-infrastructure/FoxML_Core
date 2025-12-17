@@ -113,35 +113,47 @@ class ComparisonGroup:
         return "|".join(parts) if parts else "default"
     
     def to_dir_name(self) -> str:
-        """Generate filesystem-safe directory name from comparison group key.
+        """Generate compact, filesystem-safe directory name from comparison group key.
         
-        This creates a human-readable, filesystem-safe directory name that groups
-        runs with exactly the same outcome-influencing metadata together.
+        Uses a single hash of the comparison group key for compactness, with
+        optional human-readable components (n_effective, model_family) if available.
         
         Example: "exp=test|data=abc12345|task=def67890|n=5000|family=lightgbm|features=ghi11111"
-        -> "exp-test_data-abc12345_task-def67890_n-5000_family-lightgbm_features-ghi11111"
+        -> "cg-abc12345_n-5000" (compact hash + n_effective)
         """
         key = self.to_key()
-        # Replace | with _ and = with - for filesystem safety
-        # Also sanitize any other problematic characters
+        import hashlib
+        
+        # Generate a single compact hash from the full key
+        key_hash = hashlib.sha256(key.encode()).hexdigest()[:12]  # 12 chars for uniqueness
+        
+        # Extract human-readable components for readability
+        parts = []
+        
+        # Always include n_effective if available (most important for organization)
+        if self.n_effective is not None:
+            parts.append(f"n-{self.n_effective}")
+        
+        # Optionally include model_family if available (for quick identification)
+        if self.model_family:
+            # Normalize family name to be filesystem-safe
+            family_clean = self.model_family.lower().replace("_", "-")
+            parts.append(f"fam-{family_clean}")
+        
+        # Build directory name: hash + optional readable parts
+        if parts:
+            dir_name = f"cg-{key_hash}_{'_'.join(parts)}"
+        else:
+            dir_name = f"cg-{key_hash}"
+        
+        # Sanitize for filesystem safety
         import re
-        dir_name = key.replace("|", "_").replace("=", "-")
-        # Remove any remaining problematic characters (keep alphanumeric, dash, underscore)
         dir_name = re.sub(r'[^a-zA-Z0-9_-]', '', dir_name)
-        # Limit length to avoid filesystem issues (255 chars typical max)
+        
+        # Limit length (shouldn't be needed with hash, but safety check)
         if len(dir_name) > 200:
-            # Truncate but keep important parts (n= and family= are most important)
-            # Hash the rest
-            important_parts = []
-            for part in key.split("|"):
-                if "n=" in part or "family=" in part:
-                    important_parts.append(part)
-            if important_parts:
-                rest = "_".join([p for p in key.split("|") if p not in important_parts])
-                rest_hash = hashlib.sha256(rest.encode()).hexdigest()[:8]
-                dir_name = "_".join([p.replace("=", "-") for p in important_parts]) + f"_rest-{rest_hash}"
-            else:
-                dir_name = hashlib.sha256(key.encode()).hexdigest()[:32]
+            dir_name = f"cg-{key_hash}"
+        
         return dir_name if dir_name else "default"
     
     def to_dict(self) -> Dict[str, Any]:
@@ -944,10 +956,18 @@ class DiffTelemetry:
         cohort_dir = Path(cohort_dir)
         cohort_dir.mkdir(parents=True, exist_ok=True)
         
-        # CRITICAL: On first snapshot, move run to comparison group directory
-        # This ensures runs are automatically organized by all outcome-influencing metadata
+        # NOTE: Run organization by comparison group is now done at startup (config load time)
+        # in IntelligentTrainer.__init__(). This ensures runs are organized by metadata from the start.
+        # We no longer move runs here - they're already in the correct location.
+        # Keeping this as a fallback for edge cases where startup organization didn't happen.
         if not self._run_moved and snapshot.comparison_group and self.run_dir and self.results_dir:
-            self._organize_run_by_comparison_group(snapshot)
+            # Only organize if run is in a sample size bin or _pending (not already organized)
+            run_parent = self.run_dir.parent.name
+            if run_parent.startswith("sample_") or run_parent == "_pending":
+                self._organize_run_by_comparison_group(snapshot)
+            else:
+                # Already organized, mark as moved
+                self._run_moved = True
         
         # Save full snapshot
         snapshot_file = cohort_dir / "snapshot.json"
@@ -977,8 +997,10 @@ class DiffTelemetry:
         
         try:
             # Determine target directory based on comparison group
+            # Structure: RESULTS/runs/{comparison_group_dir}/{run_name}/
             comparison_group_dir = snapshot.comparison_group.to_dir_name()
-            target_dir = self.results_dir / comparison_group_dir / self.run_dir.name
+            runs_dir = self.results_dir / "runs"
+            target_dir = runs_dir / comparison_group_dir / self.run_dir.name
             
             # Skip if already in correct location
             if self.run_dir.resolve() == target_dir.resolve():

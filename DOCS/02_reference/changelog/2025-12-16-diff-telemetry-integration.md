@@ -95,3 +95,41 @@ Minimal test cases verified:
 - Older runs without `diff_telemetry` in metadata are handled gracefully
 - New runs automatically include diff telemetry in both metadata and metrics
 
+## Additional Improvements (Later Same Day)
+
+### Diff Telemetry Digest Enhancements
+
+**Problem**: Digest computation used truncated hash and fallback string coercion, which could hide normalization bugs.
+
+**Solution**: Implemented fail-fast assertion with full SHA256 hash for maximum integrity and early bug detection.
+
+**Files Changed**:
+- `TRAINING/utils/reproducibility_tracker.py` - Fail-fast digest computation
+- `TRAINING/utils/metrics.py` - Updated comments for full SHA256
+- `DOCS/03_technical/telemetry/DIFF_TELEMETRY.md` - Updated algorithm documentation
+
+**Key Changes**:
+
+#### Fail-Fast Type Safety
+- **Removed `default=str` fallback** - Now raises `RuntimeError` if non-JSON-primitive types are detected
+- **Strict serialization** - `json.dumps()` called without fallback, ensuring normalization bugs are caught immediately
+- **Clear error messages** - Logs indicate normalization failures with full context
+
+#### Full SHA256 Hash
+- **64 hex characters** - Changed from truncated 32 chars to full SHA256 hash (256 bits of entropy)
+- **Maximum collision resistance** - Full hash eliminates any truncation concerns
+- **Consistent across all outputs** - Same full hash stored in both `metadata.json` and `metrics.json`
+
+#### Documentation Updates
+- Updated algorithm description to reflect fail-fast behavior
+- Updated verification example to show strict serialization
+- Updated JSON examples to show full 64-character hash format
+
+**Benefits**:
+- **Early bug detection** - Normalization bugs fail immediately rather than being silently hidden
+- **Maximum integrity** - Full SHA256 provides strongest possible collision resistance
+- **Review-proof** - No fallback coercion means reviewers can trust the digest represents exact data
+- **Clear failure modes** - Errors clearly indicate normalization issues upstream
+
+**Breaking Changes**: None - this is a hardening change that makes the system more strict, but existing valid data continues to work.
+

@@ -205,33 +205,37 @@ class IntelligentTrainer:
             output_dir = Path(output_dir)
             output_dir_name = output_dir.name
         
-        # Put ALL runs in RESULTS directory, organized by sample size (N_effective) in bins
-        # Structure: RESULTS/sample_{bin_start}k-{bin_end}k/{run_name}/
-        # Bins: 0-5k, 5k-10k, 10k-25k, 25k-50k, 50k-100k, 100k-250k, 250k-500k, 500k-1M, 1M+
-        # This groups similar sample sizes together for easy comparison
+        # Put ALL runs in RESULTS directory, organized by comparison group metadata
+        # Structure: RESULTS/runs/{comparison_group_dir}/{date_time_run_name}/
+        # Comparison group dir is computed from configs at startup (data, symbols, n_effective, etc.)
         repo_root = Path(__file__).parent.parent.parent  # Go up from TRAINING/orchestration/ to repo root
         results_dir = repo_root / "RESULTS"
+        runs_dir = results_dir / "runs"  # Organize all runs under runs/ subdirectory
         
         # Try to estimate N_effective early (before first target is processed)
         self._n_effective = self._estimate_n_effective_early()
         
-        if self._n_effective is not None:
-            # Bin N_effective into readable ranges for grouping similar runs
+        # Compute comparison group directory from configs available at startup
+        # This organizes runs by metadata from the start, not moved later
+        comparison_group_dir = self._compute_comparison_group_dir_at_startup()
+        
+        if comparison_group_dir:
+            # Create directory structure: RESULTS/runs/{comparison_group_dir}/{date_time_run_name}/
+            self.output_dir = runs_dir / comparison_group_dir / output_dir_name
+            logger.info(f"📁 Output directory: {self.output_dir} (organized by comparison group: {comparison_group_dir})")
+        elif self._n_effective is not None:
+            # Fallback: Use sample size bin if comparison group can't be computed
             bin_info = self._get_sample_size_bin(self._n_effective)
             bin_name = bin_info["bin_name"]
-            # Create directory directly in RESULTS/{bin_name}/{run_name}/
-            self.output_dir = results_dir / bin_name / output_dir_name
-            self._initial_output_dir = self.output_dir  # Same location, no move needed
+            self.output_dir = runs_dir / bin_name / output_dir_name
             logger.info(f"📁 Output directory: {self.output_dir} (organized by sample size bin: {bin_name}, N={self._n_effective})")
-            # Store bin info for later use in metadata
             self._bin_info = bin_info
         else:
-            # Fallback: start in _pending/ - will be moved to bin directory after first target is processed
-            self._initial_output_dir = results_dir / "_pending" / output_dir_name
-            self.output_dir = self._initial_output_dir
-            logger.info(f"📁 Output directory: {self.output_dir} (will be organized by sample size bin after first target)")
+            # Final fallback: start in _pending/ - will be organized after first target
+            self.output_dir = runs_dir / "_pending" / output_dir_name
+            logger.info(f"📁 Output directory: {self.output_dir} (will be organized after first target)")
         
-        self._run_name = output_dir_name  # Store for move operation
+        self._run_name = output_dir_name  # Store for reference
         
         # Create directory
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -385,6 +389,91 @@ class IntelligentTrainer:
         
         logger.info("⚠️  Could not determine N_effective early, will use _pending/ and organize after first target")
         return None
+    
+    def _compute_comparison_group_dir_at_startup(self) -> Optional[str]:
+        """
+        Compute comparison group directory name from configs available at startup.
+        
+        Uses metadata available at config load time:
+        - data_dir, symbols, min_cs, max_cs_samples → dataset_signature
+        - n_effective (estimated) → n_effective
+        - view/routing (if known) → routing_signature
+        
+        Note: task_signature, model_family, feature_signature come later and are not
+        included in the directory name (they're in the comparison group key for diff telemetry).
+        
+        Returns:
+            Comparison group directory name (e.g., "data-012e801c_route-fcabc6e9_n-988")
+            or None if cannot be computed
+        """
+        import hashlib
+        
+        try:
+            from TRAINING.utils.diff_telemetry import ComparisonGroup
+            
+            # Compute dataset signature from available configs
+            dataset_parts = []
+            
+            # Data directory path (normalized)
+            if self.data_dir:
+                data_dir_str = str(self.data_dir.resolve())
+                dataset_parts.append(f"data_dir={data_dir_str}")
+            
+            # Symbols (sorted for consistency)
+            if self.symbols:
+                symbols_str = "|".join(sorted(self.symbols))
+                dataset_parts.append(f"symbols={symbols_str}")
+            
+            # Config limits (if available)
+            if self._max_cs_samples is not None:
+                dataset_parts.append(f"max_cs_samples={self._max_cs_samples}")
+            
+            # Also check experiment config for min_cs, max_cs_samples
+            min_cs = None
+            max_cs_samples = self._max_cs_samples
+            if self.experiment_config:
+                try:
+                    import yaml
+                    exp_name = self.experiment_config.name
+                    exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                    if exp_file.exists():
+                        with open(exp_file, 'r') as f:
+                            exp_yaml = yaml.safe_load(f) or {}
+                        exp_data = exp_yaml.get('data', {})
+                        min_cs = exp_data.get('min_cs')
+                        if max_cs_samples is None:
+                            max_cs_samples = exp_data.get('max_cs_samples') or exp_data.get('max_rows_per_symbol')
+                        if min_cs is not None:
+                            dataset_parts.append(f"min_cs={min_cs}")
+                except Exception:
+                    pass
+            
+            # Compute dataset signature hash
+            dataset_signature = None
+            if dataset_parts:
+                dataset_str = "|".join(sorted(dataset_parts))
+                dataset_signature = hashlib.sha256(dataset_str.encode()).hexdigest()[:16]
+            
+            # Routing signature (default to CROSS_SECTIONAL if not known)
+            # This can be refined later when view is determined
+            routing_signature = None
+            routing_str = "view=CROSS_SECTIONAL"  # Default
+            routing_signature = hashlib.sha256(routing_str.encode()).hexdigest()[:16]
+            
+            # Build partial comparison group (what we know at startup)
+            comparison_group = ComparisonGroup(
+                dataset_signature=dataset_signature,
+                routing_signature=routing_signature,
+                n_effective=self._n_effective
+            )
+            
+            # Generate directory name
+            dir_name = comparison_group.to_dir_name()
+            return dir_name if dir_name != "default" else None
+            
+        except Exception as e:
+            logger.debug(f"Could not compute comparison group directory at startup: {e}")
+            return None
     
     def _get_sample_size_bin(self, n_effective: int) -> Dict[str, Any]:
         """

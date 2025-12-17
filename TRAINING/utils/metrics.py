@@ -240,28 +240,53 @@ class MetricsWriter:
                 metrics_data[key] = str(value)
         
         # NEW: Add lightweight diff telemetry fields to metrics (queryable/aggregatable)
-        # CRITICAL: Only include lightweight fields - no full payloads
+        # 
+        # CRITICAL DESIGN PRINCIPLE: metadata.json is the Single Source of Truth (SST).
+        # metrics.json contains only DERIVED, lightweight fields for dashboards/alerts.
+        # 
+        # This split prevents:
+        # - Bloated metrics store (high-cardinality blobs)
+        # - Loss of forensic detail when something regresses
+        # 
+        # Rules:
+        # - metadata.json = canonical, high-detail, high-cardinality, audit trail (SST)
+        # - metrics.json = low-cardinality, queryable signals (derived, disposable)
+        # - If metrics need regeneration, derive from metadata.json
+        # - Never treat metrics.json as authoritative - always refer to metadata.json for truth
         if diff_telemetry:
             diff = diff_telemetry.get('diff', {})
             snapshot = diff_telemetry.get('snapshot', {})
             
             # Lightweight fields for querying/aggregation
             # DO NOT include: full excluded_factors.changes, full comparison_group, full fingerprints
+            # These belong only in metadata.json (SST)
             excluded_factors = diff.get('excluded_factors_changed', {})
             
-            # Count rule: Number of keys whose value differs (one key = one change)
-            # This matches the summary formatter counting logic
+            # Count rule: Number of leaf keys whose value differs (one key = one change)
+            # PRECISE DEFINITION: Matches _count_excluded_factors_changed() in diff_telemetry.py
+            # This ensures consistency between count and summary formatter ("(+N more)" display)
             excluded_factors_count = (
                 len(excluded_factors.get('hyperparameters', {})) +
                 (1 if excluded_factors.get('train_seed') else 0) +
-                len(excluded_factors.get('versions', {}))
+                len([k for k in excluded_factors.get('versions', {}).keys() 
+                     if k in ['python_version', 'cuda_version', 'library_versions']] if excluded_factors.get('versions') else [])
             ) if excluded_factors else 0
+            
+            # diff_telemetry_digest: Copy from metadata.json (where it's computed)
+            # This allows cross-checking that metrics correspond to metadata without recomputing
+            # Algorithm: Full SHA256 hash of canonical JSON (sorted keys, strict JSON-primitive-only) → 64 hex chars
+            # See metadata.json for the exact blob that was hashed
+            digest = snapshot.get('diff_telemetry_digest')
+            if digest is None:
+                # Fallback: try to get from full diff_telemetry if available
+                digest = diff_telemetry.get('snapshot', {}).get('diff_telemetry_digest')
             
             metrics_data['diff_telemetry'] = {
                 'comparable': 1 if diff.get('comparable', False) else 0,
                 'excluded_factors_changed': 1 if excluded_factors else 0,
-                'excluded_factors_changed_count': excluded_factors_count,  # Number of keys that changed
+                'excluded_factors_changed_count': excluded_factors_count,  # Number of leaf keys that changed
                 'excluded_factors_summary': diff.get('summary', {}).get('excluded_factors_summary'),
+                'diff_telemetry_digest': digest,  # Hash of full metadata diff_telemetry (for integrity verification)
                 # Optional: comparison_group_key (only if metrics backend can tolerate high cardinality)
                 # Gate behind config flag or conditional - for now, removed to keep metrics lightweight
                 # 'comparison_group_key': (

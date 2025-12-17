@@ -1309,7 +1309,7 @@ class ReproducibilityTracker:
             # Extract diff telemetry metadata (full detail for audit trail)
             # CRITICAL: Always write valid diff_telemetry object, even if not comparable
             # Schema mismatches should still produce valid structure with comparability.reason set
-            full_metadata['diff_telemetry'] = {
+            diff_telemetry_blob = {
                 'fingerprint_schema_version': snapshot.get('fingerprint_schema_version'),
                 'comparison_group_key': comparison_group_key,
                 'comparison_group': comparison_group if isinstance(comparison_group, dict) else (
@@ -1333,6 +1333,32 @@ class ReproducibilityTracker:
                     'changes': diff.get('excluded_factors_changed', {})  # Full payload - empty dict if no changes
                 }
             }
+            
+            # Compute digest of diff_telemetry blob for integrity verification
+            # Algorithm: SHA256 hash of canonical JSON (sorted keys, strict JSON-primitive-only)
+            # Digest is full SHA256 hash (64 hex characters, 256 bits of entropy)
+            # 
+            # CRITICAL: diff_telemetry must contain only JSON-primitive types (str/int/float/bool/null/lists/dicts).
+            # If non-primitive types are present, this indicates a normalization bug upstream.
+            # We fail fast (raise) rather than silently coerce to strings, to catch bugs early.
+            try:
+                # Strict serialization - will raise TypeError if non-primitive types present
+                # This ensures we catch normalization bugs immediately rather than hiding them
+                canonical_json = json.dumps(diff_telemetry_blob, sort_keys=True)
+                
+                # Use full SHA256 hash (64 hex characters, 256 bits) for maximum collision resistance
+                digest = hashlib.sha256(canonical_json.encode('utf-8')).hexdigest()
+                diff_telemetry_blob['diff_telemetry_digest'] = digest
+            except (TypeError, ValueError) as e:
+                # Non-JSON-primitive types detected - this is a normalization bug
+                logger.error(f"diff_telemetry contains non-JSON-primitive types (normalization bug): {e}")
+                logger.error("Cannot compute diff_telemetry_digest - diff_telemetry must contain only JSON-primitive types")
+                raise RuntimeError(f"diff_telemetry normalization failed: {e}") from e
+            except Exception as e:
+                logger.error(f"Unexpected error computing diff_telemetry_digest: {e}")
+                raise
+            
+            full_metadata['diff_telemetry'] = diff_telemetry_blob
         
         # Save metadata.json
         metadata_file = cohort_dir / "metadata.json"
