@@ -2414,7 +2414,7 @@ class DiffTelemetry:
         patch.extend(output_changes['patch'])
         
         # Compute metric deltas
-        metric_deltas = self._compute_metric_deltas(
+        metric_deltas, metric_deltas_total = self._compute_metric_deltas(
             prev_snapshot.outputs,
             current_snapshot.outputs
         )
@@ -2440,18 +2440,23 @@ class DiffTelemetry:
         # Compute impact classification from metric deltas
         impact_label, top_regressions, top_improvements = self._classify_metric_impact(metric_deltas)
         
+        # Count significant deltas (all entries in metric_deltas are significant by design)
+        metric_deltas_significant = len(metric_deltas)
+        
         summary = {
             'total_changes': len(changed_keys),
             'input_changes': len(input_changes['keys']),
             'process_changes': len(process_changes['keys']),
             'output_changes': len(output_changes['keys']),
-            'metric_deltas_count': len(metric_deltas),
+            'metric_deltas_total': metric_deltas_total,  # Total metrics compared
+            'metric_deltas_count': metric_deltas_significant,  # Only significant deltas (backward compat)
+            'metric_deltas_significant': metric_deltas_significant,  # Explicit significant count
             'excluded_factors_changed': bool(excluded_factors_changed),
             'excluded_factors_summary': excluded_summary,  # Human-readable summary
             'output_digest_changes': output_digest_changes,  # List of changed output digests
             'impact_label': impact_label,  # none|noise|minor|major
-            'top_regressions': top_regressions,  # List of up to K metric keys with worst deltas
-            'top_improvements': top_improvements  # List of up to K metric keys with best deltas
+            'top_regressions': top_regressions,  # List of up to K metric keys with worst deltas (significant only)
+            'top_improvements': top_improvements  # List of up to K metric keys with best deltas (significant only)
         }
         
         # CRITICAL: Determine severity purely from the report (SST-style)
@@ -2731,22 +2736,31 @@ class DiffTelemetry:
         self,
         prev_outputs: Dict[str, Any],
         current_outputs: Dict[str, Any]
-    ) -> Dict[str, Dict[str, Any]]:
+    ) -> Tuple[Dict[str, Dict[str, Any]], int]:
         """
         Compute structured metric deltas with noise detection.
         
-        Returns deltas keyed by metric name with:
+        Returns:
+            Tuple of (deltas_dict, total_compared_count)
+            - deltas_dict: Only includes significant deltas (above tolerance), keyed by metric name
+            - total_compared_count: Total number of metrics compared (including zero-delta ones)
+        
+        Deltas include:
         - delta_abs, delta_pct: absolute and percentage changes
         - prev, curr: previous and current values
         - z_score: z-score if std_score and n_models available (for noise detection)
         - impact_label: none|noise|minor|major (based on z-score and tolerances)
         - rel_tol, abs_tol: tolerances used for classification
+        - changed: True (all entries are significant)
         
         Only computes deltas for numeric metrics that exist in both prev and current.
+        Zero-delta entries (like pos_rate, n_models that never change) are excluded from deltas_dict
+        but counted in total_compared_count.
         """
         import math
         
         deltas = {}
+        total_compared = 0
         
         prev_metrics = prev_outputs.get('metrics', {})
         current_metrics = current_outputs.get('metrics', {})
@@ -2801,6 +2815,9 @@ class DiffTelemetry:
                 if math.isnan(prev_float) or math.isinf(prev_float) or math.isnan(curr_float) or math.isinf(curr_float):
                     continue
                 
+                # Count this metric as compared (even if delta is zero)
+                total_compared += 1
+                
                 delta_abs = curr_float - prev_float
                 delta_pct = (delta_abs / abs(prev_float) * 100) if prev_float != 0 else 0.0
                 
@@ -2818,6 +2835,11 @@ class DiffTelemetry:
                 if se is not None and se > 0:
                     z_score = delta_abs / se
                 
+                # Check if delta is significant (above tolerance)
+                abs_change = abs(delta_abs)
+                rel_change = abs(delta_pct) / 100.0 if prev_float != 0 else 0.0
+                is_significant = abs_change > abs_tol or rel_change > rel_tol
+                
                 # Classify impact
                 impact_label = 'none'
                 if z_score is not None:
@@ -2830,9 +2852,6 @@ class DiffTelemetry:
                         impact_label = 'major'
                 else:
                     # Fall back to tolerance-based classification
-                    abs_change = abs(delta_abs)
-                    rel_change = abs(delta_pct) / 100.0 if prev_float != 0 else 0.0
-                    
                     if abs_change < abs_tol and rel_change < rel_tol:
                         impact_label = 'none'
                     elif abs_change < abs_tol * 10 and rel_change < rel_tol * 10:
@@ -2842,21 +2861,25 @@ class DiffTelemetry:
                     else:
                         impact_label = 'major'
                 
-                deltas[key] = {
-                    'delta_abs': round(delta_abs, 6),
-                    'delta_pct': round(delta_pct, 4),  # More precision for percentage
-                    'prev': round(prev_float, 6),
-                    'curr': round(curr_float, 6),
-                    'z_score': round(z_score, 4) if z_score is not None else None,
-                    'impact_label': impact_label,
-                    'abs_tol': abs_tol,
-                    'rel_tol': rel_tol
-                }
+                # Only include significant deltas (above tolerance)
+                # This prevents spam from zero-delta entries like pos_rate, n_models that never change
+                if is_significant:
+                    deltas[key] = {
+                        'delta_abs': round(delta_abs, 6),
+                        'delta_pct': round(delta_pct, 4),  # More precision for percentage
+                        'prev': round(prev_float, 6),
+                        'curr': round(curr_float, 6),
+                        'z_score': round(z_score, 4) if z_score is not None else None,
+                        'impact_label': impact_label,
+                        'abs_tol': abs_tol,
+                        'rel_tol': rel_tol,
+                        'changed': True  # All entries in metric_deltas are significant
+                    }
             except (ValueError, TypeError, ZeroDivisionError):
                 # Skip non-numeric or problematic values
                 continue
         
-        return deltas
+        return deltas, total_compared
     
     def _classify_metric_impact(
         self,
@@ -2865,6 +2888,8 @@ class DiffTelemetry:
     ) -> Tuple[str, List[Dict[str, Any]], List[Dict[str, Any]]]:
         """
         Classify overall impact from metric deltas and extract top regressions/improvements.
+        
+        All entries in metric_deltas are significant by design (zero-delta entries are filtered out).
         
         Returns:
             Tuple of (impact_label, top_regressions, top_improvements)
@@ -2889,6 +2914,7 @@ class DiffTelemetry:
                 worst_impact = impact
             
             # Collect regressions (negative deltas) and improvements (positive deltas)
+            # All entries are significant by design
             delta_abs = delta_info.get('delta_abs', 0)
             if delta_abs < 0:
                 regressions.append({
@@ -2937,7 +2963,7 @@ class DiffTelemetry:
         """
         total_changes = summary.get('total_changes', len(changed_keys))
         output_changes_count = summary.get('output_changes', len(output_changes.get('keys', [])))
-        metric_deltas_count = summary.get('metric_deltas_count', len(metric_deltas))
+        metric_deltas_count = summary.get('metric_deltas_significant', summary.get('metric_deltas_count', len(metric_deltas)))  # Use significant count
         input_changes_count = summary.get('input_changes', len(input_changes.get('keys', [])))
         process_changes_count = summary.get('process_changes', len(process_changes.get('keys', [])))
         has_excluded_factors = summary.get('excluded_factors_changed', bool(excluded_factors_changed))
