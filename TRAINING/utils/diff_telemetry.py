@@ -1052,7 +1052,7 @@ class DiffTelemetry:
         process = self._normalize_process_from_context(ctx)
         
         # Normalize outputs
-        outputs = self._normalize_outputs(run_data, additional_data)
+        outputs = self._normalize_outputs(run_data, additional_data, cohort_dir, resolved_metadata)
         
         # CRITICAL: Compute output digests for artifact/metric determinism verification
         # These prove that outputs are identical across reruns (full determinism claim)
@@ -1856,19 +1856,75 @@ class DiffTelemetry:
     def _normalize_outputs(
         self,
         run_data: Dict[str, Any],
-        additional_data: Optional[Dict[str, Any]]
+        additional_data: Optional[Dict[str, Any]],
+        cohort_dir: Optional[Path] = None,
+        resolved_metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Normalize outputs section."""
-        outputs = {}
+        """
+        Normalize outputs section.
         
-        # Performance metrics
+        Extracts all numeric metrics from:
+        1. run_data['metrics'] (if available)
+        2. resolved_metadata['metrics'] (if available)
+        3. metrics.json/parquet files in cohort_dir (most common for TARGET_RANKING/FEATURE_SELECTION)
+        
+        This ensures we capture all metrics for proper delta computation.
+        """
+        outputs = {}
+        metrics_data = {}
+        
+        # Try run_data first
         if run_data.get('metrics'):
-            metrics = run_data['metrics']
-            outputs['metrics'] = {
-                'mean_score': metrics.get('mean_score'),
-                'std_score': metrics.get('std_score'),
-                'composite_score': metrics.get('composite_score')
-            }
+            metrics_data = run_data['metrics']
+        
+        # Check resolved_metadata if run_data doesn't have metrics
+        if not metrics_data and resolved_metadata:
+            metrics_data = resolved_metadata.get('metrics', {})
+        
+        # CRITICAL: If still empty, read from metrics files in cohort_dir
+        # This is the most common case for TARGET_RANKING/FEATURE_SELECTION stages
+        if not metrics_data and cohort_dir:
+            cohort_path = Path(cohort_dir)
+            metrics_parquet = cohort_path / "metrics.parquet"
+            metrics_json_file = cohort_path / "metrics.json"
+            
+            # Try parquet first (canonical format)
+            if metrics_parquet.exists():
+                try:
+                    import pandas as pd
+                    df_metrics = pd.read_parquet(metrics_parquet)
+                    if len(df_metrics) > 0:
+                        metrics_dict = df_metrics.iloc[0].to_dict()
+                        # Extract all numeric metrics (exclude metadata fields)
+                        metrics_data = {
+                            k: v for k, v in metrics_dict.items()
+                            if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode', 
+                                       'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                       'composite_version', 'leakage', 'leakage_flag']
+                            and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
+                        }
+                except Exception as e:
+                    logger.debug(f"Failed to read metrics.parquet from {cohort_dir}: {e}")
+            
+            # Fall back to JSON if parquet doesn't exist or failed
+            if not metrics_data and metrics_json_file.exists():
+                try:
+                    with open(metrics_json_file, 'r') as f:
+                        metrics_json = json.load(f)
+                    # Extract all numeric metrics (exclude metadata fields)
+                    metrics_data = {
+                        k: v for k, v in metrics_json.items()
+                        if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
+                                   'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                   'composite_version', 'leakage', 'leakage_flag']
+                        and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
+                    }
+                except Exception as e:
+                    logger.debug(f"Failed to read metrics.json from {cohort_dir}: {e}")
+        
+        # Store all extracted metrics
+        if metrics_data:
+            outputs['metrics'] = metrics_data
         
         # Stability metrics (if available)
         if run_data.get('additional_data'):
@@ -1914,10 +1970,13 @@ class DiffTelemetry:
                     # Convert to dict (should be single row)
                     if len(df_metrics) > 0:
                         metrics_dict = df_metrics.iloc[0].to_dict()
-                        # Extract key metrics (exclude diff_telemetry, run_id, timestamp for stable hash)
+                        # Extract key metrics (exclude diff_telemetry, run_id, timestamp, and other metadata for stable hash)
+                        # CRITICAL: Exclude diff_telemetry to prevent volatility in digest computation
                         metrics_data = {
                             k: v for k, v in metrics_dict.items()
-                            if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode', 'stage', 'item_name']
+                            if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode', 
+                                       'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                       'composite_version', 'leakage', 'leakage_flag']
                         }
                 except Exception as e:
                     logger.debug(f"Failed to read metrics.parquet from {cohort_dir}: {e}")
@@ -1927,10 +1986,13 @@ class DiffTelemetry:
                 try:
                     with open(metrics_json_file, 'r') as f:
                         metrics_json = json.load(f)
-                    # Extract key metrics (exclude diff_telemetry, run_id, timestamp for stable hash)
+                    # Extract key metrics (exclude diff_telemetry, run_id, timestamp, and other metadata for stable hash)
+                    # CRITICAL: Exclude diff_telemetry to prevent volatility in digest computation
                     metrics_data = {
                         k: v for k, v in metrics_json.items()
-                        if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode', 'stage', 'item_name']
+                        if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
+                                   'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                   'composite_version', 'leakage', 'leakage_flag']
                     }
                 except Exception as e:
                     logger.debug(f"Failed to read metrics.json from {cohort_dir}: {e}")
@@ -2375,6 +2437,9 @@ class DiffTelemetry:
         # Build summary with readable excluded factors summary
         excluded_summary = self._format_excluded_factors_summary(excluded_factors_changed)
         
+        # Compute impact classification from metric deltas
+        impact_label, top_regressions, top_improvements = self._classify_metric_impact(metric_deltas)
+        
         summary = {
             'total_changes': len(changed_keys),
             'input_changes': len(input_changes['keys']),
@@ -2383,7 +2448,10 @@ class DiffTelemetry:
             'metric_deltas_count': len(metric_deltas),
             'excluded_factors_changed': bool(excluded_factors_changed),
             'excluded_factors_summary': excluded_summary,  # Human-readable summary
-            'output_digest_changes': output_digest_changes  # List of changed output digests
+            'output_digest_changes': output_digest_changes,  # List of changed output digests
+            'impact_label': impact_label,  # none|noise|minor|major
+            'top_regressions': top_regressions,  # List of up to K metric keys with worst deltas
+            'top_improvements': top_improvements  # List of up to K metric keys with best deltas
         }
         
         # CRITICAL: Determine severity purely from the report (SST-style)
@@ -2561,39 +2629,294 @@ class DiffTelemetry:
         else:
             return val
     
+    def _reload_snapshot_metrics(self, snapshot: NormalizedSnapshot) -> NormalizedSnapshot:
+        """
+        Reload metrics from actual metrics.json file for a snapshot.
+        
+        This ensures we have complete metrics for comparison, even if the snapshot
+        was saved before we fixed _normalize_outputs to load all metrics.
+        
+        Args:
+            snapshot: Snapshot to reload metrics for
+        
+        Returns:
+            Snapshot with reloaded metrics (or original if reload fails)
+        """
+        if not snapshot.stage or not snapshot.view or not snapshot.target:
+            return snapshot  # Can't determine path, return as-is
+        
+        # Try to find the cohort directory for this snapshot
+        # We need to search for the run directory and then find the cohort
+        if not hasattr(self, 'run_dir') or not self.run_dir:
+            return snapshot
+        
+        # Find RESULTS directory
+        results_dir = self.run_dir
+        while results_dir.parent.exists() and results_dir.name != "RESULTS":
+            results_dir = results_dir.parent
+            if results_dir.name == "RESULTS":
+                break
+        
+        if results_dir.name != "RESULTS":
+            return snapshot
+        
+        # Search for the run directory containing this snapshot
+        target_clean = snapshot.target.replace('/', '_').replace('\\', '_')
+        stage_dir_name = snapshot.stage
+        view_dir_name = snapshot.view
+        
+        # Search in runs directory
+        runs_dir = results_dir / "runs"
+        if not runs_dir.exists():
+            return snapshot
+        
+        # Search all comparison group directories
+        for cg_dir in runs_dir.iterdir():
+            if not cg_dir.is_dir() or not cg_dir.name.startswith("cg-"):
+                continue
+            
+            # Search for run directories
+            for run_dir in cg_dir.iterdir():
+                if not run_dir.is_dir():
+                    continue
+                
+                # Check if this run directory contains the snapshot
+                snapshot_path = (
+                    run_dir / "REPRODUCIBILITY" / stage_dir_name / view_dir_name / 
+                    target_clean
+                )
+                
+                if not snapshot_path.exists():
+                    continue
+                
+                # Search for cohort directories
+                for cohort_dir in snapshot_path.iterdir():
+                    if not cohort_dir.is_dir() or not cohort_dir.name.startswith("cohort="):
+                        continue
+                    
+                    # Check if this cohort has a snapshot.json with matching run_id
+                    snapshot_file = cohort_dir / "snapshot.json"
+                    if snapshot_file.exists():
+                        try:
+                            with open(snapshot_file, 'r') as f:
+                                snapshot_data = json.load(f)
+                                if snapshot_data.get('run_id') == snapshot.run_id:
+                                    # Found the cohort directory! Reload metrics
+                                    metrics_file = cohort_dir / "metrics.json"
+                                    if metrics_file.exists():
+                                        try:
+                                            with open(metrics_file, 'r') as f:
+                                                metrics_json = json.load(f)
+                                            # Extract all numeric metrics (same logic as _normalize_outputs)
+                                            metrics_data = {
+                                                k: v for k, v in metrics_json.items()
+                                                if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
+                                                           'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                                           'composite_version', 'leakage', 'leakage_flag']
+                                                and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
+                                            }
+                                            # Update snapshot's outputs.metrics
+                                            if metrics_data:
+                                                snapshot.outputs['metrics'] = metrics_data
+                                                logger.debug(f"Reloaded metrics for snapshot {snapshot.run_id} from {metrics_file}")
+                                        except Exception as e:
+                                            logger.debug(f"Failed to reload metrics from {metrics_file}: {e}")
+                                    return snapshot
+                        except Exception:
+                            continue
+        
+        return snapshot  # Return original if we couldn't find/reload
+    
     def _compute_metric_deltas(
         self,
         prev_outputs: Dict[str, Any],
         current_outputs: Dict[str, Any]
-    ) -> Dict[str, Dict[str, float]]:
-        """Compute metric deltas."""
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Compute structured metric deltas with noise detection.
+        
+        Returns deltas keyed by metric name with:
+        - delta_abs, delta_pct: absolute and percentage changes
+        - prev, curr: previous and current values
+        - z_score: z-score if std_score and n_models available (for noise detection)
+        - impact_label: none|noise|minor|major (based on z-score and tolerances)
+        - rel_tol, abs_tol: tolerances used for classification
+        
+        Only computes deltas for numeric metrics that exist in both prev and current.
+        """
+        import math
+        
         deltas = {}
         
         prev_metrics = prev_outputs.get('metrics', {})
         current_metrics = current_outputs.get('metrics', {})
         
-        for key in set(prev_metrics.keys()) | set(current_metrics.keys()):
+        # Get context for z-score computation (std_score, n_models)
+        prev_std_score = prev_metrics.get('std_score')
+        prev_n_models = prev_metrics.get('n_models')
+        curr_std_score = current_metrics.get('std_score')
+        curr_n_models = current_metrics.get('n_models')
+        
+        # Use average std_score and n_models for z-score computation
+        avg_std_score = None
+        avg_n_models = None
+        if prev_std_score is not None and curr_std_score is not None:
+            avg_std_score = (float(prev_std_score) + float(curr_std_score)) / 2.0
+        elif prev_std_score is not None:
+            avg_std_score = float(prev_std_score)
+        elif curr_std_score is not None:
+            avg_std_score = float(curr_std_score)
+        
+        if prev_n_models is not None and curr_n_models is not None:
+            avg_n_models = (float(prev_n_models) + float(curr_n_models)) / 2.0
+        elif prev_n_models is not None:
+            avg_n_models = float(prev_n_models)
+        elif curr_n_models is not None:
+            avg_n_models = float(curr_n_models)
+        
+        # Compute standard error if we have std_score and n_models
+        se = None
+        if avg_std_score is not None and avg_n_models is not None and avg_n_models > 0:
+            se = avg_std_score / math.sqrt(avg_n_models)
+        
+        # Define tolerances (metric-dependent defaults)
+        # For score-like metrics, use tighter tolerances
+        score_metrics = {'mean_score', 'composite_score', 'std_score'}
+        abs_tol_default = 1e-4  # Default absolute tolerance
+        rel_tol_default = 1e-4  # Default relative tolerance (0.01%)
+        
+        for key in set(prev_metrics.keys()) & set(current_metrics.keys()):
             prev_val = prev_metrics.get(key)
             curr_val = current_metrics.get(key)
             
-            if prev_val is not None and curr_val is not None:
-                try:
-                    prev_float = float(prev_val)
-                    curr_float = float(curr_val)
+            # Skip non-numeric values
+            if prev_val is None or curr_val is None:
+                continue
+            
+            try:
+                prev_float = float(prev_val)
+                curr_float = float(curr_val)
+                
+                # Skip NaN or Inf values
+                if math.isnan(prev_float) or math.isinf(prev_float) or math.isnan(curr_float) or math.isinf(curr_float):
+                    continue
+                
+                delta_abs = curr_float - prev_float
+                delta_pct = (delta_abs / abs(prev_float) * 100) if prev_float != 0 else 0.0
+                
+                # Choose tolerances based on metric type
+                abs_tol = abs_tol_default
+                rel_tol = rel_tol_default
+                
+                # For score metrics, use tighter tolerances
+                if key in score_metrics:
+                    abs_tol = 1e-3  # Slightly more lenient for scores
+                    rel_tol = 1e-4  # 0.01%
+                
+                # Compute z-score if we have standard error
+                z_score = None
+                if se is not None and se > 0:
+                    z_score = delta_abs / se
+                
+                # Classify impact
+                impact_label = 'none'
+                if z_score is not None:
+                    # Use z-score for classification
+                    if abs(z_score) < 0.25:
+                        impact_label = 'noise'
+                    elif abs(z_score) < 1.0:
+                        impact_label = 'minor'
+                    else:
+                        impact_label = 'major'
+                else:
+                    # Fall back to tolerance-based classification
+                    abs_change = abs(delta_abs)
+                    rel_change = abs(delta_pct) / 100.0 if prev_float != 0 else 0.0
                     
-                    delta_abs = curr_float - prev_float
-                    delta_pct = (delta_abs / abs(prev_float) * 100) if prev_float != 0 else 0.0
-                    
-                    deltas[key] = {
-                        'absolute': round(delta_abs, 6),
-                        'percent': round(delta_pct, 2),
-                        'previous': prev_float,
-                        'current': curr_float
-                    }
-                except (ValueError, TypeError):
-                    pass
+                    if abs_change < abs_tol and rel_change < rel_tol:
+                        impact_label = 'none'
+                    elif abs_change < abs_tol * 10 and rel_change < rel_tol * 10:
+                        impact_label = 'noise'
+                    elif abs_change < abs_tol * 100 and rel_change < rel_tol * 100:
+                        impact_label = 'minor'
+                    else:
+                        impact_label = 'major'
+                
+                deltas[key] = {
+                    'delta_abs': round(delta_abs, 6),
+                    'delta_pct': round(delta_pct, 4),  # More precision for percentage
+                    'prev': round(prev_float, 6),
+                    'curr': round(curr_float, 6),
+                    'z_score': round(z_score, 4) if z_score is not None else None,
+                    'impact_label': impact_label,
+                    'abs_tol': abs_tol,
+                    'rel_tol': rel_tol
+                }
+            except (ValueError, TypeError, ZeroDivisionError):
+                # Skip non-numeric or problematic values
+                continue
         
         return deltas
+    
+    def _classify_metric_impact(
+        self,
+        metric_deltas: Dict[str, Dict[str, Any]],
+        top_k: int = 5
+    ) -> Tuple[str, List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """
+        Classify overall impact from metric deltas and extract top regressions/improvements.
+        
+        Returns:
+            Tuple of (impact_label, top_regressions, top_improvements)
+            - impact_label: none|noise|minor|major (worst impact across all metrics)
+            - top_regressions: List of up to top_k metrics with worst negative deltas
+            - top_improvements: List of up to top_k metrics with best positive deltas
+        """
+        if not metric_deltas:
+            return 'none', [], []
+        
+        # Impact hierarchy: none < noise < minor < major
+        impact_hierarchy = {'none': 0, 'noise': 1, 'minor': 2, 'major': 3}
+        
+        # Find worst impact across all metrics
+        worst_impact = 'none'
+        regressions = []
+        improvements = []
+        
+        for metric_name, delta_info in metric_deltas.items():
+            impact = delta_info.get('impact_label', 'none')
+            if impact_hierarchy.get(impact, 0) > impact_hierarchy.get(worst_impact, 0):
+                worst_impact = impact
+            
+            # Collect regressions (negative deltas) and improvements (positive deltas)
+            delta_abs = delta_info.get('delta_abs', 0)
+            if delta_abs < 0:
+                regressions.append({
+                    'metric': metric_name,
+                    'delta_abs': delta_abs,
+                    'delta_pct': delta_info.get('delta_pct', 0),
+                    'z_score': delta_info.get('z_score'),
+                    'impact': impact
+                })
+            elif delta_abs > 0:
+                improvements.append({
+                    'metric': metric_name,
+                    'delta_abs': delta_abs,
+                    'delta_pct': delta_info.get('delta_pct', 0),
+                    'z_score': delta_info.get('z_score'),
+                    'impact': impact
+                })
+        
+        # Sort regressions by worst delta (most negative first)
+        regressions.sort(key=lambda x: x['delta_abs'])
+        # Sort improvements by best delta (most positive first)
+        improvements.sort(key=lambda x: x['delta_abs'], reverse=True)
+        
+        # Return top K
+        top_regressions = regressions[:top_k]
+        top_improvements = improvements[:top_k]
+        
+        return worst_impact, top_regressions, top_improvements
     
     def _determine_severity(
         self,
@@ -2620,13 +2943,11 @@ class DiffTelemetry:
         has_excluded_factors = summary.get('excluded_factors_changed', bool(excluded_factors_changed))
         output_digest_changes = summary.get('output_digest_changes', [])
         
-        # CRITICAL: Check output digests first - if they differ, this is a CRITICAL non-determinism issue
-        # This indicates outputs/metrics/artifacts are not identical across reruns despite same inputs/process
-        if output_digest_changes:
-            return ChangeSeverity.CRITICAL, (
-                f"Output digests differ (non-determinism detected): {', '.join(output_digest_changes)}. "
-                f"This indicates outputs/metrics/artifacts are not identical across reruns despite same inputs/process."
-            )
+        # CRITICAL: Separate "nondeterminism" from "regression"
+        # If output digests differ, that's a reproducibility issue (nondeterminism)
+        # But performance impact should be assessed separately using impact_label
+        impact_label = summary.get('impact_label', 'none')
+        has_nondeterminism = bool(output_digest_changes)
         
         # CRITICAL FIX: If no changes at all, severity must be NONE
         if total_changes == 0 and metric_deltas_count == 0:
@@ -2647,6 +2968,29 @@ class DiffTelemetry:
                 if key.startswith(critical):
                     return ChangeSeverity.CRITICAL, f"Critical change detected in {key}"
         
+        # Handle nondeterminism (digest mismatch) with performance impact assessment
+        if has_nondeterminism:
+            # Nondeterminism is always a reproducibility concern
+            # But severity depends on whether there's actual performance impact
+            if impact_label in ['none', 'noise']:
+                # Nondeterminism detected but performance impact is noise-level
+                return ChangeSeverity.MAJOR, (
+                    f"Output digests differ (non-determinism detected): {', '.join(output_digest_changes)}. "
+                    f"Performance impact: {impact_label} (z-score analysis indicates noise-level changes only)."
+                )
+            elif impact_label == 'minor':
+                # Nondeterminism with minor performance impact
+                return ChangeSeverity.MAJOR, (
+                    f"Output digests differ (non-determinism detected): {', '.join(output_digest_changes)}. "
+                    f"Performance impact: {impact_label} (minor changes detected)."
+                )
+            else:  # impact_label == 'major'
+                # Nondeterminism with major performance impact
+                return ChangeSeverity.CRITICAL, (
+                    f"Output digests differ (non-determinism detected): {', '.join(output_digest_changes)}. "
+                    f"Performance impact: {impact_label} (significant changes detected)."
+                )
+        
         # Major: important config OR output/metric changes
         major_paths = [
             'inputs.config', 'process.training', 'process.environment'
@@ -2654,8 +2998,23 @@ class DiffTelemetry:
         
         # Check for output changes or metric deltas (these indicate model behavior changed)
         if output_changes_count > 0 or metric_deltas_count > 0:
+            # Use impact_label to determine severity for metric changes
             if metric_deltas_count > 0:
-                return ChangeSeverity.MAJOR, f"Output/metric changes detected: {metric_deltas_count} metric deltas, {output_changes_count} output changes"
+                if impact_label == 'major':
+                    return ChangeSeverity.MAJOR, (
+                        f"Output/metric changes detected: {metric_deltas_count} metric deltas, "
+                        f"{output_changes_count} output changes. Performance impact: {impact_label}."
+                    )
+                elif impact_label == 'minor':
+                    return ChangeSeverity.MINOR, (
+                        f"Output/metric changes detected: {metric_deltas_count} metric deltas, "
+                        f"{output_changes_count} output changes. Performance impact: {impact_label}."
+                    )
+                else:  # none or noise
+                    return ChangeSeverity.MINOR, (
+                        f"Output/metric changes detected: {metric_deltas_count} metric deltas, "
+                        f"{output_changes_count} output changes. Performance impact: {impact_label} (noise-level)."
+                    )
             else:
                 return ChangeSeverity.MAJOR, f"Output changes detected: {output_changes_count} output changes"
         
@@ -2798,6 +3157,28 @@ class DiffTelemetry:
                                                             
                                                             # If we found a matching snapshot file, use it
                                                             if snapshot_file_exists:
+                                                                # CRITICAL: Reload metrics from actual metrics.json file
+                                                                # The snapshot might have been saved before we fixed _normalize_outputs
+                                                                metrics_file = cohort_subdir / "metrics.json"
+                                                                if metrics_file.exists():
+                                                                    try:
+                                                                        with open(metrics_file, 'r') as f:
+                                                                            metrics_json = json.load(f)
+                                                                        # Extract all numeric metrics (same logic as _normalize_outputs)
+                                                                        metrics_data = {
+                                                                            k: v for k, v in metrics_json.items()
+                                                                            if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
+                                                                                       'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                                                                       'composite_version', 'leakage', 'leakage_flag']
+                                                                            and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
+                                                                        }
+                                                                        # Update snapshot's outputs.metrics
+                                                                        if metrics_data:
+                                                                            snap.outputs['metrics'] = metrics_data
+                                                                            logger.debug(f"Reloaded metrics for snapshot {snap.run_id} from {metrics_file}")
+                                                                    except Exception as e:
+                                                                        logger.debug(f"Failed to reload metrics from {metrics_file}: {e}")
+                                                                
                                                                 # Mark source for auditability
                                                                 if bin_dir.name.startswith("cg-"):
                                                                     snap._comparison_source = "comparison_group_directory"
@@ -2841,7 +3222,14 @@ class DiffTelemetry:
         
         # Sort by sequence (highest = most recent)
         candidates_with_seq.sort(key=lambda x: x[0], reverse=True)
-        return candidates_with_seq[0][1]
+        prev_snapshot = candidates_with_seq[0][1]
+        
+        # CRITICAL: Reload metrics from actual metrics.json file for the previous snapshot
+        # The snapshot might have been saved before we fixed _normalize_outputs, so metrics might be incomplete
+        # We need to reload from the actual metrics.json file to ensure we have all metrics for comparison
+        prev_snapshot = self._reload_snapshot_metrics(prev_snapshot)
+        
+        return prev_snapshot
     
     def get_or_establish_baseline(
         self,
@@ -2979,9 +3367,42 @@ class DiffTelemetry:
         cohort_dir = Path(cohort_dir)
         cohort_dir.mkdir(parents=True, exist_ok=True)
         
-        # Save prev diff atomically
+        # Tier A: Summary in diff_prev.json (lightweight, always present)
+        # This includes: metric_deltas_count, impact_label, top_regressions, top_improvements
+        prev_diff_dict = diff.to_dict()
+        
+        # Tier B: Structured per-metric deltas in metric_deltas.json (detailed, only if deltas exist)
+        # This is the "real diff" with full structured deltas for each metric
+        metric_deltas_file_path = None
+        if diff.metric_deltas:
+            metric_deltas_file = cohort_dir / "metric_deltas.json"
+            # Use relative path from cohort_dir for portability
+            metric_deltas_file_path = "metric_deltas.json"
+            # Structure: keyed by metric name with full delta info
+            metric_deltas_data = {
+                'run_id': diff.current_run_id,
+                'prev_run_id': diff.prev_run_id,
+                'timestamp': datetime.now().isoformat(),
+                'metric_deltas': diff.metric_deltas,
+                'summary': {
+                    'total_metrics': len(diff.metric_deltas),
+                    'impact_label': diff.summary.get('impact_label', 'none'),
+                    'top_regressions': diff.summary.get('top_regressions', []),
+                    'top_improvements': diff.summary.get('top_improvements', [])
+                }
+            }
+            _write_atomic_json(metric_deltas_file, metric_deltas_data)
+        
+        # Add reference to metric_deltas.json in diff_prev.json summary (before writing)
+        if metric_deltas_file_path:
+            prev_diff_dict['summary']['metric_deltas_file'] = metric_deltas_file_path
+        
+        # Ensure summary includes impact classification (already computed in compute_diff)
         prev_diff_file = cohort_dir / "diff_prev.json"
-        _write_atomic_json(prev_diff_file, diff.to_dict())
+        _write_atomic_json(prev_diff_file, prev_diff_dict)
+        
+        # Tier C: Full raw metrics remain in metrics.json (already written by MetricsWriter)
+        # We don't duplicate them here - just reference the path
         
         # Save baseline diff if available (atomically)
         if baseline_diff:
@@ -2989,6 +3410,119 @@ class DiffTelemetry:
             _write_atomic_json(baseline_diff_file, baseline_diff.to_dict())
         
         logger.debug(f"✅ Saved diffs to {cohort_dir}")
+    
+    def _emit_trend_time_series(
+        self,
+        snapshot: NormalizedSnapshot,
+        metrics: Dict[str, Any],
+        cohort_dir: Path
+    ) -> None:
+        """
+        Emit time series data for trend/drift analysis.
+        
+        Emits one row per metric key with:
+        - identifiers: run_id, timestamp, comparison_group, stage, view, item_name, metric_name
+        - values: mean_score, std_score, composite_score, mean_importance, pos_rate, N_effective_cs, n_models
+        - derived: (rolling baseline, drift_z, ema, cusum computed later by trend analyzer)
+        
+        Stores in metrics_timeseries.parquet at target level (one level up from cohort_dir)
+        for aggregation across runs.
+        """
+        if not metrics:
+            return
+        
+        # Get comparison group key
+        comparison_group_key = None
+        if snapshot.comparison_group:
+            comparison_group_key = snapshot.comparison_group.to_key()
+        
+        # Extract item_name from target (for TARGET_RANKING) or from other sources
+        item_name = snapshot.target or "unknown"
+        
+        # Build time series rows - one per metric
+        # Key metrics to track
+        metric_fields = [
+            'mean_score', 'std_score', 'composite_score', 'mean_importance',
+            'pos_rate', 'N_effective_cs', 'n_models'
+        ]
+        
+        rows = []
+        for metric_name in metric_fields:
+            if metric_name not in metrics:
+                continue
+            
+            value = metrics.get(metric_name)
+            # Skip non-numeric values
+            if not isinstance(value, (int, float)) or (isinstance(value, float) and (np.isnan(value) or np.isinf(value))):
+                continue
+            
+            row = {
+                'run_id': snapshot.run_id,
+                'timestamp': snapshot.timestamp,
+                'comparison_group': comparison_group_key,
+                'stage': snapshot.stage,
+                'view': snapshot.view or 'UNKNOWN',
+                'item_name': item_name,
+                'metric_name': metric_name,
+                'value': float(value),
+                # Include key context metrics for trend analysis (same values across all rows for this run)
+                'mean_score': metrics.get('mean_score') if 'mean_score' in metrics else None,
+                'std_score': metrics.get('std_score') if 'std_score' in metrics else None,
+                'composite_score': metrics.get('composite_score') if 'composite_score' in metrics else None,
+                'mean_importance': metrics.get('mean_importance') if 'mean_importance' in metrics else None,
+                'pos_rate': metrics.get('pos_rate') if 'pos_rate' in metrics else None,
+                'N_effective_cs': metrics.get('N_effective_cs') if 'N_effective_cs' in metrics else None,
+                'n_models': metrics.get('n_models') if 'n_models' in metrics else None
+            }
+            rows.append(row)
+        
+        if not rows:
+            return
+        
+        # Store at target level (one level up from cohort_dir) for aggregation
+        # This allows querying across all runs for the same target
+        target_dir = cohort_dir.parent
+        timeseries_file = target_dir / "metrics_timeseries.parquet"
+        
+        try:
+            # Read existing data if file exists
+            existing_df = None
+            if timeseries_file.exists():
+                try:
+                    existing_df = pd.read_parquet(timeseries_file)
+                except Exception as e:
+                    logger.debug(f"Could not read existing timeseries file {timeseries_file}: {e}")
+            
+            # Create new DataFrame from current rows
+            new_df = pd.DataFrame(rows)
+            
+            # Append to existing data
+            if existing_df is not None and len(existing_df) > 0:
+                # Combine and deduplicate by (run_id, metric_name) to avoid duplicates
+                combined_df = pd.concat([existing_df, new_df], ignore_index=True)
+                # Remove duplicates, keeping the most recent (last) entry
+                combined_df = combined_df.drop_duplicates(
+                    subset=['run_id', 'metric_name'],
+                    keep='last'
+                )
+                # Sort by timestamp for easier querying
+                combined_df = combined_df.sort_values('timestamp')
+            else:
+                combined_df = new_df
+            
+            # Write back to parquet
+            timeseries_file.parent.mkdir(parents=True, exist_ok=True)
+            combined_df.to_parquet(
+                timeseries_file,
+                index=False,
+                engine='pyarrow',
+                compression='snappy'
+            )
+            
+            logger.debug(f"✅ Emitted {len(rows)} time series rows to {timeseries_file}")
+        except Exception as e:
+            logger.warning(f"Failed to emit trend time series to {timeseries_file}: {e}")
+            # Don't fail the run if trend emission fails
     
     def finalize_run(
         self,
@@ -3162,6 +3696,11 @@ class DiffTelemetry:
         
         # Save diffs
         self.save_diff(diff, baseline_diff, cohort_dir)
+        
+        # Emit trend time series data for trend/drift analysis
+        metrics = snapshot.outputs.get('metrics', {})
+        if metrics:
+            self._emit_trend_time_series(snapshot, metrics, cohort_dir)
         
         # Return diff data for integration into metadata/metrics
         diff_telemetry_data = {

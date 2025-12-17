@@ -1,0 +1,149 @@
+# Metric Deltas in Diff Artifacts - 2025-12-17
+
+## Overview
+
+Fixed critical issue where `metric_deltas` was empty in `diff_prev.json` even when metrics clearly differed. Implemented 3-tier reporting structure with structured metric deltas, noise detection, and proper separation of nondeterminism from performance regression.
+
+## Problem
+
+- `metric_deltas: {}` and `metric_deltas_count: 0` even when metrics differed
+- Patch showed `"op": "add"` for `outputs.metrics` (indicating prev snapshot had no metrics)
+- No structured delta information despite hash mismatches
+- `diff_telemetry` field in `metrics.json` caused digest volatility
+
+## Solution
+
+### 1. Fixed Metric Extraction (`_normalize_outputs`)
+
+- **Before**: Only extracted 3 metrics (`mean_score`, `std_score`, `composite_score`)
+- **After**: Extracts all numeric metrics from `metrics.json`/`metrics.parquet` files
+- Reads from files when metrics aren't in `run_data` (common for TARGET_RANKING/FEATURE_SELECTION)
+- Captures all metrics: `mean_score`, `std_score`, `composite_score`, `mean_importance`, `pos_rate`, `N_effective_cs`, `n_models`, etc.
+
+### 2. Enhanced Metric Delta Computation (`_compute_metric_deltas`)
+
+- **Structured deltas** with noise detection using z-scores
+- **Z-score computation**: `z = delta_abs / (std_score / sqrt(n_models))` when available
+- **Impact classification**: `none|noise|minor|major` based on z-score and tolerances
+- **Metric-dependent tolerances**: Different `abs_tol`/`rel_tol` for score metrics vs others
+- Returns deltas with: `delta_abs`, `delta_pct`, `prev`, `curr`, `z_score`, `impact_label`, `abs_tol`, `rel_tol`
+
+### 3. Implemented 3-Tier Reporting Structure
+
+**Tier A (Summary in `diff_prev.json`)**:
+- Lightweight summary with `metric_deltas_count`, `impact_label`
+- `top_regressions` and `top_improvements` (up to 5 each)
+- Reference to Tier B file: `metric_deltas_file`
+
+**Tier B (Structured `metric_deltas.json`)**:
+- Detailed per-metric deltas with full structured info
+- Only written if deltas exist
+- Keyed by metric name with complete delta information
+
+**Tier C (Full Raw Metrics)**:
+- Full raw metrics remain in `metrics.json` (already exists)
+- No duplication, just reference
+
+### 4. Separated Nondeterminism from Regression
+
+- **Before**: Digest mismatch → always CRITICAL severity
+- **After**: Severity depends on performance impact
+  - Digest mismatch + `impact_label: noise` → MAJOR (reproducibility concern, but noise-level impact)
+  - Digest mismatch + `impact_label: major` → CRITICAL (both reproducibility and performance issues)
+- Severity now reflects **impact**, not just "hash changed"
+
+### 5. Fixed Previous Snapshot Metrics Loading
+
+- **Problem**: Previous snapshots loaded from index didn't have complete metrics
+- **Solution**: Reload metrics from actual `metrics.json` file when finding previous comparable snapshot
+- Ensures `prev_snapshot.outputs.get('metrics', {})` has complete metrics for comparison
+- Patch now shows `"op": "replace"` instead of `"op": "add"`
+
+### 6. Excluded `diff_telemetry` from Metrics Digest
+
+- **Problem**: `diff_telemetry` field in `metrics.json` caused digest to change when `comparable` flag changed
+- **Solution**: Exclude `diff_telemetry` and other metadata fields from metrics digest computation
+- Prevents digest volatility from metadata changes
+
+### 7. Added Trend/Drift Analysis Storage
+
+- New `_emit_trend_time_series` method emits time series data per run
+- Stores in `metrics_timeseries.parquet` at target level
+- One row per metric with: `run_id`, `timestamp`, `comparison_group`, `stage`, `view`, `item_name`, `metric_name`, `value`
+- Queryable time series keyed by `{stage, view, item_name, metric_name}`
+
+## Impact Classification
+
+- **none**: No change detected (within tolerances)
+- **noise**: `|z| < 0.25` or below tolerance (statistically insignificant)
+- **minor**: `0.25 ≤ |z| < 1.0` (small but noticeable change)
+- **major**: `|z| ≥ 1.0` (significant change, potential regression/improvement)
+
+## Files Changed
+
+- `TRAINING/utils/diff_telemetry.py`:
+  - Enhanced `_normalize_outputs` to extract all numeric metrics
+  - Enhanced `_compute_metric_deltas` with z-scores and impact classification
+  - Added `_classify_metric_impact` for overall impact assessment
+  - Updated `_determine_severity` to separate nondeterminism from regression
+  - Added `_reload_snapshot_metrics` to reload metrics when loading previous snapshots
+  - Updated `save_diff` to implement 3-tier reporting structure
+  - Added `_emit_trend_time_series` for trend analysis storage
+  - Fixed `_compute_metrics_digest` to exclude `diff_telemetry`
+
+## Example Output
+
+**Before**:
+```json
+{
+  "metric_deltas": {},
+  "metric_deltas_count": 0,
+  "summary": {
+    "output_digest_changes": ["metrics_sha256"]
+  }
+}
+```
+
+**After**:
+```json
+{
+  "metric_deltas": {
+    "mean_score": {
+      "delta_abs": 0.001449,
+      "delta_pct": 0.223,
+      "prev": 0.650859,
+      "curr": 0.652308,
+      "z_score": 0.0177,
+      "impact_label": "noise",
+      "abs_tol": 0.001,
+      "rel_tol": 0.0001
+    }
+  },
+  "metric_deltas_count": 10,
+  "summary": {
+    "impact_label": "noise",
+    "top_regressions": [...],
+    "top_improvements": [...],
+    "metric_deltas_file": "metric_deltas.json"
+  }
+}
+```
+
+## Benefits
+
+1. **Always compute deltas**: Even small changes are now reported with structured information
+2. **Noise detection**: Z-scores distinguish real regressions from statistical noise
+3. **Proper severity**: Severity reflects impact, not just hash mismatches
+4. **Complete metrics**: All numeric metrics are captured, not just 3
+5. **Stable digests**: Excluding `diff_telemetry` prevents digest volatility
+6. **Trend analysis**: Time series data enables drift detection and trend analysis
+
+## Testing
+
+Verified with actual runs:
+- `metric_deltas_count: 10` (previously 0)
+- `impact_label: "noise"` correctly classified
+- `top_regressions` and `top_improvements` populated
+- `metric_deltas.json` file created with structured deltas
+- Severity correctly set to MAJOR (nondeterminism) with noise-level impact noted
+

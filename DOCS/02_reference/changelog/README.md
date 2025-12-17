@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-17 (Metric Deltas in Diff Artifacts)** — Fixed empty `metric_deltas` issue. Implemented 3-tier reporting (summary, structured deltas, full metrics), z-score noise detection, impact classification, and proper separation of nondeterminism from regression. All numeric metrics now captured and deltas always computed.
+  → [View](2025-12-17-metric-deltas-in-diff-artifacts.md)
+
 - **2025-12-17 (Training Pipeline Audit Fixes)** — Fixed 10 critical contract breaks across family IDs, routing, plan consumption, feature schema, and counting/tracking. Key fixes: family normalization, reproducibility tracking, preflight filtering, routing plan respect, symbol-specific route, feature pipeline threshold and diagnostics.
   → [View](2025-12-17-training-pipeline-audit-fixes.md)
 
