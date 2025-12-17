@@ -2832,8 +2832,28 @@ class DiffTelemetry:
                 
                 # Compute z-score if we have standard error
                 z_score = None
+                se_ratio = None
+                noise_explanation = None
                 if se is not None and se > 0:
                     z_score = delta_abs / se
+                    se_ratio = abs(delta_abs) / se  # How many SEs is this delta?
+                    
+                    # Generate noise explanation for statistical context
+                    if abs(z_score) < 0.25:
+                        noise_explanation = (
+                            f"Delta ({abs(delta_abs):.6f}) is {se_ratio:.4f}× the standard error (SE≈{se:.4f}). "
+                            f"This is statistically insignificant - well within expected run-to-run variability."
+                        )
+                    elif abs(z_score) < 1.0:
+                        noise_explanation = (
+                            f"Delta ({abs(delta_abs):.6f}) is {se_ratio:.4f}× the standard error (SE≈{se:.4f}). "
+                            f"This is a minor change but still within expected variability."
+                        )
+                    else:
+                        noise_explanation = (
+                            f"Delta ({abs(delta_abs):.6f}) is {se_ratio:.4f}× the standard error (SE≈{se:.4f}). "
+                            f"This exceeds expected variability and may indicate a real change."
+                        )
                 
                 # Check if delta is significant (above tolerance)
                 abs_change = abs(delta_abs)
@@ -2864,7 +2884,7 @@ class DiffTelemetry:
                 # Only include significant deltas (above tolerance)
                 # This prevents spam from zero-delta entries like pos_rate, n_models that never change
                 if is_significant:
-                    deltas[key] = {
+                    delta_entry = {
                         'delta_abs': round(delta_abs, 6),
                         'delta_pct': round(delta_pct, 4),  # More precision for percentage
                         'prev': round(prev_float, 6),
@@ -2875,6 +2895,15 @@ class DiffTelemetry:
                         'rel_tol': rel_tol,
                         'changed': True  # All entries in metric_deltas are significant
                     }
+                    
+                    # Add statistical context if available
+                    if se is not None and se > 0:
+                        delta_entry['se'] = round(se, 6)  # Standard error
+                        delta_entry['se_ratio'] = round(se_ratio, 4) if se_ratio is not None else None
+                        if noise_explanation:
+                            delta_entry['noise_explanation'] = noise_explanation
+                    
+                    deltas[key] = delta_entry
             except (ValueError, TypeError, ZeroDivisionError):
                 # Skip non-numeric or problematic values
                 continue
