@@ -2730,51 +2730,43 @@ class DiffTelemetry:
                                                 comparable, reason = self._check_comparability(snapshot, snap)
                                                 if comparable:
                                                     # CRITICAL: Verify snapshot file actually exists on disk
-                                                    # Try to find the snapshot.json file in the run's cohort directories
-                                                    # This prevents comparing against stale snapshots from deleted runs
-                                                    snapshot_found = False
-                                                    # Try to find snapshot.json in the run directory
-                                                    # Look for cohort directories matching the snapshot's stage/view/target
+                                                    # The snapshot_index.json might reference a snapshot from a deleted run
+                                                    # We need to verify the snapshot.json file exists before using it
+                                                    snapshot_file_exists = False
                                                     if snap.stage and snap.view and snap.target:
-                                                        # Try common cohort directory patterns
-                                                        stage_lower = snap.stage.lower()
-                                                        view_lower = snap.view.lower().replace("_", "-")
                                                         target_clean = snap.target.replace('/', '_').replace('\\', '_')
-                                                        
-                                                        # Check in the run's REPRODUCIBILITY structure
-                                                        possible_paths = [
-                                                            run_subdir / "REPRODUCIBILITY" / snap.stage / snap.view / target_clean / "cohort=*" / "snapshot.json",
-                                                            run_subdir / "REPRODUCIBILITY" / snap.stage / snap.view / target_clean / "snapshot.json"
-                                                        ]
-                                                        
-                                                        for pattern in possible_paths:
-                                                            # Try glob if pattern has wildcard
-                                                            if '*' in str(pattern):
-                                                                matches = list(pattern.parent.parent.glob(pattern.name))
-                                                                for match in matches:
-                                                                    if match.exists():
-                                                                        snapshot_found = True
-                                                                        break
+                                                        # Try to find snapshot.json in the run's cohort directories
+                                                        # Look for cohort directories matching the snapshot's stage/view/target
+                                                        stage_dir = run_subdir / "REPRODUCIBILITY" / snap.stage / snap.view / target_clean
+                                                        if stage_dir.exists():
+                                                            # Search for cohort directories
+                                                            for cohort_subdir in stage_dir.iterdir():
+                                                                if cohort_subdir.is_dir() and cohort_subdir.name.startswith("cohort="):
+                                                                    snapshot_file = cohort_subdir / "snapshot.json"
+                                                                    if snapshot_file.exists():
+                                                                        # Verify this snapshot.json matches the run_id
+                                                                        try:
+                                                                            with open(snapshot_file, 'r') as f:
+                                                                                snapshot_data = json.load(f)
+                                                                                if snapshot_data.get('run_id') == snap.run_id:
+                                                                                    snapshot_file_exists = True
+                                                                                    break
+                                                                        except Exception:
+                                                                            continue
+                                                            
+                                                            # If we found a matching snapshot file, use it
+                                                            if snapshot_file_exists:
+                                                                # Mark source for auditability
+                                                                if bin_dir.name.startswith("cg-"):
+                                                                    snap._comparison_source = "comparison_group_directory"
+                                                                else:
+                                                                    snap._comparison_source = "snapshot_index"
+                                                                candidates.append((snap.timestamp, snap))
                                                             else:
-                                                                if pattern.exists():
-                                                                    snapshot_found = True
-                                                                    
-                                                            if snapshot_found:
-                                                                break
-                                                    
-                                                    # If we can't verify file existence, skip this snapshot
-                                                    # (It might be from a deleted run)
-                                                    if not snapshot_found:
-                                                        logger.debug(f"Skipping snapshot {snap.run_id} - cannot verify snapshot.json exists on disk")
-                                                        continue
-                                                    
-                                                    # Mark source for auditability
-                                                    # Determine if from comparison group directory or snapshot_index
-                                                    if bin_dir.name.startswith("cg-"):
-                                                        snap._comparison_source = "comparison_group_directory"
+                                                                logger.debug(f"Skipping snapshot {snap.run_id} from {run_snapshot_index} - snapshot.json file not found on disk (run may have been deleted)")
                                                     else:
-                                                        snap._comparison_source = "snapshot_index"
-                                                    candidates.append((snap.timestamp, snap))
+                                                        # If we can't determine the path, skip it (safety first)
+                                                        logger.debug(f"Skipping snapshot {snap.run_id} - missing stage/view/target for path reconstruction")
                                         except Exception as e:
                                             logger.debug(f"Failed to deserialize snapshot from {run_snapshot_index}: {e}")
                                             continue
