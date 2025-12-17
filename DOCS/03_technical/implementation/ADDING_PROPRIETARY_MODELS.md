@@ -200,14 +200,18 @@ Add your trainer to `TRAINING/common/isolation_runner.py` in the `TRAINER_MODULE
 
 ```python
 TRAINER_MODULE_MAP = {
-    "LightGBM": ("model_fun.lightgbm_trainer", "LightGBMTrainer"),
-    "XGBoost": ("model_fun.xgboost_trainer", "XGBoostTrainer"),
-    "MyProprietary": ("model_fun.my_proprietary_trainer", "MyProprietaryTrainer"),  # Add this
+    "lightgbm": ("model_fun.lightgbm_trainer", "LightGBMTrainer"),
+    "xgboost": ("model_fun.xgboost_trainer", "XGBoostTrainer"),
+    "my_proprietary": ("model_fun.my_proprietary_trainer", "MyProprietaryTrainer"),  # Add this
     # ... other mappings ...
 }
 ```
 
-**Important**: The key in `TRAINER_MODULE_MAP` should match the family name (class name without "Trainer" suffix). This string must also match the `model_family` / `family_name` you pass in your config when calling the TRAINING pipeline.
+**Important**: 
+- **All registry keys must be in canonical snake_case format** (e.g., `"my_proprietary"`, not `"MyProprietary"`).
+- The key should match the family name (class name without "Trainer" suffix, converted to snake_case).
+- This string must also match the `model_family` / `family_name` you pass in your config when calling the TRAINING pipeline.
+- The system automatically normalizes family names at boundaries, so you can pass `"MyProprietary"` or `"my_proprietary"` in config, but the registry key must be snake_case.
 
 ### 4. Register in In-Process Runner (Optional)
 
@@ -215,19 +219,58 @@ If you want in-process training (not just isolated), add to `TRAINING/training_s
 
 ```python
 MODMAP = {
-    "LightGBM": ("model_fun.lightgbm_trainer", "LightGBMTrainer"),
-    "XGBoost": ("model_fun.xgboost_trainer", "XGBoostTrainer"),
-    "MyProprietary": ("model_fun.my_proprietary_trainer", "MyProprietaryTrainer"),  # Add this
+    "lightgbm": ("model_fun.lightgbm_trainer", "LightGBMTrainer"),
+    "xgboost": ("model_fun.xgboost_trainer", "XGBoostTrainer"),
+    "my_proprietary": ("model_fun.my_proprietary_trainer", "MyProprietaryTrainer"),  # Add this
     # ... other mappings ...
 }
 ```
 
-### 5. Configure Threading Policy (Optional)
+**Note**: Keys must be snake_case (canonical format). The system validates this at startup.
+
+### 5. Register Runtime Policy (Required)
+
+Add your family to `TRAINING/common/runtime_policy.py` in the `POLICY` dictionary:
+
+```python
+POLICY = {
+    # ... existing families ...
+    "my_proprietary": RuntimePolicy(
+        run_mode="inproc",  # or "process" for isolation
+        needs_gpu=False,  # or True if GPU required
+        backends=frozenset(),  # or frozenset({"tf"}), frozenset({"torch"}), etc.
+        omp_user_api="openmp",  # or "blas" or None
+        force_isolation_reason=""  # Optional: why this family must be isolated
+    ),
+}
+```
+
+**Important**: The key must be snake_case (canonical format).
+
+### 6. Register Family Capabilities (Optional)
+
+If you want to specify family capabilities, add to `TRAINING/training_strategies/utils.py` in `FAMILY_CAPS`:
+
+```python
+FAMILY_CAPS = {
+    # ... existing families ...
+    "my_proprietary": {
+        "nan_ok": True,  # Can handle NaN values
+        "needs_tf": False,  # Requires TensorFlow
+        "experimental": False,  # Is this experimental?
+        "preprocess_in_family": False  # Does preprocessing happen in family?
+    },
+}
+```
+
+**Important**: The key must be snake_case (canonical format).
+
+### 7. Configure Threading Policy (Optional)
 
 If your model needs special threading behavior, add it to `TRAINING/common/family_config.py`:
 
 ```yaml
-MyProprietary:
+my_proprietary:  # Note: snake_case key
   thread_policy: omp_heavy  # or "mkl_heavy", "balanced", "blas_only"
   needs_gpu: false  # or true if GPU required
   backends: []  # or ["tf"], ["torch"], etc.

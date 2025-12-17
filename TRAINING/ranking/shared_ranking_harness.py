@@ -114,7 +114,16 @@ class RankingHarness:
             feature_names: Optional list of feature names to use (None = all safe features)
         
         Returns:
-            Tuple of (X, y, feature_names, symbols_array, time_vals, mtf_data, detected_interval, resolved_config)
+            Tuple of 9 values: (X, y, feature_names, symbols_array, time_vals, mtf_data, detected_interval, resolved_config, resolved_data_config)
+            - X: Feature matrix (np.ndarray)
+            - y: Target array (np.ndarray)
+            - feature_names: List of feature names
+            - symbols_array: Symbol array (np.ndarray)
+            - time_vals: Timestamp array (np.ndarray)
+            - mtf_data: Multi-timeframe data dict (Dict[str, pd.DataFrame])
+            - detected_interval: Detected data interval in minutes (float)
+            - resolved_config: ResolvedConfig object with purge/embargo settings
+            - resolved_data_config: Dict with resolved data mode and loader contract
             Any can be None if data preparation fails
         """
         from TRAINING.utils.cross_sectional_data import (

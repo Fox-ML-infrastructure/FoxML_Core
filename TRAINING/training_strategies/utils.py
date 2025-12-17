@@ -345,75 +345,85 @@ TORCH_SEQ_FAMILIES = {"CNN1D", "LSTM", "Transformer", "TabCNN", "TabLSTM", "TabT
 
 def normalize_family_name(family: str) -> str:
     """
-    Normalize model family name to title case for capabilities map lookup.
+    Canonicalize model family name to snake_case lowercase for registry lookups.
+    
+    This is the SINGLE SOURCE OF TRUTH for family name normalization.
+    Apply at ALL registry boundaries: MODMAP, TRAINER_MODULE_MAP, runtime_policy, FAMILY_CAPS.
+    
+    All registries MUST use snake_case lowercase keys. This function ensures consistency.
     
     Handles common variations:
-    - lightgbm -> LightGBM
-    - xgboost -> XGBoost
-    - random_forest -> RandomForest
-    - neural_network -> NeuralNetwork
-    - mutual_information -> MutualInformation
-    - univariate_selection -> UnivariateSelection
-    - lasso -> Lasso
-    - catboost -> CatBoost
+    - LightGBM -> lightgbm
+    - XGBoost -> xgboost
+    - random_forest -> random_forest
+    - RandomForest -> random_forest
+    - neural_network -> neural_network
+    - mutual_information -> mutual_information (selector, not trainer)
+    - univariate_selection -> univariate_selection (selector, not trainer)
+    - lasso -> lasso
+    - catboost -> catboost
     """
-    # Handle special cases first
-    special_cases = {
-        "lightgbm": "LightGBM",
-        "xgboost": "XGBoost",
-        "catboost": "CatBoost",
-        "ngboost": "NGBoost",
-        "random_forest": "RandomForest",
-        "neural_network": "NeuralNetwork",
-        "mutual_information": "MutualInformation",
-        "univariate_selection": "UnivariateSelection",
-        "quantilelightgbm": "QuantileLightGBM",
-        "ftrlproximal": "FTRLProximal",
-        "gmmregime": "GMMRegime",
-        "changepoint": "ChangePoint",
-        "rewardbased": "RewardBased",
-        "metalearning": "MetaLearning",
-        "multitask": "MultiTask",
-    }
+    if not family or not isinstance(family, str):
+        return str(family).lower() if family else ""
     
-    family_lower = family.lower()
-    if family_lower in special_cases:
-        return special_cases[family_lower]
+    import re
     
-    # For others, try title case (handles most cases)
-    # Replace underscores and title case
-    return family.replace("_", "").title()
+    # Normalize input: strip, replace hyphens/spaces with underscores
+    family_clean = family.strip().replace("-", "_").replace(" ", "_")
+    
+    # If already snake_case (has underscores), just lowercase
+    if "_" in family_clean:
+        return family_clean.lower().replace("__", "_")
+    
+    # Convert TitleCase/CamelCase to snake_case
+    # Split on capital letters: "LightGBM" -> ["", "Light", "GBM"]
+    # "RandomForest" -> ["", "Random", "Forest"]
+    parts = re.split(r'(?=[A-Z])', family_clean)
+    parts = [p for p in parts if p]  # Remove empty strings
+    
+    if len(parts) == 1:
+        # Single word, just lowercase
+        return parts[0].lower()
+    
+    # Join parts with underscores, all lowercase
+    result = "_".join(p.lower() for p in parts)
+    
+    # Clean up: remove double underscores
+    result = result.replace("__", "_")
+    
+    return result
 
 
 # Family capabilities map (from original script)
+# All keys must be canonical snake_case (enforced by _assert_canonical_keys)
 FAMILY_CAPS = {
-    "LightGBM": {"nan_ok": True, "needs_tf": False, "experimental": False},
-    "XGBoost": {"nan_ok": True, "needs_tf": False, "experimental": False},
-    "MLP": {"nan_ok": False, "needs_tf": True, "experimental": False, "preprocess_in_family": True},
-    "CNN1D": {"nan_ok": False, "needs_tf": False, "backend": "torch", "experimental": False, "preprocess_in_family": True},
-    "LSTM": {"nan_ok": False, "needs_tf": False, "backend": "torch", "experimental": False, "preprocess_in_family": True},
-    "Transformer": {"nan_ok": False, "needs_tf": False, "backend": "torch", "experimental": False, "preprocess_in_family": True},
-    "TabCNN": {"nan_ok": False, "needs_tf": False, "backend": "torch", "experimental": False, "preprocess_in_family": True},
-    "TabLSTM": {"nan_ok": False, "needs_tf": False, "backend": "torch", "experimental": False, "preprocess_in_family": True},
-    "TabTransformer": {"nan_ok": False, "needs_tf": False, "backend": "torch", "experimental": False, "preprocess_in_family": True},
-    "RewardBased": {"nan_ok": False, "needs_tf": False, "experimental": False},
-    "QuantileLightGBM": {"nan_ok": True, "needs_tf": False, "experimental": False},
-    "NGBoost": {"nan_ok": False, "needs_tf": False, "experimental": True},
-    "GMMRegime": {"nan_ok": False, "needs_tf": False, "experimental": True, "feature_emitter": False},
-    "ChangePoint": {"nan_ok": False, "needs_tf": False, "experimental": True, "feature_emitter": False},
-    "FTRLProximal": {"nan_ok": False, "needs_tf": False, "experimental": False},
-    "VAE": {"nan_ok": False, "needs_tf": True, "experimental": True},
-    "GAN": {"nan_ok": False, "needs_tf": True, "experimental": True},
-    "Ensemble": {"nan_ok": False, "needs_tf": False, "experimental": False},
-    "MetaLearning": {"nan_ok": False, "needs_tf": True, "experimental": True},
-    "MultiTask": {"nan_ok": False, "needs_tf": True, "experimental": True},
-    # Additional families (feature selection methods)
-    "Lasso": {"nan_ok": False, "needs_tf": False, "experimental": False},
-    "RandomForest": {"nan_ok": True, "needs_tf": False, "experimental": False},
-    "CatBoost": {"nan_ok": True, "needs_tf": False, "experimental": False},
-    "NeuralNetwork": {"nan_ok": False, "needs_tf": True, "experimental": False, "preprocess_in_family": True},
-    "MutualInformation": {"nan_ok": True, "needs_tf": False, "experimental": False},
-    "UnivariateSelection": {"nan_ok": True, "needs_tf": False, "experimental": False}
+    "lightgbm": {"nan_ok": True, "needs_tf": False, "experimental": False},
+    "xgboost": {"nan_ok": True, "needs_tf": False, "experimental": False},
+    "mlp": {"nan_ok": False, "needs_tf": True, "experimental": False, "preprocess_in_family": True},
+    "cnn1d": {"nan_ok": False, "needs_tf": False, "backend": "torch", "experimental": False, "preprocess_in_family": True},
+    "lstm": {"nan_ok": False, "needs_tf": False, "backend": "torch", "experimental": False, "preprocess_in_family": True},
+    "transformer": {"nan_ok": False, "needs_tf": False, "backend": "torch", "experimental": False, "preprocess_in_family": True},
+    "tabcnn": {"nan_ok": False, "needs_tf": False, "backend": "torch", "experimental": False, "preprocess_in_family": True},
+    "tablstm": {"nan_ok": False, "needs_tf": False, "backend": "torch", "experimental": False, "preprocess_in_family": True},
+    "tabtransformer": {"nan_ok": False, "needs_tf": False, "backend": "torch", "experimental": False, "preprocess_in_family": True},
+    "reward_based": {"nan_ok": False, "needs_tf": False, "experimental": False},
+    "quantile_lightgbm": {"nan_ok": True, "needs_tf": False, "experimental": False},
+    "ngboost": {"nan_ok": False, "needs_tf": False, "experimental": True},
+    "gmm_regime": {"nan_ok": False, "needs_tf": False, "experimental": True, "feature_emitter": False},
+    "change_point": {"nan_ok": False, "needs_tf": False, "experimental": True, "feature_emitter": False},
+    "ftrl_proximal": {"nan_ok": False, "needs_tf": False, "experimental": False},
+    "vae": {"nan_ok": False, "needs_tf": True, "experimental": True},
+    "gan": {"nan_ok": False, "needs_tf": True, "experimental": True},
+    "ensemble": {"nan_ok": False, "needs_tf": False, "experimental": False},
+    "meta_learning": {"nan_ok": False, "needs_tf": True, "experimental": True},
+    "multi_task": {"nan_ok": False, "needs_tf": True, "experimental": True},
+    # Additional families (feature selection methods - not trainers)
+    "lasso": {"nan_ok": False, "needs_tf": False, "experimental": False},
+    "random_forest": {"nan_ok": True, "needs_tf": False, "experimental": False},
+    "catboost": {"nan_ok": True, "needs_tf": False, "experimental": False},
+    "neural_network": {"nan_ok": False, "needs_tf": True, "experimental": False, "preprocess_in_family": True},
+    "mutual_information": {"nan_ok": True, "needs_tf": False, "experimental": False},
+    "univariate_selection": {"nan_ok": True, "needs_tf": False, "experimental": False}
 }
 
 

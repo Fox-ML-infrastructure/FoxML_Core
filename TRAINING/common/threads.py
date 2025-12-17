@@ -364,6 +364,12 @@ def child_env_for_family(family: str, threads: int, gpu_ok: bool = True) -> dict
         actual_omp = plan["OMP"]
     
     env = {
+        # CRITICAL: Suppress license banner in child processes
+        # This prevents banner from printing during isolation runs
+        "FOXML_SUPPRESS_BANNER": "1",
+        "TRAINER_ISOLATION_CHILD": "1",
+        "TRAINER_CHILD_FAMILY": family,  # Also set family for banner check
+        
         # Fix readline library symbol lookup error
         # Suppress "sh: undefined symbol: rl_print_keybinding" errors
         "SHELL": "/usr/bin/bash",  # Force bash instead of sh

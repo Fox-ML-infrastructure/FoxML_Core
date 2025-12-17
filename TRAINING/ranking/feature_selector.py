@@ -428,35 +428,24 @@ def select_features_for_target(
                     if all_feature_importances and output_dir:
                         try:
                             from TRAINING.stability.feature_importance import save_snapshot_hook
-                            # Build REPRODUCIBILITY path for snapshots (same structure as feature importances)
-                            target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-                            # Determine base output directory (walk up from REPRODUCIBILITY/FEATURE_SELECTION structure)
-                            base_output_dir = output_dir
-                            while base_output_dir.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "feature_selections", "target_rankings"]:
-                                base_output_dir = base_output_dir.parent
-                                if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
-                                    break
-                            
-                            # Determine FEATURE_SELECTION base (avoid nested REPRODUCIBILITY)
+                            # Build snapshot path (matching TARGET_RANKING structure)
                             # output_dir is already at: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
-                            # Walk up to FEATURE_SELECTION level
-                            repro_base = base_output_dir
-                            while repro_base.name not in ["FEATURE_SELECTION", "TARGET_RANKING"]:
-                                repro_base = repro_base.parent
-                                if not repro_base.parent.exists() or repro_base.name in ["RESULTS", "REPRODUCIBILITY"]:
-                                    break
+                            # Use it directly to avoid nested structures
+                            target_name_clean = target_column.replace('/', '_').replace('\\', '_')
                             
-                            # If we hit REPRODUCIBILITY, go back down to FEATURE_SELECTION
-                            if repro_base.name == "REPRODUCIBILITY":
-                                repro_base = repro_base / "FEATURE_SELECTION"
-                            elif repro_base.name != "FEATURE_SELECTION":
-                                # We're at run level, construct path
-                                repro_base = repro_base / "REPRODUCIBILITY" / "FEATURE_SELECTION"
-                            
+                            # For SYMBOL_SPECIFIC, snapshots go in symbol subfolder
                             if view == "SYMBOL_SPECIFIC" and symbol_to_process:
-                                snapshot_base_dir = repro_base / view / target_name_clean / f"symbol={symbol_to_process}"
+                                # Match TARGET_RANKING: REPRODUCIBILITY/FEATURE_SELECTION/SYMBOL_SPECIFIC/{target}/symbol={symbol}/
+                                # But output_dir is at CROSS_SECTIONAL level, need to go to SYMBOL_SPECIFIC
+                                base_output_dir = output_dir
+                                while base_output_dir.name != "FEATURE_SELECTION":
+                                    base_output_dir = base_output_dir.parent
+                                    if not base_output_dir.parent.exists():
+                                        break
+                                snapshot_base_dir = base_output_dir / "SYMBOL_SPECIFIC" / target_name_clean / f"symbol={symbol_to_process}"
                             else:
-                                snapshot_base_dir = repro_base / view / target_name_clean
+                                # CROSS_SECTIONAL: use output_dir directly (already at target level)
+                                snapshot_base_dir = output_dir
                             
                             for model_family, importance_dict in all_feature_importances.items():
                                 if importance_dict:

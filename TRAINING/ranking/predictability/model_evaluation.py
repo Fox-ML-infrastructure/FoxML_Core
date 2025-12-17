@@ -1470,17 +1470,35 @@ def train_and_evaluate_models(
                     from TRAINING.stability.feature_importance import save_snapshot_hook
                     # Build REPRODUCIBILITY path for snapshots (same structure as feature importances)
                     target_name_clean = (target_column if target_column else 'unknown').replace('/', '_').replace('\\', '_')
-                    # Determine base output directory (RESULTS/{run}/)
-                    if output_dir.name == "target_rankings":
-                        base_output_dir = output_dir.parent
-                    else:
-                        base_output_dir = output_dir
                     
-                    repro_base = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
-                    if view == "SYMBOL_SPECIFIC" and symbol:
-                        snapshot_base_dir = repro_base / view / target_name_clean / f"symbol={symbol}"
+                    # Detect context: FEATURE_SELECTION or TARGET_RANKING
+                    # If output_dir is already at target level in FEATURE_SELECTION, use it directly
+                    if output_dir and "FEATURE_SELECTION" in output_dir.parts:
+                        # We're in FEATURE_SELECTION context - use output_dir directly (already at target level)
+                        # output_dir is: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
+                        snapshot_base_dir = output_dir
                     else:
-                        snapshot_base_dir = repro_base / view / target_name_clean
+                        # TARGET_RANKING context - construct path
+                        # Determine base output directory (RESULTS/{run}/)
+                        if output_dir and output_dir.name == "target_rankings":
+                            base_output_dir = output_dir.parent
+                        elif output_dir:
+                            base_output_dir = output_dir
+                            # Walk up to run level if we're inside REPRODUCIBILITY
+                            while "REPRODUCIBILITY" in base_output_dir.parts and base_output_dir.name != "RESULTS":
+                                base_output_dir = base_output_dir.parent
+                                if not base_output_dir.parent.exists():
+                                    break
+                        else:
+                            # No output_dir provided - skip snapshot
+                            snapshot_base_dir = None
+                        
+                        if snapshot_base_dir:
+                            repro_base = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
+                            if view == "SYMBOL_SPECIFIC" and symbol:
+                                snapshot_base_dir = repro_base / view / target_name_clean / f"symbol={symbol}"
+                            else:
+                                snapshot_base_dir = repro_base / view / target_name_clean
                     
                     save_snapshot_hook(
                         target_name=target_column if target_column else 'unknown',
@@ -2277,7 +2295,10 @@ def train_and_evaluate_models(
             if task_type in {TaskType.BINARY_CLASSIFICATION, TaskType.MULTICLASS_CLASSIFICATION}:
                 if len(y_true) == len(y_pred):
                     accuracy = np.mean(y_true == y_pred)
-                    if accuracy >= _correlation_threshold:  # Configurable threshold (default: 99.9%)
+                    # Use > with epsilon to prevent false triggers from rounding
+                    # Default epsilon: 1e-6 (prevents 0.9990 == 0.9990 false positives)
+                    epsilon = 1e-6
+                    if accuracy > (_correlation_threshold + epsilon):  # Configurable threshold (default: 99.9%)
                         metric_name = "training accuracy"
                         
                         if is_tree_model:
@@ -2303,7 +2324,10 @@ def train_and_evaluate_models(
             elif task_type == TaskType.REGRESSION:
                 if len(y_true) == len(y_pred):
                     corr = np.corrcoef(y_true, y_pred)[0, 1]
-                    if not np.isnan(corr) and abs(corr) >= _correlation_threshold:
+                    # Use > with epsilon to prevent false triggers from rounding
+                    # Default epsilon: 1e-6 (prevents 0.9990 == 0.9990 false positives)
+                    epsilon = 1e-6
+                    if not np.isnan(corr) and abs(corr) > (_correlation_threshold + epsilon):
                         if is_tree_model:
                             logger.warning(
                                 f"  ⚠️  {model_name} has correlation {corr:.4f} "

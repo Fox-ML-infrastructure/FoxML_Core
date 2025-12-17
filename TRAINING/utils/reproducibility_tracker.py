@@ -310,7 +310,7 @@ class ReproducibilityTracker:
         
         REPRODUCIBILITY should be at the run level, not the module level.
         If output_dir is a module subdirectory (target_rankings/, feature_selections/, training_results/),
-        go up one level to the run directory. Otherwise, use output_dir itself.
+        or inside REPRODUCIBILITY/{STAGE}/... structure, walk up to the run directory.
         
         Returns:
             Path to the run-level directory where REPRODUCIBILITY should be created
@@ -318,12 +318,29 @@ class ReproducibilityTracker:
         # Module subdirectories that indicate we need to go up one level
         module_subdirs = {"target_rankings", "feature_selections", "training_results"}
         
-        if self.output_dir.name in module_subdirs:
-            # output_dir is a module subdirectory, go up to run level
-            return self.output_dir.parent
-        else:
-            # output_dir is already at run level, use it directly
-            return self.output_dir
+        # Walk up from output_dir to find the run-level directory
+        current_dir = self.output_dir
+        
+        # If we're inside REPRODUCIBILITY/{STAGE}/... structure, walk up to run level
+        # Check if we're in a REPRODUCIBILITY subdirectory
+        if "REPRODUCIBILITY" in current_dir.parts:
+            # Find the index of REPRODUCIBILITY in the path
+            repro_idx = None
+            for i, part in enumerate(current_dir.parts):
+                if part == "REPRODUCIBILITY":
+                    repro_idx = i
+                    break
+            
+            if repro_idx is not None and repro_idx > 0:
+                # Go up to the directory before REPRODUCIBILITY (run level)
+                return Path(*current_dir.parts[:repro_idx])
+        
+        # If output_dir is a module subdirectory, go up to run level
+        if current_dir.name in module_subdirs:
+            return current_dir.parent
+        
+        # Otherwise, output_dir is already at run level
+        return current_dir
     
     def _load_thresholds(self, override: Optional[Dict[str, Dict[str, float]]] = None) -> Dict[str, Dict[str, float]]:
         """Load reproducibility thresholds from config."""
@@ -1062,7 +1079,7 @@ class ReproducibilityTracker:
             "cohort_id": cohort_id,
             "run_id": run_id_clean,
             "stage": stage_normalized,  # Already normalized to uppercase
-            "route_type": route_type.upper() if route_type else None,
+            "route_type": route_type.upper() if (route_type and isinstance(route_type, str)) else (route_type.value if hasattr(route_type, 'value') else str(route_type).upper() if route_type else None),
             "view": (additional_data.get('view') if additional_data else None) if stage_normalized == "TARGET_RANKING" else None,  # Add view for TARGET_RANKING
             "target": item_name,
             "N_effective": cohort_metadata.get('N_effective_cs', 0),
@@ -2255,10 +2272,28 @@ class ReproducibilityTracker:
         curr_auc = float(curr_run.get('mean_score', 0.0))
         
         if n_ratio < self.n_ratio_threshold:
+            # Defensive: handle both string and Enum for route_type/stage
+            route_type_str = None
+            if route_type:
+                if isinstance(route_type, str):
+                    route_type_str = route_type.upper()
+                elif hasattr(route_type, 'value'):
+                    route_type_str = route_type.value.upper() if isinstance(route_type.value, str) else str(route_type.value).upper()
+                else:
+                    route_type_str = str(route_type).upper()
+            
+            stage_str = stage
+            if isinstance(stage, str):
+                stage_str = stage.upper().replace("MODEL_TRAINING", "TRAINING")
+            elif hasattr(stage, 'value'):
+                stage_str = stage.value.upper().replace("MODEL_TRAINING", "TRAINING") if isinstance(stage.value, str) else str(stage.value).upper()
+            else:
+                stage_str = str(stage).upper().replace("MODEL_TRAINING", "TRAINING")
+            
             return {
                 "schema_version": REPRODUCIBILITY_SCHEMA_VERSION,
-                "stage": stage.upper().replace("MODEL_TRAINING", "TRAINING"),
-                "route_type": route_type.upper() if route_type else None,
+                "stage": stage_str,
+                "route_type": route_type_str,
                 "target": item_name,
                 "symbol": symbol,
                 "model_family": model_family,
@@ -2306,10 +2341,29 @@ class ReproducibilityTracker:
         else:
             reason = f"n_ratio={n_ratio:.3f}, abs_diff={abs_diff:.4f}"
         
+        # Defensive: handle both string and Enum for route_type
+        route_type_str = None
+        if route_type:
+            if isinstance(route_type, str):
+                route_type_str = route_type.upper()
+            elif hasattr(route_type, 'value'):
+                route_type_str = route_type.value.upper() if isinstance(route_type.value, str) else str(route_type.value).upper()
+            else:
+                route_type_str = str(route_type).upper()
+        
+        # Defensive: handle both string and Enum for stage
+        stage_str = stage
+        if isinstance(stage, str):
+            stage_str = stage.upper().replace("MODEL_TRAINING", "TRAINING")
+        elif hasattr(stage, 'value'):
+            stage_str = stage.value.upper().replace("MODEL_TRAINING", "TRAINING") if isinstance(stage.value, str) else str(stage.value).upper()
+        else:
+            stage_str = str(stage).upper().replace("MODEL_TRAINING", "TRAINING")
+        
         return {
             "schema_version": REPRODUCIBILITY_SCHEMA_VERSION,
-            "stage": stage.upper().replace("MODEL_TRAINING", "TRAINING"),
-            "route_type": route_type.upper() if route_type else None,
+            "stage": stage_str,
+            "route_type": route_type_str,
             "target": item_name,
             "symbol": symbol,
             "model_family": model_family,

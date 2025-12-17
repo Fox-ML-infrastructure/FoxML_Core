@@ -50,21 +50,23 @@ The system is automatically integrated via `ReproducibilityTracker._save_to_coho
 ## File Structure
 
 ```
-RESULTS/{run_id}/
+RESULTS/
   REPRODUCIBILITY/
     TELEMETRY/
-      snapshot_index.json          # Index of all snapshots
-      baseline_index.json          # Index of baselines per comparison group
-    TARGET_RANKING/.../
-      cohort={cohort_id}/
-        snapshot.json              # Normalized snapshot
-        diff_prev.json             # Diff vs previous run
-        diff_baseline.json         # Diff vs baseline
-    FEATURE_SELECTION/.../
-      cohort={cohort_id}/
-        snapshot.json
-        diff_prev.json
-        diff_baseline.json
+      snapshot_index.json          # Global index of all snapshots (all runs)
+      baseline_index.json          # Global index of baselines per comparison group
+  {run_id}/
+    REPRODUCIBILITY/
+      TARGET_RANKING/.../
+        cohort={cohort_id}/
+          snapshot.json              # Normalized snapshot (per-run)
+          diff_prev.json             # Diff vs previous run
+          diff_baseline.json         # Diff vs baseline
+      FEATURE_SELECTION/.../
+        cohort={cohort_id}/
+          snapshot.json
+          diff_prev.json
+          diff_baseline.json
 ```
 
 ## What Gets Tracked

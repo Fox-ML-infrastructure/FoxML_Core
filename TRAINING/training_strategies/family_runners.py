@@ -165,6 +165,9 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 def _run_family_inproc(family: str, X, y, total_threads: int = 12, trainer_kwargs: dict | None = None):
+    # CRITICAL: Normalize family name before registry lookup
+    from TRAINING.training_strategies.utils import normalize_family_name
+    family = normalize_family_name(family)
     """
     Runs a family trainer in the main process with unified threading control.
     - No multiprocessing, no payload temp files, no IPC.
@@ -188,22 +191,22 @@ def _run_family_inproc(family: str, X, y, total_threads: int = 12, trainer_kwarg
     reset_affinity(logger)
     reset_threadpools()
     
-    # Module mapping
+    # Module mapping - all keys must be canonical snake_case
     MODMAP = {
-        "LightGBM":           ("model_fun.lightgbm_trainer",        "LightGBMTrainer"),
-        "QuantileLightGBM":   ("model_fun.quantile_lightgbm_trainer","QuantileLightGBMTrainer"),
-        "XGBoost":            ("model_fun.xgboost_trainer",          "XGBoostTrainer"),
-        "RewardBased":        ("model_fun.reward_based_trainer",     "RewardBasedTrainer"),
-        "GMMRegime":          ("model_fun.gmm_regime_trainer",       "GMMRegimeTrainer"),
-        "ChangePoint":        ("model_fun.change_point_trainer",     "ChangePointTrainer"),
-        "NGBoost":            ("model_fun.ngboost_trainer",          "NGBoostTrainer"),
-        "Ensemble":           ("model_fun.ensemble_trainer",         "EnsembleTrainer"),
-        "FTRLProximal":       ("model_fun.ftrl_proximal_trainer",    "FTRLProximalTrainer"),
-        "MLP":                ("model_fun.mlp_trainer",              "MLPTrainer"),
-        "VAE":                ("model_fun.vae_trainer",              "VAETrainer"),
-        "GAN":                ("model_fun.gan_trainer",              "GANTrainer"),
-        "MetaLearning":       ("model_fun.meta_learning_trainer",    "MetaLearningTrainer"),
-        "MultiTask":          ("model_fun.multi_task_trainer",       "MultiTaskTrainer"),
+        "lightgbm":           ("model_fun.lightgbm_trainer",        "LightGBMTrainer"),
+        "quantile_lightgbm":   ("model_fun.quantile_lightgbm_trainer","QuantileLightGBMTrainer"),
+        "xgboost":            ("model_fun.xgboost_trainer",          "XGBoostTrainer"),
+        "reward_based":        ("model_fun.reward_based_trainer",     "RewardBasedTrainer"),
+        "gmm_regime":          ("model_fun.gmm_regime_trainer",       "GMMRegimeTrainer"),
+        "change_point":        ("model_fun.change_point_trainer",     "ChangePointTrainer"),
+        "ngboost":            ("model_fun.ngboost_trainer",          "NGBoostTrainer"),
+        "ensemble":           ("model_fun.ensemble_trainer",         "EnsembleTrainer"),
+        "ftrl_proximal":       ("model_fun.ftrl_proximal_trainer",    "FTRLProximalTrainer"),
+        "mlp":                ("model_fun.mlp_trainer",              "MLPTrainer"),
+        "vae":                ("model_fun.vae_trainer",              "VAETrainer"),
+        "gan":                ("model_fun.gan_trainer",              "GANTrainer"),
+        "meta_learning":       ("model_fun.meta_learning_trainer",    "MetaLearningTrainer"),
+        "multi_task":          ("model_fun.multi_task_trainer",       "MultiTaskTrainer"),
     }
     
     plan = plan_for_family(family, total_threads)
@@ -234,6 +237,7 @@ def _run_family_inproc(family: str, X, y, total_threads: int = 12, trainer_kwarg
     # Clamp threadpools for this fit()
     with thread_guard(omp=omp, mkl=mkl):
         # Import and instantiate trainer
+        # CRITICAL: family is already normalized to snake_case before this function is called
         mod_name, cls_name = MODMAP[family]
         Trainer = getattr(importlib.import_module(mod_name), cls_name)
         trainer = Trainer(**(trainer_kwargs or {}))
@@ -264,6 +268,10 @@ def _run_family_inproc(family: str, X, y, total_threads: int = 12, trainer_kwarg
 def _run_family_isolated(family: str, X, y, timeout_s: int = None,
                          omp_threads: int | None = None, mkl_threads: int | None = None,
                          trainer_kwargs: dict | None = None):
+    # CRITICAL: Normalize family name before registry lookup
+    from TRAINING.training_strategies.utils import normalize_family_name
+    family = normalize_family_name(family)
+    
     # Load timeout from config if not provided
     if timeout_s is None:
         if _CONFIG_AVAILABLE:
@@ -272,31 +280,36 @@ def _run_family_isolated(family: str, X, y, timeout_s: int = None,
             timeout_s = 7200
     import tempfile, joblib, multiprocessing as mp, os, time as _time, numpy as np, shutil
 
+    # Module mapping - all keys must be canonical snake_case
     MODMAP = {
-        "LightGBM":           ("model_fun.lightgbm_trainer",        "LightGBMTrainer"),
-        "QuantileLightGBM":   ("model_fun.quantile_lightgbm_trainer","QuantileLightGBMTrainer"),
-        "XGBoost":            ("model_fun.xgboost_trainer",          "XGBoostTrainer"),
-        "RewardBased":        ("model_fun.reward_based_trainer",     "RewardBasedTrainer"),
-        "GMMRegime":          ("model_fun.gmm_regime_trainer",       "GMMRegimeTrainer"),
-        "ChangePoint":        ("model_fun.change_point_trainer",     "ChangePointTrainer"),
-        "NGBoost":            ("model_fun.ngboost_trainer",          "NGBoostTrainer"),
-        "Ensemble":           ("model_fun.ensemble_trainer",         "EnsembleTrainer"),
-        "FTRLProximal":       ("model_fun.ftrl_proximal_trainer",    "FTRLProximalTrainer"),
-        "MLP":                ("model_fun.mlp_trainer",              "MLPTrainer"),
-        "VAE":                ("model_fun.vae_trainer",              "VAETrainer"),
-        "GAN":                ("model_fun.gan_trainer",              "GANTrainer"),
-        "MetaLearning":       ("model_fun.meta_learning_trainer",    "MetaLearningTrainer"),
-        "MultiTask":          ("model_fun.multi_task_trainer",       "MultiTaskTrainer"),
+        "lightgbm":           ("model_fun.lightgbm_trainer",        "LightGBMTrainer"),
+        "quantile_lightgbm":   ("model_fun.quantile_lightgbm_trainer","QuantileLightGBMTrainer"),
+        "xgboost":            ("model_fun.xgboost_trainer",          "XGBoostTrainer"),
+        "reward_based":        ("model_fun.reward_based_trainer",     "RewardBasedTrainer"),
+        "gmm_regime":          ("model_fun.gmm_regime_trainer",       "GMMRegimeTrainer"),
+        "change_point":        ("model_fun.change_point_trainer",     "ChangePointTrainer"),
+        "ngboost":            ("model_fun.ngboost_trainer",          "NGBoostTrainer"),
+        "ensemble":           ("model_fun.ensemble_trainer",         "EnsembleTrainer"),
+        "ftrl_proximal":       ("model_fun.ftrl_proximal_trainer",    "FTRLProximalTrainer"),
+        "mlp":                ("model_fun.mlp_trainer",              "MLPTrainer"),
+        "vae":                ("model_fun.vae_trainer",              "VAETrainer"),
+        "gan":                ("model_fun.gan_trainer",              "GANTrainer"),
+        "meta_learning":       ("model_fun.meta_learning_trainer",    "MetaLearningTrainer"),
+        "multi_task":          ("model_fun.multi_task_trainer",       "MultiTaskTrainer"),
     }
 
     # Get module mapping - check both MODMAP dictionaries
+    # CRITICAL: family is already normalized to snake_case before this function is called
     if family not in MODMAP:
         # Fallback to TRAINER_MODULE_MAP from isolation_runner if not in local MODMAP
         from common.isolation_runner import TRAINER_MODULE_MAP
         if family in TRAINER_MODULE_MAP:
             mod_name, cls_name = TRAINER_MODULE_MAP[family]
         else:
-            raise KeyError(f"Family '{family}' not found in MODMAP or TRAINER_MODULE_MAP")
+            # Check if this is a selector/scorer (not a trainer)
+            if family in ["mutual_information", "univariate_selection"]:
+                raise ValueError(f"Family '{family}' is a feature selector/scorer, not a model trainer. Remove from training family list.")
+            raise KeyError(f"Family '{family}' not found in MODMAP or TRAINER_MODULE_MAP. Available families: {sorted(set(MODMAP.keys()) | set(TRAINER_MODULE_MAP.keys()))}")
     else:
         mod_name, cls_name = MODMAP[family]
     

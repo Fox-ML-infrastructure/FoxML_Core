@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 2025-12-16 Updates
 - **Feature Selection Structure**: Organized feature selection outputs to match target ranking layout (feature_importances/, metadata/, artifacts/). Eliminated scattered files and nested REPRODUCIBILITY directories.
+- **Canonical Family ID System**: Migrated all model family registries to snake_case canonical IDs. All registries (`MODMAP`, `TRAINER_MODULE_MAP`, `POLICY`, `FAMILY_CAPS`) now use consistent snake_case keys (e.g., `"lightgbm"`, `"xgboost"`, `"meta_learning"`). Added startup validation to prevent key drift.
+- **Feature Audit System**: Added comprehensive feature drop tracking with per-feature drop reasons. Generates CSV reports showing why features were dropped at each stage (registry filter, Polars select, pandas coercion, NaN drop, non-numeric drop).
+- **Training Pipeline Fixes**: Fixed family name canonicalization, banner suppression in child processes, reproducibility tracking string/Enum handling, and model saving packaging bugs.
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-16-feature-selection-structure.md)
 
 #### 2025-12-15 Updates
@@ -78,7 +81,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-**Recent additions (2025-12-12 - 2025-12-14):**
+**Recent additions (2025-12-12 - 2025-12-16):**
+- Feature Audit System - Per-feature drop tracking with CSV reports showing drop reasons (2025-12-16)
+- Canonical Family ID System - Unified snake_case family IDs across all registries with startup validation (2025-12-16)
+- Registry Validation - Startup assertions to prevent non-canonical keys and collisions (2025-12-16)
 - Target Pattern Exclusion - Per-experiment control to exclude specific target types (2025-12-14)
 - Look-Ahead Bias Fixes - Feature flag-based fixes for data leakage (2025-12-14)
 - Shared Ranking Harness - Unified evaluation contract for target ranking and feature selection
@@ -99,7 +105,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-**Recent fixes (2025-12-12 - 2025-12-14):**
+**Recent fixes (2025-12-12 - 2025-12-16):**
+- **Training Pipeline Plumbing Fixes** (2025-12-16): Fixed family name canonicalization mismatches, banner suppression in child processes, reproducibility tracking string/Enum handling, model saving packaging bugs (`_pkg_ver`, `joblib` imports), feature selector vs trainer confusion
 - **Feature Selection and Config Fixes** (2025-12-14): Fixed UnboundLocalError for np (11 model families), missing import, unpacking error, routing diagnostics, experiment config loading, target exclusion, lookback enforcement
 - **Look-Ahead Bias Fixes** (2025-12-14): Rolling windows exclude current bar, CV-based normalization, feature renaming, symbol-specific logging, feature selection bug (task_type collision)
 - **Leakage Controls Structural Fixes** (2025-12-13): Unified lookback calculator, calendar feature classification, separate purge/embargo validation, fingerprint tracking, leakage canary test

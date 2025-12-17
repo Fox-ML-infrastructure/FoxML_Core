@@ -218,7 +218,7 @@ class DiffTelemetry:
         Initialize diff telemetry.
         
         Args:
-            output_dir: Base output directory (RESULTS/{run}/)
+            output_dir: Base output directory (RESULTS/ or RESULTS/{run}/)
             min_runs_for_baseline: Minimum runs before establishing baseline
             baseline_window_size: Rolling window size for baseline
         """
@@ -226,11 +226,24 @@ class DiffTelemetry:
         self.min_runs_for_baseline = min_runs_for_baseline
         self.baseline_window_size = baseline_window_size
         
-        # Directory structure
-        self.telemetry_dir = self.output_dir / "REPRODUCIBILITY" / "TELEMETRY"
+        # Find RESULTS directory (walk up if we're in a subdirectory)
+        results_dir = self.output_dir
+        if results_dir.name != "RESULTS":
+            # Walk up to find RESULTS directory
+            temp_dir = results_dir
+            for _ in range(10):  # Limit depth
+                if temp_dir.name == "RESULTS":
+                    results_dir = temp_dir
+                    break
+                if not temp_dir.parent.exists():
+                    break
+                temp_dir = temp_dir.parent
+        
+        # Global telemetry directory for index files (shared across all runs)
+        self.telemetry_dir = results_dir / "REPRODUCIBILITY" / "TELEMETRY"
         self.telemetry_dir.mkdir(parents=True, exist_ok=True)
         
-        # Index files
+        # Index files (global, not per-run)
         self.snapshot_index = self.telemetry_dir / "snapshot_index.json"
         self.baseline_index = self.telemetry_dir / "baseline_index.json"
         

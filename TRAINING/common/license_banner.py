@@ -57,7 +57,16 @@ def print_license_banner(suppress: bool = False):
         return
     
     # Check if banner should be suppressed via environment variable
+    # CRITICAL: Suppress in child processes (isolation runners) and non-interactive contexts
     if os.getenv("FOXML_SUPPRESS_BANNER", "").lower() in ("true", "1", "yes"):
+        return
+    
+    # Suppress in child processes (identified by TRAINER_CHILD_FAMILY or isolation markers)
+    if os.getenv("TRAINER_CHILD_FAMILY") or os.getenv("TRAINER_ISOLATION_CHILD"):
+        return
+    
+    # Suppress if not a TTY (non-interactive, redirected output, etc.)
+    if not sys.stdout.isatty() and not os.getenv("FOXML_FORCE_BANNER", "").lower() in ("true", "1", "yes"):
         return
     
     # Use logger if available and configured, otherwise print directly to stderr

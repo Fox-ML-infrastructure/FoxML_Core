@@ -220,6 +220,10 @@ def _prepare_training_data_polars(mtf_data: Dict[str, pd.DataFrame],
                                  max_cs_samples: int = None) -> Tuple[np.ndarray, np.ndarray, List[str], np.ndarray, np.ndarray, List[str], Optional[np.ndarray], Dict[str, Any]]:
     """Polars-based data preparation for memory efficiency with cross-sectional sampling."""
     
+    # Initialize feature auditor for tracking feature drops
+    from TRAINING.utils.feature_audit import FeatureAuditor
+    auditor = FeatureAuditor(target=target)
+    
     logger.info(f"🎯 Building cross-sectional training data (polars, memory-efficient) for target: {target}")
     
     # Harmonize schema across symbols to avoid width mismatches on concat
@@ -275,6 +279,10 @@ def _prepare_training_data_polars(mtf_data: Dict[str, pd.DataFrame],
                                  ['fwd_ret_', 'will_peak', 'will_valley', 'mdd_', 'mfe_', 'y_will_'])
                         and col not in ['symbol', 'timestamp', 'ts']]
     
+    # Record requested features
+    auditor.record_requested(feature_names)
+    logger.info(f"📊 Feature audit [{target}]: {len(feature_names)} features requested")
+    
     # Validate features with registry (if enabled)
     if feature_names:
         try:
@@ -298,6 +306,10 @@ def _prepare_training_data_polars(mtf_data: Dict[str, pd.DataFrame],
                 use_registry=True,  # Enable registry validation
                 data_interval_minutes=detected_interval
             )
+            
+            # Record registry filtering
+            auditor.record_registry_allowed(validated_features, all_columns)
+            logger.info(f"📊 Feature audit [{target}]: {len(validated_features)} features allowed by registry (from {len(all_columns)} total columns)")
             
             # Keep only features that are both in feature_names and validated
             feature_names = [f for f in feature_names if f in validated_features]
@@ -344,6 +356,10 @@ def _prepare_training_data_polars(mtf_data: Dict[str, pd.DataFrame],
         if missing_in_polars:
             logger.error(f"🔍 Debug [{target}]: {len(missing_in_polars)} selected features missing from polars frame: {missing_in_polars[:10]}")
         
+        # Record features present in Polars
+        auditor.record_present_in_polars(combined_pl, feature_names)
+        logger.info(f"📊 Feature audit [{target}]: {len(auditor.present_in_polars)} features present in Polars frame")
+        
         data_pl = combined_pl.select(feature_cols)
         
         # Convert to pandas for sklearn compatibility
@@ -358,8 +374,22 @@ def _prepare_training_data_polars(mtf_data: Dict[str, pd.DataFrame],
         logger.error(f"Error extracting target {target}: {e}")
         return (None,)*8
     
-    # Continue with pandas-based processing
-    return _process_combined_data_pandas(combined_df, target, feature_names)
+    # Continue with pandas-based processing (pass auditor for tracking)
+    result = _process_combined_data_pandas(combined_df, target, feature_names, auditor=auditor)
+    
+    # Write audit report if auditor was used
+    if auditor and len(auditor.drop_records) > 0:
+        try:
+            # Try to get output directory from environment or use default
+            import os
+            output_dir = os.getenv("TRAINING_OUTPUT_DIR", "output")
+            audit_dir = Path(output_dir) / "artifacts" / "feature_audits"
+            audit_dir.mkdir(parents=True, exist_ok=True)
+            auditor.write_report(audit_dir)
+        except Exception as e:
+            logger.warning(f"Failed to write feature audit report: {e}")
+    
+    return result
 
 def _prepare_training_data_pandas(mtf_data: Dict[str, pd.DataFrame], 
                                  target: str, 
@@ -435,7 +465,7 @@ def _prepare_training_data_pandas(mtf_data: Dict[str, pd.DataFrame],
     
     return _process_combined_data_pandas(combined_df, target, feature_names)
 
-def _process_combined_data_pandas(combined_df: pd.DataFrame, target: str, feature_names: List[str]) -> Tuple[np.ndarray, np.ndarray, List[str], np.ndarray, np.ndarray, List[str], Optional[np.ndarray], Dict[str, Any]]:
+def _process_combined_data_pandas(combined_df: pd.DataFrame, target: str, feature_names: List[str], auditor=None) -> Tuple[np.ndarray, np.ndarray, List[str], np.ndarray, np.ndarray, List[str], Optional[np.ndarray], Dict[str, Any]]:
     """Process combined data using pandas."""
     
     # Route target to get task specification
@@ -477,6 +507,11 @@ def _process_combined_data_pandas(combined_df: pd.DataFrame, target: str, featur
     
     feature_df = combined_df[feature_names].copy()
     
+    # Record features kept for training (before coercion)
+    if auditor:
+        auditor.record_kept_for_training(feature_df, feature_names)
+        logger.info(f"📊 Feature audit [{target}]: {len(auditor.kept_for_training)} features kept for training (before coercion)")
+    
     # DIAGNOSTIC: Log initial state before coercion
     logger.info(f"🔍 Debug [{target}]: Initial feature_df shape={feature_df.shape}, "
                f"feature_names count={len(feature_names)}, "
@@ -510,10 +545,13 @@ def _process_combined_data_pandas(combined_df: pd.DataFrame, target: str, featur
     
     # Drop columns that are entirely NaN after coercion
     before_cols = feature_df.shape[1]
+    dropped_cols = feature_df.columns[feature_df.isna().all()].tolist()
     feature_df = feature_df.dropna(axis=1, how='all')
     dropped_all_nan = before_cols - feature_df.shape[1]
     if dropped_all_nan:
         logger.warning(f"🔧 Dropped {dropped_all_nan} all-NaN feature columns after coercion")
+        if auditor:
+            auditor.record_dropped_all_nan(dropped_cols, combined_df)
         
         # CRITICAL: If ALL features were dropped, this is fatal
         if feature_df.shape[1] == 0:
@@ -543,11 +581,20 @@ def _process_combined_data_pandas(combined_df: pd.DataFrame, target: str, featur
     numeric_cols = [c for c in feature_df.columns if pd.api.types.is_numeric_dtype(feature_df[c])]
     if len(numeric_cols) != feature_df.shape[1]:
         non_numeric_dropped = feature_df.shape[1] - len(numeric_cols)
+        dropped_non_numeric = [c for c in feature_df.columns if c not in numeric_cols]
         feature_df = feature_df[numeric_cols]
         logger.info(f"🔧 Dropped {non_numeric_dropped} non-numeric feature columns")
+        if auditor:
+            auditor.record_dropped_non_numeric(dropped_non_numeric, combined_df)
     
     # Build float32 matrix safely
     X = feature_df.to_numpy(dtype=np.float32, copy=False)
+    
+    # Record features used in final X matrix
+    if auditor:
+        final_feature_names = feature_df.columns.tolist()
+        auditor.record_used_in_X(final_feature_names, X)
+        logger.info(f"📊 Feature audit [{target}]: {len(final_feature_names)} features used in final X matrix")
     
     # CRITICAL: Guard against empty feature matrix
     if X.shape[1] == 0:

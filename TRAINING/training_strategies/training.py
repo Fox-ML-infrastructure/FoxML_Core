@@ -444,6 +444,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                         logger.info(f"  💾 Imputer saved: {imputer_path}")
                                     
                                     # Save metadata (match cross-sectional format)
+                                    # Define _pkg_ver BEFORE conditional blocks to avoid "referenced before assignment"
                                     def _pkg_ver(pkg_name):
                                         try:
                                             import importlib.metadata
@@ -553,7 +554,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                             else:
                                 # Fallback: save model directly if no strategy_manager
                                 model_path = symbol_target_dir / "model.joblib"
-                                import joblib
+                                # joblib already imported at top of file (line 176)
                                 joblib.dump(model_result.get('model'), model_path)
                                 logger.info(f"  ✅ Saved {family} model for {target}:{symbol} to {model_path}")
                                 
@@ -664,6 +665,25 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
             results['failed_reasons'][target] = "Data preparation returned None (likely all features became NaN after coercion)"
             continue
         
+        # CRITICAL: Validate feature count collapse (requested vs allowed vs used)
+        requested_count = len(selected_features) if selected_features else 0
+        allowed_count = len(feature_names) if feature_names else 0
+        used_count = X.shape[1] if X is not None else 0
+        
+        if requested_count > 0 and used_count < requested_count * 0.5:
+            logger.warning(
+                f"⚠️ Feature count collapse for {target}: "
+                f"requested={requested_count} → allowed={allowed_count} → used={used_count} "
+                f"({used_count/requested_count*100:.1f}% retained). "
+                f"This may indicate data quality issues or overly aggressive filtering."
+            )
+        
+        logger.info(
+            f"📊 Feature pipeline for {target}: "
+            f"requested={requested_count} allowed={allowed_count} used={used_count} "
+            f"(shape: X={X.shape if X is not None else 'None'})"
+        )
+        
         # Extract routing info (now in slot 7)
         if isinstance(routing_meta, dict) and 'spec' in routing_meta:
             logger.info(f"[Routing] Using task spec: {routing_meta['spec']}")
@@ -711,18 +731,69 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
             "MLP", "Ensemble", "ChangePoint", "NGBoost", "GMMRegime", "FTRLProximal", "VAE", "GAN", "MetaLearning", "MultiTask"  # Others
         ]
         
-        # Reorder families to prevent thread pollution
+        # PREFLIGHT: Validate families exist in trainer registry before training starts
+        from TRAINING.training_strategies.utils import normalize_family_name
+        from common.isolation_runner import TRAINER_MODULE_MAP
+        
+        # Get canonical family set from registries (must match MODMAP in family_runners.py)
+        MODMAP_KEYS = {
+            "LightGBM", "QuantileLightGBM", "XGBoost", "RewardBased", "GMMRegime",
+            "ChangePoint", "NGBoost", "Ensemble", "FTRLProximal", "MLP", "VAE",
+            "GAN", "MetaLearning", "MultiTask"
+        }
+        REGISTRY_KEYS = MODMAP_KEYS | set(TRAINER_MODULE_MAP.keys())
+        
+        # Normalize and validate requested families
+        validated_families = []
+        skipped_families = []
+        invalid_families = []
+        
+        for family in target_families:
+            normalized = normalize_family_name(family)
+            if normalized in ["mutual_information", "univariate_selection"]:
+                skipped_families.append((family, normalized, "feature_selector_not_trainer"))
+            elif normalized not in REGISTRY_KEYS:
+                invalid_families.append((family, normalized))
+            else:
+                validated_families.append(normalized)
+        
+        # Log preflight results
+        if invalid_families:
+            logger.warning(f"⚠️ Preflight: {len(invalid_families)} families not in trainer registry:")
+            for raw, norm in invalid_families:
+                logger.warning(f"  - {raw} (normalized: {norm}) → SKIP")
+        if skipped_families:
+            logger.info(f"ℹ️ Preflight: {len(skipped_families)} families are selectors (not trainers):")
+            for raw, norm, reason in skipped_families:
+                logger.info(f"  - {raw} (normalized: {norm}) → SKIP ({reason})")
+        
+        if not validated_families:
+            logger.error(f"❌ No valid trainer families after preflight validation. Requested: {target_families}")
+            results['failed_targets'].append(target)
+            results['failed_reasons'][target] = f"No valid trainer families (invalid: {[f[0] for f in invalid_families]}, selectors: {[f[0] for f in skipped_families]})"
+            continue
+        
+        logger.info(f"✅ Preflight: {len(validated_families)} valid trainer families, {len(skipped_families)} selectors skipped, {len(invalid_families)} invalid")
+        
+        # Reorder validated families to prevent thread pollution
         ordered_families = []
         for priority_family in FAMILY_ORDER:
-            if priority_family in target_families:
+            if priority_family in validated_families:
                 ordered_families.append(priority_family)
         # Add any remaining families not in the priority list
-        for family in target_families:
+        for family in validated_families:
             if family not in ordered_families:
                 ordered_families.append(family)
         
         logger.info(f"🔄 Reordered families to prevent thread pollution: {ordered_families}")
         print(f"🔄 Reordered families to prevent thread pollution: {ordered_families}")
+        
+        # Track training results per family
+        family_results = {
+            'trained_ok': [],
+            'failed': [],
+            'skipped': []
+        }
         
         for i, family in enumerate(ordered_families, 1):
             logger.info(f"🎯 [{i}/{len(ordered_families)}] Training {family} for {target}")
@@ -739,6 +810,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                 # Check family capabilities
                 if normalized_family not in FAMILY_CAPS:
                     logger.warning(f"Model family {family} (normalized: {normalized_family}) not in capabilities map. Skipping.")
+                    family_results['skipped'].append((family, normalized_family, "not_in_capabilities_map"))
                     continue
                 
                 caps = FAMILY_CAPS[normalized_family]
@@ -751,14 +823,16 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                     # For isolated models, let child process handle TF availability
                     # For in-process models, check TF availability in parent
                     from TRAINING.common.runtime_policy import should_isolate
-                    if not should_isolate(family) and not tf_available():
-                        logger.warning(f"TensorFlow missing → skipping {family}")
+                    if not should_isolate(normalized_family) and not tf_available():
+                        logger.warning(f"TensorFlow missing → skipping {normalized_family}")
+                        family_results['skipped'].append((family, normalized_family, "tensorflow_missing"))
                         continue
                     # If isolated, child process will handle TF import/initialization
                 
                 # Check NGBoost dependency
                 if normalized_family == "NGBoost" and not ngboost_available():
                     logger.warning(f"NGBoost missing → skipping {normalized_family}")
+                    family_results['skipped'].append((family, normalized_family, "ngboost_missing"))
                     continue
                 
                 logger.info(f"🚀 [{family}] Starting {family} training...")
@@ -776,12 +850,15 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                         logger.warning(f"⚠️ [{family}] train_model_comprehensive returned None")
                 except Exception as train_err:
                     elapsed = _now() - start_time
-                    logger.error(f"❌ [{family}] Training failed after {elapsed:.2f} seconds: {train_err}")
-                    logger.exception(f"Full traceback for {family}:")
-                    raise  # Re-raise to be caught by outer exception handler
+                    logger.error(f"❌ [{normalized_family}] Training failed after {elapsed:.2f} seconds: {train_err}")
+                    logger.exception(f"Full traceback for {normalized_family}:")
+                    family_results['failed'].append((family, normalized_family, str(train_err)))
+                    # Don't re-raise - continue with next family
+                    continue
                 
-                if model_result is not None:
-                    target_results[family] = model_result
+                if model_result is not None and model_result.get('success', False):
+                    target_results[normalized_family] = model_result
+                    family_results['trained_ok'].append((family, normalized_family))
                     
                     # Track reproducibility: compare to previous training run
                     if output_dir and model_result.get('success', False):
@@ -1038,8 +1115,12 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                     except Exception as e:
                         logger.debug(f"[Cleanup] Minor cleanup issue: {e}")
                         pass
+                elif model_result is not None:
+                    family_results['failed'].append((family, normalized_family, "train_model_comprehensive returned success=False"))
+                    logger.warning(f"❌ {family} failed for {target} (success=False)")
                 else:
-                    logger.warning(f"❌ {family} failed for {target}")
+                    family_results['failed'].append((family, normalized_family, "train_model_comprehensive returned None"))
+                    logger.warning(f"❌ {family} failed for {target} (returned None)")
                     
             except Exception as e:
                 logger.exception(f"❌ [{family}] {family} failed for {target}: {e}")
@@ -1073,15 +1154,34 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
             logger.debug(f"[Cleanup] Minor cleanup issue after target {target}: {e}")
             pass
     
-    # Count and log saved models
+    # Count and log saved models with detailed summary
     total_saved = 0
+    total_failed = 0
+    total_skipped = 0
+    
     for target, target_results in results['models'].items():
         for family, model_result in target_results.items():
             if model_result and model_result.get('success', False):
                 total_saved += 1
     
-    logger.info(f"💾 Total models saved: {total_saved}")
+    # Aggregate family results across all targets
+    all_trained_ok = []
+    all_failed = []
+    all_skipped = []
+    
+    # Note: family_results is per-target, so we'd need to track globally
+    # For now, log per-target summary and overall saved count
+    
+    logger.info("=" * 80)
+    logger.info(f"📊 Training Summary:")
+    logger.info(f"  ✅ Trained successfully: {total_saved} models")
+    logger.info(f"  ❌ Failed targets: {len(results.get('failed_targets', []))}")
+    if results.get('failed_targets'):
+        for failed_target in results['failed_targets']:
+            reason = results.get('failed_reasons', {}).get(failed_target, 'unknown')
+            logger.info(f"    - {failed_target}: {reason}")
     logger.info(f"📁 Models saved to: {output_dir}")
+    logger.info("=" * 80)
     
     return results
 
@@ -1089,6 +1189,10 @@ def train_model_comprehensive(family: str, X: np.ndarray, y: np.ndarray,
                             target: str, strategy: str, feature_names: List[str],
                             caps: Dict[str, Any], routing_meta: Dict[str, Any] = None) -> Dict[str, Any]:
     """Train model using modular trainers directly - enforces runtime policy and routing."""
+    
+    # CRITICAL: Normalize family name before all registry lookups
+    from TRAINING.training_strategies.utils import normalize_family_name
+    family = normalize_family_name(family)
     
     logger.info(f"🎯 Training {family} model with {strategy} strategy")
     

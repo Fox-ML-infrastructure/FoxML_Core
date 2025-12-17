@@ -3290,38 +3290,35 @@ def save_multi_model_results(
 ):
     """Save multi-model feature selection results
     
-    Structure matches target ranking layout:
+    Structure matches target ranking layout exactly:
     REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
       feature_importances/
         {model}_importances.csv
         feature_importance_multi_model.csv
         feature_importance_with_boruta_debug.csv
         model_agreement_matrix.csv
-      metadata/
-        target_confidence.json
-        target_routing.json
-        cross_sectional_stability_metadata.json
-        multi_model_metadata.json
-      artifacts/
-        selected_features.txt
-      DECISION/
-      REPRODUCIBILITY/
+      feature_importance_snapshots/
+        {target}/
+          {method}/
+            {snapshot_id}.json
+      feature_exclusions/
+        {target}_exclusions.yaml
+      cohort={cohort_id}/
+        [telemetry files from reproducibility tracker]
+      selected_features.txt  (at target level, not in artifacts/)
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Create organized subdirectories (matching target ranking structure)
+    # Create organized subdirectories (matching target ranking structure exactly)
     importances_dir = output_dir / "feature_importances"  # Match target ranking
-    metadata_dir = output_dir / "metadata"
-    artifacts_dir = output_dir / "artifacts"
     importances_dir.mkdir(parents=True, exist_ok=True)
-    metadata_dir.mkdir(parents=True, exist_ok=True)
-    artifacts_dir.mkdir(parents=True, exist_ok=True)
     
-    # 1. Selected features list → artifacts/
-    with open(artifacts_dir / "selected_features.txt", "w") as f:
+    # 1. Selected features list → target level (matching TARGET_RANKING, no artifacts/ folder)
+    selected_features_path = output_dir / "selected_features.txt"
+    with open(selected_features_path, "w") as f:
         for feature in selected_features:
             f.write(f"{feature}\n")
-    logger.info(f"✅ Saved {len(selected_features)} features to {artifacts_dir / 'selected_features.txt'}")
+    logger.info(f"✅ Saved {len(selected_features)} features to {selected_features_path}")
     
     # 2. Detailed summary CSV (includes all columns including Boruta gatekeeper) → feature_importances/
     summary_df.to_csv(importances_dir / "feature_importance_multi_model.csv", index=False)
@@ -3379,14 +3376,17 @@ def save_multi_model_results(
     agreement_matrix.to_csv(importances_dir / "model_agreement_matrix.csv")
     logger.info(f"✅ Saved model agreement matrix to {importances_dir / 'model_agreement_matrix.csv'}")
     
-    # 5. Metadata JSON → metadata/
+    # 5. Metadata JSON → target level (matching TARGET_RANKING, metadata goes in cohort/ folder from reproducibility tracker)
+    # For now, save a summary at target level for quick access (detailed metadata is in cohort/)
     metadata['n_selected_features'] = len(selected_features)
     metadata['n_total_results'] = len(all_results)
     metadata['model_families_used'] = list(set(r.model_family for r in all_results))
 
-    with open(metadata_dir / "multi_model_metadata.json", "w") as f:
+    # Save summary metadata at target level (detailed metadata is in cohort/ from reproducibility tracker)
+    # This matches TARGET_RANKING structure where summary files are at target level
+    with open(output_dir / "feature_selection_summary.json", "w") as f:
         json.dump(metadata, f, indent=2)
-    logger.info(f"✅ Saved metadata to {metadata_dir / 'multi_model_metadata.json'}")
+    logger.info(f"✅ Saved feature selection summary to {output_dir / 'feature_selection_summary.json'}")
     
     # 6. Family status tracking JSON (for debugging broken models)
     if 'family_statuses' in metadata and metadata['family_statuses']:
@@ -3436,13 +3436,13 @@ def save_multi_model_results(
         for family_summary in status_summary.values():
             family_summary['error_types'] = list(family_summary['error_types'])
         
-        # Save detailed status file → metadata/
-        with open(metadata_dir / "model_family_status.json", "w") as f:
+        # Save detailed status file → target level (matching TARGET_RANKING structure)
+        with open(output_dir / "model_family_status.json", "w") as f:
             json.dump({
                 'summary': status_summary,
                 'detailed': family_statuses
             }, f, indent=2)
-        logger.info(f"✅ Saved model family status tracking to {metadata_dir / 'model_family_status.json'}")
+        logger.info(f"✅ Saved model family status tracking to {output_dir / 'model_family_status.json'}")
         
         # Log summary (only hard failures, not soft fallbacks)
         failed_families = [f for f, s in status_summary.items() if s['failed'] > 0]
@@ -3477,7 +3477,8 @@ def save_multi_model_results(
                 top_k=None  # Will use config or default
             )
             
-            with open(metadata_dir / "target_confidence.json", "w") as f:
+            # Save target confidence at target level (matching TARGET_RANKING structure)
+            with open(output_dir / "target_confidence.json", "w") as f:
                 json.dump(confidence_metrics, f, indent=2)
             
             # Log confidence summary
@@ -3490,7 +3491,7 @@ def save_multi_model_results(
             else:
                 logger.info(f"✅ Target {target_name}: confidence={confidence}")
             
-            logger.info(f"✅ Saved target confidence metrics to {metadata_dir / 'target_confidence.json'}")
+            logger.info(f"✅ Saved target confidence metrics to {output_dir / 'target_confidence.json'}")
     except Exception as e:
         logger.warning(f"Failed to compute target confidence metrics: {e}")
         logger.debug("Confidence computation requires model_families_config in metadata", exc_info=True)

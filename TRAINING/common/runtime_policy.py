@@ -102,7 +102,7 @@ class RuntimePolicy:
 CROSS_SECTIONAL_POLICIES: Dict[str, RuntimePolicy] = {
     # ---- GPU Families (MUST isolate for memory cleanup) ----
     
-    "XGBoost": RuntimePolicy(
+    "xgboost": RuntimePolicy(
         run_mode="process",
         needs_gpu=True,
         backends=frozenset({"xgb"}),
@@ -110,82 +110,82 @@ CROSS_SECTIONAL_POLICIES: Dict[str, RuntimePolicy] = {
         force_isolation_reason="GPU allocator pools don't release until process exit"
     ),
     
-    "MLP": RuntimePolicy(
+    "mlp": RuntimePolicy(
         run_mode="process",
         needs_gpu=True,
         backends=frozenset({"tf"}),
         omp_user_api="openmp",
-        cap_vram_mb=_get_vram_cap("MLP", 4096),
+        cap_vram_mb=_get_vram_cap("mlp", 4096),
         force_isolation_reason="TensorFlow CUDA context persists in-process"
     ),
     
-    "VAE": RuntimePolicy(
+    "vae": RuntimePolicy(
         run_mode="process",
         needs_gpu=True,
         backends=frozenset({"tf"}),
         omp_user_api="openmp",
-        cap_vram_mb=_get_vram_cap("VAE", 4096),
+        cap_vram_mb=_get_vram_cap("vae", 4096),
         force_isolation_reason="TensorFlow CUDA context persists in-process"
     ),
     
-    "GAN": RuntimePolicy(
+    "gan": RuntimePolicy(
         run_mode="process",
         needs_gpu=True,
         backends=frozenset({"tf"}),
         omp_user_api="openmp",
-        cap_vram_mb=_get_vram_cap("GAN", 4096),
+        cap_vram_mb=_get_vram_cap("gan", 4096),
         force_isolation_reason="TensorFlow CUDA context persists in-process"
     ),
     
-    "MultiTask": RuntimePolicy(
+    "multi_task": RuntimePolicy(
         run_mode="process",
         needs_gpu=True,
         backends=frozenset({"tf"}),
         omp_user_api="openmp",
-        cap_vram_mb=_get_vram_cap("MultiTask", 4096),
+        cap_vram_mb=_get_vram_cap("multi_task", 4096),
         force_isolation_reason="TensorFlow CUDA context persists in-process"
     ),
     
     # ---- CPU Families (in-process for speed) ----
     
-    "LightGBM": RuntimePolicy(
+    "lightgbm": RuntimePolicy(
         run_mode="inproc",
         needs_gpu=False,
         backends=frozenset(),
         omp_user_api="openmp"
     ),
     
-    "QuantileLightGBM": RuntimePolicy(
+    "quantile_lightgbm": RuntimePolicy(
         run_mode="inproc",
         needs_gpu=False,
         backends=frozenset(),
         omp_user_api="openmp"
     ),
     
-    "NGBoost": RuntimePolicy(
+    "ngboost": RuntimePolicy(
         run_mode="inproc",
         needs_gpu=False,
         backends=frozenset(),
         omp_user_api="openmp"
     ),
     
-    "Ensemble": RuntimePolicy(
+    "ensemble": RuntimePolicy(
         run_mode="inproc",
         needs_gpu=False,
         backends=frozenset(),
         omp_user_api="openmp"
     ),
     
-    "MetaLearning": RuntimePolicy(
+    "meta_learning": RuntimePolicy(
         run_mode="process",
         needs_gpu=True,
         backends=frozenset({"tf"}),
         omp_user_api="openmp",
-        cap_vram_mb=_get_vram_cap("MetaLearning", 4096),
+        cap_vram_mb=_get_vram_cap("meta_learning", 4096),
         force_isolation_reason="TensorFlow CUDA context persists in-process"
     ),
     
-    "FTRLProximal": RuntimePolicy(
+    "ftrl_proximal": RuntimePolicy(
         run_mode="inproc",
         needs_gpu=False,
         backends=frozenset(),
@@ -194,7 +194,7 @@ CROSS_SECTIONAL_POLICIES: Dict[str, RuntimePolicy] = {
     
     # ---- BLAS-Heavy Families (isolate to prevent MKL crashes) ----
     
-    "ChangePoint": RuntimePolicy(
+    "change_point": RuntimePolicy(
         run_mode="process",
         needs_gpu=False,
         backends=frozenset(),
@@ -202,7 +202,7 @@ CROSS_SECTIONAL_POLICIES: Dict[str, RuntimePolicy] = {
         force_isolation_reason="MKL/OpenMP conflicts cause segfaults in scipy.linalg.solve"
     ),
     
-    "GMMRegime": RuntimePolicy(
+    "gmm_regime": RuntimePolicy(
         run_mode="process",
         needs_gpu=False,
         backends=frozenset(),
@@ -210,7 +210,7 @@ CROSS_SECTIONAL_POLICIES: Dict[str, RuntimePolicy] = {
         force_isolation_reason="Large BLAS operations + MKL threading issues"
     ),
     
-    "RewardBased": RuntimePolicy(
+    "reward_based": RuntimePolicy(
         run_mode="process",
         needs_gpu=False,
         backends=frozenset(),
@@ -227,57 +227,57 @@ CROSS_SECTIONAL_POLICIES: Dict[str, RuntimePolicy] = {
 SEQUENTIAL_POLICIES: Dict[str, RuntimePolicy] = {
     # ---- GPU Sequential Families ----
     
-    "CNN1D": RuntimePolicy(
+    "cnn1d": RuntimePolicy(
         run_mode="process",
         needs_gpu=True,
         backends=frozenset({"tf"}),
         omp_user_api="openmp",
-        cap_vram_mb=_get_vram_cap("CNN1D", 4096),
+        cap_vram_mb=_get_vram_cap("cnn1d", 4096),
         force_isolation_reason="TensorFlow CUDA context persists in-process"
     ),
     
-    "LSTM": RuntimePolicy(
+    "lstm": RuntimePolicy(
         run_mode="process",
         needs_gpu=True,
         backends=frozenset({"tf"}),
         omp_user_api="openmp",
-        cap_vram_mb=_get_vram_cap("LSTM", 4096),
+        cap_vram_mb=_get_vram_cap("lstm", 4096),
         force_isolation_reason="TensorFlow CUDA context persists in-process"
     ),
     
-    "Transformer": RuntimePolicy(
+    "transformer": RuntimePolicy(
         run_mode="process",
         needs_gpu=True,
         backends=frozenset({"tf"}),
         omp_user_api="openmp",
-        cap_vram_mb=_get_vram_cap("Transformer", 4096),
+        cap_vram_mb=_get_vram_cap("transformer", 4096),
         force_isolation_reason="TensorFlow CUDA context persists in-process"
     ),
     
-    "TabLSTM": RuntimePolicy(
+    "tablstm": RuntimePolicy(
         run_mode="process",
         needs_gpu=True,
         backends=frozenset({"tf"}),
         omp_user_api="openmp",
-        cap_vram_mb=_get_vram_cap("TabLSTM", 4096),
+        cap_vram_mb=_get_vram_cap("tablstm", 4096),
         force_isolation_reason="TensorFlow CUDA context persists in-process"
     ),
     
-    "TabTransformer": RuntimePolicy(
+    "tabtransformer": RuntimePolicy(
         run_mode="process",
         needs_gpu=True,
         backends=frozenset({"tf"}),
         omp_user_api="openmp",
-        cap_vram_mb=_get_vram_cap("TabTransformer", 4096),
+        cap_vram_mb=_get_vram_cap("tabtransformer", 4096),
         force_isolation_reason="TensorFlow CUDA context persists in-process"
     ),
     
-    "TabCNN": RuntimePolicy(
+    "tabcnn": RuntimePolicy(
         run_mode="process",
         needs_gpu=True,
         backends=frozenset({"tf"}),
         omp_user_api="openmp",
-        cap_vram_mb=_get_vram_cap("TabCNN", 4096),
+        cap_vram_mb=_get_vram_cap("tabcnn", 4096),
         force_isolation_reason="TensorFlow CUDA context persists in-process"
     ),
 }
@@ -314,10 +314,19 @@ def get_policy(family: str) -> RuntimePolicy:
     
     Args:
         family: Family name (e.g., "XGBoost", "MLP", "LightGBM")
+                 Will be normalized to canonical TitleCase before lookup.
     
     Returns:
         RuntimePolicy instance with execution requirements
     """
+    # Normalize family name for consistent lookup
+    try:
+        from TRAINING.training_strategies.utils import normalize_family_name
+        family = normalize_family_name(family)
+    except ImportError:
+        # Fallback if utils not available (shouldn't happen in normal flow)
+        pass
+    
     policy = POLICY.get(family, DEFAULT_POLICY)
     
     if family not in POLICY:

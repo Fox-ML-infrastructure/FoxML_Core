@@ -240,6 +240,25 @@ def find_near_copy_features(
     return leaky
 
 
+def _is_calendar_feature(feature_name: str) -> bool:
+    """
+    Check if a feature is a calendar/time-index feature (not suspicious by default).
+    
+    Calendar features are time-index features that are not "future info" but may
+    dominate importance due to seasonality. These should be excluded from leak
+    suspicion or handled separately.
+    """
+    calendar_patterns = [
+        'trading_day_of_quarter', 'trading_day_of_month', 'trading_day_of_week',
+        'wd_', 'month_', 'quarter_', 'day_of_', 'dow_', 'dom_', 'doy_',
+        'monthly_seasonality', 'quarterly_seasonality', 'weekly_seasonality',
+        'hour_', 'minute_', 'time_of_day', 'is_weekend', 'is_month_end',
+        'is_quarter_end', 'is_year_end'
+    ]
+    feature_lower = feature_name.lower()
+    return any(pattern in feature_lower for pattern in calendar_patterns)
+
+
 def _detect_leaking_features(
     feature_names: List[str],
     importances: np.ndarray,
@@ -249,6 +268,9 @@ def _detect_leaking_features(
 ) -> List[Tuple[str, float]]:
     """
     Detect features with suspiciously high importance (likely data leakage).
+    
+    Excludes calendar/time-index features from leak suspicion (they may dominate
+    due to seasonality, which is legitimate, not leakage).
     
     Returns list of (feature_name, importance) tuples for suspicious features.
     """
@@ -268,10 +290,18 @@ def _detect_leaking_features(
     feature_imp_pairs = list(zip(feature_names, normalized_importance))
     feature_imp_pairs.sort(key=lambda x: x[1], reverse=True)
     
-    # Find features with importance above threshold
+    # Find features with importance above threshold (excluding calendar features)
     suspicious = []
     for feat, imp in feature_imp_pairs:
         if imp >= threshold:
+            # Exclude calendar features from leak detection
+            if _is_calendar_feature(feat):
+                logger.debug(
+                    f"  📅 Calendar feature {feat} has {imp:.1%} importance (threshold: {threshold:.1%}) - "
+                    f"likely seasonal, not leakage. Excluding from leak detection."
+                )
+                continue
+            
             suspicious.append((feat, float(imp)))
             logger.error(
                 f"  🚨 LEAK DETECTED: {feat} has {imp:.1%} importance in {model_name} "
@@ -279,19 +309,30 @@ def _detect_leaking_features(
             )
     
     # Also check if top feature dominates (even if below threshold)
+    # But exclude calendar features from this check too
     if len(normalized_importance) > 0:
         top_feature, top_importance = feature_imp_pairs[0]
         
-        # If top feature has >30% and is much larger than second, flag it
-        if top_importance >= 0.30 and len(feature_imp_pairs) > 1:
-            second_importance = feature_imp_pairs[1][1]
-            if top_importance > second_importance * 3:  # 3x larger than second
-                if (top_feature, top_importance) not in suspicious:
-                    suspicious.append((top_feature, float(top_importance)))
-                    logger.warning(
-                        f"  ⚠️  SUSPICIOUS: {top_feature} has {top_importance:.1%} importance "
-                        f"(3x larger than next feature: {feature_imp_pairs[1][0]}={second_importance:.1%}) - investigate for leakage"
-                    )
+        # Skip dominance check if top feature is a calendar feature
+        if not _is_calendar_feature(top_feature):
+            # If top feature has >30% and is much larger than second, flag it
+            if top_importance >= 0.30 and len(feature_imp_pairs) > 1:
+                second_importance = feature_imp_pairs[1][1]
+                if top_importance > second_importance * 3:  # 3x larger than second
+                    if (top_feature, top_importance) not in suspicious:
+                        suspicious.append((top_feature, float(top_importance)))
+                        logger.warning(
+                            f"  ⚠️  SUSPICIOUS: {top_feature} has {top_importance:.1%} importance "
+                            f"(3x larger than next feature: {feature_imp_pairs[1][0]}={second_importance:.1%}) - investigate for leakage"
+                        )
+        else:
+            # Calendar feature is top - log as info, not warning
+            if len(feature_imp_pairs) > 1:
+                second_importance = feature_imp_pairs[1][1]
+                logger.info(
+                    f"  📅 Calendar feature {top_feature} has {top_importance:.1%} importance "
+                    f"(next: {feature_imp_pairs[1][0]}={second_importance:.1%}) - likely seasonal pattern, not leakage"
+                )
     
     # CRITICAL: If we suspect a leak (force_report=True) or found suspicious features,
     # always print top 10 features to help identify the leak

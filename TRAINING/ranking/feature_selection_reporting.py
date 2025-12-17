@@ -57,22 +57,73 @@ def save_feature_selection_rankings(
         symbol: Symbol name (for SYMBOL_SPECIFIC view)
         metadata: Optional metadata dict
     """
-    # Determine base output directory (walk up from REPRODUCIBILITY/FEATURE_SELECTION structure)
-    base_output_dir = output_dir
-    while base_output_dir.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "feature_selections", "target_rankings"]:
-        base_output_dir = base_output_dir.parent
-        if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
-            break
-    
-    # Create directories
+    # Determine target-level directory (matching TARGET_RANKING structure)
+    # output_dir is already at: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
+    # Use it directly to avoid nested structures
     target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-    # Use CROSS_SECTIONAL view structure (default for feature selection)
-    view_dir = view if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
-    if view_dir == "SYMBOL_SPECIFIC" and symbol:
-        repro_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean / f"symbol={symbol}"
+    
+    # SIMPLIFIED: If output_dir is already at target level or inside FEATURE_SELECTION, use it directly
+    # This prevents creating nested REPRODUCIBILITY structures
+    if output_dir.name == target_name_clean:
+        # Already at target level: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
+        repro_dir = output_dir
+    elif "FEATURE_SELECTION" in output_dir.parts:
+        # We're inside FEATURE_SELECTION structure - find target level
+        # Walk up to find CROSS_SECTIONAL or SYMBOL_SPECIFIC, then go to target
+        current = output_dir
+        while current.name not in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "FEATURE_SELECTION"]:
+            if current.name == target_name_clean:
+                # Found target level
+                repro_dir = current
+                break
+            current = current.parent
+            if not current.parent.exists() or current.name == "RESULTS":
+                # Fallback: construct from current position
+                if "FEATURE_SELECTION" in current.parts:
+                    # We're at FEATURE_SELECTION level, go to view/target
+                    view_dir = view if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
+                    if view_dir == "SYMBOL_SPECIFIC" and symbol:
+                        repro_dir = current / view_dir / target_name_clean / f"symbol={symbol}"
+                    else:
+                        repro_dir = current / view_dir / target_name_clean
+                else:
+                    # We're at run level, construct full path
+                    view_dir = view if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
+                    if view_dir == "SYMBOL_SPECIFIC" and symbol:
+                        repro_dir = current / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean / f"symbol={symbol}"
+                    else:
+                        repro_dir = current / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean
+                break
+        else:
+            # Found CROSS_SECTIONAL or SYMBOL_SPECIFIC level
+            if current.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+                repro_dir = current / target_name_clean
+            else:
+                # Fallback: use output_dir if it contains target name
+                repro_dir = output_dir
     else:
-        repro_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean
+        # Not in FEATURE_SELECTION structure - construct path from scratch
+        base_output_dir = output_dir
+        while base_output_dir.name not in ["FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "RESULTS"]:
+            base_output_dir = base_output_dir.parent
+            if not base_output_dir.parent.exists():
+                break
+        view_dir = view if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
+        if view_dir == "SYMBOL_SPECIFIC" and symbol:
+            repro_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean / f"symbol={symbol}"
+        else:
+            repro_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean
+    
+    # DECISION folder should be at run level, not target level (matching TARGET_RANKING)
+    # Walk up to run level to find DECISION
+    base_output_dir = repro_dir
+    while base_output_dir.name not in ["RESULTS"] and "REPRODUCIBILITY" in base_output_dir.parts:
+        base_output_dir = base_output_dir.parent
+        if not base_output_dir.parent.exists():
+            break
+    # DECISION is at run level: RESULTS/{run_id}/DECISION/FEATURE_SELECTION/{target}/
     decision_dir = base_output_dir / "DECISION" / "FEATURE_SELECTION" / target_name_clean
+    
     repro_dir.mkdir(parents=True, exist_ok=True)
     decision_dir.mkdir(parents=True, exist_ok=True)
     

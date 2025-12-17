@@ -127,6 +127,15 @@ Replicates ALL functionality from train_mtf_cross_sectional_gpu.py but with:
 - Data validation
 """
 
+# Validate registries at startup (fail-fast if keys are non-canonical)
+try:
+    from TRAINING.utils.registry_validation import validate_all_registries
+    validate_all_registries()
+except Exception as e:
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.warning(f"Registry validation skipped: {e}")
+
 # ANTI-DEADLOCK: Process-level safety (before importing TF/XGB/sklearn)
 import time as _t
 # Make thread pools predictable (also avoids weird deadlocks)

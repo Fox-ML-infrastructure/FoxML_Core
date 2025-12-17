@@ -90,9 +90,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Print license banner on startup (compliance and commercial use notice)
+# CRITICAL: Only print in main process, not in child processes or when suppressed
 try:
-    from TRAINING.common.license_banner import print_license_banner_once
-    print_license_banner_once()
+    import os
+    if not os.getenv("FOXML_SUPPRESS_BANNER") and not os.getenv("TRAINER_ISOLATION_CHILD"):
+        from TRAINING.common.license_banner import print_license_banner_once
+        print_license_banner_once()
 except Exception:
     # Don't fail if banner can't be printed
     pass
