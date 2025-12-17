@@ -1135,12 +1135,12 @@ class ReproducibilityTracker:
             "stage": stage_normalized,  # Already normalized to uppercase
             "route_type": route_type.upper() if (route_type and isinstance(route_type, str)) else (route_type.value if hasattr(route_type, 'value') else str(route_type).upper() if route_type else None),
             "view": (additional_data.get('view') if additional_data else None) if stage_normalized == "TARGET_RANKING" else None,  # Add view for TARGET_RANKING
-            "target": item_name,
-            "N_effective": cohort_metadata.get('N_effective_cs', 0),
+            "target_name": item_name,  # Changed from "target" to match finalize_run() expectations
+            "n_effective": cohort_metadata.get('N_effective_cs', 0),  # Changed from "N_effective" to match finalize_run() expectations
             "n_symbols": cohort_metadata.get('n_symbols', 0),
             "symbols": symbols_list,  # Sorted, deduplicated list of symbols
-            "date_start": cohort_metadata.get('date_range', {}).get('start_ts'),
-            "date_end": cohort_metadata.get('date_range', {}).get('end_ts'),
+            "date_range_start": cohort_metadata.get('date_range', {}).get('start_ts'),  # Changed from "date_start" to match finalize_run() expectations
+            "date_range_end": cohort_metadata.get('date_range', {}).get('end_ts'),  # Changed from "date_end" to match finalize_run() expectations
             "universe_id": cohort_metadata.get('cs_config', {}).get('universe_id'),
             "min_cs": cohort_metadata.get('cs_config', {}).get('min_cs'),
             "max_cs_samples": cohort_metadata.get('cs_config', {}).get('max_cs_samples'),
@@ -1623,9 +1623,11 @@ class ReproducibilityTracker:
                         additional_data = {}
                     additional_data['diff_telemetry'] = diff_telemetry_data
             except Exception as e:
-                logger.debug(f"Diff telemetry failed (non-critical): {e}")
+                # CRITICAL: Log at WARNING level so it's visible - this indicates a real problem
+                logger.warning(f"⚠️  Diff telemetry failed for {stage_normalized}:{item_name}: {e}")
                 import traceback
                 logger.debug(f"Diff telemetry traceback: {traceback.format_exc()}")
+                # Don't re-raise - metadata.json and metrics.json should still be written even if diff telemetry fails
         
         # PHASE 2: Unified schema - build metrics_data for _update_index (always needed)
         # Metrics writer writes metrics.json/parquet, but we still need metrics_data for index
@@ -3397,14 +3399,24 @@ class ReproducibilityTracker:
         if ctx.stage == "target_ranking" and hasattr(ctx, 'view') and ctx.view:
             route_type_for_log = ctx.view
         
-        self.log_comparison(
-            stage=ctx.stage,
-            item_name=ctx.target_name or ctx.target_column or "unknown",
-            metrics=metrics_with_cohort,
-            additional_data=additional_data,
-            route_type=route_type_for_log,  # Use view for TARGET_RANKING
-            symbol=ctx.symbol
-        )
+        # CRITICAL: Wrap log_comparison in try/except to ensure we can still write audit report
+        # even if log_comparison fails. log_comparison itself has exception handling, but
+        # we want to be defensive here.
+        try:
+            self.log_comparison(
+                stage=ctx.stage,
+                item_name=ctx.target_name or ctx.target_column or "unknown",
+                metrics=metrics_with_cohort,
+                additional_data=additional_data,
+                route_type=route_type_for_log,  # Use view for TARGET_RANKING
+                symbol=ctx.symbol
+            )
+        except Exception as e:
+            # log_comparison should never raise (it has its own exception handling),
+            # but if it does, log it and continue so we can still write audit report
+            logger.error(f"log_comparison raised unexpected exception (this should not happen): {e}")
+            logger.debug(f"log_comparison exception traceback: {traceback.format_exc()}")
+            # Continue - we'll still write audit report below
         
         # 7. Write audit report
         audit_report_path = None
@@ -3429,17 +3441,67 @@ class ReproducibilityTracker:
                 ctx.symbol,
                 ctx.model_family
             )
-            if cohort_dir.exists():
-                # Verify metadata files exist (should have been written by _save_to_cohort)
-                metadata_file = cohort_dir / "metadata.json"
-                metrics_file = cohort_dir / "metrics.json"
-                if not metadata_file.exists() or not metrics_file.exists():
-                    logger.warning(
-                        f"⚠️  Metadata files missing in {cohort_dir.name}/: "
-                        f"metadata.json={'missing' if not metadata_file.exists() else 'exists'}, "
-                        f"metrics.json={'missing' if not metrics_file.exists() else 'exists'}. "
-                        f"This may indicate a previous bug (fixed 2025-12-12). New runs should have complete metadata."
-                    )
+            # CRITICAL: Ensure cohort_dir exists (it should have been created by _save_to_cohort)
+            if not cohort_dir.exists():
+                cohort_dir.mkdir(parents=True, exist_ok=True)
+                logger.warning(f"⚠️  Cohort directory {cohort_dir.name}/ did not exist - created it. This may indicate _save_to_cohort() was not called.")
+            
+            # Verify metadata files exist (should have been written by _save_to_cohort)
+            metadata_file = cohort_dir / "metadata.json"
+            metrics_file = cohort_dir / "metrics.json"
+            if not metadata_file.exists() or not metrics_file.exists():
+                logger.warning(
+                    f"⚠️  Metadata files missing in {cohort_dir.name}/: "
+                    f"metadata.json={'missing' if not metadata_file.exists() else 'exists'}, "
+                    f"metrics.json={'missing' if not metrics_file.exists() else 'exists'}. "
+                    f"Attempting to write them now as fallback."
+                )
+                
+                # CRITICAL FALLBACK: If _save_to_cohort() didn't write the files, write them here
+                # This ensures metadata.json and metrics.json are always written
+                try:
+                    # Build minimal metadata from available data
+                    minimal_metadata = {
+                        "schema_version": REPRODUCIBILITY_SCHEMA_VERSION,
+                        "cohort_id": cohort_id,
+                        "run_id": ctx.run_id if hasattr(ctx, 'run_id') else None,
+                        "stage": ctx.stage,
+                        "route_type": route_type_for_cohort_dir,
+                        "view": ctx.view if hasattr(ctx, 'view') else None,
+                        "target": ctx.target_name or ctx.target_column or "unknown",
+                        "N_effective": cohort_metadata.get('N_effective_cs', 0) if cohort_metadata else 0,
+                        "n_symbols": cohort_metadata.get('n_symbols', 0) if cohort_metadata else 0,
+                        "date_start": cohort_metadata.get('date_range', {}).get('start_ts') if cohort_metadata else None,
+                        "date_end": cohort_metadata.get('date_range', {}).get('end_ts') if cohort_metadata else None,
+                        "created_at": datetime.now().isoformat()
+                    }
+                    
+                    # Write metadata.json if missing
+                    if not metadata_file.exists():
+                        _write_atomic_json(metadata_file, minimal_metadata)
+                        logger.info(f"✅ Wrote metadata.json (fallback) to {cohort_dir.name}/")
+                    
+                    # Write metrics.json if missing
+                    if not metrics_file.exists() and self.metrics:
+                        minimal_metrics = {
+                            "run_id": minimal_metadata.get("run_id"),
+                            "timestamp": minimal_metadata.get("created_at"),
+                            "stage": ctx.stage,
+                            **{k: v for k, v in metrics_with_cohort.items() if k not in ['timestamp', 'cohort_metadata', 'additional_data']}
+                        }
+                        self.metrics.write_cohort_metrics(
+                            cohort_dir=cohort_dir,
+                            stage=ctx.stage,
+                            view=ctx.view if hasattr(ctx, 'view') else "UNKNOWN",
+                            target=ctx.target_name or ctx.target_column or "unknown",
+                            symbol=ctx.symbol if hasattr(ctx, 'symbol') else None,
+                            run_id=minimal_metadata.get("run_id") or datetime.now().isoformat(),
+                            metrics=minimal_metrics
+                        )
+                        logger.info(f"✅ Wrote metrics.json (fallback) to {cohort_dir.name}/")
+                except Exception as e:
+                    logger.error(f"❌ Failed to write fallback metadata/metrics: {e}")
+                    logger.debug(f"Fallback write traceback: {traceback.format_exc()}")
                 
                 audit_report_path = cohort_dir / "audit_report.json"
                 with open(audit_report_path, 'w') as f:

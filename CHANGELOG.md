@@ -2,6 +2,8 @@
 
 All notable changes to FoxML Core will be documented in this file.
 
+> **Note**: This project is under active development. See [NOTICE.md](NOTICE.md) for more information.
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -13,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Recent Highlights
+
+#### 2025-12-17 Updates
+- **Fixed Field Name Mismatch in Diff Telemetry**: Corrected field name alignment between required field validation and metadata construction. Changed `date_start`/`date_end` → `date_range_start`/`date_range_end`, `target` → `target_name`, and `N_effective` → `n_effective`. This ensures `metadata.json` and `metrics.json` are properly written to cohort directories. Improved error visibility by changing diff telemetry exception handler from DEBUG to WARNING level.
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-17-field-name-fix.md)
 
 #### 2025-12-16 Updates
 - **Diff Telemetry Integration**: Integrated diff telemetry into metadata.json and metrics.json outputs. Full audit trail in metadata (fingerprints, sources, excluded factors), lightweight queryable fields in metrics (flags, counts, summaries). All stages (TARGET_RANKING, FEATURE_SELECTION, TRAINING) now share the same telemetry contract. Backwards compatible with stable shapes for all edge cases.

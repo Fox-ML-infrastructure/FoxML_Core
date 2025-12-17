@@ -796,18 +796,18 @@ class DiffTelemetry:
         
         if stage == 'TARGET_RANKING':
             return base_required + [
-                'date_start', 'date_end', 'n_symbols', 'N_effective',
-                'target', 'view', 'min_cs', 'max_cs_samples'
+                'date_range_start', 'date_range_end', 'n_symbols', 'n_effective',
+                'target_name', 'view', 'min_cs', 'max_cs_samples'
             ]
         elif stage == 'FEATURE_SELECTION':
             return base_required + [
-                'date_start', 'date_end', 'n_symbols', 'N_effective',
-                'target', 'view', 'min_cs', 'max_cs_samples'
+                'date_range_start', 'date_range_end', 'n_symbols', 'n_effective',
+                'target_name', 'view', 'min_cs', 'max_cs_samples'
             ]
         elif stage == 'TRAINING':
             return base_required + [
-                'date_start', 'date_end', 'n_symbols', 'N_effective',
-                'target', 'view', 'model_family', 'min_cs', 'max_cs_samples'
+                'date_range_start', 'date_range_end', 'n_symbols', 'n_effective',
+                'target_name', 'view', 'model_family', 'min_cs', 'max_cs_samples'
             ]
         else:
             # Unknown stage - require base fields only
