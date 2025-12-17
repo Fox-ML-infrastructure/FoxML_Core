@@ -4657,55 +4657,8 @@ def detect_leakage(
         return "OK"
 
 
-def calculate_composite_score(
-    mean_score: float,
-    std_score: float,
-    mean_importance: float,
-    n_models: int,
-    task_type: TaskType = TaskType.REGRESSION
-) -> float:
-    """
-    Calculate composite predictability score
-    
-    Components:
-    - Mean score: Higher is better (R² for regression, ROC-AUC/Accuracy for classification)
-    - Consistency: Lower std is better
-    - Importance magnitude: Higher is better
-    - Model agreement: More models = more confidence
-    """
-    
-    # Normalize components based on task type
-    if task_type == TaskType.REGRESSION:
-        # R² can be negative, so normalize to 0-1 range
-        score_component = max(0, mean_score)  # Clamp negative R² to 0
-        consistency_component = 1.0 / (1.0 + std_score)
-        
-        # R²-weighted importance
-        if mean_score > 0:
-            importance_component = mean_importance * (1.0 + mean_score)
-        else:
-            penalty = abs(mean_score) * 0.67
-            importance_component = mean_importance * max(0.5, 1.0 - penalty)
-    else:
-        # Classification: ROC-AUC and Accuracy are already 0-1
-        score_component = mean_score  # Already 0-1
-        consistency_component = 1.0 / (1.0 + std_score)
-        
-        # Score-weighted importance (similar logic but for 0-1 scores)
-        importance_component = mean_importance * (1.0 + mean_score)
-    
-    # Weighted average
-    composite = (
-        0.50 * score_component +        # 50% weight on score
-        0.25 * consistency_component + # 25% on consistency
-        0.25 * importance_component    # 25% on score-weighted importance
-    )
-    
-    # Bonus for more models (up to 10% boost)
-    model_bonus = min(0.1, n_models * 0.02)
-    composite = composite * (1.0 + model_bonus)
-    
-    return composite
+# calculate_composite_score is imported from TRAINING.ranking.predictability.composite_score
+# (removed duplicate definition to use the imported version with definition/version support)
 
 
 
