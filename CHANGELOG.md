@@ -15,11 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Recent Highlights
 
 #### 2025-12-16 Updates
+- **Diff Telemetry Integration**: Integrated diff telemetry into metadata.json and metrics.json outputs. Full audit trail in metadata (fingerprints, sources, excluded factors), lightweight queryable fields in metrics (flags, counts, summaries). All stages (TARGET_RANKING, FEATURE_SELECTION, TRAINING) now share the same telemetry contract. Backwards compatible with stable shapes for all edge cases.
 - **Feature Selection Structure**: Organized feature selection outputs to match target ranking layout (feature_importances/, metadata/, artifacts/). Eliminated scattered files and nested REPRODUCIBILITY directories.
 - **Canonical Family ID System**: Migrated all model family registries to snake_case canonical IDs. All registries (`MODMAP`, `TRAINER_MODULE_MAP`, `POLICY`, `FAMILY_CAPS`) now use consistent snake_case keys (e.g., `"lightgbm"`, `"xgboost"`, `"meta_learning"`). Added startup validation to prevent key drift.
 - **Feature Audit System**: Added comprehensive feature drop tracking with per-feature drop reasons. Generates CSV reports showing why features were dropped at each stage (registry filter, Polars select, pandas coercion, NaN drop, non-numeric drop).
 - **Training Pipeline Fixes**: Fixed family name canonicalization, banner suppression in child processes, reproducibility tracking string/Enum handling, and model saving packaging bugs.
-→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-16-feature-selection-structure.md)
+→ [Detailed Changelogs](DOCS/02_reference/changelog/2025-12-16-diff-telemetry-integration.md) | [Training Pipeline Fixes](DOCS/02_reference/changelog/2025-12-16-training-pipeline-fixes.md) | [Feature Selection Structure](DOCS/02_reference/changelog/2025-12-16-feature-selection-structure.md)
 
 #### 2025-12-15 Updates
 - **Metrics System Rename**: Renamed telemetry to metrics throughout codebase for better branding. All metrics stored locally - no user data collection, no external transmission.

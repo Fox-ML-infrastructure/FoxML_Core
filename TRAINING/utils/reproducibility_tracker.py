@@ -1291,6 +1291,49 @@ class ReproducibilityTracker:
         if additional_data and 'dropped_features' in additional_data:
             full_metadata['dropped_features'] = additional_data['dropped_features']
         
+        # NEW: Add diff telemetry to metadata (full audit trail)
+        # CRITICAL: diff_telemetry is optional - older runs may not have it
+        if additional_data and 'diff_telemetry' in additional_data:
+            diff_telemetry = additional_data['diff_telemetry']
+            snapshot = diff_telemetry.get('snapshot', {})
+            diff = diff_telemetry.get('diff', {})
+            
+            # Extract comparison group key
+            comparison_group = snapshot.get('comparison_group')
+            comparison_group_key = None
+            if isinstance(comparison_group, dict):
+                comparison_group_key = comparison_group.get('key')
+            elif hasattr(comparison_group, 'to_key'):
+                comparison_group_key = comparison_group.to_key()
+            
+            # Extract diff telemetry metadata (full detail for audit trail)
+            # CRITICAL: Always write valid diff_telemetry object, even if not comparable
+            # Schema mismatches should still produce valid structure with comparability.reason set
+            full_metadata['diff_telemetry'] = {
+                'fingerprint_schema_version': snapshot.get('fingerprint_schema_version'),
+                'comparison_group_key': comparison_group_key,
+                'comparison_group': comparison_group if isinstance(comparison_group, dict) else (
+                    comparison_group.to_dict() if hasattr(comparison_group, 'to_dict') else None
+                ),
+                'fingerprints': {
+                    'config_fingerprint': snapshot.get('config_fingerprint'),
+                    'data_fingerprint': snapshot.get('data_fingerprint'),
+                    'feature_fingerprint': snapshot.get('feature_fingerprint'),
+                    'target_fingerprint': snapshot.get('target_fingerprint')
+                },
+                'fingerprint_sources': snapshot.get('fingerprint_sources', {}),
+                'comparability': {
+                    'comparable': diff.get('comparable', False),
+                    'comparability_reason': diff.get('comparability_reason') or None,  # Explicit None for clarity
+                    'prev_run_id': diff.get('prev_run_id')  # Can be None for first run
+                },
+                'excluded_factors': {
+                    'changed': bool(diff.get('excluded_factors_changed', {})),
+                    'summary': diff.get('summary', {}).get('excluded_factors_summary'),
+                    'changes': diff.get('excluded_factors_changed', {})  # Full payload - empty dict if no changes
+                }
+            }
+        
         # Save metadata.json
         metadata_file = cohort_dir / "metadata.json"
         try:
@@ -1345,6 +1388,11 @@ class ReproducibilityTracker:
             # Note: metrics will create cohort_dir if it doesn't exist, or fall back to target level
             metrics_written = False
             try:
+                # Extract diff telemetry data if available
+                diff_telemetry = None
+                if additional_data and 'diff_telemetry' in additional_data:
+                    diff_telemetry = additional_data['diff_telemetry']
+                
                 self.metrics.write_cohort_metrics(
                     cohort_dir=cohort_dir,
                     stage=stage_normalized,
@@ -1353,7 +1401,8 @@ class ReproducibilityTracker:
                     symbol=symbol,
                     run_id=run_id_clean,
                     metrics=run_data,
-                    baseline_key=baseline_key
+                    baseline_key=baseline_key,
+                    diff_telemetry=diff_telemetry
                 )
                 metrics_written = True
             except Exception as e:
@@ -1424,13 +1473,19 @@ class ReproducibilityTracker:
                     additional_data['experiment_id'] = experiment_id
                 
                 # Finalize run with diff telemetry
-                telemetry.finalize_run(
+                diff_telemetry_data = telemetry.finalize_run(
                     stage=stage_normalized,
                     run_data=run_data,
                     cohort_dir=cohort_dir,
                     cohort_metadata=cohort_metadata,
                     additional_data=additional_data
                 )
+                
+                # Store diff telemetry data for integration into metadata/metrics
+                if diff_telemetry_data:
+                    if additional_data is None:
+                        additional_data = {}
+                    additional_data['diff_telemetry'] = diff_telemetry_data
             except Exception as e:
                 logger.debug(f"Diff telemetry failed (non-critical): {e}")
                 import traceback

@@ -109,7 +109,8 @@ class MetricsWriter:
         symbol: Optional[str],
         run_id: str,
         metrics: Dict[str, Any],
-        baseline_key: Optional[str] = None
+        baseline_key: Optional[str] = None,
+        diff_telemetry: Optional[Dict[str, Any]] = None
     ) -> None:
         """
         Write metrics sidecar files for a cohort.
@@ -162,7 +163,8 @@ class MetricsWriter:
             self._write_metrics(
                 cohort_dir, run_id, metrics, 
                 stage=stage, 
-                reproducibility_mode="COHORT_AWARE"
+                reproducibility_mode="COHORT_AWARE",
+                diff_telemetry=diff_telemetry
             )
             logger.debug(f"✅ Wrote unified metrics to {cohort_dir}")
         except Exception as e:
@@ -184,7 +186,8 @@ class MetricsWriter:
         run_id: str,
         metrics: Dict[str, Any],
         stage: Optional[str] = None,
-        reproducibility_mode: str = "COHORT_AWARE"
+        reproducibility_mode: str = "COHORT_AWARE",
+        diff_telemetry: Optional[Dict[str, Any]] = None
     ) -> None:
         """
         Write metrics.json and metrics.parquet with unified canonical schema.
@@ -235,6 +238,38 @@ class MetricsWriter:
             else:
                 # Convert other types to string
                 metrics_data[key] = str(value)
+        
+        # NEW: Add lightweight diff telemetry fields to metrics (queryable/aggregatable)
+        # CRITICAL: Only include lightweight fields - no full payloads
+        if diff_telemetry:
+            diff = diff_telemetry.get('diff', {})
+            snapshot = diff_telemetry.get('snapshot', {})
+            
+            # Lightweight fields for querying/aggregation
+            # DO NOT include: full excluded_factors.changes, full comparison_group, full fingerprints
+            excluded_factors = diff.get('excluded_factors_changed', {})
+            
+            # Count rule: Number of keys whose value differs (one key = one change)
+            # This matches the summary formatter counting logic
+            excluded_factors_count = (
+                len(excluded_factors.get('hyperparameters', {})) +
+                (1 if excluded_factors.get('train_seed') else 0) +
+                len(excluded_factors.get('versions', {}))
+            ) if excluded_factors else 0
+            
+            metrics_data['diff_telemetry'] = {
+                'comparable': 1 if diff.get('comparable', False) else 0,
+                'excluded_factors_changed': 1 if excluded_factors else 0,
+                'excluded_factors_changed_count': excluded_factors_count,  # Number of keys that changed
+                'excluded_factors_summary': diff.get('summary', {}).get('excluded_factors_summary'),
+                # Optional: comparison_group_key (only if metrics backend can tolerate high cardinality)
+                # Gate behind config flag or conditional - for now, removed to keep metrics lightweight
+                # 'comparison_group_key': (
+                #     snapshot.get('comparison_group', {}).get('key') 
+                #     if isinstance(snapshot.get('comparison_group'), dict) 
+                #     else None
+                # )
+            }
         
         metrics_file_json = cohort_dir / "metrics.json"
         metrics_file_parquet = cohort_dir / "metrics.parquet"

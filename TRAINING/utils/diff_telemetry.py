@@ -42,6 +42,9 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+# Fingerprint schema version - increment when fingerprint computation changes
+FINGERPRINT_SCHEMA_VERSION = "1.0"
+
 
 class ChangeSeverity(str, Enum):
     """Severity levels for changes."""
@@ -60,14 +63,35 @@ class ComparabilityStatus(str, Enum):
 
 @dataclass
 class ComparisonGroup:
-    """Defines what makes runs comparable."""
+    """Defines what makes runs comparable.
+    
+    CRITICAL: Only runs with EXACTLY the same outcome-influencing metadata are comparable.
+    This includes:
+    - Exact N_effective (sample size) - 5k runs only compare against 5k runs
+    - Same dataset (universe, date range, min_cs, max_cs_samples)
+    - Same task (target, horizon, objective)
+    - Same routing/view configuration
+    - Same model_family (different families produce different outcomes)
+    - Same feature set (different features produce different outcomes)
+    
+    Runs are stored together ONLY if they match exactly on all these dimensions.
+    """
     experiment_id: Optional[str] = None
-    dataset_signature: Optional[str] = None  # Hash of universe + time rules
+    dataset_signature: Optional[str] = None  # Hash of universe + time rules + min_cs + max_cs_samples
     task_signature: Optional[str] = None  # Hash of target + horizon + objective
     routing_signature: Optional[str] = None  # Hash of routing config
+    n_effective: Optional[int] = None  # Exact sample size (CRITICAL: must match exactly)
+    model_family: Optional[str] = None  # Model family (CRITICAL: different families = different outcomes)
+    feature_signature: Optional[str] = None  # Hash of feature set (CRITICAL: different features = different outcomes)
     
     def to_key(self) -> str:
-        """Generate comparison group key."""
+        """Generate comparison group key.
+        
+        This key is used to:
+        1. Group runs in storage (runs with same key stored together)
+        2. Find previous comparable runs (only runs with same key are comparable)
+        3. Establish baselines (baselines are per comparison_group_key)
+        """
         parts = []
         if self.experiment_id:
             parts.append(f"exp={self.experiment_id}")
@@ -77,7 +101,48 @@ class ComparisonGroup:
             parts.append(f"task={self.task_signature[:8]}")
         if self.routing_signature:
             parts.append(f"route={self.routing_signature[:8]}")
+        # CRITICAL: Include exact N_effective to ensure only identical sample sizes compare
+        if self.n_effective is not None:
+            parts.append(f"n={self.n_effective}")
+        # CRITICAL: Include model_family (different families = different outcomes)
+        if self.model_family:
+            parts.append(f"family={self.model_family}")
+        # CRITICAL: Include feature signature (different features = different outcomes)
+        if self.feature_signature:
+            parts.append(f"features={self.feature_signature[:8]}")
         return "|".join(parts) if parts else "default"
+    
+    def to_dir_name(self) -> str:
+        """Generate filesystem-safe directory name from comparison group key.
+        
+        This creates a human-readable, filesystem-safe directory name that groups
+        runs with exactly the same outcome-influencing metadata together.
+        
+        Example: "exp=test|data=abc12345|task=def67890|n=5000|family=lightgbm|features=ghi11111"
+        -> "exp-test_data-abc12345_task-def67890_n-5000_family-lightgbm_features-ghi11111"
+        """
+        key = self.to_key()
+        # Replace | with _ and = with - for filesystem safety
+        # Also sanitize any other problematic characters
+        import re
+        dir_name = key.replace("|", "_").replace("=", "-")
+        # Remove any remaining problematic characters (keep alphanumeric, dash, underscore)
+        dir_name = re.sub(r'[^a-zA-Z0-9_-]', '', dir_name)
+        # Limit length to avoid filesystem issues (255 chars typical max)
+        if len(dir_name) > 200:
+            # Truncate but keep important parts (n= and family= are most important)
+            # Hash the rest
+            important_parts = []
+            for part in key.split("|"):
+                if "n=" in part or "family=" in part:
+                    important_parts.append(part)
+            if important_parts:
+                rest = "_".join([p for p in key.split("|") if p not in important_parts])
+                rest_hash = hashlib.sha256(rest.encode()).hexdigest()[:8]
+                dir_name = "_".join([p.replace("=", "-") for p in important_parts]) + f"_rest-{rest_hash}"
+            else:
+                dir_name = hashlib.sha256(key.encode()).hexdigest()[:32]
+        return dir_name if dir_name else "default"
     
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -94,11 +159,18 @@ class NormalizedSnapshot:
     target: Optional[str] = None
     symbol: Optional[str] = None
     
+    # Fingerprint schema version (for compatibility checking)
+    fingerprint_schema_version: str = FINGERPRINT_SCHEMA_VERSION
+    
     # Fingerprints (for change detection)
     config_fingerprint: Optional[str] = None
     data_fingerprint: Optional[str] = None
     feature_fingerprint: Optional[str] = None
     target_fingerprint: Optional[str] = None
+    
+    # Fingerprint source descriptions (for auditability)
+    fingerprint_sources: Dict[str, str] = field(default_factory=dict)
+    # e.g., {"fold_assignment_hash": "hash over row_id→fold_id mapping"}
     
     # Inputs (what was fed to the run)
     inputs: Dict[str, Any] = field(default_factory=dict)
@@ -169,6 +241,10 @@ class DiffResult:
     # Summary
     summary: Dict[str, Any] = field(default_factory=dict)
     
+    # Excluded factors changed (hyperparameters, seeds, versions)
+    # These are tracked but don't block comparability
+    excluded_factors_changed: Dict[str, Any] = field(default_factory=dict)
+    
     # Patch operations (JSON-Patch style)
     patch: List[Dict[str, Any]] = field(default_factory=list)
     
@@ -226,34 +302,67 @@ class DiffTelemetry:
         self.min_runs_for_baseline = min_runs_for_baseline
         self.baseline_window_size = baseline_window_size
         
-        # Find RESULTS directory (walk up if we're in a subdirectory)
+        # Find RESULTS directory and determine structure
         results_dir = self.output_dir
+        run_dir = None
+        bin_dir = None
+        
+        # Walk up to find RESULTS directory and identify run/bin structure
+        temp_dir = self.output_dir
+        for _ in range(10):  # Limit depth
+            if temp_dir.name == "RESULTS":
+                results_dir = temp_dir
+                break
+            # Check if we're in a run directory (has REPRODUCIBILITY subdirectory)
+            if (temp_dir / "REPRODUCIBILITY").exists():
+                run_dir = temp_dir
+            # Check if we're in a sample size bin directory
+            if temp_dir.name.startswith("sample_") and temp_dir.parent.name == "RESULTS":
+                bin_dir = temp_dir
+            if not temp_dir.parent.exists():
+                break
+            temp_dir = temp_dir.parent
+        
+        # If we couldn't find RESULTS, try to infer from output_dir
         if results_dir.name != "RESULTS":
-            # Walk up to find RESULTS directory
-            temp_dir = results_dir
-            for _ in range(10):  # Limit depth
-                if temp_dir.name == "RESULTS":
+            # Try to find RESULTS by looking for sample_* directories
+            temp_dir = self.output_dir
+            for _ in range(10):
+                if any((temp_dir / d).is_dir() and d.startswith("sample_") for d in temp_dir.iterdir() if d.is_dir()):
                     results_dir = temp_dir
                     break
                 if not temp_dir.parent.exists():
                     break
                 temp_dir = temp_dir.parent
         
-        # Global telemetry directory for index files (shared across all runs)
-        self.telemetry_dir = results_dir / "REPRODUCIBILITY" / "TELEMETRY"
-        self.telemetry_dir.mkdir(parents=True, exist_ok=True)
+        # Run-specific snapshot index: stored in run's REPRODUCIBILITY/METRICS/
+        if run_dir:
+            self.run_metrics_dir = run_dir / "REPRODUCIBILITY" / "METRICS"
+            self.run_metrics_dir.mkdir(parents=True, exist_ok=True)
+            self.snapshot_index = self.run_metrics_dir / "snapshot_index.json"
+        else:
+            # Fallback: use output_dir if we can't find run directory
+            self.run_metrics_dir = self.output_dir / "REPRODUCIBILITY" / "METRICS"
+            self.run_metrics_dir.mkdir(parents=True, exist_ok=True)
+            self.snapshot_index = self.run_metrics_dir / "snapshot_index.json"
         
-        # Index files (global, not per-run)
-        self.snapshot_index = self.telemetry_dir / "snapshot_index.json"
-        self.baseline_index = self.telemetry_dir / "baseline_index.json"
+        # Baselines are stored per-cohort (in cohort directory), not in a global index
+        # This ensures only exactly the same runs (same cohort, stage, target, etc.) share baselines
+        # We'll load baselines on-demand from cohort directories when needed
+        
+        # Store run_dir for later use when saving baselines
+        self.run_dir = run_dir if run_dir else self.output_dir
+        self.results_dir = results_dir
+        
+        # Track if run has been moved to comparison group directory
+        self._run_moved = False
         
         # Load existing indices
         self._snapshots: Dict[str, NormalizedSnapshot] = {}
-        self._baselines: Dict[str, BaselineState] = {}
-        self._load_indices()
+        self._baselines: Dict[str, BaselineState] = {}  # Cache for current session, but saved per-cohort
     
     def _load_indices(self):
-        """Load snapshot and baseline indices."""
+        """Load snapshot index (baselines loaded on-demand from cohort directories)."""
         if self.snapshot_index.exists():
             try:
                 with open(self.snapshot_index) as f:
@@ -263,37 +372,57 @@ class DiffTelemetry:
             except Exception as e:
                 logger.warning(f"Failed to load snapshot index: {e}")
         
-        if self.baseline_index.exists():
-            try:
-                with open(self.baseline_index) as f:
-                    data = json.load(f)
-                    for key, baseline_data in data.items():
-                        self._baselines[key] = BaselineState(**baseline_data)
-            except Exception as e:
-                logger.warning(f"Failed to load baseline index: {e}")
+        # Baselines are loaded on-demand from cohort directories (see _load_baseline_from_cohort)
     
     def _save_indices(self):
-        """Save snapshot and baseline indices."""
+        """Save snapshot index (baselines saved per-cohort, not in global index)."""
         try:
             snapshot_data = {
                 run_id: snap.to_dict() for run_id, snap in self._snapshots.items()
             }
             with open(self.snapshot_index, 'w') as f:
                 json.dump(snapshot_data, f, indent=2, default=str)
-            
-            baseline_data = {
-                key: baseline.to_dict() for key, baseline in self._baselines.items()
-            }
-            with open(self.baseline_index, 'w') as f:
-                json.dump(baseline_data, f, indent=2, default=str)
         except Exception as e:
-            logger.warning(f"Failed to save indices: {e}")
+            logger.warning(f"Failed to save snapshot index: {e}")
+    
+    def _load_baseline_from_cohort(self, cohort_dir: Path, comparison_group_key: str) -> Optional[BaselineState]:
+        """Load baseline from cohort directory."""
+        baseline_file = Path(cohort_dir) / "baseline.json"
+        if baseline_file.exists():
+            try:
+                with open(baseline_file) as f:
+                    data = json.load(f)
+                    # Verify it matches the comparison group
+                    if data.get('comparison_group_key') == comparison_group_key:
+                        return BaselineState(**data)
+            except Exception as e:
+                logger.debug(f"Failed to load baseline from {baseline_file}: {e}")
+        return None
+    
+    def _save_baseline_to_cohort(self, cohort_dir: Path, baseline: BaselineState):
+        """Save baseline to cohort directory."""
+        cohort_dir = Path(cohort_dir)
+        cohort_dir.mkdir(parents=True, exist_ok=True)
+        baseline_file = cohort_dir / "baseline.json"
+        try:
+            with open(baseline_file, 'w') as f:
+                json.dump(baseline.to_dict(), f, indent=2, default=str)
+        except Exception as e:
+            logger.warning(f"Failed to save baseline to {baseline_file}: {e}")
     
     def _deserialize_snapshot(self, data: Dict[str, Any]) -> NormalizedSnapshot:
         """Deserialize snapshot from dict."""
         comp_group = None
         if 'comparison_group' in data:
-            comp_group = ComparisonGroup(**data['comparison_group'])
+            comp_group_data = data['comparison_group']
+            # Handle backward compatibility: old snapshots might not have new fields
+            if 'n_effective' not in comp_group_data:
+                comp_group_data['n_effective'] = None
+            if 'model_family' not in comp_group_data:
+                comp_group_data['model_family'] = None
+            if 'feature_signature' not in comp_group_data:
+                comp_group_data['feature_signature'] = None
+            comp_group = ComparisonGroup(**comp_group_data)
         
         return NormalizedSnapshot(
             run_id=data['run_id'],
@@ -359,6 +488,14 @@ class DiffTelemetry:
         # Normalize outputs
         outputs = self._normalize_outputs(run_data, additional_data)
         
+        # Build fingerprint source descriptions (for auditability)
+        fingerprint_sources = {}
+        if additional_data and 'fold_assignment_hash' in additional_data:
+            fingerprint_sources['fold_assignment_hash'] = (
+                additional_data.get('fold_assignment_hash_source') or 
+                "hash over row_id→fold_id mapping"
+            )
+        
         return NormalizedSnapshot(
             run_id=run_id,
             timestamp=timestamp,
@@ -370,6 +507,7 @@ class DiffTelemetry:
             data_fingerprint=data_fp,
             feature_fingerprint=feature_fp,
             target_fingerprint=target_fp,
+            fingerprint_sources=fingerprint_sources,
             inputs=inputs,
             process=process,
             outputs=outputs,
@@ -381,7 +519,12 @@ class DiffTelemetry:
         run_data: Dict[str, Any],
         additional_data: Optional[Dict[str, Any]]
     ) -> Optional[str]:
-        """Compute config fingerprint."""
+        """Compute config fingerprint.
+        
+        Includes:
+        - Strategy, model_family, n_features, min_cs, max_cs_samples
+        - Split protocol signature (CV scheme, folds, purge/embargo, leakage guards)
+        """
         config_parts = []
         
         # Extract config-relevant fields
@@ -389,6 +532,24 @@ class DiffTelemetry:
             for key in ['strategy', 'model_family', 'n_features', 'min_cs', 'max_cs_samples']:
                 if key in additional_data:
                     config_parts.append(f"{key}={additional_data[key]}")
+            
+            # Split protocol signature (CV scheme, folds, purge/embargo, leakage guards)
+            # CRITICAL: Include split_seed (if fold assignment depends on seed) but NOT train_seed
+            # CRITICAL: Include fold_assignment_hash (from actual fold IDs, not just seed)
+            #           This ensures fold logic changes break comparability even if seed stays same
+            split_parts = []
+            for key in ['cv_method', 'cv_folds', 'purge_minutes', 'embargo_minutes', 
+                       'leakage_filter_version', 'horizon_minutes', 'split_seed', 'fold_assignment_hash']:
+                if key in additional_data:
+                    val = additional_data[key]
+                    if val is not None:
+                        # Normalize value for stable hashing
+                        normalized_val = self._normalize_value_for_hash(val)
+                        split_parts.append(f"{key}={normalized_val}")
+            
+            if split_parts:
+                split_str = "|".join(sorted(split_parts))
+                config_parts.append(f"split={hashlib.sha256(split_str.encode()).hexdigest()[:8]}")
         
         if run_data.get('additional_data'):
             for key in ['strategy', 'model_family']:
@@ -396,16 +557,63 @@ class DiffTelemetry:
                     config_parts.append(f"{key}={run_data['additional_data'][key]}")
         
         if config_parts:
+            # Canonicalize: sorted keys, normalized values
             config_str = "|".join(sorted(config_parts))
             return hashlib.sha256(config_str.encode()).hexdigest()[:16]
         return None
+    
+    def _normalize_value_for_hash(self, val: Any) -> str:
+        """Normalize value for stable hashing.
+        
+        Ensures:
+        - Dicts are sorted by key
+        - Lists preserve order (only sort when explicitly unordered, e.g., feature sets)
+        - Floats use repr() for exact representation (avoids 1e-7 vs 0.0 collapse)
+        - NaN/inf/-0.0 handled deterministically
+        - None/null are handled consistently
+        """
+        if val is None:
+            return "None"
+        elif isinstance(val, (int, str, bool)):
+            return str(val)
+        elif isinstance(val, float):
+            # Use repr() for exact representation (avoids precision loss)
+            # Handle special cases deterministically
+            if np.isnan(val):
+                return "nan"
+            elif np.isinf(val):
+                return "inf" if val > 0 else "-inf"
+            elif val == 0.0:
+                # Distinguish -0.0 from 0.0
+                return "0.0" if str(val) == "0.0" else "-0.0"
+            else:
+                # Use repr() to preserve exact value (e.g., 1e-7 stays 1e-7, not 0.0)
+                return repr(val)
+        elif isinstance(val, (list, tuple)):
+            # CRITICAL: Preserve order by default (order may be semantic)
+            # Only sort when explicitly marked as unordered (e.g., feature sets)
+            # For now, preserve order - caller should sort feature lists before hashing
+            normalized = [self._normalize_value_for_hash(v) for v in val]
+            return "[" + ",".join(normalized) + "]"
+        elif isinstance(val, dict):
+            # Sort by key (dicts are unordered by definition)
+            normalized = {k: self._normalize_value_for_hash(v) for k, v in val.items()}
+            sorted_items = sorted(normalized.items())
+            return "{" + ",".join(f"{k}:{v}" for k, v in sorted_items) + "}"
+        else:
+            return str(val)
     
     def _compute_data_fingerprint(
         self,
         cohort_metadata: Optional[Dict[str, Any]],
         additional_data: Optional[Dict[str, Any]]
     ) -> Optional[str]:
-        """Compute data fingerprint."""
+        """Compute data fingerprint.
+        
+        Includes:
+        - Data parameters (n_symbols, date_range, min_cs, max_cs_samples)
+        - Data identity (if available: row IDs hash, file manifest, parquet metadata)
+        """
         data_parts = []
         
         if cohort_metadata:
@@ -415,6 +623,12 @@ class DiffTelemetry:
                     val = cohort_metadata[key]
                     if val is not None:
                         data_parts.append(f"{key}={val}")
+            
+            # Data identity (actual data fingerprint if available)
+            if 'data_fingerprint' in cohort_metadata:
+                data_parts.append(f"data_id={cohort_metadata['data_fingerprint']}")
+            elif 'data_hash' in cohort_metadata:
+                data_parts.append(f"data_id={cohort_metadata['data_hash']}")
         
         if additional_data:
             for key in ['n_symbols', 'date_range']:
@@ -422,8 +636,13 @@ class DiffTelemetry:
                     val = additional_data[key]
                     if val is not None:
                         data_parts.append(f"{key}={val}")
+            
+            # Data identity from additional_data
+            if 'data_fingerprint' in additional_data:
+                data_parts.append(f"data_id={additional_data['data_fingerprint']}")
         
         if data_parts:
+            # Canonicalize: sorted keys, normalized values
             data_str = "|".join(sorted(data_parts))
             return hashlib.sha256(data_str.encode()).hexdigest()[:16]
         return None
@@ -433,18 +652,47 @@ class DiffTelemetry:
         run_data: Dict[str, Any],
         additional_data: Optional[Dict[str, Any]]
     ) -> Optional[str]:
-        """Compute feature fingerprint."""
-        features = None
+        """Compute feature fingerprint.
         
-        if additional_data and 'n_features' in additional_data:
-            # For now, use count (could hash actual feature list if available)
-            features = f"count={additional_data['n_features']}"
+        Includes:
+        - Feature count and names (if available)
+        - Feature pipeline signature (transforms, lookbacks, normalization, winsorization, missing-value policy)
+        """
+        feature_parts = []
         
-        if run_data.get('additional_data') and 'n_features' in run_data['additional_data']:
-            features = f"count={run_data['additional_data']['n_features']}"
+        # Feature count and names
+        if additional_data:
+            if 'n_features' in additional_data:
+                feature_parts.append(f"count={additional_data['n_features']}")
+            if 'feature_names' in additional_data:
+                # Hash actual feature list for precise matching
+                feature_list = additional_data['feature_names']
+                if isinstance(feature_list, list):
+                    feature_list_str = "|".join(sorted(feature_list))
+                    feature_parts.append(f"names_hash={hashlib.sha256(feature_list_str.encode()).hexdigest()[:8]}")
+            # Feature pipeline signature
+            if 'feature_pipeline_hash' in additional_data:
+                feature_parts.append(f"pipeline={additional_data['feature_pipeline_hash']}")
+            elif 'feature_transforms' in additional_data:
+                # Hash transform config (normalization, winsorization, missing-value policy, lookbacks)
+                transforms = additional_data['feature_transforms']
+                if isinstance(transforms, dict):
+                    transforms_str = "|".join(f"{k}={v}" for k, v in sorted(transforms.items()))
+                    feature_parts.append(f"transforms={hashlib.sha256(transforms_str.encode()).hexdigest()[:8]}")
         
-        if features:
-            return hashlib.sha256(features.encode()).hexdigest()[:16]
+        if run_data.get('additional_data'):
+            if 'n_features' in run_data['additional_data']:
+                feature_parts.append(f"count={run_data['additional_data']['n_features']}")
+            if 'feature_names' in run_data['additional_data']:
+                feature_list = run_data['additional_data']['feature_names']
+                if isinstance(feature_list, list):
+                    feature_list_str = "|".join(sorted(feature_list))
+                    feature_parts.append(f"names_hash={hashlib.sha256(feature_list_str.encode()).hexdigest()[:8]}")
+        
+        if feature_parts:
+            # Canonicalize: sorted keys, normalized values
+            features_str = "|".join(sorted(feature_parts))
+            return hashlib.sha256(features_str.encode()).hexdigest()[:16]
         return None
     
     def _compute_target_fingerprint(
@@ -452,9 +700,16 @@ class DiffTelemetry:
         run_data: Dict[str, Any],
         additional_data: Optional[Dict[str, Any]]
     ) -> Optional[str]:
-        """Compute target fingerprint."""
-        target = None
+        """Compute target fingerprint.
         
+        Includes:
+        - Target name
+        - Labeling implementation signature (labeling code/config hash, not just target name)
+        """
+        target_parts = []
+        
+        # Target name
+        target = None
         if additional_data and 'target' in additional_data:
             target = additional_data['target']
         elif run_data.get('item_name'):
@@ -463,7 +718,28 @@ class DiffTelemetry:
             target = parts[0] if parts else None
         
         if target:
-            return hashlib.sha256(target.encode()).hexdigest()[:16]
+            target_parts.append(f"target={target}")
+        
+        # Labeling implementation signature (code/config hash)
+        if additional_data:
+            if 'labeling_hash' in additional_data:
+                target_parts.append(f"labeling={additional_data['labeling_hash']}")
+            elif 'labeling_config' in additional_data:
+                # Hash labeling config (horizon, labeling rules, etc.)
+                labeling_config = additional_data['labeling_config']
+                if isinstance(labeling_config, dict):
+                    labeling_str = "|".join(f"{k}={v}" for k, v in sorted(labeling_config.items()))
+                    target_parts.append(f"labeling={hashlib.sha256(labeling_str.encode()).hexdigest()[:8]}")
+            # Horizon and objective
+            if 'horizon_minutes' in additional_data:
+                target_parts.append(f"horizon={additional_data['horizon_minutes']}")
+            if 'objective' in additional_data:
+                target_parts.append(f"objective={additional_data['objective']}")
+        
+        if target_parts:
+            # Canonicalize: sorted keys, normalized values
+            target_str = "|".join(sorted(target_parts))
+            return hashlib.sha256(target_str.encode()).hexdigest()[:16]
         return None
     
     def _build_comparison_group(
@@ -476,7 +752,19 @@ class DiffTelemetry:
         data_fp: Optional[str],
         task_fp: Optional[str]
     ) -> ComparisonGroup:
-        """Build comparison group."""
+        """Build comparison group.
+        
+        CRITICAL: Includes ALL outcome-influencing metadata to ensure only runs with
+        EXACTLY the same configuration are compared and stored together.
+        
+        Outcome-influencing metadata includes:
+        - Exact N_effective (sample size) - 5k vs 5k, not 5k vs 10k
+        - Dataset (universe, date range, min_cs, max_cs_samples)
+        - Task (target, horizon, objective)
+        - Routing/view configuration
+        - Model family (different families = different outcomes)
+        - Feature set (different features = different outcomes)
+        """
         # Extract experiment_id if available
         experiment_id = None
         if additional_data and 'experiment_id' in additional_data:
@@ -489,11 +777,49 @@ class DiffTelemetry:
         if additional_data and 'view' in additional_data:
             routing_signature = hashlib.sha256(additional_data['view'].encode()).hexdigest()[:16]
         
+        # Extract exact N_effective (CRITICAL: must match exactly for comparison)
+        n_effective = None
+        if cohort_metadata and 'N_effective_cs' in cohort_metadata:
+            n_effective = int(cohort_metadata['N_effective_cs'])
+        elif additional_data and 'N_effective_cs' in additional_data:
+            n_effective = int(additional_data['N_effective_cs'])
+        elif run_data.get('metrics') and 'N_effective_cs' in run_data['metrics']:
+            n_effective = int(run_data['metrics']['N_effective_cs'])
+        elif run_data.get('additional_data') and 'N_effective_cs' in run_data['additional_data']:
+            n_effective = int(run_data['additional_data']['N_effective_cs'])
+        
+        # Extract model_family (CRITICAL: different families = different outcomes)
+        model_family = None
+        if additional_data and 'model_family' in additional_data:
+            model_family = additional_data['model_family']
+        elif run_data.get('additional_data') and 'model_family' in run_data['additional_data']:
+            model_family = run_data['additional_data']['model_family']
+        elif run_data.get('item_name'):
+            # Extract from item_name (format: "target:family" or "target:symbol:family")
+            parts = run_data['item_name'].split(':')
+            if len(parts) >= 2:
+                model_family = parts[-1]  # Last part is usually the family
+        
+        # Extract feature signature (CRITICAL: different features = different outcomes)
+        feature_signature = None
+        if additional_data and 'n_features' in additional_data:
+            # Use feature fingerprint if available, otherwise hash n_features
+            feature_fp = self._compute_feature_fingerprint(run_data, additional_data)
+            if feature_fp:
+                feature_signature = feature_fp
+        elif run_data.get('additional_data') and 'n_features' in run_data['additional_data']:
+            feature_fp = self._compute_feature_fingerprint(run_data, run_data.get('additional_data'))
+            if feature_fp:
+                feature_signature = feature_fp
+        
         return ComparisonGroup(
             experiment_id=experiment_id,
             dataset_signature=data_fp,
             task_signature=task_fp,
-            routing_signature=routing_signature
+            routing_signature=routing_signature,
+            n_effective=n_effective,  # CRITICAL: Exact sample size
+            model_family=model_family,  # CRITICAL: Model family
+            feature_signature=feature_signature  # CRITICAL: Feature set
         )
     
     def _normalize_inputs(
@@ -609,12 +935,19 @@ class DiffTelemetry:
         """
         Save normalized snapshot to cohort directory.
         
+        Automatically organizes run by comparison group metadata on first snapshot.
+        
         Args:
             snapshot: Normalized snapshot
             cohort_dir: Cohort directory (where metadata.json lives)
         """
         cohort_dir = Path(cohort_dir)
         cohort_dir.mkdir(parents=True, exist_ok=True)
+        
+        # CRITICAL: On first snapshot, move run to comparison group directory
+        # This ensures runs are automatically organized by all outcome-influencing metadata
+        if not self._run_moved and snapshot.comparison_group and self.run_dir and self.results_dir:
+            self._organize_run_by_comparison_group(snapshot)
         
         # Save full snapshot
         snapshot_file = cohort_dir / "snapshot.json"
@@ -626,6 +959,69 @@ class DiffTelemetry:
         self._save_indices()
         
         logger.debug(f"✅ Saved snapshot to {snapshot_file}")
+    
+    def _organize_run_by_comparison_group(self, snapshot: NormalizedSnapshot) -> None:
+        """
+        Move run directory to comparison group-based organization.
+        
+        Structure: RESULTS/{comparison_group_dir}/{run_name}/
+        
+        This ensures runs with exactly the same outcome-influencing metadata
+        are stored together for human auditability.
+        
+        Args:
+            snapshot: First snapshot with comparison group metadata
+        """
+        if not snapshot.comparison_group:
+            return
+        
+        try:
+            # Determine target directory based on comparison group
+            comparison_group_dir = snapshot.comparison_group.to_dir_name()
+            target_dir = self.results_dir / comparison_group_dir / self.run_dir.name
+            
+            # Skip if already in correct location
+            if self.run_dir.resolve() == target_dir.resolve():
+                self._run_moved = True
+                return
+            
+            # Skip if target already exists (another run with same comparison group)
+            if target_dir.exists():
+                logger.warning(f"⚠️  Target directory already exists: {target_dir}")
+                logger.warning(f"   Run will remain in current location: {self.run_dir}")
+                self._run_moved = True  # Mark as moved to prevent retry
+                return
+            
+            # Create target directory parent
+            target_dir.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Move the entire run directory
+            import shutil
+            logger.info(f"📁 Organizing run by comparison group metadata...")
+            logger.info(f"   From: {self.run_dir}")
+            logger.info(f"   To:   {target_dir}")
+            logger.info(f"   Group: {snapshot.comparison_group.to_key()}")
+            
+            shutil.move(str(self.run_dir), str(target_dir))
+            
+            # Update internal references
+            self.run_dir = target_dir
+            self.run_metrics_dir = target_dir / "REPRODUCIBILITY" / "METRICS"
+            self.run_metrics_dir.mkdir(parents=True, exist_ok=True)
+            self.snapshot_index = self.run_metrics_dir / "snapshot_index.json"
+            
+            # Update output_dir if it was pointing to run_dir
+            if self.output_dir.resolve() == self.run_dir.resolve():
+                self.output_dir = target_dir
+            
+            self._run_moved = True
+            logger.info(f"✅ Run organized by comparison group metadata")
+            
+        except Exception as e:
+            logger.warning(f"⚠️  Failed to organize run by comparison group: {e}")
+            logger.warning(f"   Run will remain in current location: {self.run_dir}")
+            # Mark as moved to prevent retry loops
+            self._run_moved = True
     
     def compute_diff(
         self,
@@ -646,11 +1042,14 @@ class DiffTelemetry:
         comparable, reason = self._check_comparability(current_snapshot, prev_snapshot)
         
         if not comparable:
+            # CRITICAL: Even when not comparable, return stable shape with excluded_factors present
             return DiffResult(
                 prev_run_id=prev_snapshot.run_id,
                 current_run_id=current_snapshot.run_id,
                 comparable=False,
-                comparability_reason=reason
+                comparability_reason=reason,
+                excluded_factors_changed={},  # Empty but present (stable shape)
+                summary={'excluded_factors_summary': None}  # Empty but present (stable shape)
             )
         
         # Compute changes
@@ -691,16 +1090,25 @@ class DiffTelemetry:
             current_snapshot.outputs
         )
         
+        # Extract excluded factors (hyperparameters, seeds, versions) for reporting
+        excluded_factors_changed = self._extract_excluded_factor_changes(
+            current_snapshot, prev_snapshot
+        )
+        
         # Determine severity
         severity = self._determine_severity(changed_keys, input_changes, process_changes)
         
-        # Build summary
+        # Build summary with readable excluded factors summary
+        excluded_summary = self._format_excluded_factors_summary(excluded_factors_changed)
+        
         summary = {
             'total_changes': len(changed_keys),
             'input_changes': len(input_changes['keys']),
             'process_changes': len(process_changes['keys']),
             'output_changes': len(output_changes['keys']),
-            'metric_deltas_count': len(metric_deltas)
+            'metric_deltas_count': len(metric_deltas),
+            'excluded_factors_changed': bool(excluded_factors_changed),
+            'excluded_factors_summary': excluded_summary  # Human-readable summary
         }
         
         return DiffResult(
@@ -710,6 +1118,7 @@ class DiffTelemetry:
             changed_keys=changed_keys,
             severity=severity,
             summary=summary,
+            excluded_factors_changed=excluded_factors_changed,
             patch=patch,
             metric_deltas=metric_deltas
         )
@@ -720,6 +1129,14 @@ class DiffTelemetry:
         prev: NormalizedSnapshot
     ) -> Tuple[bool, Optional[str]]:
         """Check if two snapshots are comparable."""
+        # CRITICAL: Check fingerprint schema version compatibility
+        if current.fingerprint_schema_version != prev.fingerprint_schema_version:
+            return False, (
+                f"Different fingerprint schema versions: "
+                f"{current.fingerprint_schema_version} vs {prev.fingerprint_schema_version}. "
+                f"Fingerprint computation changed - runs are not comparable."
+            )
+        
         # Must be same stage
         if current.stage != prev.stage:
             return False, f"Different stages: {current.stage} vs {prev.stage}"
@@ -732,14 +1149,159 @@ class DiffTelemetry:
         if current.target and prev.target and current.target != prev.target:
             return False, f"Different targets: {current.target} vs {prev.target}"
         
-        # Check comparison groups
+        # CRITICAL: Must have identical comparison groups (all metadata must match exactly)
+        # This is the primary check - all outcome-influencing metadata must match
         if current.comparison_group and prev.comparison_group:
             cg_curr = current.comparison_group.to_key()
             cg_prev = prev.comparison_group.to_key()
             if cg_curr != cg_prev:
                 return False, f"Different comparison groups: {cg_curr} vs {cg_prev}"
+        elif current.comparison_group or prev.comparison_group:
+            # One has a comparison group, the other doesn't - not comparable
+            return False, "One snapshot missing comparison group"
         
         return True, None
+    
+    def _extract_excluded_factor_changes(
+        self,
+        current: NormalizedSnapshot,
+        prev: NormalizedSnapshot
+    ) -> Dict[str, Any]:
+        """Extract changes in excluded factors (hyperparameters, seeds, versions).
+        
+        These are outcome-influencing but intentionally excluded from comparability key
+        to allow controlled diffs. We surface them loudly so reviewers know about confounders.
+        
+        Returns:
+            Dict with compact summary of excluded factor changes (includes actual values, not just flag)
+        """
+        excluded = {}
+        
+        # Extract from process.training (hyperparameters)
+        curr_training = current.process.get('training', {})
+        prev_training = prev.process.get('training', {})
+        
+        # Hyperparameters (exclude model_family, strategy, seeds - those are handled separately)
+        # Include ALL hyperparameters found, not just a predefined list
+        hp_changes = {}
+        all_hp_keys = set(curr_training.keys()) | set(prev_training.keys())
+        # Exclude keys that are in comparability key or handled separately
+        excluded_keys = {'model_family', 'strategy', 'split_seed', 'train_seed', 'seed'}  # These are in key or handled separately
+        for key in all_hp_keys:
+            if key in excluded_keys:
+                continue
+            curr_val = curr_training.get(key)
+            prev_val = prev_training.get(key)
+            if curr_val != prev_val and (curr_val is not None or prev_val is not None):
+                # Include actual values for reviewer inspection
+                hp_changes[key] = {'prev': prev_val, 'curr': curr_val}
+        if hp_changes:
+            excluded['hyperparameters'] = hp_changes
+        
+        # Random seeds (train_seed, not split_seed - split_seed is in key)
+        curr_seed = curr_training.get('train_seed') or curr_training.get('seed')
+        prev_seed = prev_training.get('train_seed') or prev_training.get('seed')
+        if curr_seed != prev_seed:
+            excluded['train_seed'] = {'prev': prev_seed, 'curr': curr_seed}
+        
+        # Library/compute versions
+        curr_env = current.process.get('environment', {})
+        prev_env = prev.process.get('environment', {})
+        version_changes = {}
+        # Check all environment keys
+        all_env_keys = set(curr_env.keys()) | set(prev_env.keys())
+        for key in all_env_keys:
+            curr_val = curr_env.get(key)
+            prev_val = prev_env.get(key)
+            if curr_val != prev_val:
+                # Include actual values (e.g., "12.2 → 12.3")
+                version_changes[key] = {'prev': prev_val, 'curr': curr_val}
+        if version_changes:
+            excluded['versions'] = version_changes
+        
+        return excluded
+    
+    def _format_excluded_factors_summary(self, excluded: Dict[str, Any]) -> Optional[str]:
+        """Format excluded factors changes into readable summary.
+        
+        Returns:
+            Human-readable string like "learning_rate: 0.01→0.05, max_depth: 5→7, train_seed: 42→1337 (+2 more)"
+            or None if no excluded factors changed
+        
+        Count rule: Number of keys whose value differs (one key = one change).
+        This matches excluded_factors_changed_count calculation.
+        """
+        if not excluded:
+            return None
+        
+        parts = []
+        total_changes = 0
+        
+        # Hyperparameters (top 3)
+        if 'hyperparameters' in excluded:
+            hp_changes = excluded['hyperparameters']
+            total_changes += len(hp_changes)  # Count all HP keys that changed
+            hp_items = list(hp_changes.items())[:3]  # Top 3
+            for key, vals in hp_items:
+                prev = vals.get('prev')
+                curr = vals.get('curr')
+                if prev is not None and curr is not None:
+                    parts.append(f"{key}: {prev}→{curr}")
+            if len(hp_changes) > 3:
+                parts.append(f"(+{len(hp_changes) - 3} more HPs)")
+        
+        # Train seed
+        if 'train_seed' in excluded:
+            total_changes += 1  # Count train_seed as one change
+            seed_vals = excluded['train_seed']
+            parts.append(f"train_seed: {seed_vals.get('prev')}→{seed_vals.get('curr')}")
+        
+        # Versions (top 3)
+        if 'versions' in excluded:
+            ver_changes = excluded['versions']
+            total_changes += len(ver_changes)  # Count all version keys that changed
+            ver_items = list(ver_changes.items())[:3]  # Top 3
+            for key, vals in ver_items:
+                prev = vals.get('prev')
+                curr = vals.get('curr')
+                if prev is not None and curr is not None:
+                    parts.append(f"{key}: {prev}→{curr}")
+            if len(ver_changes) > 3:
+                parts.append(f"(+{len(ver_changes) - 3} more versions)")
+        
+        return ", ".join(parts) if parts else None
+    
+    def _count_excluded_factors_changed(self, excluded: Dict[str, Any]) -> int:
+        """Count number of excluded factors that changed.
+        
+        Count rule: Number of keys whose value differs (one key = one change).
+        - Each hyperparameter key = 1 change
+        - train_seed = 1 change (if present)
+        - Each version key = 1 change
+        
+        This matches the summary formatter counting logic.
+        
+        Returns:
+            Integer count of changed keys
+        """
+        if not excluded:
+            return 0
+        
+        count = 0
+        
+        # Count hyperparameter keys
+        if 'hyperparameters' in excluded:
+            count += len(excluded['hyperparameters'])
+        
+        # Count train_seed
+        if 'train_seed' in excluded:
+            count += 1
+        
+        # Count version keys
+        if 'versions' in excluded:
+            count += len(excluded['versions'])
+        
+        return count
     
     def _diff_dict(
         self,
@@ -879,13 +1441,16 @@ class DiffTelemetry:
         self,
         snapshot: NormalizedSnapshot
     ) -> Optional[NormalizedSnapshot]:
-        """Find previous comparable snapshot."""
+        """Find previous comparable snapshot.
+        
+        Searches across runs in the same sample size bin to find previous comparable runs.
+        """
         if not snapshot.comparison_group:
             return None
         
         group_key = snapshot.comparison_group.to_key()
         
-        # Find all snapshots in same comparison group
+        # First, search in current run's snapshots
         candidates = []
         for run_id, snap in self._snapshots.items():
             if run_id == snapshot.run_id:
@@ -894,6 +1459,44 @@ class DiffTelemetry:
             comparable, _ = self._check_comparability(snapshot, snap)
             if comparable:
                 candidates.append((snap.timestamp, snap))
+        
+        # Search across ALL runs in RESULTS to find previous comparable runs
+        # This ensures we find exactly the same runs (same comparison_group) regardless of bin
+        if hasattr(self, 'run_dir') and self.run_dir:
+            # Find RESULTS directory
+            results_dir = self.run_dir
+            while results_dir.parent.exists() and results_dir.name != "RESULTS":
+                results_dir = results_dir.parent
+                if results_dir.name == "RESULTS":
+                    break
+            
+            if results_dir.name == "RESULTS":
+                # Search all sample_* bins
+                for bin_dir in results_dir.iterdir():
+                    if bin_dir.is_dir() and bin_dir.name.startswith("sample_"):
+                        # Search all runs in this bin
+                        for run_subdir in bin_dir.iterdir():
+                            if run_subdir.is_dir() and run_subdir.name != "METRICS":
+                                run_snapshot_index = run_subdir / "REPRODUCIBILITY" / "METRICS" / "snapshot_index.json"
+                                if run_snapshot_index.exists():
+                                    try:
+                                        with open(run_snapshot_index) as f:
+                                            data = json.load(f)
+                                            for run_id, snap_data in data.items():
+                                                if run_id == snapshot.run_id:
+                                                    continue
+                                                try:
+                                                    snap = self._deserialize_snapshot(snap_data)
+                                                    # Only add if same comparison_group (exactly the same runs)
+                                                    if (snap.comparison_group and 
+                                                        snap.comparison_group.to_key() == group_key):
+                                                        comparable, _ = self._check_comparability(snapshot, snap)
+                                                        if comparable:
+                                                            candidates.append((snap.timestamp, snap))
+                                                except Exception:
+                                                    continue
+                                    except Exception:
+                                        continue
         
         if not candidates:
             return None
@@ -905,10 +1508,18 @@ class DiffTelemetry:
     def get_or_establish_baseline(
         self,
         snapshot: NormalizedSnapshot,
-        metrics: Dict[str, float]
+        metrics: Dict[str, float],
+        cohort_dir: Path
     ) -> Tuple[Optional[BaselineState], bool]:
         """
         Get or establish baseline for comparison group.
+        
+        Baselines are stored per-cohort to ensure only exactly the same runs share baselines.
+        
+        Args:
+            snapshot: Normalized snapshot
+            metrics: Metrics dict
+            cohort_dir: Cohort directory where baseline will be stored
         
         Returns:
             (BaselineState or None, is_new_baseline)
@@ -918,15 +1529,55 @@ class DiffTelemetry:
         
         group_key = snapshot.comparison_group.to_key()
         
-        # Check if baseline exists
+        # Check cache first
         if group_key in self._baselines:
             return self._baselines[group_key], False
         
-        # Count comparable runs
+        # Load from cohort directory
+        baseline = self._load_baseline_from_cohort(cohort_dir, group_key)
+        if baseline:
+            self._baselines[group_key] = baseline  # Cache it
+            return baseline, False
+        
+        # Count comparable runs (search across runs in same bin)
         comparable_runs = [
             snap for snap in self._snapshots.values()
             if snap.comparison_group and snap.comparison_group.to_key() == group_key
         ]
+        
+        # Search across ALL runs in RESULTS to find comparable runs with same comparison_group
+        # This ensures baselines are established from exactly the same runs
+        if hasattr(self, 'run_dir') and self.run_dir:
+            # Find RESULTS directory
+            results_dir = self.run_dir
+            while results_dir.parent.exists() and results_dir.name != "RESULTS":
+                results_dir = results_dir.parent
+                if results_dir.name == "RESULTS":
+                    break
+            
+            if results_dir.name == "RESULTS":
+                # Search all sample_* bins
+                for bin_dir in results_dir.iterdir():
+                    if bin_dir.is_dir() and bin_dir.name.startswith("sample_"):
+                        # Search all runs in this bin
+                        for run_subdir in bin_dir.iterdir():
+                            if run_subdir.is_dir() and run_subdir.name != "METRICS":
+                                run_snapshot_index = run_subdir / "REPRODUCIBILITY" / "METRICS" / "snapshot_index.json"
+                                if run_snapshot_index.exists():
+                                    try:
+                                        with open(run_snapshot_index) as f:
+                                            data = json.load(f)
+                                            for run_id, snap_data in data.items():
+                                                try:
+                                                    snap = self._deserialize_snapshot(snap_data)
+                                                    # Only add if same comparison_group (exactly the same runs)
+                                                    if (snap.comparison_group and 
+                                                        snap.comparison_group.to_key() == group_key):
+                                                        comparable_runs.append(snap)
+                                                except Exception:
+                                                    continue
+                                    except Exception:
+                                        continue
         
         if len(comparable_runs) < self.min_runs_for_baseline:
             return None, False
@@ -950,8 +1601,9 @@ class DiffTelemetry:
                 baseline_metrics=best_run.outputs.get('metrics', {}),
                 established_at=datetime.now().isoformat()
             )
-            self._baselines[group_key] = baseline
-            self._save_indices()
+            self._baselines[group_key] = baseline  # Cache it
+            # Save to cohort directory (not global index)
+            self._save_baseline_to_cohort(cohort_dir, baseline)
             return baseline, True
         
         return None, False
@@ -993,7 +1645,7 @@ class DiffTelemetry:
         cohort_dir: Path,
         cohort_metadata: Optional[Dict[str, Any]] = None,
         additional_data: Optional[Dict[str, Any]] = None
-    ) -> None:
+    ) -> Optional[Dict[str, Any]]:
         """
         Finalize run: create snapshot, compute diffs, update baseline.
         
@@ -1024,16 +1676,19 @@ class DiffTelemetry:
         if prev_snapshot:
             diff = self.compute_diff(snapshot, prev_snapshot)
         else:
+            # First run / no previous run: return stable shape with empty excluded factors
             diff = DiffResult(
-                prev_run_id="none",
+                prev_run_id=None,  # Use None instead of "none" for clarity
                 current_run_id=snapshot.run_id,
                 comparable=False,
-                comparability_reason="No previous comparable run found"
+                comparability_reason="No previous comparable run found",
+                excluded_factors_changed={},  # Empty but present
+                summary={'excluded_factors_summary': None}  # Empty but present
             )
         
-        # Get or establish baseline
+        # Get or establish baseline (stored per-cohort for exact matching)
         metrics = snapshot.outputs.get('metrics', {})
-        baseline_state, is_new = self.get_or_establish_baseline(snapshot, metrics)
+        baseline_state, is_new = self.get_or_establish_baseline(snapshot, metrics, cohort_dir)
         
         # Compute diff against baseline
         baseline_diff = None
@@ -1046,10 +1701,22 @@ class DiffTelemetry:
         # Save diffs
         self.save_diff(diff, baseline_diff, cohort_dir)
         
+        # Return diff data for integration into metadata/metrics
+        diff_telemetry_data = {
+            'diff': diff.to_dict(),
+            'baseline_diff': baseline_diff.to_dict() if baseline_diff else None,
+            'snapshot': snapshot.to_dict()
+        }
+        
         logger.info(f"✅ Telemetry finalized for {stage}:{snapshot.target or 'unknown'}")
         if diff.comparable:
             logger.info(f"   Changes: {len(diff.changed_keys)} keys, severity={diff.severity.value}")
             if diff.metric_deltas:
                 for metric, delta in diff.metric_deltas.items():
                     logger.info(f"   {metric}: {delta['absolute']:+.4f} ({delta['percent']:+.2f}%)")
+            # Surface excluded factors loudly
+            if diff.excluded_factors_changed and diff.summary.get('excluded_factors_summary'):
+                logger.warning(f"   ⚠️  Excluded factors changed: {diff.summary['excluded_factors_summary']}")
+        
+        return diff_telemetry_data
 
