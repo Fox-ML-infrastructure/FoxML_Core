@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-17 Updates (Training Pipeline Audit Fixes)
+- **Training Pipeline Contract Fixes**: Fixed 10 critical contract breaks across family IDs, routing, plan consumption, feature schema, and counting/tracking. Key fixes: family normalization (XGBoost → xgboost), reproducibility tracking string/Enum handling, preflight filtering for all routes, routing plan DISABLED status respect, symbol-specific route includes all eligible symbols, feature pipeline threshold fix (allowed→present not requested→present), and schema mismatch diagnostics with close matches.
+- **Feature Pipeline Improvements**: Fixed feature drop threshold to use allowed→present denominator (prevents false positives when registry intentionally prunes). Added close-match diagnostics for missing allowed features to help diagnose name mismatches.
+- **Routing/Plan Integration**: Training now respects routing plan's CS: DISABLED status. Training plan with 0 jobs now hard-fails (error, not warning). Added validation logging for routing decision count mismatches.
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-17-training-pipeline-audit-fixes.md)
+
 #### 2025-12-17 Updates (Licensing & Reproducibility)
 - **Licensing Model Reverted**: Returned to **AGPL v3 + Commercial** dual licensing model. The brief "source-available, tax-exempt universities only" model was a mistake and has been reverted. All documentation updated to reflect standard dual-license model. Sorry for any confusion during the transition.
 - **Documentation Restructure**: README.md restructured to be builder-first with minimal licensing notice. All commercial details moved to `LEGAL/LICENSING.md` for better audience separation (builders vs. buyers).
@@ -138,6 +144,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 **Recent fixes (2025-12-12 - 2025-12-17):**
+- **Training Pipeline Contract Fixes** (2025-12-17): Fixed 10 critical contract breaks: family normalization (XGBoost → xgboost alias), reproducibility tracking string/Enum crashes, LightGBM save hook `_pkg_ver` referenced-before-assignment, preflight filtering for all routes (SYMBOL_SPECIFIC now uses validated_families), router default for swing targets (binary classification), training plan 0 jobs hard error, routing plan CS: DISABLED respect, routing decision count mismatch detection, symbol-specific route includes all eligible symbols, feature pipeline threshold fix (allowed→present) and schema mismatch diagnostics.
 - **CV/Embargo Metadata Inconsistency** (2025-12-17): Fixed inconsistent embargo_minutes handling - when CV is enabled (cv_method set), embargo is now explicitly set to 0.0 (disabled) rather than marked as "not_applicable". Only marks as "not_applicable" when CV is actually disabled. Added embargo_enabled flag for clarity.
 - **Metrics Naming Redundancy** (2025-12-17): Removed redundant features_final field, kept n_features_post_prune (more descriptive). Clarified n_features_pre vs n_features_post_prune semantics.
 - **Training Pipeline Plumbing Fixes** (2025-12-16): Fixed family name canonicalization mismatches, banner suppression in child processes, reproducibility tracking string/Enum handling, model saving packaging bugs (`_pkg_ver`, `joblib` imports), feature selector vs trainer confusion

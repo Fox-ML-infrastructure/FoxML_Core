@@ -347,51 +347,42 @@ def normalize_family_name(family: str) -> str:
     """
     Canonicalize model family name to snake_case lowercase for registry lookups.
     
-    This is the SINGLE SOURCE OF TRUTH for family name normalization.
-    Apply at ALL registry boundaries: MODMAP, TRAINER_MODULE_MAP, runtime_policy, FAMILY_CAPS.
+    DEPRECATED: Use TRAINING.utils.sst_contract.normalize_family() instead.
+    This function is kept for backward compatibility but delegates to SST contract.
     
-    All registries MUST use snake_case lowercase keys. This function ensures consistency.
+    Args:
+        family: Family name (can be any case/variant)
     
-    Handles common variations:
-    - LightGBM -> lightgbm
-    - XGBoost -> xgboost
-    - random_forest -> random_forest
-    - RandomForest -> random_forest
-    - neural_network -> neural_network
-    - mutual_information -> mutual_information (selector, not trainer)
-    - univariate_selection -> univariate_selection (selector, not trainer)
-    - lasso -> lasso
-    - catboost -> catboost
+    Returns:
+        Normalized family name in snake_case lowercase
     """
-    if not family or not isinstance(family, str):
-        return str(family).lower() if family else ""
-    
-    import re
-    
-    # Normalize input: strip, replace hyphens/spaces with underscores
-    family_clean = family.strip().replace("-", "_").replace(" ", "_")
-    
-    # If already snake_case (has underscores), just lowercase
-    if "_" in family_clean:
-        return family_clean.lower().replace("__", "_")
-    
-    # Convert TitleCase/CamelCase to snake_case
-    # Split on capital letters: "LightGBM" -> ["", "Light", "GBM"]
-    # "RandomForest" -> ["", "Random", "Forest"]
-    parts = re.split(r'(?=[A-Z])', family_clean)
-    parts = [p for p in parts if p]  # Remove empty strings
-    
-    if len(parts) == 1:
-        # Single word, just lowercase
-        return parts[0].lower()
-    
-    # Join parts with underscores, all lowercase
-    result = "_".join(p.lower() for p in parts)
-    
-    # Clean up: remove double underscores
-    result = result.replace("__", "_")
-    
-    return result
+    try:
+        # Use SST contract for consistency
+        from TRAINING.utils.sst_contract import normalize_family
+        return normalize_family(family)
+    except ImportError:
+        # Fallback to original logic if SST contract not available
+        if not family or not isinstance(family, str):
+            return str(family).lower() if family else ""
+        
+        import re
+        
+        # Normalize input: strip, replace hyphens/spaces with underscores
+        family_clean = family.strip().replace("-", "_").replace(" ", "_")
+        
+        # If already snake_case (has underscores), just lowercase
+        if "_" in family_clean:
+            return family_clean.lower().replace("__", "_")
+        
+        # Convert TitleCase/CamelCase to snake_case
+        parts = re.split(r'(?=[A-Z])', family_clean)
+        parts = [p for p in parts if p]  # Remove empty strings
+        
+        if len(parts) == 1:
+            return parts[0].lower()
+        
+        result = "_".join(p.lower() for p in parts)
+        return result.replace("__", "_")
 
 
 # Family capabilities map (from original script)

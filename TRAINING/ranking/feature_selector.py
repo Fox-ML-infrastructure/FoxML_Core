@@ -271,11 +271,14 @@ def select_features_for_target(
                     actual_len = len(build_result)
                     logger.debug(f"build_panel returned {actual_len} values: {[type(x).__name__ for x in build_result]}")
                     
-                    if actual_len >= 8:
+                    if actual_len >= 9:
+                        # Current signature: 9 values (includes resolved_data_config)
+                        X, y, feature_names, symbols_array, time_vals, mtf_data, detected_interval, resolved_config, resolved_data_config = build_result[:9]
+                    elif actual_len >= 8:
+                        # Legacy signature: 8 values (missing resolved_data_config)
                         X, y, feature_names, symbols_array, time_vals, mtf_data, detected_interval, resolved_config = build_result[:8]
-                        resolved_data_config = build_result[8] if actual_len > 8 else None
-                        if actual_len > 9:
-                            logger.warning(f"build_panel returned {actual_len} values (expected 6-9), using first 9. Extra: {build_result[9:]}")
+                        resolved_data_config = None
+                        logger.debug(f"build_panel returned {actual_len} values (legacy signature without resolved_data_config)")
                     elif actual_len >= 6:
                         # Fallback for older signature (6 values)
                         X, y, feature_names, symbols_array, time_vals, mtf_data = build_result[:6]
@@ -422,6 +425,34 @@ def select_features_for_target(
                         task_type=None, resolved_config=resolved_config
                     )
                     
+                    # CRITICAL: Create RunContext for each symbol (SYMBOL_SPECIFIC view)
+                    # This ensures COHORT_AWARE mode works correctly for per-symbol processing
+                    purge_minutes = resolved_config.purge_minutes if resolved_config else None
+                    embargo_minutes = resolved_config.embargo_minutes if resolved_config else None
+                    
+                    # Store ctx for this symbol (will be collected later for aggregation)
+                    ctx = harness.create_run_context(
+                        X=X,
+                        y=y,
+                        feature_names=feature_names,
+                        symbols_array=symbols_array,
+                        time_vals=time_vals,
+                        cv_splitter=cv_splitter,
+                        horizon_minutes=horizon_minutes,
+                        purge_minutes=purge_minutes,
+                        embargo_minutes=embargo_minutes,
+                        data_interval_minutes=data_interval_minutes
+                    )
+                    # Store ctx in a dict keyed by symbol for later use
+                    if 'symbol_ctx_map' not in locals():
+                        symbol_ctx_map = {}
+                    symbol_ctx_map[symbol_to_process] = ctx
+                    
+                    logger.debug(f"Created RunContext for {symbol_to_process} with X.shape={X.shape if X is not None else None}, "
+                               f"y.shape={y.shape if y is not None else None}, "
+                               f"time_vals.shape={time_vals.shape if time_vals is not None else None}, "
+                               f"horizon_minutes={horizon_minutes}")
+                    
                     # Save stability snapshots for each model family (same as target ranking)
                     # CRITICAL: Per-model-family snapshots ensure stability is computed within same family
                     # Per-symbol snapshots for SYMBOL_SPECIFIC view
@@ -517,15 +548,20 @@ def select_features_for_target(
                 actual_len = len(build_result)
                 logger.debug(f"build_panel returned {actual_len} values: {[type(x).__name__ for x in build_result]}")
                 
-                if actual_len >= 8:
+                if actual_len >= 9:
+                    # Current signature: 9 values (includes resolved_data_config)
+                    X, y, feature_names, symbols_array, time_vals, mtf_data, detected_interval, resolved_config, resolved_data_config = build_result[:9]
+                elif actual_len >= 8:
+                    # Legacy signature: 8 values (missing resolved_data_config)
                     X, y, feature_names, symbols_array, time_vals, mtf_data, detected_interval, resolved_config = build_result[:8]
-                    if actual_len > 8:
-                        logger.warning(f"build_panel returned {actual_len} values (expected 6-8), using first 8. Extra: {build_result[8:]}")
+                    resolved_data_config = None
+                    logger.debug(f"build_panel returned {actual_len} values (legacy signature without resolved_data_config)")
                 elif actual_len >= 6:
-                    # Fallback for older signature (6 values)
+                    # Older signature: 6 values
                     X, y, feature_names, symbols_array, time_vals, mtf_data = build_result[:6]
                     detected_interval = build_result[6] if actual_len > 6 else 5.0
                     resolved_config = build_result[7] if actual_len > 7 else None
+                    resolved_data_config = None
                     logger.debug(f"build_panel returned {actual_len} values (legacy signature)")
                 else:
                     raise ValueError(f"build_panel returned {actual_len} values, expected at least 6. Got: {[type(x).__name__ for x in build_result]}")
@@ -715,6 +751,8 @@ def select_features_for_target(
                         purge_minutes = resolved_config.purge_minutes if resolved_config else None
                         embargo_minutes = resolved_config.embargo_minutes if resolved_config else None
                         
+                        # Create RunContext for reproducibility tracking (CRITICAL: Must have all required fields)
+                        # This ensures COHORT_AWARE mode works correctly
                         ctx = harness.create_run_context(
                             X=X,
                             y=y,
@@ -729,6 +767,10 @@ def select_features_for_target(
                         )
                         
                         logger.info(f"✅ Shared harness completed: {len(all_results)} model results")
+                        logger.debug(f"Created RunContext with X.shape={X.shape if X is not None else None}, "
+                                   f"y.shape={y.shape if y is not None else None}, "
+                                   f"time_vals.shape={time_vals.shape if time_vals is not None else None}, "
+                                   f"horizon_minutes={horizon_minutes}")
                 
         except Exception as e:
             logger.warning(f"Shared harness failed: {e}, falling back to per-symbol processing", exc_info=True)
@@ -1431,10 +1473,11 @@ def select_features_for_target(
             from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
             
             # Use run-level directory for reproducibility tracking
-            # output_dir is now: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
+            # output_dir is now: REPRODUCIBILITY/FEATURE_SELECTION/{view}/{target}/[symbol={symbol}/]
             # Walk up to find the run-level directory
             module_output_dir = output_dir
-            while module_output_dir.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "feature_selections", "target_rankings"]:
+            # For SYMBOL_SPECIFIC, also skip symbol= directories
+            while module_output_dir.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "feature_selections", "target_rankings"] or module_output_dir.name.startswith("symbol="):
                 module_output_dir = module_output_dir.parent
                 if not module_output_dir.parent.exists() or module_output_dir.name == "RESULTS":
                     break
@@ -1502,10 +1545,28 @@ def select_features_for_target(
                                     additional_data_override['training'] = training_config
                 
                 # Use RunContext from shared harness if available, otherwise build from available data
-                if use_shared_harness and 'ctx' in locals():
-                    # Use the RunContext created by the shared harness (has all required fields)
-                    ctx_to_use = ctx
-                else:
+                # CRITICAL: ctx is created inside the use_shared_harness block, so check both conditions
+                ctx_to_use = None
+                if use_shared_harness:
+                    # Try to get ctx from the shared harness block
+                    # For CROSS_SECTIONAL: ctx is created at function scope
+                    # For SYMBOL_SPECIFIC: ctx is stored in symbol_ctx_map (use first symbol's ctx for aggregation-level tracking)
+                    try:
+                        if view == "CROSS_SECTIONAL" and 'ctx' in locals() and ctx is not None:
+                            ctx_to_use = ctx
+                            logger.debug("Using RunContext from shared harness (CROSS_SECTIONAL, has all required fields for COHORT_AWARE)")
+                        elif view == "SYMBOL_SPECIFIC" and 'symbol_ctx_map' in locals() and symbol_ctx_map:
+                            # For SYMBOL_SPECIFIC, use the first symbol's ctx (aggregation-level tracking)
+                            # Individual symbol ctxs are already stored in symbol_ctx_map
+                            first_symbol = next(iter(symbol_ctx_map.keys()))
+                            ctx_to_use = symbol_ctx_map[first_symbol]
+                            logger.debug(f"Using RunContext from shared harness (SYMBOL_SPECIFIC, using {first_symbol}'s ctx for aggregation-level tracking)")
+                        else:
+                            logger.warning("Shared harness used but ctx not found - will build fallback RunContext")
+                    except (NameError, StopIteration):
+                        logger.warning("ctx not in scope - will build fallback RunContext")
+                
+                if ctx_to_use is None:
                     # Build RunContext from available data (fallback for per-symbol processing)
                     X_for_ctx = None
                     y_for_ctx = None
@@ -1653,12 +1714,13 @@ def select_features_for_target(
                 }
                 
                 # FIX: Map view to route_type for FEATURE_SELECTION (ensures proper telemetry scoping)
+                # Use SYMBOL_SPECIFIC directly to match directory structure (not INDIVIDUAL)
                 route_type_for_legacy = None
                 if view:
                     if view.upper() == "CROSS_SECTIONAL":
                         route_type_for_legacy = "CROSS_SECTIONAL"
                     elif view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
-                        route_type_for_legacy = "INDIVIDUAL"  # SYMBOL_SPECIFIC maps to INDIVIDUAL
+                        route_type_for_legacy = "SYMBOL_SPECIFIC"  # Use SYMBOL_SPECIFIC to match directory structure
                 
                 # Track lookback cap enforcement results (pre and post selection) in telemetry
                 lookback_cap_metadata = {}
@@ -1822,27 +1884,10 @@ def select_features_for_target(
         except Exception:
             pass  # Non-critical summary logging
     
-    # Generate metrics rollups after feature selection completes (if output_dir provided)
-    if output_dir:
-        try:
-            from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
-            from datetime import datetime
-            
-            # Find the REPRODUCIBILITY directory
-            repro_dir = output_dir / "REPRODUCIBILITY"
-            if not repro_dir.exists() and output_dir.parent.exists():
-                repro_dir = output_dir.parent / "REPRODUCIBILITY"
-            
-            if repro_dir.exists():
-                # Use output_dir parent as base (where RESULTS/runs/ typically is)
-                base_dir = output_dir.parent if (output_dir / "REPRODUCIBILITY").exists() else output_dir
-                tracker = ReproducibilityTracker(output_dir=base_dir)
-                # Generate run_id from output_dir name or timestamp
-                run_id = output_dir.name if output_dir.name else datetime.now().strftime("%Y%m%d_%H%M%S")
-                tracker.generate_metrics_rollups(stage="FEATURE_SELECTION", run_id=run_id)
-                logger.debug("✅ Generated metrics rollups for FEATURE_SELECTION")
-        except Exception as e:
-            logger.debug(f"Failed to generate metrics rollups: {e}")
+    # NOTE: Metrics rollups should be generated ONCE at the run level after ALL targets are processed,
+    # not per-target. This is handled by the orchestrator (intelligent_trainer.py) after all feature
+    # selections complete. Per-target rollups would create duplicate/conflicting trend data.
+    # If you need per-target rollups, they should be generated separately at the target level.
     
     return selected_features, summary_df
 

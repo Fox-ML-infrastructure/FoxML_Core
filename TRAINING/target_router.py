@@ -101,6 +101,12 @@ TARGET_PATTERNS = [
     # --- Regression: Probability estimates ---
     (r'^p_(up|down)_\d+[mhd]_[0-9.]+$',
      TaskSpec('regression', 'regression', ['rmse', 'mae'], label_type='float32')),
+    
+    # --- Binary classification: y_will_swing_* targets ---
+    # These are 0/1 labels indicating whether price will swing high/low
+    # CRITICAL: Route to binary classification, not regression
+    (r'^y_will_swing_(high|low)_\d+[mhd]_[0-9.]+$',
+     TaskSpec('binary', 'binary', ['roc_auc', 'log_loss'], label_type='int32')),
 ]
 
 

@@ -319,13 +319,19 @@ def get_policy(family: str) -> RuntimePolicy:
     Returns:
         RuntimePolicy instance with execution requirements
     """
-    # Normalize family name for consistent lookup
+    # CRITICAL: Use SST contract for family normalization (single source of truth)
     try:
-        from TRAINING.training_strategies.utils import normalize_family_name
-        family = normalize_family_name(family)
+        from TRAINING.utils.sst_contract import normalize_family
+        family = normalize_family(family)
     except ImportError:
-        # Fallback if utils not available (shouldn't happen in normal flow)
-        pass
+        # Fallback to legacy function if SST contract not available
+        try:
+            from TRAINING.training_strategies.utils import normalize_family_name
+            family = normalize_family_name(family)
+        except ImportError:
+            # Final fallback: basic normalization
+            if family:
+                family = family.lower().replace("-", "_").replace(" ", "_")
     
     policy = POLICY.get(family, DEFAULT_POLICY)
     

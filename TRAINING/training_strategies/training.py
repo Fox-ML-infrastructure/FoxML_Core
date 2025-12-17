@@ -160,7 +160,7 @@ from TRAINING.training_strategies.family_runners import _run_family_inproc, _run
 from TRAINING.training_strategies.data_preparation import prepare_training_data_cross_sectional
 from TRAINING.training_strategies.utils import (
     FAMILY_CAPS, ALL_FAMILIES, tf_available, ngboost_available,
-    _now, _pkg_ver, THREADS, CPU_ONLY,
+    _now, THREADS, CPU_ONLY,
     TORCH_SEQ_FAMILIES, build_sequences_from_features, _env_guard, safe_duration
 )
 # train_model_comprehensive is defined in this file, not in utils
@@ -243,6 +243,10 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         route_info = routing_decisions.get(target, {}) if routing_decisions else {}
         route = route_info.get('route', 'CROSS_SECTIONAL')
         
+        # CRITICAL FIX: Check if cross-sectional is explicitly DISABLED in routing plan
+        cs_info = route_info.get('cross_sectional', {})
+        cs_route_status = cs_info.get('route', 'ENABLED') if isinstance(cs_info, dict) else 'ENABLED'
+        
         if target_features and target in target_features:
             target_feat_data = target_features[target]
             
@@ -254,6 +258,15 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                 results['failed_reasons'][target] = f"BLOCKED: {route_info.get('reason', 'suspicious score')}"
                 continue
             elif route == 'CROSS_SECTIONAL':
+                # CRITICAL FIX: Respect routing plan - skip CS training if DISABLED
+                if cs_route_status == 'DISABLED':
+                    logger.warning(
+                        f"Skipping cross-sectional training for {target}: "
+                        f"CS route is DISABLED in routing plan (reason: {cs_info.get('reason', 'unknown')})"
+                    )
+                    results['failed_targets'].append(target)
+                    results['failed_reasons'][target] = f"CS: DISABLED in routing plan ({cs_info.get('reason', 'unknown')})"
+                    continue
                 # Simple list of features
                 selected_features = target_feat_data
                 if selected_features is not None:
@@ -311,6 +324,62 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                         logger.error(f"Failed to convert features to list: {e}")
                         selected_features = None
         
+        # CRITICAL: Run preflight validation BEFORE both CROSS_SECTIONAL and SYMBOL_SPECIFIC paths
+        # This ensures invalid families are filtered out for all routes
+        from TRAINING.training_strategies.utils import normalize_family_name
+        from common.isolation_runner import TRAINER_MODULE_MAP
+        
+        # Get canonical family set from registries (must match MODMAP in family_runners.py)
+        MODMAP_KEYS = {
+            "lightgbm", "quantile_lightgbm", "xgboost", "reward_based", "gmm_regime",
+            "change_point", "ngboost", "ensemble", "ftrl_proximal", "mlp", "vae",
+            "gan", "meta_learning", "multi_task"
+        }
+        REGISTRY_KEYS = MODMAP_KEYS | set(TRAINER_MODULE_MAP.keys())
+        
+        # Normalize and validate requested families (PREFLIGHT - runs for all routes)
+        validated_families = []
+        skipped_families = []
+        invalid_families = []
+        
+        for family in target_families:
+            normalized = normalize_family_name(family)
+            if normalized in ["mutual_information", "univariate_selection"]:
+                skipped_families.append((family, normalized, "feature_selector_not_trainer"))
+            elif normalized not in REGISTRY_KEYS:
+                invalid_families.append((family, normalized))
+            else:
+                validated_families.append(normalized)
+        
+        # Log preflight results
+        if invalid_families:
+            known_missing = {'random_forest', 'catboost', 'neural_network', 'lasso', 'elastic_net'}
+            missing_normalized = {norm for _, norm in invalid_families}
+            
+            if missing_normalized & known_missing:
+                logger.warning(
+                    f"⚠️ Preflight [{target}]: {len(invalid_families)} families not in trainer registry "
+                    f"(known missing: {sorted(missing_normalized & known_missing)}). "
+                    f"These families are used in feature selection but not registered as trainers. "
+                    f"Either: 1) Register them in TRAINER_MODULE_MAP, or 2) Remove from training_families config."
+                )
+            else:
+                logger.warning(f"⚠️ Preflight [{target}]: {len(invalid_families)} families not in trainer registry:")
+            for raw, norm in invalid_families:
+                logger.warning(f"  - {raw} (normalized: {norm}) → SKIP")
+        if skipped_families:
+            logger.info(f"ℹ️ Preflight [{target}]: {len(skipped_families)} families are selectors (not trainers):")
+            for raw, norm, reason in skipped_families:
+                logger.info(f"  - {raw} (normalized: {norm}) → SKIP ({reason})")
+        
+        if not validated_families:
+            logger.error(f"❌ No valid trainer families after preflight validation for {target}. Requested: {target_families}")
+            results['failed_targets'].append(target)
+            results['failed_reasons'][target] = f"No valid trainer families (invalid: {[f[0] for f in invalid_families]}, selectors: {[f[0] for f in skipped_families]})"
+            continue
+        
+        logger.info(f"✅ Preflight [{target}]: {len(validated_families)} valid trainer families, {len(skipped_families)} selectors skipped, {len(invalid_families)} invalid")
+        
         # Handle SYMBOL_SPECIFIC route separately (per-symbol training)
         if route == 'SYMBOL_SPECIFIC' and isinstance(target_feat_data, dict):
             # Train separate models for each symbol
@@ -361,9 +430,16 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                         'group_sizes': None
                     }
                 
+                # CRITICAL FIX: Use validated_families from preflight (not original target_families)
+                # This prevents attempting to train invalid families (random_forest, catboost, etc.)
+                families_to_train = validated_families
+                if not families_to_train:
+                    logger.warning(f"  ⚠️ No valid families to train for {target}:{symbol} (all filtered by preflight)")
+                    continue
+                
                 # Train models for this symbol
                 symbol_results = {}
-                for family in target_families:
+                for family in families_to_train:
                     try:
                         logger.info(f"  🤖 Training {family} for {target}:{symbol}")
                         model_result = train_model_comprehensive(
@@ -727,53 +803,9 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         # CRITICAL: Order families to prevent cross-lib thread pollution
         # Run CPU-GBDT families FIRST, then TF/XGB families
         FAMILY_ORDER = [
-            "QuantileLightGBM", "LightGBM", "RewardBased", "XGBoost",  # CPU tree learners first
-            "MLP", "Ensemble", "ChangePoint", "NGBoost", "GMMRegime", "FTRLProximal", "VAE", "GAN", "MetaLearning", "MultiTask"  # Others
+            "lightgbm", "quantile_lightgbm", "reward_based", "xgboost",  # CPU tree learners first (normalized)
+            "mlp", "ensemble", "change_point", "ngboost", "gmm_regime", "ftrl_proximal", "vae", "gan", "meta_learning", "multi_task"  # Others (normalized)
         ]
-        
-        # PREFLIGHT: Validate families exist in trainer registry before training starts
-        from TRAINING.training_strategies.utils import normalize_family_name
-        from common.isolation_runner import TRAINER_MODULE_MAP
-        
-        # Get canonical family set from registries (must match MODMAP in family_runners.py)
-        MODMAP_KEYS = {
-            "LightGBM", "QuantileLightGBM", "XGBoost", "RewardBased", "GMMRegime",
-            "ChangePoint", "NGBoost", "Ensemble", "FTRLProximal", "MLP", "VAE",
-            "GAN", "MetaLearning", "MultiTask"
-        }
-        REGISTRY_KEYS = MODMAP_KEYS | set(TRAINER_MODULE_MAP.keys())
-        
-        # Normalize and validate requested families
-        validated_families = []
-        skipped_families = []
-        invalid_families = []
-        
-        for family in target_families:
-            normalized = normalize_family_name(family)
-            if normalized in ["mutual_information", "univariate_selection"]:
-                skipped_families.append((family, normalized, "feature_selector_not_trainer"))
-            elif normalized not in REGISTRY_KEYS:
-                invalid_families.append((family, normalized))
-            else:
-                validated_families.append(normalized)
-        
-        # Log preflight results
-        if invalid_families:
-            logger.warning(f"⚠️ Preflight: {len(invalid_families)} families not in trainer registry:")
-            for raw, norm in invalid_families:
-                logger.warning(f"  - {raw} (normalized: {norm}) → SKIP")
-        if skipped_families:
-            logger.info(f"ℹ️ Preflight: {len(skipped_families)} families are selectors (not trainers):")
-            for raw, norm, reason in skipped_families:
-                logger.info(f"  - {raw} (normalized: {norm}) → SKIP ({reason})")
-        
-        if not validated_families:
-            logger.error(f"❌ No valid trainer families after preflight validation. Requested: {target_families}")
-            results['failed_targets'].append(target)
-            results['failed_reasons'][target] = f"No valid trainer families (invalid: {[f[0] for f in invalid_families]}, selectors: {[f[0] for f in skipped_families]})"
-            continue
-        
-        logger.info(f"✅ Preflight: {len(validated_families)} valid trainer families, {len(skipped_families)} selectors skipped, {len(invalid_families)} invalid")
         
         # Reorder validated families to prevent thread pollution
         ordered_families = []
@@ -803,9 +835,9 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
             print(f"DEBUG: About to call train_model_comprehensive for {family}")  # Debug print
             
             try:
-                # Normalize family name for capabilities map lookup
-                from TRAINING.training_strategies.utils import normalize_family_name
-                normalized_family = normalize_family_name(family)
+                # CRITICAL: family is already normalized from preflight (validated_families)
+                # No need to normalize again - use directly
+                normalized_family = family
                 
                 # Check family capabilities
                 if normalized_family not in FAMILY_CAPS:
@@ -940,11 +972,29 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     **cohort_additional_data  # Adds n_symbols, date_range, cs_config if available
                                 }
                                 
+                                # CRITICAL: Adapt additional_data to ensure string/Enum safety
+                                # This prevents 'str' object has no attribute 'name' errors
+                                from TRAINING.utils.sst_contract import tracker_input_adapter
+                                
+                                # Normalize family name for consistency
+                                from TRAINING.utils.sst_contract import normalize_family
+                                family_normalized = normalize_family(family)
+                                
+                                # Adapt additional_data (convert Enum-like objects to strings)
+                                additional_data_adapted = {}
+                                for key, value in additional_data_with_cohort.items():
+                                    if key in ['task_type', 'objective', 'stage', 'route_type', 'family']:
+                                        # These fields might be Enum-like objects
+                                        additional_data_adapted[key] = tracker_input_adapter(value, key)
+                                    else:
+                                        additional_data_adapted[key] = value
+                                
                                 tracker.log_comparison(
                                     stage="model_training",
-                                    item_name=f"{target}:{family}",
+                                    item_name=f"{target}:{family_normalized}",
                                     metrics=metrics_with_cohort,
-                                    additional_data=additional_data_with_cohort
+                                    additional_data=additional_data_adapted,
+                                    model_family=family_normalized  # Use normalized family
                                 )
                         except Exception as e:
                             logger.warning(f"Reproducibility tracking failed for {family}:{target}: {e}")
@@ -1022,6 +1072,17 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 joblib.dump(wrapped_model.imputer, imputer_path)
                                 logger.info(f"💾 Imputer saved: {imputer_path}")
                             # Note: If wrapped_model.imputer is None, no imputer was used/needed
+                            
+                            # CRITICAL: Define _pkg_ver BEFORE conditional blocks to avoid "referenced before assignment"
+                            def _pkg_ver(pkg_name):
+                                try:
+                                    import importlib.metadata
+                                    return importlib.metadata.version(pkg_name)
+                                except:
+                                    try:
+                                        return __import__(pkg_name).__version__
+                                    except:
+                                        return "unknown"
                             
                             # Save metadata (match original format exactly)
                             if save_info['is_lightgbm']:  # LightGBM - JSON format
@@ -1155,14 +1216,21 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
             pass
     
     # Count and log saved models with detailed summary
+    # CRITICAL: Use consistent counting logic (single source of truth)
     total_saved = 0
     total_failed = 0
     total_skipped = 0
+    total_attempted = 0
     
     for target, target_results in results['models'].items():
         for family, model_result in target_results.items():
+            total_attempted += 1
             if model_result and model_result.get('success', False):
                 total_saved += 1
+            elif model_result and model_result.get('skipped', False):
+                total_skipped += 1
+            else:
+                total_failed += 1
     
     # Aggregate family results across all targets
     all_trained_ok = []
@@ -1174,7 +1242,16 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
     
     logger.info("=" * 80)
     logger.info(f"📊 Training Summary:")
-    logger.info(f"  ✅ Trained successfully: {total_saved} models")
+    # CRITICAL: Log consistent counts (single source of truth)
+    logger.info(f"  ✅ Training summary: {total_saved} successful, {total_failed} failed, {total_skipped} skipped (total attempted: {total_attempted})")
+    
+    # Store in results for consistency
+    results['training_summary'] = {
+        'total_attempted': total_attempted,
+        'total_saved': total_saved,
+        'total_failed': total_failed,
+        'total_skipped': total_skipped
+    }
     logger.info(f"  ❌ Failed targets: {len(results.get('failed_targets', []))}")
     if results.get('failed_targets'):
         for failed_target in results['failed_targets']:

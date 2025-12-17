@@ -2738,18 +2738,36 @@ def train_and_evaluate_models(
             else:
                 model = RandomForestRegressor(**rf_config)
             
+            # CRITICAL: Use same CV splitter as all other models (tscv) to ensure OOF evaluation
+            # cross_val_score trains on train folds and evaluates on test folds - this is truly OOF
             scores = cross_val_score(model, X, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
             valid_scores = scores[~np.isnan(scores)]
             primary_score = valid_scores.mean() if len(valid_scores) > 0 else np.nan
+            
+            # Log CV fold details for debugging
+            if len(valid_scores) > 0:
+                logger.debug(f"Random Forest CV scores: {valid_scores.tolist()} (mean={primary_score:.4f}, std={valid_scores.std():.4f})")
+                if len(valid_scores) < len(scores):
+                    logger.warning(f"Random Forest: {len(scores) - len(valid_scores)} folds returned NaN scores")
             
             # ⚠️ IMPORTANCE BIAS WARNING: This fits on the full dataset (in-sample)
             # Deep trees/GBMs can memorize noise, making feature importance biased.
             # TODO: Future enhancement - use permutation importance calculated on CV test folds
             # For now, this is acceptable but be aware that importance may be inflated
+            # CRITICAL: The evaluation score (primary_score) is OOF, but importance is in-sample
             model.fit(X, y)
             
-            # Check for suspicious scores
+            # Check for suspicious scores (OOF score - this is the truth)
             has_leak = not np.isnan(primary_score) and primary_score >= _suspicious_score_threshold
+            if has_leak:
+                logger.warning(
+                    f"⚠️ Random Forest OOF score {primary_score:.4f} >= {_suspicious_score_threshold:.4f} "
+                    f"(suspiciously high). This may indicate: "
+                    f"(A) Target definition is trivial (e.g., fwd_ret_oc_same_day sampled at wrong time), "
+                    f"(B) Feature leakage (check top correlated features), or "
+                    f"(C) CV splitter misconfiguration. "
+                    f"CV folds: {len(valid_scores)}/{len(scores)} valid"
+                )
             
             # LEAK DETECTION: Analyze feature importance
             importances = model.feature_importances_

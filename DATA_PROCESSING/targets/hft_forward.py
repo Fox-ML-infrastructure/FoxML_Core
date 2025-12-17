@@ -79,6 +79,11 @@ def add_hft_targets(data_dir: str, output_dir: str, interval_minutes: float = 5.
             df[col_name] = (df['close'].shift(-horizon_bars) / df['close'] - 1)
         
         # Same-day open to close (session-anchored)
+        # CRITICAL: This target should ONLY be sampled at market open (decision time)
+        # If sampled at any other time during the day, the task becomes trivial because:
+        # - Near-close rows already know the close price (or can infer it)
+        # - This creates artificial "leakage" that looks like 0.9990 correlation
+        # TODO: Filter data preparation to only keep rows at market open (first bar of day) for this target
         # Group by date and calculate open to close return
         df['date'] = df['datetime'].dt.date
         df['session_open'] = df.groupby('date')['open'].transform('first')

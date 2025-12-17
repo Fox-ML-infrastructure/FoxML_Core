@@ -180,18 +180,50 @@ class RankingHarness:
             if base_output_dir.name in ["target_rankings", "feature_selections"]:
                 base_output_dir = base_output_dir.parent
             
-            # Determine stage based on job_type
-            if self.job_type == "rank_targets":
-                # Save to REPRODUCIBILITY/TARGET_RANKING/{view}/{target}/feature_exclusions/
-                target_name_clean = target_name.replace('/', '_').replace('\\', '_')
-                target_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / self.view / target_name_clean / "feature_exclusions"
-            elif self.job_type == "rank_features":
-                # Save to REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/feature_exclusions/
-                target_name_clean = target_name.replace('/', '_').replace('\\', '_')
-                target_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_name_clean / "feature_exclusions"
-            else:
-                # Fallback to old structure for backward compatibility
+            # FIX: Check if we're already inside REPRODUCIBILITY structure at target level
+            # If output_dir is already REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/,
+            # use it directly instead of reconstructing the path
+            target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+            
+            # Check if we're already at the target level inside REPRODUCIBILITY
+            is_already_in_repro = "REPRODUCIBILITY" in str(base_output_dir)
+            is_at_target_level = (
+                base_output_dir.name == target_name_clean or
+                (base_output_dir.parent.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] and
+                 base_output_dir.parent.parent.name in ["FEATURE_SELECTION", "TARGET_RANKING"])
+            )
+            
+            if is_already_in_repro and is_at_target_level:
+                # Already at target level - use it directly
                 target_exclusion_dir = base_output_dir / "feature_exclusions"
+            else:
+                # Need to construct path - walk up to find run level if we're inside REPRODUCIBILITY
+                if is_already_in_repro:
+                    # Walk up until we find the run directory (parent of REPRODUCIBILITY)
+                    current = base_output_dir
+                    while current.name != "REPRODUCIBILITY" and current.parent != current:
+                        current = current.parent
+                    if current.name == "REPRODUCIBILITY":
+                        base_output_dir = current.parent
+                    # If we couldn't find it, log warning and use original
+                    if "REPRODUCIBILITY" in str(base_output_dir):
+                        logger.warning(f"Could not resolve REPRODUCIBILITY base from {self.output_dir}, using as-is")
+                
+                # Determine stage based on job_type
+                if self.job_type == "rank_targets":
+                    # Save to REPRODUCIBILITY/TARGET_RANKING/{view}/{target}/feature_exclusions/
+                    target_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / self.view / target_name_clean / "feature_exclusions"
+                elif self.job_type == "rank_features":
+                    # Save to REPRODUCIBILITY/FEATURE_SELECTION/{view}/{target}/feature_exclusions/
+                    # FIX: Use self.view instead of hardcoding "CROSS_SECTIONAL"
+                    view_subdir = self.view if self.view else "CROSS_SECTIONAL"
+                    target_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_subdir / target_name_clean / "feature_exclusions"
+                    # For SYMBOL_SPECIFIC, add symbol subdirectory if symbol is set
+                    if view_subdir == "SYMBOL_SPECIFIC" and self.symbol:
+                        target_exclusion_dir = target_exclusion_dir.parent.parent / f"symbol={self.symbol}" / "feature_exclusions"
+                else:
+                    # Fallback to old structure for backward compatibility
+                    target_exclusion_dir = base_output_dir / "feature_exclusions"
             
             target_exclusion_dir.mkdir(parents=True, exist_ok=True)
             
@@ -392,6 +424,9 @@ class RankingHarness:
         
         Returns:
             PurgedTimeSeriesSplit instance
+        
+        Raises:
+            ValueError: If data span is insufficient for the required purge/embargo
         """
         from TRAINING.utils.purged_time_series_split import PurgedTimeSeriesSplit
         from TRAINING.utils.resolved_config import derive_purge_embargo
@@ -414,6 +449,22 @@ class RankingHarness:
                 default_purge_minutes=None  # Loads from safety_config.yaml
             )
             purge_time = pd.Timedelta(minutes=purge_minutes)
+            
+            # CRITICAL: Validate that data span is sufficient for purge/embargo
+            # Rule of thumb: need at least (purge + embargo) * 2 * cv_folds worth of data
+            # This ensures each fold has enough training data after purging
+            if time_vals is not None and len(time_vals) > 1:
+                time_vals_sorted = np.sort(time_vals)
+                data_span_minutes = (time_vals_sorted[-1] - time_vals_sorted[0]) / (60 * 1e9)  # Convert ns to minutes
+                required_span_minutes = (purge_minutes + embargo_minutes) * 2 * cv_folds
+                
+                if data_span_minutes < required_span_minutes:
+                    raise ValueError(
+                        f"Insufficient data span for long-horizon target (horizon={horizon_minutes:.1f}m). "
+                        f"Data span: {data_span_minutes:.1f}m, Required: {required_span_minutes:.1f}m "
+                        f"(purge={purge_minutes:.1f}m + embargo={embargo_minutes:.1f}m) * 2 * {cv_folds} folds. "
+                        f"Either: 1) Increase max_rows_per_symbol, 2) Reduce horizon, or 3) Skip this target."
+                    )
         else:
             # Fallback: use default purge (60m = 12 bars + buffer)
             purge_time = pd.Timedelta(minutes=60)

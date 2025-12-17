@@ -1109,7 +1109,13 @@ class IntelligentTrainer:
         
         # Select features - write directly to REPRODUCIBILITY/FEATURE_SELECTION structure
         target_name_clean = target.replace('/', '_').replace('\\', '_')
-        feature_output_dir = self.output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_name_clean
+        # FIX: Construct output_dir based on view (CROSS_SECTIONAL vs SYMBOL_SPECIFIC)
+        if view == "SYMBOL_SPECIFIC" and symbol:
+            # SYMBOL_SPECIFIC: REPRODUCIBILITY/FEATURE_SELECTION/SYMBOL_SPECIFIC/{target}/symbol={symbol}/
+            feature_output_dir = self.output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "SYMBOL_SPECIFIC" / target_name_clean / f"symbol={symbol}"
+        else:
+            # CROSS_SECTIONAL: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
+            feature_output_dir = self.output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_name_clean
         
         # Extract explicit_interval from experiment_config for feature selection
         explicit_interval = None
@@ -1484,7 +1490,15 @@ class IntelligentTrainer:
                     routing_file = self.output_dir / "target_rankings" / "REPRODUCIBILITY" / "TARGET_RANKING" / "routing_decisions.json"
                 if routing_file.exists():
                     routing_decisions = load_routing_decisions(routing_file)
-                    logger.info(f"Loaded routing decisions for {len(routing_decisions)} targets")
+                    # CRITICAL FIX: Log routing decision count and validate consistency
+                    n_decisions = len(routing_decisions)
+                    logger.info(f"Loaded routing decisions for {n_decisions} targets")
+                    # Log summary of routes for debugging
+                    route_counts = {}
+                    for target, decision in routing_decisions.items():
+                        route = decision.get('route', 'UNKNOWN')
+                        route_counts[route] = route_counts.get(route, 0) + 1
+                    logger.debug(f"Routing decision summary: {route_counts}")
             except Exception as e:
                 logger.debug(f"Could not load routing decisions: {e}, using CROSS_SECTIONAL for all targets")
             
@@ -1498,8 +1512,20 @@ class IntelligentTrainer:
                 if not routing_decisions or target not in routing_decisions:
                     route = 'CROSS_SECTIONAL'
                 
+                # CRITICAL FIX: Check if cross-sectional is explicitly DISABLED in routing plan
+                cs_info = route_info.get('cross_sectional', {})
+                cs_route_status = cs_info.get('route', 'ENABLED') if isinstance(cs_info, dict) else 'ENABLED'
+                
                 # Handle different route types
                 if route == 'CROSS_SECTIONAL':
+                    # CRITICAL FIX: Respect routing plan - skip CS feature selection if DISABLED
+                    if cs_route_status == 'DISABLED':
+                        logger.warning(
+                            f"Skipping cross-sectional feature selection for {target}: "
+                            f"CS route is DISABLED in routing plan (reason: {cs_info.get('reason', 'unknown')})"
+                        )
+                        # Don't select features for this target
+                        continue
                     # Cross-sectional feature selection only
                     target_features[target] = self.select_features_auto(
                         target=target,
@@ -1510,10 +1536,33 @@ class IntelligentTrainer:
                     )
                 elif route == 'SYMBOL_SPECIFIC':
                     # Symbol-specific feature selection only
-                    winner_symbols = route_info.get('winner_symbols', self.symbols)
-                    if not winner_symbols:
-                        # Fallback: use all symbols if no winners specified
+                    # CRITICAL FIX: winner_symbols should come from routing plan, but validate it's not empty
+                    winner_symbols = route_info.get('winner_symbols', [])
+                    
+                    # If winner_symbols is empty or None, check if we should use all symbols
+                    # This can happen if routing plan didn't populate winner_symbols correctly
+                    if not winner_symbols or len(winner_symbols) == 0:
+                        logger.warning(
+                            f"⚠️ SYMBOL_SPECIFIC route for {target} has no winner_symbols in routing plan. "
+                            f"Falling back to all symbols: {self.symbols}"
+                        )
                         winner_symbols = self.symbols
+                    else:
+                        # Validate winner_symbols are actually in our symbol list
+                        valid_symbols = [s for s in winner_symbols if s in self.symbols]
+                        if len(valid_symbols) < len(winner_symbols):
+                            invalid = set(winner_symbols) - set(self.symbols)
+                            logger.warning(
+                                f"⚠️ SYMBOL_SPECIFIC route for {target} has invalid symbols in winner_symbols: {invalid}. "
+                                f"Using only valid symbols: {valid_symbols}"
+                            )
+                        winner_symbols = valid_symbols if valid_symbols else self.symbols
+                    
+                    if not winner_symbols:
+                        logger.error(f"❌ No valid symbols for SYMBOL_SPECIFIC route for {target}, skipping")
+                        continue
+                    
+                    logger.info(f"📊 SYMBOL_SPECIFIC route for {target}: training {len(winner_symbols)} symbols: {winner_symbols}")
                     target_features[target] = {}
                     for symbol in winner_symbols:
                         target_features[target][symbol] = self.select_features_auto(
@@ -1558,6 +1607,17 @@ class IntelligentTrainer:
             # Use same features for all filtered targets
             for target in filtered_targets:
                 target_features[target] = features
+        
+        # Generate metrics rollups after feature selection completes (all targets processed)
+        if auto_features and target_features:
+            try:
+                from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+                tracker = ReproducibilityTracker(output_dir=self.output_dir)
+                run_id = self._run_name.replace("_", "-")  # Use run name as run_id
+                tracker.generate_metrics_rollups(stage="FEATURE_SELECTION", run_id=run_id)
+                logger.debug("✅ Generated metrics rollups for FEATURE_SELECTION")
+            except Exception as e:
+                logger.debug(f"Failed to generate metrics rollups for FEATURE_SELECTION: {e}")
         
         # Step 2.5: Generate training routing plan (if feature selection completed)
         # Note: training_plan_dir may already be set from Step 1.5
@@ -1812,7 +1872,16 @@ class IntelligentTrainer:
                 routing_file = self.output_dir / "target_rankings" / "REPRODUCIBILITY" / "TARGET_RANKING" / "routing_decisions.json"
             if routing_file.exists():
                 routing_decisions_for_training = load_routing_decisions(routing_file)
-                logger.info(f"Loaded routing decisions for training: {len(routing_decisions_for_training)} targets")
+                # CRITICAL FIX: Log routing decision count and validate consistency
+                n_decisions = len(routing_decisions_for_training)
+                logger.info(f"Loaded routing decisions for training: {n_decisions} targets")
+                # Validate count matches expected (if we have filtered_targets)
+                if 'filtered_targets' in locals() and filtered_targets:
+                    if n_decisions != len(filtered_targets):
+                        logger.warning(
+                            f"⚠️ Routing decision count mismatch: {n_decisions} decisions vs {len(filtered_targets)} filtered targets. "
+                            f"This may indicate duplicate entries or stale routing decisions."
+                        )
         except Exception as e:
             logger.debug(f"Could not load routing decisions for training: {e}")
         

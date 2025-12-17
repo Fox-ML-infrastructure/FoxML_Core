@@ -1218,8 +1218,13 @@ class ReproducibilityTracker:
         elif stage_upper in ["FEATURE_SELECTION", "TRAINING"]:
             if route_type:
                 mode = route_type.upper()
-                if mode not in ["CROSS_SECTIONAL", "INDIVIDUAL"]:
-                    mode = "INDIVIDUAL"
+                # FIX: Accept SYMBOL_SPECIFIC as valid mode for FEATURE_SELECTION (maps from view)
+                if mode not in ["CROSS_SECTIONAL", "INDIVIDUAL", "SYMBOL_SPECIFIC"]:
+                    # If route_type is INDIVIDUAL and we have symbol, treat as SYMBOL_SPECIFIC
+                    if mode == "INDIVIDUAL" and symbol:
+                        mode = "SYMBOL_SPECIFIC"
+                    else:
+                        mode = "INDIVIDUAL"
             else:
                 mode = "CROSS_SECTIONAL"  # Default
             path_parts.append(mode)
@@ -1227,12 +1232,14 @@ class ReproducibilityTracker:
         # Add target/item_name
         path_parts.append(item_name)
         
-        # Add symbol for SYMBOL_SPECIFIC/LOSO views (TARGET_RANKING) or INDIVIDUAL mode (FEATURE_SELECTION/TRAINING)
+        # Add symbol for SYMBOL_SPECIFIC/LOSO views (TARGET_RANKING) or SYMBOL_SPECIFIC/INDIVIDUAL mode (FEATURE_SELECTION/TRAINING)
         if stage_upper == "TARGET_RANKING":
             if view in ["SYMBOL_SPECIFIC", "LOSO"] and symbol:
                 path_parts.append(f"symbol={symbol}")
-        elif route_type and route_type.upper() == "INDIVIDUAL" and symbol:
-            path_parts.append(f"symbol={symbol}")
+        elif stage_upper in ["FEATURE_SELECTION", "TRAINING"]:
+            # For FEATURE_SELECTION/TRAINING, add symbol if mode is SYMBOL_SPECIFIC or INDIVIDUAL
+            if symbol and (route_type and route_type.upper() in ["INDIVIDUAL", "SYMBOL_SPECIFIC"]):
+                path_parts.append(f"symbol={symbol}")
         
         # Add model_family for TRAINING
         if stage_upper == "TRAINING" and model_family:
@@ -3681,13 +3688,21 @@ class ReproducibilityTracker:
             return {"mode": "legacy_fallback"}
         
         # 1. Validate required fields
+        # FIX: If required fields are missing in COHORT_AWARE mode, downgrade to NON_COHORT and log warning
         if self.cohort_aware:
             missing = ctx.validate_required_fields("COHORT_AWARE")
             if missing:
-                raise ValueError(
-                    f"Missing required fields for COHORT_AWARE mode: {missing}. "
-                    f"RunContext must contain: {ctx.get_required_fields('COHORT_AWARE')}"
+                logger.warning(
+                    f"⚠️  Missing required fields for COHORT_AWARE mode: {missing}. "
+                    f"Downgrading to NON_COHORT mode for this run. "
+                    f"RunContext should contain: {ctx.get_required_fields('COHORT_AWARE')}"
                 )
+                # Downgrade to NON_COHORT mode for this run (don't fail)
+                use_cohort_aware = False
+            else:
+                use_cohort_aware = True
+        else:
+            use_cohort_aware = False
         
         # 2. Auto-derive purge/embargo if not set
         if ctx.purge_minutes is None and ctx.horizon_minutes is not None:
@@ -3697,25 +3712,30 @@ class ReproducibilityTracker:
                 ctx.embargo_minutes = embargo_min
             logger.info(f"Auto-derived purge={purge_min:.1f}m, embargo={embargo_min:.1f}m from horizon={ctx.horizon_minutes}m")
         
-        # 3. Extract metadata from RunContext
+        # 3. Extract metadata from RunContext (only if use_cohort_aware is True)
         from TRAINING.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
         
-        cohort_metadata = extract_cohort_metadata(
-            X=ctx.X,
-            y=ctx.y,
-            symbols=ctx.symbols,
-            time_vals=ctx.time_vals,
-            mtf_data=ctx.mtf_data,
-            min_cs=ctx.min_cs,
-            max_cs_samples=ctx.max_cs_samples,
-            leakage_filter_version=ctx.leakage_filter_version,
-            universe_id=ctx.universe_id,
-            compute_data_fingerprint=True,
-            compute_per_symbol_stats=True
-        )
-        
-        # Format for tracker
-        cohort_metrics, cohort_additional_data = format_for_reproducibility_tracker(cohort_metadata)
+        if use_cohort_aware:
+            cohort_metadata = extract_cohort_metadata(
+                X=ctx.X,
+                y=ctx.y,
+                symbols=ctx.symbols,
+                time_vals=ctx.time_vals,
+                mtf_data=ctx.mtf_data,
+                min_cs=ctx.min_cs,
+                max_cs_samples=ctx.max_cs_samples,
+                leakage_filter_version=ctx.leakage_filter_version,
+                universe_id=ctx.universe_id,
+                compute_data_fingerprint=True,
+                compute_per_symbol_stats=True
+            )
+            
+            # Format for tracker
+            cohort_metrics, cohort_additional_data = format_for_reproducibility_tracker(cohort_metadata)
+        else:
+            # NON_COHORT mode: use minimal metadata
+            cohort_metrics = {}
+            cohort_additional_data = {}
         
         # Build additional_data with CV details
         additional_data = {
@@ -3764,10 +3784,11 @@ class ReproducibilityTracker:
             route_type_for_cohort = ctx.view
         elif ctx.stage == "feature_selection" and hasattr(ctx, 'view') and ctx.view:
             # Map view to route_type for FEATURE_SELECTION
+            # FIX: Use SYMBOL_SPECIFIC directly (not INDIVIDUAL) to match directory structure
             if ctx.view.upper() == "CROSS_SECTIONAL":
                 route_type_for_cohort = "CROSS_SECTIONAL"
             elif ctx.view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
-                route_type_for_cohort = "INDIVIDUAL"  # SYMBOL_SPECIFIC maps to INDIVIDUAL
+                route_type_for_cohort = "SYMBOL_SPECIFIC"  # Use SYMBOL_SPECIFIC to match directory structure
         
         cohort_id = self._compute_cohort_id(cohort_metadata, route_type_for_cohort)
         previous_metadata = None
@@ -3854,10 +3875,11 @@ class ReproducibilityTracker:
                 route_type_for_cohort_dir = ctx.view
             elif ctx.stage == "feature_selection" and hasattr(ctx, 'view') and ctx.view:
                 # Map view to route_type for FEATURE_SELECTION
+                # FIX: Use SYMBOL_SPECIFIC directly (not INDIVIDUAL) to match directory structure
                 if ctx.view.upper() == "CROSS_SECTIONAL":
                     route_type_for_cohort_dir = "CROSS_SECTIONAL"
                 elif ctx.view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
-                    route_type_for_cohort_dir = "INDIVIDUAL"  # SYMBOL_SPECIFIC maps to INDIVIDUAL
+                    route_type_for_cohort_dir = "SYMBOL_SPECIFIC"  # Use SYMBOL_SPECIFIC to match directory structure
             
             cohort_dir = self._get_cohort_dir(
                 ctx.stage,

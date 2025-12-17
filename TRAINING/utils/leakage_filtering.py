@@ -664,7 +664,16 @@ def filter_features_for_target(
                     elif target_horizon_bars is not None:
                         logger.info(f"  Feature registry: {len(registry_allowed)} features explicitly allowed for horizon_bars={target_horizon_bars} bars @ interval={data_interval_minutes:.1f}m")
                     else:
-                        logger.info(f"  Feature registry: {len(registry_allowed)} features explicitly allowed (horizon extraction failed, using default horizon=1)")
+                        # CRITICAL: Do NOT silently default to horizon=1
+                        # This invalidates safety contracts (purge/embargo, lookback caps)
+                        logger.warning(
+                            f"  ⚠️  Feature registry: Horizon extraction failed for target '{target_column}'. "
+                            f"Using default horizon=1 bar for registry filtering ONLY. "
+                            f"This may be incorrect for targets like 'fwd_ret_oc_same_day' or 'fwd_ret_5d'. "
+                            f"Target should be marked as 'unresolved_horizon' and quarantined from production."
+                        )
+                        # Still use horizon=1 for registry filtering (permissive), but log warning
+                        logger.info(f"  Feature registry: {len(registry_allowed)} features explicitly allowed (horizon extraction failed, using default horizon=1 for registry ONLY)")
         except Exception as e:
             logger.warning(f"  Feature registry not available: {e}. Using pattern-based filtering only.")
             registry_allowed_set = None
@@ -948,25 +957,34 @@ def _extract_horizon(target_column: str, config: Dict[str, Any]) -> Optional[int
     """
     Extract horizon from target column name (in minutes) using config patterns.
     
+    Uses SST contract function for consistency.
+    
     Examples:
         fwd_ret_60m -> 60
         y_will_peak_15m_0.8 -> 15
         fwd_ret_1d -> 1440 (assuming 1d = 1440 minutes)
+        fwd_ret_oc_same_day -> 390 (special case: trading session)
     """
-    horizon_config = config.get('horizon_extraction', {})
-    patterns = horizon_config.get('patterns', [])
-    
-    for pattern_config in patterns:
-        regex = pattern_config.get('regex')
-        multiplier = pattern_config.get('multiplier', 1)
+    # Use SST contract function for consistency
+    try:
+        from TRAINING.utils.sst_contract import resolve_target_horizon_minutes
+        return resolve_target_horizon_minutes(target_column, config)
+    except ImportError:
+        # Fallback to original logic if SST contract not available
+        horizon_config = config.get('horizon_extraction', {})
+        patterns = horizon_config.get('patterns', [])
         
-        if regex:
-            match = re.search(regex, target_column)
-            if match:
-                value = int(match.group(1))
-                return value * multiplier
-    
-    return None
+        for pattern_config in patterns:
+            regex = pattern_config.get('regex')
+            multiplier = pattern_config.get('multiplier', 1)
+            
+            if regex:
+                match = re.search(regex, target_column)
+                if match:
+                    value = int(match.group(1))
+                    return value * multiplier
+        
+        return None
 
 
 def _get_target_type_exclude_patterns(target_type: str, config: Dict[str, Any]) -> Dict[str, List[str]]:

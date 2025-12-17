@@ -1,0 +1,8 @@
+metric,count,stage,reason
+requested,100,initial,config_or_discovery
+registry_allowed,51,registry_filter,passed_registry_validation
+present_in_polars,519,polars_select,exists_in_dataframe
+kept_for_training,13,pandas_coercion,passed_initial_filtering
+used_in_X,13,final,in_feature_matrix
+dropped_registry_filter,468,registry_filter,excluded_by_registry
+dropped_pandas_coercion,13,pandas_coercion,kept

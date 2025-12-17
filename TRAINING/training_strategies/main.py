@@ -590,9 +590,17 @@ def main():
             joblib.dump(results, output_dir / f'{args.strategy}_results.pkl')
             logger.info(f"Results saved to {output_dir / f'{args.strategy}_results.pkl'}")
             
-            # Print summary
-            total_models = sum(len(target_results) for target_results in results['models'].values())
-            logger.info(f"✅ {args.strategy} training completed: {total_models} models trained")
+            # Print summary using consistent counting from results
+            # CRITICAL: Use training_summary if available (single source of truth)
+            if 'training_summary' in results:
+                summary = results['training_summary']
+                logger.info(f"✅ {args.strategy} training completed: {summary['total_saved']} successful, "
+                          f"{summary['total_failed']} failed, {summary['total_skipped']} skipped "
+                          f"(total attempted: {summary['total_attempted']})")
+            else:
+                # Fallback: count from results dict
+                total_models = sum(len(target_results) for target_results in results['models'].values())
+                logger.info(f"✅ {args.strategy} training completed: {total_models} models in results dict")
         
         logger.info("🎉 Training completed successfully")
         

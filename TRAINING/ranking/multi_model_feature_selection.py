@@ -2892,12 +2892,19 @@ def aggregate_multi_model_importance(
         weight = model_families_config[family_name].get('weight', 1.0)
         
         # CRITICAL: Boruta is NOT included in base consensus - it's a gatekeeper, not a scorer
+        # FIX: Count unique symbols, not number of results (CROSS_SECTIONAL has 1 result with symbol="ALL")
+        unique_symbols = set(r.symbol for r in results if hasattr(r, 'symbol') and r.symbol)
+        n_symbols = len(unique_symbols)
+        symbol_str = f"{n_symbols} symbol{'s' if n_symbols != 1 else ''}"
+        if n_symbols == 1 and results and hasattr(results[0], 'symbol') and results[0].symbol == "ALL":
+            symbol_str = "all symbols (CROSS_SECTIONAL)"
+        
         if family_name == 'boruta':
             boruta_scores = family_score  # Store for gatekeeper role only
-            logger.info(f"🔒 {family_name}: Aggregated {len(results)} symbols (gatekeeper, excluded from base consensus)")
+            logger.info(f"🔒 {family_name}: Aggregated {symbol_str} (gatekeeper, excluded from base consensus)")
         else:
             family_scores[family_name] = family_score * weight
-            logger.info(f"📊 {family_name}: Aggregated {len(results)} symbols, "
+            logger.info(f"📊 {family_name}: Aggregated {symbol_str}, "
                        f"weight={weight}, top={family_score.idxmax()}")
     
     # Combine across families (EXCLUDING Boruta - it's a gatekeeper, not a scorer)
@@ -3009,15 +3016,43 @@ def aggregate_multi_model_importance(
         
     elif boruta_enabled:
         # Boruta enabled but failed completely (no results from any symbol)
-        logger.warning("🔒 Boruta gatekeeper disabled or unavailable for this target (no effect). "
-                      "Boruta may have failed for all symbols or was disabled mid-run.")
-        # Set defaults: no effect
-        boruta_gate_effect_series = pd.Series(0.0, index=consensus_score_base.index)
-        boruta_gate_scores_series = pd.Series(0.0, index=consensus_score_base.index)
-        boruta_confirmed_mask = pd.Series(False, index=consensus_score_base.index)
-        boruta_rejected_mask = pd.Series(False, index=consensus_score_base.index)
-        boruta_tentative_mask = pd.Series(False, index=consensus_score_base.index)
-        consensus_score_final = consensus_score_base.copy()
+        # CRITICAL: This is a hard failure if Boruta is enabled in config but fails
+        # Collect error information for diagnostics
+        boruta_failures = []
+        if all_family_statuses:
+            boruta_failures = [s for s in all_family_statuses 
+                             if s.get('family') == 'boruta' and s.get('status') == 'failed']
+        
+        error_summary = "Unknown error"
+        if boruta_failures:
+            error_messages = [s.get('error', '') for s in boruta_failures if s.get('error')]
+            error_types = set(s.get('error_type') for s in boruta_failures if s.get('error_type'))
+            symbols_failed = [s.get('symbol') for s in boruta_failures]
+            
+            if error_messages:
+                # Use first error message as summary
+                error_summary = error_messages[0]
+            elif error_types:
+                error_summary = f"Error types: {', '.join(error_types)}"
+            
+            error_details = (
+                f"Boruta gatekeeper FAILED for {len(symbols_failed)} symbol(s): {', '.join(set(symbols_failed))}. "
+                f"Error: {error_summary}"
+            )
+        else:
+            error_details = (
+                "Boruta gatekeeper enabled in config but no results produced and no failure status recorded. "
+                "This may indicate Boruta was silently skipped or failed without proper error tracking."
+            )
+        
+        # HARD FAILURE: Raise exception if Boruta is enabled but failed
+        raise RuntimeError(
+            f"🚨 CRITICAL: Boruta gatekeeper is enabled in config but failed completely. "
+            f"{error_details} "
+            f"Either: 1) Fix the underlying issue (check error messages above), "
+            f"2) Disable Boruta in config (set boruta.enabled=false), or "
+            f"3) Ensure Boruta package is installed (pip install Boruta)."
+        )
     else:
         # Boruta not enabled in config - explicit log for clarity
         logger.debug("🔒 Boruta gatekeeper: disabled via config (no effect on consensus).")

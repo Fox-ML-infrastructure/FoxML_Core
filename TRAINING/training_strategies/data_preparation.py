@@ -348,17 +348,67 @@ def _prepare_training_data_polars(mtf_data: Dict[str, pd.DataFrame],
         target_series_pl = combined_pl.select(pl.col(target))
         y = target_series_pl.to_pandas()[target].values
         
-        # Get feature columns (preserve timestamp for metadata)
-        feature_cols = [target] + feature_names + ['symbol'] + ([ts_name] if ts_name else [])
+        # CRITICAL FIX: Track feature pipeline stages separately
+        # Stage 1: requested → allowed (registry filtering - expected)
+        # Stage 2: allowed → present (schema mismatch - NOT expected, indicates bug)
+        # Stage 3: present → used (dtype/nan filtering - may be expected)
         
-        # DIAGNOSTIC: Check which feature columns actually exist in polars frame
+        # Get registry-allowed count (before schema check)
+        registry_allowed_count = len(feature_names)  # feature_names is already registry-filtered at this point
+        requested_count = len(auditor.requested_features) if hasattr(auditor, 'requested_features') and auditor.requested_features else registry_allowed_count
+        
+        # Check which allowed features are actually present in Polars frame
+        available_features = [f for f in feature_names if f in combined_pl.columns]
         missing_in_polars = [c for c in feature_names if c not in combined_pl.columns]
+        
+        # CRITICAL FIX (Pitfall B): Diagnose missing allowed features with close matches
         if missing_in_polars:
-            logger.error(f"🔍 Debug [{target}]: {len(missing_in_polars)} selected features missing from polars frame: {missing_in_polars[:10]}")
+            logger.error(f"🚨 CRITICAL [{target}]: {len(missing_in_polars)} registry-allowed features missing from polars frame")
+            logger.error(f"  Missing features: {missing_in_polars[:20]}{'...' if len(missing_in_polars) > 20 else ''}")
+            
+            # Find close matches for missing features (helps diagnose name mismatches)
+            from difflib import get_close_matches
+            all_polars_cols = list(combined_pl.columns)
+            close_matches = {}
+            for missing_feat in missing_in_polars[:10]:  # Limit to first 10 for performance
+                matches = get_close_matches(missing_feat, all_polars_cols, n=3, cutoff=0.6)
+                if matches:
+                    close_matches[missing_feat] = matches
+            if close_matches:
+                logger.error(f"  Close matches found in polars columns:")
+                for missing, matches in close_matches.items():
+                    logger.error(f"    '{missing}' → {matches}")
+            
+            if auditor:
+                for feat in missing_in_polars:
+                    auditor.record_drop(feat, "missing_from_polars", f"Feature not in polars frame columns")
         
         # Record features present in Polars
         auditor.record_present_in_polars(combined_pl, feature_names)
-        logger.info(f"📊 Feature audit [{target}]: {len(auditor.present_in_polars)} features present in Polars frame")
+        present_count = len(auditor.present_in_polars) if hasattr(auditor, 'present_in_polars') else len(available_features)
+        logger.info(
+            f"📊 Feature audit [{target}]: "
+            f"requested={requested_count} → allowed={registry_allowed_count} → present={present_count} "
+            f"(allowed→present drop: {len(missing_in_polars)})"
+        )
+        
+        # Build feature_cols with only existing columns
+        feature_cols = [target] + available_features + ['symbol'] + ([ts_name] if ts_name and ts_name in combined_pl.columns else [])
+        
+        # CRITICAL FIX (Pitfall A): Check threshold on allowed → present (not requested → present)
+        # This prevents false positives when registry intentionally prunes features
+        if registry_allowed_count > 0 and present_count < registry_allowed_count * 0.5:
+            error_msg = (
+                f"🚨 CRITICAL [{target}]: Feature schema mismatch detected! "
+                f"Registry allowed {registry_allowed_count} features, but only {present_count} exist in polars frame "
+                f"(ratio={present_count/registry_allowed_count:.1%}). "
+                f"This indicates a schema breach or feature name mismatch. "
+                f"Missing allowed features: {missing_in_polars[:20]}{'...' if len(missing_in_polars) > 20 else ''}"
+            )
+            if close_matches:
+                error_msg += f"\n  Close matches found (possible name mismatches): {close_matches}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
         
         data_pl = combined_pl.select(feature_cols)
         

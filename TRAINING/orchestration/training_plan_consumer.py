@@ -132,7 +132,14 @@ def filter_targets_by_training_plan(
     jobs = training_plan.get("jobs", [])
     
     if not jobs:
-        logger.warning(f"Training plan has no jobs, returning all targets")
+        # CRITICAL: 0 jobs is a logic error, not expected behavior
+        # Either the plan generation failed, or routing produced no valid jobs
+        logger.error(
+            f"🚨 Training plan has 0 jobs - this indicates a logic error. "
+            f"Either: 1) Plan generation failed, 2) Routing produced no valid jobs, or "
+            f"3) All targets were filtered out. Returning all targets as fallback, but this should be investigated."
+        )
+        # Return all targets as fallback, but log as error
         return targets
     
     # Get targets that have jobs of the specified type

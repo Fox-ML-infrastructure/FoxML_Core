@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-17 (Training Pipeline Audit Fixes)** — Fixed 10 critical contract breaks across family IDs, routing, plan consumption, feature schema, and counting/tracking. Key fixes: family normalization, reproducibility tracking, preflight filtering, routing plan respect, symbol-specific route, feature pipeline threshold and diagnostics.
+  → [View](2025-12-17-training-pipeline-audit-fixes.md)
+
 - **2025-12-16 (Feature Selection Structure)** — Organized feature selection outputs to match target ranking layout. Eliminated scattered files and nested REPRODUCIBILITY directories.
   → [View](2025-12-16-feature-selection-structure.md)
 
