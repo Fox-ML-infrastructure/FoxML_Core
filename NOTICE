@@ -2,7 +2,7 @@ FoxML Core
 Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 All rights reserved.
 
-Source-available license. Free for non-commercial academic research at qualifying tax-exempt institutions. All other use requires a commercial license. See LICENSE and COMMERCIAL_LICENSE.md.
+Dual-licensed: AGPL v3 + Commercial. AGPL v3 available for open research and projects that can comply with copyleft. Commercial license required for proprietary deployments. See LICENSE (AGPL v3) and COMMERCIAL_LICENSE.md.
 
 ⚠️ STRATEGIC LICENSING ROADMAP: v1.x is the last fully open window. Core remains open; production layer will require commercial license in v2.0+. See LEGAL/ROADMAP_BOUNDARIES.md for details.
 

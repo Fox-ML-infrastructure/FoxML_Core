@@ -32,28 +32,27 @@
 
 **A:** No. If they are using the Software in the scope of their work for a business or organization, that constitutes organizational use and requires a commercial license.
 
-Organizational use requires a commercial license. Free use is limited to non-commercial academic research at qualifying tax-exempt institutions.
+FoxML Core is dual-licensed: AGPL v3 + Commercial. AGPL v3 is available for open research and projects that can comply with AGPL copyleft requirements. Commercial licenses are required for proprietary deployments where AGPL compliance is not possible.
 
-**Key point:** Use by employees, contractors, interns, or Affiliates in the scope of their work for a business entity requires a commercial license, regardless of their employment status.
+**Key point:** If you deploy AGPL-licensed software as a service (including internal services), you must publish your modifications under AGPL v3 unless you have a commercial license.
 
 ---
 
-### Q: Can some teams use it for free while others use a commercial license?
+### Q: Can some teams use AGPL while others use a commercial license?
 
-**A:** No. Organizational use requires a commercial license. Free use is limited to non-commercial academic research at qualifying tax-exempt institutions.
+**A:** Yes. Different teams can use different licenses based on their needs. Teams that can comply with AGPL copyleft can use AGPL v3. Teams requiring proprietary modifications need a commercial license.
 
 ---
 
 ### Q: What about academic partnerships or university research?
 
-**A:** It depends on the context:
+**A:** It depends on whether the project can comply with AGPL:
 
-- **Non-commercial academic research** at a qualifying tax-exempt educational institution (where results are not used to support commercial operations) → Free use permitted (see `LICENSE`)
-- **Corporate-funded research** or research sponsored by commercial organizations → Commercial license required
-- **For-profit universities** or corporate research labs → Commercial license required
-- **Research that supports commercial operations, trading, or revenue-generating activities** → Commercial license required
+- **Open research that can comply with AGPL copyleft** (publish modifications if deployed as a service) → AGPL v3 available (see `LICENSE`)
+- **Proprietary research or closed-source integration** → Commercial license required
+- **Production systems or internal tooling that cannot comply with AGPL** → Commercial license required
 
-See `LICENSE` for the complete definition of free academic use.
+See `LICENSE` for the complete AGPL v3 license terms.
 
 ---
 

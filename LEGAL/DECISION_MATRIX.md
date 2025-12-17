@@ -42,21 +42,24 @@
 
 ## Key Principles
 
-### ✅ Free Use (No License Required)
+### ✅ AGPL v3 Use (No Commercial License Required)
 
-- Note: Personal use (individual, non-commercial) requires a commercial license
-- Non-commercial academic research at qualifying tax-exempt institutions
+- Open research and experimentation
+- Projects that can comply with AGPL copyleft requirements
+- Individual researchers and developers
+- Open-source contributors
+- **Note:** If you deploy as a service, you must publish modifications under AGPL v3
 
-See `LICENSE` for complete definition of free use.
+See `LICENSE` for complete AGPL v3 license terms.
 
-### ❌ Commercial License Required for Organizational Use
+### ❌ Commercial License Required for Proprietary Use
 
 ### ❌ Commercial License is REQUIRED for:
-1. **Any use within a business, organization, or commercial entity**
-2. **Any use that directly or indirectly supports revenue-generating activities**
-3. **Any use by employees, contractors, interns, or Affiliates in scope of their work**
-4. **Any use in any environment** (development, testing, staging, production) within a business context
-5. **Any experimental, proof of concept, or pilot project** within a business context
+1. **Proprietary internal use** (modifications must remain private)
+2. **Production trading systems** or operational infrastructure
+3. **Closed-source integrations** into proprietary systems
+4. **Hosted services** where you cannot comply with AGPL source disclosure requirements
+5. **Any deployment** where AGPL compliance is not possible
 
 ### 🚫 PROHIBITED under both licenses:
 1. **Building a Competing Infrastructure Service**
@@ -76,9 +79,9 @@ See `LICENSE` for complete definition of free use.
 | "It's just research" | ❌ Research within a business context requires commercial license |
 | "Our interns are using it" | ❌ Use by employees/contractors/interns requires commercial license |
 | "We're a non-profit" | ❌ Non-profit status doesn't exempt commercial use — still requires commercial license |
-| "We're a university" | ⚠️ Only non-commercial academic research at degree-granting institutions is exempt — corporate funding or commercial integration requires commercial license |
+| "We're a university" | ⚠️ AGPL v3 available if project can comply with copyleft. Proprietary deployments require commercial license |
 | "We'll only use it for evaluation" | ⚠️ 30-day $0 evaluation available (strict limits). Continued evaluation requires a paid pilot ($35k) |
-| "It's open source, so it's free" | ❌ Source-available means code is visible, but organizational use requires a commercial license |
+| "It's open source, so it's free" | ⚠️ AGPL v3 available for open research. Proprietary deployments require commercial license |
 | "We'll contribute back to open source" | ❌ Open source contributions don't exempt commercial use from licensing requirements |
 
 ---

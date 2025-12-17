@@ -26,19 +26,23 @@ Commercial license pricing is aligned with enterprise ML infrastructure standard
 **PAID PILOT REQUIRED FOR BUSINESS EVALUATION:**
 Organizations can use a 30-day $0 evaluation (strict limits: non-production, no client deliverables). Continued evaluation beyond 30 days requires a paid Pilot ($35k, credited 100% to Year 1 if converted within 60 days). See `COMMERCIAL_LICENSE.md` Section 2 for complete evaluation license terms.
 
-**Organizational use requires a commercial license.**
+**FoxML Core is dual-licensed: AGPL v3 + Commercial**
 
-**Free use is limited to:**
-- Non-commercial academic research at qualifying tax-exempt institutions (see `LICENSE` for full definition)
+**AGPL v3 use is available for:**
+- Open research and experimentation
+- Projects that can comply with AGPL copyleft requirements
+- Individual researchers and developers
+- Open-source contributors
+- **Note:** If you deploy as a service, you must publish modifications under AGPL v3
 
-**Organizational use includes:**
-- Any use by or for a company, university, lab, or other organization
-- Any internal evaluation, pilots, PoCs, dev/staging, or production use
-- Any use supporting revenue, operations, services, or internal tooling
-- Any evaluation/pilot done by an organization
-- Any use by employees, contractors, interns, or affiliates in the scope of their work
+**Commercial license required for:**
+- Proprietary internal use
+- Production trading systems
+- Closed-source integrations
+- Hosted services where you cannot comply with AGPL source disclosure requirements
+- Any deployment where modifications must remain private
 
-**IMPORTANT:** Unauthorized organizational use of the Software without a valid commercial license may constitute copyright infringement and may result in legal claims. If you have used the Software without a license, you must immediately obtain a commercial license. This is not legal advice; see `COMMERCIAL_LICENSE.md` for complete terms.
+**IMPORTANT:** If you deploy AGPL-licensed software as a service (including internal services), you must publish your modifications under AGPL v3 unless you have a commercial license. This is not legal advice; see `COMMERCIAL_LICENSE.md` for complete terms.
 
 **See `LICENSE` for complete license terms and `DOCS/02_reference/licensing/DUAL_LICENSE.md` for licensing overview.**
 
@@ -48,9 +52,10 @@ Organizations can use a 30-day $0 evaluation (strict limits: non-production, no 
 
 | Scenario | License Required | Notes |
 |----------|------------------|-------|
-| **Personal / Individual (Non-Commercial)** | Commercial | Personal use (individual, non-commercial) requires a commercial license |
-| **Non-Commercial Academic Research** | Free | Qualifying non-commercial academic research at tax-exempt institutions (see `LICENSE`) |
-| **Academic Institution (Organizational Use)** | Commercial | Institutional use, sponsored/industry work, or internal tooling requires a commercial license |
+| **Open Research / Experimentation** | AGPL v3 | Projects that can comply with AGPL copyleft (publish modifications if deployed as service) |
+| **Proprietary Internal Use** | Commercial | Any deployment where modifications must remain private |
+| **Production Systems** | Commercial | Production trading systems or operational infrastructure |
+| **Closed-Source Integration** | Commercial | Integration into proprietary systems |
 | **Sole Proprietor / Freelancer** | Commercial | Any use in connection with business activity, client work, or revenue generation (even if claimed to be "personal") |
 | **Startup / Small Business** | Commercial | Any business entity, regardless of size, revenue, profitability, or stage (including pre-revenue startups, companies operating at a loss, or companies in development phase) |
 | **Subsidiary / Affiliate** | Commercial | Each legal entity (including subsidiaries, affiliates, and parent companies) must have its own license. A parent company's license does not cover subsidiaries, and vice versa |

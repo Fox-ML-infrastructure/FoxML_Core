@@ -6,7 +6,7 @@
 
 ## Quick Start
 
-**Organizational use requires a paid license.** Commercial licensing is per team/desk and starts at $120,000/year. Paid pilot required for organizational evaluation.
+**FoxML Core is dual-licensed: AGPL v3 + Commercial.** AGPL v3 available for open research. Commercial licenses required for proprietary deployments, per team/desk, starting at $120,000/year. Paid pilot required for organizational evaluation.
 
 📧 **jenn.lewis5789@gmail.com** | Subject: `FoxML Core Commercial Licensing`
 

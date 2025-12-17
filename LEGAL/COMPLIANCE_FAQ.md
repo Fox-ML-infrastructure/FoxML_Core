@@ -24,19 +24,19 @@
 
 ---
 
-### Q1.2: What's the difference between the source-available license and Commercial License?
+### Q1.2: What's the difference between AGPL v3 and Commercial License?
 
 **A:**
-- **Source-available license:** Code is publicly available for inspection. Free for non-commercial academic research at qualifying tax-exempt institutions. All other use requires a commercial license.
-- **Commercial License:** Required for all use, allows internal commercial use, includes access to private repositories
+- **AGPL v3:** Available for open research and projects that can comply with AGPL copyleft (must publish modifications if deployed as service). Code is publicly available for inspection.
+- **Commercial License:** Required for proprietary deployments where AGPL compliance is not possible. Allows internal commercial use, closed-source integrations, and modifications without source disclosure obligations. Includes access to private repositories.
 
-**See `LICENSE` and `DOCS/02_reference/licensing/DUAL_LICENSE.md` for complete licensing information.**
+**See `LICENSE` (AGPL v3) and `DOCS/02_reference/licensing/DUAL_LICENSE.md` for complete licensing information.**
 
 ---
 
 ### Q1.3: Can I use it for free?
 
-**A:** Free use is limited to non-commercial academic research at qualifying tax-exempt institutions. All other use (including personal/individual use) requires a paid commercial license. See `LICENSE` for complete license terms.
+**A:** Yes, under AGPL v3 for open research, experimentation, and projects that can comply with AGPL copyleft requirements. If you deploy as a service, you must publish modifications under AGPL v3. Commercial licenses are required for proprietary deployments where AGPL compliance is not possible. See `LICENSE` for complete AGPL v3 license terms.
 
 **See `LEGAL/SUBSCRIPTIONS.md` for pricing.**
 
@@ -186,9 +186,9 @@
 
 ### Q7.1: Can universities use it for free?
 
-**A:** Yes, for qualifying non-commercial academic research at tax-exempt institutions (see `LICENSE` for full definition). If the university uses it for organizational purposes, a commercial license is required.
+**A:** Yes, under AGPL v3 for open research and projects that can comply with AGPL copyleft requirements. If the university requires proprietary deployments or cannot comply with AGPL source disclosure, a commercial license is required.
 
-**See `DOCS/02_reference/licensing/DUAL_LICENSE.md` for academic use details.**
+**See `DOCS/02_reference/licensing/DUAL_LICENSE.md` and `LEGAL/ACADEMIC.md` for academic use details.**
 
 ---
 

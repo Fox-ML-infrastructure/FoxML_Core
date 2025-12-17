@@ -23,18 +23,18 @@
 
 ### ❌ **NO — You do NOT need a commercial license if:**
 
-- You are using it for **non-commercial academic research** (see `LEGAL/SUBSCRIPTIONS.md` for full definition) at a qualifying non-profit, tax-exempt educational institution
-- You are using it for **personal study or learning** (individual in personal capacity, NOT for business, client work, or revenue generation)
-- You are contributing to the Software in a personal/non-commercial context
-- You are **not using it in production** or for commercial purposes
+- You are using it under **AGPL v3** for open research, experimentation, or projects that can comply with AGPL copyleft requirements
+- Your project can **publish modifications** if deployed as a service (AGPL requirement)
+- You are contributing to the Software in an open-source context
+- You are using it for **personal study or learning** in a non-proprietary context
 
-**IMPORTANT EXCLUSIONS:**
-- **Sole proprietors, freelancers, and independent contractors** — Even if claimed to be "personal," any use in connection with business activity or client work requires a commercial license
-- **For-profit educational institutions** — Any use by for-profit universities, bootcamps, or training companies requires a commercial license
-- **Corporate research labs** — Research conducted by or for commercial organizations requires a commercial license, regardless of non-profit status
-- **"Experimental" or "non-revenue" business use** — Still requires a commercial license
+**IMPORTANT:**
+- **AGPL v3 requires** that if you modify the software and deploy it as a service (including internal services), you must publish your modifications under AGPL v3
+- **Proprietary deployments** (modifications must remain private) require a commercial license
+- **Production systems** that cannot comply with AGPL source disclosure require a commercial license
+- **Closed-source integrations** require a commercial license
 
-**Note:** Academic research conducted for, funded by, sponsored by, or operationally integrated into a commercial organization requires a commercial license, even if performed by students or interns.
+**Note:** If you cannot comply with AGPL copyleft requirements (publish modifications), you need a commercial license.
 
 **EVALUATION POLICY:** Organizations can use a 30-day $0 evaluation (strict limits: non-production, no client deliverables, no redistribution). Continued evaluation beyond 30 days requires a paid Pilot ($35k, credited 100% to Year 1 if converted within 60 days). Payment is required for continued use after the evaluation period.
 

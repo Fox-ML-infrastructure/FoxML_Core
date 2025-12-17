@@ -1,15 +1,30 @@
 # FoxML Core — ML Cross-Sectional Infrastructure
 
-## License (TL;DR)
+## Licensing
 
-**FoxML Core is source-available. Free for non-commercial academic research at qualifying tax-exempt institutions. All other use requires a paid commercial license.**
+**FoxML Core is dual-licensed:**
+- **AGPL v3** for open research, experimentation, and transparency
+- **Commercial license** required for proprietary, internal, or production deployments
 
-### Decision Rule
+### AGPL License (Free Use)
 
-**If you're an organization (company, university, lab, or any legal entity), you need a license — except:**
-- Pure non-commercial academic research at qualifying tax-exempt institutions (see definitions below)
+The AGPL v3 license is intended for:
+- Individual researchers and developers
+- Open-source contributors
+- Academic use and research
+- Evaluation and experimentation
+- Projects that can comply with AGPL copyleft requirements
 
-**Individual use (personal, non-commercial) requires a commercial license.**
+**AGPL Requirements:** If you modify FoxML Core and deploy it as a service (including internal services), you must publish your changes under AGPL v3 unless you have a commercial license.
+
+### Commercial License (Required for Proprietary Use)
+
+Commercial licenses are required for:
+- Proprietary internal use
+- Production trading systems
+- Closed-source integrations
+- Hosted services where you cannot comply with AGPL
+- Organizations that need to modify and deploy without source disclosure obligations
 
 **Evaluation:** Organizations can use a **30-day $0 evaluation** (strict limits: non-production, no client deliverables). Continued evaluation requires a **paid Pilot ($35k, credited to Year 1)**.
 
@@ -20,26 +35,6 @@
 **For complete licensing information:** [`LEGAL/QUICK_REFERENCE.md`](LEGAL/QUICK_REFERENCE.md) (one-page summary) | [`COMMERCIAL_LICENSE.md`](COMMERCIAL_LICENSE.md) (full terms)
 
 **📋 Strategic Licensing Roadmap:** See [`LEGAL/ROADMAP_BOUNDARIES.md`](LEGAL/ROADMAP_BOUNDARIES.md) for licensing evolution strategy. **v1.x is the last fully open window** — core remains open, production layer will require commercial license in v2.0+.
-
----
-
-### Definitions
-
-**Note:** Personal use (individual, non-commercial) is not permitted under the free license. Individual use requires a commercial license.
-
-**Non-commercial academic research:** Research conducted at a qualifying tax-exempt educational institution that:
-- Is not funded by, sponsored by, or integrated into commercial operations
-- Does not generate revenue or support revenue-generating activities
-- Is conducted solely for academic or research purposes
-- Does not involve internal tooling, operational systems, or client deliverables
-
-**Organizational use:** Any use by or for a legal entity (company, university, lab, etc.), including:
-- Internal evaluation, pilots, PoCs, dev/staging, or production use
-- Use supporting revenue, operations, services, or internal tooling
-- Use by employees, contractors, interns, or affiliates in scope of their work
-- Institutional deployment (even at non-profit universities)
-
-**Note:** Unauthorized organizational use may constitute copyright infringement. This is not legal advice; see `LICENSE` and `COMMERCIAL_LICENSE.md` for complete terms.
 
 ---
 
@@ -92,11 +87,11 @@ FoxML Core is **general-purpose ML cross-sectional infrastructure** for panel da
 ## Intended Use
 
 ### Appropriate Use Cases
-- Research and experimentation (personal or non-commercial academic)
+- Research and experimentation (AGPL or commercial license)
 - ML workflow and architecture study
-- Non-commercial academic analysis at qualifying institutions
-- Internal engineering reference (with commercial license)
-- Benchmarking and systems review (with commercial license)
+- Open-source projects (AGPL)
+- Internal engineering reference (commercial license)
+- Production deployments (commercial license)
 
 ### Not Appropriate For
 - Commercial use without a license
@@ -147,11 +142,11 @@ Subject: `FoxML Core Commercial Licensing`
 
 ## Quick FAQ
 
-**Q: We're a university lab—do we need a license?**  
-A: It depends. **Pure non-commercial academic research** at a qualifying tax-exempt institution: no license needed. **Institutional use, sponsored/industry work, or internal tooling**: yes, you need a commercial license. See definitions above.
-
 **Q: Can I use it for free?**  
-A: Only for non-commercial academic research at qualifying tax-exempt institutions. All other use (including personal/individual use) requires a commercial license.
+A: Yes, under AGPL v3 for open research, experimentation, and projects that can comply with AGPL copyleft requirements. If you deploy it as a service, you must publish your modifications unless you have a commercial license.
+
+**Q: When do I need a commercial license?**  
+A: Commercial licenses are required for proprietary internal use, production systems, closed-source integrations, or any deployment where you cannot comply with AGPL source disclosure requirements.
 
 **Q: What if I just want to evaluate it?**  
 A: Organizations can use a **30-day $0 evaluation** (strict limits: non-production, no client deliverables). Continued evaluation requires a **paid Pilot ($35k)**.

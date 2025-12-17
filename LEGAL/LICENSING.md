@@ -2,26 +2,29 @@
 
 > **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` controls for free use.
 
-FoxML Core is **source-available** with a commercial license required for organizational use.
+FoxML Core is **dual-licensed: AGPL v3 + Commercial**.
 
-## Free Use (No License Required)
+## AGPL v3 Use (No Commercial License Required)
 
-**Non-commercial academic research** is free:
-- Non-commercial academic research at qualifying tax-exempt institutions
+**AGPL v3 is available for:**
+- Open research and experimentation
+- Projects that can comply with AGPL copyleft requirements
+- Individual researchers and developers
+- Open-source contributors
+- **Note:** If you deploy as a service, you must publish modifications under AGPL v3
 
-**Note:** Personal use (individual, non-commercial) is not permitted under the free license. Individual use requires a commercial license.
+**See `LICENSE` for the complete AGPL v3 license terms.**
 
-**See `LICENSE` for the complete definition of free use.**
+## Commercial License (Required for Proprietary Use)
 
-## Commercial License (Required for Organizational Use)
-
-**Any organizational use requires a paid commercial license.**
+**Commercial licenses are required for proprietary deployments where AGPL compliance is not possible.**
 
 This includes:
-- Any use by or for a company, university, lab, or other organization
-- Any internal tooling, deployment, pilot, PoC, or evaluation
-- Any use by employees, contractors, interns, or affiliates in the scope of their work
-- Any use in development, testing, staging, or production environments within a business context
+- Proprietary internal use (modifications must remain private)
+- Production trading systems
+- Closed-source integrations
+- Hosted services where you cannot comply with AGPL source disclosure requirements
+- Any deployment where AGPL compliance is not possible
 
 **Commercial licenses provide:**
 - Permission to use FoxML Core for organizational purposes

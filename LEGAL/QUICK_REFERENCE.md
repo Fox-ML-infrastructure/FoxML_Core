@@ -4,17 +4,21 @@
 
 ---
 
-## The Rule (Model B)
+## The Rule (Dual Licensing)
 
-✅ **FREE:**
-- Non-commercial academic research at qualifying tax-exempt institutions
+✅ **AGPL v3 (FREE):**
+- Open research and experimentation
+- Projects that can comply with AGPL copyleft requirements
+- Individual researchers and developers
+- Open-source contributors
+- **Note:** If you deploy as a service, you must publish modifications under AGPL v3
 
-❌ **PAID LICENSE REQUIRED:**
-- Any organizational use (companies, universities, labs, any legal entity)
-  - **Exception:** Pure non-commercial academic research at qualifying tax-exempt institutions (see definitions below)
-- Any use by employees, contractors, interns in scope of their work
-- Any use supporting revenue, operations, or internal tooling
-- Institutional deployment (even at non-profit universities)
+❌ **COMMERCIAL LICENSE REQUIRED:**
+- Proprietary internal use
+- Production trading systems
+- Closed-source integrations
+- Hosted services where you cannot comply with AGPL source disclosure requirements
+- Any deployment where modifications must remain private
 
 ---
 
@@ -78,15 +82,9 @@ Subject: `FoxML Core Commercial Licensing`
 
 ## Definitions
 
-**Note:** Personal use (individual, non-commercial) is not permitted under the free license. Individual use requires a commercial license.
+**AGPL v3 Use:** Use under the GNU Affero General Public License v3, which requires that if you modify the software and deploy it as a service (including internal services), you must publish your modifications under AGPL v3. Suitable for open research, experimentation, and projects that can comply with copyleft requirements.
 
-**Non-commercial academic research:** Research conducted at a qualifying tax-exempt educational institution that:
-- Is not funded by, sponsored by, or integrated into commercial operations
-- Does not generate revenue or support revenue-generating activities
-- Is conducted solely for academic or research purposes
-- Does not involve internal tooling, operational systems, or client deliverables
-
-**Organizational use:** Any use by or for a legal entity (company, university, lab, etc.), including institutional deployment, internal tooling, or any use by employees/contractors in scope of their work.
+**Commercial License Use:** Use under a paid commercial license, which allows proprietary internal use, production deployments, closed-source integrations, and modifications without source disclosure obligations. Required when AGPL compliance is not possible or desired.
 
 ---
 
