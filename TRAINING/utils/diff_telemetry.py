@@ -2729,18 +2729,18 @@ class DiffTelemetry:
                                             if snap.view != snapshot.view:
                                                 continue
                                             
-                                                    # Only add if same comparison_group (exactly the same runs)
-                                                    if (snap.comparison_group and 
-                                                        snap.comparison_group.to_key() == group_key):
-                                                        comparable, reason = self._check_comparability(snapshot, snap)
-                                                        if comparable:
-                                                            # Mark source for auditability
-                                                            # Determine if from comparison group directory or snapshot_index
-                                                            if bin_dir.name.startswith("cg-"):
-                                                                snap._comparison_source = "comparison_group_directory"
-                                                            else:
-                                                                snap._comparison_source = "snapshot_index"
-                                                            candidates.append((snap.timestamp, snap))
+                                            # Only add if same comparison_group (exactly the same runs)
+                                            if (snap.comparison_group and 
+                                                snap.comparison_group.to_key() == group_key):
+                                                comparable, reason = self._check_comparability(snapshot, snap)
+                                                if comparable:
+                                                    # Mark source for auditability
+                                                    # Determine if from comparison group directory or snapshot_index
+                                                    if bin_dir.name.startswith("cg-"):
+                                                        snap._comparison_source = "comparison_group_directory"
+                                                    else:
+                                                        snap._comparison_source = "snapshot_index"
+                                                    candidates.append((snap.timestamp, snap))
                                         except Exception as e:
                                             logger.debug(f"Failed to deserialize snapshot from {run_snapshot_index}: {e}")
                                             continue
