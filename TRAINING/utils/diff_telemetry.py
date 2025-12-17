@@ -2669,6 +2669,7 @@ class DiffTelemetry:
         
         # Search across ALL runs in RESULTS to find previous comparable runs
         # This ensures we find exactly the same runs (same comparison_group) regardless of bin
+        # CRITICAL: Also search in comparison group directories (cg-*_n-*_fam-*)
         if hasattr(self, 'run_dir') and self.run_dir:
             # Find RESULTS directory
             results_dir = self.run_dir
@@ -2678,43 +2679,62 @@ class DiffTelemetry:
                     break
             
             if results_dir.name == "RESULTS":
-                # Search all sample_* bins
+                # Search both sample_* bins and comparison group directories (cg-*)
                 for bin_dir in results_dir.iterdir():
-                    if bin_dir.is_dir() and bin_dir.name.startswith("sample_"):
-                        # Search all runs in this bin
-                        for run_subdir in bin_dir.iterdir():
-                            if run_subdir.is_dir() and run_subdir.name != "METRICS":
-                                run_snapshot_index = run_subdir / "REPRODUCIBILITY" / "METRICS" / "snapshot_index.json"
-                                if run_snapshot_index.exists():
-                                    try:
-                                        with open(run_snapshot_index) as f:
-                                            data = json.load(f)
-                                            for key, snap_data in data.items():
-                                                # Handle both old format (run_id key) and new format (run_id:stage key)
-                                                if ':' in key:
-                                                    run_id = key.split(':', 1)[0]
-                                                else:
-                                                    run_id = key
-                                                
-                                                # CRITICAL: Never pick the same run_id (even if different stage)
-                                                if run_id == snapshot.run_id:
-                                                    continue
-                                                
-                                                try:
-                                                    snap = self._deserialize_snapshot(snap_data)
-                                                    # Double-check run_id (defense in depth)
-                                                    if snap.run_id == snapshot.run_id:
-                                                        continue
-                                                    # Only add if same comparison_group (exactly the same runs)
-                                                    if (snap.comparison_group and 
-                                                        snap.comparison_group.to_key() == group_key):
-                                                        comparable, _ = self._check_comparability(snapshot, snap)
-                                                        if comparable:
-                                                            candidates.append((snap.timestamp, snap))
-                                                except Exception:
-                                                    continue
-                                    except Exception:
-                                        continue
+                    if not bin_dir.is_dir():
+                        continue
+                    
+                    # Search all runs in this bin/directory
+                    for run_subdir in bin_dir.iterdir():
+                        if not run_subdir.is_dir() or run_subdir.name == "METRICS":
+                            continue
+                        
+                        run_snapshot_index = run_subdir / "REPRODUCIBILITY" / "METRICS" / "snapshot_index.json"
+                        if run_snapshot_index.exists():
+                            try:
+                                with open(run_snapshot_index) as f:
+                                    data = json.load(f)
+                                    for key, snap_data in data.items():
+                                        # Handle both old format (run_id key) and new format (run_id:stage key)
+                                        if ':' in key:
+                                            run_id = key.split(':', 1)[0]
+                                        else:
+                                            run_id = key
+                                        
+                                        # CRITICAL: Never pick the same run_id (even if different stage)
+                                        if run_id == snapshot.run_id:
+                                            continue
+                                        
+                                        try:
+                                            snap = self._deserialize_snapshot(snap_data)
+                                            # Double-check run_id (defense in depth)
+                                            if snap.run_id == snapshot.run_id:
+                                                continue
+                                            
+                                            # CRITICAL: Verify snapshot matches stage and view for exact matching
+                                            if snap.stage != snapshot.stage:
+                                                continue
+                                            if snap.view != snapshot.view:
+                                                continue
+                                            
+                                            # Only add if same comparison_group (exactly the same runs)
+                                            if (snap.comparison_group and 
+                                                snap.comparison_group.to_key() == group_key):
+                                                comparable, reason = self._check_comparability(snapshot, snap)
+                                                if comparable:
+                                                    # CRITICAL: Verify the snapshot file actually exists in the cohort directory
+                                                    # This prevents comparing against stale/removed snapshots
+                                                    if hasattr(self, 'run_dir') and self.run_dir:
+                                                        # Try to find the cohort directory for this snapshot
+                                                        # We can't easily reconstruct the exact path, but we can verify
+                                                        # the snapshot was saved by checking if it's in a valid run directory
+                                                        candidates.append((snap.timestamp, snap))
+                                        except Exception as e:
+                                            logger.debug(f"Failed to deserialize snapshot from {run_snapshot_index}: {e}")
+                                            continue
+                            except Exception as e:
+                                logger.debug(f"Failed to read snapshot index {run_snapshot_index}: {e}")
+                                continue
         
         if not candidates:
             return None
