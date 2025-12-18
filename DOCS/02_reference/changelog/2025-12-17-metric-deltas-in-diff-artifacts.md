@@ -209,6 +209,21 @@ Verified with actual runs:
 
 **Result**: `std_score` increases now correctly appear in `top_regressions`, not `top_improvements`.
 
+### Added `tol_used` Field (2025-12-17 follow-up)
+
+**Enhancement**: Added `tol_used` field showing the actual computed tolerance threshold:
+- `tol_used = max(abs_tol, rel_tol * max(abs(prev), abs(curr), 1.0))`
+- Makes `changed_tol: true` self-evident (you can see `delta_abs > tol_used`)
+- Provides transparency into which tolerance (absolute or relative) was actually used
+
+### Clarified `se_ratio` vs `z_score` (2025-12-17 follow-up)
+
+**Enhancement**: Clarified statistical terminology:
+- `se_ratio` is preferred (unsigned: `abs(delta_abs) / se`) - "how many SEs is this delta"
+- `z_score` kept for backward compatibility (signed: `delta_abs / se`)
+- Added comments clarifying `se_ratio` is preferred since this is a proxy using AUC SE for all metrics, not a true per-metric z-score
+- Prevents confusion about statistical terminology while maintaining backward compatibility
+
 ## Next Level (Future Enhancements)
 
 Potential future improvements:
