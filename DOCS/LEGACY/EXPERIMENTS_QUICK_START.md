@@ -163,9 +163,9 @@ feature_selection:
 ## Related Documentation
 
 - [Experiments Workflow](EXPERIMENTS_WORKFLOW.md) - Complete workflow overview
-- [Experiments Operations](EXPERIMENTS_OPERATIONS.md) - Detailed step-by-step guide
-- [Phase 1: Feature Engineering](PHASE1_FEATURE_ENGINEERING.md) - Phase 1 documentation
-- [Experiments Implementation](../../03_technical/implementation/EXPERIMENTS_IMPLEMENTATION.md) - Implementation details
+- [Experiments Operations](../01_tutorials/training/EXPERIMENTS_OPERATIONS.md) - Detailed step-by-step guide
+- [Phase 1: Feature Engineering](../01_tutorials/training/PHASE1_FEATURE_ENGINEERING.md) - Phase 1 documentation
+- [Experiments Implementation](EXPERIMENTS_IMPLEMENTATION.md) - Implementation details
 
 ## Performance Comparison
 

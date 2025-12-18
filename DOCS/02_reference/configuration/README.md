@@ -896,4 +896,4 @@ For configuration questions or issues, refer to:
 - [Environment Variables](ENVIRONMENT_VARIABLES.md) - Environment variable overrides
 - [Model Config Reference](../models/MODEL_CONFIG_REFERENCE.md) - Model-specific configurations
 - [Intelligence Layer Overview](../../03_technical/research/INTELLIGENCE_LAYER.md) - How configs are used in intelligent training
-- [Leakage Analysis](../../03_technical/research/LEAKAGE_ANALYSIS.md) - Leakage detection configuration details
+- [Leakage Analysis](../../03_technical/research/INTERNAL/LEAKAGE_ANALYSIS.md) - Leakage detection configuration details

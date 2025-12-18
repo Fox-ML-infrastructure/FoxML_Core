@@ -2,7 +2,7 @@
 
 **Fingerprint Tracking System for Lookback Computation Consistency**
 
-**Related**: [SST Enforcement Design](../../../TRAINING/utils/SST_ENFORCEMENT_DESIGN.md) | [Fingerprint Improvements](../../03_technical/fixes/2025-12-13-fingerprint-improvements.md)
+**Related**: [SST Enforcement Design](../../03_technical/implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md) | [Fingerprint Improvements](../../03_technical/fixes/2025-12-13-fingerprint-improvements.md)
 
 For a quick overview, see the [root changelog](../../../CHANGELOG.md).  
 For other dates, see the [changelog index](README.md).
@@ -170,34 +170,11 @@ Implemented comprehensive fingerprint tracking system to ensure lookback computa
 ## Files Modified
 
 ### Core Implementation
-- `TRAINING/utils/leakage_budget.py` - Fingerprint tracking, dataclass, validation
-- `TRAINING/utils/cross_sectional_data.py` - Set-invariant fingerprints, order detection
-- `TRAINING/ranking/predictability/model_evaluation.py` - Stage logging, invariant checks
-- `TRAINING/utils/resolved_config.py` - Wrapper return type, parameter forwarding
-
-### Call Sites Updated
-- `TRAINING/ranking/shared_ranking_harness.py` - Dataclass handling
-- `TRAINING/utils/feature_sanitizer.py` - Dataclass handling
-
-### Configuration
-- `CONFIG/experiments/leakage_canary_test.yaml` - New test config
-- `CONFIG/experiments/README.md` - Updated with canary test info
-
-### Documentation
-- `DOCS/03_technical/fixes/2025-12-13-lookback-fingerprint-tracking.md` - Initial implementation
-- `DOCS/03_technical/fixes/2025-12-13-fingerprint-improvements.md` - Improvements
-- `DOCS/03_technical/fixes/2025-12-13-lookback-result-dataclass-migration.md` - Migration guide
-- `DOCS/03_technical/testing/LEAKAGE_CANARY_TEST_GUIDE.md` - Canary test guide
-
----
-
-## Related Documentation
-
-- [Leakage Controls Evaluation](../03_technical/architecture/LEAKAGE_CONTROLS_EVALUATION.md)
-- [Leakage Validation Fix](../03_technical/fixes/2025-12-13-leakage-validation-fix.md)
-- [Fingerprint Improvements](../03_technical/fixes/2025-12-13-fingerprint-improvements.md)
-- [Lookback Result Migration](../03_technical/fixes/2025-12-13-lookback-result-dataclass-migration.md)
-- [Leakage Canary Test Guide](../03_technical/testing/LEAKAGE_CANARY_TEST_GUIDE.md)
+- `03_technical/implementation/training_utils/INTERNAL/)
+- [Leakage Validation Fix](../../03_technical/fixes/2025-12-13-leakage-validation-fix.md)
+- [Fingerprint Improvements](../../03_technical/fixes/2025-12-13-fingerprint-improvements.md)
+- [Lookback Result Migration](../../03_technical/fixes/2025-12-13-lookback-result-dataclass-migration.md)
+- [Leakage Canary Test Guide](../../03_technical/testing/LEAKAGE_CANARY_TEST_GUIDE.md)
 
 ---
 

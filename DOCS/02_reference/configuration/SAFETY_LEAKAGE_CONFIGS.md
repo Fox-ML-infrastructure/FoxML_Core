@@ -502,5 +502,5 @@ numerical_stability:
 - [Training Pipeline Configs](TRAINING_PIPELINE_CONFIGS.md) - Training configuration
 - [Usage Examples](USAGE_EXAMPLES.md) - Practical configuration examples
 - [Intelligence Layer Overview](../../03_technical/research/INTELLIGENCE_LAYER.md) - How leakage detection works
-- [Leakage Analysis](../../03_technical/research/LEAKAGE_ANALYSIS.md) - Detailed leakage documentation
+- [Leakage Analysis](../../03_technical/research/INTERNAL/LEAKAGE_ANALYSIS.md) - Detailed leakage documentation
 

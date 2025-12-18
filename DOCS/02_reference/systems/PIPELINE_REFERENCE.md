@@ -104,5 +104,5 @@ for parquet_file in data_dir.glob("*.parquet"):
 
 - [Data Processing Walkthrough](../../01_tutorials/pipelines/DATA_PROCESSING_WALKTHROUGH.md) - Detailed guide
 - [First Pipeline Run](../../01_tutorials/pipelines/FIRST_PIPELINE_RUN.md) - Quick start
-- [Data Processing README](../../../DATA_PROCESSING/README.md) - Module overview
+- [Data Processing README](../../01_tutorials/pipelines/DATA_PROCESSING_README.md) - Module overview
 

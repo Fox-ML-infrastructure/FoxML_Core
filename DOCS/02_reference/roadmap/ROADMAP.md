@@ -5,8 +5,8 @@ FoxML Core is the core research and training engine of Fox ML Infrastructure.
 Direction and priorities for ongoing development. Timelines are aspirational and subject to change.
 
 **For detailed status and technical roadmap:**
-- [Detailed Roadmap](DOCS/02_reference/roadmap/README.md) – Per-date detailed roadmap with component status, limitations, and priorities
-- [Known Issues & Limitations](DOCS/02_reference/KNOWN_ISSUES.md) – Features that don't work yet or have limitations
+- [Detailed Roadmap](README.md) – Per-date detailed roadmap with component status, limitations, and priorities
+- [Known Issues & Limitations](../KNOWN_ISSUES.md) – Features that don't work yet or have limitations
 
 ---
 
@@ -57,7 +57,7 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 * **Stability Analysis** — Under active testing. Thresholds may need adjustment.
 
 **For complete list of limitations, experimental features, and troubleshooting:**
-- [Known Issues & Limitations](DOCS/02_reference/KNOWN_ISSUES.md) — Features that don't work yet, experimental features, and known limitations
+- [Known Issues & Limitations](../KNOWN_ISSUES.md) — Features that don't work yet, experimental features, and known limitations
 
 ---
 
@@ -97,6 +97,6 @@ FoxML Core is maintained with an **enterprise reliability mindset**:
 ---
 
 **For detailed status, limitations, and technical roadmap:**
-- [Detailed Roadmap](DOCS/02_reference/roadmap/README.md)
-- [Known Issues & Limitations](DOCS/02_reference/KNOWN_ISSUES.md)
-- [Changelog](CHANGELOG.md) – Recent changes and fixes
+- [Detailed Roadmap](README.md)
+- [Known Issues & Limitations](../KNOWN_ISSUES.md)
+- [Changelog](../../../CHANGELOG.md) – Recent changes and fixes

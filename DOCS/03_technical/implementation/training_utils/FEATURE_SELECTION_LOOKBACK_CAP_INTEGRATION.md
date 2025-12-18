@@ -1,7 +1,7 @@
 # Feature Selection Lookback Cap Integration
 
 **Date**: 2025-12-13  
-**Related**: [Single Source of Truth Fix](../../TRAINING/utils/SINGLE_SOURCE_OF_TRUTH_COMPLETE.md) | [Lookback Cap Enforcement](../../TRAINING/utils/lookback_cap_enforcement.py)
+**Related**: [Single Source of Truth Fix](INTERNAL/SINGLE_SOURCE_OF_TRUTH_COMPLETE.md) | [SST Enforcement Design](INTERNAL/SST_ENFORCEMENT_DESIGN.md)
 
 ## Overview
 

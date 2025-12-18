@@ -225,8 +225,7 @@ Long format with one row per metric:
 ## Files Changed
 
 ### Modified Files
-- `TRAINING/utils/telemetry.py` - Enhanced drift tracking with fingerprints, tiers, sanity checks, Parquet output
-- `VERSION_1.0_MANIFEST.md` - Removed (duplicate of `FOXML_1.0_MANIFEST.md`)
+- `03_technical/implementation/training_utils/INTERNAL/`)
 
 ---
 
@@ -275,7 +274,7 @@ critical_changes = df[df["is_critical"] == True]
 ## Related Documentation
 
 - [Telemetry System](2025-12-14-telemetry-system.md) - Initial telemetry implementation
-- [Reproducibility Structure](../03_technical/implementation/REPRODUCIBILITY_STRUCTURE.md) - Directory structure
+- [Reproducibility Structure](../../03_technical/implementation/REPRODUCIBILITY_STRUCTURE.md) - Directory structure
 
 ---
 

@@ -155,14 +155,14 @@ Ready for model training (TRAINING/)
 ## Related Documentation
 
 ### Tutorials
-- **[Data Processing Walkthrough](../../DOCS/01_tutorials/pipelines/DATA_PROCESSING_WALKTHROUGH.md)** - Step-by-step pipeline guide
-- **[Feature Engineering Tutorial](../../DOCS/01_tutorials/pipelines/FEATURE_ENGINEERING_TUTORIAL.md)** - Advanced feature creation
-- **[First Pipeline Run](../../DOCS/01_tutorials/pipelines/FIRST_PIPELINE_RUN.md)** - Quick start guide
+- **[Data Processing Walkthrough](DATA_PROCESSING_WALKTHROUGH.md)** - Step-by-step pipeline guide
+- **[Feature Engineering Tutorial](FEATURE_ENGINEERING_TUTORIAL.md)** - Advanced feature creation
+- **[First Pipeline Run](FIRST_PIPELINE_RUN.md)** - Quick start guide
 
 ### API Reference
-- **[DATA_PROCESSING API Reference](../../DOCS/02_reference/api/DATA_PROCESSING_API.md)** - Complete API documentation
-- **[Module Reference](../../DOCS/02_reference/api/MODULE_REFERENCE.md)** - General module API
-- **[Pipeline Reference](../../DOCS/02_reference/systems/PIPELINE_REFERENCE.md)** - Pipeline workflows
+- **[DATA_PROCESSING API Reference](../../02_reference/api/DATA_PROCESSING_API.md)** - Complete API documentation
+- **[Module Reference](../../02_reference/api/MODULE_REFERENCE.md)** - General module API
+- **[Pipeline Reference](../../02_reference/systems/PIPELINE_REFERENCE.md)** - Pipeline workflows
 
 ### Other Modules
 - **[TRAINING](../training/TRAINING_README.md)** - Model training using processed features

@@ -210,7 +210,7 @@ If GPU fails, the system automatically falls back to CPU. Check logs for specifi
 
 **Prevention**: The system sets `TERM=dumb` and `SHELL=/usr/bin/bash` to mitigate readline issues, but Conda environment conflicts can still occur.
 
-See [Known Issues](DOCS/02_reference/KNOWN_ISSUES.md) for more details.
+See [Known Issues](../../02_reference/KNOWN_ISSUES.md) for more details.
 
 ### XGBoost 3.1+ Compatibility
 
@@ -248,8 +248,8 @@ All GPU settings are in `CONFIG/training_config/gpu_config.yaml`. See:
 
 ## See Also
 
-- [Auto Target Ranking](../../training/AUTO_TARGET_RANKING.md) - How to use GPU-accelerated target ranking
-- [Feature Selection Tutorial](../../training/FEATURE_SELECTION_TUTORIAL.md) - GPU-accelerated feature selection
+- [Auto Target Ranking](../training/AUTO_TARGET_RANKING.md) - How to use GPU-accelerated target ranking
+- [Feature Selection Tutorial](../training/FEATURE_SELECTION_TUTORIAL.md) - GPU-accelerated feature selection
 - [Roadmap](../../02_reference/roadmap/ROADMAP.md) - See Phase 4 for multi-GPU support timeline
 - [Known Issues](../../02_reference/KNOWN_ISSUES.md) - GPU troubleshooting and limitations
 

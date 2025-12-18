@@ -110,7 +110,7 @@ Both target ranking and feature selection now use the same:
 
 This ensures consistency across the entire pipeline: target ranking → feature selection → training.
 
-**NEW (2025-12-13)**: SST Enforcement Design ensures provably split-brain free system with `EnforcedFeatureSet` contract, immediate X slicing, and boundary assertions. See [SST Enforcement Design](../../../TRAINING/utils/SST_ENFORCEMENT_DESIGN.md) for details.
+**NEW (2025-12-13)**: SST Enforcement Design ensures provably split-brain free system with `EnforcedFeatureSet` contract, immediate X slicing, and boundary assertions. See [SST Enforcement Design](../../03_technical/implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md) for details.
 
 ## See Also
 

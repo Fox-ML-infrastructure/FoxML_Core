@@ -1,6 +1,6 @@
 # EXPERIMENTS - Optimized Training Workflow
 
-> **⚠️ Note**: This 3-phase EXPERIMENTS workflow is a legacy approach. For new projects, consider using the [Intelligent Training Pipeline](INTELLIGENT_TRAINING_TUTORIAL.md) which provides automated target ranking and feature selection with a unified configuration system.
+> **⚠️ Note**: This 3-phase EXPERIMENTS workflow is a legacy approach. For new projects, consider using the [Intelligent Training Pipeline](../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) which provides automated target ranking and feature selection with a unified configuration system.
 
 3-phase training workflow that reduces feature dimensionality from 400+ to ~50-60 features.
 
@@ -248,8 +248,8 @@ Solution:
 ## Related Documentation
 
 - [Experiments Quick Start](EXPERIMENTS_QUICK_START.md) - Quick setup guide
-- [Experiments Operations](EXPERIMENTS_OPERATIONS.md) - Step-by-step instructions
-- [Phase 1: Feature Engineering](PHASE1_FEATURE_ENGINEERING.md) - Phase 1 details
-- [Experiments Implementation](../../03_technical/implementation/EXPERIMENTS_IMPLEMENTATION.md) - Implementation details
-- [Training Optimization](../../03_technical/implementation/TRAINING_OPTIMIZATION_GUIDE.md) - Optimization guide
-- [Feature Selection Implementation](../../03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Feature selection guide
+- [Experiments Operations](../01_tutorials/training/EXPERIMENTS_OPERATIONS.md) - Step-by-step instructions
+- [Phase 1: Feature Engineering](../01_tutorials/training/PHASE1_FEATURE_ENGINEERING.md) - Phase 1 details
+- [Experiments Implementation](EXPERIMENTS_IMPLEMENTATION.md) - Implementation details
+- [Training Optimization](../03_technical/implementation/TRAINING_OPTIMIZATION_GUIDE.md) - Optimization guide
+- [Feature Selection Implementation](../03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Feature selection guide

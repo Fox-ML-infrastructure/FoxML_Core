@@ -161,4 +161,4 @@ python -m TRAINING.orchestration.intelligent_trainer \
 
 - [Leakage Controls Evaluation](../architecture/LEAKAGE_CONTROLS_EVALUATION.md)
 - [Leakage Validation Fix](../fixes/2025-12-13-leakage-validation-fix.md)
-- [Safety Configuration](../../02_reference/configuration/SAFETY_CONFIG.md)
+- [Safety & Leakage Configs](../../02_reference/configuration/SAFETY_LEAKAGE_CONFIGS.md)

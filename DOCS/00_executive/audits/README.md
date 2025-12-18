@@ -43,10 +43,7 @@ System and implementation audits:
    - Config-driven determinism verification
    - External factor identification
 
-2. **[Cross-Sectional Ranking Analysis](CROSS_SECTIONAL_RANKING_ANALYSIS.md)** (2025-12-09)
-   - Analysis of when cross-sectional ranking is disabled or skipped
-   - Config conditions and symbol requirements
-   - Performance considerations
+2. ~~**[Cross-Sectional Ranking Analysis](CROSS_SECTIONAL_RANKING_ANALYSIS.md)**~~ (2025-12-09) - *File not found, reference removed*
 
 3. **[Command CS Ranking Check](COMMAND_CS_RANKING_CHECK.md)** (2025-12-10)
    - Test coverage analysis for cross-sectional ranking commands
@@ -80,7 +77,7 @@ System and implementation audits:
 
 ## Related Documentation
 
-- [Documentation Review Statement](../../../DOCUMENTATION_REVIEW.md) - Public statement of documentation review
+- ~~[Documentation Review Statement](../../../DOCUMENTATION_REVIEW.md)~~ - *File not found, reference removed*
 - [Changelog Index](../../02_reference/changelog/README.md) - Links to these audits
 - [Known Issues](../../02_reference/KNOWN_ISSUES.md) - Current limitations and issues
 - [Configuration Reference](../../02_reference/configuration/README.md) - Config system documentation

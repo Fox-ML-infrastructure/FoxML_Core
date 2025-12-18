@@ -1,7 +1,7 @@
 # Leakage Controls Implementation Status
 
 **Date**: 2025-12-13  
-**Related**: [Leakage Controls Evaluation](LEAKAGE_CONTROLS_EVALUATION.md) | [SST Enforcement Design](../../../TRAINING/utils/SST_ENFORCEMENT_DESIGN.md) | [Leakage Validation Fix](../fixes/2025-12-13-leakage-validation-fix.md) | [Fingerprint Tracking](../fixes/2025-12-13-lookback-fingerprint-tracking.md) | [Fingerprint Improvements](../fixes/2025-12-13-fingerprint-improvements.md) | [Canary Test Guide](../testing/LEAKAGE_CANARY_TEST_GUIDE.md)  
+**Related**: [Leakage Controls Evaluation](../LEAKAGE_CONTROLS_EVALUATION.md) | [SST Enforcement Design](../../implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md) | [Leakage Validation Fix](../../fixes/2025-12-13-leakage-validation-fix.md) | [Fingerprint Tracking](../../fixes/2025-12-13-fingerprint-tracking.md) | [Fingerprint Improvements](../../fixes/2025-12-13-fingerprint-improvements.md) | [Canary Test Guide](../../testing/LEAKAGE_CANARY_TEST_GUIDE.md)  
 **Status**: Phase 1 (Critical) - Complete | Phase 2 (SST Enforcement Design) - ✅ Complete
 
 ## Completed (Commits 1-3)

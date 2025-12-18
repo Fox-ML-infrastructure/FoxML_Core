@@ -146,7 +146,7 @@ def assert_featureset_fingerprint(
 ## Related Documentation
 
 - [SST Enforcement Design Changelog](../../02_reference/changelog/2025-12-13-sst-enforcement-design.md) - Complete changelog
-- [SST Enforcement Design Document](../../../TRAINING/utils/SST_ENFORCEMENT_DESIGN.md) - Design specification
-- [Type Boundary Wiring Complete](../../../TRAINING/utils/TYPE_BOUNDARY_WIRING_COMPLETE.md) - Implementation details
-- [Boundary Assertions Complete](../../../TRAINING/utils/BOUNDARY_ASSERTIONS_COMPLETE.md) - Assertion details
-- [SST Implementation Coverage](../../../TRAINING/utils/SST_IMPLEMENTATION_COVERAGE.md) - Coverage matrix
+- [SST Enforcement Design Document](03_technical/implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md) - Design specification
+- [Type Boundary Wiring Complete](03_technical/implementation/training_utils/INTERNAL/) - Implementation details
+- [Boundary Assertions Complete](03_technical/implementation/training_utils/INTERNAL/) - Assertion details
+- [SST Implementation Coverage](03_technical/implementation/training_utils/INTERNAL/) - Coverage matrix

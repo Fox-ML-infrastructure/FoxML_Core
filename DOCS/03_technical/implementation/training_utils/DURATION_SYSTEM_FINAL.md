@@ -75,7 +75,7 @@ enforce_purge_audit_rule("85m", "100m", interval=None, strict_greater=True)  # V
 
 **Files:**
 - `TRAINING/utils/duration_parser.py` - `parse_duration_bars()` function
-- `TRAINING/utils/DURATION_SCHEMA_GUIDE.md` - Schema documentation
+- `03_technical/implementation/training_utils/INTERNAL/` - Schema documentation
 
 **Best Practice:**
 ```yaml
@@ -168,12 +168,7 @@ All critical tests pass:
 ## Files Created/Modified
 
 ### New Files
-- `TRAINING/utils/duration_parser.py` - Core duration parsing system
-- `TRAINING/utils/audit_helpers.py` - Helper functions for downstream components
-- `TRAINING/utils/tests/test_duration_parser.py` - Comprehensive test suite
-- `TRAINING/utils/DURATION_PARSING_GUIDE.md` - Usage guide
-- `TRAINING/utils/DURATION_SCHEMA_GUIDE.md` - Schema best practices
-- `TRAINING/utils/DURATION_SYSTEM_FINAL.md` - This document
+- `03_technical/implementation/training_utils/INTERNAL/` - This document
 
 ### Modified Files
 - `TRAINING/utils/resolved_config.py` - Uses duration parsing, deprecated float fields

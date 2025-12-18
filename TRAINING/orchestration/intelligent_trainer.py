@@ -2030,7 +2030,7 @@ class IntelligentTrainer:
             if repro_dir.exists():
                 # Create tracker to access trend summary method
                 tracker = ReproducibilityTracker(output_dir=self.output_dir)
-                trend_summary = tracker.generate_trend_summary(view="STRICT", min_runs_for_trend=3)
+                trend_summary = tracker.generate_trend_summary(view="STRICT", min_runs_for_trend=2)
                 
                 if trend_summary.get("status") == "ok":
                     logger.info("="*80)

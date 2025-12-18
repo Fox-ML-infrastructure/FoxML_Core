@@ -458,8 +458,8 @@ After each phase:
 
 ## Related Documentation
 
-- ⚠️ **Legacy**: [Experiments Workflow](../LEGACY/EXPERIMENTS_WORKFLOW.md) - **DEPRECATED**: Use [Intelligent Training Pipeline](INTELLIGENT_TRAINING_TUTORIAL.md) instead
-- ⚠️ **Legacy**: [Experiments Quick Start](../LEGACY/EXPERIMENTS_QUICK_START.md) - **DEPRECATED**: Use [Intelligent Training Tutorial](INTELLIGENT_TRAINING_TUTORIAL.md) instead
+- ⚠️ **Legacy**: [Experiments Workflow](../../LEGACY/EXPERIMENTS_WORKFLOW.md) - **DEPRECATED**: Use [Intelligent Training Pipeline](INTELLIGENT_TRAINING_TUTORIAL.md) instead
+- ⚠️ **Legacy**: [Experiments Quick Start](../../LEGACY/EXPERIMENTS_QUICK_START.md) - **DEPRECATED**: Use [Intelligent Training Tutorial](INTELLIGENT_TRAINING_TUTORIAL.md) instead
 - [Phase 1: Feature Engineering](PHASE1_FEATURE_ENGINEERING.md) - Phase 1 documentation
 - [Training Optimization](../../03_technical/implementation/TRAINING_OPTIMIZATION_GUIDE.md) - Optimization guide
 - [Feature Selection Implementation](../../03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Feature selection guide

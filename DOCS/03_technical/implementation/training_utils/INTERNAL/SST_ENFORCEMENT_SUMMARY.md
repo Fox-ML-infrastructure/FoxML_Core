@@ -41,7 +41,7 @@ Implemented a comprehensive Single Source of Truth (SST) enforcement design that
 
 ## Documentation
 
-- [Complete Changelog](../../DOCS/02_reference/changelog/2025-12-13-sst-enforcement-design.md)
-- [Fix Documentation](../../DOCS/03_technical/fixes/2025-12-13-sst-enforcement-design.md)
+- [Complete Changelog](../../../02_reference/changelog/2025-12-13-sst-enforcement-design.md)
+- [Fix Documentation](../../../03_technical/fixes/2025-12-13-sst-enforcement-design.md)
 - [Design Document](SST_ENFORCEMENT_DESIGN.md)
 - [Implementation Coverage](SST_IMPLEMENTATION_COVERAGE.md)

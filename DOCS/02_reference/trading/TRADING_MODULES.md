@@ -2,7 +2,7 @@
 
 This document explains the two main trading modules in the FoxML Core repository: `ALPACA_trading` and `IBKR_trading`. Both modules provide complete trading infrastructure but are designed for different use cases and broker integrations.
 
-> **⚠️ IMPORTANT LEGAL NOTICE**: FoxML Core provides **client-side trading execution software** that connects to **user-owned brokerage accounts** via **user-provided API keys**. We are **NOT a broker, investment advisor, or custodian**. Users are solely responsible for brokerage relationships, regulatory compliance, API credentials, and all trading decisions. See [`LEGAL/BROKER_INTEGRATION_COMPLIANCE.md`](LEGAL/BROKER_INTEGRATION_COMPLIANCE.md) for complete compliance framework.
+> **⚠️ IMPORTANT LEGAL NOTICE**: FoxML Core provides **client-side trading execution software** that connects to **user-owned brokerage accounts** via **user-provided API keys**. We are **NOT a broker, investment advisor, or custodian**. Users are solely responsible for brokerage relationships, regulatory compliance, API credentials, and all trading decisions. See [`LEGAL/BROKER_INTEGRATION_COMPLIANCE.md`](../../../LEGAL/BROKER_INTEGRATION_COMPLIANCE.md) for complete compliance framework.
 
 ## Table of Contents
 
@@ -407,22 +407,22 @@ Both modules are part of the FoxML Core infrastructure and share the same underl
 ## Additional Resources
 
 ### Module Documentation
-- **ALPACA_trading README**: [`ALPACA_trading/README.md`](ALPACA_trading/README.md)
-- **IBKR_trading README**: [`IBKR_trading/README.md`](IBKR_trading/README.md)
+- **ALPACA_trading README**: [`ALPACA_trading/README.md`](../../../ALPACA_trading/README.md) (outside DOCS)
+- **IBKR_trading README**: [`IBKR_trading/README.md`](../../../IBKR_trading/README.md) (outside DOCS)
 
 ### Trading Documentation
-- **Trading Reference**: [`DOCS/02_reference/trading/README.md`](DOCS/02_reference/trading/README.md)
-- **Trading Technical Docs**: [`DOCS/03_technical/trading/README.md`](DOCS/03_technical/trading/README.md)
-  - Architecture: [`DOCS/03_technical/trading/architecture/`](DOCS/03_technical/trading/architecture/)
-  - Implementation: [`DOCS/03_technical/trading/implementation/`](DOCS/03_technical/trading/implementation/)
-  - Testing: [`DOCS/03_technical/trading/testing/`](DOCS/03_technical/trading/testing/)
-  - Operations: [`DOCS/03_technical/trading/operations/`](DOCS/03_technical/trading/operations/)
+- **Trading Reference**: [Trading Reference](README.md)
+- **Trading Technical Docs**: [`03_technical/trading/README.md`](../../03_technical/trading/README.md)
+  - Architecture: [`03_technical/trading/architecture/`](../../03_technical/trading/architecture/) (no README.md)
+  - Implementation: [`03_technical/trading/implementation/`](../../03_technical/trading/implementation/) (no README.md)
+  - Testing: [`03_technical/trading/testing/`](../../03_technical/trading/testing/) (no README.md)
+  - Operations: [`03_technical/trading/operations/`](../../03_technical/trading/operations/) (no README.md)
 
 ### General Documentation
-- **Configuration Guide**: [`DOCS/01_tutorials/configuration/`](DOCS/01_tutorials/configuration/)
-- **Training Guide**: [`DOCS/01_tutorials/training/`](DOCS/01_tutorials/training/)
-- **Architecture Docs**: [`DOCS/02_reference/`](DOCS/02_reference/)
-- **Documentation Index**: [`DOCS/INDEX.md`](DOCS/INDEX.md)
+- **Configuration Guide**: [`01_tutorials/configuration/`](../../01_tutorials/configuration/)
+- **Training Guide**: [`01_tutorials/training/`](../../01_tutorials/training/)
+- **Architecture Docs**: [`02_reference/`](../)
+- **Documentation Index**: [`INDEX.md`](../../INDEX.md)
 
 ---
 

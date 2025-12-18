@@ -104,9 +104,7 @@ Minimal test cases verified:
 **Solution**: Implemented fail-fast assertion with full SHA256 hash for maximum integrity and early bug detection.
 
 **Files Changed**:
-- `TRAINING/utils/reproducibility_tracker.py` - Fail-fast digest computation
-- `TRAINING/utils/metrics.py` - Updated comments for full SHA256
-- `DOCS/03_technical/telemetry/DIFF_TELEMETRY.md` - Updated algorithm documentation
+- `03_technical/implementation/training_utils/INTERNAL/` - Updated algorithm documentation
 
 **Key Changes**:
 

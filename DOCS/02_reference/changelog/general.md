@@ -289,7 +289,7 @@ See [`DOCS/LEGAL_INDEX.md`](../../LEGAL_INDEX.md) for complete legal documentati
   - **Policy:** Licensing scoped to business unit/desk, not parent company total headcount
 - Enhanced copyright headers across codebase (2025-2026 Fox ML Infrastructure LLC)
 
-See [`COMMERCIAL_LICENSE.md`](../../../../COMMERCIAL_LICENSE.md) and [`LEGAL/SUBSCRIPTIONS.md`](../../../../LEGAL/SUBSCRIPTIONS.md) for complete pricing details.
+See [`COMMERCIAL_LICENSE.md`](../../../COMMERCIAL_LICENSE.md) and [`LEGAL/SUBSCRIPTIONS.md`](../../../LEGAL/SUBSCRIPTIONS.md) for complete pricing details.
 
 ---
 

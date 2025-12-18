@@ -9,7 +9,7 @@ The `DATA_PROCESSING` module provides tools for transforming raw market data int
 **Module Location:** `DATA_PROCESSING/`
 
 **Related Documentation:**
-- **[Module README](../../../DATA_PROCESSING/README.md)** - Complete module overview and quick start
+- **[Module README](../../01_tutorials/pipelines/DATA_PROCESSING_README.md)** - Complete module overview and quick start
 - **[Data Processing Walkthrough](../../01_tutorials/pipelines/DATA_PROCESSING_WALKTHROUGH.md)** - Step-by-step tutorial
 - **[Pipeline Reference](../systems/PIPELINE_REFERENCE.md)** - Pipeline workflows
 
@@ -413,7 +413,7 @@ mem_mgr.check_memory("After processing")
 
 ## See Also
 
-- **[Module README](../../../DATA_PROCESSING/README.md)** - Complete module documentation
+- **[Module README](../../01_tutorials/pipelines/DATA_PROCESSING_README.md)** - Complete module documentation
 - **[Data Processing Walkthrough](../../01_tutorials/pipelines/DATA_PROCESSING_WALKTHROUGH.md)** - Step-by-step tutorial
 - **[Pipeline Reference](../systems/PIPELINE_REFERENCE.md)** - Pipeline workflows
 - **[Feature Engineering Tutorial](../../01_tutorials/pipelines/FEATURE_ENGINEERING_TUTORIAL.md)** - Advanced feature creation

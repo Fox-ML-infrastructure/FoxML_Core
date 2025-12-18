@@ -191,7 +191,7 @@ Run with `lookback_budget_minutes: 240` and verify:
 ## Related Documentation
 
 - [Single Source of Truth Changelog](../../02_reference/changelog/2025-12-13-single-source-of-truth.md)
-- [POST_PRUNE Invariant Check](../../../../TRAINING/utils/POST_PRUNE_INVARIANT_CHECK.md)
-- [XD Pattern Fix Summary](../../../../TRAINING/utils/XD_PATTERN_FIX_SUMMARY.md)
-- [Gatekeeper Lookback Fix](../../../../TRAINING/utils/GATEKEEPER_LOOKBACK_FIX.md)
-- [Lookback Inference Consistency Fix](../../../../TRAINING/utils/LOOKBACK_INFERENCE_CONSISTENCY_FIX.md)
+- [POST_PRUNE Invariant Check](../../../../03_technical/implementation/training_utils/INTERNAL/)
+- [XD Pattern Fix Summary](../../../../03_technical/implementation/training_utils/INTERNAL/)
+- [Gatekeeper Lookback Fix](../../../../03_technical/implementation/training_utils/INTERNAL/)
+- [Lookback Inference Consistency Fix](../../../../03_technical/implementation/training_utils/INTERNAL/)

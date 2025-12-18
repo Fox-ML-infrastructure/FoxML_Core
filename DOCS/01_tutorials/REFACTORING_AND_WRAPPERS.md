@@ -391,7 +391,7 @@ from TRAINING.models.specialized_models import train_model
 - **[Config Basics](configuration/CONFIG_BASICS.md)** - Configuration system used by refactored modules
 
 ### Code Structure
-- **[TRAINING Module README](../training/TRAINING_README.md)** - Overview of the TRAINING module structure
+- **[TRAINING Module README](training/TRAINING_README.md)** - Overview of the TRAINING module structure
 - **[Architecture Overview](../00_executive/ARCHITECTURE_OVERVIEW.md)** - System architecture including modular design
 
 ---

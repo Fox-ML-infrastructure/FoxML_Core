@@ -247,21 +247,7 @@ if isinstance(feature_df, pd.DataFrame):
   - All stages have boundary assertions
 
 ### Supporting Changes
-- `TRAINING/utils/resolved_config.py`: Pre-enforcement purge guard, `canonical_lookback_map` parameter
-- `TRAINING/utils/cross_sectional_data.py`: Order drift clamping
-
-## Documentation
-
-### Design Documents
-- `TRAINING/utils/SST_ENFORCEMENT_DESIGN.md`: Complete design specification
-- `TRAINING/utils/TYPE_BOUNDARY_WIRING_COMPLETE.md`: Type boundary wiring details
-- `TRAINING/utils/BOUNDARY_ASSERTIONS_COMPLETE.md`: Boundary assertions details
-- `TRAINING/utils/SST_IMPLEMENTATION_COVERAGE.md`: Implementation coverage matrix
-
-### Fix Documents
-- `TRAINING/utils/CANONICAL_MAP_SIGNATURE_FIX.md`: Canonical map parameter fix
-- `TRAINING/utils/PRE_ENFORCEMENT_PURGE_INFLATION_FIX.md`: Pre-enforcement purge guard
-- `TRAINING/utils/ORDERED_FINGERPRINT_AND_EXACT_EQUALITY_FIX.md`: Ordered fingerprints
+- `03_technical/implementation/training_utils/INTERNAL/`: Ordered fingerprints
 
 ## Verification
 

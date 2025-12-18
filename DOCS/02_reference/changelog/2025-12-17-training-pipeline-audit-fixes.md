@@ -182,25 +182,7 @@ This changelog documents critical fixes to training pipeline contract breaks acr
 ## Files Changed Summary
 
 **Core Fixes:**
-- `TRAINING/utils/sst_contract.py` - Family normalization, tracker adapter
-- `TRAINING/common/runtime_policy.py` - Use SST normalization
-- `TRAINING/training_strategies/utils.py` - Delegate to SST contract
-- `TRAINING/training_strategies/training.py` - Preflight, routing, repro tracking, _pkg_ver
-- `TRAINING/target_router.py` - Swing target pattern
-- `TRAINING/orchestration/training_plan_consumer.py` - 0 jobs error
-- `TRAINING/orchestration/intelligent_trainer.py` - Routing plan consumption, symbol-specific
-- `TRAINING/training_strategies/data_preparation.py` - Feature pipeline threshold & diagnostics
-- `TRAINING/utils/reproducibility_tracker.py` - Defensive string/Enum handling
-
-**Documentation:**
-- `docs/audit/fix-training-pipeline-audit-fixes.md` - Consolidated summary with verification checklist
-- `scripts/verify_training_pipeline_fixes.sh` - Automated verification script
-
----
-
-## Verification
-
-See `docs/audit/fix-training-pipeline-audit-fixes.md` for complete verification checklist.
+- `03_technical/implementation/training_utils/INTERNAL/` for complete verification checklist.
 
 **Quick Verification:**
 ```bash

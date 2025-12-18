@@ -219,8 +219,8 @@ This generates:
 
 ## Related Documentation
 
-- [Reproducibility Structure](03_technical/implementation/REPRODUCIBILITY_STRUCTURE.md)
-- [Reproducibility API](03_technical/implementation/REPRODUCIBILITY_API.md)
+- [Reproducibility Structure](../../03_technical/implementation/REPRODUCIBILITY_STRUCTURE.md)
+- [Reproducibility API](../../03_technical/implementation/REPRODUCIBILITY_API.md)
 
 ---
 

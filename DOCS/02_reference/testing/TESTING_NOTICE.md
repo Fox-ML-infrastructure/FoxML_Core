@@ -98,7 +98,7 @@ Recent improvements:
   2. Repair environment: `conda install -c conda-forge readline=8.2` (or `conda update readline`)
   3. If needed: `conda install -c conda-forge ncurses`
 - **Prevention**: System sets `TERM=dumb` and `SHELL=/usr/bin/bash` to mitigate, but Conda conflicts can still occur
-- See [Known Issues](DOCS/02_reference/KNOWN_ISSUES.md) for details
+- See [Known Issues](../KNOWN_ISSUES.md) for details
 
 ### GPU Acceleration
 - **XGBoost 3.1+**: If you see `gpu_id has been removed since 3.1` errors, ensure you're using the latest code (fixed 2025-12-12)
@@ -112,16 +112,16 @@ Recent improvements:
     - **Most Likely Causes**: Text features without `text_features` parameter, high cardinality categoricals (ID columns), depth > 8, or evaluation overhead
     - **Fixes Applied**: Added `metric_period: 50` to configs to reduce evaluation overhead
     - **Checklist**: Drop ID columns, define text features explicitly, keep depth ≤ 8, use `metric_period` if using eval_set
-    - **Status**: Being actively investigated. See [Known Issues](DOCS/02_reference/KNOWN_ISSUES.md) for detailed troubleshooting
+    - **Status**: Being actively investigated. See [Known Issues](../KNOWN_ISSUES.md) for detailed troubleshooting
 - **GPU Detection**: If GPU isn't being used, check logs for `⚠️ [Model] GPU test failed` messages and verify CUDA drivers are installed
-- See [GPU Setup Guide](DOCS/01_tutorials/setup/GPU_SETUP.md) and [Known Issues](DOCS/02_reference/KNOWN_ISSUES.md) for detailed troubleshooting
+- See [GPU Setup Guide](../../01_tutorials/setup/GPU_SETUP.md) and [Known Issues](../KNOWN_ISSUES.md) for detailed troubleshooting
 
 ## Reporting Issues
 
 If you encounter issues:
 1. Check `CHANGELOG.md` for recent changes
 2. Review detailed changelog: `DOCS/02_reference/changelog/README.md`
-3. Check [Known Issues & Limitations](DOCS/02_reference/KNOWN_ISSUES.md) for known problems and workarounds
+3. Check [Known Issues & Limitations](../KNOWN_ISSUES.md) for known problems and workarounds
 4. Report with sufficient detail (config, error messages, environment, GPU status)
 
 ---

@@ -229,17 +229,7 @@ intelligent_training:
 - `TRAINING/ranking/target_ranker.py` - Added skip reason tracking
 - `TRAINING/ranking/target_routing.py` - Fixed routing reason strings, added skip reasons to JSON
 - `TRAINING/orchestration/intelligent_trainer.py` - Fixed config loading, added target exclusion
-- `TRAINING/utils/leakage_budget.py` - Added calendar features
-
-### Configuration Changes
-- `CONFIG/experiments/e2e_ranking_test.yaml` - Added exclude_target_patterns example
-- `CONFIG/experiments/e2e_full_targets_test.yaml` - Added exclude_target_patterns
-
-### Documentation Changes
-- `README.md` - Added pricing anchor
-- `LEGAL/SUBSCRIPTIONS.md` - Added pricing anchor
-- `COMMERCIAL_LICENSE.md` - Added pricing anchor
-- `LEGAL/COMMERCIAL_USE.md` - Added pricing anchor
+- `03_technical/implementation/training_utils/INTERNAL/` - Added pricing anchor
 
 ---
 

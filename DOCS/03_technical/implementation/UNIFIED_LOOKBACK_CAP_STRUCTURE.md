@@ -2,7 +2,7 @@
 
 **Date**: 2025-12-13  
 **Goal**: Ensure all phases follow the same structure for consistency and maintainability.  
-**Related**: [SST Enforcement Design](../../../TRAINING/utils/SST_ENFORCEMENT_DESIGN.md) | [Feature Selection Lookback Cap Integration](FEATURE_SELECTION_LOOKBACK_CAP_INTEGRATION.md)
+**Related**: [SST Enforcement Design](03_technical/implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md) | [Feature Selection Lookback Cap Integration](FEATURE_SELECTION_LOOKBACK_CAP_INTEGRATION.md)
 
 ## Standard Structure (apply_lookback_cap)
 
@@ -44,7 +44,7 @@ All lookback cap enforcement phases should follow this structure:
 - All phases convert to `EnforcedFeatureSet` and slice X immediately using `enforced.features`
 - Boundary assertions validate featureset integrity at all key boundaries
 
-See [SST Enforcement Design](../../../TRAINING/utils/SST_ENFORCEMENT_DESIGN.md) for complete details.
+See [SST Enforcement Design](03_technical/implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md) for complete details.
 
 ## Refactoring Status
 

@@ -292,7 +292,7 @@ intelligent_training:
 ## Related Documentation
 
 - [Intelligent Training Tutorial](./INTELLIGENT_TRAINING_TUTORIAL.md) - Full pipeline overview
-- [Feature Selection Guide](./FEATURE_SELECTION.md) - How feature selection works
+- [Feature Selection Tutorial](./FEATURE_SELECTION_TUTORIAL.md) - How feature selection works
 - [Configuration Reference](../../02_reference/configuration/) - Detailed config options
 - [Execution Order Documents](../../03_technical/implementation/) - Pipeline execution details
 

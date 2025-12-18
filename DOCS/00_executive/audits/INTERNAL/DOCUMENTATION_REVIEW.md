@@ -40,10 +40,10 @@ The review process focused on:
 
 Detailed audit reports documenting specific changes are available in:
 
-- **[Documentation Accuracy Check](DOCS/00_executive/audits/DOCS_ACCURACY_CHECK.md)** - Factual corrections and qualifications
-- **[Unverified Claims Analysis](DOCS/00_executive/audits/DOCS_UNVERIFIED_CLAIMS.md)** - Claims requiring test coverage or benchmarks
-- **[Marketing Language Removal](DOCS/00_executive/audits/MARKETING_LANGUAGE_REMOVED.md)** - Removed vague or unverified terms
-- **[Dishonest Statements Fixed](DOCS/00_executive/audits/DISHONEST_STATEMENTS_FIXED.md)** - Resolved contradictions and inconsistencies
+- **[Documentation Accuracy Check](../DOCS_ACCURACY_CHECK.md)** - Factual corrections and qualifications
+- **[Unverified Claims Analysis](../DOCS_UNVERIFIED_CLAIMS.md)** - Claims requiring test coverage or benchmarks
+- **[Marketing Language Removal](../MARKETING_LANGUAGE_REMOVED.md)** - Removed vague or unverified terms
+- **[Dishonest Statements Fixed](../DISHONEST_STATEMENTS_FIXED.md)** - Resolved contradictions and inconsistencies
 
 ## Current Documentation Status
 

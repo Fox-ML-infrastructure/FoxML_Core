@@ -83,8 +83,8 @@ Step-by-step guides for common tasks. See [01_tutorials/README.md](01_tutorials/
 - [Walk-Forward Validation](01_tutorials/training/WALKFORWARD_VALIDATION.md) - Validation workflow
 - [Feature Selection Tutorial](01_tutorials/training/FEATURE_SELECTION_TUTORIAL.md) - Manual feature selection
 - [Experiments Operations](01_tutorials/training/EXPERIMENTS_OPERATIONS.md) - Step-by-step operations
-- ⚠️ **Legacy**: [EXPERIMENTS Workflow](../LEGACY/EXPERIMENTS_WORKFLOW.md) - **DEPRECATED**: Use [Intelligent Training Pipeline](training/INTELLIGENT_TRAINING_TUTORIAL.md) instead
-- ⚠️ **Legacy**: [EXPERIMENTS Quick Start](../LEGACY/EXPERIMENTS_QUICK_START.md) - **DEPRECATED**: Use [Intelligent Training Tutorial](training/INTELLIGENT_TRAINING_TUTORIAL.md) instead
+- ⚠️ **Legacy**: [EXPERIMENTS Workflow](LEGACY/EXPERIMENTS_WORKFLOW.md) - **DEPRECATED**: Use [Intelligent Training Pipeline](01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) instead
+- ⚠️ **Legacy**: [EXPERIMENTS Quick Start](LEGACY/EXPERIMENTS_QUICK_START.md) - **DEPRECATED**: Use [Intelligent Training Tutorial](01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) instead
 - [Phase 1: Feature Engineering](01_tutorials/training/PHASE1_FEATURE_ENGINEERING.md) - Phase 1 documentation
 
 ### Configuration
@@ -165,7 +165,7 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 ### Research
 - [Intelligence Layer Overview](03_technical/research/INTELLIGENCE_LAYER.md) - Complete overview of intelligent training pipeline decision-making and automation
 - [Leakage Controls Evaluation](03_technical/architecture/LEAKAGE_CONTROLS_EVALUATION.md) - Leakage controls structural evaluation
-- [SST Enforcement Design](03_technical/implementation/training_utils/SST_ENFORCEMENT_DESIGN.md) - **NEW**: EnforcedFeatureSet contract eliminates split-brain across all training paths
+- [SST Enforcement Design](03_technical/implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md) - **NEW**: EnforcedFeatureSet contract eliminates split-brain across all training paths
 - [Leakage Canary Test Guide](03_technical/testing/LEAKAGE_CANARY_TEST_GUIDE.md) - Pipeline integrity validation
 - [Feature Importance Methodology](03_technical/research/FEATURE_IMPORTANCE_METHODOLOGY.md) - Feature importance research
 - [Feature Importance Stability](03_technical/implementation/FEATURE_IMPORTANCE_STABILITY.md) - Feature importance stability tracking and analysis (see also Systems Reference)
@@ -225,7 +225,7 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 - [Reproducibility Improvements](03_technical/implementation/REPRODUCIBILITY_IMPROVEMENTS.md) - **NEW**: Summary of reproducibility improvements
 - [Reproducibility Self-Test](03_technical/implementation/REPRODUCIBILITY_SELF_TEST.md) - **NEW**: Self-test checklist for validation
 - [Strategy Updates](03_technical/implementation/STRATEGY_UPDATES.md) - Training strategy updates
-- ⚠️ **Legacy**: [Experiments Implementation](../LEGACY/EXPERIMENTS_IMPLEMENTATION.md) - **DEPRECATED**: See [Intelligent Training Tutorial](../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) instead
+- ⚠️ **Legacy**: [Experiments Implementation](LEGACY/EXPERIMENTS_IMPLEMENTATION.md) - **DEPRECATED**: See [Intelligent Training Tutorial](01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) instead
 - [Pressure Test Plan](03_technical/implementation/PRESSURE_TEST_PLAN.md) - Testing plan
 - [Performance Optimization](03_technical/implementation/PERFORMANCE_OPTIMIZATION.md) - Optimization work
 - [Adding Proprietary Models](03_technical/implementation/ADDING_PROPRIETARY_MODELS.md) - Using BaseModelTrainer to add custom models
@@ -248,7 +248,7 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 - [Daily Testing](03_technical/testing/DAILY_TESTING.md) - Daily test procedures
 
 ### Operations
-- ⚠️ **Legacy**: [Training Pipeline Debugging Status](../LEGACY/STATUS_DEBUGGING.md) - **OUTDATED**: Last updated 2025-12-09, issues resolved. See [CHANGELOG.md](../CHANGELOG.md) for current status
+- ⚠️ **Legacy**: [Training Pipeline Debugging Status](LEGACY/STATUS_DEBUGGING.md) - **OUTDATED**: Last updated 2025-12-09, issues resolved. See [CHANGELOG.md](../CHANGELOG.md) for current status
 - [Journald Logging](03_technical/operations/JOURNALD_LOGGING.md) - Logging setup
 - [Restore from Logs](03_technical/operations/RESTORE_FROM_LOGS.md) - Recovery procedures
 - [Avoid Long Runs](03_technical/operations/AVOID_LONG_RUNS.md) - Performance tips

@@ -119,7 +119,7 @@ class TrendAnalyzer:
         self,
         reproducibility_dir: Path,
         half_life_days: float = 7.0,
-        min_runs_for_trend: int = 5,
+        min_runs_for_trend: int = 2,  # Minimum 2 runs for trend (slope requires 2 points)
         suspicious_slope_threshold: float = -0.01  # Alert if slope < -0.01 per day
     ):
         """
@@ -128,7 +128,7 @@ class TrendAnalyzer:
         Args:
             reproducibility_dir: Path to REPRODUCIBILITY directory
             half_life_days: Exponential decay half-life in days (default: 7)
-            min_runs_for_trend: Minimum runs required for trend fitting (default: 5)
+            min_runs_for_trend: Minimum runs required for trend fitting (default: 2, needs at least 2 points for slope)
             suspicious_slope_threshold: Alert threshold for negative slope (default: -0.01/day)
         """
         self.reproducibility_dir = Path(reproducibility_dir)
@@ -491,12 +491,14 @@ class TrendAnalyzer:
         ]
         
         if len(valid_runs) < self.min_runs_for_trend:
+            # Use "first_run" status for single runs to distinguish from multiple insufficient runs
+            status = "first_run" if len(valid_runs) == 1 else "insufficient_runs"
             return TrendResult(
                 series_key=series_key,
                 view=view,
                 metric_name=metric_field,
                 n_runs=len(valid_runs),
-                status="insufficient_runs",
+                status=status,
                 half_life_days=self.half_life_days
             )
         
@@ -644,13 +646,21 @@ class TrendAnalyzer:
             
             # Check minimum runs requirement
             if len(runs) < self.min_runs_for_trend:
-                logger.info(
-                    f"SKIP(series={series_key.stage}:{series_key.target}, "
-                    f"reason=insufficient_runs, n={len(runs)}, min={self.min_runs_for_trend})"
-                )
+                if len(runs) == 1:
+                    # Single run: log as first run (expected for new series)
+                    logger.debug(
+                        f"SKIP(series={series_key.stage}:{series_key.target}, "
+                        f"reason=first_run, n=1, min={self.min_runs_for_trend}). "
+                        f"Trends will be available after {self.min_runs_for_trend - 1} more run(s)."
+                    )
+                else:
+                    logger.info(
+                        f"SKIP(series={series_key.stage}:{series_key.target}, "
+                        f"reason=insufficient_runs, n={len(runs)}, min={self.min_runs_for_trend})"
+                    )
                 skipped_series.append({
                     'series_key': f"{series_key.stage}:{series_key.target}",
-                    'reason': 'insufficient_runs',
+                    'reason': 'first_run' if len(runs) == 1 else 'insufficient_runs',
                     'n_runs': len(runs),
                     'min_required': self.min_runs_for_trend
                 })

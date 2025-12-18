@@ -9,9 +9,7 @@ This document tracks key cross-references between documentation files to ensure 
   - `TRAINING/utils/telemetry.py` (new)
   - `CONFIG/pipeline/training/safety.yaml` (added `safety.telemetry` section)
 - **References**:
-  - `TRAINING/utils/reproducibility_tracker.py` - Integrated telemetry writer
-  - `DOCS/02_reference/changelog/2025-12-14-telemetry-system.md` - Detailed changelog
-  - `DOCS/03_technical/implementation/REPRODUCIBILITY_STRUCTURE.md` - Reproducibility structure (telemetry follows same structure)
+  - `03_technical/implementation/training_utils/INTERNAL/` - Reproducibility structure (telemetry follows same structure)
   - `CHANGELOG.md` - Root changelog entry
 - **Structure**: Sidecar files in cohort directories, view-level and stage-level rollups
 
@@ -55,18 +53,7 @@ This document tracks key cross-references between documentation files to ensure 
 
 ### Utility Modules
 - **Files**: 
-  - `TRAINING/utils/target_utils.py`
-  - `TRAINING/utils/sklearn_safe.py`
-- **Documented in**:
-  - `RANKING_SELECTION_CONSISTENCY.md` - Usage guide
-  - `MODULE_REFERENCE.md` - API reference
-
-## Key Cross-Reference Patterns
-
-### Configuration Files
-All config files should reference:
-- `MODULAR_CONFIG_SYSTEM.md` - Main config guide
-- `README.md` (configuration) - Overview
+  - `03_technical/implementation/training_utils/INTERNAL/` (configuration) - Overview
 - `USAGE_EXAMPLES.md` - Practical examples
 
 ### Training Pipeline
@@ -102,16 +89,7 @@ All API docs should reference:
   - `CHANGELOG.md` - Added highlights section
   - `changelog/2025-12-12.md` - Complete detailed changelog
 - **Code**:
-  - `TRAINING/utils/cohort_metadata_extractor.py` - **NEW** - Unified metadata extraction utility
-  - `TRAINING/utils/reproducibility_tracker.py` - Major refactor for cohort-aware mode
-  - All pipeline modules use unified extractor
-
-### RESULTS Directory Organization
-- **Structure**: All runs organized in `RESULTS/{cohort_id}/{run_name}/`
-- **Documented in**:
-  - `INTELLIGENT_TRAINING_TUTORIAL.md` - Output structure section
-  - `REPRODUCIBILITY_STRUCTURE.md` - Complete structure guide
-  - `COHORT_AWARE_REPRODUCIBILITY.md` - Storage structure section
+  - `03_technical/implementation/training_utils/INTERNAL/` - Storage structure section
 
 ### Integrated Config Backups
 - **New Location**: `RESULTS/{cohort_id}/{run_name}/backups/` (when `output_dir` provided)
@@ -134,13 +112,13 @@ When multiple docs cover similar topics, prefer:
 
 ## Legacy Documentation
 
-**Deprecated files moved to `DOCS/LEGACY/`:**
+**Deprecated files moved to `LEGACY/`:**
 - `EXPERIMENTS_WORKFLOW.md` - Replaced by Intelligent Training Pipeline
 - `EXPERIMENTS_QUICK_START.md` - Replaced by Intelligent Training Tutorial
 - `EXPERIMENTS_IMPLEMENTATION.md` - Replaced by current implementation docs
 - `STATUS_DEBUGGING.md` - Outdated debugging status (2025-12-09)
 
-See `DOCS/LEGACY/README.md` for migration guide.
+See `LEGACY/README.md` for migration guide.
 
 ## Cross-Reference Updates (2025-12-14)
 
@@ -183,19 +161,8 @@ See `DOCS/LEGACY/README.md` for migration guide.
 
 **SST Enforcement Design Implementation:**
 - **Files**:
-  - `TRAINING/utils/SST_ENFORCEMENT_DESIGN.md` - Complete design specification
-  - `TRAINING/utils/SST_IMPLEMENTATION_COVERAGE.md` - Implementation coverage matrix
-  - `TRAINING/utils/TYPE_BOUNDARY_WIRING_COMPLETE.md` - Type boundary wiring details
-  - `TRAINING/utils/BOUNDARY_ASSERTIONS_COMPLETE.md` - Boundary assertions details
-  - `DOCS/02_reference/changelog/2025-12-13-sst-enforcement-design.md` - Complete changelog
-  - `DOCS/03_technical/fixes/2025-12-13-sst-enforcement-design.md` - Technical fix documentation
-- **References**:
-  - `INDEX.md` - Added to implementation and architecture sections
-  - `03_technical/README.md` - Added to fixes section
-  - `03_technical/implementation/README.md` - Added to core systems section
-  - `CHANGELOG.md` - Added highlights section
-  - `changelog/README.md` - Added index entry
-  - `fixes/README.md` - Added to recent fixes
+  - `03_technical/implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md` - Complete design specification
+  - `03_technical/implementation/training_utils/INTERNAL/` - Added to recent fixes
 - **Related Documentation**:
   - Links to Single Source of Truth fix
   - Links to Fingerprint Tracking

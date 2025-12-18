@@ -3039,7 +3039,7 @@ class ReproducibilityTracker:
                             trend_analyzer = TrendAnalyzer(
                                 reproducibility_dir=repro_base,
                                 half_life_days=7.0,
-                                min_runs_for_trend=3
+                                min_runs_for_trend=2  # Minimum 2 runs for trend (slope requires 2 points)
                             )
                             
                             # Analyze STRICT series
@@ -3527,7 +3527,7 @@ class ReproducibilityTracker:
                     trend_analyzer = TrendAnalyzer(
                         reproducibility_dir=repro_base,
                         half_life_days=7.0,
-                        min_runs_for_trend=3  # Lower threshold for per-run analysis
+                        min_runs_for_trend=2  # Minimum 2 runs for trend (slope requires 2 points)
                     )
                     
                     # Analyze STRICT series for this specific target
@@ -3593,7 +3593,7 @@ class ReproducibilityTracker:
     def generate_trend_summary(
         self,
         view: str = "STRICT",
-        min_runs_for_trend: int = 3
+        min_runs_for_trend: int = 2  # Minimum 2 runs for trend (slope requires 2 points)
     ) -> Dict[str, Any]:
         """
         Generate trend summary for all series in the reproducibility directory.

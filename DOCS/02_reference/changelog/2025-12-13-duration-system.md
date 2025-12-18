@@ -18,12 +18,7 @@ For other dates, see the [changelog index](README.md).
 - **Explicit Bar Parsing**: `parse_duration_bars()` removes ambiguity between seconds and bars
 - **Interval-Aware Strictness**: Primary mechanism uses data resolution for purge/lookback enforcement
 - **Files**:
-  - `TRAINING/utils/duration_parser.py` - Core duration system
-  - `TRAINING/utils/audit_helpers.py` - Helper functions for downstream components
-  - `TRAINING/utils/tests/test_duration_parser.py` - Comprehensive test suite
-  - `TRAINING/utils/DURATION_PARSING_GUIDE.md` - Usage guide
-  - `TRAINING/utils/DURATION_SCHEMA_GUIDE.md` - Schema best practices
-  - `TRAINING/utils/DURATION_SYSTEM_FINAL.md` - Implementation summary
+  - `03_technical/implementation/training_utils/INTERNAL/` - Implementation summary
 
 **Key Features**:
 - ✅ Canonical representation: Everything becomes `Duration` before comparison
@@ -40,13 +35,7 @@ For other dates, see the [changelog index](README.md).
 - **Summary Lines**: `❌ AUDIT STATUS: NON-AUDITABLE` in training output
 - **Downstream Helpers**: `is_auditable()`, `require_auditable()` functions for components
 - **Files**:
-  - `TRAINING/utils/audit_enforcer.py` - Sticky markers in metadata
-  - `TRAINING/utils/audit_helpers.py` - Helper functions
-
-### Documentation Review Statement
-
-**Initial Documentation Review Completed**
-- **New Document**: `DOCUMENTATION_REVIEW.md` - Public statement of documentation review
+  - `03_technical/implementation/training_utils/INTERNAL/` - Public statement of documentation review
 - **Review Objectives**: Accuracy, realistic statements, removal of marketing language
 - **Key Changes**: Model count corrections, qualified language, consistency fixes
 - **Status**: Initial review completed, ongoing standards established
@@ -69,7 +58,7 @@ For other dates, see the [changelog index](README.md).
   2. Explicit time suffixes (`_15m`, `_30m`, `_1d`, `_24h`) - **checked first**
   3. Keyword heuristics (`.*day.*`) - **fallback only**
 - **Impact**: Eliminates false positives for features with explicit short lookbacks
-- **Documentation**: `TRAINING/utils/LOOKBACK_DETECTION_FIX.md`
+- **Documentation**: `03_technical/implementation/training_utils/INTERNAL/`
 
 ### Audit Rule Enforcement
 
@@ -136,10 +125,7 @@ For other dates, see the [changelog index](README.md).
 ### New Documentation Files
 
 - `DOCUMENTATION_REVIEW.md` - Documentation review statement
-- `TRAINING/utils/DURATION_PARSING_GUIDE.md` - Duration system usage guide
-- `TRAINING/utils/DURATION_SCHEMA_GUIDE.md` - Schema best practices for bar encoding
-- `TRAINING/utils/DURATION_SYSTEM_FINAL.md` - Complete implementation summary
-- `TRAINING/utils/LOOKBACK_DETECTION_FIX.md` - Lookback detection precedence fix details
+- `03_technical/implementation/training_utils/INTERNAL/` - Lookback detection precedence fix details
 
 ### Updated Documentation
 

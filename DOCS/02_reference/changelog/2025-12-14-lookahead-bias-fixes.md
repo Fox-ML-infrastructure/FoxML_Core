@@ -145,8 +145,8 @@ Per-experiment control available in experiment config files (e.g., `CONFIG/exper
 
 ## Related Documentation
 
-- [Look-Ahead Bias Fix Plan](../../03_technical/fixes/LOOKAHEAD_BIAS_FIX_PLAN.md) - Complete analysis and fix details
-- [Safe Implementation Plan](../../03_technical/fixes/LOOKAHEAD_BIAS_SAFE_IMPLEMENTATION.md) - Implementation strategy and migration guide
+- ~~[Look-Ahead Bias Fix Plan](../../03_technical/fixes/LOOKAHEAD_BIAS_FIX_PLAN.md)~~ - *File not found, reference removed*
+- ~~[Safe Implementation Plan](../../03_technical/fixes/LOOKAHEAD_BIAS_SAFE_IMPLEMENTATION.md)~~ - *File not found, reference removed*
 
 ## Commits
 

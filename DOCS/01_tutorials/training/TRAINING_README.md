@@ -4,19 +4,19 @@ Core training infrastructure for FoxML Core.
 
 ## Documentation
 
-**All training documentation has been moved to the `DOCS/` folder for better organization.**
+**All training documentation is in the `DOCS/` folder.**
 
-See the [Training Documentation](../../DOCS/INDEX.md#tier-b-tutorials--walkthroughs) for complete guides.
+See the [Training Documentation](../../INDEX.md#tier-b-tutorials--walkthroughs) for complete guides.
 
 ## Quick Links
 
-- [Intelligent Training Tutorial](../../DOCS/01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Automated target ranking and feature selection
-- [Model Training Guide](../../DOCS/01_tutorials/training/MODEL_TRAINING_GUIDE.md) - Manual training workflow
-- [Feature Selection Tutorial](../../DOCS/01_tutorials/training/FEATURE_SELECTION_TUTORIAL.md) - Feature selection workflow
-- [Walk-Forward Validation](../../DOCS/01_tutorials/training/WALKFORWARD_VALIDATION.md) - Validation workflow
-- [Experiments Workflow](../../DOCS/01_tutorials/training/EXPERIMENTS_WORKFLOW.md) - 3-phase training workflow
-- [Training Optimization](../../DOCS/03_technical/implementation/TRAINING_OPTIMIZATION_GUIDE.md) - Optimization guide
-- [Feature Selection Implementation](../../DOCS/03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Implementation details
+- [Intelligent Training Tutorial](INTELLIGENT_TRAINING_TUTORIAL.md) - Automated target ranking and feature selection
+- [Model Training Guide](MODEL_TRAINING_GUIDE.md) - Manual training workflow
+- [Feature Selection Tutorial](FEATURE_SELECTION_TUTORIAL.md) - Feature selection workflow
+- [Walk-Forward Validation](WALKFORWARD_VALIDATION.md) - Validation workflow
+- [Experiments Workflow](../../LEGACY/EXPERIMENTS_WORKFLOW.md) - 3-phase training workflow (Legacy)
+- [Training Optimization](../../03_technical/implementation/TRAINING_OPTIMIZATION_GUIDE.md) - Optimization guide
+- [Feature Selection Implementation](../../03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Implementation details
 
 ## Directory Structure
 
@@ -107,8 +107,7 @@ TRAINING/
   - `multi_model_feature_selection.py` → `multi_model_feature_selection/` folder
   - `intelligent_trainer.py` → `intelligent_trainer/` folder
   - `leakage_detection.py` → `leakage_detection/` folder
-- **Backward compatibility maintained** via `TRAINING/utils/__init__.py` re-exports
-- See **[Detailed Changelog](../../02_reference/changelog/2025-12-18-code-modularization.md)** for complete details
+- **Backward compatibility maintained** via `03_technical/implementation/training_utils/INTERNAL/)** for complete details
 
 ### 2025-12-09: Initial Large File Splits
 
@@ -128,4 +127,4 @@ TRAINING/
 - ✅ **Largest file now**: 2,542 lines (cohesive subsystem, not monolithic)
 - ✅ **Most files**: 500-1,400 lines (focused responsibilities)
 
-For detailed documentation on each component, see the [Training Documentation](../../DOCS/INDEX.md#tier-b-tutorials--walkthroughs).
+For detailed documentation on each component, see the [Training Documentation](../../INDEX.md#tier-b-tutorials--walkthroughs).

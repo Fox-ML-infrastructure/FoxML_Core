@@ -56,10 +56,10 @@ IP Assignment Agreement has been signed, legally assigning all intellectual prop
 
 ## Related Documentation
 
-- [IP Assignment Agreement](../LEGAL/IP_ASSIGNMENT_AGREEMENT.md) - Source agreement
-- [Signed Agreement](../LEGAL/IP_ASSIGNMENT_AGREEMENT_SIGNED.pdf) - ✅ Signed copy
-- [Signing Instructions](../LEGAL/ip_assignment_docs/IP_ASSIGNMENT_SIGNING_INSTRUCTIONS.md) - Signing guide
-- [IP Ownership Clarification](../LEGAL/IP_OWNERSHIP_CLARIFICATION.md) - IP ownership framework
+- [IP Assignment Agreement](../../../LEGAL/IP_ASSIGNMENT_AGREEMENT.md) - Source agreement (if exists)
+- [Signed Agreement](../../../LEGAL/IP_ASSIGNMENT_AGREEMENT_SIGNED.pdf) - ✅ Signed copy (if exists)
+- [Signing Instructions](../../../LEGAL/ip_assignment_docs/IP_ASSIGNMENT_SIGNING_INSTRUCTIONS.md) - Signing guide (if exists)
+- [IP Ownership Clarification](../../../LEGAL/IP_OWNERSHIP_CLARIFICATION.md) - IP ownership framework (if exists)
 
 ---
 

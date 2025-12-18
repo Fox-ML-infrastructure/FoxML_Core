@@ -1,6 +1,6 @@
 # Single Source of Truth for Lookback Computation - 2025-12-13
 
-**Related**: [SST Enforcement Design](../../../TRAINING/utils/SST_ENFORCEMENT_DESIGN.md) | [Single Source of Truth Fix Summary](../../03_technical/fixes/2025-12-13-single-source-of-truth-complete.md) | [POST_PRUNE Invariant Check](../../03_technical/fixes/2025-12-13-post-prune-invariant-check.md) | [XD Pattern Fix](../../03_technical/fixes/2025-12-13-xd-pattern-fix.md)
+**Related**: [SST Enforcement Design](../../03_technical/implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md) | [Single Source of Truth Fix Summary](../../03_technical/fixes/2025-12-13-single-source-of-truth-fix.md) | [SST Enforcement Design Document](../../03_technical/fixes/2025-12-13-sst-enforcement-design.md)
 
 ## Overview
 
@@ -214,8 +214,6 @@ No migration required. The fix is automatic and transparent.
 
 ## Related Documentation
 
-- [Single Source of Truth Fix Summary](../../../../TRAINING/utils/SINGLE_SOURCE_OF_TRUTH_COMPLETE.md)
-- [POST_PRUNE Invariant Check](../../../../TRAINING/utils/POST_PRUNE_INVARIANT_CHECK.md)
-- [XD Pattern Fix Summary](../../../../TRAINING/utils/XD_PATTERN_FIX_SUMMARY.md)
-- [Gatekeeper Lookback Fix](../../../../TRAINING/utils/GATEKEEPER_LOOKBACK_FIX.md)
-- [Lookback Inference Consistency Fix](../../../../TRAINING/utils/LOOKBACK_INFERENCE_CONSISTENCY_FIX.md)
+- [SST Enforcement Design](../../03_technical/implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md) - Complete design document
+- [Single Source of Truth Fix](../../03_technical/fixes/2025-12-13-single-source-of-truth-fix.md) - Detailed fix documentation
+- [SST Enforcement Design Document](../../03_technical/fixes/2025-12-13-sst-enforcement-design.md) - Implementation details

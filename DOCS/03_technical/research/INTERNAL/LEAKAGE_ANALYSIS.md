@@ -70,7 +70,7 @@ active_sanitization:
 ```
 
 **See Also:**
-- [Active Sanitization Guide](../implementation/ACTIVE_SANITIZATION.md) - Complete documentation
+- [Active Sanitization Guide](../../implementation/ACTIVE_SANITIZATION.md) - Complete documentation
 
 ### Feature/Target Schema
 
@@ -116,7 +116,7 @@ safe_features = filter_features_for_target(
 
 The system automatically detects leakage during training and can auto-fix it:
 
-![Leakage detection and auto fixer at work](../images/leakage_detection_auto_fixer.png)
+![Leakage detection and auto fixer at work](../../../images/leakage_detection_auto_fixer.png)
 
 *Leakage detection and auto fixer at work*
 
@@ -230,6 +230,6 @@ This catches obvious leaks (like a feature that's literally the target column) b
 - [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Complete pipeline guide
 - [Safety & Leakage Configs](../../02_reference/configuration/SAFETY_LEAKAGE_CONFIGS.md) - Leakage detection configuration
 - [Feature & Target Configs](../../02_reference/configuration/FEATURE_TARGET_CONFIGS.md) - Feature/target configuration guide
-- [Safe Target Pattern](../implementation/SAFE_TARGET_PATTERN_IMPLEMENTATION.md) - Implementation details
-- [Intelligence Layer Overview](INTELLIGENCE_LAYER.md) - Complete intelligence layer overview
+- [Safe Target Pattern](../../implementation/SAFE_TARGET_PATTERN_IMPLEMENTATION.md) - Implementation details (if exists)
+- [Intelligence Layer Overview](../INTELLIGENCE_LAYER.md) - Complete intelligence layer overview
 
