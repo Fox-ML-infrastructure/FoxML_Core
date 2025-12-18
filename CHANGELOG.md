@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-18 Updates (Code Modularization & Refactoring)
+- **Large File Modularization**: Split 7 large files (2,000-6,800 lines) into smaller, maintainable modules. Created 23 new utility/module files including `model_evaluation/`, `reproducibility/`, `diff_telemetry/`, `multi_model_feature_selection/`, `intelligent_trainer/`, and `leakage_detection/` subdirectories. Total: 103 files changed, ~2,000+ lines extracted.
+- **Common Utilities Centralization**: Created 6 new centralized utility modules (`file_utils`, `cache_manager`, `config_hashing`, `process_cleanup`, `path_setup`, `family_constants`) to eliminate duplication across the codebase.
+- **Utils Folder Reorganization**: Reorganized `TRAINING/utils/` into domain-specific subdirectories (`ranking/utils/`, `orchestration/utils/`, `common/utils/`). Maintained full backward compatibility via re-exports.
+- **Import Error Fixes**: Fixed all import errors from refactoring, including missing imports, circular dependencies, and module export issues.
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-18-code-modularization.md)
+
 #### 2025-12-17 Updates (Training Pipeline Audit Fixes)
 - **Training Pipeline Contract Fixes**: Fixed 12 critical contract breaks across family IDs, routing, plan consumption, feature schema, counting/tracking, diff telemetry, and determinism verification. Key fixes: family normalization (XGBoost → xgboost), reproducibility tracking string/Enum handling, preflight filtering for all routes, routing plan DISABLED status respect, symbol-specific route includes all eligible symbols, feature pipeline threshold fix (allowed→present not requested→present), schema mismatch diagnostics with close matches, diff telemetry severity logic (fixed "minor" severity when no changes), and output digests for full determinism verification (metrics_sha256, artifacts_manifest_sha256, predictions_sha256).
 - **Feature Pipeline Improvements**: Fixed feature drop threshold to use allowed→present denominator (prevents false positives when registry intentionally prunes). Added close-match diagnostics for missing allowed features to help diagnose name mismatches.

@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-18 (Code Modularization)** — Major code refactoring: Split 7 large files (2,000-6,800 lines) into modular components, created 23 new utility/module files, reorganized utils folder into domain-specific subdirectories, centralized common utilities (file_utils, cache_manager, config_hashing, etc.), fixed all import errors, maintained full backward compatibility. Total: 103 files changed, ~2,000+ lines extracted.
+  → [View](2025-12-18-code-modularization.md)
+
 - **2025-12-17 (Metric Deltas in Diff Artifacts)** — Fixed empty `metric_deltas` issue. Implemented 3-tier reporting (summary, structured deltas, full metrics), z-score noise detection, impact classification, and proper separation of nondeterminism from regression. All numeric metrics now captured and deltas always computed.
   → [View](2025-12-17-metric-deltas-in-diff-artifacts.md)
 
