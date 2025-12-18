@@ -325,14 +325,26 @@ def compute_cross_sectional_importance(
     
     # Check if we have enough symbols BEFORE attempting cross-sectional ranking
     # This prevents the hard-stop error and allows graceful skip
+    # Minimum: 3 symbols (hard requirement for cross-sectional analysis)
+    # Recommended: 10+ symbols for robust results
+    MIN_SYMBOLS_REQUIRED = 3
+    RECOMMENDED_SYMBOLS = 10
+    
     n_symbols_loaded = len(mtf_data)
-    if n_symbols_loaded < min_cs:
+    if n_symbols_loaded < MIN_SYMBOLS_REQUIRED:
         logger.warning(
             f"⚠️  Cross-sectional importance SKIPPED: insufficient symbols "
-            f"(have {n_symbols_loaded}, need {min_cs}). "
+            f"(have {n_symbols_loaded}, need >= {MIN_SYMBOLS_REQUIRED}). "
             f"Returning zero importance. Use SYMBOL_SPECIFIC mode for single-symbol ranking."
         )
         return pd.Series(0.0, index=candidate_features)
+    
+    # Warn if using fewer than recommended symbols (but proceed)
+    if n_symbols_loaded < RECOMMENDED_SYMBOLS:
+        logger.warning(
+            f"⚠️  Cross-sectional ranking with {n_symbols_loaded} symbols (recommended: >= {RECOMMENDED_SYMBOLS}). "
+            f"Results may be less robust with fewer symbols."
+        )
     
     # Build panel with candidate features only
     X, y, feature_names, symbols_array, time_vals, resolved_data_config = prepare_cross_sectional_data_for_ranking(

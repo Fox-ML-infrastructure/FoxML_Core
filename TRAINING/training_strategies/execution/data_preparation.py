@@ -142,7 +142,8 @@ def prepare_training_data_cross_sectional(mtf_data: Dict[str, pd.DataFrame],
                                        target: str, 
                                        feature_names: List[str] = None,
                                        min_cs: int = 10,
-                                       max_cs_samples: int = None) -> Tuple[np.ndarray, np.ndarray, List[str], np.ndarray, np.ndarray, List[str], Optional[np.ndarray], Dict[str, Any]]:
+                                       max_cs_samples: int = None,
+                                       routing_decisions: Optional[Dict[str, Dict[str, Any]]] = None) -> Tuple[np.ndarray, np.ndarray, List[str], np.ndarray, np.ndarray, List[str], Optional[np.ndarray], Dict[str, Any]]:
     """Prepare cross-sectional training data with polars optimization for memory efficiency."""
     
     logger.info(f"🎯 Building cross-sectional training data for target: {target}")
@@ -159,15 +160,16 @@ def prepare_training_data_cross_sectional(mtf_data: Dict[str, pd.DataFrame],
         logger.info(f"📊 Cross-sectional sampling: max {max_cs_samples} samples per timestamp")
     
     if USE_POLARS:
-        return _prepare_training_data_polars(mtf_data, target, feature_names, min_cs, max_cs_samples)
+        return _prepare_training_data_polars(mtf_data, target, feature_names, min_cs, max_cs_samples, routing_decisions)
     else:
-        return _prepare_training_data_pandas(mtf_data, target, feature_names, min_cs, max_cs_samples)
+        return _prepare_training_data_pandas(mtf_data, target, feature_names, min_cs, max_cs_samples, routing_decisions)
 
 def _prepare_training_data_polars(mtf_data: Dict[str, pd.DataFrame], 
                                  target: str, 
                                  feature_names: List[str] = None,
                                  min_cs: int = 10,
-                                 max_cs_samples: int = None) -> Tuple[np.ndarray, np.ndarray, List[str], np.ndarray, np.ndarray, List[str], Optional[np.ndarray], Dict[str, Any]]:
+                                 max_cs_samples: int = None,
+                                 routing_decisions: Optional[Dict[str, Dict[str, Any]]] = None) -> Tuple[np.ndarray, np.ndarray, List[str], np.ndarray, np.ndarray, List[str], Optional[np.ndarray], Dict[str, Any]]:
     """Polars-based data preparation for memory efficiency with cross-sectional sampling."""
     
     # Initialize feature auditor for tracking feature drops
@@ -374,8 +376,8 @@ def _prepare_training_data_polars(mtf_data: Dict[str, pd.DataFrame],
         logger.error(f"Error extracting target {target}: {e}")
         return (None,)*8
     
-    # Continue with pandas-based processing (pass auditor for tracking)
-    result = _process_combined_data_pandas(combined_df, target, feature_names, auditor=auditor)
+    # Continue with pandas-based processing (pass auditor for tracking and routing_decisions)
+    result = _process_combined_data_pandas(combined_df, target, feature_names, auditor=auditor, routing_decisions=routing_decisions)
     
     # Write audit report if auditor was used
     if auditor and len(auditor.drop_records) > 0:
@@ -395,7 +397,8 @@ def _prepare_training_data_pandas(mtf_data: Dict[str, pd.DataFrame],
                                  target: str, 
                                  feature_names: List[str] = None,
                                  min_cs: int = 10,
-                                 max_cs_samples: int = None) -> Tuple[np.ndarray, np.ndarray, List[str], np.ndarray, np.ndarray, List[str], Optional[np.ndarray], Dict[str, Any]]:
+                                 max_cs_samples: int = None,
+                                 routing_decisions: Optional[Dict[str, Dict[str, Any]]] = None) -> Tuple[np.ndarray, np.ndarray, List[str], np.ndarray, np.ndarray, List[str], Optional[np.ndarray], Dict[str, Any]]:
     """Pandas-based data preparation (fallback)."""
     
     # Combine all symbol data
@@ -463,15 +466,22 @@ def _prepare_training_data_pandas(mtf_data: Dict[str, pd.DataFrame],
         except Exception as e:
             logger.warning(f"  Feature registry validation failed: {e}. Using provided features as-is.")
     
-    return _process_combined_data_pandas(combined_df, target, feature_names)
+    return _process_combined_data_pandas(combined_df, target, feature_names, auditor=None, routing_decisions=routing_decisions)
 
-def _process_combined_data_pandas(combined_df: pd.DataFrame, target: str, feature_names: List[str], auditor=None) -> Tuple[np.ndarray, np.ndarray, List[str], np.ndarray, np.ndarray, List[str], Optional[np.ndarray], Dict[str, Any]]:
+def _process_combined_data_pandas(combined_df: pd.DataFrame, target: str, feature_names: List[str], auditor=None, routing_decisions: Optional[Dict[str, Dict[str, Any]]] = None) -> Tuple[np.ndarray, np.ndarray, List[str], np.ndarray, np.ndarray, List[str], Optional[np.ndarray], Dict[str, Any]]:
     """Process combined data using pandas."""
     
     # Route target to get task specification
+    # Use routing_decisions if available, otherwise fallback to route_target inference
     route_info = route_target(target)
     spec = route_info['spec']
     logger.info(f"[Router] Target {target} → {spec.task} task (objective={spec.objective})")
+    
+    # Enhance routing_meta with routing_decisions context if available
+    route_decision_info = None
+    if routing_decisions and target in routing_decisions:
+        route_decision_info = routing_decisions[target]
+        logger.info(f"[Routing] Using routing decision for {target}: route={route_decision_info.get('route', 'UNKNOWN')}")
     
     # Extract target using safe extraction
     try:
@@ -668,6 +678,15 @@ def _process_combined_data_pandas(combined_df: pd.DataFrame, target: str, featur
     routing_meta['spec'] = spec
     routing_meta['sample_weights'] = sample_weights
     routing_meta['group_sizes'] = group_sizes
+    
+    # Enhance routing_meta with routing_decisions context if available
+    if route_decision_info:
+        routing_meta['route'] = route_decision_info.get('route', 'CROSS_SECTIONAL')
+        routing_meta['route_reason'] = route_decision_info.get('reason')
+        # Include other routing decision metadata
+        for key in ['cs_auc', 'symbol_auc_mean', 'symbol_auc_median', 'frac_symbols_good', 'winner_symbols']:
+            if key in route_decision_info:
+                routing_meta[key] = route_decision_info[key]
     
     logger.info(f"[Routing] Prepared {spec.task} task: y_shape={y_prepared.shape}, has_weights={sample_weights is not None}, has_groups={group_sizes is not None}")
     

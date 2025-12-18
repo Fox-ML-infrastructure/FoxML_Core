@@ -2735,7 +2735,21 @@ def process_single_symbol(
                 # Capture exception details for debugging
                 error_type = type(e).__name__
                 error_msg = str(e)
-                logger.error(f"    ❌ {symbol}: {family_name} FAILED: {error_type}: {error_msg}", exc_info=True)
+                
+                # Check if this is an expected failure (over-regularization, no signal, etc.)
+                # These are common and expected, so log as WARNING without traceback
+                is_expected_failure = (
+                    "all coefficients are zero" in error_msg.lower() or
+                    "over-regularized" in error_msg.lower() or
+                    "no signal" in error_msg.lower() or
+                    "model invalid" in error_msg.lower()
+                )
+                
+                if is_expected_failure:
+                    logger.warning(f"    ⚠️  {symbol}: {family_name} failed (expected): {error_msg}")
+                else:
+                    # Unexpected errors get full ERROR logging with traceback
+                    logger.error(f"    ❌ {symbol}: {family_name} FAILED: {error_type}: {error_msg}", exc_info=True)
                 
                 family_statuses.append({
                     "status": "failed",

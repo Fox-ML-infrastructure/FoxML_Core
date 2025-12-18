@@ -246,7 +246,8 @@ def prepare_cross_sectional_data_for_ranking(
     max_cs_samples: Optional[int] = None,
     feature_names: Optional[List[str]] = None,
     feature_time_meta_map: Optional[Dict[str, Any]] = None,  # NEW: Optional map of feature_name -> FeatureTimeMeta
-    base_interval_minutes: Optional[float] = None  # NEW: Base training grid interval (for alignment)
+    base_interval_minutes: Optional[float] = None,  # NEW: Base training grid interval (for alignment)
+    allow_single_symbol: bool = False  # NEW: Allow single symbol for SYMBOL_SPECIFIC view
 ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[List[str]], Optional[np.ndarray], Optional[np.ndarray]]:
     """
     Prepare cross-sectional data for ranking (simplified version of training pipeline).
@@ -310,46 +311,73 @@ def prepare_cross_sectional_data_for_ranking(
             'dropped_symbols': []
         }
     
-    # CRITICAL: Enforce min_cs BEFORE building cross-sectional data
-    # Cross-sectional ranking with n_symbols < min_cs should hard-stop, not degrade silently
+    # CRITICAL: Enforce minimum symbols BEFORE building cross-sectional data
+    # Cross-sectional ranking with too few symbols should hard-stop, not degrade silently
     # 
     # IMPORTANT DISTINCTION:
     #   - This check enforces: "N symbols loaded overall" (global availability)
     #   - Later, per-timestamp filtering enforces: "effective cross-sectional width per timestamp"
-    #   - The hard-stop prevents "only 1 symbol total", while per-timestamp sampling enforces cross-sectional width
+    #   - The hard-stop prevents "only 1-2 symbols total", while per-timestamp sampling enforces cross-sectional width
     # 
     # NOTE: For LOSO view:
     #   - This function is called with mtf_data containing (N-1) training symbols (validation symbol excluded)
     #   - The check is applied to the training set size (N-1), which is correct
-    #   - We need at least min_cs symbols loaded in the training set (global availability)
+    #   - We need at least MIN_SYMBOLS symbols loaded in the training set (global availability)
     #   - Per-timestamp filtering (below) ensures each timestamp has >= effective_min_cs symbols present
     #   - The validation symbol is loaded separately with min_cs=1 (see evaluate_target_predictability)
     # 
     # For CROSS_SECTIONAL view:
     #   - This function is called with mtf_data containing all N symbols
-    #   - The check ensures we have at least min_cs symbols loaded overall (global availability)
+    #   - The check ensures we have at least MIN_SYMBOLS symbols loaded overall (global availability)
     #   - Per-timestamp filtering (below) ensures each timestamp has >= effective_min_cs symbols present
-    if n_symbols_available < min_cs:
-        error_msg = (
-            f"CROSS_SECTIONAL mode requires >= {min_cs} symbols, but only {n_symbols_available} loaded. "
-            f"Loaded symbols: {loaded_symbols_list}. "
-            f"This would silently degrade into single-symbol time series masquerading as cross-sectional ranking. "
-            f"Use SYMBOL_SPECIFIC mode for single-symbol ranking, or ensure sufficient symbols are available."
-        )
-        # Always include dropped symbols info if available
-        if loader_contract and loader_contract.get('dropped_symbols'):
-            dropped_dict = {d['symbol']: d.get('reason', 'unknown') for d in loader_contract['dropped_symbols']}
-            error_msg += f" Dropped symbols: {dropped_dict}"
-        elif loader_contract and loader_contract.get('requested_symbols'):
-            # If we have requested list, show what was requested but not loaded
-            requested_set = set(loader_contract['requested_symbols'])
-            loaded_set = set(loaded_symbols_list)
-            missing = requested_set - loaded_set
-            if missing:
-                error_msg += f" Missing from requested list: {sorted(missing)}"
+    
+    # Minimum symbols required for meaningful cross-sectional analysis
+    # Hard minimum: 3 symbols (below this, it's not truly cross-sectional)
+    # Recommended: 10+ symbols for robust cross-sectional ranking
+    # Exception: allow_single_symbol=True for SYMBOL_SPECIFIC view (intentional single-symbol time series)
+    MIN_SYMBOLS_REQUIRED = 3
+    RECOMMENDED_SYMBOLS = 10
+    
+    # Skip symbol count check for SYMBOL_SPECIFIC view (intentional single-symbol)
+    if not allow_single_symbol:
+        if n_symbols_available < MIN_SYMBOLS_REQUIRED:
+            error_msg = (
+                f"CROSS_SECTIONAL mode requires >= {MIN_SYMBOLS_REQUIRED} symbols, but only {n_symbols_available} loaded. "
+                f"Loaded symbols: {loaded_symbols_list}. "
+                f"This would silently degrade into single-symbol time series masquerading as cross-sectional ranking. "
+                f"Use SYMBOL_SPECIFIC mode for single-symbol ranking, or ensure sufficient symbols are available."
+            )
+            # Always include dropped symbols info if available
+            if loader_contract and loader_contract.get('dropped_symbols'):
+                dropped_dict = {d['symbol']: d.get('reason', 'unknown') for d in loader_contract['dropped_symbols']}
+                error_msg += f" Dropped symbols: {dropped_dict}"
+            elif loader_contract and loader_contract.get('requested_symbols'):
+                # If we have requested list, show what was requested but not loaded
+                requested_set = set(loader_contract['requested_symbols'])
+                loaded_set = set(loaded_symbols_list)
+                missing = requested_set - loaded_set
+                if missing:
+                    error_msg += f" Missing from requested list: {sorted(missing)}"
+            
+            logger.error(error_msg)
+            raise ValueError(error_msg)
         
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+        # Warn if using fewer than recommended symbols (but allow it)
+        if n_symbols_available < RECOMMENDED_SYMBOLS:
+            logger.warning(
+                f"⚠️  CROSS_SECTIONAL mode with {n_symbols_available} symbols (recommended: >= {RECOMMENDED_SYMBOLS}). "
+                f"Cross-sectional ranking may be less robust with fewer symbols. "
+                f"Consider using SYMBOL_SPECIFIC mode for more reliable per-symbol ranking."
+            )
+    else:
+        # SYMBOL_SPECIFIC view: single symbol is expected and valid
+        if n_symbols_available == 1:
+            logger.debug(f"SYMBOL_SPECIFIC view: processing single symbol {loaded_symbols_list[0]}")
+        elif n_symbols_available > 1:
+            logger.warning(
+                f"SYMBOL_SPECIFIC view expected 1 symbol, but {n_symbols_available} loaded: {loaded_symbols_list}. "
+                f"Proceeding with all loaded symbols."
+            )
     
     # Compute effective_min_cs (should equal min_cs now, but keep for consistency)
     effective_min_cs = min(min_cs, n_symbols_available)

@@ -4660,10 +4660,12 @@ def evaluate_target_predictability(
     if view == "SYMBOL_SPECIFIC":
         # For symbol-specific, prepare single-symbol time series data
         # Use same function but with single symbol (min_cs=1 effectively)
+        # allow_single_symbol=True bypasses the minimum symbol count check
         X, y, feature_names, symbols_array, time_vals, resolved_data_config = prepare_cross_sectional_data_for_ranking(
             mtf_data, target_column, min_cs=1, max_cs_samples=max_cs_samples, feature_names=safe_columns,
             feature_time_meta_map=resolved_config.feature_time_meta_map if resolved_config else None,
-            base_interval_minutes=resolved_config.base_interval_minutes if resolved_config else None
+            base_interval_minutes=resolved_config.base_interval_minutes if resolved_config else None,
+            allow_single_symbol=True  # Allow single symbol for SYMBOL_SPECIFIC view
         )
         # Verify we only have one symbol
         unique_symbols = set(symbols_array) if symbols_array is not None else set()
@@ -4677,7 +4679,8 @@ def evaluate_target_predictability(
         # Load validation symbol data separately
         validation_mtf_data = load_mtf_data_for_ranking(data_dir, [validation_symbol], max_rows_per_symbol=max_rows_per_symbol)
         X_val, y_val, feature_names_val, symbols_array_val, time_vals_val, resolved_data_config_val = prepare_cross_sectional_data_for_ranking(
-            validation_mtf_data, target_column, min_cs=1, max_cs_samples=None, feature_names=safe_columns
+            validation_mtf_data, target_column, min_cs=1, max_cs_samples=None, feature_names=safe_columns,
+            allow_single_symbol=True  # LOSO validation symbol is intentionally single-symbol
         )
         # For LOSO, we'll use a special CV that trains on X_train and validates on X_val
         # For now, combine them and use a custom splitter (will be implemented in train_and_evaluate_models)

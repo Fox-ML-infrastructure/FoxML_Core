@@ -184,6 +184,7 @@ TRAINER_MODULE_MAP = {
     "change_point": ("model_fun.change_point_trainer", "ChangePointTrainer"),
     "ftrl_proximal": ("model_fun.ftrl_proximal_trainer", "FTRLProximalTrainer"),
     "mlp": ("model_fun.mlp_trainer", "MLPTrainer"),
+    "neural_network": ("model_fun.neural_network_trainer", "NeuralNetworkTrainer"),
     "cnn1d": ("model_fun.cnn1d_trainer", "CNN1DTrainer"),
     "lstm": ("model_fun.lstm_trainer", "LSTMTrainer"),
     "transformer": ("model_fun.transformer_trainer", "TransformerTrainer"),

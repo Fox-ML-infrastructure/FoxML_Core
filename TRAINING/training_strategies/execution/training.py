@@ -289,7 +289,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         # Get canonical family set from registries (must match MODMAP in family_runners.py)
         MODMAP_KEYS = {
             "lightgbm", "quantile_lightgbm", "xgboost", "reward_based", "gmm_regime",
-            "change_point", "ngboost", "ensemble", "ftrl_proximal", "mlp", "vae",
+            "change_point", "ngboost", "ensemble", "ftrl_proximal", "mlp", "neural_network", "vae",
             "gan", "meta_learning", "multi_task"
         }
         REGISTRY_KEYS = MODMAP_KEYS | set(TRAINER_MODULE_MAP.keys())
@@ -310,7 +310,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         
         # Log preflight results
         if invalid_families:
-            known_missing = {'random_forest', 'catboost', 'neural_network', 'lasso', 'elastic_net'}
+            known_missing = {'random_forest', 'catboost', 'lasso', 'elastic_net'}
             missing_normalized = {norm for _, norm in invalid_families}
             
             if missing_normalized & known_missing:
@@ -356,7 +356,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                 # Prepare data for this symbol only
                 symbol_mtf_data = {symbol: mtf_data[symbol]}
                 X, y, feature_names, symbols_arr, indices, feat_cols, time_vals, routing_meta = prepare_training_data_cross_sectional(
-                    symbol_mtf_data, target, feature_names=symbol_features, min_cs=1, max_cs_samples=max_cs_samples
+                    symbol_mtf_data, target, feature_names=symbol_features, min_cs=1, max_cs_samples=max_cs_samples, routing_decisions=routing_decisions
                 )
                 
                 if X is None or len(X) == 0:
@@ -687,7 +687,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         # Cross-sectional training (for CROSS_SECTIONAL or BOTH routes)
         # Note: BLOCKED targets are skipped earlier in the loop
         X, y, feature_names, symbols, indices, feat_cols, time_vals, routing_meta = prepare_training_data_cross_sectional(
-            mtf_data, target, feature_names=selected_features, min_cs=min_cs, max_cs_samples=max_cs_samples
+            mtf_data, target, feature_names=selected_features, min_cs=min_cs, max_cs_samples=max_cs_samples, routing_decisions=routing_decisions
         )
         prep_elapsed = _t.time() - prep_start
         print(f"✅ Data preparation completed in {prep_elapsed:.2f}s")  # Debug print
@@ -761,7 +761,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         # Run CPU-GBDT families FIRST, then TF/XGB families
         FAMILY_ORDER = [
             "lightgbm", "quantile_lightgbm", "reward_based", "xgboost",  # CPU tree learners first (normalized)
-            "mlp", "ensemble", "change_point", "ngboost", "gmm_regime", "ftrl_proximal", "vae", "gan", "meta_learning", "multi_task"  # Others (normalized)
+            "mlp", "neural_network", "ensemble", "change_point", "ngboost", "gmm_regime", "ftrl_proximal", "vae", "gan", "meta_learning", "multi_task"  # Others (normalized)
         ]
         
         # Reorder validated families to prevent thread pollution
