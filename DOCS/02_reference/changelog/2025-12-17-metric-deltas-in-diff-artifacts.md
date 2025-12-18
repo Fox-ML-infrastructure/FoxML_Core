@@ -187,6 +187,28 @@ Verified with actual runs:
 
 **Enhancement**: Added `stage`, `view`, `item_name` fields to enable downstream joining and querying.
 
+### Fixed Tolerance Logic (2025-12-17 follow-up)
+
+**Problem**: `changed_tol: true` was set even when `delta_abs < abs_tol` (e.g., `std_score` with `delta_abs=0.000811` and `abs_tol=0.001`).
+
+**Solution**: Use correct combined tolerance calculation:
+- `tol = max(abs_tol, rel_tol * max(abs(prev), abs(curr), 1.0))`
+- `changed_tol = abs(delta) > tol`
+- Renamed `changed` to `changed_tol` for clarity
+
+**Result**: `changed_tol` now correctly reflects whether delta exceeds the combined tolerance threshold.
+
+### Fixed Per-Metric Polarity for Improvements/Regressions (2025-12-17 follow-up)
+
+**Problem**: `std_score` increases were incorrectly classified as improvements (should be regressions since lower is better).
+
+**Solution**: Added per-metric polarity mapping:
+- `higher_is_better` dict: `std_score: False`, others: `True`
+- Compute `signed_delta = delta_abs if is_higher_better else -delta_abs`
+- Rank improvements/regressions using `signed_delta` instead of raw `delta_abs`
+
+**Result**: `std_score` increases now correctly appear in `top_regressions`, not `top_improvements`.
+
 ## Next Level (Future Enhancements)
 
 Potential future improvements:
