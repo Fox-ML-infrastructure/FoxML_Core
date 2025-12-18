@@ -763,7 +763,7 @@ def compute_budget(
                         if lag_bars is not None and lag_bars >= 0:
                             computed_spec = float(lag_bars * interval_minutes)
                             # CRITICAL: If registry returns 0.0 for indicator-period features or _Xd features, ignore it and use pattern matching
-                            import re
+                            # Note: re is imported at module level
                             is_xd_feature = bool(re.search(r'_\d+d$', feat_name, re.I))
                             if computed_spec == 0.0 and (_is_indicator_period_feature(feat_name) or is_xd_feature):
                                 feature_type = "_Xd feature" if is_xd_feature else "indicator-period feature"
@@ -874,7 +874,7 @@ def compute_budget(
                         computed_spec = float(lag_bars * interval_minutes)
                         # CRITICAL: If registry returns 0.0 for indicator-period features, ignore it and use pattern matching
                         # Also ignore 0.0 for _Xd features (day-suffix) - they should use pattern matching
-                        import re
+                        # Note: re is imported at module level
                         is_xd_feature = bool(re.search(r'_\d+d$', feat_name, re.I))
                         if computed_spec == 0.0 and (_is_indicator_period_feature(feat_name) or is_xd_feature):
                             feature_type = "_Xd feature" if is_xd_feature else "indicator-period feature"
