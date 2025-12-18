@@ -2911,17 +2911,19 @@ class DiffTelemetry:
                         'prev': prev_rounded,
                         'curr': curr_rounded,
                         'differs': differs,  # prev != curr (after rounding)
-                        'changed_tol': is_significant,  # abs(delta) > max(abs_tol, rel_tol*max(abs(prev),abs(curr),1.0))
+                        'changed_tol': is_significant,  # abs(delta) > tol_used
                         'impact_label': impact_label,
                         'abs_tol': abs_tol,
-                        'rel_tol': rel_tol
+                        'rel_tol': rel_tol,
+                        'tol_used': round(tol, 6)  # The actual tolerance used: max(abs_tol, rel_tol*max(abs(prev),abs(curr),1.0))
                     }
                     
                     # Add statistical context if available
                     if se is not None and se > 0:
                         delta_entry['se'] = round(se, 6)  # Standard error
+                        # se_ratio is preferred over z_score (this is a proxy, not a true z-score)
                         delta_entry['se_ratio'] = round(se_ratio, 4) if se_ratio is not None else None
-                        # Label z_score as a proxy (using AUC SE for all metrics)
+                        # z_score kept for backward compatibility, but se_ratio is preferred
                         delta_entry['z_score'] = round(z_score, 4) if z_score is not None else None
                         delta_entry['z_score_basis'] = "auc_se_proxy"  # Using std_score/sqrt(n_models) as proxy for all metrics
                         if noise_explanation:
@@ -2932,8 +2934,9 @@ class DiffTelemetry:
                                 str(delta_abs_serialized)
                             )
                     else:
-                        # No SE available, so no z_score
-                        delta_entry['z_score'] = None
+                        # No SE available
+                        delta_entry['se_ratio'] = None
+                        delta_entry['z_score'] = None  # Deprecated: use se_ratio
                         delta_entry['z_score_basis'] = None
                     
                     deltas[key] = delta_entry
