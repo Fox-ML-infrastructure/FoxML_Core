@@ -15,5 +15,18 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-"""Memory management utilities"""
+"""
+Backward compatibility wrapper for TRAINING.memory
+
+This module has been moved to TRAINING.common.memory
+All imports are re-exported here to maintain backward compatibility.
+"""
+
+# Re-export everything from the new location
+from TRAINING.common.memory import *
+
+__all__ = [
+    'MemoryManager',
+    'aggressive_cleanup',
+]
 

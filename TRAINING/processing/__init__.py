@@ -15,5 +15,18 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-"""Advanced data processing utilities (cross-sectional, polars optimization)"""
+"""
+Backward compatibility wrapper for TRAINING.processing
+
+This module has been moved to TRAINING.data.processing
+All imports are re-exported here to maintain backward compatibility.
+"""
+
+# Re-export everything from the new location
+from TRAINING.data.processing import *
+
+__all__ = [
+    'cross_sectional',
+    'polars_optimizer',
+]
 

@@ -38,7 +38,8 @@ Feature selection reduces dimensionality and improves model performance by:
 ### Single-Target Selection
 
 ```python
-from TRAINING.strategies.single_task import SingleTaskStrategy
+from TRAINING.training_strategies.strategies.single_task import SingleTaskStrategy
+# Backward compatibility: from TRAINING.strategies.single_task import ... still works
 
 # Train on all features
 config = load_model_config("lightgbm", variant="conservative")
@@ -62,7 +63,8 @@ strategy.train(X_selected, {'fwd_ret_5m': y}, selected_features)
 ### Multi-Target Selection
 
 ```python
-from TRAINING.strategies.multi_task import MultiTaskStrategy
+from TRAINING.training_strategies.strategies.multi_task import MultiTaskStrategy
+# Backward compatibility: from TRAINING.strategies.multi_task import ... still works
 
 # Train on all features with multiple targets
 targets = {
@@ -86,7 +88,8 @@ selected_features = [f[0] for f in top_50]
 Uses model feature importance (LightGBM/XGBoost):
 
 ```python
-from TRAINING.strategies.single_task import SingleTaskStrategy
+from TRAINING.training_strategies.strategies.single_task import SingleTaskStrategy
+# Backward compatibility: from TRAINING.strategies.single_task import ... still works
 from CONFIG.config_loader import load_model_config
 
 config = load_model_config("lightgbm", variant="conservative")

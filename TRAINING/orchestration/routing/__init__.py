@@ -16,20 +16,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 """
-Backward compatibility wrapper for TRAINING.datasets
+Target Routing Module
 
-This module has been moved to TRAINING.data.datasets
-All imports are re-exported here to maintain backward compatibility.
+Routes target columns to training specifications.
 """
 
-# Re-export everything from the new location
-from TRAINING.data.datasets import *
+from .target_router import TaskSpec, route_target
 
-__all__ = [
-    'SeqDataset',
-    'VariableSeqDataset',
-    'pad_collate',
-    'create_seq_dataloader',
-    'SeqDataModule',
-]
+__all__ = ['TaskSpec', 'route_target']
 

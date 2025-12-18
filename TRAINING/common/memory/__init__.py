@@ -15,21 +15,9 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-"""
-Backward compatibility wrapper for TRAINING.datasets
+"""Memory management utilities"""
 
-This module has been moved to TRAINING.data.datasets
-All imports are re-exported here to maintain backward compatibility.
-"""
+from .memory_manager import MemoryManager
 
-# Re-export everything from the new location
-from TRAINING.data.datasets import *
-
-__all__ = [
-    'SeqDataset',
-    'VariableSeqDataset',
-    'pad_collate',
-    'create_seq_dataloader',
-    'SeqDataModule',
-]
+__all__ = ['MemoryManager']
 

@@ -63,9 +63,9 @@ def main():
     
     # Import the actual functions
     try:
-        from TRAINING.training_strategies.strategies import load_mtf_data
-        from TRAINING.training_strategies.data_preparation import prepare_training_data_cross_sectional
-        from TRAINING.training_strategies.training import train_models_for_interval_comprehensive, train_model_comprehensive
+        from TRAINING.training_strategies.strategy_functions import load_mtf_data
+        from TRAINING.training_strategies.execution.data_preparation import prepare_training_data_cross_sectional
+        from TRAINING.training_strategies.execution.training import train_models_for_interval_comprehensive, train_model_comprehensive
         from TRAINING.orchestration.intelligent_trainer import IntelligentTrainer
     except ImportError as e:
         print(f"❌ Import error: {e}")

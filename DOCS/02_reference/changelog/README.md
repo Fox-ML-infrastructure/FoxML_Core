@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-18 (TRAINING Folder Reorganization)** — Comprehensive reorganization of `TRAINING/` folder structure: consolidated small directories (`features/`, `datasets/`, `memory/`, `live/`) into `data/` and `common/`, merged overlapping directories (`strategies/` into `training_strategies/`, data processing modules into `data/`), reorganized entry points into `orchestration/`, moved output directories to `RESULTS/`, fixed config loader import warnings. All changes maintain backward compatibility via re-export wrappers. 100% of key imports passing.
+  → [View](2025-12-18-training-folder-reorganization.md)
+
 - **2025-12-18 (Code Modularization)** — Major code refactoring: Split 7 large files (2,000-6,800 lines) into modular components, created 23 new utility/module files, reorganized utils folder into domain-specific subdirectories, centralized common utilities (file_utils, cache_manager, config_hashing, etc.), fixed all import errors, maintained full backward compatibility. Total: 103 files changed, ~2,000+ lines extracted.
   → [View](2025-12-18-code-modularization.md)
 

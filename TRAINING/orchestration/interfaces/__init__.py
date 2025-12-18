@@ -15,5 +15,13 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-"""Phase 1: Feature Engineering & Selection"""
+"""
+Training Interfaces Module
+
+Unified training interfaces and entry points.
+"""
+
+from .unified_training_interface import UnifiedTrainingInterface
+
+__all__ = ['UnifiedTrainingInterface']
 

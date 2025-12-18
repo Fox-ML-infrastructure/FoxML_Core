@@ -76,7 +76,7 @@ def main():
     
     # Import and call main.py's main function
     # We'll call it directly with parsed arguments instead of manipulating sys.argv
-    from TRAINING.training_strategies.main import main as main_func
+    from .main import main as main_func
     
     # Create a mock argparse.Namespace for main.py
     # Since main.py uses argparse internally, we need to call it properly

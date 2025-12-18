@@ -15,5 +15,19 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-"""Feature engineering and sequential feature builders"""
+"""
+Backward compatibility wrapper for TRAINING.features
+
+This module has been moved to TRAINING.data.features
+All imports are re-exported here to maintain backward compatibility.
+"""
+
+# Re-export everything from the new location
+from TRAINING.data.features import *
+
+__all__ = [
+    'build_sequences_for_symbol',
+    'build_sequences_panel',
+    'validate_sequences',
+]
 

@@ -15,5 +15,22 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-"""Data preprocessing pipelines"""
+"""
+Backward compatibility wrapper for TRAINING.preprocessing
+
+This module has been moved to TRAINING.data.preprocessing
+All imports are re-exported here to maintain backward compatibility.
+"""
+
+# Re-export everything from the new location
+from TRAINING.data.preprocessing import *
+
+__all__ = [
+    'MegaScriptDataPreprocessor',
+    'MegaScriptPreprocessor',
+    'MegaScriptSequentialPreprocessor',
+    'mega_script_data_preprocessor',
+    'mega_script_pipeline',
+    'mega_script_sequential_preprocessor',
+]
 

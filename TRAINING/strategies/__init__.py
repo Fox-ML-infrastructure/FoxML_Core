@@ -16,23 +16,19 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 """
-Training Strategies Module
+Backward compatibility wrapper for TRAINING.strategies
 
-Implements different training approaches:
-- Single-task: Separate models per target
-- Multi-task: Shared encoder + separate heads
-- Cascade: Stacking/gating approach
+This module has been moved to TRAINING.training_strategies.strategies
+All imports are re-exported here to maintain backward compatibility.
 """
 
-
-from .single_task import SingleTaskStrategy
-from .multi_task import MultiTaskStrategy  
-from .cascade import CascadeStrategy
-from .base import BaseTrainingStrategy
+# Re-export everything from the new location
+from TRAINING.training_strategies.strategies import *
 
 __all__ = [
     'BaseTrainingStrategy',
     'SingleTaskStrategy',
-    'MultiTaskStrategy', 
-    'CascadeStrategy'
+    'MultiTaskStrategy',
+    'CascadeStrategy',
 ]
+

@@ -78,7 +78,8 @@ features = computer.compute(df)
 After building features, select the most important:
 
 ```python
-from TRAINING.strategies.single_task import SingleTaskStrategy
+from TRAINING.training_strategies.strategies.single_task import SingleTaskStrategy
+# Backward compatibility: from TRAINING.strategies.single_task import ... still works
 
 # Train model to get feature importance
 strategy = SingleTaskStrategy(config)

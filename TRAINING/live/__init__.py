@@ -15,5 +15,17 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-"""Live trading and real-time data processing utilities"""
+"""
+Backward compatibility wrapper for TRAINING.live
+
+This module has been moved to TRAINING.common.live
+All imports are re-exported here to maintain backward compatibility.
+"""
+
+# Re-export everything from the new location
+from TRAINING.common.live import *
+
+__all__ = [
+    'SequentialRingBuffer',
+]
 

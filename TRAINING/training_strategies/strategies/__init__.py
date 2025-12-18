@@ -16,20 +16,23 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 """
-Backward compatibility wrapper for TRAINING.datasets
+Training Strategies Module
 
-This module has been moved to TRAINING.data.datasets
-All imports are re-exported here to maintain backward compatibility.
+Implements different training approaches:
+- Single-task: Separate models per target
+- Multi-task: Shared encoder + separate heads
+- Cascade: Stacking/gating approach
 """
 
-# Re-export everything from the new location
-from TRAINING.data.datasets import *
+
+from .single_task import SingleTaskStrategy
+from .multi_task import MultiTaskStrategy  
+from .cascade import CascadeStrategy
+from .base import BaseTrainingStrategy
 
 __all__ = [
-    'SeqDataset',
-    'VariableSeqDataset',
-    'pad_collate',
-    'create_seq_dataloader',
-    'SeqDataModule',
+    'BaseTrainingStrategy',
+    'SingleTaskStrategy',
+    'MultiTaskStrategy', 
+    'CascadeStrategy'
 ]
-

@@ -155,8 +155,10 @@ predictions = trainer.predict(X_test)
 ### Training Strategies
 
 ```python
-from TRAINING.strategies.single_task import SingleTaskStrategy
-from TRAINING.strategies.multi_task import MultiTaskStrategy
+from TRAINING.training_strategies.strategies.single_task import SingleTaskStrategy
+from TRAINING.training_strategies.strategies.multi_task import MultiTaskStrategy
+# Backward compatibility: old paths still work via re-exports
+# from TRAINING.strategies.single_task import SingleTaskStrategy  # Still works
 
 # Single target
 strategy = SingleTaskStrategy(config)

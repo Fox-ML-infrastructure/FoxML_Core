@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-18 Updates (TRAINING Folder Reorganization)
+- **TRAINING Folder Reorganization**: Comprehensive reorganization of `TRAINING/` folder structure to improve modularity and reduce duplication. Consolidated small directories (`features/`, `datasets/`, `memory/`, `live/`) into `data/` and `common/`. Merged overlapping directories (`strategies/` into `training_strategies/`, data processing modules into `data/`). Reorganized entry points (`unified_training_interface.py`, `target_router.py` into `orchestration/`). Moved output directories to `RESULTS/` and archived `EXPERIMENTS/`. Fixed config loader import warnings (changed to debug level). All changes maintain backward compatibility via re-export wrappers. 100% of key imports passing.
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-18-training-folder-reorganization.md)
+
 #### 2025-12-18 Updates (Code Modularization & Refactoring)
 - **Large File Modularization**: Split 7 large files (2,000-6,800 lines) into smaller, maintainable modules. Created 23 new utility/module files including `model_evaluation/`, `reproducibility/`, `diff_telemetry/`, `multi_model_feature_selection/`, `intelligent_trainer/`, and `leakage_detection/` subdirectories. Total: 103 files changed, ~2,000+ lines extracted.
 - **Common Utilities Centralization**: Created 6 new centralized utility modules (`file_utils`, `cache_manager`, `config_hashing`, `process_cleanup`, `path_setup`, `family_constants`) to eliminate duplication across the codebase.

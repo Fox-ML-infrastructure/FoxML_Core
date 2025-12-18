@@ -50,17 +50,19 @@ if str(_PROJECT_ROOT) not in sys.path:
 os.environ.setdefault("PYTHONPATH", str(_PROJECT_ROOT))
 
 # Set up all paths using centralized utilities
+# Note: setup_all_paths already adds CONFIG to sys.path
 from TRAINING.common.utils.path_setup import setup_all_paths
 _PROJECT_ROOT, _TRAINING_ROOT, _CONFIG_DIR = setup_all_paths(_PROJECT_ROOT)
 
-# Import config loader
+# Import config loader (CONFIG is already in sys.path from setup_all_paths)
 try:
     from config_loader import get_pipeline_config, get_family_timeout, get_cfg, get_system_config
     _CONFIG_AVAILABLE = True
 except ImportError:
     _CONFIG_AVAILABLE = False
     import logging
-    logging.getLogger(__name__).warning("Config loader not available; using hardcoded defaults")
+    # Only log at debug level to avoid misleading warnings
+    logging.getLogger(__name__).debug("Config loader not available; using hardcoded defaults")
 
 from TRAINING.common.safety import set_global_numeric_guards
 set_global_numeric_guards()
@@ -116,7 +118,7 @@ import os
 USE_POLARS = os.getenv("USE_POLARS", "1") == "1"
 
 # Import target router utilities from TRAINING root
-from TRAINING.target_router import route_target
+from TRAINING.orchestration.routing.target_router import route_target
 # safe_target_extraction may be in utils or defined elsewhere
 try:
     from TRAINING.training_strategies.utils import safe_target_extraction

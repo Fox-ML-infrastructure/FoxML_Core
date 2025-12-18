@@ -71,7 +71,7 @@ def validate_all_registries():
     Raises AssertionError if any registry has non-canonical keys or collisions.
     """
     try:
-        from TRAINING.training_strategies.family_runners import _run_family_inproc
+        from TRAINING.training_strategies.execution.family_runners import _run_family_inproc
         # MODMAP is defined inside _run_family_inproc, so we can't import it directly
         # We'll validate it via the test suite instead
         pass

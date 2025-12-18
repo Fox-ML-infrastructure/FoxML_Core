@@ -113,15 +113,15 @@ from TRAINING.common.family_constants import TF_FAMS, TORCH_FAMS, CPU_FAMS, TORC
 """Core training functions."""
 
 # Import dependencies
-from TRAINING.training_strategies.family_runners import _run_family_inproc, _run_family_isolated
-from TRAINING.training_strategies.data_preparation import prepare_training_data_cross_sectional
+from TRAINING.training_strategies.execution.family_runners import _run_family_inproc, _run_family_isolated
+from TRAINING.training_strategies.execution.data_preparation import prepare_training_data_cross_sectional
 from TRAINING.training_strategies.utils import (
     FAMILY_CAPS, ALL_FAMILIES, tf_available, ngboost_available,
     _now, THREADS, CPU_ONLY,
     TORCH_SEQ_FAMILIES, build_sequences_from_features, _env_guard, safe_duration
 )
 # train_model_comprehensive is defined in this file, not in utils
-from TRAINING.target_router import TaskSpec
+from TRAINING.orchestration.routing.target_router import TaskSpec
 from TRAINING.training_strategies.strategies.single_task import SingleTaskStrategy
 from TRAINING.training_strategies.strategies.multi_task import MultiTaskStrategy
 from TRAINING.training_strategies.strategies.cascade import CascadeStrategy
@@ -378,7 +378,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                 if isinstance(routing_meta, dict) and 'spec' in routing_meta:
                     logger.info(f"[Routing] {symbol}: Using task spec: {routing_meta['spec']}")
                 else:
-                    from TRAINING.target_router import route_target
+                    from TRAINING.orchestration.routing.target_router import route_target
                     route_info = route_target(target)
                     routing_meta = {
                         'target_name': target,
