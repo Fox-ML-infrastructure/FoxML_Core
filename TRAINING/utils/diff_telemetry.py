@@ -2871,9 +2871,12 @@ class DiffTelemetry:
                 differs = prev_rounded != curr_rounded
                 
                 # Check if delta is significant (above tolerance)
+                # Use max(abs_tol, rel_tol * max(abs(prev), abs(curr), 1.0)) for combined tolerance
+                # This ensures we use the stricter of absolute or relative tolerance
                 abs_change = abs(delta_abs)
-                rel_change = abs(delta_pct) / 100.0 if prev_float != 0 else 0.0
-                is_significant = abs_change > abs_tol or rel_change > rel_tol
+                max_value = max(abs(prev_float), abs(curr_float), 1.0)  # At least 1.0 to avoid division issues
+                tol = max(abs_tol, rel_tol * max_value)
+                is_significant = abs_change > tol
                 
                 # Classify impact
                 impact_label = 'none'
@@ -2886,12 +2889,12 @@ class DiffTelemetry:
                     else:
                         impact_label = 'major'
                 else:
-                    # Fall back to tolerance-based classification
-                    if abs_change < abs_tol and rel_change < rel_tol:
+                    # Fall back to tolerance-based classification using same tol calculation
+                    if abs_change < tol:
                         impact_label = 'none'
-                    elif abs_change < abs_tol * 10 and rel_change < rel_tol * 10:
+                    elif abs_change < tol * 10:
                         impact_label = 'noise'
-                    elif abs_change < abs_tol * 100 and rel_change < rel_tol * 100:
+                    elif abs_change < tol * 100:
                         impact_label = 'minor'
                     else:
                         impact_label = 'major'
@@ -2908,7 +2911,7 @@ class DiffTelemetry:
                         'prev': prev_rounded,
                         'curr': curr_rounded,
                         'differs': differs,  # prev != curr (after rounding)
-                        'changed': is_significant,  # abs(delta) > max(abs_tol, rel_tol*abs(prev))
+                        'changed_tol': is_significant,  # abs(delta) > max(abs_tol, rel_tol*max(abs(prev),abs(curr),1.0))
                         'impact_label': impact_label,
                         'abs_tol': abs_tol,
                         'rel_tol': rel_tol
@@ -2950,14 +2953,29 @@ class DiffTelemetry:
         
         All entries in metric_deltas are significant by design (zero-delta entries are filtered out).
         
+        Uses per-metric polarity to correctly identify improvements vs regressions:
+        - For metrics where higher is better (mean_score, composite_score, mean_importance): positive delta = improvement
+        - For metrics where lower is better (std_score): positive delta = regression
+        
         Returns:
             Tuple of (impact_label, top_regressions, top_improvements)
             - impact_label: none|noise|minor|major (worst impact across all metrics)
-            - top_regressions: List of up to top_k metrics with worst negative deltas
-            - top_improvements: List of up to top_k metrics with best positive deltas
+            - top_regressions: List of up to top_k metrics with worst regressions (using signed_delta)
+            - top_improvements: List of up to top_k metrics with best improvements (using signed_delta)
         """
         if not metric_deltas:
             return 'none', [], []
+        
+        # Per-metric polarity: True = higher is better, False = lower is better
+        higher_is_better = {
+            'mean_score': True,
+            'composite_score': True,
+            'mean_importance': True,
+            'std_score': False,  # Lower variability is better
+            'n_models': True,  # More models is better (if applicable)
+            'pos_rate': True,  # Higher positive rate is better (if applicable)
+            'N_effective_cs': True,  # More effective samples is better
+        }
         
         # Impact hierarchy: none < noise < minor < major
         impact_hierarchy = {'none': 0, 'noise': 1, 'minor': 2, 'major': 3}
@@ -2972,30 +2990,35 @@ class DiffTelemetry:
             if impact_hierarchy.get(impact, 0) > impact_hierarchy.get(worst_impact, 0):
                 worst_impact = impact
             
-            # Collect regressions (negative deltas) and improvements (positive deltas)
-            # All entries are significant by design
+            # Compute signed delta based on metric polarity
             delta_abs = delta_info.get('delta_abs', 0)
-            if delta_abs < 0:
+            is_higher_better = higher_is_better.get(metric_name, True)  # Default to higher is better
+            signed_delta = delta_abs if is_higher_better else -delta_abs
+            
+            # Collect regressions (negative signed_delta) and improvements (positive signed_delta)
+            if signed_delta < 0:
                 regressions.append({
                     'metric': metric_name,
                     'delta_abs': delta_abs,
+                    'signed_delta': signed_delta,  # For ranking
                     'delta_pct': delta_info.get('delta_pct', 0),
                     'z_score': delta_info.get('z_score'),
                     'impact': impact
                 })
-            elif delta_abs > 0:
+            elif signed_delta > 0:
                 improvements.append({
                     'metric': metric_name,
                     'delta_abs': delta_abs,
+                    'signed_delta': signed_delta,  # For ranking
                     'delta_pct': delta_info.get('delta_pct', 0),
                     'z_score': delta_info.get('z_score'),
                     'impact': impact
                 })
         
-        # Sort regressions by worst delta (most negative first)
-        regressions.sort(key=lambda x: x['delta_abs'])
-        # Sort improvements by best delta (most positive first)
-        improvements.sort(key=lambda x: x['delta_abs'], reverse=True)
+        # Sort regressions by worst signed_delta (most negative first)
+        regressions.sort(key=lambda x: x['signed_delta'])
+        # Sort improvements by best signed_delta (most positive first)
+        improvements.sort(key=lambda x: x['signed_delta'], reverse=True)
         
         # Return top K
         top_regressions = regressions[:top_k]
