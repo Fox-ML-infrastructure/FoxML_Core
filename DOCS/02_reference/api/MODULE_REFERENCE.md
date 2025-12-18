@@ -78,16 +78,18 @@ df = classify_excess_return(df, horizon="5m")
 
 ### Target Type Detection
 
-**Module:** `TRAINING/utils/target_utils.py`
+**Module:** `TRAINING/ranking/utils/target_utils.py` (also available via `TRAINING/utils/target_utils.py` for backward compatibility)
 
 Provides reusable helpers for detecting target types consistently:
 
 ```python
-from TRAINING.utils.target_utils import (
+from TRAINING.utils.target_utils import (  # Backward-compatible import
     is_classification_target,
     is_binary_classification_target,
     is_multiclass_target
 )
+# Or use the new path:
+# from TRAINING.ranking.utils.target_utils import ...
 
 # Detect target type
 if is_classification_target(y):

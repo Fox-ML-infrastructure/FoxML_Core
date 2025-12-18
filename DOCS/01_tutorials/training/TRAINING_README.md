@@ -33,7 +33,10 @@ TRAINING/
 ├── training_strategies/    # Training strategies (modular)
 │   └── train_with_strategies.py  # Backward-compat wrapper
 ├── strategies/             # Training strategies
-├── utils/                  # Utilities (data loading, leakage filtering, reproducibility tracking, etc.)
+├── utils/                  # Utilities (backward-compat re-exports)
+│   ├── ranking/utils/      # Ranking-specific utilities (24 files)
+│   ├── orchestration/utils/ # Orchestration utilities (8 files)
+│   └── common/utils/       # Shared/common utilities (16 files)
 ├── common/                 # Common utilities (safety, threading, etc.)
 ├── preprocessing/          # Data preprocessing
 ├── processing/            # Data processing
