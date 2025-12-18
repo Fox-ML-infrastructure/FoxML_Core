@@ -46,18 +46,33 @@ TRAINING/
 └── train.py                # Main training entry point
 ```
 
-## Refactoring (2025-12-09)
+## Refactoring History
 
-Large monolithic files have been split into modular components:
+### 2025-12-18: Code Modularization & Utils Reorganization
+
+- **`TRAINING/utils/` reorganized** into domain-specific subdirectories:
+  - `ranking/utils/` - Ranking-specific utilities (24 files)
+  - `orchestration/utils/` - Orchestration utilities (8 files)  
+  - `common/utils/` - Shared/common utilities (16 files)
+- **Large files split** into modular components:
+  - `reproducibility_tracker.py` → `reproducibility/` folder
+  - `diff_telemetry.py` → `diff_telemetry/` folder
+  - `multi_model_feature_selection.py` → `multi_model_feature_selection/` folder
+  - `intelligent_trainer.py` → `intelligent_trainer/` folder
+  - `leakage_detection.py` → `leakage_detection/` folder
+- **Backward compatibility maintained** via `TRAINING/utils/__init__.py` re-exports
+- See **[Detailed Changelog](../../02_reference/changelog/2025-12-18-code-modularization.md)** for complete details
+
+### 2025-12-09: Initial Large File Splits
 
 - **`models/specialized_models.py`**: 4,518 → 82 lines (split into `models/specialized/`)
 - **`ranking/rank_target_predictability.py`**: 3,454 → 56 lines (split into `ranking/predictability/`)
 - **`train_with_strategies.py`**: 2,523 → 66 lines (split into `training_strategies/`)
 
 **For detailed refactoring documentation, see:**
-- **[Refactoring & Wrappers Guide](../../DOCS/01_tutorials/REFACTORING_AND_WRAPPERS.md)** - User-facing guide explaining wrappers and import patterns
-- **[Refactoring Summary](../../DOCS/INTERNAL/REFACTORING_SUMMARY_INTERNAL.md)** - Internal technical details
-- **[Module-Specific Docs](../../DOCS/03_technical/refactoring/)** - Detailed structure for each refactored module
+- **[Refactoring & Wrappers Guide](../../01_tutorials/REFACTORING_AND_WRAPPERS.md)** - User-facing guide explaining wrappers and import patterns
+- **[Refactoring Summary](../../INTERNAL/REFACTORING_SUMMARY_INTERNAL.md)** - Internal technical details
+- **[Module-Specific Docs](../../03_technical/refactoring/)** - Detailed structure for each refactored module
 
 ### Key Points
 
