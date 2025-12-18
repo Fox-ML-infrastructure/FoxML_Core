@@ -49,29 +49,9 @@ if str(_PROJECT_ROOT) not in sys.path:
 # Propagate to spawned processes (spawned interpreter reads PYTHONPATH at startup)
 os.environ.setdefault("PYTHONPATH", str(_PROJECT_ROOT))
 
-# Additional safety: ensure the path is in sys.path for child processes
-def _ensure_project_path():
-    """Ensure project path is available for child processes."""
-    if str(_PROJECT_ROOT) not in sys.path:
-        sys.path.insert(0, str(_PROJECT_ROOT))
-
-# Call it immediately
-_ensure_project_path()
-
-# Set global numeric guards for stability
-# Add TRAINING to path for local imports
-_TRAINING_ROOT = Path(__file__).resolve().parent
-if str(_TRAINING_ROOT) not in sys.path:
-    sys.path.insert(0, str(_TRAINING_ROOT))
-
-# Also add current directory for relative imports
-if '.' not in sys.path:
-    sys.path.insert(0, '.')
-
-# Add CONFIG directory to path for centralized config loading
-_CONFIG_DIR = _PROJECT_ROOT / "CONFIG"
-if str(_CONFIG_DIR) not in sys.path:
-    sys.path.insert(0, str(_CONFIG_DIR))
+# Set up all paths using centralized utilities
+from TRAINING.common.utils.path_setup import setup_all_paths
+_PROJECT_ROOT, _TRAINING_ROOT, _CONFIG_DIR = setup_all_paths(_PROJECT_ROOT)
 
 # Import config loader
 try:
@@ -86,31 +66,8 @@ from TRAINING.common.safety import set_global_numeric_guards
 set_global_numeric_guards()
 
 # ---- JOBLIB/LOKY CLEANUP: prevent resource tracker warnings ----
-import atexit
-# Set persistent temp folder for joblib memmapping
-# Load from config if available, otherwise use default
-if _CONFIG_AVAILABLE:
-    joblib_temp = get_cfg("system.paths.joblib_temp", config_name="system_config")
-    if joblib_temp:
-        _JOBLIB_TMP = Path(joblib_temp)
-    else:
-        _JOBLIB_TMP = Path.home() / "trainer_tmp" / "joblib"
-else:
-    _JOBLIB_TMP = Path.home() / "trainer_tmp" / "joblib"
-_JOBLIB_TMP.mkdir(parents=True, exist_ok=True)
-os.environ.setdefault("JOBLIB_TEMP_FOLDER", str(_JOBLIB_TMP))
-
-# Force clean loky worker shutdown at exit to prevent semlock/file leaks
-try:
-    from joblib.externals.loky import get_reusable_executor
-    @atexit.register
-    def _loky_shutdown():
-        try:
-            get_reusable_executor().shutdown(wait=True, kill_workers=True)
-        except Exception:
-            pass
-except Exception:
-    pass
+from TRAINING.common.utils.process_cleanup import setup_loky_cleanup_from_config
+setup_loky_cleanup_from_config()
 
 """
 Enhanced Training Script with Multiple Strategies - Full Original Functionality
@@ -147,10 +104,8 @@ from TRAINING.common.threads import temp_environ, child_env_for_family, plan_for
 from TRAINING.common.tf_runtime import ensure_tf_initialized
 from TRAINING.common.tf_setup import tf_thread_setup
 
-# Family classifications
-TF_FAMS = {"MLP", "VAE", "GAN", "MetaLearning", "MultiTask"}
-TORCH_FAMS = {"CNN1D", "LSTM", "Transformer", "TabCNN", "TabLSTM", "TabTransformer"}
-CPU_FAMS = {"LightGBM", "QuantileLightGBM", "RewardBased", "NGBoost", "GMMRegime", "ChangePoint", "FTRLProximal", "Ensemble"}
+# Family classifications - import from centralized constants
+from TRAINING.common.family_constants import TF_FAMS, TORCH_FAMS, CPU_FAMS, TORCH_SEQ_FAMILIES
 
 
 """Setup and bootstrap code for training strategies."""

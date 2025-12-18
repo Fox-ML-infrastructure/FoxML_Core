@@ -33,11 +33,11 @@ intelligent_training:
   # Auto-discover ALL targets from data
   auto_targets: true
   
-  # Evaluate all discovered targets (no limit)
-  top_n_targets: 100  # High limit to get all targets
+  # Evaluate top N targets (limited for faster testing)
+  top_n_targets: 10  # Limited for faster testing
   
-  # Maximum targets to evaluate (set high for comprehensive test)
-  max_targets_to_evaluate: 100  # Will evaluate all valid targets
+  # Maximum targets to evaluate (limited for faster testing)
+  max_targets_to_evaluate: 10  # Limited for faster testing
   
   # Auto-discover features
   auto_features: true

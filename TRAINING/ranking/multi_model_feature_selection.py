@@ -83,9 +83,9 @@ from CONFIG.config_loader import load_model_config
 import yaml
 
 # Import checkpoint utility (after path is set)
-from TRAINING.utils.checkpoint import CheckpointManager
+from TRAINING.orchestration.utils.checkpoint import CheckpointManager
 # Setup logging with journald support (after path is set)
-from TRAINING.utils.logging_setup import setup_logging
+from TRAINING.orchestration.utils.logging_setup import setup_logging
 logger = setup_logging(
     script_name="multi_model_feature_selection",
     level=logging.INFO,
@@ -106,27 +106,14 @@ except ImportError:
 
 
 # Import shared config cleaner utility
-from TRAINING.utils.config_cleaner import clean_config_for_estimator as _clean_config_for_estimator
+from TRAINING.common.utils.config_cleaner import clean_config_for_estimator as _clean_config_for_estimator
 
 
-@dataclass
-class ModelFamilyConfig:
-    """Configuration for a model family"""
-    name: str
-    importance_method: str  # 'native', 'shap', 'permutation'
-    enabled: bool
-    config: Dict[str, Any]
-    weight: float = 1.0  # Weight in final aggregation
-
-
-@dataclass
-class ImportanceResult:
-    """Result from a single model's feature importance calculation"""
-    model_family: str
-    symbol: str
-    importance_scores: pd.Series
-    method: str
-    train_score: float
+# Import from modular components
+from TRAINING.ranking.multi_model_feature_selection.types import (
+    ModelFamilyConfig,
+    ImportanceResult
+)
 
 
 def normalize_importance(
@@ -746,6 +733,14 @@ def get_default_config() -> Dict[str, Any]:
     }
 
 
+# Import from modular components (keeping original implementations for now due to complexity)
+# from TRAINING.ranking.multi_model_feature_selection.importance_extractors import (
+#     safe_load_dataframe,
+#     extract_native_importance,
+#     extract_shap_importance,
+#     extract_permutation_importance
+# )
+
 def safe_load_dataframe(file_path: Path) -> pd.DataFrame:
     """Safely load a parquet file"""
     try:
@@ -930,7 +925,7 @@ def train_model_and_get_importance(
     
     # Validate target before training
     try:
-        from TRAINING.utils.target_validation import validate_target
+        from TRAINING.ranking.utils.target_validation import validate_target
         is_valid, error_msg = validate_target(y, min_samples=10, min_class_samples=2)
         if not is_valid:
             logger.debug(f"    {model_family}: {error_msg}")
@@ -1172,7 +1167,7 @@ def train_model_and_get_importance(
         
         # Load look-ahead bias fix config
         try:
-            from TRAINING.utils.lookahead_bias_config import get_lookahead_bias_fix_config
+            from TRAINING.ranking.utils.lookahead_bias_config import get_lookahead_bias_fix_config
             fix_config = get_lookahead_bias_fix_config()
             normalize_inside_cv = fix_config.get('normalize_inside_cv', False)
         except Exception:
@@ -1683,7 +1678,7 @@ def train_model_and_get_importance(
     
     elif model_family == 'lasso':
         from sklearn.linear_model import Lasso
-        from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+        from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
         
         # Lasso doesn't handle NaNs - use sklearn-safe conversion
         X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
@@ -1707,7 +1702,7 @@ def train_model_and_get_importance(
         from sklearn.linear_model import Ridge, RidgeClassifier
         from sklearn.pipeline import Pipeline
         from sklearn.preprocessing import StandardScaler
-        from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+        from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
         
         # Ridge doesn't handle NaNs - use sklearn-safe conversion
         X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
@@ -1788,7 +1783,7 @@ def train_model_and_get_importance(
         from sklearn.linear_model import ElasticNet, LogisticRegression
         from sklearn.pipeline import Pipeline
         from sklearn.preprocessing import StandardScaler
-        from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+        from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
         
         # Elastic Net doesn't handle NaNs - use sklearn-safe conversion
         X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
@@ -1884,7 +1879,7 @@ def train_model_and_get_importance(
     elif model_family == 'mutual_information':
         # Mutual information doesn't train a model, just calculates information
         from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
-        from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+        from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
         
         # Mutual information doesn't support NaN - use sklearn-safe conversion
         X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
@@ -1918,7 +1913,7 @@ def train_model_and_get_importance(
     elif model_family == 'univariate_selection':
         # Univariate Feature Selection (f_regression/f_classif)
         from sklearn.feature_selection import f_regression, f_classif, chi2
-        from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+        from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
         
         # Univariate selection doesn't support NaN - use sklearn-safe conversion
         X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
@@ -2092,7 +2087,7 @@ def train_model_and_get_importance(
         try:
             from boruta import BorutaPy
             from sklearn.ensemble import ExtraTreesRegressor, ExtraTreesClassifier
-            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+            from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
             
             # Boruta doesn't support NaN - use sklearn-safe conversion
             X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
@@ -2147,13 +2142,13 @@ def train_model_and_get_importance(
                     class_weight_value = boruta_class_weight
                 
                 # Clean config to prevent double random_state argument
-                from TRAINING.utils.config_cleaner import clean_config_for_estimator
+                from TRAINING.common.utils.config_cleaner import clean_config_for_estimator
                 et_config = {'n_estimators': boruta_n_estimators, 'max_depth': boruta_max_depth, 'n_jobs': boruta_n_jobs, 'class_weight': class_weight_value}
                 et_config_clean = clean_config_for_estimator(ExtraTreesClassifier, et_config, extra_kwargs={'random_state': boruta_random_state}, family_name='boruta_et')
                 base_estimator = ExtraTreesClassifier(**et_config_clean, random_state=boruta_random_state)
             else:
                 # Clean config to prevent double random_state argument
-                from TRAINING.utils.config_cleaner import clean_config_for_estimator
+                from TRAINING.common.utils.config_cleaner import clean_config_for_estimator
                 et_config = {'n_estimators': boruta_n_estimators, 'max_depth': boruta_max_depth, 'n_jobs': boruta_n_jobs}
                 et_config_clean = clean_config_for_estimator(ExtraTreesRegressor, et_config, extra_kwargs={'random_state': boruta_random_state}, family_name='boruta_et')
                 base_estimator = ExtraTreesRegressor(**et_config_clean, random_state=boruta_random_state)
@@ -2253,8 +2248,8 @@ def train_model_and_get_importance(
         )
         
         # CRITICAL: Use PurgedTimeSeriesSplit to prevent temporal leakage
-        from TRAINING.utils.purged_time_series_split import PurgedTimeSeriesSplit
-        from TRAINING.utils.leakage_filtering import _extract_horizon, _load_leakage_config
+        from TRAINING.ranking.utils.purged_time_series_split import PurgedTimeSeriesSplit
+        from TRAINING.ranking.utils.leakage_filtering import _extract_horizon, _load_leakage_config
         
         # Calculate purge_overlap from target horizon
         # CRITICAL: Use the data_interval_minutes parameter (detected in calling function)
@@ -2294,7 +2289,7 @@ def train_model_and_get_importance(
             
             try:
                 # Clean config to prevent double random_state argument
-                from TRAINING.utils.config_cleaner import clean_config_for_estimator
+                from TRAINING.common.utils.config_cleaner import clean_config_for_estimator
                 if is_binary or is_multiclass:
                     lr_config = {'Cs': stability_cs, 'cv': purged_cv, 'max_iter': stability_max_iter, 'n_jobs': stability_n_jobs}
                     lr_config_clean = clean_config_for_estimator(LogisticRegressionCV, lr_config, extra_kwargs={'random_state': stability_random_state}, family_name='stability_selection')
@@ -2445,8 +2440,8 @@ def process_single_symbol(
             df = df.sample(n=max_samples, random_state=sample_seed)
         
         # LEAKAGE PREVENTION: Filter out leaking features (with registry validation)
-        from TRAINING.utils.leakage_filtering import filter_features_for_target
-        from TRAINING.utils.data_interval import detect_interval_from_dataframe
+        from TRAINING.ranking.utils.leakage_filtering import filter_features_for_target
+        from TRAINING.ranking.utils.data_interval import detect_interval_from_dataframe
         
         # Detect data interval for horizon conversion
         detected_interval = detect_interval_from_dataframe(
@@ -3735,7 +3730,7 @@ def main():
     
     # Generate metrics rollups after all feature selections complete
     try:
-        from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+        from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
         from datetime import datetime
         
         # Find the REPRODUCIBILITY directory

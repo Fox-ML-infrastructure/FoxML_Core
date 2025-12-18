@@ -321,7 +321,7 @@ def get_policy(family: str) -> RuntimePolicy:
     """
     # CRITICAL: Use SST contract for family normalization (single source of truth)
     try:
-        from TRAINING.utils.sst_contract import normalize_family
+        from TRAINING.common.utils.sst_contract import normalize_family
         family = normalize_family(family)
     except ImportError:
         # Fallback to legacy function if SST contract not available

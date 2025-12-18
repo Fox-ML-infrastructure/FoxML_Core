@@ -75,16 +75,8 @@ try:
 except ImportError:
     pass  # Logger not yet initialized, will be set up below
 
-def _get_importance_top_fraction() -> float:
-    """Get the top fraction for importance analysis from config."""
-    if _CONFIG_AVAILABLE:
-        try:
-            # Load from feature_selection/multi_model.yaml
-            fraction = float(get_cfg("aggregation.importance_top_fraction", default=0.10, config_name="multi_model"))
-            return fraction
-        except Exception:
-            return 0.10  # FALLBACK_DEFAULT_OK
-    return 0.10  # FALLBACK_DEFAULT_OK
+# Import from modular components
+from TRAINING.ranking.predictability.model_evaluation.config_helpers import get_importance_top_fraction as _get_importance_top_fraction
 
 # Import logging config utilities
 try:
@@ -101,15 +93,15 @@ except ImportError:
             self.detail = False
 
 # Import checkpoint utility (after path is set)
-from TRAINING.utils.checkpoint import CheckpointManager
+from TRAINING.orchestration.utils.checkpoint import CheckpointManager
 
 # Import unified task type system
-from TRAINING.utils.task_types import (
+from TRAINING.common.utils.task_types import (
     TaskType, TargetConfig, ModelConfig, 
     is_compatible, create_model_configs_from_yaml
 )
-from TRAINING.utils.task_metrics import evaluate_by_task, compute_composite_score
-from TRAINING.utils.target_validation import validate_target, check_cv_compatibility
+from TRAINING.common.utils.task_metrics import evaluate_by_task, compute_composite_score
+from TRAINING.ranking.utils.target_validation import validate_target, check_cv_compatibility
 
 # Suppress expected warnings (harmless)
 warnings.filterwarnings('ignore', message='X does not have valid feature names')
@@ -119,7 +111,7 @@ warnings.filterwarnings('ignore', message='invalid value encountered in divide')
 warnings.filterwarnings('ignore', message='invalid value encountered in true_divide')
 
 # Setup logging with journald support
-from TRAINING.utils.logging_setup import setup_logging
+from TRAINING.orchestration.utils.logging_setup import setup_logging
 logger = setup_logging(
     script_name="rank_target_predictability",
     level=logging.INFO,
@@ -135,178 +127,12 @@ from TRAINING.ranking.predictability.data_loading import load_sample_data, prepa
 from TRAINING.ranking.predictability.leakage_detection import detect_leakage, _save_feature_importances, _log_suspicious_features, find_near_copy_features, _detect_leaking_features
 
 
-def _compute_suspicion_score(
-    train_score: float,
-    cv_score: Optional[float],
-    feature_importances: Dict[str, float],
-    task_type: str = 'classification'
-) -> float:
-    """
-    Compute suspicion score for perfect train accuracy.
-    
-    Higher score = more suspicious (likely real leakage, not just overfitting).
-    
-    Signals that increase suspicion:
-    - CV too good to be true (cv_mean >= 0.85)
-    - Generalization gap too small with perfect train (gap < 0.05)
-    - Single feature domination (top1_importance / sum >= 0.40)
-    
-    Signals that decrease suspicion:
-    - CV is normal-ish (0.55-0.75)
-    - Large gap (classic overfit)
-    - Feature dominance not extreme
-    """
-    suspicion = 0.0
-    
-    # Signal 1: CV too good to be true
-    if cv_score is not None:
-        if cv_score >= 0.85:
-            suspicion += 0.4  # High suspicion
-        elif cv_score >= 0.75:
-            suspicion += 0.2  # Medium suspicion
-        elif cv_score < 0.55:
-            suspicion -= 0.2  # Low suspicion (normal performance)
-    
-    # Signal 2: Generalization gap (small gap with perfect train = suspicious)
-    if cv_score is not None:
-        gap = train_score - cv_score
-        if gap < 0.05 and train_score >= 0.99:
-            suspicion += 0.3  # Very suspicious: perfect train but CV also high
-        elif gap > 0.20:
-            suspicion -= 0.2  # Large gap = classic overfit (less suspicious)
-    
-    # Signal 3: Feature dominance
-    if feature_importances:
-        importances = list(feature_importances.values())
-        if importances:
-            total_importance = sum(importances)
-            if total_importance > 0:
-                top1_importance = max(importances)
-                dominance_ratio = top1_importance / total_importance
-                if dominance_ratio >= 0.50:
-                    suspicion += 0.3  # Single feature dominates
-                elif dominance_ratio >= 0.40:
-                    suspicion += 0.2  # High dominance
-                elif dominance_ratio < 0.20:
-                    suspicion -= 0.1  # Low dominance (less suspicious)
-    
-    # Clamp to [0, 1]
-    return max(0.0, min(1.0, suspicion))
+# Import from modular components
+from TRAINING.ranking.predictability.model_evaluation.leakage_helpers import compute_suspicion_score as _compute_suspicion_score
 
 
-def _log_canonical_summary(
-    target_name: str,
-    target_column: str,
-    symbols: List[str],
-    time_vals: Optional[np.ndarray],
-    interval: Optional[Union[int, str]],
-    horizon: Optional[int],
-    rows: int,
-    features_safe: int,
-    features_pruned: int,
-    leak_scan_verdict: str,
-    auto_fix_verdict: str,
-    auto_fix_reason: Optional[str],
-    cv_metric: str,
-    composite: float,
-    leakage_flag: str,
-    cohort_path: Optional[str],
-    splitter_name: Optional[str] = None,
-    purge_minutes: Optional[float] = None,
-    embargo_minutes: Optional[float] = None,
-    max_feature_lookback_minutes: Optional[float] = None,
-    n_splits: Optional[int] = None,
-    lookback_budget_minutes: Optional[Union[float, str]] = None,
-    purge_include_feature_lookback: Optional[bool] = None,
-    gatekeeper_threshold_source: Optional[str] = None
-):
-    """
-    Log canonical run summary block (one block that can be screenshot for PR comments).
-    
-    This provides a stable anchor for reviewers to quickly understand:
-    - What was evaluated
-    - Data characteristics
-    - Feature pipeline
-    - Leakage status
-    - Performance metrics
-    - Reproducibility path
-    """
-    # Extract date range from time_vals if available
-    date_range = "N/A"
-    if time_vals is not None and len(time_vals) > 0:
-        try:
-            import pandas as pd
-            if isinstance(time_vals[0], (int, float)):
-                time_series = pd.to_datetime(time_vals, unit='ns')
-            else:
-                time_series = pd.Series(time_vals)
-            if len(time_series) > 0:
-                date_range = f"{time_series.min().strftime('%Y-%m-%d')} → {time_series.max().strftime('%Y-%m-%d')}"
-        except Exception:
-            pass
-    
-    # Format symbols (show first 5, then count)
-    if len(symbols) <= 5:
-        symbols_str = ', '.join(symbols)
-    else:
-        symbols_str = f"{', '.join(symbols[:5])}, ... ({len(symbols)} total)"
-    
-    # Format interval/horizon
-    interval_str = f"{interval}" if interval else "auto"
-    horizon_str = f"{horizon}m" if horizon else "N/A"
-    
-    # Format auto-fix info
-    auto_fix_str = auto_fix_verdict
-    if auto_fix_reason:
-        auto_fix_str += f" (reason={auto_fix_reason})"
-    
-    logger.info("=" * 60)
-    logger.info("TARGET_RANKING SUMMARY")
-    logger.info("=" * 60)
-    logger.info(f"target: {target_column:<40} horizon: {horizon_str:<8} interval: {interval_str}")
-    logger.info(f"symbols: {len(symbols)} ({symbols_str})")
-    logger.info(f"date: {date_range}")
-    logger.info(f"rows: {rows:<10} features: safe={features_safe} → pruned={features_pruned}")
-    logger.info(f"leak_scan: {leak_scan_verdict:<6} auto_fix: {auto_fix_str}")
-    logger.info(f"cv: {cv_metric:<25} composite: {composite:.3f}")
-    
-    # CV splitter and leakage budget details (CRITICAL for audit)
-    if splitter_name:
-        logger.info(f"splitter: {splitter_name}")
-    if n_splits is not None:
-        logger.info(f"n_splits: {n_splits}")
-    if purge_minutes is not None:
-        logger.info(f"purge_minutes: {purge_minutes:.1f}m")
-    if embargo_minutes is not None:
-        logger.info(f"embargo_minutes: {embargo_minutes:.1f}m")
-    if max_feature_lookback_minutes is not None:
-        logger.info(f"max_feature_lookback_minutes: {max_feature_lookback_minutes:.1f}m")
-    
-    # Config trace for leakage detection settings (CRITICAL for auditability)
-    logger.info("")
-    logger.info("📋 CONFIG TRACE: Leakage Detection Settings")
-    logger.info("-" * 60)
-    if lookback_budget_minutes is not None:
-        if isinstance(lookback_budget_minutes, str):
-            logger.info(f"  lookback_budget_minutes: {lookback_budget_minutes} (source: config)")
-        else:
-            logger.info(f"  lookback_budget_minutes: {lookback_budget_minutes:.1f}m (source: config)")
-    else:
-        logger.info(f"  lookback_budget_minutes: auto (not set, using actual max)")
-    if purge_include_feature_lookback is not None:
-        logger.info(f"  purge_include_feature_lookback: {purge_include_feature_lookback} (source: config)")
-    else:
-        logger.info(f"  purge_include_feature_lookback: N/A (not available)")
-    if gatekeeper_threshold_source is not None:
-        logger.info(f"  gatekeeper_threshold_source: {gatekeeper_threshold_source}")
-    else:
-        logger.info(f"  gatekeeper_threshold_source: N/A (not available)")
-    logger.info("-" * 60)
-    logger.info("")
-    
-    if cohort_path:
-        logger.info(f"repro: {cohort_path}")
-    logger.info("=" * 60)
+# Import from modular components
+from TRAINING.ranking.predictability.model_evaluation.reporting import log_canonical_summary as _log_canonical_summary
 
 def _enforce_final_safety_gate(
     X: np.ndarray,
@@ -400,7 +226,7 @@ def _enforce_final_safety_gate(
     # This ensures consistency: same canonical map, same quarantine logic, same invariants
     # Gatekeeper has extra logic (X matrix manipulation, daily pattern heuristics, dropped_tracker),
     # so we use apply_lookback_cap() for the core structure and preserve the extra logic
-    from TRAINING.utils.lookback_cap_enforcement import apply_lookback_cap
+    from TRAINING.ranking.utils.lookback_cap_enforcement import apply_lookback_cap
     from CONFIG.config_loader import get_cfg
     
     # Load policy and log_mode from config
@@ -454,7 +280,7 @@ def _enforce_final_safety_gate(
     
     # Build lookup dict from canonical map for per-feature iteration (needed for X matrix manipulation)
     # Use the canonical map from enforced result (SST)
-    from TRAINING.utils.leakage_budget import _feat_key
+    from TRAINING.ranking.utils.leakage_budget import _feat_key
     feature_lookback_dict = {}
     for feat_name in feature_names:
         feat_key = _feat_key(feat_name)
@@ -575,7 +401,7 @@ def _enforce_final_safety_gate(
         
         # NEW: Track dropped features for telemetry with structured reasons
         if dropped_tracker is not None:
-            from TRAINING.utils.dropped_features_tracker import DropReason
+            from TRAINING.ranking.utils.dropped_features_tracker import DropReason
             
             # Capture input/output for stage record
             input_features_before_gatekeeper = feature_names.copy() if 'feature_names' in locals() else []
@@ -687,9 +513,9 @@ def train_and_evaluate_models(
         from sklearn.model_selection import cross_val_score
         from sklearn.preprocessing import StandardScaler
         import lightgbm as lgb
-        from TRAINING.utils.purged_time_series_split import PurgedTimeSeriesSplit
-        from TRAINING.utils.leakage_filtering import _extract_horizon, _load_leakage_config
-        from TRAINING.utils.feature_pruning import quick_importance_prune
+        from TRAINING.ranking.utils.purged_time_series_split import PurgedTimeSeriesSplit
+        from TRAINING.ranking.utils.leakage_filtering import _extract_horizon, _load_leakage_config
+        from TRAINING.ranking.utils.feature_pruning import quick_importance_prune
     except Exception as e:
         logger.warning(f"Failed to import required libraries: {e}")
         return {}, {}, 0.0, {}, {}, []
@@ -785,7 +611,7 @@ def train_and_evaluate_models(
     
     # NEW: Initialize dropped features tracker for telemetry
     if dropped_tracker is None:
-        from TRAINING.utils.dropped_features_tracker import DroppedFeaturesTracker
+        from TRAINING.ranking.utils.dropped_features_tracker import DroppedFeaturesTracker
         dropped_tracker = DroppedFeaturesTracker()
     
     # ARCHITECTURAL IMPROVEMENT: Pre-prune low-importance features before expensive training
@@ -873,7 +699,7 @@ def train_and_evaluate_models(
                 feature_names = feature_names_pruned
                 
                 # Log feature set transition
-                from TRAINING.utils.cross_sectional_data import _log_feature_set
+                from TRAINING.ranking.utils.cross_sectional_data import _log_feature_set
                 _log_feature_set("PRUNER_SELECTED", feature_names, previous_names=feature_names_before_prune, logger_instance=logger)
                 
                 # CRITICAL: Re-run gatekeeper after pruning (pruning can surface long-lookback features)
@@ -901,13 +727,13 @@ def train_and_evaluate_models(
                             feature_names = post_prune_gatekeeper_enforced.features.copy()
             else:
                 logger.info(f"  No features pruned (all above threshold)")
-                from TRAINING.utils.cross_sectional_data import _log_feature_set
+                from TRAINING.ranking.utils.cross_sectional_data import _log_feature_set
                 _log_feature_set("PRUNER_SELECTED", feature_names, previous_names=None, logger_instance=logger)
             
             # CRITICAL: Recompute resolved_config with feature_lookback_max from PRUNED features
             # This prevents paying 1440m purge for features we don't even use
-            from TRAINING.utils.leakage_budget import compute_budget
-            from TRAINING.utils.resolved_config import compute_feature_lookback_max, create_resolved_config
+            from TRAINING.ranking.utils.leakage_budget import compute_budget
+            from TRAINING.ranking.utils.resolved_config import compute_feature_lookback_max, create_resolved_config
             
             # Get registry for lookback calculation
             registry = None
@@ -1006,7 +832,7 @@ def train_and_evaluate_models(
             
             # Compute feature lookback from PRUNED features
             # Get fingerprint for validation
-            from TRAINING.utils.cross_sectional_data import _log_feature_set, _compute_feature_fingerprint
+            from TRAINING.ranking.utils.cross_sectional_data import _log_feature_set, _compute_feature_fingerprint
             _log_feature_set("POST_PRUNE", feature_names, previous_names=None, logger_instance=logger)
             post_prune_fp, post_prune_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
             # CRITICAL: Store feature_names for invariant check later
@@ -1028,7 +854,7 @@ def train_and_evaluate_models(
             
             # CRITICAL: Use apply_lookback_cap() to enforce (quarantine unknowns), not just compute
             # This ensures unknowns are dropped at POST_PRUNE, not just logged
-            from TRAINING.utils.lookback_cap_enforcement import apply_lookback_cap
+            from TRAINING.ranking.utils.lookback_cap_enforcement import apply_lookback_cap
             from CONFIG.config_loader import get_cfg
             
             # Load policy
@@ -1062,7 +888,7 @@ def train_and_evaluate_models(
             post_prune_artifact = None
             if output_dir is not None:
                 try:
-                    from TRAINING.utils.feature_set_artifact import create_artifact_from_enforced
+                    from TRAINING.ranking.utils.feature_set_artifact import create_artifact_from_enforced
                     post_prune_artifact = create_artifact_from_enforced(
                         enforced_post_prune,
                         stage="POST_PRUNE",
@@ -1129,7 +955,7 @@ def train_and_evaluate_models(
                         )
                 
                 # CRITICAL: Boundary assertion - validate feature_names matches POST_PRUNE EnforcedFeatureSet
-                from TRAINING.utils.lookback_policy import assert_featureset_fingerprint
+                from TRAINING.ranking.utils.lookback_policy import assert_featureset_fingerprint
                 try:
                     assert_featureset_fingerprint(
                         label="POST_PRUNE",
@@ -1177,7 +1003,7 @@ def train_and_evaluate_models(
                 # CRITICAL INVARIANT CHECK: max(lookback_map[features]) == actual_max_from_features
                 # This prevents regression and ensures canonical map consistency
                 if canonical_map_from_post_prune is not None:
-                    from TRAINING.utils.leakage_budget import _feat_key
+                    from TRAINING.ranking.utils.leakage_budget import _feat_key
                     
                     # Extract lookbacks for current features from canonical map
                     feature_lookbacks_from_map = []
@@ -1321,7 +1147,7 @@ def train_and_evaluate_models(
                 
                 # CRITICAL: Enforce leakage policy after pruning (final feature set)
                 if resolved_config.purge_minutes is not None and resolved_config.feature_lookback_max_minutes is not None:
-                    from TRAINING.utils.leakage_budget import compute_budget
+                    from TRAINING.ranking.utils.leakage_budget import compute_budget
                     
                     # Get registry
                     registry = None
@@ -1528,7 +1354,7 @@ def train_and_evaluate_models(
     # CRITICAL: Create resolved_config AFTER pruning (or if pruning skipped)
     # This ensures feature_lookback_max is computed from actual features used in training
     if resolved_config is None:
-        from TRAINING.utils.resolved_config import compute_feature_lookback_max, create_resolved_config
+        from TRAINING.ranking.utils.resolved_config import compute_feature_lookback_max, create_resolved_config
         
         # Get n_symbols_available from cohort_context
         n_symbols_available = len(mtf_data) if 'mtf_data' in locals() else 1
@@ -1544,7 +1370,7 @@ def train_and_evaluate_models(
             pass
         
         # Compute feature lookback from actual features (pruned or unpruned)
-        from TRAINING.utils.cross_sectional_data import _compute_feature_fingerprint
+        from TRAINING.ranking.utils.cross_sectional_data import _compute_feature_fingerprint
         current_fp, current_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
         
         # CRITICAL INVARIANT CHECK: Verify featureset matches POST_PRUNE (if it exists)
@@ -1552,7 +1378,7 @@ def train_and_evaluate_models(
         if 'post_prune_fp' in locals() and post_prune_fp is not None:
             # Use reusable invariant check helper (if EnforcedFeatureSet available)
             if 'post_prune_enforced' in locals():
-                from TRAINING.utils.lookback_policy import assert_featureset_fingerprint
+                from TRAINING.ranking.utils.lookback_policy import assert_featureset_fingerprint
                 assert_featureset_fingerprint(
                     label="MODEL_TRAIN_INPUT",
                     expected=post_prune_enforced,
@@ -1668,7 +1494,7 @@ def train_and_evaluate_models(
         target_horizon_minutes = None
         if target_column:
             try:
-                from TRAINING.utils.leakage_filtering import _extract_horizon, _load_leakage_config
+                from TRAINING.ranking.utils.leakage_filtering import _extract_horizon, _load_leakage_config
                 leakage_config = _load_leakage_config()
                 target_horizon_minutes = _extract_horizon(target_column, leakage_config)
             except Exception:
@@ -1802,9 +1628,9 @@ def train_and_evaluate_models(
     # CRITICAL FIX: Recompute purge_minutes from FINAL featureset (post-gatekeeper + post-prune)
     # The resolved_config.purge_minutes may have been computed from pre-prune featureset
     # We need to ensure purge is computed from the ACTUAL features used in training
-    from TRAINING.utils.leakage_budget import compute_budget
-    from TRAINING.utils.resolved_config import derive_purge_embargo
-    from TRAINING.utils.cross_sectional_data import _compute_feature_fingerprint
+    from TRAINING.ranking.utils.leakage_budget import compute_budget
+    from TRAINING.ranking.utils.resolved_config import derive_purge_embargo
+    from TRAINING.ranking.utils.cross_sectional_data import _compute_feature_fingerprint
     
     # Compute fingerprint of final featureset for validation
     final_featureset_fp, _ = _compute_feature_fingerprint(feature_names, set_invariant=True)
@@ -1872,7 +1698,7 @@ def train_and_evaluate_models(
     # CRITICAL: Apply purge_include_feature_lookback policy (same logic as create_resolved_config)
     # If purge_include_feature_lookback=True, purge must be >= feature_lookback_max + interval
     if purge_include_feature_lookback and feature_lookback_max_minutes is not None:
-        from TRAINING.utils.duration_parser import enforce_purge_audit_rule, format_duration
+        from TRAINING.common.utils.duration_parser import enforce_purge_audit_rule, format_duration
         
         purge_in = purge_minutes_val
         lookback_in = feature_lookback_max_minutes
@@ -1972,7 +1798,7 @@ def train_and_evaluate_models(
     # CRITICAL: This fingerprint represents the ACTUAL features used in training (POST_PRUNE, not just post-gatekeeper)
     # Pruning happens earlier in this function (line ~635), so feature_names here is the final pruned set
     # All subsequent lookback computations must use this same fingerprint for validation
-    from TRAINING.utils.cross_sectional_data import _log_feature_set, _compute_feature_fingerprint
+    from TRAINING.ranking.utils.cross_sectional_data import _log_feature_set, _compute_feature_fingerprint
     _log_feature_set("MODEL_TRAIN_INPUT", feature_names, previous_names=None, logger_instance=logger)
     model_train_input_fingerprint, model_train_input_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
     logger.info(f"📊 MODEL_TRAIN_INPUT fingerprint={model_train_input_fingerprint} (n_features={len(feature_names)}, POST_PRUNE)")
@@ -2001,7 +1827,7 @@ def train_and_evaluate_models(
         
         # PHASE 1: Pre-CV compatibility check for degenerate folds (first-class handling)
         # Check if target is compatible with CV before creating splitter
-        from TRAINING.utils.target_validation import check_cv_compatibility
+        from TRAINING.ranking.utils.target_validation import check_cv_compatibility
         is_cv_compatible, cv_compatibility_reason = check_cv_compatibility(y, task_type, cv_folds)
         
         # Get degenerate fold fallback policy from config
@@ -2704,7 +2530,7 @@ def train_and_evaluate_models(
                 logger.warning(f"    Missing from importance: {sorted(missing)[:10]}{'...' if len(missing) > 10 else ''}")
             elif importance_keys == train_input_keys:
                 # Keys match AND order matches - safe to log fingerprint
-                from TRAINING.utils.cross_sectional_data import _log_feature_set
+                from TRAINING.ranking.utils.cross_sectional_data import _log_feature_set
                 _log_feature_set("IMPORTANCE_KEYS", importance_keys, previous_names=feature_names, logger_instance=logger)
             
             # Compute and store full task-aware metrics
@@ -2797,7 +2623,7 @@ def train_and_evaluate_models(
                     logger.warning(f"    Missing from importance: {sorted(missing)[:10]}{'...' if len(missing) > 10 else ''}")
                 elif importance_keys == train_input_keys:
                     # Keys match AND order matches - safe to log fingerprint
-                    from TRAINING.utils.cross_sectional_data import _log_feature_set
+                    from TRAINING.ranking.utils.cross_sectional_data import _log_feature_set
                     _log_feature_set("IMPORTANCE_KEYS", importance_keys, previous_names=feature_names, logger_instance=logger)
             
             # Compute and store full task-aware metrics
@@ -3088,7 +2914,7 @@ def train_and_evaluate_models(
         try:
             import catboost as cb
             from catboost import Pool
-            from TRAINING.utils.target_utils import is_classification_target, is_binary_classification_target
+            from TRAINING.ranking.utils.target_utils import is_classification_target, is_binary_classification_target
             
             # Determine task characteristics (use task_type, not y inspection for consistency)
             is_binary = task_type == TaskType.BINARY_CLASSIFICATION
@@ -3795,7 +3621,7 @@ def train_and_evaluate_models(
         try:
             from sklearn.linear_model import Lasso
             from sklearn.pipeline import Pipeline
-            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+            from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
             
             # Get config values
             lasso_config = get_model_config('lasso', multi_model_config)
@@ -3851,7 +3677,7 @@ def train_and_evaluate_models(
             from sklearn.linear_model import Ridge, RidgeClassifier
             from sklearn.pipeline import Pipeline
             from sklearn.preprocessing import StandardScaler
-            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+            from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
             
             # Ridge doesn't handle NaNs - use sklearn-safe conversion
             X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
@@ -3926,7 +3752,7 @@ def train_and_evaluate_models(
             from sklearn.linear_model import ElasticNet, LogisticRegression
             from sklearn.pipeline import Pipeline
             from sklearn.preprocessing import StandardScaler
-            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+            from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
             
             # Elastic Net doesn't handle NaNs - use sklearn-safe conversion
             X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
@@ -4015,7 +3841,7 @@ def train_and_evaluate_models(
     if 'mutual_information' in model_families:
         try:
             from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
-            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+            from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
             
             # Mutual information doesn't handle NaN - use sklearn-safe conversion
             X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
@@ -4074,7 +3900,7 @@ def train_and_evaluate_models(
     if 'univariate_selection' in model_families:
         try:
             from sklearn.feature_selection import f_regression, f_classif
-            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+            from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
             
             # F-tests don't handle NaN - use sklearn-safe conversion
             X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
@@ -4188,7 +4014,7 @@ def train_and_evaluate_models(
         try:
             from boruta import BorutaPy
             from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+            from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
             
             # Boruta doesn't support NaN - use sklearn-safe conversion
             X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
@@ -4269,7 +4095,7 @@ def train_and_evaluate_models(
     if 'stability_selection' in model_families:
         try:
             from sklearn.linear_model import LassoCV, LogisticRegressionCV
-            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+            from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
             
             # Stability selection uses Lasso/LogisticRegression which don't handle NaN
             X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
@@ -4303,7 +4129,7 @@ def train_and_evaluate_models(
                     # Use TimeSeriesSplit for internal CV (even though bootstrap breaks temporal order,
                     # this maintains consistency with the rest of the codebase)
                     # Clean config to prevent double random_state argument
-                    from TRAINING.utils.config_cleaner import clean_config_for_estimator
+                    from TRAINING.common.utils.config_cleaner import clean_config_for_estimator
                     if is_binary or is_multiclass:
                         lr_config = {'Cs': stability_cs, 'cv': tscv, 'max_iter': lasso_config.get('max_iter', 1000), 'n_jobs': stability_n_jobs}
                         lr_config_clean = clean_config_for_estimator(LogisticRegressionCV, lr_config, extra_kwargs={'random_state': random_state}, family_name='stability_selection')
@@ -4415,264 +4241,12 @@ def train_and_evaluate_models(
     return model_metrics, model_scores, mean_importance, all_suspicious_features, all_feature_importances, fold_timestamps, _perfect_correlation_models
 
 
-def _save_feature_importances(
-    target_column: str,
-    symbol: str,
-    feature_importances: Dict[str, Dict[str, float]],
-    output_dir: Path = None,
-    view: str = "CROSS_SECTIONAL"
-) -> None:
-    """
-    Save detailed per-model, per-feature importance scores to CSV files.
-    
-    Creates structure:
-    {output_dir}/feature_importances/
-      {target_name}/
-        {symbol}/
-          lightgbm_importances.csv
-          xgboost_importances.csv
-          random_forest_importances.csv
-          ...
-    
-    Args:
-        target_column: Name of the target being evaluated
-        symbol: Symbol being evaluated
-        feature_importances: Dict of {model_name: {feature: importance}}
-        output_dir: Base output directory (defaults to results/)
-    """
-    if output_dir is None:
-        output_dir = _REPO_ROOT / "results"
-    
-    # Create directory structure in REPRODUCIBILITY/TARGET_RANKING/{view}/{target}/{symbol}/feature_importances/
-    # This aligns with the reproducibility structure and keeps all target ranking outputs together
-    target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-    # Determine base directory for REPRODUCIBILITY (should be at run level)
-    if output_dir.name == "target_rankings":
-        # output_dir is target_rankings/, go up to run level
-        repro_base = output_dir.parent / "REPRODUCIBILITY" / "TARGET_RANKING"
-    else:
-        # output_dir is already at run level
-        repro_base = output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
-    
-    if view == "SYMBOL_SPECIFIC" and symbol:
-        importances_dir = repro_base / view / target_name_clean / f"symbol={symbol}" / "feature_importances"
-    else:
-        importances_dir = repro_base / view / target_name_clean / "feature_importances"
-    importances_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Save per-model CSV files
-    # Sort model names for deterministic order (ensures reproducible file output)
-    for model_name in sorted(feature_importances.keys()):
-        importances = feature_importances[model_name]
-        if not importances:
-            continue
-        
-        # Create DataFrame sorted by importance
-        df = pd.DataFrame([
-            {'feature': feat, 'importance': imp}
-            for feat, imp in sorted(importances.items())  # Sort features for deterministic order
-        ])
-        df = df.sort_values('importance', ascending=False)
-        
-        # Normalize to percentages
-        total = df['importance'].sum()
-        if total > 0:
-            df['importance_pct'] = (df['importance'] / total * 100).round(2)
-            df['cumulative_pct'] = df['importance_pct'].cumsum().round(2)
-        else:
-            df['importance_pct'] = 0.0
-            df['cumulative_pct'] = 0.0
-        
-        # Reorder columns
-        df = df[['feature', 'importance', 'importance_pct', 'cumulative_pct']]
-        
-        # Save to CSV
-        csv_file = importances_dir / f"{model_name}_importances.csv"
-        df.to_csv(csv_file, index=False)
-        
-        # Save stability snapshot (non-invasive hook)
-        # Pass the same repro_base directory so snapshots are saved alongside feature importances
-        try:
-            from TRAINING.stability.feature_importance import save_snapshot_hook
-            # Use the same base directory structure as feature importances
-            snapshot_output_dir = importances_dir.parent  # Same level as feature_importances/
-            save_snapshot_hook(
-                target_name=target_column,
-                method=model_name,
-                importance_dict=importances,
-                universe_id=view,  # Use view parameter (CROSS_SECTIONAL or SYMBOL_SPECIFIC)
-                output_dir=snapshot_output_dir,  # Save snapshots in same directory structure
-                auto_analyze=None,  # Load from config
-            )
-        except Exception as e:
-            logger.debug(f"Stability snapshot save failed (non-critical): {e}")
-    
-    logger.info(f"  💾 Saved feature importances to: {importances_dir}")
-
-
-def _log_suspicious_features(
-    target_column: str,
-    symbol: str,
-    suspicious_features: Dict[str, List[Tuple[str, float]]]
-) -> None:
-    """
-    Log suspicious features to a file for later analysis.
-    
-    Args:
-        target_column: Name of the target being evaluated
-        symbol: Symbol being evaluated
-        suspicious_features: Dict of {model_name: [(feature, importance), ...]}
-    """
-    leak_report_file = _REPO_ROOT / "results" / "leak_detection_report.txt"
-    leak_report_file.parent.mkdir(parents=True, exist_ok=True)
-    
-    with open(leak_report_file, 'a') as f:
-        f.write(f"\n{'='*80}\n")
-        f.write(f"Target: {target_column} | Symbol: {symbol}\n")
-        f.write(f"{'='*80}\n")
-        
-        for model_name, features in suspicious_features.items():
-            if features:
-                f.write(f"\n{model_name.upper()} - Suspicious Features:\n")
-                f.write(f"{'-'*80}\n")
-                for feat, imp in sorted(features, key=lambda x: x[1], reverse=True):
-                    f.write(f"  {feat:50s} | Importance: {imp:.1%}\n")
-                f.write("\n")
-    
-    logger.info(f"  Leak detection report saved to: {leak_report_file}")
-
-
-def detect_leakage(
-    mean_score: float,
-    composite_score: float,
-    mean_importance: float,
-    target_name: str = "",
-    model_scores: Dict[str, float] = None,
-    task_type: TaskType = TaskType.REGRESSION
-) -> str:
-    """
-    Detect potential data leakage based on suspicious patterns.
-    
-    Returns:
-        "OK" - No signs of leakage
-        "HIGH_R2" - R² > threshold (suspiciously high)
-        "INCONSISTENT" - Composite score too high for R² (possible leakage)
-        "SUSPICIOUS" - Multiple warning signs
-    """
-    flags = []
-    
-    # Load thresholds from config
-    if _CONFIG_AVAILABLE:
-        try:
-            safety_cfg = get_safety_config()
-            # safety_config.yaml has a top-level 'safety' key
-            safety_section = safety_cfg.get('safety', {})
-            leakage_cfg = safety_section.get('leakage_detection', {})
-            warning_cfg = leakage_cfg.get('warning_thresholds', {})
-        except Exception:
-            warning_cfg = {}
-    else:
-        warning_cfg = {}
-    
-    # Determine threshold based on task type and target name
-    if task_type == TaskType.REGRESSION:
-        is_forward_return = target_name.startswith('fwd_ret_')
-        if is_forward_return:
-            # For forward returns: R² > 0.50 is suspicious
-            reg_cfg = warning_cfg.get('regression', {}).get('forward_return', {})
-            high_threshold = float(reg_cfg.get('high', 0.50))
-            very_high_threshold = float(reg_cfg.get('very_high', 0.60))
-            metric_name = "R²"
-        else:
-            # For barrier targets: R² > 0.70 is suspicious
-            reg_cfg = warning_cfg.get('regression', {}).get('barrier', {})
-            high_threshold = float(reg_cfg.get('high', 0.70))
-            very_high_threshold = float(reg_cfg.get('very_high', 0.80))
-            metric_name = "R²"
-    elif task_type == TaskType.BINARY_CLASSIFICATION:
-        # ROC-AUC > 0.95 is suspicious (near-perfect classification)
-        class_cfg = warning_cfg.get('classification', {})
-        high_threshold = float(class_cfg.get('high', 0.90))
-        very_high_threshold = float(class_cfg.get('very_high', 0.95))
-        metric_name = "ROC-AUC"
-    else:  # MULTICLASS_CLASSIFICATION
-        # Accuracy > 0.95 is suspicious
-        class_cfg = warning_cfg.get('classification', {})
-        high_threshold = float(class_cfg.get('high', 0.90))
-        very_high_threshold = float(class_cfg.get('very_high', 0.95))
-        metric_name = "Accuracy"
-    
-    # Check 1: Suspiciously high mean score
-    if mean_score > very_high_threshold:
-        flags.append("HIGH_SCORE")
-        logger.warning(
-            f"LEAKAGE WARNING: {metric_name}={mean_score:.3f} > {very_high_threshold:.2f} "
-            f"(extremely high - likely leakage)"
-        )
-    elif mean_score > high_threshold:
-        flags.append("HIGH_SCORE")
-        logger.warning(
-            f"LEAKAGE WARNING: {metric_name}={mean_score:.3f} > {high_threshold:.2f} "
-            f"(suspiciously high - investigate)"
-        )
-    
-    # Check 2: Individual model scores too high (even if mean is lower)
-    if model_scores:
-        high_model_count = sum(1 for score in model_scores.values() 
-                              if not np.isnan(score) and score > high_threshold)
-        if high_model_count >= 3:  # 3+ models with high scores
-            flags.append("HIGH_SCORE")
-            logger.warning(
-                f"LEAKAGE WARNING: {high_model_count} models have {metric_name} > {high_threshold:.2f} "
-                f"(models: {[k for k, v in model_scores.items() if not np.isnan(v) and v > high_threshold]})"
-            )
-    
-    # Check 3: Composite score inconsistent with mean score
-    # Load thresholds from config
-    try:
-        from CONFIG.config_loader import get_cfg
-        composite_high_threshold = float(get_cfg("safety.leakage_detection.model_evaluation.composite_score_high_threshold", default=0.5, config_name="safety_config"))
-        regression_score_low = float(get_cfg("safety.leakage_detection.model_evaluation.regression_score_low_threshold", default=0.2, config_name="safety_config"))
-        classification_score_low = float(get_cfg("safety.leakage_detection.model_evaluation.classification_score_low_threshold", default=0.6, config_name="safety_config"))
-    except Exception:
-        composite_high_threshold = 0.5
-        regression_score_low = 0.2
-        classification_score_low = 0.6
-    
-    score_low_threshold = regression_score_low if task_type == TaskType.REGRESSION else classification_score_low
-    if composite_score > composite_high_threshold and mean_score < score_low_threshold:
-        flags.append("INCONSISTENT")
-        logger.warning(
-            f"LEAKAGE WARNING: Composite={composite_score:.3f} but {metric_name}={mean_score:.3f} "
-            f"(inconsistent - possible leakage)"
-        )
-    
-    # Check 4: Very high importance with low score (might indicate leaked features)
-    # Load thresholds from config
-    try:
-        from CONFIG.config_loader import get_cfg
-        importance_high_threshold = float(get_cfg("safety.leakage_detection.model_evaluation.importance_high_threshold", default=0.7, config_name="safety_config"))
-        regression_score_very_low = float(get_cfg("safety.leakage_detection.model_evaluation.regression_score_very_low_threshold", default=0.1, config_name="safety_config"))
-        classification_score_very_low = float(get_cfg("safety.leakage_detection.model_evaluation.classification_score_very_low_threshold", default=0.5, config_name="safety_config"))
-    except Exception:
-        importance_high_threshold = 0.7
-        regression_score_very_low = 0.1
-        classification_score_very_low = 0.5
-    
-    score_very_low_threshold = regression_score_very_low if task_type == TaskType.REGRESSION else classification_score_very_low
-    if mean_importance > importance_high_threshold and mean_score < score_very_low_threshold:
-        flags.append("INCONSISTENT")
-        logger.warning(
-            f"LEAKAGE WARNING: Importance={mean_importance:.2f} but {metric_name}={mean_score:.3f} "
-            f"(high importance with low {metric_name} - check for leaked features)"
-        )
-    
-    if len(flags) > 1:
-        return "SUSPICIOUS"
-    elif len(flags) == 1:
-        return flags[0]
-    else:
-        return "OK"
+# Import from modular components
+from TRAINING.ranking.predictability.model_evaluation.reporting import (
+    save_feature_importances as _save_feature_importances,
+    log_suspicious_features as _log_suspicious_features
+)
+from TRAINING.ranking.predictability.model_evaluation.leakage_helpers import detect_leakage
 
 
 # calculate_composite_score is imported from TRAINING.ranking.predictability.composite_score
@@ -4836,9 +4410,9 @@ def evaluate_target_predictability(
     logger.info(f"{'='*60}")
     
     # Load data based on view
-    from TRAINING.utils.cross_sectional_data import load_mtf_data_for_ranking, prepare_cross_sectional_data_for_ranking
-    from TRAINING.utils.leakage_filtering import filter_features_for_target
-    from TRAINING.utils.target_conditional_exclusions import (
+    from TRAINING.ranking.utils.cross_sectional_data import load_mtf_data_for_ranking, prepare_cross_sectional_data_for_ranking
+    from TRAINING.ranking.utils.leakage_filtering import filter_features_for_target
+    from TRAINING.ranking.utils.target_conditional_exclusions import (
         generate_target_exclusion_list,
         load_target_exclusion_list
     )
@@ -4919,7 +4493,7 @@ def evaluate_target_predictability(
                 registry = None
             
             # Detect interval for lookback calculation
-            from TRAINING.utils.data_interval import detect_interval_from_dataframe
+            from TRAINING.ranking.utils.data_interval import detect_interval_from_dataframe
             temp_interval = detect_interval_from_dataframe(sample_df, explicit_interval=explicit_interval)
             
             target_conditional_exclusions, exclusion_metadata = generate_target_exclusion_list(
@@ -4942,7 +4516,7 @@ def evaluate_target_predictability(
         logger.debug("No output_dir provided - skipping target-conditional exclusions")
 
     # Detect data interval for horizon conversion (use explicit_interval if provided)
-    from TRAINING.utils.data_interval import detect_interval_from_dataframe
+    from TRAINING.ranking.utils.data_interval import detect_interval_from_dataframe
     detected_interval = detect_interval_from_dataframe(
         sample_df,
         timestamp_column='ts', 
@@ -4952,7 +4526,7 @@ def evaluate_target_predictability(
     )
     
     # Extract target horizon for error messages
-    from TRAINING.utils.leakage_filtering import _load_leakage_config, _extract_horizon
+    from TRAINING.ranking.utils.leakage_filtering import _load_leakage_config, _extract_horizon
     leakage_config = _load_leakage_config()
     target_horizon_minutes = _extract_horizon(target_column, leakage_config) if target_column else None
     target_horizon_bars = None
@@ -5054,7 +4628,7 @@ def evaluate_target_predictability(
     # CRITICAL: Initialize resolved_config early to avoid "referenced before assignment" errors
     # We need it for SYMBOL_SPECIFIC view data preparation
     resolved_config = None
-    from TRAINING.utils.resolved_config import create_resolved_config
+    from TRAINING.ranking.utils.resolved_config import create_resolved_config
     
     # Get n_symbols_available from mtf_data (needed for resolved_config creation)
     n_symbols_available = len(mtf_data) if mtf_data is not None else 0
@@ -5223,7 +4797,7 @@ def evaluate_target_predictability(
         # The feature_names list IS the authoritative order - X columns must match it
         
         logger.info(f"  After leak removal: {X.shape[1]} features remaining")
-        from TRAINING.utils.cross_sectional_data import _log_feature_set
+        from TRAINING.ranking.utils.cross_sectional_data import _log_feature_set
         _log_feature_set("AFTER_LEAK_REMOVAL", feature_names, previous_names=feature_names_before_leak_scan, logger_instance=logger)
         
         # If we removed too many features, mark as insufficient
@@ -5261,7 +4835,7 @@ def evaluate_target_predictability(
             )
     else:
         logger.info("  ✅ No obvious leaky features detected in pre-training scan")
-        from TRAINING.utils.cross_sectional_data import _log_feature_set
+        from TRAINING.ranking.utils.cross_sectional_data import _log_feature_set
         _log_feature_set("AFTER_LEAK_REMOVAL", feature_names, previous_names=feature_names_before_leak_scan, logger_instance=logger)
     
     # CRITICAL: Early exit if too few features (before wasting time training models)
@@ -5374,7 +4948,7 @@ def evaluate_target_predictability(
     # This runs AFTER all loading/merging/sanitization is done
     # It physically drops features that violate the purge limit from the dataframe
     # This is the "worry-free" auto-corrector that handles race conditions
-    from TRAINING.utils.cross_sectional_data import _log_feature_set, _compute_feature_fingerprint
+    from TRAINING.ranking.utils.cross_sectional_data import _log_feature_set, _compute_feature_fingerprint
     pre_gatekeeper_fp, _ = _compute_feature_fingerprint(feature_names, set_invariant=True)
     _log_feature_set("PRE_GATEKEEPER", feature_names, previous_names=None, logger_instance=logger)
     
@@ -5399,7 +4973,7 @@ def evaluate_target_predictability(
         # PHASE 1: Persist FeatureSet artifact for debugging
         if output_dir is not None:
             try:
-                from TRAINING.utils.feature_set_artifact import create_artifact_from_enforced
+                from TRAINING.ranking.utils.feature_set_artifact import create_artifact_from_enforced
                 artifact = create_artifact_from_enforced(
                     enforced_gatekeeper,
                     stage="POST_GATEKEEPER",
@@ -5433,7 +5007,7 @@ def evaluate_target_predictability(
                 )
         
         # CRITICAL: Boundary assertion - validate feature_names matches gatekeeper EnforcedFeatureSet
-        from TRAINING.utils.lookback_policy import assert_featureset_fingerprint
+        from TRAINING.ranking.utils.lookback_policy import assert_featureset_fingerprint
         try:
             assert_featureset_fingerprint(
                 label="POST_GATEKEEPER",
@@ -5456,8 +5030,8 @@ def evaluate_target_predictability(
     # The audit system uses this value, so it must reflect the ACTUAL features that will be trained
     # (not the original features before the gatekeeper dropped problematic ones)
     if feature_names and len(feature_names) > 0:
-        from TRAINING.utils.leakage_budget import compute_budget
-        from TRAINING.utils.resolved_config import compute_feature_lookback_max
+        from TRAINING.ranking.utils.leakage_budget import compute_budget
+        from TRAINING.ranking.utils.resolved_config import compute_feature_lookback_max
         
         # Get registry for lookback calculation
         registry = None
@@ -5504,7 +5078,7 @@ def evaluate_target_predictability(
             # Get canonical map from the budget computation (it was passed in)
             # We need to recompute it here since we don't have a reference, but we'll use the same logic
             # Actually, better: use compute_feature_lookback_max which builds the canonical map correctly
-            from TRAINING.utils.leakage_budget import compute_feature_lookback_max
+            from TRAINING.ranking.utils.leakage_budget import compute_feature_lookback_max
             lookback_result = compute_feature_lookback_max(
                 feature_names,
                 detected_interval,
@@ -5659,7 +5233,7 @@ def evaluate_target_predictability(
                             except Exception:
                                 pass
                         
-                        from TRAINING.utils.leakage_budget import infer_lookback_minutes
+                        from TRAINING.ranking.utils.leakage_budget import infer_lookback_minutes
                         lookback = infer_lookback_minutes(
                             feat_name,
                             detected_interval,
@@ -5682,7 +5256,7 @@ def evaluate_target_predictability(
                         feature_names = [name for i, name in enumerate(feature_names) if i in keep_indices]
                         
                         # Recompute budget on remaining features
-                        from TRAINING.utils.cross_sectional_data import _compute_feature_fingerprint
+                        from TRAINING.ranking.utils.cross_sectional_data import _compute_feature_fingerprint
                         after_drop_fp, after_drop_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
                         budget, budget_fp, budget_order_fp = compute_budget(
                             feature_names,
@@ -5760,7 +5334,7 @@ def evaluate_target_predictability(
         # The feature_names passed to train_and_evaluate_models should match post_gatekeeper fingerprint
         # NOTE: Pruning happens INSIDE train_and_evaluate_models, so MODEL_TRAIN_INPUT will be POST_PRUNE
         if 'gatekeeper_output_fingerprint' in locals():
-            from TRAINING.utils.cross_sectional_data import _compute_feature_fingerprint
+            from TRAINING.ranking.utils.cross_sectional_data import _compute_feature_fingerprint
             current_fp, current_order_fp = _compute_feature_fingerprint(feature_names, set_invariant=True)
             if current_fp != gatekeeper_output_fingerprint:
                 logger.warning(
@@ -5771,7 +5345,7 @@ def evaluate_target_predictability(
         
         # NEW: Initialize dropped features tracker for telemetry (EARLY - before any filtering)
         # This must happen BEFORE filter_features_for_target so sanitizer can track drops
-        from TRAINING.utils.dropped_features_tracker import DroppedFeaturesTracker
+        from TRAINING.ranking.utils.dropped_features_tracker import DroppedFeaturesTracker
         dropped_tracker = DroppedFeaturesTracker()
         
         # NEW: Track early filter drops (schema/pattern/registry) - capture before filter_features_for_target
@@ -6284,7 +5858,7 @@ def evaluate_target_predictability(
     }
     
     # CRITICAL: Build LeakageAssessment to prevent contradictory reason strings
-    from TRAINING.utils.leakage_assessment import LeakageAssessment
+    from TRAINING.common.utils.leakage_assessment import LeakageAssessment
     
     # Determine CV suspicious flag (CV score too high suggests leakage, not just overfitting)
     cv_suspicious = False
@@ -6471,7 +6045,7 @@ def evaluate_target_predictability(
     # This runs regardless of which entry point calls this function
     if output_dir and result.mean_score != -999.0:
         try:
-            from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+            from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
             
             # Use module-specific directory for reproducibility log
             # output_dir might be: output_dir_YYYYMMDD_HHMMSS/target_rankings/ or just output_dir_YYYYMMDD_HHMMSS
@@ -6493,7 +6067,7 @@ def evaluate_target_predictability(
             
             # Automated audit-grade reproducibility tracking using RunContext
             try:
-                from TRAINING.utils.run_context import RunContext
+                from TRAINING.orchestration.utils.run_context import RunContext
                 
                 # Build RunContext from available data
                 # Prefer symbols_array (from prepare_cross_sectional_data_for_ranking) over symbols list
@@ -6528,7 +6102,7 @@ def evaluate_target_predictability(
                 if 'feature_lookback_max' not in locals() or feature_lookback_max is None:
                     # Try to compute from final feature_names if available
                     if 'feature_names' in locals() and feature_names and 'data_interval_minutes' in locals() and data_interval_minutes:
-                        from TRAINING.utils.leakage_budget import compute_budget
+                        from TRAINING.ranking.utils.leakage_budget import compute_budget
                         try:
                             # Get horizon for budget calculation
                             horizon = target_horizon_minutes if 'target_horizon_minutes' in locals() else 60.0
@@ -6660,7 +6234,7 @@ def evaluate_target_predictability(
             except ImportError:
                 # Fallback to legacy API if RunContext not available
                 logger.warning("RunContext not available, falling back to legacy reproducibility tracking")
-                from TRAINING.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
+                from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
                 
                 if 'cohort_context' in locals() and cohort_context:
                     symbols_for_extraction = cohort_context.get('symbols_array') or cohort_context.get('symbols')

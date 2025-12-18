@@ -57,8 +57,8 @@ except ImportError:
     # Fallback: use regular evaluation
     evaluate_target_with_autofix = None
     _AUTOFIX_AVAILABLE = False
-from TRAINING.utils.task_types import TargetConfig, TaskType
-from TRAINING.utils.leakage_filtering import reload_feature_configs
+from TRAINING.common.utils.task_types import TargetConfig, TaskType
+from TRAINING.ranking.utils.leakage_filtering import reload_feature_configs
 
 # Import parallel execution utilities
 try:
@@ -147,17 +147,34 @@ def evaluate_target_predictability(
             max_cs_samples = 1000
     
     if max_rows_per_symbol is None:
-        # First check experiment config if available
+        # First check experiment config if available (same pattern as model_evaluation.py)
         if experiment_config and hasattr(experiment_config, 'max_samples_per_symbol'):
             max_rows_per_symbol = experiment_config.max_samples_per_symbol
-            logger.debug(f"Using max_rows_per_symbol={max_rows_per_symbol} from experiment config")
+            logger.debug(f"Using max_rows_per_symbol={max_rows_per_symbol} from experiment config attribute")
         else:
+            # Try reading from experiment config YAML directly (same as model_evaluation.py)
+            if experiment_config:
+                try:
+                    import yaml
+                    exp_name = experiment_config.name
+                    exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                    if exp_file.exists():
+                        with open(exp_file, 'r') as f:
+                            exp_yaml = yaml.safe_load(f) or {}
+                        exp_data = exp_yaml.get('data', {})
+                        if 'max_samples_per_symbol' in exp_data:
+                            max_rows_per_symbol = exp_data['max_samples_per_symbol']
+                            logger.debug(f"Using max_rows_per_symbol={max_rows_per_symbol} from experiment config YAML")
+                except Exception:
+                    pass
+            
             # Fallback to pipeline config
-            try:
-                from CONFIG.config_loader import get_cfg
-                max_rows_per_symbol = int(get_cfg("pipeline.data_limits.default_max_rows_per_symbol_ranking", default=50000, config_name="pipeline_config"))
-            except Exception:
-                max_rows_per_symbol = 50000
+            if max_rows_per_symbol is None:
+                try:
+                    from CONFIG.config_loader import get_cfg
+                    max_rows_per_symbol = int(get_cfg("pipeline.data_limits.default_max_rows_per_symbol_ranking", default=50000, config_name="pipeline_config"))
+                except Exception:
+                    max_rows_per_symbol = 50000
     
     return _evaluate_target_predictability(
         target_name=target_name,
@@ -297,17 +314,34 @@ def rank_targets(
                 max_cs_samples = 1000
     
     if max_rows_per_symbol is None:
-        # First check experiment config if available
+        # First check experiment config if available (same pattern as model_evaluation.py)
         if experiment_config and hasattr(experiment_config, 'max_samples_per_symbol'):
             max_rows_per_symbol = experiment_config.max_samples_per_symbol
-            logger.debug(f"Using max_rows_per_symbol={max_rows_per_symbol} from experiment config")
+            logger.debug(f"Using max_rows_per_symbol={max_rows_per_symbol} from experiment config attribute")
         else:
+            # Try reading from experiment config YAML directly (same as model_evaluation.py)
+            if experiment_config:
+                try:
+                    import yaml
+                    exp_name = experiment_config.name
+                    exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                    if exp_file.exists():
+                        with open(exp_file, 'r') as f:
+                            exp_yaml = yaml.safe_load(f) or {}
+                        exp_data = exp_yaml.get('data', {})
+                        if 'max_samples_per_symbol' in exp_data:
+                            max_rows_per_symbol = exp_data['max_samples_per_symbol']
+                            logger.debug(f"Using max_rows_per_symbol={max_rows_per_symbol} from experiment config YAML")
+                except Exception:
+                    pass
+            
             # Fallback to pipeline config
-            try:
-                from CONFIG.config_loader import get_cfg
-                max_rows_per_symbol = int(get_cfg("pipeline.data_limits.default_max_rows_per_symbol_ranking", default=50000, config_name="pipeline_config"))
-            except Exception:
-                max_rows_per_symbol = 50000
+            if max_rows_per_symbol is None:
+                try:
+                    from CONFIG.config_loader import get_cfg
+                    max_rows_per_symbol = int(get_cfg("pipeline.data_limits.default_max_rows_per_symbol_ranking", default=50000, config_name="pipeline_config"))
+                except Exception:
+                    max_rows_per_symbol = 50000
     
     # Results storage: separate by view
     results_cs = []  # Cross-sectional results
@@ -990,7 +1024,7 @@ def rank_targets(
         
         # Generate metrics rollups after all targets are evaluated
         try:
-            from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+            from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
             from datetime import datetime
             
             # Find the REPRODUCIBILITY directory (could be in output_dir or parent)

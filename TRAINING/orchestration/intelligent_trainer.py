@@ -116,37 +116,8 @@ except ImportError:
     _PANDAS_AVAILABLE = False
 
 
-def _json_default(obj: Any) -> Any:
-    """
-    Fallback serializer for json.dump when saving ranking cache.
-    Handles pandas / numpy / datetime objects.
-    """
-    # Datetime-like
-    if isinstance(obj, (datetime.datetime, datetime.date)):
-        # ISO-8601 string is human readable and round-trippable enough for our use
-        return obj.isoformat()
-    
-    # Pandas Timestamp (must check after datetime since pd.Timestamp is a subclass)
-    if _PANDAS_AVAILABLE:
-        try:
-            import pandas as pd
-            if isinstance(obj, pd.Timestamp):
-                return obj.isoformat()
-        except ImportError:
-            pass
-    
-    # Numpy scalars
-    if isinstance(obj, (np.integer,)):
-        return int(obj)
-    if isinstance(obj, (np.floating,)):
-        return float(obj)
-    
-    # Numpy arrays
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    
-    # Anything else falls back to string representation
-    return str(obj)
+# Import from modular components
+from TRAINING.orchestration.intelligent_trainer.utils import json_default as _json_default
 
 
 class IntelligentTrainer:
@@ -409,7 +380,7 @@ class IntelligentTrainer:
         import hashlib
         
         try:
-            from TRAINING.utils.diff_telemetry import ComparisonGroup
+            from TRAINING.orchestration.utils.diff_telemetry import ComparisonGroup
             
             # Compute dataset signature from available configs
             dataset_parts = []
@@ -777,8 +748,9 @@ class IntelligentTrainer:
     
     def _get_cache_key(self, symbols: List[str], config_hash: str) -> str:
         """Generate cache key from symbols and config."""
-        key_str = f"{sorted(symbols)}_{config_hash}"
-        return hashlib.md5(key_str.encode()).hexdigest()
+        from TRAINING.common.utils.config_hashing import compute_config_hash_from_values
+        # Use centralized config hashing for consistency
+        return compute_config_hash_from_values(symbols=sorted(symbols), config_hash=config_hash)[:32]  # Truncate for backward compatibility
     
     def _load_cached_rankings(self, cache_key: str, use_cache: bool = True) -> Optional[List[Dict[str, Any]]]:
         """Load cached target rankings."""
@@ -813,31 +785,22 @@ class IntelligentTrainer:
     
     def _load_cached_features(self, target: str) -> Optional[List[str]]:
         """Load cached feature selection for a target."""
+        from TRAINING.common.utils.cache_manager import load_cache
         cache_path = self._get_feature_cache_path(target)
-        if not cache_path.exists():
-            return None
-        
-        try:
-            with open(cache_path, 'r') as f:
-                cache_data = json.load(f)
-                return cache_data.get('selected_features')
-        except Exception as e:
-            logger.warning(f"Failed to load feature cache for {target}: {e}")
-            return None
+        cache_data = load_cache(cache_path, verify_hash=False)
+        if cache_data:
+            return cache_data.get('selected_features')
+        return None
     
     def _save_cached_features(self, target: str, features: List[str]):
         """Save feature selection results to cache."""
+        from TRAINING.common.utils.cache_manager import save_cache
         cache_path = self._get_feature_cache_path(target)
-        try:
-            cache_data = {
-                'target': target,
-                'selected_features': features,
-                'timestamp': time.time()
-            }
-            with open(cache_path, 'w') as f:
-                json.dump(cache_data, f, indent=2)
-        except Exception as e:
-            logger.warning(f"Failed to save feature cache for {target}: {e}")
+        cache_data = {
+            'target': target,
+            'selected_features': features
+        }
+        save_cache(cache_path, cache_data, include_timestamp=True)
     
     def rank_targets_auto(
         self,
@@ -1030,7 +993,7 @@ class IntelligentTrainer:
         
         # Generate metrics rollups after target ranking completes
         try:
-            from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+            from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
             tracker = ReproducibilityTracker(output_dir=self.output_dir / "target_rankings")
             run_id = self._run_name.replace("_", "-")  # Use run name as run_id
             tracker.generate_metrics_rollups(stage="TARGET_RANKING", run_id=run_id)
@@ -1237,7 +1200,7 @@ class IntelligentTrainer:
         decision_artifact_dir = None
         try:
             from TRAINING.decisioning.decision_engine import DecisionEngine
-            from TRAINING.utils.cohort_metadata_extractor import extract_cohort_metadata
+            from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata
             
             # Try to extract cohort metadata early (for decision loading)
             # This is approximate - actual cohort_id will be computed later
@@ -1251,7 +1214,7 @@ class IntelligentTrainer:
                 segment_id = None
                 if cohort_metadata:
                     # Compute approximate cohort_id (will be refined later)
-                    from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+                    from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
                     temp_tracker = ReproducibilityTracker(output_dir=self.output_dir)
                     cohort_id = temp_tracker._compute_cohort_id(cohort_metadata, route_type=None)
                     
@@ -1611,7 +1574,7 @@ class IntelligentTrainer:
         # Generate metrics rollups after feature selection completes (all targets processed)
         if auto_features and target_features:
             try:
-                from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+                from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
                 tracker = ReproducibilityTracker(output_dir=self.output_dir)
                 run_id = self._run_name.replace("_", "-")  # Use run name as run_id
                 tracker.generate_metrics_rollups(stage="FEATURE_SELECTION", run_id=run_id)
@@ -2003,7 +1966,7 @@ class IntelligentTrainer:
         # Generate trend summary (if reproducibility tracking is available)
         trend_summary = None
         try:
-            from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+            from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
             # Path is already imported at top of file
             # Find REPRODUCIBILITY directory
             repro_dir = self.output_dir / "REPRODUCIBILITY"

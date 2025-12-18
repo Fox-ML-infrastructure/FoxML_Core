@@ -34,7 +34,7 @@ USE_POLARS = os.getenv("USE_POLARS", "1") == "1"
 from TRAINING.data_processing.data_utils import (
     strip_targets, collapse_identical_duplicate_columns
 )
-from TRAINING.utils.core_utils import SYMBOL_COL, INTERVAL_TO_TARGET
+from TRAINING.common.utils.core_utils import SYMBOL_COL, INTERVAL_TO_TARGET
 
 # Helper function to resolve time column
 def resolve_time_col(df: pd.DataFrame) -> str:

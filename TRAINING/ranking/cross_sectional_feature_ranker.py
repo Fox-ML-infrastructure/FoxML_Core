@@ -186,7 +186,7 @@ def train_panel_model(
     config = {**default_configs.get(model_family, {}), **model_config}
     
     # Import shared config cleaner utility
-    from TRAINING.utils.config_cleaner import clean_config_for_estimator
+    from TRAINING.common.utils.config_cleaner import clean_config_for_estimator
     
     # Determine task type
     unique_vals = np.unique(y[~np.isnan(y)])
@@ -312,7 +312,7 @@ def compute_cross_sectional_importance(
     logger.info(f"   Symbols: {len(symbols)}, Model families: {model_families}")
     
     # Load panel data (reuse existing utility)
-    from TRAINING.utils.cross_sectional_data import (
+    from TRAINING.ranking.utils.cross_sectional_data import (
         load_mtf_data_for_ranking,
         prepare_cross_sectional_data_for_ranking
     )
@@ -393,9 +393,9 @@ def compute_cross_sectional_importance(
     # This provides separate tracking for CS ranking specifically
     if output_dir is not None:
         try:
-            from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
-            from TRAINING.utils.run_context import RunContext
-            from TRAINING.utils.cohort_metadata_extractor import extract_cohort_metadata
+            from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
+            from TRAINING.orchestration.utils.run_context import RunContext
+            from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata
             
             # Use module-specific directory
             module_output_dir = output_dir.parent / 'feature_selections' if (output_dir.parent / 'feature_selections').exists() else output_dir

@@ -8,7 +8,7 @@ import sys
 import re
 sys.path.insert(0, '.')
 
-from TRAINING.utils.leakage_budget import infer_lookback_minutes, compute_feature_lookback_max
+from TRAINING.ranking.utils.leakage_budget import infer_lookback_minutes, compute_feature_lookback_max
 
 
 def test_xd_pattern_inference():
@@ -60,7 +60,7 @@ def test_canonical_map_includes_xd():
         return False
     
     all_passed = True
-    from TRAINING.utils.leakage_budget import _feat_key
+    from TRAINING.ranking.utils.leakage_budget import _feat_key
     
     for feat in test_features:
         normalized = _feat_key(feat)
@@ -91,7 +91,7 @@ def test_gatekeeper_drops_xd_offenders():
         print("  ❌ Canonical map not available - FAILED")
         return False
     
-    from TRAINING.utils.leakage_budget import _feat_key
+    from TRAINING.ranking.utils.leakage_budget import _feat_key
     offenders = []
     
     for feat in test_features:

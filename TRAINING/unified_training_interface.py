@@ -223,7 +223,7 @@ class UnifiedTrainingInterface:
             else:
                 # CRITICAL: Use PurgedTimeSeriesSplit instead of standard K-Fold
                 # Standard K-Fold shuffles data randomly, causing temporal leakage
-                from TRAINING.utils.purged_time_series_split import PurgedTimeSeriesSplit
+                from TRAINING.ranking.utils.purged_time_series_split import PurgedTimeSeriesSplit
                 from sklearn.model_selection import cross_val_score
                 
                 # Use conservative default purge (60m target = 17 bars)

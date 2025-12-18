@@ -43,7 +43,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from TRAINING.common.leakage_sentinels import LeakageSentinel, SentinelResult
 from TRAINING.common.importance_diff_detector import ImportanceDiffDetector
-from TRAINING.utils.leakage_filtering import filter_features_for_target, _load_leakage_config
+from TRAINING.ranking.utils.leakage_filtering import filter_features_for_target, _load_leakage_config
 
 logger = logging.getLogger(__name__)
 
