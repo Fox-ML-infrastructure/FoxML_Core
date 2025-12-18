@@ -71,7 +71,7 @@ except ImportError:
 # Try to import config loader
 _CONFIG_AVAILABLE = False
 try:
-    from config_loader import get_safety_config
+    from config_loader import get_safety_config, get_experiment_config_path, load_experiment_config
     _CONFIG_AVAILABLE = True
 except ImportError:
     pass
@@ -157,10 +157,16 @@ def evaluate_target_predictability(
                 try:
                     import yaml
                     exp_name = experiment_config.name
-                    exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
-                    if exp_file.exists():
-                        with open(exp_file, 'r') as f:
-                            exp_yaml = yaml.safe_load(f) or {}
+                    if _CONFIG_AVAILABLE:
+                        exp_yaml = load_experiment_config(exp_name)
+                    else:
+                        import yaml
+                        exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                        if exp_file.exists():
+                            with open(exp_file, 'r') as f:
+                                exp_yaml = yaml.safe_load(f) or {}
+                        else:
+                            exp_yaml = {}
                         exp_data = exp_yaml.get('data', {})
                         if 'max_samples_per_symbol' in exp_data:
                             max_rows_per_symbol = exp_data['max_samples_per_symbol']
@@ -324,10 +330,16 @@ def rank_targets(
                 try:
                     import yaml
                     exp_name = experiment_config.name
-                    exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
-                    if exp_file.exists():
-                        with open(exp_file, 'r') as f:
-                            exp_yaml = yaml.safe_load(f) or {}
+                    if _CONFIG_AVAILABLE:
+                        exp_yaml = load_experiment_config(exp_name)
+                    else:
+                        import yaml
+                        exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                        if exp_file.exists():
+                            with open(exp_file, 'r') as f:
+                                exp_yaml = yaml.safe_load(f) or {}
+                        else:
+                            exp_yaml = {}
                         exp_data = exp_yaml.get('data', {})
                         if 'max_samples_per_symbol' in exp_data:
                             max_rows_per_symbol = exp_data['max_samples_per_symbol']

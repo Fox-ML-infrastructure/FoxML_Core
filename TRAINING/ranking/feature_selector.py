@@ -58,6 +58,14 @@ except ImportError:
     # Logger not yet initialized, will be set up below
     pass
 
+# Import config loader for centralized path resolution
+try:
+    from CONFIG.config_loader import get_experiment_config_path, load_experiment_config
+    _CONFIG_LOADER_AVAILABLE = True
+except ImportError:
+    _CONFIG_LOADER_AVAILABLE = False
+    pass
+
 # Suppress expected warnings
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=UserWarning)
@@ -198,12 +206,17 @@ def select_features_for_target(
             else:
                 # Fallback: check experiment YAML file (same as target ranking)
                 try:
-                    import yaml
                     exp_name = experiment_config.name
-                    exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
-                    if exp_file.exists():
-                        with open(exp_file, 'r') as f:
-                            exp_yaml = yaml.safe_load(f) or {}
+                    if _CONFIG_LOADER_AVAILABLE:
+                        exp_yaml = load_experiment_config(exp_name)
+                    else:
+                        import yaml
+                        exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                        if exp_file.exists():
+                            with open(exp_file, 'r') as f:
+                                exp_yaml = yaml.safe_load(f) or {}
+                        else:
+                            exp_yaml = {}
                         exp_data = exp_yaml.get('data', {})
                         if 'max_samples_per_symbol' in exp_data:
                             max_samples_per_symbol = exp_data['max_samples_per_symbol']
@@ -294,12 +307,17 @@ def select_features_for_target(
             from CONFIG.config_loader import get_cfg
             if experiment_config:
                 try:
-                    import yaml
                     exp_name = experiment_config.name
-                    exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
-                    if exp_file.exists():
-                        with open(exp_file, 'r') as f:
-                            exp_yaml = yaml.safe_load(f) or {}
+                    if _CONFIG_LOADER_AVAILABLE:
+                        exp_yaml = load_experiment_config(exp_name)
+                    else:
+                        import yaml
+                        exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                        if exp_file.exists():
+                            with open(exp_file, 'r') as f:
+                                exp_yaml = yaml.safe_load(f) or {}
+                        else:
+                            exp_yaml = {}
                         exp_data = exp_yaml.get('data', {})
                         harness_min_cs = exp_data.get('min_cs')
                         harness_max_cs_samples = exp_data.get('max_cs_samples')

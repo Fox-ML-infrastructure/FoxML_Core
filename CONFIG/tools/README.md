@@ -1,5 +1,47 @@
 # Config Analysis Tools
 
+## validate_config_paths.py
+
+Validates that all config paths have been migrated from hardcoded paths to the centralized config loader API.
+
+### Purpose
+
+This tool helps ensure the migration from hardcoded `Path("CONFIG/...")` patterns to the config loader API is complete. It scans the TRAINING directory for remaining hardcoded paths and validates that all config files are accessible via the loader.
+
+### Usage
+
+```bash
+# Run validation
+python CONFIG/tools/validate_config_paths.py
+```
+
+### What It Checks
+
+1. **Hardcoded paths**: Scans for `Path("CONFIG/...")` patterns in Python files
+2. **Config loader access**: Validates that config files are accessible via the loader API
+3. **Symlink validity**: Checks that all symlinks are valid and point to existing files
+
+### Output
+
+The script reports:
+- Files with hardcoded paths (if any)
+- Config loader API access status
+- Symlink validity
+
+### Example Output
+
+```
+✅ No hardcoded config paths found!
+✅ All config files accessible via config loader
+✅ All 4 symlinks are valid
+```
+
+### Integration
+
+This tool can be run as part of CI/CD to ensure new code uses the config loader API instead of hardcoded paths.
+
+---
+
 ## find_repeated_defaults.py
 
 Scans all YAML config files in `CONFIG/` and identifies repeated settings that are good candidates for centralization into `CONFIG/defaults.yaml`.

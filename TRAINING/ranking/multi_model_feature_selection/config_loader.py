@@ -37,33 +37,40 @@ if str(_REPO_ROOT) not in sys.path:
 def load_multi_model_config(config_path: Path = None) -> Dict[str, Any]:
     """Load multi-model feature selection configuration
     
+    Uses centralized config loader if available, otherwise falls back to manual path resolution.
     Checks new location first (CONFIG/ranking/features/multi_model.yaml),
-    then old location (CONFIG/feature_selection/multi_model.yaml),
-    then falls back to legacy location (CONFIG/multi_model_feature_selection.yaml).
+    then old location (CONFIG/feature_selection/multi_model.yaml).
     """
     if config_path is None:
-        # Try newest location first (ranking/features/)
-        newest_path = _REPO_ROOT / "CONFIG" / "ranking" / "features" / "multi_model.yaml"
-        # Then old location (feature_selection/)
-        old_path = _REPO_ROOT / "CONFIG" / "feature_selection" / "multi_model.yaml"
-        # Finally legacy location (root)
-        legacy_path = _REPO_ROOT / "CONFIG" / "multi_model_feature_selection.yaml"
+        # Try using centralized config loader first
+        try:
+            from CONFIG.config_loader import get_config_path
+            config_path = get_config_path("feature_selection_multi_model")
+            if config_path.exists():
+                logger.debug(f"Using centralized config loader: {config_path}")
+            else:
+                # Fallback to manual resolution
+                config_path = None
+        except (ImportError, AttributeError):
+            # Config loader not available, use manual resolution
+            config_path = None
         
-        if newest_path.exists():
-            config_path = newest_path
-            logger.debug(f"Using new config location: {config_path}")
-        elif old_path.exists():
-            config_path = old_path
-            logger.debug(f"Using old config location: {config_path} (consider migrating to ranking/features/)")
-        elif legacy_path.exists():
-            config_path = legacy_path
-            logger.warning(
-                f"⚠️  DEPRECATED: Using legacy config location: {legacy_path}\n"
-                f"   Please migrate to: CONFIG/ranking/features/multi_model.yaml"
-            )
-        else:
-            logger.warning(f"Config not found in new ({newest_path}) or legacy ({legacy_path}) locations, using defaults")
-            return get_default_config()
+        if config_path is None:
+            # Manual path resolution (fallback)
+            # Try newest location first (ranking/features/)
+            newest_path = _REPO_ROOT / "CONFIG" / "ranking" / "features" / "multi_model.yaml"
+            # Then old location (feature_selection/)
+            old_path = _REPO_ROOT / "CONFIG" / "feature_selection" / "multi_model.yaml"
+            
+            if newest_path.exists():
+                config_path = newest_path
+                logger.debug(f"Using new config location: {config_path}")
+            elif old_path.exists():
+                config_path = old_path
+                logger.debug(f"Using old config location: {config_path} (consider migrating to ranking/features/)")
+            else:
+                logger.warning(f"Config not found in new ({newest_path}) or old ({old_path}) locations, using defaults")
+                return get_default_config()
     
     if not config_path.exists():
         logger.warning(f"Config not found: {config_path}, using defaults")

@@ -70,7 +70,7 @@ if str(_CONFIG_DIR) not in sys.path:
 # Try to import config loader
 _CONFIG_AVAILABLE = False
 try:
-    from config_loader import get_cfg, get_safety_config
+    from config_loader import get_cfg, get_safety_config, get_experiment_config_path, load_experiment_config
     _CONFIG_AVAILABLE = True
 except ImportError:
     pass  # Logger not yet initialized, will be set up below
@@ -4298,17 +4298,22 @@ def evaluate_target_predictability(
             # Try reading from experiment config YAML directly
             if experiment_config:
                 try:
-                    import yaml
                     exp_name = experiment_config.name
-                    exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
-                    if exp_file.exists():
-                        with open(exp_file, 'r') as f:
-                            exp_yaml = yaml.safe_load(f) or {}
-                        exp_data = exp_yaml.get('data', {})
-                        if 'max_samples_per_symbol' in exp_data:
-                            max_rows_per_symbol = exp_data['max_samples_per_symbol']
-                            config_provenance['max_rows_per_symbol'] = f"experiment YAML data.max_samples_per_symbol = {max_rows_per_symbol}"
-                            logger.debug(f"Using max_rows_per_symbol={max_rows_per_symbol} from experiment config YAML")
+                    if _CONFIG_AVAILABLE:
+                        exp_yaml = load_experiment_config(exp_name)
+                    else:
+                        import yaml
+                        exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                        if exp_file.exists():
+                            with open(exp_file, 'r') as f:
+                                exp_yaml = yaml.safe_load(f) or {}
+                        else:
+                            exp_yaml = {}
+                    exp_data = exp_yaml.get('data', {})
+                    if 'max_samples_per_symbol' in exp_data:
+                        max_rows_per_symbol = exp_data['max_samples_per_symbol']
+                        config_provenance['max_rows_per_symbol'] = f"experiment YAML data.max_samples_per_symbol = {max_rows_per_symbol}"
+                        logger.debug(f"Using max_rows_per_symbol={max_rows_per_symbol} from experiment config YAML")
                 except Exception:
                     pass
             
@@ -4332,12 +4337,17 @@ def evaluate_target_predictability(
         # First check experiment config YAML
         if experiment_config:
             try:
-                import yaml
                 exp_name = experiment_config.name
-                exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
-                if exp_file.exists():
-                    with open(exp_file, 'r') as f:
-                        exp_yaml = yaml.safe_load(f) or {}
+                if _CONFIG_AVAILABLE:
+                    exp_yaml = load_experiment_config(exp_name)
+                else:
+                    import yaml
+                    exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                    if exp_file.exists():
+                        with open(exp_file, 'r') as f:
+                            exp_yaml = yaml.safe_load(f) or {}
+                    else:
+                        exp_yaml = {}
                     exp_data = exp_yaml.get('data', {})
                     if 'max_cs_samples' in exp_data:
                         max_cs_samples = exp_data['max_cs_samples']

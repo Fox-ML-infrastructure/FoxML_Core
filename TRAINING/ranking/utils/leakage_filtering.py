@@ -310,8 +310,19 @@ except ImportError:
 # Robust path resolution: try multiple possible locations
 def _find_config_path() -> Path:
     """Find the excluded_features.yaml config file using multiple strategies."""
-    # Strategy 0: Use config if available
+    # Strategy 0: Use centralized config loader if available
     if _CONFIG_AVAILABLE:
+        try:
+            from CONFIG.config_loader import get_config_path
+            config_file = get_config_path("excluded_features")
+            if config_file.exists():
+                return config_file
+        except (ImportError, AttributeError):
+            pass  # Fall through to fallback strategies
+        except Exception:
+            pass  # Fall through to fallback strategies
+        
+        # Fallback: Try system config
         try:
             system_cfg = get_system_config()
             config_path = system_cfg.get('system', {}).get('paths', {})
