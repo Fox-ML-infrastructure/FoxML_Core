@@ -159,6 +159,34 @@ Verified with actual runs:
 - Severity correctly set to MAJOR (nondeterminism) with noise-level impact noted
 - Zero-delta entries (pos_rate, n_models) filtered out from `metric_deltas` dict
 
+## Bug Fixes (2025-12-17 follow-up)
+
+### Fixed `changed` Flag Semantics
+
+**Problem**: `changed: true` was set for all entries in `metric_deltas`, even when `delta_abs < abs_tol`.
+
+**Solution**: Split into two flags:
+- `differs`: `prev != curr` (after rounding) - indicates values are different
+- `changed`: `abs(delta) > max(abs_tol, rel_tol*abs(prev))` - indicates delta exceeds tolerance
+
+**Example**: `std_score` with `delta_abs=9.2e-05` and `abs_tol=0.001` now correctly shows `changed: false`.
+
+### Fixed `noise_explanation` Formatting Bug
+
+**Problem**: Explanation showed `Delta (0.00092)` but actual value was `9.2e-05` (10× error).
+
+**Solution**: Use exact serialized `delta_abs` value via placeholder replacement to ensure explanation matches the field exactly.
+
+### Labeled `z_score` as Proxy
+
+**Problem**: `z_score` uses same SE (`std_score/sqrt(n_models)`) for all metrics, but wasn't labeled as a proxy.
+
+**Solution**: Added `z_score_basis: "auc_se_proxy"` to make it clear this is a heuristic using AUC standard error as proxy for all metrics, not a per-metric significance test.
+
+### Added Identifiers to `metric_deltas.json`
+
+**Enhancement**: Added `stage`, `view`, `item_name` fields to enable downstream joining and querying.
+
 ## Next Level (Future Enhancements)
 
 Potential future improvements:
