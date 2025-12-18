@@ -681,8 +681,8 @@ class DiffTelemetry:
         # Normalize outputs
         outputs = self._normalize_outputs(run_data, additional_data, cohort_dir, resolved_metadata)
         
-        # CRITICAL: Compute output digests for artifact/metric determinism verification
-        # These prove that outputs are identical across reruns (full determinism claim)
+        # CRITICAL: Compute output digests for artifact/metric reproducibility verification
+        # These enable comparison of outputs across reruns for reproducibility tracking
         metrics_sha256 = self._compute_metrics_digest(outputs, resolved_metadata, cohort_dir)
         artifacts_manifest_sha256 = self._compute_artifacts_manifest_digest(cohort_dir, stage)
         predictions_sha256 = self._compute_predictions_digest(cohort_dir, stage)
@@ -820,7 +820,7 @@ class DiffTelemetry:
         - Dicts are sorted by key
         - Lists preserve order (only sort when explicitly unordered, e.g., feature sets)
         - Floats use repr() for exact representation (avoids 1e-7 vs 0.0 collapse)
-        - NaN/inf/-0.0 handled deterministically
+        - NaN/inf/-0.0 handled reproducibly
         - None/null are handled consistently
         """
         if val is None:
@@ -829,7 +829,7 @@ class DiffTelemetry:
             return str(val)
         elif isinstance(val, float):
             # Use repr() for exact representation (avoids precision loss)
-            # Handle special cases deterministically
+            # Handle special cases reproducibly
             if np.isnan(val):
                 return "nan"
             elif np.isinf(val):
@@ -1567,9 +1567,9 @@ class DiffTelemetry:
         cohort_dir: Optional[Path]
     ) -> Optional[str]:
         """
-        Compute SHA256 digest of metrics for determinism verification.
+        Compute SHA256 digest of metrics for reproducibility verification.
         
-        This proves that metrics are identical across reruns with same inputs/process.
+        This enables comparison of metrics across reruns with same inputs/process.
         
         Metrics can be in:
         1. outputs['metrics'] (from run_data)
@@ -1638,9 +1638,9 @@ class DiffTelemetry:
         stage: str
     ) -> Optional[str]:
         """
-        Compute SHA256 digest of artifacts manifest for determinism verification.
+        Compute SHA256 digest of artifacts manifest for reproducibility verification.
         
-        This proves that artifacts (feature_importances.parquet, etc.) are identical across reruns.
+        This enables comparison of artifacts (feature_importances.parquet, etc.) across reruns.
         Creates a manifest of artifact files with their sizes and modification times.
         
         Artifacts are stored at the target level (one level up from cohort directory):
@@ -1762,9 +1762,9 @@ class DiffTelemetry:
         stage: str
     ) -> Optional[str]:
         """
-        Compute SHA256 digest of predictions for determinism verification.
+        Compute SHA256 digest of predictions for reproducibility verification.
         
-        This proves that predictions are identical across reruns.
+        This enables comparison of predictions across reruns.
         Currently, predictions may not be stored in cohort directories for all stages.
         """
         if not cohort_dir or not cohort_dir.exists():
@@ -1973,7 +1973,9 @@ class DiffTelemetry:
     def compute_diff(
         self,
         current_snapshot: NormalizedSnapshot,
-        prev_snapshot: NormalizedSnapshot
+        prev_snapshot: NormalizedSnapshot,
+        prev_cohort_dir: Optional[Path] = None,
+        curr_cohort_dir: Optional[Path] = None
     ) -> DiffResult:
         """
         Compute diff between two snapshots.
@@ -2046,8 +2048,20 @@ class DiffTelemetry:
             current_snapshot.outputs
         )
         
-        # CRITICAL: Check output digests for artifact/metric determinism
-        # If digests differ, this indicates non-deterministic outputs even with same inputs/process
+        # Compute trend deltas (if cohort directories are provided)
+        trend_deltas = {}
+        if prev_cohort_dir and curr_cohort_dir:
+            prev_metadata_path = Path(prev_cohort_dir) / "metadata.json"
+            curr_metadata_path = Path(curr_cohort_dir) / "metadata.json"
+            
+            prev_trend = self._load_trend_from_metadata(prev_metadata_path)
+            curr_trend = self._load_trend_from_metadata(curr_metadata_path)
+            
+            if prev_trend and curr_trend:
+                trend_deltas = self._compute_trend_deltas(prev_trend, curr_trend)
+        
+        # CRITICAL: Check output digests for artifact/metric reproducibility
+        # If digests differ, this indicates reproducibility variance even with same inputs/process
         output_digest_changes = []
         if prev_snapshot.metrics_sha256 != current_snapshot.metrics_sha256:
             output_digest_changes.append("metrics_sha256")
@@ -2070,6 +2084,20 @@ class DiffTelemetry:
         # Count significant deltas (all entries in metric_deltas are significant by design)
         metric_deltas_significant = len(metric_deltas)
         
+        # Compute trend direction change (if slope_per_day is available)
+        trend_direction_change = None
+        if trend_deltas and 'slope_per_day' in trend_deltas:
+            prev_slope = trend_deltas['slope_per_day'].get('prev')
+            curr_slope = trend_deltas['slope_per_day'].get('curr')
+            if prev_slope is not None and curr_slope is not None:
+                prev_improving = prev_slope > 0
+                curr_improving = curr_slope > 0
+                if prev_improving != curr_improving:
+                    if prev_improving:
+                        trend_direction_change = "improving→declining"
+                    else:
+                        trend_direction_change = "declining→improving"
+        
         summary = {
             'total_changes': len(changed_keys),
             'input_changes': len(input_changes['keys']),
@@ -2083,7 +2111,9 @@ class DiffTelemetry:
             'output_digest_changes': output_digest_changes,  # List of changed output digests
             'impact_label': impact_label,  # none|noise|minor|major
             'top_regressions': top_regressions,  # List of up to K metric keys with worst deltas (significant only)
-            'top_improvements': top_improvements  # List of up to K metric keys with best deltas (significant only)
+            'top_improvements': top_improvements,  # List of up to K metric keys with best deltas (significant only)
+            'trend_deltas_count': len(trend_deltas),  # Number of trend fields compared
+            'trend_direction_change': trend_direction_change  # Direction change if slope sign changed
         }
         
         # CRITICAL: Determine severity purely from the report (SST-style)
@@ -2113,7 +2143,8 @@ class DiffTelemetry:
             summary=summary,
             excluded_factors_changed=excluded_factors_changed,
             patch=patch,
-            metric_deltas=metric_deltas
+            metric_deltas=metric_deltas,
+            trend_deltas=trend_deltas
         )
     
     def _check_comparability(
@@ -2573,6 +2604,159 @@ class DiffTelemetry:
         
         return deltas, total_compared
     
+    def _load_trend_from_metadata(self, metadata_path: Path) -> Optional[Dict[str, Any]]:
+        """
+        Load trend data from metadata.json file.
+        
+        Args:
+            metadata_path: Path to metadata.json file
+            
+        Returns:
+            Trend dict from metadata.json['trend'] if available, None otherwise
+        """
+        if not metadata_path.exists():
+            return None
+        
+        try:
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+            
+            trend = metadata.get('trend')
+            if trend and isinstance(trend, dict):
+                return trend
+        except Exception as e:
+            logger.debug(f"Failed to load trend from {metadata_path}: {e}")
+        
+        return None
+    
+    def _compute_trend_deltas(
+        self,
+        prev_trend: Optional[Dict[str, Any]],
+        curr_trend: Optional[Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Compute trend deltas between previous and current runs.
+        
+        Compares all trend fields: slope_per_day, current_estimate, ewma_value, 
+        status, n_runs, residual_std.
+        
+        For numeric fields: computes delta_abs and delta_pct (similar to metric_deltas).
+        For status field: shows prev→curr transition.
+        
+        Args:
+            prev_trend: Trend dict from previous run (from metadata.json['trend'])
+            curr_trend: Trend dict from current run (from metadata.json['trend'])
+            
+        Returns:
+            Dict mapping trend field names to delta dicts with prev, curr, delta_abs, delta_pct.
+            Returns empty dict if either trend is missing or metric_name doesn't match.
+        """
+        import math
+        
+        if not prev_trend or not curr_trend:
+            return {}
+        
+        # Only compare if metric_name matches (trends are metric-specific)
+        prev_metric = prev_trend.get('metric_name')
+        curr_metric = curr_trend.get('metric_name')
+        if prev_metric != curr_metric:
+            logger.debug(
+                f"Skipping trend comparison: metric_name mismatch "
+                f"(prev={prev_metric}, curr={curr_metric})"
+            )
+            return {}
+        
+        deltas = {}
+        
+        # Fields to compare (numeric fields)
+        numeric_fields = [
+            'slope_per_day',
+            'current_estimate',
+            'ewma_value',
+            'residual_std'
+        ]
+        
+        # Integer fields
+        integer_fields = ['n_runs']
+        
+        # Status field (non-numeric)
+        status_field = 'status'
+        
+        # Compare numeric fields
+        for field in numeric_fields:
+            prev_val = prev_trend.get(field)
+            curr_val = curr_trend.get(field)
+            
+            # Skip if either value is None or NaN
+            if prev_val is None or curr_val is None:
+                continue
+            
+            try:
+                prev_float = float(prev_val)
+                curr_float = float(curr_val)
+                
+                # Skip NaN or Inf values
+                if math.isnan(prev_float) or math.isinf(prev_float) or \
+                   math.isnan(curr_float) or math.isinf(curr_float):
+                    continue
+                
+                delta_abs = curr_float - prev_float
+                # For percentage, handle zero and very small values
+                if abs(prev_float) > 1e-10:
+                    delta_pct = (delta_abs / abs(prev_float)) * 100
+                else:
+                    delta_pct = 0.0 if abs(delta_abs) < 1e-10 else float('inf')
+                
+                deltas[field] = {
+                    'prev': round(prev_float, 6),
+                    'curr': round(curr_float, 6),
+                    'delta_abs': round(delta_abs, 6),
+                    'delta_pct': round(delta_pct, 4)
+                }
+            except (ValueError, TypeError):
+                continue
+        
+        # Compare integer fields
+        for field in integer_fields:
+            prev_val = prev_trend.get(field)
+            curr_val = curr_trend.get(field)
+            
+            if prev_val is None or curr_val is None:
+                continue
+            
+            try:
+                prev_int = int(prev_val)
+                curr_int = int(curr_val)
+                
+                delta_abs = curr_int - prev_int
+                delta_pct = (delta_abs / prev_int * 100) if prev_int != 0 else 0.0
+                
+                deltas[field] = {
+                    'prev': prev_int,
+                    'curr': curr_int,
+                    'delta_abs': delta_abs,
+                    'delta_pct': round(delta_pct, 4)
+                }
+            except (ValueError, TypeError):
+                continue
+        
+        # Compare status field (non-numeric)
+        prev_status = prev_trend.get(status_field)
+        curr_status = curr_trend.get(status_field)
+        
+        if prev_status is not None or curr_status is not None:
+            deltas[status_field] = {
+                'prev': prev_status,
+                'curr': curr_status,
+                'delta_abs': None,
+                'delta_pct': None
+            }
+            # Add transition string if status changed
+            if prev_status != curr_status:
+                deltas[status_field]['transition'] = f"{prev_status}→{curr_status}"
+        
+        return deltas
+    
     def _classify_metric_impact(
         self,
         metric_deltas: Dict[str, Dict[str, Any]],
@@ -2681,11 +2865,11 @@ class DiffTelemetry:
         has_excluded_factors = summary.get('excluded_factors_changed', bool(excluded_factors_changed))
         output_digest_changes = summary.get('output_digest_changes', [])
         
-        # CRITICAL: Separate "nondeterminism" from "regression"
-        # If output digests differ, that's a reproducibility issue (nondeterminism)
+        # CRITICAL: Separate "reproducibility variance" from "regression"
+        # If output digests differ, that's a reproducibility variance issue
         # But performance impact should be assessed separately using impact_label
         impact_label = summary.get('impact_label', 'none')
-        has_nondeterminism = bool(output_digest_changes)
+        has_reproducibility_variance = bool(output_digest_changes)
         
         # CRITICAL FIX: If no changes at all, severity must be NONE
         if total_changes == 0 and metric_deltas_count == 0:
@@ -2706,26 +2890,26 @@ class DiffTelemetry:
                 if key.startswith(critical):
                     return ChangeSeverity.CRITICAL, f"Critical change detected in {key}"
         
-        # Handle nondeterminism (digest mismatch) with performance impact assessment
-        if has_nondeterminism:
-            # Nondeterminism is always a reproducibility concern
+        # Handle reproducibility variance (digest mismatch) with performance impact assessment
+        if has_reproducibility_variance:
+            # Reproducibility variance is always a concern
             # But severity depends on whether there's actual performance impact
             if impact_label in ['none', 'noise']:
-                # Nondeterminism detected but performance impact is noise-level
+                # Reproducibility variance detected but performance impact is noise-level
                 return ChangeSeverity.MAJOR, (
-                    f"Output digests differ (non-determinism detected): {', '.join(output_digest_changes)}. "
+                    f"Output digests differ (reproducibility variance detected): {', '.join(output_digest_changes)}. "
                     f"Performance impact: {impact_label} (z-score analysis indicates noise-level changes only)."
                 )
             elif impact_label == 'minor':
-                # Nondeterminism with minor performance impact
+                # Reproducibility variance with minor performance impact
                 return ChangeSeverity.MAJOR, (
-                    f"Output digests differ (non-determinism detected): {', '.join(output_digest_changes)}. "
+                    f"Output digests differ (reproducibility variance detected): {', '.join(output_digest_changes)}. "
                     f"Performance impact: {impact_label} (minor changes detected)."
                 )
             else:  # impact_label == 'major'
-                # Nondeterminism with major performance impact
+                # Reproducibility variance with major performance impact
                 return ChangeSeverity.CRITICAL, (
-                    f"Output digests differ (non-determinism detected): {', '.join(output_digest_changes)}. "
+                    f"Output digests differ (reproducibility variance detected): {', '.join(output_digest_changes)}. "
                     f"Performance impact: {impact_label} (significant changes detected)."
                 )
         
@@ -3414,9 +3598,50 @@ class DiffTelemetry:
         # Find previous comparable run
         prev_snapshot = self.find_previous_comparable(snapshot)
         
+        # Try to find previous snapshot's cohort directory for trend comparison
+        prev_cohort_dir = None
+        if prev_snapshot and prev_snapshot.stage and prev_snapshot.view and prev_snapshot.target:
+            # Reconstruct path similar to find_previous_comparable
+            target_clean = prev_snapshot.target.replace('/', '_').replace('\\', '_')
+            if hasattr(self, 'run_dir') and self.run_dir:
+                results_dir = self.run_dir
+                while results_dir.parent.exists() and results_dir.name != "RESULTS":
+                    results_dir = results_dir.parent
+                    if results_dir.name == "RESULTS":
+                        break
+                
+                if results_dir.name == "RESULTS":
+                    # Search for the previous run's cohort directory
+                    runs_dir = results_dir / "runs"
+                    if runs_dir.exists():
+                        for cg_dir in runs_dir.iterdir():
+                            if not cg_dir.is_dir() or not cg_dir.name.startswith("cg-"):
+                                continue
+                            for run_dir in cg_dir.iterdir():
+                                if not run_dir.is_dir():
+                                    continue
+                                stage_dir = run_dir / "REPRODUCIBILITY" / prev_snapshot.stage / prev_snapshot.view / target_clean
+                                if stage_dir.exists():
+                                    for cohort_subdir in stage_dir.iterdir():
+                                        if cohort_subdir.is_dir() and cohort_subdir.name.startswith("cohort="):
+                                            snapshot_file = cohort_subdir / "snapshot.json"
+                                            if snapshot_file.exists():
+                                                try:
+                                                    with open(snapshot_file, 'r') as f:
+                                                        snapshot_data = json.load(f)
+                                                        if snapshot_data.get('run_id') == prev_snapshot.run_id:
+                                                            prev_cohort_dir = cohort_subdir
+                                                            break
+                                                except Exception:
+                                                    continue
+                                    if prev_cohort_dir:
+                                        break
+                            if prev_cohort_dir:
+                                break
+        
         # Compute diff against previous
         if prev_snapshot:
-            diff = self.compute_diff(snapshot, prev_snapshot)
+            diff = self.compute_diff(snapshot, prev_snapshot, prev_cohort_dir=prev_cohort_dir, curr_cohort_dir=cohort_dir)
         else:
             # First run / no previous run: return stable shape with empty excluded factors
             # CRITICAL: If not comparable, severity must be CRITICAL with reason
@@ -3454,7 +3679,46 @@ class DiffTelemetry:
             # Load baseline snapshot
             baseline_snapshot = self._snapshots.get(baseline_state.baseline_run_id)
             if baseline_snapshot:
-                baseline_diff = self.compute_diff(snapshot, baseline_snapshot)
+                # Try to find baseline snapshot's cohort directory
+                baseline_cohort_dir = None
+                if baseline_snapshot.stage and baseline_snapshot.view and baseline_snapshot.target:
+                    target_clean = baseline_snapshot.target.replace('/', '_').replace('\\', '_')
+                    if hasattr(self, 'run_dir') and self.run_dir:
+                        results_dir = self.run_dir
+                        while results_dir.parent.exists() and results_dir.name != "RESULTS":
+                            results_dir = results_dir.parent
+                            if results_dir.name == "RESULTS":
+                                break
+                        
+                        if results_dir.name == "RESULTS":
+                            runs_dir = results_dir / "runs"
+                            if runs_dir.exists():
+                                for cg_dir in runs_dir.iterdir():
+                                    if not cg_dir.is_dir() or not cg_dir.name.startswith("cg-"):
+                                        continue
+                                    for run_dir in cg_dir.iterdir():
+                                        if not run_dir.is_dir():
+                                            continue
+                                        stage_dir = run_dir / "REPRODUCIBILITY" / baseline_snapshot.stage / baseline_snapshot.view / target_clean
+                                        if stage_dir.exists():
+                                            for cohort_subdir in stage_dir.iterdir():
+                                                if cohort_subdir.is_dir() and cohort_subdir.name.startswith("cohort="):
+                                                    snapshot_file = cohort_subdir / "snapshot.json"
+                                                    if snapshot_file.exists():
+                                                        try:
+                                                            with open(snapshot_file, 'r') as f:
+                                                                snapshot_data = json.load(f)
+                                                                if snapshot_data.get('run_id') == baseline_snapshot.run_id:
+                                                                    baseline_cohort_dir = cohort_subdir
+                                                                    break
+                                                        except Exception:
+                                                            continue
+                                            if baseline_cohort_dir:
+                                                break
+                                    if baseline_cohort_dir:
+                                        break
+                
+                baseline_diff = self.compute_diff(snapshot, baseline_snapshot, prev_cohort_dir=baseline_cohort_dir, curr_cohort_dir=cohort_dir)
         
         # Save diffs
         self.save_diff(diff, baseline_diff, cohort_dir)

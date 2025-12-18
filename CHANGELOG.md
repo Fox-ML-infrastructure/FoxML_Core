@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-18-code-modularization.md)
 
 #### 2025-12-17 Updates (Training Pipeline Audit Fixes)
-- **Training Pipeline Contract Fixes**: Fixed 12 critical contract breaks across family IDs, routing, plan consumption, feature schema, counting/tracking, diff telemetry, and determinism verification. Key fixes: family normalization (XGBoost → xgboost), reproducibility tracking string/Enum handling, preflight filtering for all routes, routing plan DISABLED status respect, symbol-specific route includes all eligible symbols, feature pipeline threshold fix (allowed→present not requested→present), schema mismatch diagnostics with close matches, diff telemetry severity logic (fixed "minor" severity when no changes), and output digests for full determinism verification (metrics_sha256, artifacts_manifest_sha256, predictions_sha256).
+- **Training Pipeline Contract Fixes**: Fixed 12 critical contract breaks across family IDs, routing, plan consumption, feature schema, counting/tracking, diff telemetry, and reproducibility verification. Key fixes: family normalization (XGBoost → xgboost), reproducibility tracking string/Enum handling, preflight filtering for all routes, routing plan DISABLED status respect, symbol-specific route includes all eligible symbols, feature pipeline threshold fix (allowed→present not requested→present), schema mismatch diagnostics with close matches, diff telemetry severity logic (fixed "minor" severity when no changes), and output digests for reproducibility verification (metrics_sha256, artifacts_manifest_sha256, predictions_sha256).
 - **Feature Pipeline Improvements**: Fixed feature drop threshold to use allowed→present denominator (prevents false positives when registry intentionally prunes). Added close-match diagnostics for missing allowed features to help diagnose name mismatches.
 - **Routing/Plan Integration**: Training now respects routing plan's CS: DISABLED status. Training plan with 0 jobs now hard-fails (error, not warning). Added validation logging for routing decision count mismatches.
 - **Diff Telemetry Severity Fix**: Fixed severity logic to be purely derived from report. Added `severity_reason` field. Fixed bug where `total_changes=0` incorrectly returned "minor" severity. Now correctly returns "none" when no changes, "critical" when not comparable, with clear reasons.
@@ -41,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Integrated hyperparameters, train_seed, and library versions tracking into FEATURE_SELECTION stage
   - FEATURE_SELECTION now has same reproducibility requirements as TRAINING stage
   - Hyperparameters extracted from `model_families_config` (primary model family, usually LightGBM)
-  - `train_seed` tracked from config (`pipeline.determinism.base_seed`)
+  - `train_seed` tracked from config (`pipeline.determinism.base_seed`) (note: config key name preserved for backward compatibility)
   - Library versions collected via `collect_environment_info()` and stored in `environment.library_versions`
   - All three factors (hyperparameters, train_seed, library_versions) now included in comparison group for FEATURE_SELECTION
   - Runs with different hyperparameters, train_seed, or library versions are no longer considered comparable
@@ -53,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 2025-12-17 Updates (continued)
 - **Audit-Grade Metadata Enhancement**: Added comprehensive environment tracking (python_version, platform, hostname, cuda_version, dependencies_lock_hash), data source details (source, dataset_id, bar_size, timezone, market_calendar), evaluation details (target_definition, n_features, feature_family_counts), and comparable_key for run comparison. Fixed CV/embargo inconsistency - embargo now explicitly set to 0.0 when CV is enabled (not "not_applicable"). Added splitter_impl and enabled flags to cv_details for clarity.
-- **Research-Grade Metrics Enhancement**: Added per-fold distributional stats (fold_scores, min_score, max_score, median_score) for detecting fold collapse and bimodality. Added composite_score definition and versioning for deterministic comparison. Enhanced leakage reporting with structured object (status, checks_run, violations) instead of simple flag. Fixed naming redundancy (removed features_final, kept n_features_post_prune).
+- **Research-Grade Metrics Enhancement**: Added per-fold distributional stats (fold_scores, min_score, max_score, median_score) for detecting fold collapse and bimodality. Added composite_score definition and versioning for reproducible comparison. Enhanced leakage reporting with structured object (status, checks_run, violations) instead of simple flag. Fixed naming redundancy (removed features_final, kept n_features_post_prune).
 
 #### 2025-12-17 Updates
 - **Fixed Field Name Mismatch in Diff Telemetry**: Corrected field name alignment between required field validation and metadata construction. Changed `date_start`/`date_end` → `date_range_start`/`date_range_end`, `target` → `target_name`, and `N_effective` → `n_effective`. This ensures `metadata.json` and `metrics.json` are properly written to cohort directories. Improved error visibility by changing diff telemetry exception handler from DEBUG to WARNING level.
@@ -119,7 +119,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Trading / execution modules** are out of scope for the core repo; FoxML Core focuses on ML research & infra
 - **Feature engineering** still requires human review and domain validation
-- **Full end-to-end test suite** is being expanded following SST + determinism changes
+- **Full end-to-end test suite** is being expanded following SST + reproducibility changes
 - **LOSO CV splitter**: LOSO view currently uses combined data; dedicated CV splitter is a future enhancement
 - **Placebo test per symbol**: Symbol-specific strong targets should be validated with placebo tests - future enhancement
 
@@ -156,7 +156,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 **Recent fixes (2025-12-12 - 2025-12-17):**
-- **Training Pipeline Contract Fixes** (2025-12-17): Fixed 12 critical contract breaks: family normalization (XGBoost → xgboost alias), reproducibility tracking string/Enum crashes, LightGBM save hook `_pkg_ver` referenced-before-assignment, preflight filtering for all routes (SYMBOL_SPECIFIC now uses validated_families), router default for swing targets (binary classification), training plan 0 jobs hard error, routing plan CS: DISABLED respect, routing decision count mismatch detection, symbol-specific route includes all eligible symbols, feature pipeline threshold fix (allowed→present) and schema mismatch diagnostics, diff telemetry severity logic fix (severity now purely derived from report with `severity_reason` field), and output digests for full determinism verification (metrics_sha256, artifacts_manifest_sha256, predictions_sha256 - proves outputs are identical across reruns).
+- **Training Pipeline Contract Fixes** (2025-12-17): Fixed 12 critical contract breaks: family normalization (XGBoost → xgboost alias), reproducibility tracking string/Enum crashes, LightGBM save hook `_pkg_ver` referenced-before-assignment, preflight filtering for all routes (SYMBOL_SPECIFIC now uses validated_families), router default for swing targets (binary classification), training plan 0 jobs hard error, routing plan CS: DISABLED respect, routing decision count mismatch detection, symbol-specific route includes all eligible symbols, feature pipeline threshold fix (allowed→present) and schema mismatch diagnostics, diff telemetry severity logic fix (severity now purely derived from report with `severity_reason` field), and output digests for reproducibility verification (metrics_sha256, artifacts_manifest_sha256, predictions_sha256 - enables comparison of outputs across reruns).
 - **CV/Embargo Metadata Inconsistency** (2025-12-17): Fixed inconsistent embargo_minutes handling - when CV is enabled (cv_method set), embargo is now explicitly set to 0.0 (disabled) rather than marked as "not_applicable". Only marks as "not_applicable" when CV is actually disabled. Added embargo_enabled flag for clarity.
 - **Metrics Naming Redundancy** (2025-12-17): Removed redundant features_final field, kept n_features_post_prune (more descriptive). Clarified n_features_pre vs n_features_post_prune semantics.
 - **Training Pipeline Plumbing Fixes** (2025-12-16): Fixed family name canonicalization mismatches, banner suppression in child processes, reproducibility tracking string/Enum handling, model saving packaging bugs (`_pkg_ver`, `joblib` imports), feature selector vs trainer confusion
@@ -173,7 +173,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Determinism & Defaults** (2025-12-10): Removed hardcoded `random_state` and similar defaults
+- **Reproducibility & Defaults** (2025-12-10): Removed hardcoded `random_state` and similar defaults (note: internal module names preserved for backward compatibility)
 - **Logging** (2025-12-10): Replaced scattered logging flags with structured YAML-driven configuration
 - **Documentation** (2025-12-09+): Restructured into 4-tier hierarchy with improved cross-linking
 

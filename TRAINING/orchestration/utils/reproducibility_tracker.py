@@ -1,7 +1,7 @@
 """
 Reproducibility Tracking Module
 
-Tracks and compares run results across pipeline stages to verify deterministic behavior.
+Tracks and compares run results across pipeline stages to verify reproducible behavior.
 Supports target ranking, feature selection, and other pipeline stages.
 
 Usage:

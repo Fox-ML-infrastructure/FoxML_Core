@@ -243,10 +243,10 @@ class NormalizedSnapshot:
     feature_fingerprint: Optional[str] = None
     target_fingerprint: Optional[str] = None
     
-    # Output digests (for artifact/metric determinism verification)
-    metrics_sha256: Optional[str] = None  # SHA256 of metrics dict (proves metric determinism)
-    artifacts_manifest_sha256: Optional[str] = None  # SHA256 of artifacts manifest (proves artifact determinism)
-    predictions_sha256: Optional[str] = None  # SHA256 of predictions (if available, proves prediction determinism)
+    # Output digests (for artifact/metric reproducibility verification)
+    metrics_sha256: Optional[str] = None  # SHA256 of metrics dict (enables metric reproducibility comparison)
+    artifacts_manifest_sha256: Optional[str] = None  # SHA256 of artifacts manifest (enables artifact reproducibility comparison)
+    predictions_sha256: Optional[str] = None  # SHA256 of predictions (if available, enables prediction reproducibility comparison)
     
     # Fingerprint source descriptions (for auditability)
     fingerprint_sources: Dict[str, str] = field(default_factory=dict)
@@ -342,6 +342,9 @@ class DiffResult:
     
     # Metric deltas
     metric_deltas: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    
+    # Trend deltas (comparison of trend analysis between consecutive runs)
+    trend_deltas: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)

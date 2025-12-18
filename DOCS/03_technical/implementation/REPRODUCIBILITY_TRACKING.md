@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `ReproducibilityTracker` module provides automatic comparison of pipeline run results to verify deterministic behavior across executions. It tracks metrics, compares them to previous runs, and logs differences to help identify non-reproducibility issues.
+The `ReproducibilityTracker` module provides automatic comparison of pipeline run results to verify reproducible behavior across executions. It tracks metrics, compares them to previous runs, and logs differences to help identify reproducibility variance issues.
 
 **Location:** `TRAINING/utils/reproducibility_tracker.py`
 
@@ -39,7 +39,7 @@ tracker.log_comparison(
 - **Configurable thresholds**: Per-metric thresholds (roc_auc, composite, importance) with absolute, relative, and z-score support
 - **Statistical significance**: Optional z-score calculation using reported σ (std_score) when available
 - **Multi-stage support**: Track different pipeline stages separately (target_ranking, feature_selection, model_training, etc.)
-- **Comprehensive coverage**: Integrated into all deterministic pipeline stages (target ranking, feature selection, model training)
+- **Comprehensive coverage**: Integrated into all reproducible pipeline stages (target ranking, feature selection, model training)
 - **Architectural design**: Tracking is integrated into computation modules, not entry points
   - Works regardless of which entry point calls the computation functions
   - Single source of tracking logic (no duplication)

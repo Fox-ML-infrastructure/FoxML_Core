@@ -49,7 +49,7 @@ TRAINING/
 │   └── datasets/                # Dataset classes
 │
 ├── common/                     # Shared utilities
-│   ├── core/                    # Core functionality (determinism, environment)
+│   ├── core/                    # Core functionality (reproducibility, environment)
 │   ├── memory/                  # Memory management
 │   ├── live/                    # Live trading utilities
 │   └── utils/                   # Common utilities

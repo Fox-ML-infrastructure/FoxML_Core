@@ -1,21 +1,23 @@
-# Deterministic Training & Reproducibility
+# Reproducible Training & Auditability
 
 **ML Infrastructure**
 
-This ML research infrastructure system ensures **deterministic, reproducible training** through a Single Source of Truth (SST) configuration architecture (reproducibility depends on using proper configs and consistent environment).
+This ML research infrastructure system ensures **reproducible, auditable training** through a Single Source of Truth (SST) configuration architecture. The system provides comprehensive tracking and reproducibility verification, enabling full auditability of training runs.
+
+> **Note**: True bitwise determinism (identical outputs at the binary level) requires lower-level language implementations and strict control over floating-point operations. This system focuses on reproducibility (consistent results within expected variance) and auditability (full tracking of inputs, configs, and outputs).
 
 ---
 
 ## Core Guarantee
 
-> **Same config → same behavior → same results.**
+> **Same config → same behavior → reproducible results.**
 
-Every training run with identical configuration files produces identical model outputs, enabling:
+Every training run with identical configuration files produces reproducible results within expected variance, enabling:
 
 - **Reproducible backtests** - Compare strategies with confidence
-- **Auditable decisions** - All behavior controlled via versioned config files
-- **Deterministic debugging** - Isolate issues by comparing config vs. code
-- **Compliance-ready** - Clear separation of code (immutable) vs. configuration (tunable)
+- **Auditable decisions** - All behavior controlled via versioned config files with full tracking
+- **Reproducible debugging** - Isolate issues by comparing config vs. code with complete audit trails
+- **Compliance-ready** - Clear separation of code (immutable) vs. configuration (tunable) with full provenance
 
 ---
 
@@ -23,11 +25,11 @@ Every training run with identical configuration files produces identical model o
 
 **✅ Your existing code and configuration files continue to work unchanged.**
 
-The SST and determinism improvements (completed 2025-12-10) were **internal changes** that enhance reproducibility without requiring any user migration:
+The SST and reproducibility improvements (completed 2025-12-10) were **internal changes** that enhance reproducibility and auditability without requiring any user migration:
 
 - **Same API** - All function calls and CLI commands work exactly as before
 - **Same configs** - Your existing YAML configuration files are fully compatible
-- **Automatic** - SST enforcement and deterministic seeds are applied automatically
+- **Automatic** - SST enforcement and reproducible seeds are applied automatically
 - **Backward compatible** - Legacy config locations and patterns still work (with deprecation warnings)
 
 **What changed internally:**
@@ -59,13 +61,13 @@ CONFIG/
 
 **Example**: LightGBM hyperparameters are defined in `CONFIG/model_config/lightgbm.yaml`, not hardcoded in source code.
 
-### 2. Deterministic Seeds
+### 2. Reproducible Seeds
 
-All randomness is controlled through a centralized determinism system:
+All randomness is controlled through a centralized reproducibility system:
 
 - Base seed set globally at startup
-- Per-target/fold seeds derived deterministically
-- Same target + same fold + same config → same seed → same model
+- Per-target/fold seeds derived reproducibly
+- Same target + same fold + same config → same seed → reproducible model
 
 ### 3. Automated Enforcement
 
@@ -181,21 +183,22 @@ training_profiles:
 
 ## Verification
 
-Verify your setup is deterministic:
+Verify your setup is reproducible:
 
 ```bash
 # Run same target twice with same config
 python TRAINING/training_strategies/main.py --target fwd_ret_5m
 python TRAINING/training_strategies/main.py --target fwd_ret_5m
 
-# Models should be identical (same predictions, same metrics)
+# Results should be reproducible (consistent predictions and metrics within expected variance)
+# Use the reproducibility tracking system to compare runs and verify consistency
 ```
 
 ---
 
 ## Related Documentation
 
-- **Internal Technical Details**: `DOCS/03_technical/internal/SST_DETERMINISM_GUARANTEES.md`
+- **Internal Technical Details**: `DOCS/03_technical/internal/SST_DETERMINISM_GUARANTEES.md` (note: file name preserved for historical reference)
 - **Configuration Reference**: `DOCS/02_reference/configuration/`
 - **Model Configuration**: `DOCS/02_reference/configuration/MODEL_CONFIGURATION.md`
 
