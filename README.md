@@ -34,7 +34,8 @@ FoxML Core provides:
 - **Leakage detection system** with pre-training leak detection and auto-fix
 - **Single Source of Truth (SST)** config system - all 20 model families use config-driven hyperparameters
 - **Multi-model training systems** with 20+ model families (GPU-accelerated)
-- **Reproducibility tracking** with end-to-end reproducibility verification
+- **Reproducibility tracking** with end-to-end reproducibility verification and auditability
+- **Auditability focus** - Full tracking of inputs, configs, and outputs for complete run auditability. Note: True bitwise determinism requires lower-level language implementations; this system focuses on reproducibility (consistent results within expected variance) and comprehensive auditability.
 - **Local metrics tracking** - Model performance metrics (ROC-AUC, R², feature importance) stored locally for reproducibility. No external data transmission, no user data collection.
 
 **For detailed capabilities:** See [Architecture Overview](DOCS/00_executive/ARCHITECTURE_OVERVIEW.md)

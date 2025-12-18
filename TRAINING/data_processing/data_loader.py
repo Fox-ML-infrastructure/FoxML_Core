@@ -34,7 +34,7 @@ USE_POLARS = os.getenv("USE_POLARS", "1") == "1"
 from TRAINING.data_processing.data_utils import (
     strip_targets, collapse_identical_duplicate_columns
 )
-from TRAINING.utils.core_utils import SYMBOL_COL, INTERVAL_TO_TARGET
+from TRAINING.common.utils.core_utils import SYMBOL_COL, INTERVAL_TO_TARGET
 
 # Helper function to resolve time column
 def resolve_time_col(df: pd.DataFrame) -> str:
@@ -81,7 +81,7 @@ def _load_mtf_data_pandas(data_dir: str, symbols: List[str], interval: str = "5m
 def _prepare_training_data_cross_sectional_pandas(mtf_data: Dict[str, pd.DataFrame], target: str, common_features: List[str], min_cs: int, max_samples_per_symbol: int = None) -> Tuple:
     """Pandas-based fallback for cross-sectional data preparation."""
     # Import the pandas version from data_preparation
-    from TRAINING.training_strategies.data_preparation import _prepare_training_data_pandas
+    from TRAINING.training_strategies.execution.data_preparation import _prepare_training_data_pandas
     return _prepare_training_data_pandas(mtf_data, target, common_features, min_cs, max_samples_per_symbol)
 
 # CS_WINSOR default

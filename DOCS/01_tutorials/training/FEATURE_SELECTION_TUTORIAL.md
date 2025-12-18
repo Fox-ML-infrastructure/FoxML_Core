@@ -30,7 +30,7 @@ Feature selection reduces dimensionality and improves model performance by:
 - **Boruta statistical gatekeeper**: Boruta acts as a gatekeeper (not just another scorer), using ExtraTrees to test feature significance and modifying consensus scores via bonuses/penalties
 - **Cross-sectional ranking** (optional): Panel model trained across all symbols simultaneously to identify universe-core features vs symbol-specific features. Automatically tags features as CORE/SYMBOL_SPECIFIC/CS_SPECIFIC/WEAK. Enabled via `aggregation.cross_sectional_ranking.enabled` in config. Only runs if `len(symbols) >= min_symbols` (default: 5).
 - **Cross-sectional stability tracking**: Tracks factor robustness across runs using top-K overlap, Kendall tau, and snapshot analysis. Provides STABLE/DRIFTING/DIVERGED classification for global factors. Stricter thresholds than per-symbol (overlap ≥0.75, tau ≥0.65) since cross-sectional features should be more persistent. Stores snapshots in `artifacts/feature_importance/{target}/cross_sectional_panel/` and metadata in `cross_sectional_stability_metadata.json`. See [Feature Importance Stability](../../../../03_technical/implementation/FEATURE_IMPORTANCE_STABILITY.md) for details.
-- **Reproducibility logging**: Per-symbol debug logs showing base_seed, n_features, n_samples, and detected_interval for deterministic behavior verification
+- **Reproducibility logging**: Per-symbol debug logs showing base_seed, n_features, n_samples, and detected_interval for reproducible behavior verification
 - See [Ranking and Selection Consistency](RANKING_SELECTION_CONSISTENCY.md) for details
 
 ## Quick Start
@@ -38,7 +38,8 @@ Feature selection reduces dimensionality and improves model performance by:
 ### Single-Target Selection
 
 ```python
-from TRAINING.strategies.single_task import SingleTaskStrategy
+from TRAINING.training_strategies.strategies.single_task import SingleTaskStrategy
+# Backward compatibility: from TRAINING.strategies.single_task import ... still works
 
 # Train on all features
 config = load_model_config("lightgbm", variant="conservative")
@@ -62,7 +63,8 @@ strategy.train(X_selected, {'fwd_ret_5m': y}, selected_features)
 ### Multi-Target Selection
 
 ```python
-from TRAINING.strategies.multi_task import MultiTaskStrategy
+from TRAINING.training_strategies.strategies.multi_task import MultiTaskStrategy
+# Backward compatibility: from TRAINING.strategies.multi_task import ... still works
 
 # Train on all features with multiple targets
 targets = {
@@ -86,7 +88,8 @@ selected_features = [f[0] for f in top_50]
 Uses model feature importance (LightGBM/XGBoost):
 
 ```python
-from TRAINING.strategies.single_task import SingleTaskStrategy
+from TRAINING.training_strategies.strategies.single_task import SingleTaskStrategy
+# Backward compatibility: from TRAINING.strategies.single_task import ... still works
 from CONFIG.config_loader import load_model_config
 
 config = load_model_config("lightgbm", variant="conservative")

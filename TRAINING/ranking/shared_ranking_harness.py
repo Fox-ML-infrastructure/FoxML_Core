@@ -126,17 +126,17 @@ class RankingHarness:
             - resolved_data_config: Dict with resolved data mode and loader contract
             Any can be None if data preparation fails
         """
-        from TRAINING.utils.cross_sectional_data import (
+        from TRAINING.ranking.utils.cross_sectional_data import (
             load_mtf_data_for_ranking,
             prepare_cross_sectional_data_for_ranking
         )
-        from TRAINING.utils.leakage_filtering import filter_features_for_target, _extract_horizon, _load_leakage_config
-        from TRAINING.utils.data_interval import detect_interval_from_dataframe
-        from TRAINING.utils.target_conditional_exclusions import (
+        from TRAINING.ranking.utils.leakage_filtering import filter_features_for_target, _extract_horizon, _load_leakage_config
+        from TRAINING.ranking.utils.data_interval import detect_interval_from_dataframe
+        from TRAINING.ranking.utils.target_conditional_exclusions import (
             generate_target_exclusion_list,
             load_target_exclusion_list
         )
-        from TRAINING.utils.resolved_config import create_resolved_config
+        from TRAINING.ranking.utils.resolved_config import create_resolved_config
         from TRAINING.ranking.predictability.scoring import TaskType
         
         # Filter symbols based on view
@@ -428,8 +428,8 @@ class RankingHarness:
         Raises:
             ValueError: If data span is insufficient for the required purge/embargo
         """
-        from TRAINING.utils.purged_time_series_split import PurgedTimeSeriesSplit
-        from TRAINING.utils.resolved_config import derive_purge_embargo
+        from TRAINING.ranking.utils.purged_time_series_split import PurgedTimeSeriesSplit
+        from TRAINING.ranking.utils.resolved_config import derive_purge_embargo
         
         # Get CV config
         cv_config = self.multi_model_config.get('cross_validation', {}) if self.multi_model_config else {}
@@ -589,7 +589,7 @@ class RankingHarness:
         Returns:
             RunContext instance
         """
-        from TRAINING.utils.run_context import RunContext
+        from TRAINING.orchestration.utils.run_context import RunContext
         
         ctx = RunContext(
             stage="FEATURE_SELECTION" if self.job_type == "rank_features" else "TARGET_RANKING",
@@ -726,8 +726,8 @@ class RankingHarness:
         from TRAINING.ranking.predictability.leakage_detection import find_near_copy_features
         from TRAINING.ranking.predictability.model_evaluation import _enforce_final_safety_gate, validate_target
         from TRAINING.ranking.predictability.scoring import TaskType
-        from TRAINING.utils.cross_sectional_data import _log_feature_set
-        from TRAINING.utils.resolved_config import compute_feature_lookback_max
+        from TRAINING.ranking.utils.cross_sectional_data import _log_feature_set
+        from TRAINING.ranking.utils.resolved_config import compute_feature_lookback_max
         
         # Infer task type if not provided
         if task_type is None:

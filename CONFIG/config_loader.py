@@ -116,8 +116,9 @@ def inject_defaults(config: Dict[str, Any], model_family: Optional[str] = None) 
         random_state = defaults['randomness'].get('random_state')
         if random_state is None:
             # Load from determinism system (SST) - load directly to avoid circular dependency
+            # Use get_config_path() for path resolution (SST-compliant)
             try:
-                pipeline_config_file = CONFIG_DIR / "training_config" / "pipeline_config.yaml"
+                pipeline_config_file = get_config_path("pipeline_config")
                 if pipeline_config_file.exists():
                     with open(pipeline_config_file, 'r') as f:
                         pipeline_config = yaml.safe_load(f)
@@ -603,7 +604,16 @@ def get_config_path(config_name: str) -> Path:
         "target_configs": ("ranking/targets/configs.yaml", "target_configs.yaml"),
         "feature_selection_multi_model": ("ranking/features/multi_model.yaml", "feature_selection/multi_model.yaml"),
         "feature_selection_config": ("ranking/features/config.yaml", "feature_selection_config.yaml"),
+        
+        # Experiment configs (special handling - use get_experiment_config_path instead)
+        # This mapping is for reference, but experiments should use get_experiment_config_path()
     }
+    
+    # Special handling for experiment configs
+    if config_name.startswith("experiment:"):
+        # Format: "experiment:exp_name" -> experiments/exp_name.yaml
+        exp_name = config_name.replace("experiment:", "", 1)
+        return get_experiment_config_path(exp_name)
     
     # Check if we have a mapping
     if config_name in config_mappings:
@@ -624,8 +634,94 @@ def get_config_path(config_name: str) -> Path:
     if old_model_file.exists():
         return old_model_file
     
+    # Check if it's an experiment config (experiments/ directory)
+    exp_file = CONFIG_DIR / "experiments" / f"{config_name}.yaml"
+    if exp_file.exists():
+        return exp_file
+    
     # Default: assume it's in the root or use the name directly
     return CONFIG_DIR / f"{config_name}.yaml"
+
+
+def get_experiment_config_path(exp_name: str) -> Path:
+    """
+    Get path to experiment config file.
+    
+    Args:
+        exp_name: Experiment name (without .yaml extension)
+        
+    Returns:
+        Path to experiment config file
+        
+    Example:
+        >>> exp_path = get_experiment_config_path("e2e_full_targets_test")
+        >>> # Returns CONFIG_DIR / "experiments" / "e2e_full_targets_test.yaml"
+    """
+    return CONFIG_DIR / "experiments" / f"{exp_name}.yaml"
+
+
+def load_experiment_config(exp_name: str) -> Dict[str, Any]:
+    """
+    Load experiment config by name.
+    
+    Experiment configs are the TOP-LEVEL config (highest priority after CLI args).
+    They override intelligent_training_config and defaults.
+    
+    **Config Precedence (Highest to Lowest):**
+    1. CLI arguments (highest priority)
+    2. **Experiment config** (this function) - overrides everything below
+    3. Intelligent training config (pipeline/training/intelligent.yaml)
+    4. Pipeline configs (pipeline/training/*.yaml)
+    5. Defaults (defaults.yaml) - lowest priority
+    
+    **Fallback Behavior:**
+    - If experiment config exists: values in it override intelligent_training_config
+    - Missing values in experiment config fall back to intelligent_training_config
+    - Missing values there fall back to defaults.yaml
+    - If experiment config file doesn't exist: raises FileNotFoundError (no fallback)
+    
+    **SST Principle:**
+    Experiment configs only need to specify values that differ from defaults.
+    Missing values automatically fall back through the precedence chain.
+    
+    Args:
+        exp_name: Experiment name (without .yaml extension)
+        
+    Returns:
+        Dictionary with experiment configuration (loaded as-is, merging happens in intelligent_trainer.py)
+        
+    Raises:
+        FileNotFoundError: If experiment config file doesn't exist (no fallback)
+        
+    Example:
+        >>> config = load_experiment_config("e2e_full_targets_test")
+        >>> data_dir = config.get("data", {}).get("data_dir")
+    """
+    exp_path = get_experiment_config_path(exp_name)
+    if not exp_path.exists():
+        raise FileNotFoundError(f"Experiment config not found: {exp_path}")
+    
+    try:
+        with open(exp_path, 'r') as f:
+            config = yaml.safe_load(f)
+        if config is None:
+            logger.warning(f"Experiment config {exp_path} is empty or invalid YAML, using empty config")
+            config = {}
+        
+        # Experiment configs are top-level - they override everything
+        # They only need to specify values that differ from defaults/intelligent_training_config
+        # Missing values will fall back to intelligent_training_config, then defaults
+        # (This happens in intelligent_trainer.py, not here)
+        
+        # Note: We don't inject defaults here because experiment configs should be
+        # loaded as-is. The merging with defaults/intelligent_training_config happens
+        # in intelligent_trainer.py where the precedence is enforced.
+        
+        logger.debug(f"Loaded experiment config: {exp_name} from {exp_path}")
+        return config
+    except Exception as e:
+        logger.error(f"Failed to load experiment config {exp_path}: {e}")
+        raise
 
 
 def get_family_timeout(family: str, default: int = 7200) -> int:

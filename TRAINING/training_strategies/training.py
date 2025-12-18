@@ -49,68 +49,27 @@ if str(_PROJECT_ROOT) not in sys.path:
 # Propagate to spawned processes (spawned interpreter reads PYTHONPATH at startup)
 os.environ.setdefault("PYTHONPATH", str(_PROJECT_ROOT))
 
-# Additional safety: ensure the path is in sys.path for child processes
-def _ensure_project_path():
-    """Ensure project path is available for child processes."""
-    if str(_PROJECT_ROOT) not in sys.path:
-        sys.path.insert(0, str(_PROJECT_ROOT))
+# Set up all paths using centralized utilities
+# Note: setup_all_paths already adds CONFIG to sys.path
+from TRAINING.common.utils.path_setup import setup_all_paths
+_PROJECT_ROOT, _TRAINING_ROOT, _CONFIG_DIR = setup_all_paths(_PROJECT_ROOT)
 
-# Call it immediately
-_ensure_project_path()
-
-# Set global numeric guards for stability
-# Add TRAINING to path for local imports
-_TRAINING_ROOT = Path(__file__).resolve().parent
-if str(_TRAINING_ROOT) not in sys.path:
-    sys.path.insert(0, str(_TRAINING_ROOT))
-
-# Also add current directory for relative imports
-if '.' not in sys.path:
-    sys.path.insert(0, '.')
-
-# Add CONFIG directory to path for centralized config loading
-_CONFIG_DIR = _PROJECT_ROOT / "CONFIG"
-if str(_CONFIG_DIR) not in sys.path:
-    sys.path.insert(0, str(_CONFIG_DIR))
-
-# Import config loader
+# Import config loader (CONFIG is already in sys.path from setup_all_paths)
 try:
     from config_loader import get_pipeline_config, get_family_timeout, get_cfg, get_system_config
     _CONFIG_AVAILABLE = True
 except ImportError:
     _CONFIG_AVAILABLE = False
     import logging
-    logging.getLogger(__name__).warning("Config loader not available; using hardcoded defaults")
+    # Only log at debug level to avoid misleading warnings
+    logging.getLogger(__name__).debug("Config loader not available; using hardcoded defaults")
 
 from TRAINING.common.safety import set_global_numeric_guards
 set_global_numeric_guards()
 
 # ---- JOBLIB/LOKY CLEANUP: prevent resource tracker warnings ----
-import atexit
-# Set persistent temp folder for joblib memmapping
-# Load from config if available, otherwise use default
-if _CONFIG_AVAILABLE:
-    joblib_temp = get_cfg("system.paths.joblib_temp", config_name="system_config")
-    if joblib_temp:
-        _JOBLIB_TMP = Path(joblib_temp)
-    else:
-        _JOBLIB_TMP = Path.home() / "trainer_tmp" / "joblib"
-else:
-    _JOBLIB_TMP = Path.home() / "trainer_tmp" / "joblib"
-_JOBLIB_TMP.mkdir(parents=True, exist_ok=True)
-os.environ.setdefault("JOBLIB_TEMP_FOLDER", str(_JOBLIB_TMP))
-
-# Force clean loky worker shutdown at exit to prevent semlock/file leaks
-try:
-    from joblib.externals.loky import get_reusable_executor
-    @atexit.register
-    def _loky_shutdown():
-        try:
-            get_reusable_executor().shutdown(wait=True, kill_workers=True)
-        except Exception:
-            pass
-except Exception:
-    pass
+from TRAINING.common.utils.process_cleanup import setup_loky_cleanup_from_config
+setup_loky_cleanup_from_config()
 
 """
 Enhanced Training Script with Multiple Strategies - Full Original Functionality
@@ -147,10 +106,8 @@ from TRAINING.common.threads import temp_environ, child_env_for_family, plan_for
 from TRAINING.common.tf_runtime import ensure_tf_initialized
 from TRAINING.common.tf_setup import tf_thread_setup
 
-# Family classifications
-TF_FAMS = {"MLP", "VAE", "GAN", "MetaLearning", "MultiTask"}
-TORCH_FAMS = {"CNN1D", "LSTM", "Transformer", "TabCNN", "TabLSTM", "TabTransformer"}
-CPU_FAMS = {"LightGBM", "QuantileLightGBM", "RewardBased", "NGBoost", "GMMRegime", "ChangePoint", "FTRLProximal", "Ensemble"}
+# Family classifications - import from centralized constants
+from TRAINING.common.family_constants import TF_FAMS, TORCH_FAMS, CPU_FAMS, TORCH_SEQ_FAMILIES
 
 
 """Core training functions."""
@@ -165,9 +122,9 @@ from TRAINING.training_strategies.utils import (
 )
 # train_model_comprehensive is defined in this file, not in utils
 from TRAINING.target_router import TaskSpec
-from TRAINING.strategies.single_task import SingleTaskStrategy
-from TRAINING.strategies.multi_task import MultiTaskStrategy
-from TRAINING.strategies.cascade import CascadeStrategy
+from TRAINING.training_strategies.strategies.single_task import SingleTaskStrategy
+from TRAINING.training_strategies.strategies.multi_task import MultiTaskStrategy
+from TRAINING.training_strategies.strategies.cascade import CascadeStrategy
 
 # Standard library imports
 from typing import Dict, List, Any, Optional, Tuple
@@ -656,8 +613,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                             # Track reproducibility for symbol-specific model
                             if output_dir:
                                 try:
-                                    from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
-                                    from TRAINING.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
+                                    from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
+                                    from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
                                     
                                     module_output_dir = Path(output_dir)
                                     if module_output_dir.name != 'training_results':
@@ -895,7 +852,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                     # Track reproducibility: compare to previous training run
                     if output_dir and model_result.get('success', False):
                         try:
-                            from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+                            from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
                             # Use module-specific directory for reproducibility log
                             # output_dir is typically: output_dir_YYYYMMDD_HHMMSS/training_results/
                             # We want to store in training_results/ subdirectory for this module
@@ -930,7 +887,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                             # If we have metrics, log comparison
                             if metrics:
                                 # Extract cohort metadata using unified extractor
-                                from TRAINING.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
+                                from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
                                 
                                 # Extract cohort metadata from stored context (X, symbols, time_vals, mtf_data from prepare_training_data_cross_sectional)
                                 # cohort_context is defined earlier in the function after data preparation (and downsampling if any)
@@ -974,10 +931,10 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 
                                 # CRITICAL: Adapt additional_data to ensure string/Enum safety
                                 # This prevents 'str' object has no attribute 'name' errors
-                                from TRAINING.utils.sst_contract import tracker_input_adapter
+                                from TRAINING.common.utils.sst_contract import tracker_input_adapter
                                 
                                 # Normalize family name for consistency
-                                from TRAINING.utils.sst_contract import normalize_family
+                                from TRAINING.common.utils.sst_contract import normalize_family
                                 family_normalized = normalize_family(family)
                                 
                                 # Adapt additional_data (convert Enum-like objects to strings)

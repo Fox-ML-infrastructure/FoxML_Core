@@ -58,6 +58,14 @@ except ImportError:
     # Logger not yet initialized, will be set up below
     pass
 
+# Import config loader for centralized path resolution
+try:
+    from CONFIG.config_loader import get_experiment_config_path, load_experiment_config
+    _CONFIG_LOADER_AVAILABLE = True
+except ImportError:
+    _CONFIG_LOADER_AVAILABLE = False
+    pass
+
 # Suppress expected warnings
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=UserWarning)
@@ -71,6 +79,70 @@ except ImportError:
     _PARALLEL_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+
+def _compute_feature_selection_config_hash(
+    target_column: str,
+    symbols: List[str],
+    model_families_config: Dict[str, Dict[str, Any]],
+    view: str,
+    symbol: Optional[str],
+    max_samples_per_symbol: Optional[int],
+    min_cs: Optional[int],
+    max_cs_samples: Optional[int],
+    explicit_interval: Optional[Union[int, str]],
+    aggregation_config: Dict[str, Any],
+    top_n: Optional[int]
+) -> str:
+    """
+    Compute a deterministic hash of feature selection configuration.
+    
+    This hash is used to determine if cached results can be reused,
+    bypassing Phase 2 (symbol processing) when configs are identical.
+    
+    Uses centralized config hashing utility for consistency.
+    
+    Args:
+        target_column: Target column name
+        symbols: List of symbols to process (sorted for hash stability)
+        model_families_config: Model families configuration
+        view: View type (CROSS_SECTIONAL/SYMBOL_SPECIFIC/LOSO)
+        symbol: Symbol for SYMBOL_SPECIFIC view
+        max_samples_per_symbol: Maximum samples per symbol
+        min_cs: Minimum cross-sectional samples
+        max_cs_samples: Maximum cross-sectional samples
+        explicit_interval: Explicit interval
+        aggregation_config: Aggregation configuration
+        top_n: Number of top features to return
+    
+    Returns:
+        Hex digest of config hash (truncated to 16 characters for backward compatibility)
+    """
+    from TRAINING.common.utils.config_hashing import compute_config_hash
+    
+    # Build config dict for hashing (only include parameters that affect results)
+    config_dict = {
+        'target': target_column,
+        'symbols': sorted(symbols),  # Sort for stability
+        'view': view,
+        'symbol': symbol,  # For SYMBOL_SPECIFIC view
+        'max_samples_per_symbol': max_samples_per_symbol,
+        'min_cs': min_cs,
+        'max_cs_samples': max_cs_samples,
+        'explicit_interval': explicit_interval,
+        'top_n': top_n,
+        'aggregation': aggregation_config,
+        # Include enabled model families and their configs (only enabled ones)
+        'model_families': {
+            name: cfg for name, cfg in model_families_config.items()
+            if isinstance(cfg, dict) and cfg.get('enabled', False)
+        }
+    }
+    
+    # Compute hash using centralized utility (SHA256, truncated to 16 chars for backward compatibility)
+    config_hash = compute_config_hash(config_dict)[:16]
+    
+    return config_hash
 
 
 def load_multi_model_config(config_path: Path = None) -> Dict[str, Any]:
@@ -99,7 +171,8 @@ def select_features_for_target(
     explicit_interval: Optional[Union[int, str]] = None,  # Optional explicit interval (e.g., "5m" or 5)
     experiment_config: Optional[Any] = None,  # Optional ExperimentConfig (for data.bar_interval)
     view: str = "CROSS_SECTIONAL",  # "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC" - must match target ranking view
-    symbol: Optional[str] = None  # Required for SYMBOL_SPECIFIC view
+    symbol: Optional[str] = None,  # Required for SYMBOL_SPECIFIC view
+    force_refresh: bool = False  # If True, bypass cache and re-run Phase 2
 ) -> Tuple[List[str], pd.DataFrame]:
     """
     Select top features for a target using multi-model consensus.
@@ -122,13 +195,43 @@ def select_features_for_target(
     Returns:
         Tuple of (selected_feature_names, importance_dataframe)
     """
-    # Load max_samples_per_symbol from config if not provided
+    # Load max_samples_per_symbol from config if not provided (same logic as target ranking)
     if max_samples_per_symbol is None:
-        try:
-            from CONFIG.config_loader import get_cfg
-            max_samples_per_symbol = int(get_cfg("pipeline.data_limits.default_max_samples_feature_selection", default=50000, config_name="pipeline_config"))
-        except Exception:
-            max_samples_per_symbol = 50000
+        # First check experiment config if available (same as target ranking)
+        if experiment_config:
+            # Check experiment_config attribute first
+            if hasattr(experiment_config, 'max_samples_per_symbol'):
+                max_samples_per_symbol = experiment_config.max_samples_per_symbol
+                logger.debug(f"Using max_samples_per_symbol={max_samples_per_symbol} from experiment config attribute")
+            else:
+                # Fallback: check experiment YAML file (same as target ranking)
+                try:
+                    exp_name = experiment_config.name
+                    if _CONFIG_LOADER_AVAILABLE:
+                        exp_yaml = load_experiment_config(exp_name)
+                    else:
+                        import yaml
+                        exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                        if exp_file.exists():
+                            with open(exp_file, 'r') as f:
+                                exp_yaml = yaml.safe_load(f) or {}
+                        else:
+                            exp_yaml = {}
+                        exp_data = exp_yaml.get('data', {})
+                        if 'max_samples_per_symbol' in exp_data:
+                            max_samples_per_symbol = exp_data['max_samples_per_symbol']
+                            logger.debug(f"Using max_samples_per_symbol={max_samples_per_symbol} from experiment config YAML")
+                except Exception:
+                    pass
+        
+        # Fallback to pipeline config (use same key as target ranking for consistency)
+        if max_samples_per_symbol is None:
+            try:
+                from CONFIG.config_loader import get_cfg
+                # Use same config key as target ranking for consistency
+                max_samples_per_symbol = int(get_cfg("pipeline.data_limits.default_max_rows_per_symbol_ranking", default=50000, config_name="pipeline_config"))
+            except Exception:
+                max_samples_per_symbol = 50000
     
     # NEW: Use typed config if provided
     # Note: explicit_interval can be passed directly or extracted from experiment config
@@ -196,20 +299,25 @@ def select_features_for_target(
     post_cap_result = None
     
     # Load min_cs and max_cs_samples from config if not provided (for shared harness)
+    harness_min_cs = None
+    harness_max_cs_samples = None
     if use_shared_harness:
         # Load defaults from config (same as target ranking)
-        harness_min_cs = None
-        harness_max_cs_samples = None
         try:
             from CONFIG.config_loader import get_cfg
             if experiment_config:
                 try:
-                    import yaml
                     exp_name = experiment_config.name
-                    exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
-                    if exp_file.exists():
-                        with open(exp_file, 'r') as f:
-                            exp_yaml = yaml.safe_load(f) or {}
+                    if _CONFIG_LOADER_AVAILABLE:
+                        exp_yaml = load_experiment_config(exp_name)
+                    else:
+                        import yaml
+                        exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                        if exp_file.exists():
+                            with open(exp_file, 'r') as f:
+                                exp_yaml = yaml.safe_load(f) or {}
+                        else:
+                            exp_yaml = {}
                         exp_data = exp_yaml.get('data', {})
                         harness_min_cs = exp_data.get('min_cs')
                         harness_max_cs_samples = exp_data.get('max_cs_samples')
@@ -224,6 +332,75 @@ def select_features_for_target(
             harness_min_cs = 10
             harness_max_cs_samples = 1000
     
+    # Compute config hash for cache key
+    config_hash = _compute_feature_selection_config_hash(
+        target_column=target_column,
+        symbols=symbols_to_process,
+        model_families_config=model_families_config,
+        view=view,
+        symbol=symbol,
+        max_samples_per_symbol=max_samples_per_symbol,
+        min_cs=harness_min_cs,
+        max_cs_samples=harness_max_cs_samples,
+        explicit_interval=explicit_interval,
+        aggregation_config=aggregation_config,
+        top_n=top_n
+    )
+    
+    # Check cache before Phase 2 (symbol processing)
+    cache_hit = False
+    cached_features = None
+    cached_summary_df = None
+    
+    if not force_refresh and output_dir:
+        from TRAINING.common.utils.cache_manager import (
+            build_cache_key_with_symbol,
+            get_cache_path,
+            load_cache
+        )
+        
+        # Create cache key using centralized utility
+        cache_key = build_cache_key_with_symbol(target_column, config_hash, view, symbol)
+        cache_path = get_cache_path(output_dir, "feature_selection", cache_key)
+        
+        # Load cache using centralized utility
+        cache_data = load_cache(cache_path, config_hash, verify_hash=True)
+        
+        if cache_data:
+            cached_features = cache_data.get('selected_features', [])
+            # Load summary DataFrame if available
+            if 'summary_df' in cache_data and cache_data['summary_df']:
+                import pandas as pd
+                cached_summary_df = pd.DataFrame(cache_data['summary_df'])
+            
+            if cached_features:
+                cache_hit = True
+                logger.info(f"✅ Using cached feature selection results (config hash: {config_hash[:8]}, {len(cached_features)} features)")
+            else:
+                logger.debug(f"Cache file exists but has no features, proceeding with Phase 2")
+    
+    # If cache hit, skip Phase 2 and return cached results
+    if cache_hit and cached_features is not None:
+        # Apply top_n filter if specified
+        if top_n is not None and len(cached_features) > top_n:
+            cached_features = cached_features[:top_n]
+        
+        # Return cached results (bypass Phase 2)
+        if cached_summary_df is not None:
+            # Filter summary_df to match selected features
+            if top_n is not None:
+                cached_summary_df = cached_summary_df.head(top_n)
+            return cached_features, cached_summary_df
+        else:
+            # Create minimal summary_df from cached features
+            import pandas as pd
+            summary_df = pd.DataFrame({
+                'feature': cached_features,
+                'consensus_score': [1.0] * len(cached_features)  # Placeholder
+            })
+            return cached_features, summary_df
+    
+    # Phase 2: Process symbols (only if cache miss or force_refresh)
     if use_shared_harness:
         logger.info("🔧 Using shared ranking harness (same evaluation contract as target ranking)")
         try:
@@ -314,7 +491,7 @@ def select_features_for_target(
                     # Apply lookback cap BEFORE running importance producers
                     # Note: pre_cap_result is initialized at function scope for telemetry
                     # This prevents selector from even seeing unsafe features (faster + safer)
-                    from TRAINING.utils.lookback_cap_enforcement import apply_lookback_cap
+                    from TRAINING.ranking.utils.lookback_cap_enforcement import apply_lookback_cap
                     from CONFIG.config_loader import get_cfg
                     from TRAINING.common.feature_registry import get_registry
                     
@@ -382,7 +559,7 @@ def select_features_for_target(
                             feature_names = [feature_names_cleaned[i] for i in feature_indices]
                         
                         # CRITICAL: Boundary assertion - validate feature_names matches FS_PRE EnforcedFeatureSet
-                        from TRAINING.utils.lookback_policy import assert_featureset_fingerprint
+                        from TRAINING.ranking.utils.lookback_policy import assert_featureset_fingerprint
                         try:
                             assert_featureset_fingerprint(
                                 label=f"FS_PRE_{view}_{symbol_to_process}" if view == "SYMBOL_SPECIFIC" else f"FS_PRE_{view}",
@@ -408,7 +585,7 @@ def select_features_for_target(
                         logger.debug(f"FS_PRE: No lookback cap set, skipping cap enforcement (view={view}, symbol={symbol_to_process})")
                     
                     # Extract horizon and create split policy
-                    from TRAINING.utils.leakage_filtering import _extract_horizon, _load_leakage_config
+                    from TRAINING.ranking.utils.leakage_filtering import _extract_horizon, _load_leakage_config
                     leakage_config = _load_leakage_config()
                     horizon_minutes = _extract_horizon(target_column, leakage_config) if target_column else None
                     data_interval_minutes = detected_interval
@@ -597,7 +774,7 @@ def select_features_for_target(
                         # CRITICAL: Pre-selection lookback cap enforcement (FS_PRE)
                         # Apply lookback cap BEFORE running importance producers
                         # Note: pre_cap_result is initialized at function scope for telemetry
-                        from TRAINING.utils.lookback_cap_enforcement import apply_lookback_cap
+                        from TRAINING.ranking.utils.lookback_cap_enforcement import apply_lookback_cap
                         from CONFIG.config_loader import get_cfg
                         from TRAINING.common.feature_registry import get_registry
                         
@@ -667,7 +844,7 @@ def select_features_for_target(
                                     feature_names = [feature_names_cleaned[i] for i in feature_indices]
                             
                             # CRITICAL: Boundary assertion - validate feature_names matches FS_PRE EnforcedFeatureSet
-                            from TRAINING.utils.lookback_policy import assert_featureset_fingerprint
+                            from TRAINING.ranking.utils.lookback_policy import assert_featureset_fingerprint
                             try:
                                 assert_featureset_fingerprint(
                                     label=f"FS_PRE_{view}",
@@ -695,7 +872,7 @@ def select_features_for_target(
                             logger.debug(f"FS_PRE: No lookback cap set, skipping cap enforcement (view={view})")
                         
                         # Extract horizon for split policy
-                        from TRAINING.utils.leakage_filtering import _extract_horizon, _load_leakage_config
+                        from TRAINING.ranking.utils.leakage_filtering import _extract_horizon, _load_leakage_config
                         leakage_config = _load_leakage_config()
                         horizon_minutes = _extract_horizon(target_column, leakage_config) if target_column else None
                         
@@ -929,7 +1106,7 @@ def select_features_for_target(
     # Apply lookback cap AFTER selection to catch long-lookback features that selection surfaced
     # This prevents the "pruning surfaced long-lookback" class of bugs
     if selected_features:
-        from TRAINING.utils.lookback_cap_enforcement import apply_lookback_cap
+        from TRAINING.ranking.utils.lookback_cap_enforcement import apply_lookback_cap
         from CONFIG.config_loader import get_cfg
         from TRAINING.common.feature_registry import get_registry
         
@@ -961,7 +1138,7 @@ def select_features_for_target(
         elif explicit_interval:
             if isinstance(explicit_interval, str):
                 # Parse "5m" -> 5.0
-                from TRAINING.utils.duration_parser import parse_duration
+                from TRAINING.common.utils.duration_parser import parse_duration
                 duration = parse_duration(explicit_interval)
                 data_interval_minutes = duration.to_minutes()
             else:
@@ -1002,7 +1179,7 @@ def select_features_for_target(
             selected_features = enforced_fs_post.features.copy()
             
             # CRITICAL: Boundary assertion - validate selected_features matches FS_POST EnforcedFeatureSet
-            from TRAINING.utils.lookback_policy import assert_featureset_fingerprint
+            from TRAINING.ranking.utils.lookback_policy import assert_featureset_fingerprint
             try:
                 assert_featureset_fingerprint(
                     label=f"FS_POST_{view}",
@@ -1232,8 +1409,8 @@ def select_features_for_target(
     try:
         from TRAINING.common.importance_diff_detector import ImportanceDiffDetector
         from TRAINING.common.feature_registry import get_registry
-        from TRAINING.utils.data_interval import detect_interval_from_dataframe
-        from TRAINING.utils.leakage_filtering import filter_features_for_target, _extract_horizon, _load_leakage_config
+        from TRAINING.ranking.utils.data_interval import detect_interval_from_dataframe
+        from TRAINING.ranking.utils.leakage_filtering import filter_features_for_target, _extract_horizon, _load_leakage_config
         
         # Check if we should run importance diff detection
         # (This would require training two sets of models - full vs safe)
@@ -1470,7 +1647,7 @@ def select_features_for_target(
     # This runs regardless of which entry point calls this function
     if output_dir and summary_df is not None and len(summary_df) > 0:
         try:
-            from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+            from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
             
             # Use run-level directory for reproducibility tracking
             # output_dir is now: REPRODUCIBILITY/FEATURE_SELECTION/{view}/{target}/[symbol={symbol}/]
@@ -1495,7 +1672,7 @@ def select_features_for_target(
             n_successful_families = len([s for s in all_family_statuses if s.get('status') == 'success'])
             
             # Extract cohort metadata using unified extractor
-            from TRAINING.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
+            from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
             
             # Extract cohort metadata from stored context (symbols, mtf_data, cs_config)
             # cohort_context is defined earlier in the function
@@ -1520,8 +1697,8 @@ def select_features_for_target(
             
             # Try to use new log_run API with RunContext (includes trend analysis)
             try:
-                from TRAINING.utils.run_context import RunContext
-                from TRAINING.utils.cohort_metadata_extractor import extract_cohort_metadata
+                from TRAINING.orchestration.utils.run_context import RunContext
+                from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata
                 
                 # Extract hyperparameters from model_families_config for FEATURE_SELECTION
                 # CRITICAL: Different hyperparameters = different features selected
@@ -1591,7 +1768,7 @@ def select_features_for_target(
                     elif target_column:
                         # Try to extract horizon from target column name
                         try:
-                            from TRAINING.utils.leakage_filtering import _extract_horizon, _load_leakage_config
+                            from TRAINING.ranking.utils.leakage_filtering import _extract_horizon, _load_leakage_config
                             leakage_config = _load_leakage_config()
                             horizon_minutes_for_ctx = _extract_horizon(target_column, leakage_config)
                         except Exception:
@@ -1889,6 +2066,30 @@ def select_features_for_target(
     # selections complete. Per-target rollups would create duplicate/conflicting trend data.
     # If you need per-target rollups, they should be generated separately at the target level.
     
+    # Save results to cache after Phase 2 completion
+    if output_dir and selected_features:
+        from TRAINING.common.utils.cache_manager import (
+            build_cache_key_with_symbol,
+            get_cache_path,
+            save_cache
+        )
+        
+        # Create cache key (same as check above)
+        cache_key = build_cache_key_with_symbol(target_column, config_hash, view, symbol)
+        cache_path = get_cache_path(output_dir, "feature_selection", cache_key)
+        
+        # Prepare cache data
+        cache_data = {
+            'target': target_column,
+            'view': view,
+            'symbol': symbol,
+            'selected_features': selected_features,
+            'summary_df': summary_df.to_dict('records') if summary_df is not None else None
+        }
+        
+        # Save to cache using centralized utility
+        save_cache(cache_path, cache_data, config_hash=config_hash, include_timestamp=True)
+    
     return selected_features, summary_df
 
 
@@ -1919,11 +2120,13 @@ def rank_features_multi_model(
     Returns:
         DataFrame with features ranked by consensus score
     """
-    # Load max_samples_per_symbol from config if not provided
+    # Load max_samples_per_symbol from config if not provided (same logic as target ranking)
+    # Note: This function doesn't have experiment_config, so it will use pipeline config
     if max_samples_per_symbol is None:
         try:
             from CONFIG.config_loader import get_cfg
-            max_samples_per_symbol = int(get_cfg("pipeline.data_limits.default_max_samples_feature_selection", default=50000, config_name="pipeline_config"))
+            # Use same config key as target ranking for consistency
+            max_samples_per_symbol = int(get_cfg("pipeline.data_limits.default_max_rows_per_symbol_ranking", default=50000, config_name="pipeline_config"))
         except Exception:
             max_samples_per_symbol = 50000
     

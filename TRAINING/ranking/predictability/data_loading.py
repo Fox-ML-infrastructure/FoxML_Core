@@ -89,15 +89,15 @@ except ImportError:
             self.detail = False
 
 # Import checkpoint utility (after path is set)
-from TRAINING.utils.checkpoint import CheckpointManager
+from TRAINING.orchestration.utils.checkpoint import CheckpointManager
 
 # Import unified task type system
-from TRAINING.utils.task_types import (
+from TRAINING.common.utils.task_types import (
     TaskType, TargetConfig, ModelConfig, 
     is_compatible, create_model_configs_from_yaml
 )
-from TRAINING.utils.task_metrics import evaluate_by_task, compute_composite_score
-from TRAINING.utils.target_validation import validate_target, check_cv_compatibility
+from TRAINING.common.utils.task_metrics import evaluate_by_task, compute_composite_score
+from TRAINING.ranking.utils.target_validation import validate_target, check_cv_compatibility
 
 # Suppress expected warnings (harmless)
 warnings.filterwarnings('ignore', message='X does not have valid feature names')
@@ -107,7 +107,7 @@ warnings.filterwarnings('ignore', message='invalid value encountered in divide')
 warnings.filterwarnings('ignore', message='invalid value encountered in true_divide')
 
 # Setup logging with journald support
-from TRAINING.utils.logging_setup import setup_logging
+from TRAINING.orchestration.utils.logging_setup import setup_logging
 logger = setup_logging(
     script_name="rank_target_predictability",
     level=logging.INFO,
@@ -333,8 +333,8 @@ def prepare_features_and_target(
         task_type = target_config.task_type
     
     # LEAKAGE PREVENTION: Filter out leaking features (target-aware, with registry validation)
-    from TRAINING.utils.leakage_filtering import filter_features_for_target
-    from TRAINING.utils.data_interval import detect_interval_from_dataframe
+    from TRAINING.ranking.utils.leakage_filtering import filter_features_for_target
+    from TRAINING.ranking.utils.data_interval import detect_interval_from_dataframe
     
     # Detect data interval for horizon conversion (use explicit_interval if provided)
     detected_interval = detect_interval_from_dataframe(

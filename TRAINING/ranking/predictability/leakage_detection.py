@@ -100,16 +100,16 @@ except ImportError:
             self.detail = False
 
 # Import checkpoint utility (after path is set)
-from TRAINING.utils.checkpoint import CheckpointManager
+from TRAINING.orchestration.utils.checkpoint import CheckpointManager
 from TRAINING.ranking.predictability.data_loading import get_model_config
 
 # Import unified task type system
-from TRAINING.utils.task_types import (
+from TRAINING.common.utils.task_types import (
     TaskType, TargetConfig, ModelConfig, 
     is_compatible, create_model_configs_from_yaml
 )
-from TRAINING.utils.task_metrics import evaluate_by_task, compute_composite_score
-from TRAINING.utils.target_validation import validate_target, check_cv_compatibility
+from TRAINING.common.utils.task_metrics import evaluate_by_task, compute_composite_score
+from TRAINING.ranking.utils.target_validation import validate_target, check_cv_compatibility
 
 # Suppress expected warnings (harmless)
 warnings.filterwarnings('ignore', message='X does not have valid feature names')
@@ -119,7 +119,7 @@ warnings.filterwarnings('ignore', message='invalid value encountered in divide')
 warnings.filterwarnings('ignore', message='invalid value encountered in true_divide')
 
 # Setup logging with journald support
-from TRAINING.utils.logging_setup import setup_logging
+from TRAINING.orchestration.utils.logging_setup import setup_logging
 logger = setup_logging(
     script_name="rank_target_predictability",
     level=logging.INFO,
@@ -127,6 +127,17 @@ logger = setup_logging(
 )
 
 # Leakage detection and feature analysis for target predictability
+
+# Import from modular components
+from TRAINING.ranking.predictability.leakage_detection.feature_analysis import (
+    find_near_copy_features,
+    is_calendar_feature as _is_calendar_feature,
+    detect_leaking_features as _detect_leaking_features
+)
+from TRAINING.ranking.predictability.leakage_detection.reporting import (
+    save_feature_importances as _save_feature_importances,
+    log_suspicious_features as _log_suspicious_features
+)
 
 def find_near_copy_features(
     X: pd.DataFrame,
@@ -415,9 +426,9 @@ def train_and_evaluate_models(
         from sklearn.model_selection import cross_val_score
         from sklearn.preprocessing import StandardScaler
         import lightgbm as lgb
-        from TRAINING.utils.purged_time_series_split import PurgedTimeSeriesSplit
-        from TRAINING.utils.leakage_filtering import _extract_horizon, _load_leakage_config
-        from TRAINING.utils.feature_pruning import quick_importance_prune
+        from TRAINING.ranking.utils.purged_time_series_split import PurgedTimeSeriesSplit
+        from TRAINING.ranking.utils.leakage_filtering import _extract_horizon, _load_leakage_config
+        from TRAINING.ranking.utils.feature_pruning import quick_importance_prune
     except Exception as e:
         logger.warning(f"Failed to import required libraries: {e}")
         return {}, {}, 0.0, {}, {}, []
@@ -1436,7 +1447,7 @@ def train_and_evaluate_models(
     if 'catboost' in model_families:
         try:
             import catboost as cb
-            from TRAINING.utils.target_utils import is_classification_target, is_binary_classification_target
+            from TRAINING.ranking.utils.target_utils import is_classification_target, is_binary_classification_target
             
             # Get config values
             cb_config = get_model_config('catboost', multi_model_config)
@@ -1508,7 +1519,7 @@ def train_and_evaluate_models(
         try:
             from sklearn.linear_model import Lasso
             from sklearn.pipeline import Pipeline
-            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+            from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
             
             # Get config values
             lasso_config = get_model_config('lasso', multi_model_config)
@@ -1561,7 +1572,7 @@ def train_and_evaluate_models(
     if 'mutual_information' in model_families:
         try:
             from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
-            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+            from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
             
             # Mutual information doesn't handle NaN - use sklearn-safe conversion
             X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
@@ -1620,7 +1631,7 @@ def train_and_evaluate_models(
     if 'univariate_selection' in model_families:
         try:
             from sklearn.feature_selection import f_regression, f_classif
-            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+            from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
             
             # F-tests don't handle NaN - use sklearn-safe conversion
             X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
@@ -1733,7 +1744,7 @@ def train_and_evaluate_models(
         try:
             from boruta import BorutaPy
             from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+            from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
             
             # Boruta doesn't support NaN - use sklearn-safe conversion
             X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
@@ -1813,7 +1824,7 @@ def train_and_evaluate_models(
     if 'stability_selection' in model_families:
         try:
             from sklearn.linear_model import LassoCV, LogisticRegressionCV
-            from TRAINING.utils.sklearn_safe import make_sklearn_dense_X
+            from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
             
             # Stability selection uses Lasso/LogisticRegression which don't handle NaN
             X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
@@ -1843,7 +1854,7 @@ def train_and_evaluate_models(
                     # Use TimeSeriesSplit for internal CV (even though bootstrap breaks temporal order,
                     # this maintains consistency with the rest of the codebase)
                     # Clean config to prevent double random_state argument
-                    from TRAINING.utils.config_cleaner import clean_config_for_estimator
+                    from TRAINING.common.utils.config_cleaner import clean_config_for_estimator
                     if is_binary or is_multiclass:
                         lr_config = {'Cs': stability_cs, 'cv': tscv, 'max_iter': lasso_config.get('max_iter', 1000), 'n_jobs': stability_n_jobs}
                         lr_config_clean = clean_config_for_estimator(LogisticRegressionCV, lr_config, extra_kwargs={'random_state': random_state}, family_name='stability_selection')

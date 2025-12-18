@@ -73,6 +73,20 @@ except ImportError:
     # Logger not yet initialized, will be set up below
     pass
 
+# Import config loader for centralized path resolution
+try:
+    from CONFIG.config_loader import (
+        get_experiment_config_path,
+        load_experiment_config,
+        load_training_config,
+        CONFIG_DIR
+    )
+    _CONFIG_LOADER_AVAILABLE = True
+except ImportError:
+    _CONFIG_LOADER_AVAILABLE = False
+    # Logger not yet initialized, will be set up below
+    pass
+
 # Import existing training pipeline functions
 # We import the module but don't run main() - we call functions directly
 import TRAINING.train_with_strategies as train_module
@@ -88,6 +102,30 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Helper functions to get/load experiment config (with fallback)
+# These are defined after logger setup so we can use logger if needed
+def _get_experiment_config_path(exp_name: str) -> Path:
+    """Get experiment config path using config loader if available, otherwise fallback."""
+    if _CONFIG_LOADER_AVAILABLE:
+        return get_experiment_config_path(exp_name)
+    else:
+        return Path("CONFIG/experiments") / f"{exp_name}.yaml"
+
+def _load_experiment_config_safe(exp_name: str) -> Dict[str, Any]:
+    """Load experiment config using config loader if available, otherwise fallback."""
+    if _CONFIG_LOADER_AVAILABLE:
+        try:
+            return load_experiment_config(exp_name)
+        except FileNotFoundError:
+            return {}
+    else:
+        import yaml
+        exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+        if exp_file.exists():
+            with open(exp_file, 'r') as f:
+                return yaml.safe_load(f) or {}
+        return {}
 
 # Print license banner on startup (compliance and commercial use notice)
 # CRITICAL: Only print in main process, not in child processes or when suppressed
@@ -116,37 +154,8 @@ except ImportError:
     _PANDAS_AVAILABLE = False
 
 
-def _json_default(obj: Any) -> Any:
-    """
-    Fallback serializer for json.dump when saving ranking cache.
-    Handles pandas / numpy / datetime objects.
-    """
-    # Datetime-like
-    if isinstance(obj, (datetime.datetime, datetime.date)):
-        # ISO-8601 string is human readable and round-trippable enough for our use
-        return obj.isoformat()
-    
-    # Pandas Timestamp (must check after datetime since pd.Timestamp is a subclass)
-    if _PANDAS_AVAILABLE:
-        try:
-            import pandas as pd
-            if isinstance(obj, pd.Timestamp):
-                return obj.isoformat()
-        except ImportError:
-            pass
-    
-    # Numpy scalars
-    if isinstance(obj, (np.integer,)):
-        return int(obj)
-    if isinstance(obj, (np.floating,)):
-        return float(obj)
-    
-    # Numpy arrays
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    
-    # Anything else falls back to string representation
-    return str(obj)
+# Import from modular components
+from TRAINING.orchestration.intelligent_trainer.utils import json_default as _json_default
 
 
 class IntelligentTrainer:
@@ -273,12 +282,20 @@ class IntelligentTrainer:
         # Also check experiment config if available
         if self.experiment_config:
             try:
-                import yaml
                 exp_name = self.experiment_config.name
-                exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
-                if exp_file.exists():
-                    with open(exp_file, 'r') as f:
-                        exp_yaml = yaml.safe_load(f) or {}
+                if _CONFIG_LOADER_AVAILABLE:
+                    exp_file = get_experiment_config_path(exp_name)
+                    if exp_file.exists():
+                        exp_yaml = load_experiment_config(exp_name)
+                        exp_data = exp_yaml.get('data', {})
+                        config_max_rows = exp_data.get('max_rows_per_symbol') or exp_data.get('max_samples_per_symbol')
+                        if config_max_rows is not None and config_max_rows > 0:
+                            expected_n = config_max_rows * len(self.symbols)
+                            logger.info(f"🔍 Using experiment config max_rows_per_symbol={config_max_rows} × {len(self.symbols)} symbols = {expected_n} for output directory binning")
+                            return expected_n
+                else:
+                    # Fallback for when config loader is not available
+                    exp_yaml = _load_experiment_config_safe(exp_name)
                     exp_data = exp_yaml.get('data', {})
                     config_max_rows = exp_data.get('max_rows_per_symbol') or exp_data.get('max_samples_per_symbol')
                     if config_max_rows is not None and config_max_rows > 0:
@@ -409,10 +426,19 @@ class IntelligentTrainer:
         import hashlib
         
         try:
-            from TRAINING.utils.diff_telemetry import ComparisonGroup
+            from TRAINING.orchestration.utils.diff_telemetry import ComparisonGroup
             
             # Compute dataset signature from available configs
             dataset_parts = []
+            
+            # Experiment config path (if available)
+            if self.experiment_config:
+                if _CONFIG_LOADER_AVAILABLE:
+                    exp_file = get_experiment_config_path(self.experiment_config.name)
+                else:
+                    exp_file = _get_experiment_config_path(self.experiment_config.name)
+                if exp_file.exists():
+                    dataset_parts.append(f"exp:{self.experiment_config.name}")
             
             # Data directory path (normalized)
             if self.data_dir:
@@ -433,12 +459,9 @@ class IntelligentTrainer:
             max_cs_samples = self._max_cs_samples
             if self.experiment_config:
                 try:
-                    import yaml
                     exp_name = self.experiment_config.name
-                    exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
-                    if exp_file.exists():
-                        with open(exp_file, 'r') as f:
-                            exp_yaml = yaml.safe_load(f) or {}
+                    exp_yaml = _load_experiment_config_safe(exp_name)
+                    if exp_yaml:
                         exp_data = exp_yaml.get('data', {})
                         min_cs = exp_data.get('min_cs')
                         if max_cs_samples is None:
@@ -777,8 +800,9 @@ class IntelligentTrainer:
     
     def _get_cache_key(self, symbols: List[str], config_hash: str) -> str:
         """Generate cache key from symbols and config."""
-        key_str = f"{sorted(symbols)}_{config_hash}"
-        return hashlib.md5(key_str.encode()).hexdigest()
+        from TRAINING.common.utils.config_hashing import compute_config_hash_from_values
+        # Use centralized config hashing for consistency
+        return compute_config_hash_from_values(symbols=sorted(symbols), config_hash=config_hash)[:32]  # Truncate for backward compatibility
     
     def _load_cached_rankings(self, cache_key: str, use_cache: bool = True) -> Optional[List[Dict[str, Any]]]:
         """Load cached target rankings."""
@@ -813,31 +837,22 @@ class IntelligentTrainer:
     
     def _load_cached_features(self, target: str) -> Optional[List[str]]:
         """Load cached feature selection for a target."""
+        from TRAINING.common.utils.cache_manager import load_cache
         cache_path = self._get_feature_cache_path(target)
-        if not cache_path.exists():
-            return None
-        
-        try:
-            with open(cache_path, 'r') as f:
-                cache_data = json.load(f)
-                return cache_data.get('selected_features')
-        except Exception as e:
-            logger.warning(f"Failed to load feature cache for {target}: {e}")
-            return None
+        cache_data = load_cache(cache_path, verify_hash=False)
+        if cache_data:
+            return cache_data.get('selected_features')
+        return None
     
     def _save_cached_features(self, target: str, features: List[str]):
         """Save feature selection results to cache."""
+        from TRAINING.common.utils.cache_manager import save_cache
         cache_path = self._get_feature_cache_path(target)
-        try:
-            cache_data = {
-                'target': target,
-                'selected_features': features,
-                'timestamp': time.time()
-            }
-            with open(cache_path, 'w') as f:
-                json.dump(cache_data, f, indent=2)
-        except Exception as e:
-            logger.warning(f"Failed to save feature cache for {target}: {e}")
+        cache_data = {
+            'target': target,
+            'selected_features': features
+        }
+        save_cache(cache_path, cache_data, include_timestamp=True)
     
     def rank_targets_auto(
         self,
@@ -916,10 +931,9 @@ class IntelligentTrainer:
             try:
                 import yaml
                 exp_name = self.experiment_config.name
-                exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                exp_file = _get_experiment_config_path(exp_name)
                 if exp_file.exists():
-                    with open(exp_file, 'r') as f:
-                        exp_yaml = yaml.safe_load(f) or {}
+                    exp_yaml = _load_experiment_config_safe(exp_name)
                     intel_training = exp_yaml.get('intelligent_training', {})
                     if intel_training:
                         exclude_patterns = intel_training.get('exclude_target_patterns', [])
@@ -1030,7 +1044,7 @@ class IntelligentTrainer:
         
         # Generate metrics rollups after target ranking completes
         try:
-            from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+            from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
             tracker = ReproducibilityTracker(output_dir=self.output_dir / "target_rankings")
             run_id = self._run_name.replace("_", "-")  # Use run name as run_id
             tracker.generate_metrics_rollups(stage="TARGET_RANKING", run_id=run_id)
@@ -1237,7 +1251,7 @@ class IntelligentTrainer:
         decision_artifact_dir = None
         try:
             from TRAINING.decisioning.decision_engine import DecisionEngine
-            from TRAINING.utils.cohort_metadata_extractor import extract_cohort_metadata
+            from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata
             
             # Try to extract cohort metadata early (for decision loading)
             # This is approximate - actual cohort_id will be computed later
@@ -1251,7 +1265,7 @@ class IntelligentTrainer:
                 segment_id = None
                 if cohort_metadata:
                     # Compute approximate cohort_id (will be refined later)
-                    from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+                    from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
                     temp_tracker = ReproducibilityTracker(output_dir=self.output_dir)
                     cohort_id = temp_tracker._compute_cohort_id(cohort_metadata, route_type=None)
                     
@@ -1611,7 +1625,7 @@ class IntelligentTrainer:
         # Generate metrics rollups after feature selection completes (all targets processed)
         if auto_features and target_features:
             try:
-                from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+                from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
                 tracker = ReproducibilityTracker(output_dir=self.output_dir)
                 run_id = self._run_name.replace("_", "-")  # Use run name as run_id
                 tracker.generate_metrics_rollups(stage="FEATURE_SELECTION", run_id=run_id)
@@ -2003,7 +2017,7 @@ class IntelligentTrainer:
         # Generate trend summary (if reproducibility tracking is available)
         trend_summary = None
         try:
-            from TRAINING.utils.reproducibility_tracker import ReproducibilityTracker
+            from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
             # Path is already imported at top of file
             # Find REPRODUCIBILITY directory
             repro_dir = self.output_dir / "REPRODUCIBILITY"
@@ -2160,19 +2174,39 @@ Examples:
             raise
     
     # Load intelligent training config (NEW - allows simple command-line usage)
-    # Try new location first (pipeline/training/), then old (training_config/)
-    intel_config_file = Path("CONFIG/pipeline/training/intelligent.yaml")
-    if not intel_config_file.exists():
-        intel_config_file = Path("CONFIG/training_config/intelligent_training_config.yaml")
+    # Use config loader if available, otherwise fallback to direct path
     intel_config_data = {}
-    if intel_config_file.exists():
+    if _CONFIG_LOADER_AVAILABLE:
         try:
-            import yaml
-            with open(intel_config_file, 'r') as f:
-                intel_config_data = yaml.safe_load(f) or {}
-            logger.info(f"✅ Loaded intelligent training config from {intel_config_file}")
+            intel_config_data = load_training_config("intelligent_training_config")
+            logger.info("✅ Loaded intelligent training config using config loader")
         except Exception as e:
-            logger.warning(f"Could not load intelligent training config: {e}")
+            logger.warning(f"Could not load intelligent training config via loader: {e}")
+    else:
+        # Fallback: Try new location first (pipeline/training/), then old (training_config/)
+        intel_config_file = Path("CONFIG/pipeline/training/intelligent.yaml")
+        if not intel_config_file.exists():
+            intel_config_file = Path("CONFIG/training_config/intelligent_training_config.yaml")
+        if intel_config_file.exists():
+            try:
+                import yaml
+                with open(intel_config_file, 'r') as f:
+                    intel_config_data = yaml.safe_load(f) or {}
+                logger.info(f"✅ Loaded intelligent training config from {intel_config_file}")
+            except Exception as e:
+                logger.warning(f"Could not load intelligent training config: {e}")
+    
+    # Get config file path for logging (needed for trace output)
+    if _CONFIG_LOADER_AVAILABLE:
+        try:
+            from CONFIG.config_loader import get_config_path
+            intel_config_file = get_config_path("intelligent_training_config")
+        except:
+            intel_config_file = Path("CONFIG/pipeline/training/intelligent.yaml")
+    else:
+        intel_config_file = Path("CONFIG/pipeline/training/intelligent.yaml")
+        if not intel_config_file.exists():
+            intel_config_file = Path("CONFIG/training_config/intelligent_training_config.yaml")
     
     # Apply config values if CLI args not provided
     if not args.data_dir and intel_config_data.get('data', {}).get('data_dir'):
@@ -2242,10 +2276,9 @@ Examples:
             try:
                 import yaml
                 exp_name = experiment_config.name
-                exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                exp_file = _get_experiment_config_path(exp_name)
                 if exp_file.exists():
-                    with open(exp_file, 'r') as f:
-                        exp_yaml = yaml.safe_load(f) or {}
+                    exp_yaml = _load_experiment_config_safe(exp_name)
                     exp_data_section = exp_yaml.get('data', {})
                     # Merge ALL data section keys from YAML (experiment config takes priority)
                     # This includes: min_cs, max_cs_samples, max_rows_train, max_samples_per_symbol, max_rows_per_symbol
@@ -2267,10 +2300,9 @@ Examples:
                 import yaml
                 # Path is already imported at top of file
                 exp_name = experiment_config.name
-                exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                exp_file = _get_experiment_config_path(exp_name)
                 if exp_file.exists():
-                    with open(exp_file, 'r') as f:
-                        exp_yaml = yaml.safe_load(f) or {}
+                    exp_yaml = _load_experiment_config_safe(exp_name)
                     intel_training = exp_yaml.get('intelligent_training', {})
                     if intel_training:
                         exp_manual_targets = intel_training.get('manual_targets', [])
@@ -2336,12 +2368,9 @@ Examples:
             exp_has_top_m = False
             if experiment_config:
                 try:
-                    import yaml
                     exp_name = experiment_config.name
-                    exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
-                    if exp_file.exists():
-                        with open(exp_file, 'r') as f:
-                            exp_yaml = yaml.safe_load(f) or {}
+                    exp_yaml = _load_experiment_config_safe(exp_name)
+                    if exp_yaml:
                         intel_training = exp_yaml.get('intelligent_training', {})
                         if intel_training:
                             exp_has_max_targets = 'max_targets_to_evaluate' in intel_training
@@ -2387,10 +2416,9 @@ Examples:
             try:
                 import yaml
                 exp_name = experiment_config.name
-                exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                exp_file = _get_experiment_config_path(exp_name)
                 if exp_file.exists():
-                    with open(exp_file, 'r') as f:
-                        exp_yaml = yaml.safe_load(f) or {}
+                    exp_yaml = _load_experiment_config_safe(exp_name)
                     intel_training = exp_yaml.get('intelligent_training', {})
                     if intel_training:
                         # Override with experiment config values (experiment config takes priority)
@@ -2436,10 +2464,9 @@ Examples:
                 # Path is already imported at top of file
                 # Find the experiment config file
                 exp_name = experiment_config.name
-                exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                exp_file = _get_experiment_config_path(exp_name)
                 if exp_file.exists():
-                    with open(exp_file, 'r') as f:
-                        exp_yaml = yaml.safe_load(f) or {}
+                    exp_yaml = _load_experiment_config_safe(exp_name)
                     # Extract intelligent_training section
                     intel_training = exp_yaml.get('intelligent_training', {})
                     if intel_training:
@@ -2509,7 +2536,7 @@ Examples:
     if intel_config_file.exists():
         loaded_files.append(("intelligent_training_config.yaml", str(intel_config_file.resolve())))
     if experiment_config:
-        exp_file = Path("CONFIG/experiments") / f"{experiment_config.name}.yaml"
+        exp_file = _get_experiment_config_path(experiment_config.name)
         if exp_file.exists():
             loaded_files.append((f"experiment: {experiment_config.name}.yaml", str(exp_file.resolve())))
     
@@ -2549,10 +2576,9 @@ Examples:
             try:
                 import yaml
                 exp_name = experiment_config.name
-                exp_file = Path("CONFIG/experiments") / f"{exp_name}.yaml"
+                exp_file = _get_experiment_config_path(exp_name)
                 if exp_file.exists():
-                    with open(exp_file, 'r') as f:
-                        exp_yaml = yaml.safe_load(f) or {}
+                    exp_yaml = _load_experiment_config_safe(exp_name)
                     exp_data = exp_yaml.get('data', {})
                     exp_max_rows = exp_data.get('max_rows_per_symbol') or exp_data.get('max_samples_per_symbol')
             except Exception:
@@ -2590,12 +2616,10 @@ Examples:
     
     # Check for experiment config overrides
     if experiment_config:
-        exp_file = Path("CONFIG/experiments") / f"{experiment_config.name}.yaml"
+        exp_file = _get_experiment_config_path(experiment_config.name)
         if exp_file.exists():
             try:
-                import yaml
-                with open(exp_file, 'r') as f:
-                    exp_yaml = yaml.safe_load(f) or {}
+                exp_yaml = _load_experiment_config_safe(experiment_config.name)
                 exp_data = exp_yaml.get('data', {})
                 # Trace all data section keys that exist in experiment config
                 for key in ['min_cs', 'max_cs_samples', 'max_rows_train', 'max_samples_per_symbol', 'max_rows_per_symbol']:
@@ -2677,7 +2701,10 @@ Examples:
     logger.info("📂 Environment:")
     logger.info(f"   Working directory: {os.getcwd()}")
     logger.info(f"   Project root: {_PROJECT_ROOT}")
-    logger.info(f"   Config directory: {Path('CONFIG').resolve()}")
+    if _CONFIG_LOADER_AVAILABLE:
+        logger.info(f"   Config directory: {CONFIG_DIR.resolve()}")
+    else:
+        logger.info(f"   Config directory: {Path('CONFIG').resolve()}")
     
     logger.info("=" * 80)
     logger.info("")

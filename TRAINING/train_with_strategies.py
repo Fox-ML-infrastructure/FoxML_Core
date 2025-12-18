@@ -26,7 +26,7 @@ All imports are re-exported here to maintain backward compatibility.
 from TRAINING.training_strategies import *
 
 # Also export main directly for script execution
-from TRAINING.training_strategies.main import main
+from TRAINING.training_strategies.execution.main import main
 
 __all__ = [
     # Family runners

@@ -22,39 +22,104 @@ See the [Training Documentation](../../DOCS/INDEX.md#tier-b-tutorials--walkthrou
 
 ```
 TRAINING/
-├── orchestration/          # Intelligent training pipeline
-├── ranking/                # Target ranking system
-│   ├── predictability/     # Target predictability ranking (modular)
-│   └── rank_target_predictability.py  # Backward-compat wrapper
-├── model_fun/              # Model trainers (17 models)
-├── models/                 # Model wrappers and registry
-│   └── specialized/       # Specialized model implementations (modular)
-│       └── specialized_models.py  # Backward-compat wrapper
-├── training_strategies/    # Training strategies (modular)
-│   └── train_with_strategies.py  # Backward-compat wrapper
-├── strategies/             # Training strategies
-├── utils/                  # Utilities (data loading, leakage filtering, reproducibility tracking, etc.)
-├── common/                 # Common utilities (safety, threading, etc.)
-├── preprocessing/          # Data preprocessing
-├── processing/            # Data processing
-├── features/               # Feature engineering
-├── datasets/               # Dataset classes
-├── EXPERIMENTS/            # 3-phase training workflow
-└── train.py                # Main training entry point
+├── train.py                    # Primary entry point (delegates to intelligent_trainer)
+├── train_with_strategies.py    # Backward compat wrapper
+│
+├── orchestration/              # Intelligent training pipeline
+│   ├── intelligent_trainer/    # Main orchestrator
+│   ├── interfaces/             # Unified training interface
+│   ├── routing/                # Target routing logic
+│   └── utils/                  # Orchestration utilities
+│
+├── ranking/                    # Target ranking system
+│   ├── predictability/         # Target predictability ranking (modular)
+│   ├── multi_model_feature_selection/  # Feature selection
+│   └── utils/                  # Ranking-specific utilities
+│
+├── training_strategies/         # Training strategies (merged from strategies/)
+│   ├── strategies/              # Strategy classes (single-task, multi-task, cascade)
+│   ├── execution/               # Execution code (main, training, data prep)
+│   └── utils/                   # Strategy utilities
+│
+├── data/                       # Consolidated data handling
+│   ├── loading/                 # Data loading (from data_processing)
+│   ├── preprocessing/           # Preprocessing pipelines
+│   ├── processing/              # Data transformations
+│   ├── features/                # Feature engineering
+│   └── datasets/                # Dataset classes
+│
+├── common/                     # Shared utilities
+│   ├── core/                    # Core functionality (reproducibility, environment)
+│   ├── memory/                  # Memory management
+│   ├── live/                    # Live trading utilities
+│   └── utils/                   # Common utilities
+│
+├── model_fun/                  # Model trainers (34 files)
+├── models/                     # Model wrappers and registry (18 files)
+├── decisioning/                # Decision engine (4 files)
+├── stability/                  # Stability analysis (6 files)
+├── tools/                      # Development tools (7 files)
+├── tests/                      # Tests (7 files)
+│
+└── archive/                     # Historical files
 ```
 
-## Refactoring (2025-12-09)
+## Entry Points
 
-Large monolithic files have been split into modular components:
+- **`train.py`** - Primary entry point, delegates to `IntelligentTrainer`
+- **`train_with_strategies.py`** - Backward compatibility wrapper for training strategies
+- **`orchestration/interfaces/unified_training_interface.py`** - Alternative unified interface
+
+## Refactoring History
+
+### 2025-12-18: TRAINING Folder Reorganization
+
+- **Directory Consolidation**: 
+  - Moved `features/` → `data/features/`
+  - Moved `datasets/` → `data/datasets/`
+  - Moved `memory/` → `common/memory/`
+  - Moved `live/` → `common/live/`
+  - Moved `core/` → `common/core/`
+- **Overlapping Directory Merges**:
+  - Merged `strategies/` → `training_strategies/strategies/`
+  - Consolidated `data_processing/`, `preprocessing/`, `processing/` → `data/` (with subdirectories)
+- **Entry Point Reorganization**:
+  - Moved `unified_training_interface.py` → `orchestration/interfaces/`
+  - Moved `target_router.py` → `orchestration/routing/`
+- **Output Directory Cleanup**:
+  - Moved `modular_output/` → `RESULTS/modular_output/`
+  - Moved `results/` → `RESULTS/training_results/`
+  - Archived `EXPERIMENTS/` → `archive/experiments/`
+- **Config Loader Fixes**: Fixed misleading "Config loader not available" warnings (changed to debug level)
+- **Backward Compatibility**: All old import paths maintained via `__init__.py` re-export wrappers
+- **Import Status**: 100% of key imports passing
+- See **[Detailed Changelog](../../02_reference/changelog/2025-12-18-training-folder-reorganization.md)** for complete details
+
+### 2025-12-18: Code Modularization & Utils Reorganization
+
+- **`TRAINING/utils/` reorganized** into domain-specific subdirectories:
+  - `ranking/utils/` - Ranking-specific utilities (24 files)
+  - `orchestration/utils/` - Orchestration utilities (8 files)  
+  - `common/utils/` - Shared/common utilities (16 files)
+- **Large files split** into modular components:
+  - `reproducibility_tracker.py` → `reproducibility/` folder
+  - `diff_telemetry.py` → `diff_telemetry/` folder
+  - `multi_model_feature_selection.py` → `multi_model_feature_selection/` folder
+  - `intelligent_trainer.py` → `intelligent_trainer/` folder
+  - `leakage_detection.py` → `leakage_detection/` folder
+- **Backward compatibility maintained** via `TRAINING/utils/__init__.py` re-exports
+- See **[Detailed Changelog](../../02_reference/changelog/2025-12-18-code-modularization.md)** for complete details
+
+### 2025-12-09: Initial Large File Splits
 
 - **`models/specialized_models.py`**: 4,518 → 82 lines (split into `models/specialized/`)
 - **`ranking/rank_target_predictability.py`**: 3,454 → 56 lines (split into `ranking/predictability/`)
 - **`train_with_strategies.py`**: 2,523 → 66 lines (split into `training_strategies/`)
 
 **For detailed refactoring documentation, see:**
-- **[Refactoring & Wrappers Guide](../../DOCS/01_tutorials/REFACTORING_AND_WRAPPERS.md)** - User-facing guide explaining wrappers and import patterns
-- **[Refactoring Summary](../../DOCS/INTERNAL/REFACTORING_SUMMARY_INTERNAL.md)** - Internal technical details
-- **[Module-Specific Docs](../../DOCS/03_technical/refactoring/)** - Detailed structure for each refactored module
+- **[Refactoring & Wrappers Guide](../../01_tutorials/REFACTORING_AND_WRAPPERS.md)** - User-facing guide explaining wrappers and import patterns
+- **[Refactoring Summary](../../INTERNAL/REFACTORING_SUMMARY_INTERNAL.md)** - Internal technical details
+- **[Module-Specific Docs](../../03_technical/refactoring/)** - Detailed structure for each refactored module
 
 ### Key Points
 

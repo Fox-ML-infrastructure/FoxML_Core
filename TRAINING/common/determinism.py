@@ -16,18 +16,22 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-Deterministic Training System
+Reproducible Training System
 ============================
 
-One switch to rule them all: global determinism for reproducible ML training.
+One switch to rule them all: global reproducibility configuration for ML training.
 
 This module must be imported FIRST in every entrypoint (before importing 
 torch/tf/lightgbm/xgboost) to ensure reproducible results across all model families.
 
+Note: True bitwise determinism (identical outputs at the binary level) requires 
+lower-level language implementations and strict control over floating-point operations. 
+This system focuses on reproducibility (consistent results within expected variance).
+
 Usage:
     from common.determinism import set_global_determinism, stable_seed_from, seed_for
     
-    # Set global determinism (call this FIRST)
+    # Set global reproducibility configuration (call this FIRST)
     BASE_SEED = set_global_determinism(base_seed=1234, threads=1, deterministic_algorithms=True)
     
     # Derive per-target/fold seeds
@@ -47,7 +51,7 @@ logger = logging.getLogger(__name__)
 BASE_SEED = None
 
 def _export_env(env: Dict[str, str]) -> None:
-    """Set environment variables for determinism."""
+    """Set environment variables for reproducibility."""
     for k, v in env.items():
         os.environ.setdefault(k, str(v))
 
@@ -74,17 +78,17 @@ def set_global_determinism(
     strict_mode: bool = False,  # Allow optimizations
 ) -> int:
     """
-    Set global determinism for all ML libraries.
+    Set global reproducibility configuration for all ML libraries.
     
     Call this BEFORE importing torch/tensorflow/xgboost/lightgbm.
     
     Args:
         base_seed: Base seed for all random operations
-        threads: Number of threads (1 for strict determinism)
+        threads: Number of threads (1 for enhanced reproducibility)
         deterministic_algorithms: Enable deterministic algorithms where possible
-        prefer_cpu_tree_train: Use CPU for tree training (more deterministic)
-        tf_on: Enable TensorFlow determinism
-        strict_mode: Enable strict deterministic mode (disables some optimizations)
+        prefer_cpu_tree_train: Use CPU for tree training (improves reproducibility)
+        tf_on: Enable TensorFlow reproducibility settings
+        strict_mode: Enable strict reproducibility mode (disables some optimizations)
         
     Returns:
         The normalized base seed used
@@ -358,8 +362,8 @@ def reproducibility_test(train_fn, data, target: str, fold: int, **kwargs) -> bo
         return False
 
 def log_determinism_info():
-    """Log current determinism settings and library versions."""
-    logger.info("🔒 Determinism Configuration:")
+    """Log current reproducibility settings and library versions."""
+    logger.info("🔒 Reproducibility Configuration:")
     logger.info(f"  Base seed: {BASE_SEED}")
     logger.info(f"  Python hash seed: {os.environ.get('PYTHONHASHSEED')}")
     logger.info(f"  Threads: {os.environ.get('OMP_NUM_THREADS')}")
@@ -397,8 +401,8 @@ def log_determinism_info():
         pass
 
 def verify_determinism_setup() -> bool:
-    """Verify that determinism is properly configured."""
-    logger.info("🔍 Verifying determinism setup...")
+    """Verify that reproducibility is properly configured."""
+    logger.info("🔍 Verifying reproducibility setup...")
     
     checks = []
     

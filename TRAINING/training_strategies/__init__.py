@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Training strategies - split from original large file for maintainability."""
 
 # Re-export everything for backward compatibility
-from TRAINING.training_strategies.family_runners import (
+from TRAINING.training_strategies.execution.family_runners import (
     _run_family_inproc,
     _run_family_isolated,
 )
@@ -35,32 +35,41 @@ from TRAINING.training_strategies.utils import (
     pick_tf_device,
 )
 
-from TRAINING.training_strategies.data_preparation import (
+from TRAINING.training_strategies.execution.data_preparation import (
     prepare_training_data_cross_sectional,
 )
 
+# Import strategy classes from strategies/ directory
 from TRAINING.training_strategies.strategies import (
+    BaseTrainingStrategy,
+    SingleTaskStrategy,
+    MultiTaskStrategy,
+    CascadeStrategy,
+)
+
+# Import data/strategy functions from strategy_functions.py file
+from TRAINING.training_strategies.strategy_functions import (
     load_mtf_data,
     discover_targets,
     prepare_training_data,
-)
-
-from TRAINING.training_strategies.training import (
-    train_models_for_interval_comprehensive,
-    train_model_comprehensive,
-    _legacy_train_fallback,
-)
-
-from TRAINING.training_strategies.strategies import (
     create_strategy_config,
     train_with_strategy,
     compare_strategies,
 )
 
-from TRAINING.training_strategies.main import main
+from TRAINING.training_strategies.execution.training import (
+    train_models_for_interval_comprehensive,
+    train_model_comprehensive,
+    _legacy_train_fallback,
+)
+from TRAINING.training_strategies.execution.data_preparation import (
+    prepare_training_data_cross_sectional,
+)
+
+from TRAINING.training_strategies.execution.main import main
 
 # Export constants
-from TRAINING.training_strategies.setup import (
+from TRAINING.training_strategies.execution.setup import (
     TF_FAMS,
     TORCH_FAMS,
     CPU_FAMS,
