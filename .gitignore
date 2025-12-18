@@ -45,6 +45,9 @@ config/
 # Training artifacts
 catboost_info/
 
+# Output directory
+output/
+
 # Archive of original large files (deprecated, split into modules)
 TRAINING/archive/
 
