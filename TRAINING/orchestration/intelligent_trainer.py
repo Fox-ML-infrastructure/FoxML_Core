@@ -862,6 +862,7 @@ class IntelligentTrainer:
         force_refresh: bool = False,
         use_cache: bool = True,
         max_targets_to_evaluate: Optional[int] = None,  # Limit number of targets to evaluate (for faster testing)
+        targets_to_evaluate: Optional[List[str]] = None,  # NEW: Whitelist of specific targets to evaluate (works with auto_targets=true)
         target_ranking_config: Optional['TargetRankingConfig'] = None,  # New typed config (optional)
         min_cs: Optional[int] = None,  # Load from config if None
         max_cs_samples: Optional[int] = None,  # Load from config if None
@@ -877,6 +878,7 @@ class IntelligentTrainer:
             force_refresh: If True, ignore cache and re-rank
             use_cache: If True, use cached rankings if available
             max_targets_to_evaluate: Optional limit on number of targets to evaluate (for faster testing)
+            targets_to_evaluate: Optional whitelist of specific targets to evaluate (works with auto_targets=true)
             target_ranking_config: Optional TargetRankingConfig object [NEW - preferred]
             min_cs: Minimum cross-sectional size per timestamp (loads from config if None)
             max_cs_samples: Maximum samples per timestamp for cross-sectional sampling (loads from config if None)
@@ -886,12 +888,16 @@ class IntelligentTrainer:
             List of top N target names
         """
         logger.info(f"🎯 Ranking targets (top {top_n})...")
+        if max_targets_to_evaluate is not None:
+            logger.info(f"📊 max_targets_to_evaluate limit: {max_targets_to_evaluate}")
         
         # Generate cache key
         config_hash = hashlib.md5(
             json.dumps({
                 'model_families': model_families or [],
-                'symbols': sorted(self.symbols)
+                'symbols': sorted(self.symbols),
+                'max_targets_to_evaluate': max_targets_to_evaluate,  # Include limit in cache key
+                'targets_to_evaluate': sorted(targets_to_evaluate) if targets_to_evaluate else []  # NEW: Include whitelist in cache key
             }, sort_keys=True).encode()
         ).hexdigest()
         cache_key = self._get_cache_key(self.symbols, config_hash)
@@ -900,7 +906,15 @@ class IntelligentTrainer:
         if not force_refresh and use_cache:
             cached = self._load_cached_rankings(cache_key, use_cache=True)
             if cached:
-                logger.info(f"✅ Using cached target rankings ({len(cached)} targets)")
+                # Respect max_targets_to_evaluate even when using cache
+                if max_targets_to_evaluate is not None and max_targets_to_evaluate > 0:
+                    if len(cached) > max_targets_to_evaluate:
+                        logger.info(f"✅ Using cached rankings, truncating to {max_targets_to_evaluate} targets (cache had {len(cached)})")
+                        cached = cached[:max_targets_to_evaluate]
+                    else:
+                        logger.info(f"✅ Using cached target rankings ({len(cached)} targets, limit={max_targets_to_evaluate})")
+                else:
+                    logger.info(f"✅ Using cached target rankings ({len(cached)} targets)")
                 # Return top N from cache
                 top_targets = [r['target_name'] for r in cached[:top_n]]
                 return top_targets
@@ -963,6 +977,21 @@ class IntelligentTrainer:
             if excluded_count > 0:
                 logger.info(f"📋 Excluded {excluded_count} targets matching patterns: {exclude_patterns}")
                 logger.info(f"📋 Remaining {len(targets_dict)} targets after exclusion")
+        
+        # NEW: Apply targets_to_evaluate whitelist if specified (works with auto_targets=true)
+        if targets_to_evaluate:
+            original_count = len(targets_dict)
+            whitelisted_targets = {}
+            targets_to_evaluate_set = set(targets_to_evaluate)
+            for target_name, target_config in targets_dict.items():
+                if target_name in targets_to_evaluate_set:
+                    whitelisted_targets[target_name] = target_config
+            targets_dict = whitelisted_targets
+            filtered_count = original_count - len(targets_dict)
+            if filtered_count > 0:
+                logger.info(f"📋 Applied targets_to_evaluate whitelist: {len(targets_dict)} targets remain (filtered out {filtered_count})")
+            if len(targets_dict) == 0:
+                logger.warning(f"⚠️  targets_to_evaluate whitelist resulted in 0 targets. Check that whitelist targets exist in discovered targets.")
         
         # NEW: Build target ranking config from experiment config if available
         if target_ranking_config is None and self.experiment_config and _NEW_CONFIG_AVAILABLE:
@@ -1223,6 +1252,7 @@ class IntelligentTrainer:
         use_cache: bool = True,
         run_leakage_diagnostics: bool = False,
         max_targets_to_evaluate: Optional[int] = None,  # Limit number of targets to evaluate (for faster testing)
+        targets_to_evaluate: Optional[List[str]] = None,  # NEW: Whitelist of specific targets to evaluate (works with auto_targets=true)
         **train_kwargs
     ) -> Dict[str, Any]:
         """
@@ -1421,10 +1451,13 @@ class IntelligentTrainer:
             logger.info("="*80)
             logger.info("STEP 1: Automatic Target Ranking")
             logger.info("="*80)
+            if max_targets_to_evaluate is not None:
+                logger.info(f"🔢 max_targets_to_evaluate={max_targets_to_evaluate} (type: {type(max_targets_to_evaluate).__name__})")
             targets = self.rank_targets_auto(
                 top_n=top_n_targets,
                 use_cache=use_cache,
                 max_targets_to_evaluate=max_targets_to_evaluate,
+                targets_to_evaluate=targets_to_evaluate,  # NEW: Pass whitelist
                 min_cs=min_cs,
                 max_cs_samples=max_cs_samples,
                 max_rows_per_symbol=max_rows_per_symbol
@@ -2293,6 +2326,14 @@ Examples:
         top_n_targets = targets_cfg.get('top_n_targets', 10)
         max_targets_to_evaluate = targets_cfg.get('max_targets_to_evaluate', None)
         manual_targets = targets_cfg.get('manual_targets', [])
+        targets_to_evaluate = targets_cfg.get('targets_to_evaluate', [])  # NEW: Whitelist support
+        
+        # Track config source for debug logging
+        config_sources = {
+            'max_targets_to_evaluate': 'base_config',
+            'top_n_targets': 'base_config',
+            'targets_to_evaluate': 'base_config'
+        }
         
         # NEW: Extract manual_targets, max_targets_to_evaluate, etc. from experiment config if available (overrides config file)
         if experiment_config:
@@ -2315,14 +2356,30 @@ Examples:
                             logger.info(f"📋 Disabled auto_targets from experiment config (using manual targets)")
                         # Extract max_targets_to_evaluate from experiment config (overrides base config)
                         exp_max_targets = intel_training.get('max_targets_to_evaluate')
+                        logger.debug(f"🔍 DEBUG: Found max_targets_to_evaluate in experiment config: {exp_max_targets} (type: {type(exp_max_targets).__name__})")
                         if exp_max_targets is not None:
-                            max_targets_to_evaluate = exp_max_targets
-                            logger.info(f"📋 Using max_targets_to_evaluate={max_targets_to_evaluate} from experiment config")
+                            # Ensure it's an integer (YAML might load as int or string)
+                            try:
+                                max_targets_to_evaluate = int(exp_max_targets)
+                                config_sources['max_targets_to_evaluate'] = 'experiment_config'
+                                logger.info(f"📋 Using max_targets_to_evaluate={max_targets_to_evaluate} from experiment config")
+                            except (ValueError, TypeError) as e:
+                                logger.warning(f"⚠️  Invalid max_targets_to_evaluate value '{exp_max_targets}' in experiment config, ignoring: {e}")
+                                # Keep existing value (from base config or default)
+                        else:
+                            logger.debug(f"🔍 DEBUG: max_targets_to_evaluate not found in experiment config intelligent_training section (current value: {max_targets_to_evaluate})")
                         # Extract top_n_targets from experiment config (overrides base config)
                         exp_top_n = intel_training.get('top_n_targets')
                         if exp_top_n is not None:
                             top_n_targets = exp_top_n
+                            config_sources['top_n_targets'] = 'experiment_config'
                             logger.info(f"📋 Using top_n_targets={top_n_targets} from experiment config")
+                        # Extract targets_to_evaluate whitelist from experiment config (NEW)
+                        exp_targets_whitelist = intel_training.get('targets_to_evaluate', [])
+                        if exp_targets_whitelist:
+                            targets_to_evaluate = exp_targets_whitelist if isinstance(exp_targets_whitelist, list) else [exp_targets_whitelist]
+                            config_sources['targets_to_evaluate'] = 'experiment_config'
+                            logger.info(f"📋 Using targets_to_evaluate whitelist from experiment config: {targets_to_evaluate}")
             except Exception as e:
                 logger.debug(f"Could not load intelligent_training from experiment config: {e}")
             
@@ -2363,9 +2420,9 @@ Examples:
             logger.info("📋 Using test configuration (detected 'test' in output-dir)")
             # Only apply test config if experiment config didn't override these values
             # Check if experiment config already set these (experiment config takes priority)
-            exp_has_max_targets = False
-            exp_has_top_n = False
-            exp_has_top_m = False
+            exp_has_max_targets = config_sources.get('max_targets_to_evaluate') == 'experiment_config'
+            exp_has_top_n = config_sources.get('top_n_targets') == 'experiment_config'
+            exp_has_top_m = False  # Check separately for top_m_features
             if experiment_config:
                 try:
                     exp_name = experiment_config.name
@@ -2373,22 +2430,39 @@ Examples:
                     if exp_yaml:
                         intel_training = exp_yaml.get('intelligent_training', {})
                         if intel_training:
-                            exp_has_max_targets = 'max_targets_to_evaluate' in intel_training
-                            exp_has_top_n = 'top_n_targets' in intel_training
-                            exp_has_top_m = 'top_m_features' in intel_training
+                            # Double-check by looking at the YAML directly
+                            if 'max_targets_to_evaluate' in intel_training:
+                                exp_has_max_targets = True
+                            if 'top_n_targets' in intel_training:
+                                exp_has_top_n = True
+                            if 'top_m_features' in intel_training:
+                                exp_has_top_m = True
                 except Exception:
                     pass
             
             # Only override if experiment config didn't set these values
             if 'max_targets_to_evaluate' in test_cfg and not exp_has_max_targets:
                 max_targets_to_evaluate = test_cfg.get('max_targets_to_evaluate')
-                logger.info(f"📋 Using max_targets_to_evaluate={max_targets_to_evaluate} from test config")
+                config_sources['max_targets_to_evaluate'] = 'test_config'
+                logger.info(f"📋 Using max_targets_to_evaluate={max_targets_to_evaluate} from test config (experiment config did not override)")
+            elif exp_has_max_targets:
+                logger.debug(f"📋 Skipping test config max_targets_to_evaluate (experiment config value={max_targets_to_evaluate} takes priority)")
             if 'top_n_targets' in test_cfg and not exp_has_top_n:
                 top_n_targets = test_cfg.get('top_n_targets')
-                logger.info(f"📋 Using top_n_targets={top_n_targets} from test config")
+                config_sources['top_n_targets'] = 'test_config'
+                logger.info(f"📋 Using top_n_targets={top_n_targets} from test config (experiment config did not override)")
+            elif exp_has_top_n:
+                logger.debug(f"📋 Skipping test config top_n_targets (experiment config value={top_n_targets} takes priority)")
             if 'top_m_features' in test_cfg and not exp_has_top_m:
                 top_m_features = test_cfg.get('top_m_features')
                 logger.info(f"📋 Using top_m_features={top_m_features} from test config")
+        
+        # Debug logging: Show final config values and their sources
+        logger.debug(f"🔍 Config precedence summary:")
+        logger.debug(f"   max_targets_to_evaluate={max_targets_to_evaluate} (source: {config_sources.get('max_targets_to_evaluate', 'unknown')})")
+        logger.debug(f"   top_n_targets={top_n_targets} (source: {config_sources.get('top_n_targets', 'unknown')})")
+        if targets_to_evaluate:
+            logger.debug(f"   targets_to_evaluate={targets_to_evaluate} (source: {config_sources.get('targets_to_evaluate', 'unknown')})")
     elif _CONFIG_AVAILABLE:
         # Fallback to old config system
         use_test_config = args.output_dir and 'test' in str(args.output_dir).lower()
@@ -2406,6 +2480,7 @@ Examples:
         auto_targets = intel_cfg.get('auto_targets', True)
         top_n_targets = intel_cfg.get('top_n_targets', 5)
         max_targets_to_evaluate = intel_cfg.get('max_targets_to_evaluate', None)
+        targets_to_evaluate = intel_cfg.get('targets_to_evaluate', [])  # NEW: Whitelist support
         auto_features = intel_cfg.get('auto_features', True)
         top_m_features = intel_cfg.get('top_m_features', 100)
         strategy = intel_cfg.get('strategy', 'single_task')
@@ -2431,6 +2506,11 @@ Examples:
                         if 'top_m_features' in intel_training:
                             top_m_features = intel_training.get('top_m_features')
                             logger.info(f"📋 Using top_m_features={top_m_features} from experiment config (overrides test config)")
+                        # Extract targets_to_evaluate whitelist from experiment config (NEW)
+                        exp_targets_whitelist = intel_training.get('targets_to_evaluate', [])
+                        if exp_targets_whitelist:
+                            targets_to_evaluate = exp_targets_whitelist if isinstance(exp_targets_whitelist, list) else [exp_targets_whitelist]
+                            logger.info(f"📋 Using targets_to_evaluate whitelist from experiment config: {targets_to_evaluate}")
             except Exception as e:
                 logger.debug(f"Could not load intelligent_training from experiment config: {e}")
         
@@ -2482,8 +2562,13 @@ Examples:
                         # Extract max_targets_to_evaluate from experiment config (overrides base config)
                         exp_max_targets = intel_training.get('max_targets_to_evaluate')
                         if exp_max_targets is not None:
-                            max_targets_to_evaluate = exp_max_targets
-                            logger.info(f"📋 Using max_targets_to_evaluate={max_targets_to_evaluate} from experiment config")
+                            # Ensure it's an integer (YAML might load as int or string)
+                            try:
+                                max_targets_to_evaluate = int(exp_max_targets)
+                                logger.info(f"📋 Using max_targets_to_evaluate={max_targets_to_evaluate} from experiment config")
+                            except (ValueError, TypeError) as e:
+                                logger.warning(f"⚠️  Invalid max_targets_to_evaluate value '{exp_max_targets}' in experiment config, ignoring: {e}")
+                                # Keep existing value (from base config or default)
                         # Extract top_n_targets from experiment config (overrides base config)
                         exp_top_n = intel_training.get('top_n_targets')
                         if exp_top_n is not None:
@@ -2505,6 +2590,7 @@ Examples:
         auto_targets = True
         top_n_targets = 5
         max_targets_to_evaluate = None
+        targets_to_evaluate = []  # NEW: Initialize whitelist
         auto_features = True
         top_m_features = 100
         strategy = 'single_task'
@@ -2627,6 +2713,14 @@ Examples:
                         trace_value(key, exp_data[key],
                                     f"experiment: {experiment_config.name}.yaml → data.{key} = {exp_data[key]} (OVERRIDE)",
                                     "data")
+                # Trace intelligent_training section overrides
+                exp_intel = exp_yaml.get('intelligent_training', {})
+                if exp_intel:
+                    for key in ['max_targets_to_evaluate', 'top_n_targets', 'auto_targets']:
+                        if key in exp_intel:
+                            trace_value(key, exp_intel[key],
+                                        f"experiment: {experiment_config.name}.yaml → intelligent_training.{key} = {exp_intel[key]} (OVERRIDE)",
+                                        "targets" if key in ['max_targets_to_evaluate', 'top_n_targets', 'auto_targets'] else "")
             except Exception as e:
                 logger.debug(f"Could not trace experiment config: {e}")
     
@@ -2768,6 +2862,7 @@ Examples:
             auto_targets=auto_targets,
             top_n_targets=top_n_targets,
             max_targets_to_evaluate=max_targets_to_evaluate,
+            targets_to_evaluate=targets_to_evaluate,  # NEW: Pass whitelist
             auto_features=auto_features,
             top_m_features=top_m_features,
             targets=targets,  # Manual override if provided

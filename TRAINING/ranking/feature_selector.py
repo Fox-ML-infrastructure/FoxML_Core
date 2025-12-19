@@ -692,6 +692,26 @@ def select_features_for_target(
                                 "error_type": None
                             })
                     
+                    # Check for missing model families (failed or skipped) - same as CROSS_SECTIONAL
+                    enabled_families_set = set(model_families_list)
+                    families_with_results = set(all_feature_importances.keys())
+                    missing_families = enabled_families_set - families_with_results
+                    
+                    if missing_families:
+                        logger.warning(f"⚠️  {symbol_to_process}: {len(missing_families)} model families missing from harness results: {', '.join(missing_families)}")
+                        # Record failure statuses for missing families
+                        for family_name in missing_families:
+                            all_family_statuses.append({
+                                "status": "failed",
+                                "family": family_name,
+                                "symbol": symbol_to_process,
+                                "score": None,
+                                "top_feature": None,
+                                "top_feature_score": None,
+                                "error": "Model family not in harness results (likely failed silently)",
+                                "error_type": "MissingFromHarness"
+                            })
+                    
                     logger.info(f"✅ {symbol_to_process}: {len([r for r in all_results if r.symbol == symbol_to_process])} model results")
             else:
                 # CROSS_SECTIONAL: process all symbols together
@@ -921,6 +941,26 @@ def select_features_for_target(
                                     "error_type": None
                                 })
                         
+                        # Check for missing model families (failed or skipped)
+                        enabled_families_set = set(model_families_list)
+                        families_with_results = set(all_feature_importances.keys())
+                        missing_families = enabled_families_set - families_with_results
+                        
+                        if missing_families:
+                            logger.warning(f"⚠️  {len(missing_families)} model families missing from harness results: {', '.join(missing_families)}")
+                            # Record failure statuses for missing families
+                            for family_name in missing_families:
+                                all_family_statuses.append({
+                                    "status": "failed",
+                                    "family": family_name,
+                                    "symbol": "ALL",
+                                    "score": None,
+                                    "top_feature": None,
+                                    "top_feature_score": None,
+                                    "error": "Model family not in harness results (likely failed silently)",
+                                    "error_type": "MissingFromHarness"
+                                })
+                        
                         # Create RunContext for reproducibility tracking
                         # FIX: Extract purge/embargo from resolved_config
                         purge_minutes = resolved_config.purge_minutes if resolved_config else None
@@ -955,6 +995,16 @@ def select_features_for_target(
                 logger.info(f"Shared harness: {error_msg}. Falling back to per-symbol processing.")
             else:
                 logger.warning(f"Shared harness failed: {e}, falling back to per-symbol processing", exc_info=True)
+            
+            # Preserve partial status information if any was collected before the exception
+            partial_results_count = len(all_results) if 'all_results' in locals() else 0
+            partial_statuses_count = len(all_family_statuses) if 'all_family_statuses' in locals() else 0
+            if partial_results_count > 0 or partial_statuses_count > 0:
+                logger.warning(
+                    f"⚠️  Shared harness exception occurred after partial success: "
+                    f"{partial_results_count} results and {partial_statuses_count} statuses were collected but will be discarded in fallback path"
+                )
+            
             use_shared_harness = False
             all_results = []
             all_family_statuses = []
@@ -1084,15 +1134,39 @@ def select_features_for_target(
                     logger.error(f"  ❌ {symbol} failed: {e}")
                     continue
     else:
-        # Shared harness was used - all_results already populated
-        # Create empty family_statuses for compatibility
-        all_family_statuses = []
+        # Shared harness was used - all_results and all_family_statuses already populated
+        # Statuses were collected in the shared harness block (lines 684-693 for SYMBOL_SPECIFIC or 913-942 for CROSS_SECTIONAL)
+        # Do not overwrite all_family_statuses here - it would destroy the failure statuses for missing families like Boruta
+        pass
+    
+    # Validation: Ensure statuses are preserved through control flow
+    if use_shared_harness and model_families_config:
+        enabled_families = set(f for f, cfg in model_families_config.items() if cfg.get('enabled', False))
+        if enabled_families:
+            # Check that we have status information for all enabled families (success or failure)
+            families_with_statuses = set(s.get('family') for s in all_family_statuses if s.get('family'))
+            missing_statuses = enabled_families - families_with_statuses
+            if missing_statuses:
+                logger.warning(
+                    f"⚠️  Validation: {len(missing_statuses)} enabled families have no status information: {', '.join(sorted(missing_statuses))}. "
+                    f"This may indicate families were silently skipped."
+                )
     
     if not all_results:
         logger.warning("No results from any symbol")
         return [], pd.DataFrame()
     
     logger.info(f"\nAggregating results from {len(all_results)} model runs...")
+    
+    # Debug logging: show expected vs actual families
+    if model_families_config:
+        expected_families = sorted([f for f, cfg in model_families_config.items() if cfg.get('enabled', False)])
+        actual_families = sorted(set(r.model_family for r in all_results))
+        logger.debug(f"Expected model families: {expected_families}")
+        logger.debug(f"Families with results: {actual_families}")
+        missing = set(expected_families) - set(actual_families)
+        if missing:
+            logger.warning(f"⚠️  Missing families in results: {sorted(missing)}")
     
     # Aggregate across models and symbols
     # aggregation_config and model_families_config are already set above (from typed config or legacy)

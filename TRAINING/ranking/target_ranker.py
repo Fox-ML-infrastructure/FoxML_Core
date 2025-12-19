@@ -428,10 +428,16 @@ def rank_targets(
     all_targets_count = len(targets)
     targets_to_evaluate = targets
     if max_targets_to_evaluate is not None and max_targets_to_evaluate > 0:
-        # Take first N targets (they're already in a reasonable order from discovery)
-        target_items = list(targets.items())[:max_targets_to_evaluate]
+        # Sort targets alphabetically for consistent ordering
+        sorted_target_items = sorted(targets.items(), key=lambda x: x[0])
+        target_items = sorted_target_items[:max_targets_to_evaluate]
         targets_to_evaluate = dict(target_items)
         logger.info(f"Limiting evaluation to {len(targets_to_evaluate)} targets (out of {all_targets_count} total) for faster testing")
+        selected_target_names = list(targets_to_evaluate.keys())
+        if len(selected_target_names) <= 10:
+            logger.debug(f"Selected targets: {selected_target_names}")
+        else:
+            logger.debug(f"Selected targets: {selected_target_names[:10]}... (showing first 10 of {len(selected_target_names)})")
     
     total_to_evaluate = len(targets_to_evaluate)
     logger.info(f"Ranking {total_to_evaluate} targets across {len(symbols)} symbols")

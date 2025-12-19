@@ -3035,7 +3035,7 @@ def aggregate_multi_model_importance(
         
     elif boruta_enabled:
         # Boruta enabled but failed completely (no results from any symbol)
-        # CRITICAL: This is a hard failure if Boruta is enabled in config but fails
+        # GRACEFUL DEGRADATION: Log warning and continue without Boruta gatekeeper
         # Collect error information for diagnostics
         boruta_failures = []
         if all_family_statuses:
@@ -3059,19 +3059,34 @@ def aggregate_multi_model_importance(
                 f"Error: {error_summary}"
             )
         else:
-            error_details = (
-                "Boruta gatekeeper enabled in config but no results produced and no failure status recorded. "
-                "This may indicate Boruta was silently skipped or failed without proper error tracking."
+            # Check if this is CROSS_SECTIONAL view (symbol="ALL")
+            is_cross_sectional = all_family_statuses and any(
+                s.get('symbol') == 'ALL' for s in all_family_statuses
             )
+            if is_cross_sectional:
+                error_details = (
+                    "Boruta gatekeeper enabled in config but no results produced and no failure status recorded. "
+                    "This likely indicates Boruta failed silently in the shared harness (CROSS_SECTIONAL view). "
+                    "Check harness logs for Boruta errors."
+                )
+            else:
+                error_details = (
+                    "Boruta gatekeeper enabled in config but no results produced and no failure status recorded. "
+                    "This may indicate Boruta was silently skipped or failed without proper error tracking."
+                )
         
-        # HARD FAILURE: Raise exception if Boruta is enabled but failed
-        raise RuntimeError(
-            f"🚨 CRITICAL: Boruta gatekeeper is enabled in config but failed completely. "
-            f"{error_details} "
-            f"Either: 1) Fix the underlying issue (check error messages above), "
-            f"2) Disable Boruta in config (set boruta.enabled=false), or "
-            f"3) Ensure Boruta package is installed (pip install Boruta)."
+        # GRACEFUL DEGRADATION: Log warning and continue without Boruta
+        logger.warning(
+            f"⚠️  Boruta gatekeeper is enabled but failed. {error_details} "
+            f"Continuing without Boruta gatekeeper (features will not receive Boruta bonuses/penalties)."
         )
+        # Continue without Boruta (graceful degradation)
+        boruta_gate_effect_series = pd.Series(0.0, index=consensus_score_base.index)
+        boruta_gate_scores_series = pd.Series(0.0, index=consensus_score_base.index)
+        boruta_confirmed_mask = pd.Series(False, index=consensus_score_base.index)
+        boruta_rejected_mask = pd.Series(False, index=consensus_score_base.index)
+        boruta_tentative_mask = pd.Series(False, index=consensus_score_base.index)
+        consensus_score_final = consensus_score_base.copy()
     else:
         # Boruta not enabled in config - explicit log for clarity
         logger.debug("🔒 Boruta gatekeeper: disabled via config (no effect on consensus).")

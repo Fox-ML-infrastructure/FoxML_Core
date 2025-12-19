@@ -2711,6 +2711,7 @@ def train_and_evaluate_models(
             baseline_score = model.score(X, y_for_training)
             
             perm_scores = []
+            importance = np.zeros(X.shape[1])  # Initialize importance array
             for i in range(min(10, X.shape[1])):  # Sample 10 features
                 X_perm = X.copy()
                 # Use deterministic seed for permutation
@@ -2719,12 +2720,30 @@ def train_and_evaluate_models(
                 np.random.seed(perm_seed)
                 np.random.shuffle(X_perm[:, i])
                 perm_score = model.score(X_perm, y_for_training)
-                perm_scores.append(abs(baseline_score - perm_score))
+                perm_importance = abs(baseline_score - perm_score)
+                perm_scores.append(perm_importance)
+                importance[i] = perm_importance
+            
+            # Normalize importance to match sampled features
+            if len(perm_scores) > 0 and np.max(perm_scores) > 0:
+                # Scale sampled features to full feature set
+                importance = importance / np.max(perm_scores) if np.max(perm_scores) > 0 else importance
+            
+            # Store all feature importances for detailed export (same pattern as other models)
+            # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+            importance_series = pd.Series(importance, index=feature_names[:len(importance)] if len(importance) <= len(feature_names) else feature_names)
+            importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+            importance_dict = importance_series.to_dict()
+            all_feature_importances['neural_network'] = importance_dict
             
             importance_magnitudes.append(np.mean(perm_scores))
             
+        except ImportError as e:
+            logger.error(f"❌ Neural Network not available: {e}")
+            all_feature_importances['neural_network'] = {}  # Record failure
         except Exception as e:
-            logger.warning(f"NeuralNetwork failed: {e}")
+            logger.error(f"❌ Neural Network failed: {e}", exc_info=True)
+            all_feature_importances['neural_network'] = {}  # Record failure
     
     # XGBoost
     if 'xgboost' in model_families:
@@ -3656,6 +3675,14 @@ def train_and_evaluate_models(
             
             # Update feature_names to match dense array
             feature_names = feature_names_dense
+            
+            # Store all feature importances for detailed export (same pattern as other models)
+            # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+            importance_series = pd.Series(importance, index=feature_names)
+            importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+            importance_dict = importance_series.to_dict()
+            all_feature_importances['lasso'] = importance_dict
+            
             if len(importance) > 0:
                 total_importance = np.sum(importance)
                 if total_importance > 0:
@@ -3668,8 +3695,12 @@ def train_and_evaluate_models(
             else:
                 importance_ratio = 0.0
             importance_magnitudes.append(importance_ratio)
+        except ImportError as e:
+            logger.error(f"❌ Lasso not available: {e}")
+            all_feature_importances['lasso'] = {}  # Record failure
         except Exception as e:
-            logger.warning(f"Lasso failed: {e}")
+            logger.error(f"❌ Lasso failed: {e}", exc_info=True)
+            all_feature_importances['lasso'] = {}  # Record failure
     
     # Ridge
     if 'ridge' in model_families:
@@ -3726,6 +3757,13 @@ def train_and_evaluate_models(
             # Update feature_names to match dense array
             feature_names = feature_names_dense
             
+            # Store all feature importances for detailed export (same pattern as other models)
+            # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+            importance_series = pd.Series(importance, index=feature_names)
+            importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+            importance_dict = importance_series.to_dict()
+            all_feature_importances['ridge'] = importance_dict
+            
             # Validate importance is not all zeros
             if np.all(importance == 0) or np.sum(importance) == 0:
                 logger.warning(f"Ridge: All coefficients are zero (over-regularized or no signal)")
@@ -3743,8 +3781,12 @@ def train_and_evaluate_models(
                 else:
                     importance_ratio = 0.0
             importance_magnitudes.append(importance_ratio)
+        except ImportError as e:
+            logger.error(f"❌ Ridge not available: {e}")
+            all_feature_importances['ridge'] = {}  # Record failure
         except Exception as e:
-            logger.warning(f"Ridge failed: {e}")
+            logger.error(f"❌ Ridge failed: {e}", exc_info=True)
+            all_feature_importances['ridge'] = {}  # Record failure
     
     # Elastic Net
     if 'elastic_net' in model_families:
@@ -3817,6 +3859,13 @@ def train_and_evaluate_models(
             # Update feature_names to match dense array
             feature_names = feature_names_dense
             
+            # Store all feature importances for detailed export (same pattern as other models)
+            # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+            importance_series = pd.Series(importance, index=feature_names)
+            importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+            importance_dict = importance_series.to_dict()
+            all_feature_importances['elastic_net'] = importance_dict
+            
             # Validate importance is not all zeros
             if np.all(importance == 0) or np.sum(importance) == 0:
                 logger.warning(f"Elastic Net: All coefficients are zero (over-regularized or no signal)")
@@ -3834,8 +3883,12 @@ def train_and_evaluate_models(
                 else:
                     importance_ratio = 0.0
             importance_magnitudes.append(importance_ratio)
+        except ImportError as e:
+            logger.error(f"❌ Elastic Net not available: {e}")
+            all_feature_importances['elastic_net'] = {}  # Record failure
         except Exception as e:
-            logger.warning(f"Elastic Net failed: {e}")
+            logger.error(f"❌ Elastic Net failed: {e}", exc_info=True)
+            all_feature_importances['elastic_net'] = {}  # Record failure
     
     # Mutual Information
     if 'mutual_information' in model_families:
@@ -3873,6 +3926,13 @@ def train_and_evaluate_models(
             # Handle NaN/inf
             importance = np.nan_to_num(importance, nan=0.0, posinf=0.0, neginf=0.0)
             
+            # Store all feature importances for detailed export (same pattern as other models)
+            # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+            importance_series = pd.Series(importance, index=feature_names)
+            importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+            importance_dict = importance_series.to_dict()
+            all_feature_importances['mutual_information'] = importance_dict
+            
             # Mutual information doesn't have R², so we use a proxy based on max MI
             # Normalize to 0-1 scale for importance
             if len(importance) > 0 and np.max(importance) > 0:
@@ -3893,8 +3953,12 @@ def train_and_evaluate_models(
             # Scale to approximate R² range (0-0.3 for good targets)
             model_scores['mutual_information'] = min(0.3, importance_ratio * 0.3)
             importance_magnitudes.append(importance_ratio)
+        except ImportError as e:
+            logger.error(f"❌ Mutual Information not available: {e}")
+            all_feature_importances['mutual_information'] = {}  # Record failure
         except Exception as e:
-            logger.warning(f"Mutual Information failed: {e}")
+            logger.error(f"❌ Mutual Information failed: {e}", exc_info=True)
+            all_feature_importances['mutual_information'] = {}  # Record failure
     
     # Univariate Selection
     if 'univariate_selection' in model_families:
@@ -3922,22 +3986,34 @@ def train_and_evaluate_models(
             # Normalize F-statistics
             if len(scores) > 0 and np.max(scores) > 0:
                 importance = scores / np.max(scores)
+            else:
+                importance = np.zeros(len(feature_names))
+            
+            # Store all feature importances for detailed export (same pattern as other models)
+            # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+            importance_series = pd.Series(importance, index=feature_names)
+            importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+            importance_dict = importance_series.to_dict()
+            all_feature_importances['univariate_selection'] = importance_dict
+            
+            if len(importance) > 0 and np.sum(importance) > 0:
                 total_importance = np.sum(importance)
-                if total_importance > 0:
-                    top_fraction = _get_importance_top_fraction()
-                    top_k = max(1, int(len(importance) * top_fraction))
-                    top_importance_sum = np.sum(np.sort(importance)[-top_k:])
-                    importance_ratio = top_importance_sum / total_importance
-                else:
-                    importance_ratio = 0.0
+                top_fraction = _get_importance_top_fraction()
+                top_k = max(1, int(len(importance) * top_fraction))
+                top_importance_sum = np.sum(np.sort(importance)[-top_k:])
+                importance_ratio = top_importance_sum / total_importance
             else:
                 importance_ratio = 0.0
             
             # F-statistics don't have R², use proxy
             model_scores['univariate_selection'] = min(0.3, importance_ratio * 0.3)
             importance_magnitudes.append(importance_ratio)
+        except ImportError as e:
+            logger.error(f"❌ Univariate Selection not available: {e}")
+            all_feature_importances['univariate_selection'] = {}  # Record failure
         except Exception as e:
-            logger.warning(f"Univariate Selection failed: {e}")
+            logger.error(f"❌ Univariate Selection failed: {e}", exc_info=True)
+            all_feature_importances['univariate_selection'] = {}  # Record failure
     
     # RFE
     if 'rfe' in model_families:
@@ -3994,6 +4070,14 @@ def train_and_evaluate_models(
             # Convert ranking to importance
             ranking = selector.ranking_
             importance = 1.0 / (ranking + 1e-6)
+            
+            # Store all feature importances for detailed export (same pattern as other models)
+            # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+            importance_series = pd.Series(importance, index=feature_names)
+            importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+            importance_dict = importance_series.to_dict()
+            all_feature_importances['rfe'] = importance_dict
+            
             if len(importance) > 0:
                 total_importance = np.sum(importance)
                 if total_importance > 0:
@@ -4006,8 +4090,12 @@ def train_and_evaluate_models(
             else:
                 importance_ratio = 0.0
             importance_magnitudes.append(importance_ratio)
+        except ImportError as e:
+            logger.error(f"❌ RFE not available: {e}")
+            all_feature_importances['rfe'] = {}  # Record failure
         except Exception as e:
-            logger.warning(f"RFE failed: {e}")
+            logger.error(f"❌ RFE failed: {e}", exc_info=True)
+            all_feature_importances['rfe'] = {}  # Record failure
     
     # Boruta
     if 'boruta' in model_families:
@@ -4086,10 +4174,19 @@ def train_and_evaluate_models(
             else:
                 importance_ratio = 0.0
             importance_magnitudes.append(importance_ratio)
-        except ImportError:
-            logger.warning("Boruta not available (pip install Boruta)")
+            
+            # Store all feature importances for detailed export (same pattern as other models)
+            # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+            importance_series = pd.Series(importance, index=feature_names)
+            importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+            importance_dict = importance_series.to_dict()
+            all_feature_importances['boruta'] = importance_dict
+        except ImportError as e:
+            logger.error(f"❌ Boruta not available (pip install Boruta): {e}")
+            all_feature_importances['boruta'] = {}  # Record failure
         except Exception as e:
-            logger.warning(f"Boruta failed: {e}")
+            logger.error(f"❌ Boruta failed: {e}", exc_info=True)
+            all_feature_importances['boruta'] = {}  # Record failure
     
     # Stability Selection
     if 'stability_selection' in model_families:
@@ -4173,6 +4270,14 @@ def train_and_evaluate_models(
             
             # Normalize stability scores to importance
             importance = stability_scores / n_bootstrap
+            
+            # Store all feature importances for detailed export (same pattern as other models)
+            # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+            importance_series = pd.Series(importance, index=feature_names)
+            importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+            importance_dict = importance_series.to_dict()
+            all_feature_importances['stability_selection'] = importance_dict
+            
             if len(importance) > 0:
                 total_importance = np.sum(importance)
                 if total_importance > 0:
@@ -4185,8 +4290,12 @@ def train_and_evaluate_models(
             else:
                 importance_ratio = 0.0
             importance_magnitudes.append(importance_ratio)
+        except ImportError as e:
+            logger.error(f"❌ Stability Selection not available: {e}")
+            all_feature_importances['stability_selection'] = {}  # Record failure
         except Exception as e:
-            logger.warning(f"Stability Selection failed: {e}")
+            logger.error(f"❌ Stability Selection failed: {e}", exc_info=True)
+            all_feature_importances['stability_selection'] = {}  # Record failure
     
     # Histogram Gradient Boosting
     if 'histogram_gradient_boosting' in model_families:
