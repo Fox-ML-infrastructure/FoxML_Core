@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-19 (Target Evaluation Config Fixes)** — Fixed config precedence issue where `max_targets_to_evaluate` from experiment config was not properly overriding test config values. Added `targets_to_evaluate` whitelist support that works with `auto_targets: true`, allowing users to specify a specific list of targets to evaluate while still using auto-discovery. Enhanced debug logging shows config precedence chain and config trace now includes `intelligent_training` section overrides.
+  → [View](2025-12-19-target-evaluation-config-fixes.md)
+
 - **2025-12-18 (TRAINING Folder Reorganization)** — Comprehensive reorganization of `TRAINING/` folder structure: consolidated small directories (`features/`, `datasets/`, `memory/`, `live/`) into `data/` and `common/`, merged overlapping directories (`strategies/` into `training_strategies/`, data processing modules into `data/`), reorganized entry points into `orchestration/`, moved output directories to `RESULTS/`, fixed config loader import warnings. All changes maintain backward compatibility via re-export wrappers. 100% of key imports passing.
   → [View](2025-12-18-training-folder-reorganization.md)
 

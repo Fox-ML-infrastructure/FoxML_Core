@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-19 Updates (Target Evaluation Config Fixes)
+- **Config Precedence Fix**: Fixed issue where `max_targets_to_evaluate` from experiment config was not properly overriding test config values. Experiment config now correctly takes priority over test config, with debug logging showing the precedence chain.
+- **Target Whitelist Support**: Added `targets_to_evaluate` whitelist field that works with `auto_targets: true`. Users can now specify a specific list of targets to evaluate while still using auto-discovery, providing fine-grained control over target evaluation.
+- **Enhanced Debug Logging**: Added comprehensive debug logging for config loading, showing where each config value comes from and the full precedence chain. Config trace now includes `intelligent_training` section overrides.
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-19-target-evaluation-config-fixes.md)
+
 #### 2025-12-18 Updates (TRAINING Folder Reorganization)
 - **TRAINING Folder Reorganization**: Comprehensive reorganization of `TRAINING/` folder structure to improve modularity and reduce duplication. Consolidated small directories (`features/`, `datasets/`, `memory/`, `live/`) into `data/` and `common/`. Merged overlapping directories (`strategies/` into `training_strategies/`, data processing modules into `data/`). Reorganized entry points (`unified_training_interface.py`, `target_router.py` into `orchestration/`). Moved output directories to `RESULTS/` and archived `EXPERIMENTS/`. Fixed config loader import warnings (changed to debug level). All changes maintain backward compatibility via re-export wrappers. 100% of key imports passing.
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-18-training-folder-reorganization.md)
