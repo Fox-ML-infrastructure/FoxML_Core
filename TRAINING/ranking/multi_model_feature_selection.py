@@ -3059,10 +3059,21 @@ def aggregate_multi_model_importance(
                 f"Error: {error_summary}"
             )
         else:
-            error_details = (
-                "Boruta gatekeeper enabled in config but no results produced and no failure status recorded. "
-                "This may indicate Boruta was silently skipped or failed without proper error tracking."
+            # Check if this is CROSS_SECTIONAL view (symbol="ALL")
+            is_cross_sectional = all_family_statuses and any(
+                s.get('symbol') == 'ALL' for s in all_family_statuses
             )
+            if is_cross_sectional:
+                error_details = (
+                    "Boruta gatekeeper enabled in config but no results produced and no failure status recorded. "
+                    "This likely indicates Boruta failed silently in the shared harness (CROSS_SECTIONAL view). "
+                    "Check harness logs for Boruta errors. The harness may have caught exceptions but not recorded failure statuses."
+                )
+            else:
+                error_details = (
+                    "Boruta gatekeeper enabled in config but no results produced and no failure status recorded. "
+                    "This may indicate Boruta was silently skipped or failed without proper error tracking."
+                )
         
         # HARD FAILURE: Raise exception if Boruta is enabled but failed
         raise RuntimeError(
