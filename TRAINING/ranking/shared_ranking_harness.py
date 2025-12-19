@@ -622,6 +622,18 @@ class RankingHarness:
         """
         from TRAINING.orchestration.utils.run_context import RunContext
         
+        # Extract cv_folds from splitter if available (required for COHORT_AWARE mode)
+        cv_folds = None
+        if cv_splitter is not None:
+            # Try to get n_splits from splitter (PurgedTimeSeriesSplit has n_splits attribute)
+            if hasattr(cv_splitter, 'n_splits'):
+                cv_folds = cv_splitter.n_splits
+            elif hasattr(cv_splitter, 'get_n_splits'):
+                try:
+                    cv_folds = cv_splitter.get_n_splits()
+                except Exception:
+                    pass
+        
         ctx = RunContext(
             stage="FEATURE_SELECTION" if self.job_type == "rank_features" else "TARGET_RANKING",
             target_name=self.target_column,
@@ -636,6 +648,7 @@ class RankingHarness:
             embargo_minutes=embargo_minutes,
             data_interval_minutes=data_interval_minutes,
             cv_splitter=cv_splitter,
+            cv_folds=cv_folds,  # FIX: Extract and pass cv_folds for COHORT_AWARE mode
             view=self.view,
             symbol=self.symbol
         )

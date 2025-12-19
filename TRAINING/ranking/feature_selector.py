@@ -1967,6 +1967,14 @@ def select_features_for_target(
                 # Fallback to legacy API if RunContext not available
                 logger.debug("RunContext not available, falling back to legacy reproducibility tracking")
                 
+                # FIX: Ensure cohort variables are initialized (may not exist if exception occurred before initialization)
+                if 'cohort_metadata' not in locals():
+                    cohort_metadata = None
+                if 'cohort_metrics' not in locals():
+                    cohort_metrics = {}
+                if 'cohort_additional_data' not in locals():
+                    cohort_additional_data = {}
+                
                 # Merge with existing metrics and additional_data
                 # Use cohort_metrics if available (may be empty dict if extraction failed)
                 metrics_with_cohort = {

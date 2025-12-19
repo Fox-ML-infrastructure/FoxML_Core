@@ -111,7 +111,7 @@ def save_snapshot_hook(
                 except Exception:
                     pass  # Use defaults
                 
-                analyze_stability_auto(
+                stability_metrics = analyze_stability_auto(
                     base_dir=base_dir,
                     target_name=target_name,
                     method=method,
@@ -121,6 +121,12 @@ def save_snapshot_hook(
                     min_tau_threshold=min_tau_threshold,
                     top_k=top_k,
                 )
+                # Log when analysis is skipped due to insufficient snapshots
+                if stability_metrics is None:
+                    logger.info(
+                        f"📊 Stability analysis for {target_name}/{method}: "
+                        f"Snapshot saved (analysis will run once more snapshots are available)"
+                    )
             except Exception as e:
                 logger.debug(f"Auto-analysis failed (non-critical): {e}")
         
