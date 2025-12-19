@@ -77,6 +77,52 @@ from TRAINING.orchestration.utils.reproducibility.utils import (
 from TRAINING.common.utils.file_utils import write_atomic_json as _write_atomic_json
 
 
+def _construct_comparison_group_key_from_dict(comparison_group: Dict[str, Any]) -> str:
+    """
+    Construct comparison_group_key from comparison_group dict, matching ComparisonGroup.to_key() logic.
+    
+    This ensures consistency between how keys are constructed in reproducibility_tracker and trend_analyzer.
+    
+    Args:
+        comparison_group: Dictionary with comparison group fields (from diff_telemetry snapshot)
+        
+    Returns:
+        Comparison group key string (returns "default" if no parts, matching ComparisonGroup.to_key())
+    """
+    if not comparison_group:
+        return "default"
+    
+    parts = []
+    if comparison_group.get('experiment_id'):
+        parts.append(f"exp={comparison_group['experiment_id']}")
+    if comparison_group.get('dataset_signature'):
+        parts.append(f"data={comparison_group['dataset_signature'][:8]}")
+    if comparison_group.get('task_signature'):
+        parts.append(f"task={comparison_group['task_signature'][:8]}")
+    if comparison_group.get('routing_signature'):
+        parts.append(f"route={comparison_group['routing_signature'][:8]}")
+    # CRITICAL: Include exact N_effective to ensure only identical sample sizes compare
+    if comparison_group.get('n_effective') is not None:
+        parts.append(f"n={comparison_group['n_effective']}")
+    # CRITICAL: Include model_family (different families = different outcomes)
+    if comparison_group.get('model_family'):
+        parts.append(f"family={comparison_group['model_family']}")
+    # CRITICAL: Include feature signature (different features = different outcomes)
+    if comparison_group.get('feature_signature'):
+        parts.append(f"features={comparison_group['feature_signature'][:8]}")
+    # CRITICAL: Include hyperparameters signature (different HPs = different outcomes)
+    if comparison_group.get('hyperparameters_signature'):
+        parts.append(f"hps={comparison_group['hyperparameters_signature'][:8]}")
+    # CRITICAL: Include train_seed (different seeds = different outcomes)
+    if comparison_group.get('train_seed') is not None:
+        parts.append(f"seed={comparison_group['train_seed']}")
+    # CRITICAL: Include library versions signature (different versions = different outcomes)
+    if comparison_group.get('library_versions_signature'):
+        parts.append(f"libs={comparison_group['library_versions_signature'][:8]}")
+    
+    return "|".join(parts) if parts else "default"
+
+
 # All utility functions are now imported from reproducibility.utils (see imports above)
 
 
@@ -1371,7 +1417,8 @@ class ReproducibilityTracker:
             comparison_group = snapshot.get('comparison_group')
             comparison_group_key = None
             if isinstance(comparison_group, dict):
-                comparison_group_key = comparison_group.get('key')
+                # Construct key from dict fields (matching ComparisonGroup.to_key() logic)
+                comparison_group_key = _construct_comparison_group_key_from_dict(comparison_group)
             elif hasattr(comparison_group, 'to_key'):
                 comparison_group_key = comparison_group.to_key()
             
@@ -3050,6 +3097,18 @@ class ReproducibilityTracker:
                                 # Check if this series matches
                                 if any(t.series_key.target == item_name and 
                                        t.series_key.stage == stage_normalized for t in trend_list):
+                                    # Write trend.json to cohort directory (similar to metadata.json and metrics.json)
+                                    if cohort_dir and cohort_dir.exists():
+                                        try:
+                                            trend_analyzer.write_cohort_trend(
+                                                cohort_dir=cohort_dir,
+                                                stage=stage_normalized,
+                                                target=item_name,
+                                                trends={series_key_str: trend_list}  # Pass pre-computed trends
+                                            )
+                                        except Exception as e:
+                                            logger.debug(f"Failed to write trend.json: {e}")
+                                    
                                     # Find trend for primary metric
                                     primary_metric = metrics.get("metric_name", "mean_score")
                                     for trend in trend_list:
@@ -3544,6 +3603,19 @@ class ReproducibilityTracker:
                     
                     if series_key_str and series_key_str in all_trends:
                         trends = all_trends[series_key_str]
+                        
+                        # Write trend.json to cohort directory (similar to metadata.json and metrics.json)
+                        if cohort_dir and cohort_dir.exists():
+                            try:
+                                target_name = ctx.target_name or ctx.target_column or "unknown"
+                                trend_analyzer.write_cohort_trend(
+                                    cohort_dir=cohort_dir,
+                                    stage=ctx.stage.upper(),
+                                    target=target_name,
+                                    trends={series_key_str: trends}  # Pass pre-computed trends
+                                )
+                            except Exception as e:
+                                logger.debug(f"Failed to write trend.json: {e}")
                         
                         # Find trend for the primary metric
                         primary_metric = metrics.get("metric_name", "mean_score")

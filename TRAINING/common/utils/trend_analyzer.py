@@ -286,7 +286,8 @@ class TrendAnalyzer:
         if comparison_group.get('library_versions_signature'):
             parts.append(f"libs={comparison_group['library_versions_signature'][:8]}")
         
-        return "|".join(parts) if parts else None
+        # Return "default" if no parts (matching ComparisonGroup.to_key() behavior)
+        return "|".join(parts) if parts else "default"
     
     def _extract_index_row(
         self,
@@ -829,3 +830,110 @@ class TrendAnalyzer:
             json.dump(report, f, indent=2, default=str)
         
         logger.info(f"Wrote trend report to {output_path}")
+    
+    def write_cohort_trend(
+        self,
+        cohort_dir: Path,
+        stage: str,
+        target: str,
+        trends: Optional[Dict[str, List[TrendResult]]] = None
+    ) -> Optional[Path]:
+        """
+        Write trend.json to cohort directory (similar to metadata.json and metrics.json).
+        
+        Args:
+            cohort_dir: Cohort directory path (where metadata.json and metrics.json are written)
+            stage: Stage name (e.g., "TARGET_RANKING")
+            target: Target name
+            trends: Optional pre-computed trends dict. If None, will compute trends for this series.
+        
+        Returns:
+            Path to written trend.json file, or None if writing failed
+        """
+        try:
+            # If trends not provided, compute them
+            if trends is None:
+                df = self.load_artifact_index()
+                if len(df) == 0:
+                    logger.debug("No runs found in artifact index, skipping trend.json write")
+                    return None
+                
+                # Group into series
+                series = self.group_into_series(df, view=SeriesView.STRICT, use_comparison_group=True)
+                
+                # Find the series that matches this stage and target
+                matching_series_key = None
+                for series_key_str, runs in series.items():
+                    # Check if this series matches
+                    series_key = runs[0].get('_series_key') if runs else None
+                    if series_key and series_key.stage == stage and series_key.target == target:
+                        matching_series_key = series_key_str
+                        break
+                
+                if not matching_series_key:
+                    logger.debug(f"No matching series found for stage={stage}, target={target}, skipping trend.json write")
+                    return None
+                
+                # Analyze trends for this series
+                runs = series[matching_series_key]
+                series_key = runs[0].get('_series_key')
+                
+                # Determine metric fields per stage
+                metric_fields_by_stage = {
+                    'TARGET_RANKING': ['auc_mean', 'composite_score', 'importance_mean'],
+                    'FEATURE_SELECTION': ['n_selected'],
+                    'TRAINING': ['primary_metric'],
+                    'MODEL_TRAINING': ['primary_metric']
+                }
+                metric_fields = metric_fields_by_stage.get(stage, ['primary_metric'])
+                
+                trend_list = []
+                for metric_field in metric_fields:
+                    if any(metric_field in r and pd.notna(r.get(metric_field)) for r in runs):
+                        trend = self.analyze_series_trend(runs, metric_field, SeriesView.STRICT, series_key)
+                        if trend.status == "ok":
+                            trend_list.append(trend)
+                
+                if not trend_list:
+                    logger.debug(f"No valid trends found for stage={stage}, target={target}, skipping trend.json write")
+                    return None
+                
+                trends = {matching_series_key: trend_list}
+            
+            # Build trend.json structure (similar to metadata.json/metrics.json format)
+            trend_data = {
+                'generated_at': datetime.now(timezone.utc).isoformat(),
+                'stage': stage,
+                'target': target,
+                'half_life_days': self.half_life_days,
+                'min_runs_for_trend': self.min_runs_for_trend,
+                'trends': []
+            }
+            
+            # Extract trends for this series (should be only one series_key in trends dict)
+            for series_key_str, trend_list in trends.items():
+                for trend in trend_list:
+                    trend_dict = {
+                        'metric_name': trend.metric_name,
+                        'status': trend.status,
+                        'n_runs': trend.n_runs,
+                        'slope_per_day': trend.slope_per_day,
+                        'current_estimate': trend.current_estimate,
+                        'ewma_value': trend.ewma_value,
+                        'residual_std': trend.residual_std,
+                        'alerts': trend.alerts,
+                        'breakpoints': trend.breakpoints
+                    }
+                    trend_data['trends'].append(trend_dict)
+            
+            # Write to cohort directory using atomic write
+            trend_file = cohort_dir / "trend.json"
+            from TRAINING.common.utils.file_utils import write_atomic_json
+            write_atomic_json(trend_file, trend_data)
+            
+            logger.info(f"✅ Wrote trend.json to {cohort_dir.name}/")
+            return trend_file
+            
+        except Exception as e:
+            logger.debug(f"Failed to write trend.json to {cohort_dir}: {e}")
+            return None
