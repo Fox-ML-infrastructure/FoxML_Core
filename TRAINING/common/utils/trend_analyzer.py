@@ -10,6 +10,10 @@ Supports two views:
 - STRICT_SERIES: Only trend when all comparability keys match (reproducibility)
 - PROGRESS_SERIES: Allow controlled changes, mark breakpoints (iteration progress)
 
+By default, uses comparison_group_key for grouping (lenient, like metrics diffs).
+This allows runs with the same comparison group to be grouped together even if
+some hashes differ. Set use_comparison_group=False to use strict SeriesKey matching.
+
 Usage:
     from TRAINING.common.utils.trend_analyzer import TrendAnalyzer
     
@@ -239,6 +243,51 @@ class TrendAnalyzer:
         
         return items
     
+    def _construct_comparison_group_key(self, metadata: Dict[str, Any]) -> Optional[str]:
+        """
+        Construct comparison_group_key from metadata, matching ComparisonGroup.to_key() logic.
+        
+        Args:
+            metadata: Metadata dictionary from metadata.json
+            
+        Returns:
+            Comparison group key string, or None if not available
+        """
+        # First, try to get it directly from diff_telemetry
+        diff_telemetry = metadata.get('diff_telemetry', {})
+        comparison_group_key = diff_telemetry.get('comparison_group_key')
+        if comparison_group_key:
+            return comparison_group_key
+        
+        # If not available, construct from comparison_group dict
+        comparison_group = diff_telemetry.get('comparison_group', {})
+        if not comparison_group:
+            return None
+        
+        parts = []
+        if comparison_group.get('experiment_id'):
+            parts.append(f"exp={comparison_group['experiment_id']}")
+        if comparison_group.get('dataset_signature'):
+            parts.append(f"data={comparison_group['dataset_signature'][:8]}")
+        if comparison_group.get('task_signature'):
+            parts.append(f"task={comparison_group['task_signature'][:8]}")
+        if comparison_group.get('routing_signature'):
+            parts.append(f"route={comparison_group['routing_signature'][:8]}")
+        if comparison_group.get('n_effective') is not None:
+            parts.append(f"n={comparison_group['n_effective']}")
+        if comparison_group.get('model_family'):
+            parts.append(f"family={comparison_group['model_family']}")
+        if comparison_group.get('feature_signature'):
+            parts.append(f"features={comparison_group['feature_signature'][:8]}")
+        if comparison_group.get('hyperparameters_signature'):
+            parts.append(f"hps={comparison_group['hyperparameters_signature'][:8]}")
+        if comparison_group.get('train_seed') is not None:
+            parts.append(f"seed={comparison_group['train_seed']}")
+        if comparison_group.get('library_versions_signature'):
+            parts.append(f"libs={comparison_group['library_versions_signature'][:8]}")
+        
+        return "|".join(parts) if parts else None
+    
     def _extract_index_row(
         self,
         stage: str,
@@ -260,6 +309,9 @@ class TrendAnalyzer:
             # Extract comparability keys
             cv_details = metadata.get('cv_details', {})
             
+            # Extract comparison_group_key (for lenient grouping like metrics diffs)
+            comparison_group_key = self._construct_comparison_group_key(metadata)
+            
             row = {
                 # Identity
                 'run_id': metadata.get('run_id', ''),
@@ -274,12 +326,15 @@ class TrendAnalyzer:
                 'symbol': metadata.get('symbol'),
                 'model_family': metadata.get('model_family'),
                 
-                # Strict comparability keys
+                # Strict comparability keys (for backward compatibility)
                 'cohort_id': cohort_id,
                 'data_fingerprint': metadata.get('data_fingerprint'),
                 'feature_registry_hash': metadata.get('feature_registry_hash'),
                 'fold_boundaries_hash': cv_details.get('fold_boundaries_hash'),
                 'label_definition_hash': cv_details.get('label_definition_hash') or metadata.get('label_definition_hash'),
+                
+                # Comparison group key (for lenient grouping like metrics diffs)
+                'comparison_group_key': comparison_group_key,
                 
                 # CV details
                 'horizon_minutes': cv_details.get('horizon_minutes') or metadata.get('horizon_minutes'),
@@ -317,7 +372,8 @@ class TrendAnalyzer:
     def group_into_series(
         self,
         df: pd.DataFrame,
-        view: SeriesView = SeriesView.STRICT
+        view: SeriesView = SeriesView.STRICT,
+        use_comparison_group: bool = True
     ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Group runs into comparable series based on view.
@@ -325,14 +381,19 @@ class TrendAnalyzer:
         Args:
             df: Artifact index DataFrame
             view: STRICT or PROGRESS
+            use_comparison_group: If True, use comparison_group_key for grouping (lenient, like metrics diffs).
+                                 If False, use strict SeriesKey matching (backward compatible).
         
         Returns:
             Dict mapping series_key -> list of run rows
         """
         series = {}
         
+        # Check if comparison_group_key is available in the DataFrame
+        has_comparison_group = use_comparison_group and 'comparison_group_key' in df.columns
+        
         for _, row in df.iterrows():
-            # Build SeriesKey
+            # Build SeriesKey (always needed for TrendResult.series_key)
             key = SeriesKey(
                 cohort_id=str(row.get('cohort_id', '')),
                 stage=str(row.get('stage', '')),
@@ -343,11 +404,24 @@ class TrendAnalyzer:
                 label_definition_hash=str(row.get('label_definition_hash', '')) if pd.notna(row.get('label_definition_hash')) else None
             )
             
-            # Generate grouping key based on view
-            if view == SeriesView.STRICT:
-                series_key = key.to_strict_key()
+            # Choose grouping key: use comparison_group_key if available and enabled, else use SeriesKey
+            if has_comparison_group:
+                comparison_group_key = row.get('comparison_group_key')
+                if pd.notna(comparison_group_key) and comparison_group_key:
+                    # Use comparison_group_key for grouping (lenient, like metrics diffs)
+                    series_key = str(comparison_group_key)
+                else:
+                    # Fall back to SeriesKey if comparison_group_key is missing
+                    if view == SeriesView.STRICT:
+                        series_key = key.to_strict_key()
+                    else:
+                        series_key = key.to_progress_key()
             else:
-                series_key = key.to_progress_key()
+                # Use strict SeriesKey matching (backward compatible)
+                if view == SeriesView.STRICT:
+                    series_key = key.to_strict_key()
+                else:
+                    series_key = key.to_progress_key()
             
             # Convert row to dict
             run_dict = row.to_dict()
@@ -596,7 +670,8 @@ class TrendAnalyzer:
     def analyze_all_series(
         self,
         view: SeriesView = SeriesView.STRICT,
-        metric_fields: Optional[List[str]] = None
+        metric_fields: Optional[List[str]] = None,
+        use_comparison_group: bool = True
     ) -> Dict[str, List[TrendResult]]:
         """
         Analyze trends for all series in the artifact index.
@@ -604,6 +679,8 @@ class TrendAnalyzer:
         Args:
             view: STRICT or PROGRESS
             metric_fields: List of metric fields to analyze (None = auto-detect per stage)
+            use_comparison_group: If True, use comparison_group_key for grouping (lenient, like metrics diffs).
+                                 If False, use strict SeriesKey matching (backward compatible).
         
         Returns:
             Dict mapping series_key -> list of TrendResult (one per metric)
@@ -614,8 +691,9 @@ class TrendAnalyzer:
             return {}
         
         # Group into series
-        series = self.group_into_series(df, view)
-        logger.info(f"Found {len(series)} series for {view.value} view")
+        series = self.group_into_series(df, view, use_comparison_group=use_comparison_group)
+        grouping_mode = "comparison_group" if use_comparison_group else "strict"
+        logger.info(f"Found {len(series)} series for {view.value} view (grouping: {grouping_mode})")
         
         # Determine metric fields per stage
         if metric_fields is None:
