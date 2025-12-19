@@ -1107,6 +1107,7 @@ def select_features_for_target(
         # Shared harness was used - all_results and all_family_statuses already populated
         # Statuses were collected in the shared harness block (lines 684-693 for SYMBOL_SPECIFIC or 913-942 for CROSS_SECTIONAL)
         # Do not overwrite all_family_statuses here - it would destroy the failure statuses for missing families like Boruta
+        pass
     
     if not all_results:
         logger.warning("No results from any symbol")
