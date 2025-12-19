@@ -891,7 +891,8 @@ class IntelligentTrainer:
         config_hash = hashlib.md5(
             json.dumps({
                 'model_families': model_families or [],
-                'symbols': sorted(self.symbols)
+                'symbols': sorted(self.symbols),
+                'max_targets_to_evaluate': max_targets_to_evaluate  # Include limit in cache key
             }, sort_keys=True).encode()
         ).hexdigest()
         cache_key = self._get_cache_key(self.symbols, config_hash)
@@ -900,7 +901,15 @@ class IntelligentTrainer:
         if not force_refresh and use_cache:
             cached = self._load_cached_rankings(cache_key, use_cache=True)
             if cached:
-                logger.info(f"✅ Using cached target rankings ({len(cached)} targets)")
+                # Respect max_targets_to_evaluate even when using cache
+                if max_targets_to_evaluate is not None and max_targets_to_evaluate > 0:
+                    if len(cached) > max_targets_to_evaluate:
+                        logger.info(f"✅ Using cached rankings, truncating to {max_targets_to_evaluate} targets (cache had {len(cached)})")
+                        cached = cached[:max_targets_to_evaluate]
+                    else:
+                        logger.info(f"✅ Using cached target rankings ({len(cached)} targets, limit={max_targets_to_evaluate})")
+                else:
+                    logger.info(f"✅ Using cached target rankings ({len(cached)} targets)")
                 # Return top N from cache
                 top_targets = [r['target_name'] for r in cached[:top_n]]
                 return top_targets
