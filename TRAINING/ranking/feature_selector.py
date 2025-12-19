@@ -370,7 +370,6 @@ def select_features_for_target(
             cached_features = cache_data.get('selected_features', [])
             # Load summary DataFrame if available
             if 'summary_df' in cache_data and cache_data['summary_df']:
-                import pandas as pd
                 cached_summary_df = pd.DataFrame(cache_data['summary_df'])
             
             if cached_features:
@@ -393,7 +392,6 @@ def select_features_for_target(
             return cached_features, cached_summary_df
         else:
             # Create minimal summary_df from cached features
-            import pandas as pd
             summary_df = pd.DataFrame({
                 'feature': cached_features,
                 'consensus_score': [1.0] * len(cached_features)  # Placeholder
@@ -950,7 +948,13 @@ def select_features_for_target(
                                    f"horizon_minutes={horizon_minutes}")
                 
         except Exception as e:
-            logger.warning(f"Shared harness failed: {e}, falling back to per-symbol processing", exc_info=True)
+            # FIX: Check if this is an expected error (insufficient symbols for CROSS_SECTIONAL)
+            # If so, log at INFO level instead of WARNING to reduce noise
+            error_msg = str(e)
+            if "CROSS_SECTIONAL mode requires" in error_msg and "symbols" in error_msg:
+                logger.info(f"Shared harness: {error_msg}. Falling back to per-symbol processing.")
+            else:
+                logger.warning(f"Shared harness failed: {e}, falling back to per-symbol processing", exc_info=True)
             use_shared_harness = False
             all_results = []
             all_family_statuses = []

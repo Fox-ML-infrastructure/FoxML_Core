@@ -164,6 +164,29 @@ class RankingHarness:
             logger.error(f"No data loaded for any symbols")
             return None, None, None, None, None, None, None, None
         
+        # FIX: Check if CROSS_SECTIONAL mode has insufficient symbols and handle gracefully
+        n_symbols_loaded = len(mtf_data)
+        MIN_SYMBOLS_FOR_CROSS_SECTIONAL = 3
+        
+        if self.view == "CROSS_SECTIONAL" and n_symbols_loaded < MIN_SYMBOLS_FOR_CROSS_SECTIONAL:
+            loaded_symbols_list = list(mtf_data.keys())
+            if n_symbols_loaded == 1:
+                # Single symbol: automatically switch to SYMBOL_SPECIFIC mode
+                logger.warning(
+                    f"⚠️  CROSS_SECTIONAL mode requires >= {MIN_SYMBOLS_FOR_CROSS_SECTIONAL} symbols, "
+                    f"but only {n_symbols_loaded} loaded ({loaded_symbols_list}). "
+                    f"Automatically switching to SYMBOL_SPECIFIC mode for symbol {loaded_symbols_list[0]}."
+                )
+                self.view = "SYMBOL_SPECIFIC"
+                self.symbol = loaded_symbols_list[0]
+            else:
+                # 2 symbols: still insufficient, but log warning and proceed with allow_single_symbol=True
+                logger.warning(
+                    f"⚠️  CROSS_SECTIONAL mode recommended >= {MIN_SYMBOLS_FOR_CROSS_SECTIONAL} symbols, "
+                    f"but only {n_symbols_loaded} loaded ({loaded_symbols_list}). "
+                    f"Proceeding with reduced cross-sectional width (may be less robust)."
+                )
+        
         # Get sample dataframe for interval detection and feature filtering
         sample_df = next(iter(mtf_data.values()))
         all_columns = sample_df.columns.tolist()
@@ -360,12 +383,14 @@ class RankingHarness:
         )
         
         # Prepare data based on view (with alignment args from resolved_config)
+        # NOTE: view may have been changed to SYMBOL_SPECIFIC above if only 1 symbol loaded
         if self.view == "SYMBOL_SPECIFIC":
             # For symbol-specific, prepare single-symbol time series data
             X, y, feature_names_out, symbols_array, time_vals, resolved_data_config = prepare_cross_sectional_data_for_ranking(
                 mtf_data, target_column, min_cs=1, max_cs_samples=self.max_cs_samples, feature_names=feature_names,
                 feature_time_meta_map=resolved_config.feature_time_meta_map,  # NEW: Pass from resolved_config
-                base_interval_minutes=resolved_config.base_interval_minutes  # NEW: Pass from resolved_config
+                base_interval_minutes=resolved_config.base_interval_minutes,  # NEW: Pass from resolved_config
+                allow_single_symbol=True  # SYMBOL_SPECIFIC always allows single symbol
             )
         elif self.view == "LOSO":
             # LOSO: prepare training data (all symbols except validation symbol)
@@ -378,10 +403,15 @@ class RankingHarness:
             logger.warning("LOSO view: Using combined data for now (LOSO-specific CV splitter not yet implemented)")
         else:
             # CROSS_SECTIONAL: standard pooled data
+            # FIX: Pass allow_single_symbol=True if we have < 3 symbols (graceful degradation)
+            # This prevents ValueError when only 1-2 symbols are loaded
+            # Note: If view was changed to SYMBOL_SPECIFIC above, we won't reach this block
+            allow_single_symbol = (n_symbols_loaded < 3)  # Use literal to avoid scope issues
             X, y, feature_names_out, symbols_array, time_vals, resolved_data_config = prepare_cross_sectional_data_for_ranking(
                 mtf_data, target_column, min_cs=self.min_cs, max_cs_samples=self.max_cs_samples, feature_names=feature_names,
                 feature_time_meta_map=resolved_config.feature_time_meta_map,  # NEW: Pass from resolved_config
-                base_interval_minutes=resolved_config.base_interval_minutes  # NEW: Pass from resolved_config
+                base_interval_minutes=resolved_config.base_interval_minutes,  # NEW: Pass from resolved_config
+                allow_single_symbol=allow_single_symbol  # FIX: Allow graceful degradation for < 3 symbols
             )
         
         # Update feature counts after data preparation
