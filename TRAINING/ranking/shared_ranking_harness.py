@@ -493,7 +493,8 @@ class RankingHarness:
                         f"Insufficient data span for long-horizon target (horizon={horizon_minutes:.1f}m). "
                         f"Data span: {data_span_minutes:.1f}m, Required: {required_span_minutes:.1f}m "
                         f"(purge={purge_minutes:.1f}m + embargo={embargo_minutes:.1f}m) * 2 * {cv_folds} folds. "
-                        f"Either: 1) Increase max_rows_per_symbol, 2) Reduce horizon, or 3) Skip this target."
+                        f"Falling back to per-symbol processing (expected for long-horizon targets with limited data). "
+                        f"To use shared harness: 1) Increase max_rows_per_symbol, 2) Reduce horizon, or 3) Skip this target."
                     )
         else:
             # Fallback: use default purge (60m = 12 bars + buffer)

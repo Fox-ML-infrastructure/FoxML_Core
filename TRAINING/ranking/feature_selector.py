@@ -988,11 +988,13 @@ def select_features_for_target(
                                    f"horizon_minutes={horizon_minutes}")
                 
         except Exception as e:
-            # FIX: Check if this is an expected error (insufficient symbols for CROSS_SECTIONAL)
+            # FIX: Check if this is an expected error (insufficient symbols for CROSS_SECTIONAL or insufficient data span)
             # If so, log at INFO level instead of WARNING to reduce noise
             error_msg = str(e)
             if "CROSS_SECTIONAL mode requires" in error_msg and "symbols" in error_msg:
                 logger.info(f"Shared harness: {error_msg}. Falling back to per-symbol processing.")
+            elif "Insufficient data span for long-horizon target" in error_msg:
+                logger.info(f"Shared harness: {error_msg}")
             else:
                 logger.warning(f"Shared harness failed: {e}, falling back to per-symbol processing", exc_info=True)
             
@@ -1749,29 +1751,39 @@ def select_features_for_target(
             n_features_selected = len(selected_features)
             n_successful_families = len([s for s in all_family_statuses if s.get('status') == 'success'])
             
+            # Initialize cohort metadata variables to safe defaults
+            cohort_metadata = None
+            cohort_metrics = {}
+            cohort_additional_data = {}
+            
             # Extract cohort metadata using unified extractor
-            from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
-            
-            # Extract cohort metadata from stored context (symbols, mtf_data, cs_config)
-            # cohort_context is defined earlier in the function
-            if 'cohort_context' in locals() and cohort_context:
-                cohort_metadata = extract_cohort_metadata(
-                    symbols=cohort_context.get('symbols'),
-                    mtf_data=cohort_context.get('mtf_data'),
-                    min_cs=cohort_context.get('min_cs'),
-                    max_cs_samples=cohort_context.get('max_cs_samples')
-                )
-            else:
-                # Fallback: try to extract from function variables (shouldn't happen if cohort_context is set)
-                cohort_metadata = extract_cohort_metadata(
-                    symbols=symbols,
-                    mtf_data=mtf_data if 'mtf_data' in locals() else None,
-                    min_cs=None,
-                    max_cs_samples=None
-                )
-            
-            # Format for reproducibility tracker
-            cohort_metrics, cohort_additional_data = format_for_reproducibility_tracker(cohort_metadata)
+            try:
+                from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
+                
+                # Extract cohort metadata from stored context (symbols, mtf_data, cs_config)
+                # cohort_context is defined earlier in the function
+                if 'cohort_context' in locals() and cohort_context:
+                    cohort_metadata = extract_cohort_metadata(
+                        symbols=cohort_context.get('symbols'),
+                        mtf_data=cohort_context.get('mtf_data'),
+                        min_cs=cohort_context.get('min_cs'),
+                        max_cs_samples=cohort_context.get('max_cs_samples')
+                    )
+                else:
+                    # Fallback: try to extract from function variables (shouldn't happen if cohort_context is set)
+                    cohort_metadata = extract_cohort_metadata(
+                        symbols=symbols,
+                        mtf_data=mtf_data if 'mtf_data' in locals() else None,
+                        min_cs=None,
+                        max_cs_samples=None
+                    )
+                
+                # Format for reproducibility tracker
+                if cohort_metadata is not None:
+                    cohort_metrics, cohort_additional_data = format_for_reproducibility_tracker(cohort_metadata)
+            except Exception as e:
+                logger.debug(f"Failed to extract cohort metadata for reproducibility tracking: {e}")
+                # Use empty dicts as fallbacks (already initialized above)
             
             # Try to use new log_run API with RunContext (includes trend analysis)
             try:
@@ -1956,6 +1968,7 @@ def select_features_for_target(
                 logger.debug("RunContext not available, falling back to legacy reproducibility tracking")
                 
                 # Merge with existing metrics and additional_data
+                # Use cohort_metrics if available (may be empty dict if extraction failed)
                 metrics_with_cohort = {
                     "metric_name": "Consensus Score",
                     "mean_score": mean_consensus,
@@ -1965,8 +1978,10 @@ def select_features_for_target(
                     "n_features_selected": n_features_selected,
                     "n_successful_families": n_successful_families,
                     "n_selected": n_features_selected,  # For trend analyzer
-                    **cohort_metrics  # Adds N_effective_cs if available
                 }
+                # Add cohort_metrics if available (safe to unpack empty dict)
+                if cohort_metrics:
+                    metrics_with_cohort.update(cohort_metrics)
                 
                 # FIX: Map view to route_type for FEATURE_SELECTION (ensures proper telemetry scoping)
                 # Use SYMBOL_SPECIFIC directly to match directory structure (not INDIVIDUAL)
@@ -2002,9 +2017,11 @@ def select_features_for_target(
                     "view": view,  # FIX: Include view for proper telemetry scoping
                     "symbol": symbol,  # FIX: Include symbol for SYMBOL_SPECIFIC view
                     "route_type": route_type_for_legacy,  # FIX: Map view to route_type
-                    **cohort_additional_data,  # Adds n_symbols, date_range, cs_config if available
                     'lookback_cap_enforcement': lookback_cap_metadata if lookback_cap_metadata else None
                 }
+                # Add cohort_additional_data if available (safe to unpack empty dict)
+                if cohort_additional_data:
+                    additional_data_with_cohort.update(cohort_additional_data)
                 
                 # Add seed for reproducibility tracking
                 try:

@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-19 (Feature Selection Error Fixes)
+- **cohort_metadata undefined error fix**: Fixed `NameError` in feature selection when cohort metadata extraction fails. Added safe initialization and guards in fallback paths.
+- **Improved error messaging**: Updated insufficient data span error message to clarify that fallback to per-symbol processing is expected for long-horizon targets.
+- **Reduced log noise**: Changed log level from WARNING to INFO for expected fallback scenarios.
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-19-feature-selection-error-fixes.md)
+
 #### 2025-12-19 (Target Evaluation Config Fixes)
 - **Config Precedence Fix**: Fixed `max_targets_to_evaluate` from experiment config not overriding test config. Experiment config now correctly takes priority.
 - **Target Whitelist Support**: Added `targets_to_evaluate` whitelist that works with `auto_targets: true` for fine-grained control.
