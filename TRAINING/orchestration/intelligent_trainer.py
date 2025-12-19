@@ -886,6 +886,8 @@ class IntelligentTrainer:
             List of top N target names
         """
         logger.info(f"🎯 Ranking targets (top {top_n})...")
+        if max_targets_to_evaluate is not None:
+            logger.info(f"📊 max_targets_to_evaluate limit: {max_targets_to_evaluate}")
         
         # Generate cache key
         config_hash = hashlib.md5(
@@ -1430,6 +1432,8 @@ class IntelligentTrainer:
             logger.info("="*80)
             logger.info("STEP 1: Automatic Target Ranking")
             logger.info("="*80)
+            if max_targets_to_evaluate is not None:
+                logger.info(f"🔢 max_targets_to_evaluate={max_targets_to_evaluate} (type: {type(max_targets_to_evaluate).__name__})")
             targets = self.rank_targets_auto(
                 top_n=top_n_targets,
                 use_cache=use_cache,
@@ -2325,8 +2329,13 @@ Examples:
                         # Extract max_targets_to_evaluate from experiment config (overrides base config)
                         exp_max_targets = intel_training.get('max_targets_to_evaluate')
                         if exp_max_targets is not None:
-                            max_targets_to_evaluate = exp_max_targets
-                            logger.info(f"📋 Using max_targets_to_evaluate={max_targets_to_evaluate} from experiment config")
+                            # Ensure it's an integer (YAML might load as int or string)
+                            try:
+                                max_targets_to_evaluate = int(exp_max_targets)
+                                logger.info(f"📋 Using max_targets_to_evaluate={max_targets_to_evaluate} from experiment config")
+                            except (ValueError, TypeError) as e:
+                                logger.warning(f"⚠️  Invalid max_targets_to_evaluate value '{exp_max_targets}' in experiment config, ignoring: {e}")
+                                # Keep existing value (from base config or default)
                         # Extract top_n_targets from experiment config (overrides base config)
                         exp_top_n = intel_training.get('top_n_targets')
                         if exp_top_n is not None:
@@ -2491,8 +2500,13 @@ Examples:
                         # Extract max_targets_to_evaluate from experiment config (overrides base config)
                         exp_max_targets = intel_training.get('max_targets_to_evaluate')
                         if exp_max_targets is not None:
-                            max_targets_to_evaluate = exp_max_targets
-                            logger.info(f"📋 Using max_targets_to_evaluate={max_targets_to_evaluate} from experiment config")
+                            # Ensure it's an integer (YAML might load as int or string)
+                            try:
+                                max_targets_to_evaluate = int(exp_max_targets)
+                                logger.info(f"📋 Using max_targets_to_evaluate={max_targets_to_evaluate} from experiment config")
+                            except (ValueError, TypeError) as e:
+                                logger.warning(f"⚠️  Invalid max_targets_to_evaluate value '{exp_max_targets}' in experiment config, ignoring: {e}")
+                                # Keep existing value (from base config or default)
                         # Extract top_n_targets from experiment config (overrides base config)
                         exp_top_n = intel_training.get('top_n_targets')
                         if exp_top_n is not None:
