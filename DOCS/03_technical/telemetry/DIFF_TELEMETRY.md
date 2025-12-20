@@ -51,27 +51,52 @@ The system is automatically integrated via `ReproducibilityTracker._save_to_coho
 
 Runs are **automatically organized** by comparison group metadata after the first snapshot is created.
 
-**Current Structure** (as of 2025-12-16):
+**Current Structure** (as of 2025-12-19 - Target-First):
 ```
 RESULTS/
   runs/                            # All runs organized by comparison group
     {comparison_group_dir}/        # Organized by all outcome-influencing metadata
       {run_name}/
-      REPRODUCIBILITY/
-        METRICS/
-          snapshot_index.json      # Run-specific snapshot index
-        TARGET_RANKING/.../
-          cohort={cohort_id}/
-            snapshot.json          # Normalized snapshot (per-run)
-            diff_prev.json         # Diff vs previous run
-            diff_baseline.json     # Diff vs baseline
-            baseline.json          # Baseline for this exact comparison_group (stored per-cohort)
-        FEATURE_SELECTION/.../
-          cohort={cohort_id}/
-            snapshot.json
-            diff_prev.json
-            diff_baseline.json
-            baseline.json          # Baseline for this exact comparison_group
+        manifest.json              # Run-level manifest
+        globals/                   # Global summaries
+          stats.json               # Run-level statistics
+        targets/                   # Target-first organization
+          {target}/
+            reproducibility/
+              CROSS_SECTIONAL/
+                cohort={cohort_id}/
+                  snapshot.json    # Normalized snapshot (per-run)
+                  diff_prev.json   # Diff vs previous run
+                  diff_baseline.json # Diff vs baseline
+                  metric_deltas.json # Metric deltas
+                  metadata.json    # Full cohort metadata
+                  metrics.json     # Performance metrics
+              SYMBOL_SPECIFIC/
+                symbol={symbol}/
+                  cohort={cohort_id}/
+                    snapshot.json
+                    diff_prev.json
+                    diff_baseline.json
+                    metric_deltas.json
+                    metadata.json
+                    metrics.json
+```
+
+**Legacy Structure** (deprecated, no longer created):
+```
+REPRODUCIBILITY/
+  METRICS/
+    snapshot_index.json
+  TARGET_RANKING/.../
+    cohort={cohort_id}/
+      snapshot.json
+      diff_prev.json
+      diff_baseline.json
+  FEATURE_SELECTION/.../
+    cohort={cohort_id}/
+      snapshot.json
+      diff_prev.json
+      diff_baseline.json
 ```
 
 **Comparison Group Directory Naming:**

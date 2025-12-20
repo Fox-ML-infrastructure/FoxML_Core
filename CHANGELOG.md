@@ -16,6 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-19 (Target-First Directory Structure Migration)
+- **Target-First Organization**: Migrated all output artifacts to target-first structure (`targets/<target>/`) for better organization and decision-making
+- **Global Summaries**: Added `globals/` directory for run-level summaries (routing decisions, target rankings, confidence summaries, stats)
+- **Per-Target Metadata**: Added `targets/<target>/metadata.json` aggregating all target information
+- **Run Manifest**: Added `manifest.json` at run root with experiment config and target index
+- **Legacy Support**: All reading logic checks target-first structure first, then falls back to legacy for backward compatibility
+- **No Legacy Writes**: Removed all writes to legacy `REPRODUCIBILITY/` structure - new runs only create target-first structure
+- **Complete Migration**: All artifacts (metadata, metrics, diffs, snapshots, decisions, models, feature selection) now use target-first structure
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-19-target-first-structure-migration.md)
+
 #### 2025-12-19 (Feature Selection Error Fixes)
 - **cohort_metadata undefined error fix**: Fixed `NameError` in feature selection when cohort metadata extraction fails. Added safe initialization and guards in fallback paths.
 - **Improved error messaging**: Updated insufficient data span error message to clarify that fallback to per-symbol processing is expected for long-horizon targets.

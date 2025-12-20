@@ -401,17 +401,33 @@ RESULTS/
         │           ├── excluded_features.yaml
         │           ├── feature_registry.yaml
         │           └── manifest.json
-        ├── REPRODUCIBILITY/            # Cohort-aware reproducibility tracking
-        │   ├── TARGET_RANKING/
-        │   │   └── {target}/
-        │   │       └── cohort={cohort_id}/
-        │   │           ├── metadata.json  # Includes symbols list, bin info
-        │   │           ├── metrics.json
-        │   │           └── drift.json
-        │   ├── FEATURE_SELECTION/
-        │   ├── TRAINING/
-        │   ├── index.parquet
-        │   └── stats.json
+        ├── manifest.json                # Run-level manifest with experiment config
+        ├── globals/                     # Global summaries
+        │   ├── routing_decisions.json    # Global routing decisions
+        │   ├── target_prioritization.yaml
+        │   ├── target_confidence_summary.json
+        │   └── stats.json               # Run-level statistics
+        └── targets/                      # Target-first organization
+            └── {target}/
+                ├── metadata.json        # Per-target metadata
+                ├── decision/            # Routing and prioritization
+                │   ├── routing_decision.json
+                │   └── feature_prioritization.yaml
+                ├── reproducibility/     # Reproducibility tracking
+                │   ├── CROSS_SECTIONAL/
+                │   │   └── cohort={cohort_id}/
+                │   │       ├── metadata.json
+                │   │       ├── metrics.json
+                │   │       ├── snapshot.json
+                │   │       ├── diff_prev.json
+                │   │       └── diff_baseline.json
+                │   └── SYMBOL_SPECIFIC/
+                │       └── symbol={symbol}/
+                │           └── cohort={cohort_id}/
+                │               └── ...
+                ├── metrics/             # Performance metrics
+                ├── models/              # Trained models
+                └── trends/             # Trend analysis
         └── cache/
             ├── target_rankings.json
             └── feature_selections/
