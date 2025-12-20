@@ -64,12 +64,10 @@ Step-by-step guides for common tasks. See [01_tutorials/README.md](01_tutorials/
 - [GPU Setup](01_tutorials/setup/GPU_SETUP.md) - **UPDATED**: GPU configuration for target ranking, feature selection, and model training
 
 ### Pipelines
-- [Data Processing README](01_tutorials/pipelines/DATA_PROCESSING_README.md) - DATA_PROCESSING module overview
 - [First Pipeline Run](01_tutorials/pipelines/FIRST_PIPELINE_RUN.md) - Run your first pipeline
 
 ### Development & Architecture
 - [Refactoring & Wrappers](01_tutorials/REFACTORING_AND_WRAPPERS.md) - Understanding the modular structure and backward compatibility wrappers
-- [Data Processing Walkthrough](01_tutorials/pipelines/DATA_PROCESSING_WALKTHROUGH.md) - Data pipeline guide
 - [Feature Engineering Tutorial](01_tutorials/pipelines/FEATURE_ENGINEERING_TUTORIAL.md) - Feature creation
 
 ### Training
@@ -136,7 +134,6 @@ Complete technical reference for daily use. See [02_reference/README.md](02_refe
 
 ### API Reference
 - [Module Reference](02_reference/api/MODULE_REFERENCE.md) - Python API for all modules
-- [DATA_PROCESSING API](02_reference/api/DATA_PROCESSING_API.md) - Complete DATA_PROCESSING module API reference
 - [Intelligent Trainer API](02_reference/api/INTELLIGENT_TRAINER_API.md) - Intelligent training pipeline API
 - [CLI Reference](02_reference/api/CLI_REFERENCE.md) - Command-line interface reference
 

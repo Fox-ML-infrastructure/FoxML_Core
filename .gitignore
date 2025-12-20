@@ -402,3 +402,6 @@ RESULTS/
 # Trading modules (untracked)
 ALPACA_trading/
 IBKR_trading/
+
+# Data processing (untracked)
+DATA_PROCESSING/

@@ -4,7 +4,7 @@
 # Default paths (can be overridden by command line args)
 paths:
   data_dir: "data/data_labeled/interval=5m"  # Relative to repo root
-  output_dir: "DATA_PROCESSING/data/features"  # Relative to repo root
+  output_dir: "RESULTS/features"  # Relative to repo root
 
 # Default feature selection parameters
 defaults:

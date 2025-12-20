@@ -3843,7 +3843,7 @@ def main():
                        default=_REPO_ROOT / "data/data_labeled/interval=5m",
                        help="Directory with labeled data")
     parser.add_argument("--output-dir", type=Path,
-                       default=_REPO_ROOT / "DATA_PROCESSING/data/features/multi_model",
+                       default=_REPO_ROOT / "RESULTS/features/multi_model",
                        help="Output directory")
     parser.add_argument("--target-column", type=str,
                        default="y_will_peak_60m_0.8",
