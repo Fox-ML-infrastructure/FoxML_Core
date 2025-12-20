@@ -1373,6 +1373,73 @@ class ReproducibilityTracker:
                 telemetry = None
                 self._telemetry = None
         
+        # Determine target-first directory (for TARGET_RANKING and FEATURE_SELECTION stages)
+        # CRITICAL: Do this BEFORE finalize_run() so we can pass the correct cohort_dir
+        target_cohort_dir = None
+        if stage_normalized in ["TARGET_RANKING", "FEATURE_SELECTION"]:
+            try:
+                from TRAINING.orchestration.utils.target_first_paths import (
+                    get_target_reproducibility_dir, ensure_target_structure
+                )
+                
+                # Determine view from route_type or additional_data
+                view_for_target = None
+                if stage_normalized == "TARGET_RANKING":
+                    # For TARGET_RANKING, view comes from route_type or additional_data
+                    if route_type and route_type.upper() in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "LOSO"]:
+                        view_for_target = route_type.upper()
+                    elif additional_data and 'view' in additional_data:
+                        view_for_target = additional_data['view'].upper()
+                    if not view_for_target:
+                        view_for_target = "CROSS_SECTIONAL"  # Default
+                elif stage_normalized == "FEATURE_SELECTION":
+                    # For FEATURE_SELECTION, map route_type to view
+                    if route_type:
+                        if route_type.upper() == "CROSS_SECTIONAL":
+                            view_for_target = "CROSS_SECTIONAL"
+                        elif route_type.upper() in ["INDIVIDUAL", "SYMBOL_SPECIFIC"]:
+                            view_for_target = "SYMBOL_SPECIFIC"  # Map INDIVIDUAL to SYMBOL_SPECIFIC for consistency
+                    elif additional_data and 'view' in additional_data:
+                        view_for_target = additional_data['view'].upper()
+                    if not view_for_target:
+                        view_for_target = "CROSS_SECTIONAL"  # Default
+                
+                # Get base output directory (run directory, not REPRODUCIBILITY subdirectory)
+                base_output_dir = self._repro_base_dir
+                
+                # Ensure target structure exists
+                ensure_target_structure(base_output_dir, item_name)
+                
+                # Build target-first reproducibility path: 
+                # For CROSS_SECTIONAL: targets/<target>/reproducibility/CROSS_SECTIONAL/cohort=<cohort_id>/
+                # For SYMBOL_SPECIFIC: targets/<target>/reproducibility/SYMBOL_SPECIFIC/symbol=<symbol>/cohort=<cohort_id>/
+                target_repro_dir = get_target_reproducibility_dir(base_output_dir, item_name)
+                if view_for_target == "SYMBOL_SPECIFIC" and symbol:
+                    # Include symbol in path to prevent overwriting
+                    target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol}" / f"cohort={cohort_id}"
+                else:
+                    target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
+                target_cohort_dir.mkdir(parents=True, exist_ok=True)
+                logger.debug(f"Created target-first cohort directory: {target_cohort_dir}")
+            except Exception as e:
+                # Don't fail if target-first structure creation fails - old structure is primary
+                # But log at INFO level so we can see if there are issues
+                logger.info(f"⚠️ Failed to create target-first structure for {item_name}/{view_for_target}/cohort={cohort_id} (non-critical): {e}")
+                import traceback
+                logger.debug(f"Target-first structure creation traceback: {traceback.format_exc()}")
+                target_cohort_dir = None
+        
+        # Determine cohort_dir for finalize_run() - use target_cohort_dir if available, otherwise fall back to legacy
+        cohort_dir = target_cohort_dir
+        if cohort_dir is None:
+            # Fall back to legacy cohort_dir if target-first structure wasn't created
+            try:
+                legacy_cohort_dir = self._get_cohort_dir(stage, item_name, cohort_id, route_type, symbol, model_family)
+                cohort_dir = legacy_cohort_dir
+            except Exception as e:
+                logger.debug(f"Could not determine legacy cohort_dir: {e}")
+                cohort_dir = None
+        
         # CRITICAL: Call finalize_run() BEFORE adding diff_telemetry to full_metadata
         # This ensures snapshot/diff computation uses the exact same resolved_metadata that will be written
         # Pass full_metadata (without diff_telemetry) as resolved_metadata for SST consistency
@@ -1394,14 +1461,17 @@ class ReproducibilityTracker:
                 # CRITICAL: Pass full_metadata (without diff_telemetry) as resolved_metadata for SST consistency
                 # This ensures snapshot/diff computation uses the exact same data that will be written to metadata.json
                 # full_metadata is already built above (lines 1077-1292), we just haven't added diff_telemetry yet
-                diff_telemetry_data = telemetry.finalize_run(
-                    stage=stage_normalized,
-                    run_data=run_data,
-                    cohort_dir=cohort_dir,
-                    cohort_metadata=cohort_metadata,
-                    additional_data=additional_data,
-                    resolved_metadata=full_metadata  # CRITICAL: Pass in-memory metadata for SST consistency
-                )
+                if cohort_dir is None:
+                    logger.warning(f"⚠️  Cannot call finalize_run() for {item_name}: cohort_dir is None")
+                else:
+                    diff_telemetry_data = telemetry.finalize_run(
+                        stage=stage_normalized,
+                        run_data=run_data,
+                        cohort_dir=cohort_dir,
+                        cohort_metadata=cohort_metadata,
+                        additional_data=additional_data,
+                        resolved_metadata=full_metadata  # CRITICAL: Pass in-memory metadata for SST consistency
+                    )
                 
                 # Store diff telemetry data for integration into metadata/metrics
                 if diff_telemetry_data:
@@ -1496,60 +1566,8 @@ class ReproducibilityTracker:
             else:
                 logger.warning("Skipping diff_telemetry in metadata.json due to computation failure")
         
-        # Determine target-first directory (for TARGET_RANKING and FEATURE_SELECTION stages)
-        target_cohort_dir = None
-        if stage_normalized in ["TARGET_RANKING", "FEATURE_SELECTION"]:
-            try:
-                from TRAINING.orchestration.utils.target_first_paths import (
-                    get_target_reproducibility_dir, ensure_target_structure
-                )
-                
-                # Determine view from route_type or additional_data
-                view_for_target = None
-                if stage_normalized == "TARGET_RANKING":
-                    # For TARGET_RANKING, view comes from route_type or additional_data
-                    if route_type and route_type.upper() in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "LOSO"]:
-                        view_for_target = route_type.upper()
-                    elif additional_data and 'view' in additional_data:
-                        view_for_target = additional_data['view'].upper()
-                    if not view_for_target:
-                        view_for_target = "CROSS_SECTIONAL"  # Default
-                elif stage_normalized == "FEATURE_SELECTION":
-                    # For FEATURE_SELECTION, map route_type to view
-                    if route_type:
-                        if route_type.upper() == "CROSS_SECTIONAL":
-                            view_for_target = "CROSS_SECTIONAL"
-                        elif route_type.upper() in ["INDIVIDUAL", "SYMBOL_SPECIFIC"]:
-                            view_for_target = "SYMBOL_SPECIFIC"  # Map INDIVIDUAL to SYMBOL_SPECIFIC for consistency
-                    elif additional_data and 'view' in additional_data:
-                        view_for_target = additional_data['view'].upper()
-                    if not view_for_target:
-                        view_for_target = "CROSS_SECTIONAL"  # Default
-                
-                # Get base output directory (run directory, not REPRODUCIBILITY subdirectory)
-                base_output_dir = self._repro_base_dir
-                
-                # Ensure target structure exists
-                ensure_target_structure(base_output_dir, item_name)
-                
-                # Build target-first reproducibility path: 
-                # For CROSS_SECTIONAL: targets/<target>/reproducibility/CROSS_SECTIONAL/cohort=<cohort_id>/
-                # For SYMBOL_SPECIFIC: targets/<target>/reproducibility/SYMBOL_SPECIFIC/symbol=<symbol>/cohort=<cohort_id>/
-                target_repro_dir = get_target_reproducibility_dir(base_output_dir, item_name)
-                if view_for_target == "SYMBOL_SPECIFIC" and symbol:
-                    # Include symbol in path to prevent overwriting
-                    target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol}" / f"cohort={cohort_id}"
-                else:
-                    target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
-                target_cohort_dir.mkdir(parents=True, exist_ok=True)
-                logger.debug(f"Created target-first cohort directory: {target_cohort_dir}")
-            except Exception as e:
-                # Don't fail if target-first structure creation fails - old structure is primary
-                # But log at INFO level so we can see if there are issues
-                logger.info(f"⚠️ Failed to create target-first structure for {item_name}/{view_for_target}/cohort={cohort_id} (non-critical): {e}")
-                import traceback
-                logger.debug(f"Target-first structure creation traceback: {traceback.format_exc()}")
-                target_cohort_dir = None
+        # NOTE: target_cohort_dir was already created above (before finalize_run() call)
+        # This section is kept for backward compatibility and to ensure it exists for metadata saving
         
         # Save metadata.json to target-first structure only
         if target_cohort_dir:
