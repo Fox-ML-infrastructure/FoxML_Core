@@ -167,22 +167,21 @@ def save_feature_selection_rankings(
         'recommendation': _get_recommendation(row)
     } for i, (_, row) in enumerate(summary_df_sorted.iterrows())])
     
-    # Save CSV to REPRODUCIBILITY (reproducibility artifact) - legacy location
+    # Save CSV to both legacy and target-first structures (write directly to both)
     csv_path = repro_dir / "feature_selection_rankings.csv"
     df.to_csv(csv_path, index=False)
     logger.info(f"Saved feature selection rankings CSV to {csv_path}")
     
-    # Also save to target-first structure (targets/<target>/reproducibility/)
+    # Also write directly to target-first structure (targets/<target>/reproducibility/)
     try:
         from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
         target_repro_dir.mkdir(parents=True, exist_ok=True)
         target_csv_path = target_repro_dir / "feature_selection_rankings.csv"
-        import shutil
-        shutil.copy2(csv_path, target_csv_path)
-        logger.debug(f"Saved feature selection rankings CSV to target-first location: {target_csv_path}")
+        df.to_csv(target_csv_path, index=False)
+        logger.debug(f"Also saved feature selection rankings CSV to target-first location: {target_csv_path}")
     except Exception as e:
-        logger.debug(f"Failed to copy feature selection rankings CSV to target-first location: {e}")
+        logger.debug(f"Failed to write feature selection rankings CSV to target-first location: {e}")
     
     # Save YAML with recommendations to DECISION (decision log)
     yaml_data = {
@@ -223,24 +222,25 @@ def save_feature_selection_rankings(
         yaml.dump(yaml_data, f, default_flow_style=False)
     logger.debug(f"Saved feature prioritization YAML to legacy location {legacy_yaml_path} (backward compatibility)")
     
-    # Save selected features list to REPRODUCIBILITY (reproducibility artifact) - legacy location
+    # Save selected features list to both legacy and target-first structures (write directly to both)
     selected_features_path = repro_dir / "selected_features.txt"
     with open(selected_features_path, "w") as f:
         for feature in selected_features:
             f.write(f"{feature}\n")
     logger.info(f"Saved {len(selected_features)} selected features to {selected_features_path}")
     
-    # Also save to target-first structure
+    # Also write directly to target-first structure
     try:
         from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
         target_repro_dir.mkdir(parents=True, exist_ok=True)
         target_selected_path = target_repro_dir / "selected_features.txt"
-        import shutil
-        shutil.copy2(selected_features_path, target_selected_path)
-        logger.debug(f"Saved selected features to target-first location: {target_selected_path}")
+        with open(target_selected_path, "w") as f:
+            for feature in selected_features:
+                f.write(f"{feature}\n")
+        logger.debug(f"Also saved selected features to target-first location: {target_selected_path}")
     except Exception as e:
-        logger.debug(f"Failed to copy selected features to target-first location: {e}")
+        logger.debug(f"Failed to write selected features to target-first location: {e}")
 
 
 def _get_recommendation(row: pd.Series) -> str:

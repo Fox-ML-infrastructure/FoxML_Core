@@ -3440,15 +3440,14 @@ def save_multi_model_results(
     summary_df.to_csv(summary_csv_path, index=False)
     logger.info(f"✅ Saved detailed multi-model summary to {summary_csv_path}")
     
-    # Also save to target-first structure
+    # Also write directly to target-first structure
     if target_importances_dir:
         try:
-            import shutil
             target_csv_path = target_importances_dir / "feature_importance_multi_model.csv"
-            shutil.copy2(summary_csv_path, target_csv_path)
-            logger.debug(f"Saved feature importance summary to target-first location: {target_csv_path}")
+            summary_df.to_csv(target_csv_path, index=False)
+            logger.debug(f"Also saved feature importance summary to target-first location: {target_csv_path}")
         except Exception as e:
-            logger.debug(f"Failed to copy feature importance summary to target-first location: {e}")
+            logger.debug(f"Failed to write feature importance summary to target-first location: {e}")
     
     # 2b. Explicit debug view: Boruta gatekeeper effect analysis → feature_importances/
     # This is a stable, named file for quick inspection of Boruta's impact
@@ -3473,15 +3472,14 @@ def save_multi_model_results(
         debug_df.to_csv(debug_csv_path, index=False)
         logger.info(f"✅ Saved Boruta gatekeeper debug view to {debug_csv_path}")
         
-        # Also save to target-first structure
+        # Also write directly to target-first structure
         if target_importances_dir:
             try:
-                import shutil
                 target_debug_path = target_importances_dir / "feature_importance_with_boruta_debug.csv"
-                shutil.copy2(debug_csv_path, target_debug_path)
-                logger.debug(f"Saved Boruta debug view to target-first location: {target_debug_path}")
+                debug_df.to_csv(target_debug_path, index=False)
+                logger.debug(f"Also saved Boruta debug view to target-first location: {target_debug_path}")
             except Exception as e:
-                logger.debug(f"Failed to copy Boruta debug view to target-first location: {e}")
+                logger.debug(f"Failed to write Boruta debug view to target-first location: {e}")
     
     # 3. Per-model-family breakdowns → feature_importances/ (matching target ranking naming)
     for family_name in summary_df.columns:
@@ -3493,14 +3491,14 @@ def save_multi_model_results(
             family_csv = importances_dir / f"{model_name}_importances.csv"
             family_df.to_csv(family_csv, index=False)
             
-            # Also save to target-first structure
+            # Also write directly to target-first structure
             if target_importances_dir:
                 try:
-                    import shutil
                     target_family_csv = target_importances_dir / f"{model_name}_importances.csv"
-                    shutil.copy2(family_csv, target_family_csv)
+                    family_df.to_csv(target_family_csv, index=False)
+                    logger.debug(f"Also saved {model_name} importances to target-first location: {target_family_csv}")
                 except Exception as e:
-                    logger.debug(f"Failed to copy {model_name} importances to target-first location: {e}")
+                    logger.debug(f"Failed to write {model_name} importances to target-first location: {e}")
     
     # 4. Model agreement matrix → feature_importances/
     model_families = list(set(r.model_family for r in all_results))
@@ -3523,15 +3521,14 @@ def save_multi_model_results(
     agreement_matrix.to_csv(agreement_csv_path)
     logger.info(f"✅ Saved model agreement matrix to {agreement_csv_path}")
     
-    # Also save to target-first structure
+    # Also write directly to target-first structure
     if target_importances_dir:
         try:
-            import shutil
             target_agreement_path = target_importances_dir / "model_agreement_matrix.csv"
-            shutil.copy2(agreement_csv_path, target_agreement_path)
-            logger.debug(f"Saved model agreement matrix to target-first location: {target_agreement_path}")
+            agreement_matrix.to_csv(target_agreement_path)
+            logger.debug(f"Also saved model agreement matrix to target-first location: {target_agreement_path}")
         except Exception as e:
-            logger.debug(f"Failed to copy model agreement matrix to target-first location: {e}")
+            logger.debug(f"Failed to write model agreement matrix to target-first location: {e}")
     
     # 5. Metadata JSON → target level (matching TARGET_RANKING, metadata goes in cohort/ folder from reproducibility tracker)
     # For now, save a summary at target level for quick access (detailed metadata is in cohort/)
