@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-20 (Threading, Feature Pruning, and Path Resolution Fixes)
+- **Threading/Parallelization**: Added `cross_val_score` with `n_jobs` for CatBoost and Elastic Net in feature selection, matching target ranking performance (2-4x speedup expected)
+- **Feature Pruning**: Added `ret_zscore_*` to exclusion patterns to prevent target columns from being used as features (fixes data leakage)
+- **Path Resolution**: Fixed path resolution errors causing permission denied when saving files - now validates paths and falls back safely
+- **Files Changed**: `multi_model_feature_selection.py`, `leakage_filtering.py`, `feature_selection_reporting.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-20-threading-feature-pruning-path-fixes.md)
+
 #### 2025-12-20 (Untrack DATA_PROCESSING Folder)
 - **Repository Cleanup**: Untracked `DATA_PROCESSING/` folder from git (22 files) - folder remains on disk but is now ignored
 - **Dependency Updates**: Updated default output paths in `multi_model_feature_selection.py` and `CONFIG/ranking/features/config.yaml` from `DATA_PROCESSING/` to `RESULTS/`

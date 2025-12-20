@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-20 (Threading, Feature Pruning, and Path Resolution Fixes)** — Added threading/parallelization to feature selection (CatBoost/Elastic Net), excluded `ret_zscore_*` targets from features to prevent leakage, and fixed path resolution errors causing permission denied. Feature selection now matches target ranking performance.
+  → [View](2025-12-20-threading-feature-pruning-path-fixes.md)
+
 - **2025-12-20 (Untrack DATA_PROCESSING Folder)** — Untracked `DATA_PROCESSING/` folder from git (22 files), updated default output paths to use `RESULTS/` instead, removed DATA_PROCESSING-specific documentation. Verified TRAINING pipeline is completely independent - no core functionality affected.
   → [View](2025-12-20-untrack-data-processing-folder.md)
 
