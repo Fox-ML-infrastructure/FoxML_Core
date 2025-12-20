@@ -199,7 +199,11 @@ class ReproducibilityTracker:
                 logger.warning("Audit enforcement not available (RunContext/AuditEnforcer not imported), disabling audit")
         
         # Initialize stats tracking
-        self.stats_file = self._repro_base_dir / "REPRODUCIBILITY" / "stats.json"
+        # Stats file now goes to globals/ instead of REPRODUCIBILITY/
+        from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+        globals_dir = get_globals_dir(self._repro_base_dir)
+        globals_dir.mkdir(parents=True, exist_ok=True)
+        self.stats_file = globals_dir / "stats.json"
         
         # Initialize metrics writer (if enabled)
         try:
@@ -856,8 +860,11 @@ class ReproducibilityTracker:
         - metrics.json: Run metrics
         - drift.json: Comparison to previous run (if applicable)
         """
-        cohort_dir = self._get_cohort_dir(stage, item_name, cohort_id, route_type, symbol, model_family)
-        cohort_dir.mkdir(parents=True, exist_ok=True)
+        # Get target-first cohort directory (no longer use legacy REPRODUCIBILITY structure)
+        # We still call _get_cohort_dir for path calculation, but we'll use target_cohort_dir instead
+        # This is just for logging/compatibility - actual writes go to target_cohort_dir
+        legacy_cohort_dir = self._get_cohort_dir(stage, item_name, cohort_id, route_type, symbol, model_family)
+        # Don't create legacy directory - we only use target-first structure now
         
         # Log where files are being written (INFO level so it's visible)
         main_logger = _get_main_logger()
@@ -1550,10 +1557,26 @@ class ReproducibilityTracker:
                 _write_atomic_json(target_metadata_file, full_metadata)
                 # Log at INFO level so it's visible
                 main_logger = _get_main_logger()
+                try:
+                    # Try to get a relative path for readability
+                    run_base = target_cohort_dir
+                    for _ in range(6):  # Walk up to find run directory
+                        if (run_base / "targets").exists() or run_base.name in ["RESULTS", "intelligent_output"]:
+                            break
+                        if not run_base.parent.exists():
+                            break
+                        run_base = run_base.parent
+                    rel_path = target_cohort_dir.relative_to(run_base) if run_base.exists() else target_cohort_dir
+                    log_msg = f"📁 Reproducibility: Writing cohort data to {rel_path}"
+                except (ValueError, AttributeError):
+                    log_msg = f"📁 Reproducibility: Writing cohort data to {target_cohort_dir}"
+                
                 if main_logger != logger:
-                    main_logger.info(f"✅ Reproducibility: Saved metadata.json to {target_metadata_file.relative_to(target_cohort_dir.parent.parent.parent.parent) if target_cohort_dir.parent.parent.parent.parent.exists() else target_metadata_file}")
+                    main_logger.info(log_msg)
+                    main_logger.info(f"✅ Reproducibility: Saved metadata.json to {target_metadata_file.name} in {target_metadata_file.parent.name}/")
                 else:
-                    logger.info(f"✅ Reproducibility: Saved metadata.json to {target_metadata_file}")
+                    logger.info(log_msg)
+                    logger.info(f"✅ Reproducibility: Saved metadata.json to {target_metadata_file.name} in {target_metadata_file.parent.name}/")
             except (IOError, OSError) as e:
                 logger.warning(f"Failed to save metadata.json to {target_metadata_file}: {e}, error_type=IO_ERROR")
                 self._increment_error_counter("write_failures", "IO_ERROR")

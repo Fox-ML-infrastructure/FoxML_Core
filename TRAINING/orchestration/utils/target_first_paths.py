@@ -170,9 +170,7 @@ def initialize_run_structure(base_output_dir: Path) -> None:
     (base_output_dir / "targets").mkdir(exist_ok=True)
     ensure_globals_structure(base_output_dir)
     
-    # Keep existing structure for backward compatibility
-    (base_output_dir / "REPRODUCIBILITY").mkdir(exist_ok=True)
-    (base_output_dir / "DECISION").mkdir(exist_ok=True)
+    # Only create essential directories - no legacy REPRODUCIBILITY structure
     (base_output_dir / "cache").mkdir(exist_ok=True)
     (base_output_dir / "logs").mkdir(exist_ok=True)
 
