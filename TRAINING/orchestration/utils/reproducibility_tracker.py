@@ -1602,10 +1602,10 @@ class ReproducibilityTracker:
                     if symbol and route_type == "INDIVIDUAL":
                         baseline_key += f":{symbol}"
             
-            logger.debug(f"📊 Writing metrics for stage={stage_normalized}, target={target}, view={view}, cohort_dir={cohort_dir}")
+            logger.debug(f"📊 Writing metrics for stage={stage_normalized}, target={target}, view={view}, target_cohort_dir={target_cohort_dir}")
             
             # Write metrics sidecar files in cohort directory
-            # Note: metrics will create cohort_dir if it doesn't exist, or fall back to target level
+            # Note: metrics will create target_cohort_dir if it doesn't exist, or fall back to target level
             metrics_written = False
             try:
                 # Extract diff telemetry data if available
@@ -1658,27 +1658,31 @@ class ReproducibilityTracker:
                 from TRAINING.orchestration.utils.diff_telemetry import DiffTelemetry
                 
                 # Determine base output directory for telemetry
-                # Walk up from cohort_dir to find run-level directory
-                base_output_dir = Path(cohort_dir)
-                while base_output_dir.name not in ["RESULTS"] and base_output_dir.parent.exists():
-                    base_output_dir = base_output_dir.parent
-                    if base_output_dir.name == "RESULTS":
-                        break
-                
-                # If we're still in REPRODUCIBILITY or a subdirectory, walk up more
-                if base_output_dir.name not in ["RESULTS"]:
-                    # Try to find RESULTS directory
-                    temp_dir = base_output_dir
-                    for _ in range(5):  # Limit depth
-                        if temp_dir.name == "RESULTS":
-                            base_output_dir = temp_dir
+                # Walk up from target_cohort_dir to find run-level directory
+                if target_cohort_dir:
+                    base_output_dir = Path(target_cohort_dir)
+                    while base_output_dir.name not in ["RESULTS", "targets"] and base_output_dir.parent.exists():
+                        base_output_dir = base_output_dir.parent
+                        if base_output_dir.name in ["RESULTS", "targets"]:
                             break
-                        if not temp_dir.parent.exists():
-                            break
-                        temp_dir = temp_dir.parent
-                
-                # If we couldn't find RESULTS, use the output_dir from tracker
-                if base_output_dir.name != "RESULTS":
+                    
+                    # If we're still in a subdirectory, walk up more
+                    if base_output_dir.name not in ["RESULTS", "targets"]:
+                        # Try to find RESULTS or run directory
+                        temp_dir = base_output_dir
+                        for _ in range(5):  # Limit depth
+                            if temp_dir.name in ["RESULTS", "targets"] or (temp_dir / "targets").exists() or (temp_dir / "REPRODUCIBILITY").exists():
+                                base_output_dir = temp_dir
+                                break
+                            if not temp_dir.parent.exists():
+                                break
+                            temp_dir = temp_dir.parent
+                    
+                    # If we couldn't find RESULTS, use the output_dir from tracker
+                    if base_output_dir.name not in ["RESULTS", "targets"] and not (base_output_dir / "targets").exists():
+                        base_output_dir = self.output_dir
+                else:
+                    # Fallback: use output_dir from tracker
                     base_output_dir = self.output_dir
                 
                 # Initialize telemetry (creates TELEMETRY directory if needed)
@@ -1702,10 +1706,11 @@ class ReproducibilityTracker:
                 # We just haven't added diff_telemetry to it yet (that happens after finalize_run())
                 
                 # Finalize run with diff telemetry (pass resolved_metadata for SST consistency)
+                # Use target_cohort_dir instead of legacy cohort_dir
                 diff_telemetry_data = telemetry.finalize_run(
                     stage=stage_normalized,
                     run_data=run_data,
-                    cohort_dir=cohort_dir,
+                    cohort_dir=target_cohort_dir,  # Use target-first structure
                     cohort_metadata=cohort_metadata,
                     additional_data=additional_data,
                     resolved_metadata=full_metadata  # CRITICAL: Use same full_metadata as will be written to metadata.json
@@ -1735,28 +1740,24 @@ class ReproducibilityTracker:
         }
         
         # PHASE 2: Only write as fallback if metrics failed and we don't have metrics.json yet
-        metrics_file = cohort_dir / "metrics.json"
-        if not metrics_file.exists() and not metrics_written:
+        # Use target_cohort_dir instead of legacy cohort_dir
+        if target_cohort_dir:
+            metrics_file = target_cohort_dir / "metrics.json"
+        else:
+            metrics_file = None
+        
+        if metrics_file and not metrics_file.exists() and not metrics_written:
             # Fallback: write metrics.json using unified canonical schema (atomically)
+            # Write directly to target-first structure (metrics_file is already target_cohort_dir / "metrics.json")
             try:
                 _write_atomic_json(metrics_file, metrics_data)
                 # Also write metrics.parquet for consistency
                 try:
                     import pandas as pd
                     df_metrics = pd.DataFrame([metrics_data])
-                    metrics_parquet = cohort_dir / "metrics.parquet"
+                    metrics_parquet = target_cohort_dir / "metrics.parquet"
                     df_metrics.to_parquet(metrics_parquet, index=False, engine='pyarrow', compression='snappy')
-                    
-                    # Also write to target-first structure
-                    if target_cohort_dir:
-                        try:
-                            target_metrics_file = target_cohort_dir / "metrics.json"
-                            _write_atomic_json(target_metrics_file, metrics_data)
-                            target_metrics_parquet = target_cohort_dir / "metrics.parquet"
-                            df_metrics.to_parquet(target_metrics_parquet, index=False, engine='pyarrow', compression='snappy')
-                            logger.debug(f"✅ Also saved metrics.json/parquet to target-first structure")
-                        except Exception as e:
-                            logger.debug(f"Failed to save metrics to target-first structure (non-critical): {e}")
+                    logger.debug(f"✅ Saved metrics.json/parquet to target-first structure")
                 except Exception as e_parquet:
                     logger.debug(f"Failed to write metrics.parquet fallback: {e_parquet}")
                 # Log at INFO level so it's visible
@@ -1770,32 +1771,15 @@ class ReproducibilityTracker:
                 self._increment_error_counter("write_failures", "IO_ERROR")
                 # Don't raise - metrics might have written it, or we'll try again
         elif metrics_written and target_cohort_dir:
-            # Metrics were written by MetricsWriter, also write to target-first structure
-            try:
-                # Read the metrics.json that was written
-                if metrics_file.exists():
-                    import json
-                    with open(metrics_file, 'r') as f:
-                        metrics_data_written = json.load(f)
-                    target_metrics_file = target_cohort_dir / "metrics.json"
-                    _write_atomic_json(target_metrics_file, metrics_data_written)
-                    logger.debug(f"✅ Also saved metrics.json to target-first structure: {target_metrics_file}")
-                
-                # Also copy metrics.parquet if it exists
-                metrics_parquet = cohort_dir / "metrics.parquet"
-                if metrics_parquet.exists():
-                    import shutil
-                    target_metrics_parquet = target_cohort_dir / "metrics.parquet"
-                    shutil.copy2(metrics_parquet, target_metrics_parquet)
-                    logger.debug(f"✅ Also saved metrics.parquet to target-first structure: {target_metrics_parquet}")
-            except Exception as e:
-                logger.debug(f"Failed to save metrics to target-first structure (non-critical): {e}")
+            # Metrics were already written by MetricsWriter to target-first structure
+            # No need to duplicate - MetricsWriter already writes to target_cohort_dir
+            logger.debug(f"✅ Metrics already written to target-first structure by MetricsWriter")
         
-        # Update index.parquet
+        # Update index.parquet (use target_cohort_dir if available, otherwise None)
         try:
             self._update_index(
                 stage, item_name, route_type, symbol, model_family,
-                cohort_id, run_id_clean, full_metadata, metrics_data, cohort_dir
+                cohort_id, run_id_clean, full_metadata, metrics_data, target_cohort_dir  # Use target-first structure
             )
         except Exception as e:
             error_type = "IO_ERROR" if isinstance(e, (IOError, OSError)) else "SERIALIZATION_ERROR" if isinstance(e, (json.JSONDecodeError, TypeError)) else "UNKNOWN_ERROR"
@@ -3730,13 +3714,15 @@ class ReproducibilityTracker:
                         "created_at": datetime.now().isoformat()
                     }
                     
-                    # Write metadata.json if missing
-                    if not metadata_file.exists():
-                        _write_atomic_json(metadata_file, minimal_metadata)
-                        logger.info(f"✅ Wrote metadata.json (fallback) to {cohort_dir.name}/")
+                    # Write metadata.json if missing (to target-first structure)
+                    target_metadata_file = target_cohort_dir / "metadata.json"
+                    if not target_metadata_file.exists():
+                        _write_atomic_json(target_metadata_file, minimal_metadata)
+                        logger.info(f"✅ Wrote metadata.json (fallback) to {target_cohort_dir.name}/")
                     
-                    # Write metrics.json if missing
-                    if not metrics_file.exists() and self.metrics:
+                    # Write metrics.json if missing (to target-first structure)
+                    target_metrics_file = target_cohort_dir / "metrics.json"
+                    if not target_metrics_file.exists() and self.metrics:
                         minimal_metrics = {
                             "run_id": minimal_metadata.get("run_id"),
                             "timestamp": minimal_metadata.get("created_at"),
@@ -3753,7 +3739,7 @@ class ReproducibilityTracker:
                             run_id=minimal_metadata.get("run_id") or datetime.now().isoformat(),
                             metrics=minimal_metrics
                         )
-                        logger.info(f"✅ Wrote metrics.json (fallback) to {cohort_dir.name}/")
+                        logger.info(f"✅ Wrote metrics.json (fallback) to {target_cohort_dir.name}/")
                 except Exception as e:
                     logger.error(f"❌ Failed to write fallback metadata/metrics: {e}")
                     logger.debug(f"Fallback write traceback: {traceback.format_exc()}")
