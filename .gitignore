@@ -398,3 +398,7 @@ INTERNAL/
 INTERNAL_EXPERIMENTAL/
 INTERNAL_EXPERIMENTAL/**
 RESULTS/
+
+# Trading modules (untracked)
+ALPACA_trading/
+IBKR_trading/

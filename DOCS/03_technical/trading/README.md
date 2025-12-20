@@ -50,9 +50,7 @@ Deployment, integration, and operational guides:
 
 ## Related Documentation
 
-- [Trading Modules Overview](../../02_reference/trading/TRADING_MODULES.md) - Complete guide to both modules
-- [Trading Reference](../../02_reference/trading/README.md) - Reference documentation
-- [IBKR Trading README](../../../IBKR_trading/README.md) - Module README
+- Trading technical documentation and architecture guides
 
 ---
 
