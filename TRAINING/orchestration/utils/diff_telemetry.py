@@ -1907,6 +1907,80 @@ class DiffTelemetry:
             cohort_dir: Cohort directory (where metadata.json lives)
         """
         cohort_dir = Path(cohort_dir)
+        
+        # CRITICAL: Ensure we only write to target-first structure
+        # If cohort_dir is in legacy REPRODUCIBILITY structure, find/create target-first equivalent
+        target_cohort_dir = cohort_dir
+        if "REPRODUCIBILITY" in str(cohort_dir):
+            # Extract identifiers from cohort_dir path and create target-first path
+            try:
+                parts = Path(cohort_dir).parts
+                stage = None
+                view = None
+                item_name = None
+                cohort_id = None
+                symbol_for_target = None
+                
+                for i, part in enumerate(parts):
+                    if part in ['TARGET_RANKING', 'FEATURE_SELECTION', 'TRAINING']:
+                        stage = part
+                        if i + 1 < len(parts) and parts[i+1] in ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC', 'LOSO', 'INDIVIDUAL']:
+                            view = parts[i+1]
+                            if i + 2 < len(parts) and not parts[i+2].startswith('cohort='):
+                                item_name = parts[i+2]
+                        # Find cohort_id and symbol
+                        for j in range(i, len(parts)):
+                            if parts[j].startswith('cohort='):
+                                cohort_id = parts[j].replace('cohort=', '')
+                            elif parts[j].startswith('symbol='):
+                                symbol_for_target = parts[j].replace('symbol=', '')
+                            elif parts[j].startswith('model_family='):
+                                # Skip model_family in path
+                                continue
+                
+                # Only create target-first structure for TARGET_RANKING and FEATURE_SELECTION
+                if stage in ['TARGET_RANKING', 'FEATURE_SELECTION'] and item_name and cohort_id:
+                    # Find base output directory (run directory)
+                    temp_dir = cohort_dir
+                    for _ in range(10):  # Limit depth
+                        if (temp_dir / "targets").exists() or (temp_dir.parent / "targets").exists():
+                            if (temp_dir / "targets").exists():
+                                base_output_dir = temp_dir
+                            else:
+                                base_output_dir = temp_dir.parent
+                            break
+                        if not temp_dir.parent.exists() or temp_dir.parent == temp_dir:
+                            break
+                        temp_dir = temp_dir.parent
+                    
+                    if base_output_dir:
+                        from TRAINING.orchestration.utils.target_first_paths import (
+                            get_target_reproducibility_dir, ensure_target_structure
+                        )
+                        
+                        # Normalize view for FEATURE_SELECTION (INDIVIDUAL -> SYMBOL_SPECIFIC)
+                        view_for_target = view
+                        if stage == 'FEATURE_SELECTION' and view == 'INDIVIDUAL':
+                            view_for_target = 'SYMBOL_SPECIFIC'
+                        
+                        # Ensure target structure exists
+                        ensure_target_structure(base_output_dir, item_name)
+                        
+                        # Build target-first reproducibility path
+                        target_repro_dir = get_target_reproducibility_dir(base_output_dir, item_name)
+                        if view_for_target == "SYMBOL_SPECIFIC" and symbol_for_target:
+                            # Include symbol in path to prevent overwriting
+                            target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol_for_target}" / f"cohort={cohort_id}"
+                        else:
+                            target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
+                        target_cohort_dir.mkdir(parents=True, exist_ok=True)
+                        logger.debug(f"✅ Created target-first cohort directory for snapshot: {target_cohort_dir}")
+            except Exception as e:
+                logger.warning(f"Failed to create target-first structure for snapshot (falling back to cohort_dir): {e}")
+                target_cohort_dir = cohort_dir
+        
+        # Use target-first directory for all writes
+        cohort_dir = target_cohort_dir
         cohort_dir.mkdir(parents=True, exist_ok=True)
         
         # NOTE: Run organization by comparison group is now done at startup (config load time)

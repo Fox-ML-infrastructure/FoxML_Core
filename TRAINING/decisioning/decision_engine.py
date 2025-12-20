@@ -294,7 +294,9 @@ class DecisionEngine:
         Returns:
             Path to persisted decision file
         """
-        decisions_dir = base_dir / "REPRODUCIBILITY" / "decisions"
+        from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+        globals_dir = get_globals_dir(base_dir)
+        decisions_dir = globals_dir / "decisions"
         decisions_dir.mkdir(parents=True, exist_ok=True)
         
         decision_file = decisions_dir / f"{decision_result.run_id}.json"

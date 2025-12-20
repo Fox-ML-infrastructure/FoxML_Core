@@ -750,6 +750,37 @@ class ReproducibilityTracker:
         
         return f"{cohort_id}_{short_hash}"
     
+    def _calculate_cohort_relative_path(self, cohort_dir: Path) -> str:
+        """
+        Calculate relative path from cohort_dir to run root.
+        
+        Args:
+            cohort_dir: Cohort directory path
+            
+        Returns:
+            Relative path string
+        """
+        # Calculate relative path from cohort_dir to run root
+        run_root = self._repro_base_dir
+        # Walk up from cohort_dir to find run root
+        temp_dir = Path(cohort_dir)
+        for _ in range(10):
+            if (temp_dir / "targets").exists() or temp_dir.name in ["RESULTS", "intelligent_output"]:
+                run_root = temp_dir
+                break
+            if not temp_dir.parent.exists():
+                break
+            temp_dir = temp_dir.parent
+        
+        # Calculate relative path
+        try:
+            path = str(Path(cohort_dir).relative_to(run_root))
+        except ValueError:
+            # If not relative, use absolute path as fallback
+            path = str(cohort_dir)
+        
+        return path
+    
     def _get_cohort_dir(
         self,
         stage: str,
@@ -2214,8 +2245,8 @@ class ReproducibilityTracker:
             "decision_action_mask": json.dumps(metrics.get("decision_action_mask") or []) if metrics.get("decision_action_mask") else None,
             "decision_reason_codes": json.dumps(metrics.get("decision_reason_codes") or []) if metrics.get("decision_reason_codes") else None,
             
-            # Path
-            "path": str(cohort_dir.relative_to(repro_dir))
+            # Path - calculate relative path from cohort_dir to run root
+            "path": self._calculate_cohort_relative_path(cohort_dir)
         }
         
         # Load existing index or create new

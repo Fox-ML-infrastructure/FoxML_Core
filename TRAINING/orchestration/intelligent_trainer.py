@@ -818,7 +818,6 @@ class IntelligentTrainer:
         # Create new structure directories (keep for backward compatibility)
         (self.output_dir / "DECISION" / "TARGET_RANKING").mkdir(parents=True, exist_ok=True)
         (self.output_dir / "DECISION" / "FEATURE_SELECTION").mkdir(parents=True, exist_ok=True)
-        (self.output_dir / "REPRODUCIBILITY" / "TARGET_RANKING").mkdir(parents=True, exist_ok=True)
         # Target-first structure only - no legacy REPRODUCIBILITY directory creation
         
         # Cache paths
@@ -1356,7 +1355,9 @@ class IntelligentTrainer:
                             
                             if latest_decision.decision_level >= decision_min_level:
                                 # Create artifact directory for receipts (one location, one format)
-                                decision_artifact_dir = self.output_dir / "REPRODUCIBILITY" / "patches"
+                                from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+                                globals_dir = get_globals_dir(self.output_dir)
+                                decision_artifact_dir = globals_dir / "decision_patches"
                                 decision_artifact_dir.mkdir(parents=True, exist_ok=True)
                                 
                                 # Always save receipts (dry-run or apply) - NON-NEGOTIABLE
