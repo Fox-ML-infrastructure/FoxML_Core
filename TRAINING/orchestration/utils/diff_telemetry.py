@@ -3484,8 +3484,24 @@ class DiffTelemetry:
                         ensure_target_structure(base_output_dir, item_name)
                         
                         # Build target-first reproducibility path
+                        # For CROSS_SECTIONAL: targets/<target>/reproducibility/CROSS_SECTIONAL/cohort=<cohort_id>/
+                        # For SYMBOL_SPECIFIC: targets/<target>/reproducibility/SYMBOL_SPECIFIC/symbol=<symbol>/cohort=<cohort_id>/
                         target_repro_dir = get_target_reproducibility_dir(base_output_dir, item_name)
-                        target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
+                        # Extract symbol from cohort_dir path if available
+                        symbol_for_target = None
+                        if view_for_target == "SYMBOL_SPECIFIC":
+                            # Try to extract symbol from cohort_dir path
+                            parts = Path(cohort_dir).parts
+                            for part in parts:
+                                if part.startswith('symbol='):
+                                    symbol_for_target = part.replace('symbol=', '')
+                                    break
+                        
+                        if view_for_target == "SYMBOL_SPECIFIC" and symbol_for_target:
+                            # Include symbol in path to prevent overwriting
+                            target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol_for_target}" / f"cohort={cohort_id}"
+                        else:
+                            target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
                         target_cohort_dir.mkdir(parents=True, exist_ok=True)
                     except Exception as e:
                         logger.debug(f"Failed to create target-first structure for diffs (non-critical): {e}")

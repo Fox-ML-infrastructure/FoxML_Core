@@ -259,8 +259,14 @@ class MetricsWriter:
                     ensure_target_structure(base_output_dir, target)
                     
                     # Build target-first reproducibility path
+                    # For CROSS_SECTIONAL: targets/<target>/reproducibility/CROSS_SECTIONAL/cohort=<cohort_id>/
+                    # For SYMBOL_SPECIFIC: targets/<target>/reproducibility/SYMBOL_SPECIFIC/symbol=<symbol>/cohort=<cohort_id>/
                     target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
-                    target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
+                    if view_for_target == "SYMBOL_SPECIFIC" and symbol:
+                        # Include symbol in path to prevent overwriting
+                        target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol}" / f"cohort={cohort_id}"
+                    else:
+                        target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
                     target_cohort_dir.mkdir(parents=True, exist_ok=True)
                     
                     # Write metrics to target-first reproducibility directory
