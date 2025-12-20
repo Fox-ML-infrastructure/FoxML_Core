@@ -1271,10 +1271,10 @@ def aggregate_metrics_facts(
     - run_id, stage, view, target, symbol, universe_id, cohort_id
     - All metric values as separate columns
     
-    Structure matches current metrics tracking exactly.
+    Checks both target-first structure (targets/<target>/metrics/) and legacy REPRODUCIBILITY structure.
     
     Args:
-        repro_dir: REPRODUCIBILITY directory root
+        repro_dir: REPRODUCIBILITY directory root (or run directory)
         facts_file: Optional path to facts table (defaults to repro_dir/metrics_facts.parquet)
     
     Returns:
@@ -1285,18 +1285,57 @@ def aggregate_metrics_facts(
     
     repro_dir = Path(repro_dir)
     if not repro_dir.exists():
-        logger.warning(f"REPRODUCIBILITY directory does not exist: {repro_dir}")
+        logger.warning(f"Directory does not exist: {repro_dir}")
         return pd.DataFrame()
+    
+    # Find run directory (may be passed REPRODUCIBILITY or run root)
+    run_dir = repro_dir
+    if repro_dir.name == "REPRODUCIBILITY":
+        run_dir = repro_dir.parent
+    elif (repro_dir / "REPRODUCIBILITY").exists():
+        repro_dir = repro_dir / "REPRODUCIBILITY"
     
     # Collect all metrics.json files (unified canonical schema)
     rows = []
     
-    # Walk REPRODUCIBILITY structure
-    for stage_dir in repro_dir.iterdir():
-        if not stage_dir.is_dir() or stage_dir.name in ["artifact_index.parquet", "metrics_facts.parquet", "stats.json"]:
-            continue
-        
-        stage = stage_dir.name
+    # First, check target-first structure (targets/<target>/metrics/)
+    targets_dir = run_dir / "targets"
+    if targets_dir.exists():
+        for target_dir in targets_dir.iterdir():
+            if not target_dir.is_dir():
+                continue
+            target = target_dir.name
+            metrics_dir = target_dir / "metrics"
+            if metrics_dir.exists():
+                # Check for view-organized metrics
+                for item in metrics_dir.iterdir():
+                    if item.is_dir() and item.name.startswith("view="):
+                        view = item.name.replace("view=", "")
+                        metrics_file = item / "metrics.json"
+                        if metrics_file.exists():
+                            row = _extract_metrics_row(
+                                metrics_file, "TRAINING", view, target, None, 
+                                "default", None
+                            )
+                            if row:
+                                rows.append(row)
+                    elif item.name == "metrics.json":
+                        # Direct metrics file
+                        metrics_file = item
+                        row = _extract_metrics_row(
+                            metrics_file, "TRAINING", "CROSS_SECTIONAL", target, None,
+                            "default", None
+                        )
+                        if row:
+                            rows.append(row)
+    
+    # Also walk legacy REPRODUCIBILITY structure
+    if repro_dir.exists():
+        for stage_dir in repro_dir.iterdir():
+            if not stage_dir.is_dir() or stage_dir.name in ["artifact_index.parquet", "metrics_facts.parquet", "stats.json"]:
+                continue
+            
+            stage = stage_dir.name
         
         # Check if this stage has view subdirectories (TARGET_RANKING, FEATURE_SELECTION)
         view_dirs = []

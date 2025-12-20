@@ -1548,6 +1548,78 @@ class DiffTelemetry:
                     }
                 except Exception as e:
                     logger.debug(f"Failed to read metrics.json from {cohort_dir}: {e}")
+            
+            # Fallback: Try target-first structure if metrics not found in cohort_dir
+            if not metrics_data:
+                try:
+                    # Try to extract target from cohort_dir path or resolved_metadata
+                    target = None
+                    if resolved_metadata:
+                        target = resolved_metadata.get('target') or resolved_metadata.get('item_name')
+                    
+                    # If we can't get target from metadata, try to extract from path
+                    if not target:
+                        # Walk up from cohort_dir to find target
+                        current = cohort_path
+                        for _ in range(10):
+                            if current.name.startswith('cohort='):
+                                # Parent should be target directory
+                                if current.parent.name not in ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC', 'FEATURE_SELECTION', 'TARGET_RANKING']:
+                                    target = current.parent.name
+                                    break
+                            if not current.parent.exists():
+                                break
+                            current = current.parent
+                    
+                    if target:
+                        # Find run directory
+                        run_dir = cohort_path
+                        for _ in range(10):
+                            if (run_dir / "targets").exists() or run_dir.name == "RESULTS":
+                                break
+                            if not run_dir.parent.exists():
+                                break
+                            run_dir = run_dir.parent
+                        
+                        # Try target-first metrics location
+                        target_metrics_dir = run_dir / "targets" / target / "metrics"
+                        if target_metrics_dir.exists():
+                            # Check for view-organized metrics
+                            for item in target_metrics_dir.iterdir():
+                                if item.is_dir() and item.name.startswith("view="):
+                                    metrics_file = item / "metrics.json"
+                                    if metrics_file.exists():
+                                        try:
+                                            with open(metrics_file, 'r') as f:
+                                                metrics_json = json.load(f)
+                                            metrics_data = {
+                                                k: v for k, v in metrics_json.items()
+                                                if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
+                                                           'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                                           'composite_version', 'leakage', 'leakage_flag']
+                                                and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
+                                            }
+                                            if metrics_data:
+                                                break
+                                        except Exception:
+                                            pass
+                                elif item.name == "metrics.json":
+                                    try:
+                                        with open(item, 'r') as f:
+                                            metrics_json = json.load(f)
+                                        metrics_data = {
+                                            k: v for k, v in metrics_json.items()
+                                            if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
+                                                       'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                                       'composite_version', 'leakage', 'leakage_flag']
+                                            and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
+                                        }
+                                        if metrics_data:
+                                            break
+                                    except Exception:
+                                        pass
+                except Exception as e:
+                    logger.debug(f"Failed to read metrics from target-first structure: {e}")
         
         # Store all extracted metrics
         if metrics_data:

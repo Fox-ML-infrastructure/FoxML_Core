@@ -164,11 +164,68 @@ class TrendAnalyzer:
                 except Exception:
                     pass
         
-        # Build index from REPRODUCIBILITY structure
-        logger.info("Building artifact index from REPRODUCIBILITY structure...")
+        # Build index from REPRODUCIBILITY structure and target-first structure
+        logger.info("Building artifact index from REPRODUCIBILITY and target-first structure...")
         rows = []
         
-        # Walk REPRODUCIBILITY directory
+        # Find run directory (reproducibility_dir might be REPRODUCIBILITY or run root)
+        run_dir = self.reproducibility_dir
+        if self.reproducibility_dir.name == "REPRODUCIBILITY":
+            run_dir = self.reproducibility_dir.parent
+        elif (self.reproducibility_dir / "REPRODUCIBILITY").exists():
+            run_dir = self.reproducibility_dir
+        
+        # First, check target-first structure (targets/<target>/reproducibility/)
+        targets_dir = run_dir / "targets"
+        if targets_dir.exists():
+            for target_dir in targets_dir.iterdir():
+                if not target_dir.is_dir():
+                    continue
+                target = target_dir.name
+                repro_dir = target_dir / "reproducibility"
+                if repro_dir.exists():
+                    # Look for metadata files in reproducibility directory
+                    metadata_file = repro_dir / "meta_b0.json"
+                    metrics_file = repro_dir / "metrics.json"
+                    if not metrics_file.exists():
+                        # Check view-organized metrics
+                        for item in repro_dir.iterdir():
+                            if item.is_dir() and item.name.startswith("view="):
+                                metrics_file = item / "metrics.json"
+                                if metrics_file.exists():
+                                    break
+                    
+                    if metadata_file.exists() or metrics_file.exists():
+                        try:
+                            metadata = {}
+                            if metadata_file.exists():
+                                with open(metadata_file, 'r') as f:
+                                    metadata = json.load(f)
+                            
+                            metrics_data = {}
+                            if metrics_file.exists():
+                                with open(metrics_file, 'r') as f:
+                                    metrics_data = json.load(f)
+                            
+                            # Extract run_id from metadata or metrics
+                            run_id = metadata.get('run_id') or metrics_data.get('run_id') or run_dir.name
+                            
+                            row = {
+                                'run_id': run_id,
+                                'stage': metadata.get('stage', 'TRAINING'),
+                                'target': target,
+                                'view': metadata.get('view', 'CROSS_SECTIONAL'),
+                                'cohort_id': metadata.get('cohort_id', 'default'),
+                                'metadata_path': str(metadata_file.relative_to(run_dir)) if metadata_file.exists() else None,
+                                'metrics_path': str(metrics_file.relative_to(run_dir)) if metrics_file.exists() else None,
+                                **metadata,
+                                **{k: v for k, v in metrics_data.items() if k not in metadata}
+                            }
+                            rows.append(row)
+                        except Exception as e:
+                            logger.debug(f"Failed to process target-first metrics for {target}: {e}")
+        
+        # Also walk legacy REPRODUCIBILITY directory
         for stage_dir in self.reproducibility_dir.iterdir():
             if not stage_dir.is_dir() or stage_dir.name.startswith('.'):
                 continue

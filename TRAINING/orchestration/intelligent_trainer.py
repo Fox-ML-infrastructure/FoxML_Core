@@ -1539,15 +1539,9 @@ class IntelligentTrainer:
             routing_decisions = {}
             try:
                 from TRAINING.ranking.target_routing import load_routing_decisions
-                # Try new structure first (DECISION), then REPRODUCIBILITY, then old structure
-                routing_file = self.output_dir / "DECISION" / "TARGET_RANKING" / "routing_decisions.json"
-                if not routing_file.exists():
-                    routing_file = self.output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / "routing_decisions.json"
-                if not routing_file.exists():
-                    # Try old structure (backward compatibility)
-                    routing_file = self.output_dir / "target_rankings" / "REPRODUCIBILITY" / "TARGET_RANKING" / "routing_decisions.json"
-                if routing_file.exists():
-                    routing_decisions = load_routing_decisions(routing_file)
+                # load_routing_decisions now automatically checks new and legacy locations
+                routing_decisions = load_routing_decisions(output_dir=self.output_dir)
+                if routing_decisions:
                     # CRITICAL FIX: Log routing decision count and validate consistency
                     n_decisions = len(routing_decisions)
                     logger.info(f"Loaded routing decisions for {n_decisions} targets")
@@ -1921,15 +1915,9 @@ class IntelligentTrainer:
         routing_decisions_for_training = {}
         try:
             from TRAINING.ranking.target_routing import load_routing_decisions
-            # Try new structure first (DECISION), then REPRODUCIBILITY, then old structure
-            routing_file = self.output_dir / "DECISION" / "TARGET_RANKING" / "routing_decisions.json"
-            if not routing_file.exists():
-                routing_file = self.output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / "routing_decisions.json"
-            if not routing_file.exists():
-                # Try old structure (backward compatibility)
-                routing_file = self.output_dir / "target_rankings" / "REPRODUCIBILITY" / "TARGET_RANKING" / "routing_decisions.json"
-            if routing_file.exists():
-                routing_decisions_for_training = load_routing_decisions(routing_file)
+            # load_routing_decisions now automatically checks new and legacy locations
+            routing_decisions_for_training = load_routing_decisions(output_dir=self.output_dir)
+            if routing_decisions_for_training:
                 # CRITICAL FIX: Log routing decision count and validate consistency
                 n_decisions = len(routing_decisions_for_training)
                 logger.info(f"Loaded routing decisions for training: {n_decisions} targets")

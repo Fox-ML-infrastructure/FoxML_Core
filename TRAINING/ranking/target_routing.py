@@ -262,26 +262,70 @@ def _save_dual_view_rankings(
     # via reproducibility tracker (with view/symbol metadata in RunContext)
 
 
-def load_routing_decisions(routing_file: Path) -> Dict[str, Dict[str, Any]]:
+def load_routing_decisions(routing_file: Optional[Path] = None, output_dir: Optional[Path] = None) -> Dict[str, Dict[str, Any]]:
     """
     Load routing decisions from file.
     
+    Tries multiple locations in order:
+    1. Target-first structure: globals/routing_decisions.json
+    2. Legacy structure: DECISION/TARGET_RANKING/routing_decisions.json
+    3. Legacy structure: REPRODUCIBILITY/TARGET_RANKING/routing_decisions.json
+    4. Explicit routing_file path if provided
+    
     Args:
-        routing_file: Path to routing_decisions.json
+        routing_file: Optional explicit path to routing_decisions.json
+        output_dir: Optional base output directory (will search for routing decisions)
     
     Returns:
         Dict mapping target_name -> routing decision dict
     """
     import json
     
-    if not routing_file.exists():
-        logger.warning(f"Routing decisions file not found: {routing_file}")
-        return {}
+    # If explicit file provided, use it
+    if routing_file and routing_file.exists():
+        try:
+            with open(routing_file, 'r') as f:
+                data = json.load(f)
+            return data.get('routing_decisions', {})
+        except Exception as e:
+            logger.error(f"Failed to load routing decisions from {routing_file}: {e}")
+            return {}
     
-    try:
-        with open(routing_file, 'r') as f:
-            data = json.load(f)
-        return data.get('routing_decisions', {})
-    except Exception as e:
-        logger.error(f"Failed to load routing decisions: {e}")
-        return {}
+    # If output_dir provided, search for routing decisions in new and legacy locations
+    if output_dir:
+        output_dir = Path(output_dir)
+        
+        # Try target-first structure first (globals/routing_decisions.json)
+        globals_file = output_dir / "globals" / "routing_decisions.json"
+        if globals_file.exists():
+            try:
+                with open(globals_file, 'r') as f:
+                    data = json.load(f)
+                logger.debug(f"Loaded routing decisions from target-first structure: {globals_file}")
+                return data.get('routing_decisions', {})
+            except Exception as e:
+                logger.debug(f"Failed to load from globals: {e}")
+        
+        # Try legacy locations
+        legacy_locations = [
+            output_dir / "DECISION" / "TARGET_RANKING" / "routing_decisions.json",
+            output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / "routing_decisions.json",
+            output_dir / "target_rankings" / "REPRODUCIBILITY" / "TARGET_RANKING" / "routing_decisions.json"
+        ]
+        
+        for legacy_file in legacy_locations:
+            if legacy_file.exists():
+                try:
+                    with open(legacy_file, 'r') as f:
+                        data = json.load(f)
+                    logger.debug(f"Loaded routing decisions from legacy location: {legacy_file}")
+                    return data.get('routing_decisions', {})
+                except Exception as e:
+                    logger.debug(f"Failed to load from {legacy_file}: {e}")
+                    continue
+    
+    # If routing_file was provided but doesn't exist, warn
+    if routing_file:
+        logger.warning(f"Routing decisions file not found: {routing_file}")
+    
+    return {}
