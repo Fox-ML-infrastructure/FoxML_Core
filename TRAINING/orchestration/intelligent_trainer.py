@@ -781,10 +781,33 @@ class IntelligentTrainer:
         from TRAINING.orchestration.utils.target_first_paths import initialize_run_structure
         initialize_run_structure(self.output_dir)
         
-        # Create initial manifest
+        # Create initial manifest with experiment config and run metadata
         from TRAINING.orchestration.utils.manifest import create_manifest
         try:
-            create_manifest(self.output_dir, run_id=self.output_dir.name)
+            experiment_config_dict = None
+            if self.experiment_config:
+                # Convert experiment config to dict for manifest
+                try:
+                    import yaml
+                    exp_name = self.experiment_config.name
+                    exp_file = _get_experiment_config_path(exp_name)
+                    if exp_file.exists():
+                        experiment_config_dict = _load_experiment_config_safe(exp_name)
+                except Exception as e:
+                    logger.debug(f"Could not load experiment config for manifest: {e}")
+            
+            run_metadata_dict = {
+                "data_dir": str(self.data_dir) if self.data_dir else None,
+                "symbols": self.symbols if self.symbols else None,
+                "output_dir": str(self.output_dir) if self.output_dir else None
+            }
+            
+            create_manifest(
+                self.output_dir,
+                run_id=self.output_dir.name,
+                experiment_config=experiment_config_dict,
+                run_metadata=run_metadata_dict
+            )
         except Exception as e:
             logger.warning(f"Failed to create initial manifest: {e}")
         
@@ -2086,6 +2109,47 @@ class IntelligentTrainer:
         except Exception as e:
             logger.debug(f"Could not generate trend summary: {e}")
             # Don't fail if trend analysis fails
+        
+        # Create per-target metadata files and update final manifest
+        try:
+            from TRAINING.orchestration.utils.manifest import create_target_metadata, update_manifest
+            for target in targets:
+                try:
+                    create_target_metadata(self.output_dir, target)
+                except Exception as e:
+                    logger.debug(f"Failed to create metadata for target {target}: {e}")
+            
+            # Update manifest with final targets list
+            try:
+                # Load experiment config as dict if available
+                experiment_config_dict = None
+                if hasattr(self, 'experiment_config') and self.experiment_config:
+                    try:
+                        import yaml
+                        exp_name = self.experiment_config.name
+                        exp_file = _get_experiment_config_path(exp_name)
+                        if exp_file.exists():
+                            experiment_config_dict = _load_experiment_config_safe(exp_name)
+                    except Exception as e:
+                        logger.debug(f"Could not load experiment config for final manifest: {e}")
+                
+                # Update manifest with final information
+                from TRAINING.orchestration.utils.manifest import create_manifest
+                create_manifest(
+                    self.output_dir,
+                    run_id=self.output_dir.name,
+                    targets=targets,
+                    experiment_config=experiment_config_dict,
+                    run_metadata={
+                        "data_dir": str(self.data_dir) if self.data_dir else None,
+                        "symbols": self.symbols if self.symbols else None,
+                        "n_effective": getattr(self, '_n_effective', None)
+                    }
+                )
+            except Exception as e:
+                logger.debug(f"Failed to update final manifest: {e}")
+        except Exception as e:
+            logger.debug(f"Failed to create target metadata files: {e}")
         
         return {
             'targets': targets,

@@ -34,16 +34,20 @@ def create_manifest(
     output_dir: Path,
     run_id: Optional[str] = None,
     config_digest: Optional[str] = None,
-    targets: Optional[List[str]] = None
+    targets: Optional[List[str]] = None,
+    experiment_config: Optional[Dict[str, Any]] = None,
+    run_metadata: Optional[Dict[str, Any]] = None
 ) -> Path:
     """
-    Create manifest.json at run root.
+    Create manifest.json at run root with comprehensive run metadata.
     
     Args:
         output_dir: Base run output directory
         run_id: Run identifier (defaults to directory name or timestamp)
         config_digest: Config digest/hash for reproducibility
         targets: List of targets processed
+        experiment_config: Optional experiment config dict (name, data_dir, symbols, etc.)
+        run_metadata: Optional additional run metadata (data_dir, symbols, n_effective, etc.)
     
     Returns:
         Path to manifest.json
@@ -69,6 +73,24 @@ def create_manifest(
         "created_at": datetime.now().isoformat(),
         "targets": targets or []
     }
+    
+    # Add experiment config if provided
+    if experiment_config:
+        manifest["experiment"] = {
+            "name": experiment_config.get("name") or experiment_config.get("experiment", {}).get("name"),
+            "description": experiment_config.get("description") or experiment_config.get("experiment", {}).get("description"),
+            "data_dir": str(experiment_config.get("data_dir")) if experiment_config.get("data_dir") else None,
+            "symbols": experiment_config.get("symbols") or experiment_config.get("data", {}).get("symbols"),
+            "interval": experiment_config.get("interval") or experiment_config.get("data", {}).get("bar_interval"),
+            "max_samples_per_symbol": experiment_config.get("max_samples_per_symbol") or experiment_config.get("data", {}).get("max_rows_per_symbol")
+        }
+    
+    # Add run metadata if provided
+    if run_metadata:
+        manifest["run_metadata"] = {
+            k: v for k, v in run_metadata.items()
+            if k not in ["experiment_config", "targets"]  # Avoid duplication
+        }
     
     # Add target index if targets directory exists
     targets_dir = output_dir / "targets"
@@ -230,4 +252,134 @@ def _find_model_families(models_dir: Path) -> Dict[str, List[str]]:
                 families[family_name] = sorted(artifacts)
     
     return families
+
+
+def create_target_metadata(
+    output_dir: Path,
+    target_name: str
+) -> Path:
+    """
+    Create per-target metadata.json that aggregates information from all cohorts.
+    
+    This file provides a single source of truth for all metadata related to a target,
+    aggregating information from:
+    - All cohort directories (CROSS_SECTIONAL and SYMBOL_SPECIFIC)
+    - Decision files
+    - Metrics summaries
+    - Feature selection results
+    
+    Args:
+        output_dir: Base run output directory
+        target_name: Target name (will be cleaned)
+    
+    Returns:
+        Path to target metadata.json
+    """
+    import json
+    from TRAINING.orchestration.utils.target_first_paths import (
+        get_target_reproducibility_dir, get_target_decision_dir, get_target_metrics_dir
+    )
+    
+    target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+    target_dir = output_dir / "targets" / target_name_clean
+    
+    if not target_dir.exists():
+        logger.warning(f"Target directory does not exist: {target_dir}")
+        return None
+    
+    target_metadata = {
+        "target_name": target_name,
+        "target_name_clean": target_name_clean,
+        "created_at": datetime.now().isoformat(),
+        "cohorts": {},
+        "views": {},
+        "decisions": {},
+        "metrics_summary": {}
+    }
+    
+    # Collect cohort metadata from reproducibility directory
+    repro_dir = get_target_reproducibility_dir(output_dir, target_name_clean)
+    if repro_dir.exists():
+        for view_dir in repro_dir.iterdir():
+            if view_dir.is_dir() and view_dir.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+                view_name = view_dir.name
+                target_metadata["views"][view_name] = {
+                    "cohorts": []
+                }
+                
+                # Find all cohort directories
+                for cohort_dir in view_dir.iterdir():
+                    if cohort_dir.is_dir() and cohort_dir.name.startswith("cohort="):
+                        cohort_id = cohort_dir.name.replace("cohort=", "")
+                        metadata_file = cohort_dir / "metadata.json"
+                        
+                        cohort_info = {
+                            "cohort_id": cohort_id,
+                            "path": str(cohort_dir.relative_to(output_dir))
+                        }
+                        
+                        # Load metadata if available
+                        if metadata_file.exists():
+                            try:
+                                with open(metadata_file) as f:
+                                    cohort_metadata = json.load(f)
+                                    cohort_info["metadata"] = {
+                                        "stage": cohort_metadata.get("stage"),
+                                        "route_type": cohort_metadata.get("route_type"),
+                                        "n_effective": cohort_metadata.get("N_effective"),
+                                        "n_symbols": cohort_metadata.get("n_symbols"),
+                                        "date_start": cohort_metadata.get("date_start"),
+                                        "date_end": cohort_metadata.get("date_end"),
+                                        "universe_id": cohort_metadata.get("universe_id"),
+                                        "min_cs": cohort_metadata.get("min_cs"),
+                                        "max_cs_samples": cohort_metadata.get("max_cs_samples")
+                                    }
+                            except Exception as e:
+                                logger.debug(f"Failed to load metadata from {metadata_file}: {e}")
+                        
+                        target_metadata["views"][view_name]["cohorts"].append(cohort_info)
+                        target_metadata["cohorts"][cohort_id] = {
+                            "view": view_name,
+                            "path": str(cohort_dir.relative_to(output_dir))
+                        }
+    
+    # Collect decision files
+    decision_dir = get_target_decision_dir(output_dir, target_name_clean)
+    if decision_dir.exists():
+        for decision_file in decision_dir.iterdir():
+            if decision_file.is_file() and decision_file.suffix in [".json", ".yaml"]:
+                decision_type = decision_file.stem
+                target_metadata["decisions"][decision_type] = {
+                    "path": str(decision_file.relative_to(output_dir)),
+                    "format": decision_file.suffix[1:]  # Remove leading dot
+                }
+    
+    # Collect metrics summary
+    metrics_dir = get_target_metrics_dir(output_dir, target_name_clean)
+    if metrics_dir.exists():
+        for view_dir in metrics_dir.iterdir():
+            if view_dir.is_dir() and view_dir.name.startswith("view="):
+                view_name = view_dir.name.replace("view=", "")
+                metrics_file = view_dir / "metrics.json"
+                if metrics_file.exists():
+                    try:
+                        with open(metrics_file) as f:
+                            metrics_data = json.load(f)
+                            target_metadata["metrics_summary"][view_name] = {
+                                "path": str(metrics_file.relative_to(output_dir)),
+                                "mean_score": metrics_data.get("mean_score"),
+                                "std_score": metrics_data.get("std_score"),
+                                "composite_score": metrics_data.get("composite_score"),
+                                "metric_name": metrics_data.get("metric_name")
+                            }
+                    except Exception as e:
+                        logger.debug(f"Failed to load metrics from {metrics_file}: {e}")
+    
+    # Write target metadata
+    target_metadata_file = target_dir / "metadata.json"
+    with open(target_metadata_file, 'w') as f:
+        json.dump(target_metadata, f, indent=2, default=str)
+    
+    logger.debug(f"Created target metadata: {target_metadata_file}")
+    return target_metadata_file
 
