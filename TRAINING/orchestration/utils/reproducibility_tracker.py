@@ -1528,9 +1528,14 @@ class ReproducibilityTracker:
                 target_repro_dir = get_target_reproducibility_dir(base_output_dir, item_name)
                 target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
                 target_cohort_dir.mkdir(parents=True, exist_ok=True)
+                logger.debug(f"Created target-first cohort directory: {target_cohort_dir}")
             except Exception as e:
                 # Don't fail if target-first structure creation fails - old structure is primary
-                logger.debug(f"Failed to create target-first structure (non-critical): {e}")
+                # But log at INFO level so we can see if there are issues
+                logger.info(f"⚠️ Failed to create target-first structure for {item_name}/{view_for_target}/cohort={cohort_id} (non-critical): {e}")
+                import traceback
+                logger.debug(f"Target-first structure creation traceback: {traceback.format_exc()}")
+                target_cohort_dir = None
         
         # Save metadata.json atomically to both old and new structures
         metadata_file = cohort_dir / "metadata.json"
