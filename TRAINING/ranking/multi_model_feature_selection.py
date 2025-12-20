@@ -3464,18 +3464,17 @@ def save_multi_model_results(
     if available_debug_columns:
         debug_df = summary_df[available_debug_columns].copy()
         debug_df = debug_df.sort_values('consensus_score', ascending=False)  # Sort by final score
-        debug_csv_path = importances_dir / "feature_importance_with_boruta_debug.csv"
-        debug_df.to_csv(debug_csv_path, index=False)
-        logger.info(f"✅ Saved Boruta gatekeeper debug view to {debug_csv_path}")
         
-        # Also write directly to target-first structure
+        # Write to target-first structure only
         if target_importances_dir:
             try:
                 target_debug_path = target_importances_dir / "feature_importance_with_boruta_debug.csv"
                 debug_df.to_csv(target_debug_path, index=False)
-                logger.debug(f"Also saved Boruta debug view to target-first location: {target_debug_path}")
+                logger.info(f"✅ Saved Boruta gatekeeper debug view to {target_debug_path}")
             except Exception as e:
-                logger.debug(f"Failed to write Boruta debug view to target-first location: {e}")
+                logger.warning(f"Failed to write Boruta debug view to target-first location: {e}")
+                import traceback
+                logger.debug(f"Traceback: {traceback.format_exc()}")
     
     # 3. Per-model-family breakdowns → feature_importances/ (matching target ranking naming)
     for family_name in summary_df.columns:
@@ -3484,8 +3483,6 @@ def save_multi_model_results(
             family_df = family_df.sort_values(family_name, ascending=False)
             # Match target ranking naming: {model}_importances.csv
             model_name = family_name.replace('_score', '')
-            family_csv = importances_dir / f"{model_name}_importances.csv"
-            family_df.to_csv(family_csv, index=False)
             
             # Write to target-first structure only
             if target_importances_dir:
@@ -3513,11 +3510,7 @@ def save_multi_model_results(
                 else:
                     agreement_matrix.loc[feature, result.model_family] = max(current, score)
     
-    agreement_csv_path = importances_dir / "model_agreement_matrix.csv"
-    agreement_matrix.to_csv(agreement_csv_path)
-    logger.info(f"✅ Saved model agreement matrix to {agreement_csv_path}")
-    
-    # Also write directly to target-first structure
+    # Write to target-first structure only
     if target_importances_dir:
         try:
             target_agreement_path = target_importances_dir / "model_agreement_matrix.csv"
