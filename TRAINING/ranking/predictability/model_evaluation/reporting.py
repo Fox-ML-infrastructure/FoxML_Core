@@ -178,99 +178,75 @@ def save_feature_importances(
     if output_dir is None:
         output_dir = _REPO_ROOT / "results"
     
-    # Create directory structure in REPRODUCIBILITY/TARGET_RANKING/{view}/{target}/{symbol}/feature_importances/
-    # This aligns with the reproducibility structure and keeps all target ranking outputs together
+    # Find base run directory for target-first structure
+    base_output_dir = output_dir
+    for _ in range(10):
+        if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
+            break
+        if not base_output_dir.parent.exists():
+            break
+        base_output_dir = base_output_dir.parent
+    
     target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-    # Determine base directory for REPRODUCIBILITY (should be at run level)
-    if output_dir.name == "target_rankings":
-        # output_dir is target_rankings/, go up to run level
-        repro_base = output_dir.parent / "REPRODUCIBILITY" / "TARGET_RANKING"
-    else:
-        # output_dir is already at run level
-        repro_base = output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
     
-    if view == "SYMBOL_SPECIFIC" and symbol:
-        importances_dir = repro_base / view / target_name_clean / f"symbol={symbol}" / "feature_importances"
-    else:
-        importances_dir = repro_base / view / target_name_clean / "feature_importances"
-    importances_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Save per-model CSV files
-    # Sort model names for deterministic order (ensures reproducible file output)
-    for model_name in sorted(feature_importances.keys()):
-        importances = feature_importances[model_name]
-        if not importances:
-            continue
+    # Save to target-first structure only
+    try:
+        from TRAINING.orchestration.utils.target_first_paths import (
+            get_target_reproducibility_dir, ensure_target_structure
+        )
+        ensure_target_structure(base_output_dir, target_name_clean)
+        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+        target_importances_dir = target_repro_dir / "feature_importances"
+        target_importances_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create DataFrame sorted by importance
-        df = pd.DataFrame([
-            {'feature': feat, 'importance': imp}
-            for feat, imp in sorted(importances.items())  # Sort features for deterministic order
-        ])
-        df = df.sort_values('importance', ascending=False)
-        
-        # Normalize to percentages
-        total = df['importance'].sum()
-        if total > 0:
-            df['importance_pct'] = (df['importance'] / total * 100).round(2)
-            df['cumulative_pct'] = df['importance_pct'].cumsum().round(2)
-        else:
-            df['importance_pct'] = 0.0
-            df['cumulative_pct'] = 0.0
-        
-        # Reorder columns
-        df = df[['feature', 'importance', 'importance_pct', 'cumulative_pct']]
-        
-        # Save to CSV (legacy location)
-        csv_file = importances_dir / f"{model_name}_importances.csv"
-        df.to_csv(csv_file, index=False)
-        
-        # Also save to target-first structure
-        try:
-            # Find base run directory
-            base_output_dir = output_dir
-            for _ in range(10):
-                if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
-                    break
-                if not base_output_dir.parent.exists():
-                    break
-                base_output_dir = base_output_dir.parent
+        # Save per-model CSV files
+        # Sort model names for deterministic order (ensures reproducible file output)
+        for model_name in sorted(feature_importances.keys()):
+            importances = feature_importances[model_name]
+            if not importances:
+                continue
             
-            if base_output_dir.exists():
-                from TRAINING.orchestration.utils.target_first_paths import (
-                    get_target_reproducibility_dir, ensure_target_structure
+            # Create DataFrame sorted by importance
+            df = pd.DataFrame([
+                {'feature': feat, 'importance': imp}
+                for feat, imp in sorted(importances.items())  # Sort features for deterministic order
+            ])
+            df = df.sort_values('importance', ascending=False)
+            
+            # Normalize to percentages
+            total = df['importance'].sum()
+            if total > 0:
+                df['importance_pct'] = (df['importance'] / total * 100).round(2)
+                df['cumulative_pct'] = df['importance_pct'].cumsum().round(2)
+            else:
+                df['importance_pct'] = 0.0
+                df['cumulative_pct'] = 0.0
+            
+            # Reorder columns
+            df = df[['feature', 'importance', 'importance_pct', 'cumulative_pct']]
+            
+            # Save to target-first location
+            target_csv_file = target_importances_dir / f"{model_name}_importances.csv"
+            df.to_csv(target_csv_file, index=False)
+            
+            # Save stability snapshot (non-invasive hook)
+            try:
+                from TRAINING.stability.feature_importance import save_snapshot_hook
+                # Use target-first structure for snapshots
+                save_snapshot_hook(
+                    target_name=target_column,
+                    method=model_name,
+                    importance_dict=importances,
+                    universe_id=view,  # Use view parameter (CROSS_SECTIONAL or SYMBOL_SPECIFIC)
+                    output_dir=target_repro_dir,  # Save snapshots in target-first structure
+                    auto_analyze=None,  # Load from config
                 )
-                target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-                ensure_target_structure(base_output_dir, target_name_clean)
-                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
-                target_importances_dir = target_repro_dir / "feature_importances"
-                target_importances_dir.mkdir(parents=True, exist_ok=True)
-                
-                # Save to target-first location
-                target_csv_file = target_importances_dir / f"{model_name}_importances.csv"
-                df.to_csv(target_csv_file, index=False)
-                logger.debug(f"Also saved {model_name} importances to target-first location: {target_csv_file}")
-        except Exception as e:
-            logger.debug(f"Failed to save feature importances to target-first structure (non-critical): {e}")
+            except Exception as e:
+                logger.debug(f"Stability snapshot save failed (non-critical): {e}")
         
-        # Save stability snapshot (non-invasive hook)
-        # Pass the same repro_base directory so snapshots are saved alongside feature importances
-        try:
-            from TRAINING.stability.feature_importance import save_snapshot_hook
-            # Use the same base directory structure as feature importances
-            snapshot_output_dir = importances_dir.parent  # Same level as feature_importances/
-            save_snapshot_hook(
-                target_name=target_column,
-                method=model_name,
-                importance_dict=importances,
-                universe_id=view,  # Use view parameter (CROSS_SECTIONAL or SYMBOL_SPECIFIC)
-                output_dir=snapshot_output_dir,  # Save snapshots in same directory structure
-                auto_analyze=None,  # Load from config
-            )
-        except Exception as e:
-            logger.debug(f"Stability snapshot save failed (non-critical): {e}")
-    
-    logger.info(f"  💾 Saved feature importances to: {importances_dir}")
+        logger.info(f"  💾 Saved feature importances to: {target_importances_dir}")
+    except Exception as e:
+        logger.warning(f"Failed to save feature importances to target-first structure: {e}")
 
 
 def log_suspicious_features(

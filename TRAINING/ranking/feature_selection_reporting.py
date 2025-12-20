@@ -159,8 +159,16 @@ def save_feature_selection_rankings(
             'rank', 'feature', 'consensus_score', 'n_models_agree', 
             'consensus_pct', 'std_across_models', 'recommendation'
         ])
-        empty_df.to_csv(repro_dir / "feature_selection_rankings.csv", index=False)
-        logger.info(f"Saved empty rankings file to {repro_dir / 'feature_selection_rankings.csv'}")
+        # Save to target-first structure only
+        try:
+            from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+            target_repro_dir.mkdir(parents=True, exist_ok=True)
+            empty_csv_path = target_repro_dir / "feature_selection_rankings.csv"
+            empty_df.to_csv(empty_csv_path, index=False)
+            logger.info(f"Saved empty rankings file to {empty_csv_path}")
+        except Exception as e:
+            logger.warning(f"Failed to save empty rankings file: {e}")
         return
     
     # Sort by consensus score
@@ -276,25 +284,11 @@ def save_dual_view_feature_selections(
     output_dir: Path
 ):
     """
-    Save dual-view feature selection results (same structure as target ranking).
+    Save dual-view feature selection results.
     
-    Structure (same as target ranking):
-    REPRODUCIBILITY/FEATURE_SELECTION/
-      CROSS_SECTIONAL/
-        {target_column}/
-          cohort={cohort_id}/
-            metrics.json
-            metadata.json
-      SYMBOL_SPECIFIC/
-        {target_column}/
-          symbol={symbol}/
-            cohort={cohort_id}/
-              metrics.json
-              metadata.json
-    
-    Note: Individual view results are already saved by reproducibility tracker
-    (with view/symbol metadata in RunContext), so this function just saves
-    summary files for convenience (same pattern as target ranking).
+    NOTE: This function is deprecated. All data is now saved to the target-first
+    structure by the reproducibility tracker. This function is kept as a no-op
+    for backward compatibility but does not write any files.
     
     Args:
         results_cs: Cross-sectional results dict (if available)
@@ -302,50 +296,10 @@ def save_dual_view_feature_selections(
         target_column: Target column name
         output_dir: Base output directory
     """
-    import json
-    from pathlib import Path
-    
-    # Determine REPRODUCIBILITY directory (same as target ranking)
-    # output_dir might be: RESULTS/{run_id}/REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
-    # We want: RESULTS/{run_id}/REPRODUCIBILITY/FEATURE_SELECTION/
-    # Determine base directory for REPRODUCIBILITY (should be at run level)
-    # Walk up the directory tree to find the run directory (not a bin directory)
-    repro_base = output_dir
-    # Keep going up until we find a directory that's not a module subdirectory or bin directory
-    while repro_base.name in ["feature_selections", "target_rankings", "training_results", "DECISION", "REPRODUCIBILITY"] or repro_base.name.startswith("sample_"):
-        repro_base = repro_base.parent
-        # Safety check: don't go above RESULTS directory
-        if repro_base.name == "RESULTS" or not repro_base.parent.exists():
-            break
-    
-    # Use proper REPRODUCIBILITY/FEATURE_SELECTION structure (at run level, not nested)
-    repro_dir = repro_base / "REPRODUCIBILITY" / "FEATURE_SELECTION"
-    repro_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Save cross-sectional results if available
-    if results_cs:
-        cs_dir = repro_dir / "CROSS_SECTIONAL" / target_column
-        cs_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Results are already saved by reproducibility tracker, but we can save summary here
-        summary_file = cs_dir / "feature_selection_summary.json"
-        with open(summary_file, 'w') as f:
-            json.dump(results_cs, f, indent=2, default=str)
-        logger.debug(f"Saved cross-sectional feature selection summary to {summary_file}")
-    
-    # Save symbol-specific results if available
-    if results_sym:
-        for symbol, sym_results in results_sym.items():
-            sym_dir = repro_dir / "SYMBOL_SPECIFIC" / target_column / f"symbol={symbol}"
-            sym_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Results are already saved by reproducibility tracker, but we can save summary here
-            summary_file = sym_dir / "feature_selection_summary.json"
-            with open(summary_file, 'w') as f:
-                json.dump(sym_results, f, indent=2, default=str)
-            logger.debug(f"Saved symbol-specific feature selection summary for {symbol} to {summary_file}")
-    
-    logger.info(f"Saved dual-view feature selection results to {repro_dir}")
+    # All data is already saved by reproducibility tracker to target-first structure
+    # No legacy writes needed - target-first structure is the only source of truth
+    logger.debug(f"save_dual_view_feature_selections called for {target_column} (no-op, data already in target-first structure)")
+    pass
 
 
 def save_feature_importances_for_reproducibility(
@@ -374,34 +328,26 @@ def save_feature_importances_for_reproducibility(
     """
     import pandas as pd
     
-    # Determine base directory (walk up to FEATURE_SELECTION level)
-    # output_dir is: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
-    # We want: REPRODUCIBILITY/FEATURE_SELECTION/{view}/{target}/feature_importances/
-    base_dir = output_dir
-    while base_dir.name not in ["FEATURE_SELECTION", "TARGET_RANKING"]:
-        base_dir = base_dir.parent
-        if not base_dir.parent.exists() or base_dir.name in ["RESULTS", "REPRODUCIBILITY"]:
+    # Find base run directory for target-first structure
+    base_output_dir = output_dir
+    for _ in range(10):
+        if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
             break
-    
-    # If we're already at FEATURE_SELECTION level, use it directly
-    # Otherwise, if we hit REPRODUCIBILITY, go back down
-    if base_dir.name == "REPRODUCIBILITY":
-        # We went too far up, go back to FEATURE_SELECTION
-        base_dir = base_dir / "FEATURE_SELECTION"
-    elif base_dir.name != "FEATURE_SELECTION":
-        # We're at run level, construct path
-        base_dir = base_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION"
+        if not base_output_dir.parent.exists():
+            break
+        base_output_dir = base_output_dir.parent
     
     target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-    view_dir = view if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
     
-    # Create directory structure (same as target ranking) - feature_importances/ at target level
-    if view_dir == "SYMBOL_SPECIFIC" and symbol:
-        importances_dir = base_dir / view_dir / target_name_clean / f"symbol={symbol}" / "feature_importances"
-    else:
-        importances_dir = base_dir / view_dir / target_name_clean / "feature_importances"
-    
-    importances_dir.mkdir(parents=True, exist_ok=True)
+    # Save to target-first structure only
+    try:
+        from TRAINING.orchestration.utils.target_first_paths import (
+            get_target_reproducibility_dir, ensure_target_structure
+        )
+        ensure_target_structure(base_output_dir, target_name_clean)
+        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+        importances_dir = target_repro_dir / "feature_importances"
+        importances_dir.mkdir(parents=True, exist_ok=True)
     
     # Save per-model-family importances as CSV (same format as target ranking)
     for model_family, importance_dict in all_feature_importances.items():

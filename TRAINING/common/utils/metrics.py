@@ -212,20 +212,20 @@ class MetricsWriter:
                     logger.warning(f"⚠️  Cannot use fallback: missing target or view (target={target}, view={view})")
                 return
         
-        # Write metrics.json and metrics.parquet (unified canonical schema) to target-first structure
-        # cohort_dir is now always the target-first structure (targets/<target>/reproducibility/<view>/cohort=<id>/)
-        try:
-            self._write_metrics(
-                cohort_dir, run_id, metrics, 
-                stage=stage, 
-                reproducibility_mode="COHORT_AWARE",
-                diff_telemetry=diff_telemetry
-            )
-            logger.debug(f"✅ Wrote unified metrics to {cohort_dir}")
-        except Exception as e:
-            logger.warning(f"⚠️  Failed to write metrics to {cohort_dir}: {e}")
+        # SST Architecture (Option A): Write canonical metrics to cohort_dir (reproducibility location)
+        # metrics.parquet is canonical, metrics.json is debug export
+        # Then create reference pointer in targets/<target>/metrics/ for convenience
         
-        # Also write to target-first structure (targets/<target>/metrics/)
+        # Write canonical metrics to cohort_dir (reproducibility location)
+        self._write_metrics(
+            cohort_dir, run_id, metrics,
+            stage=stage,
+            reproducibility_mode="COHORT_AWARE",
+            diff_telemetry=diff_telemetry
+        )
+        logger.debug(f"✅ Wrote canonical metrics to cohort directory: {cohort_dir}")
+        
+        # Create reference pointer in targets/<target>/metrics/ for convenience
         if target:
             try:
                 from TRAINING.orchestration.utils.target_first_paths import (
@@ -240,7 +240,7 @@ class MetricsWriter:
                         break
                     base_output_dir = base_output_dir.parent
                 
-                # If we found a run directory, write to target-first location
+                # If we found a run directory, create reference pointer
                 if (base_output_dir / "targets").exists() or (base_output_dir / "REPRODUCIBILITY").exists():
                     target_name_clean = target.replace('/', '_').replace('\\', '_')
                     ensure_target_structure(base_output_dir, target_name_clean)
@@ -251,39 +251,22 @@ class MetricsWriter:
                         view_metrics_dir = target_metrics_dir / f"view={view}"
                         view_metrics_dir.mkdir(parents=True, exist_ok=True)
                         
-                        # For SYMBOL_SPECIFIC, organize by symbol: view=SYMBOL_SPECIFIC/symbol=<symbol>/
+                        # For SYMBOL_SPECIFIC, organize by symbol
                         if view == "SYMBOL_SPECIFIC" and symbol:
                             symbol_metrics_dir = view_metrics_dir / f"symbol={symbol}"
                             symbol_metrics_dir.mkdir(parents=True, exist_ok=True)
-                            # Write to symbol-specific location
-                            self._write_metrics(
-                                symbol_metrics_dir, run_id, metrics,
-                                stage=stage,
-                                reproducibility_mode="COHORT_AWARE",
-                                diff_telemetry=diff_telemetry
-                            )
-                            logger.debug(f"✅ Wrote metrics to target-first symbol location: {symbol_metrics_dir}")
+                            ref_dir = symbol_metrics_dir
                         else:
-                            # CROSS_SECTIONAL or SYMBOL_SPECIFIC without symbol (aggregated)
-                            # Write copy to view-specific location
-                            self._write_metrics(
-                                view_metrics_dir, run_id, metrics,
-                                stage=stage,
-                                reproducibility_mode="COHORT_AWARE",
-                                diff_telemetry=diff_telemetry
-                            )
-                            logger.debug(f"✅ Wrote metrics to target-first location: {view_metrics_dir}")
+                            ref_dir = view_metrics_dir
                     else:
-                        # Write to canonical location
-                        self._write_metrics(
-                            target_metrics_dir, run_id, metrics,
-                            stage=stage,
-                            reproducibility_mode="COHORT_AWARE",
-                            diff_telemetry=diff_telemetry
-                        )
-                        logger.debug(f"✅ Wrote metrics to target-first location: {target_metrics_dir}")
+                        ref_dir = target_metrics_dir
+                    
+                    # Write reference pointer to canonical location
+                    self._write_metrics_reference(
+                        ref_dir, cohort_dir, run_id, target, view, symbol, base_output_dir
+                    )
             except Exception as e:
-                logger.debug(f"Failed to write metrics to target-first location: {e}")
+                logger.debug(f"Failed to write metrics reference pointer: {e}")
         
         # Write metrics_drift.json (comparison to baseline)
         if baseline_key:
@@ -415,17 +398,125 @@ class MetricsWriter:
         metrics_file_parquet = cohort_dir / "metrics.parquet"
         
         try:
-            # Write JSON atomically (human-readable, canonical format)
-            _write_atomic_json(metrics_file_json, metrics_data)
-            
-            # Write Parquet (queryable, wide format - same schema as JSON)
-            # Convert to DataFrame with one row (wide format, not long format)
+            # SST Architecture (Option A): metrics.parquet is canonical, metrics.json is debug export
+            # Write Parquet FIRST (canonical format)
             df_metrics = pd.DataFrame([metrics_data])
             df_metrics.to_parquet(metrics_file_parquet, index=False, engine='pyarrow', compression='snappy')
             
-            logger.debug(f"✅ Wrote unified metrics (JSON + Parquet) to {cohort_dir}")
+            # Write JSON as debug export (derived from same data, human-readable)
+            _write_atomic_json(metrics_file_json, metrics_data)
+            
+            logger.debug(f"✅ Wrote canonical metrics.parquet and debug metrics.json to {cohort_dir}")
         except Exception as e:
             logger.warning(f"Failed to write metrics to {cohort_dir}: {e}")
+    
+    def _write_metrics_reference(
+        self,
+        ref_dir: Path,
+        canonical_cohort_dir: Path,
+        run_id: str,
+        target: str,
+        view: str,
+        symbol: Optional[str],
+        base_output_dir: Path
+    ) -> None:
+        """
+        Write reference pointer to canonical metrics location.
+        
+        Creates latest_ref.json in targets/<target>/metrics/ that points to the canonical
+        metrics.parquet in reproducibility/cohort directory.
+        
+        Args:
+            ref_dir: Directory where reference should be written (targets/<target>/metrics/view=.../)
+            canonical_cohort_dir: Canonical cohort directory (targets/<target>/reproducibility/<view>/cohort=<id>/)
+            run_id: Run identifier
+            target: Target name
+            view: View type (CROSS_SECTIONAL, SYMBOL_SPECIFIC)
+            symbol: Symbol name (optional, for SYMBOL_SPECIFIC)
+            base_output_dir: Base run output directory
+        """
+        try:
+            import hashlib
+            
+            # Compute relative path from ref_dir to canonical location
+            # ref_dir: targets/<target>/metrics/view=CROSS_SECTIONAL/
+            # canonical: targets/<target>/reproducibility/CROSS_SECTIONAL/cohort=<id>/
+            try:
+                relative_path = os.path.relpath(canonical_cohort_dir / "metrics.parquet", ref_dir)
+            except ValueError:
+                # If paths are on different drives (Windows), use absolute path
+                relative_path = str(canonical_cohort_dir / "metrics.parquet")
+            
+            # Compute SHA256 of canonical metrics.parquet if it exists
+            canonical_parquet = canonical_cohort_dir / "metrics.parquet"
+            sha256 = None
+            if canonical_parquet.exists():
+                try:
+                    with open(canonical_parquet, 'rb') as f:
+                        sha256 = hashlib.sha256(f.read()).hexdigest()
+                except Exception as e:
+                    logger.debug(f"Failed to compute SHA256 for metrics reference: {e}")
+            
+            # Extract cohort_id from canonical_cohort_dir path
+            cohort_id = None
+            for part in canonical_cohort_dir.parts:
+                if part.startswith("cohort="):
+                    cohort_id = part.replace("cohort=", "")
+                    break
+            
+            # Create reference data
+            ref_data = {
+                "run_id": run_id,
+                "cohort_id": cohort_id,
+                "target": target,
+                "view": view,
+                "symbol": symbol,
+                "canonical_path": str(canonical_cohort_dir / "metrics.parquet"),
+                "relative_path": relative_path,
+                "sha256": sha256,
+                "timestamp": datetime.now().isoformat(),
+                "note": "This is a pointer to canonical metrics.parquet in reproducibility/cohort directory"
+            }
+            
+            # Write reference file
+            ref_file = ref_dir / "latest_ref.json"
+            _write_atomic_json(ref_file, ref_data)
+            logger.debug(f"✅ Wrote metrics reference pointer to {ref_file}")
+        except Exception as e:
+            logger.debug(f"Failed to write metrics reference pointer: {e}")
+    
+    @staticmethod
+    def export_metrics_json_from_parquet(parquet_path: Path, json_path: Optional[Path] = None) -> Dict[str, Any]:
+        """
+        Export metrics.json from canonical metrics.parquet (for debugging).
+        
+        This function reads the canonical metrics.parquet and exports it as JSON.
+        Used when metrics.json is requested but only parquet exists.
+        
+        Args:
+            parquet_path: Path to canonical metrics.parquet
+            json_path: Optional path to write JSON (if None, returns dict only)
+        
+        Returns:
+            Metrics dictionary
+        """
+        try:
+            df = pd.read_parquet(parquet_path)
+            if len(df) == 0:
+                return {}
+            
+            # Convert first row to dict (parquet has one row per cohort)
+            metrics_dict = df.iloc[0].to_dict()
+            
+            # Write JSON if path provided
+            if json_path:
+                _write_atomic_json(json_path, metrics_dict)
+                logger.debug(f"✅ Exported metrics.json from parquet to {json_path}")
+            
+            return metrics_dict
+        except Exception as e:
+            logger.warning(f"Failed to export metrics.json from parquet {parquet_path}: {e}")
+            return {}
     
     def _write_drift(
         self,
@@ -469,11 +560,88 @@ class MetricsWriter:
             logger.debug(f"No baseline found for drift comparison: {baseline_key} (no matching fingerprints)")
             return
         
-        # Load baseline metrics and metadata
-        # PHASE 2: Unified schema - use metrics.json as canonical
-        baseline_metrics_file = baseline_cohort_dir / "metrics.json"
-        if not baseline_metrics_file.exists():
-            logger.debug(f"Baseline metrics not found: {baseline_metrics_file}")
+        # SST Architecture: Load baseline metrics from canonical location (cohort_dir) first
+        baseline_data = None
+        
+        # 1. Try canonical metrics.parquet in cohort directory (SST)
+        baseline_metrics_parquet = baseline_cohort_dir / "metrics.parquet"
+        if baseline_metrics_parquet.exists():
+            try:
+                df = pd.read_parquet(baseline_metrics_parquet)
+                if len(df) > 0:
+                    baseline_data = df.iloc[0].to_dict()
+                    logger.debug(f"✅ Loaded baseline metrics from canonical parquet: {baseline_metrics_parquet}")
+            except Exception as e:
+                logger.debug(f"Failed to read baseline metrics.parquet: {e}")
+        
+        # 2. Fallback to metrics.json in cohort directory (debug export)
+        if baseline_data is None:
+            baseline_metrics_json = baseline_cohort_dir / "metrics.json"
+            if baseline_metrics_json.exists():
+                try:
+                    with open(baseline_metrics_json, 'r') as f:
+                        baseline_data = json.load(f)
+                    logger.debug(f"✅ Loaded baseline metrics from JSON: {baseline_metrics_json}")
+                except Exception as e:
+                    logger.debug(f"Failed to read baseline metrics.json: {e}")
+        
+        # 3. Fallback to reference pointer in metrics/ directory
+        if baseline_data is None and target:
+            try:
+                from TRAINING.orchestration.utils.target_first_paths import get_target_metrics_dir
+                # Find base output directory
+                base_output_dir = baseline_cohort_dir
+                for _ in range(10):
+                    if (base_output_dir / "targets").exists() or (base_output_dir / "REPRODUCIBILITY").exists():
+                        break
+                    if not base_output_dir.parent.exists():
+                        break
+                    base_output_dir = base_output_dir.parent
+                
+                if (base_output_dir / "targets").exists():
+                    target_name_clean = target.replace('/', '_').replace('\\', '_')
+                    target_metrics_dir = get_target_metrics_dir(base_output_dir, target_name_clean)
+                    if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+                        view_metrics_dir = target_metrics_dir / f"view={view}"
+                        if view == "SYMBOL_SPECIFIC" and symbol:
+                            ref_dir = view_metrics_dir / f"symbol={symbol}"
+                        else:
+                            ref_dir = view_metrics_dir
+                        
+                        # Try to follow reference pointer
+                        ref_file = ref_dir / "latest_ref.json"
+                        if ref_file.exists():
+                            try:
+                                with open(ref_file, 'r') as f:
+                                    ref_data = json.load(f)
+                                canonical_path = Path(ref_data.get("canonical_path", ""))
+                                if canonical_path.exists():
+                                    baseline_data = self.export_metrics_json_from_parquet(canonical_path)
+                                    logger.debug(f"✅ Loaded baseline metrics via reference pointer: {canonical_path}")
+                            except Exception as e:
+                                logger.debug(f"Failed to follow reference pointer: {e}")
+            except Exception as e:
+                logger.debug(f"Failed to load baseline metrics via reference: {e}")
+        
+        # 4. Last resort: try legacy locations for backward compatibility
+        if baseline_data is None:
+            try:
+                from TRAINING.orchestration.utils.target_first_paths import get_metrics_path_from_cohort_dir
+                baseline_metrics_dir = get_metrics_path_from_cohort_dir(baseline_cohort_dir)
+                if baseline_metrics_dir:
+                    legacy_parquet = baseline_metrics_dir / "metrics.parquet"
+                    if legacy_parquet.exists():
+                        df = pd.read_parquet(legacy_parquet)
+                        if len(df) > 0:
+                            baseline_data = df.iloc[0].to_dict()
+                    elif (baseline_metrics_dir / "metrics.json").exists():
+                        with open(baseline_metrics_dir / "metrics.json", 'r') as f:
+                            baseline_data = json.load(f)
+            except Exception as e:
+                logger.debug(f"Failed to load baseline metrics from legacy location: {e}")
+        
+        if baseline_data is None:
+            logger.debug(f"Baseline metrics not found for baseline_cohort_dir: {baseline_cohort_dir}")
             return
         
         # Load baseline metadata for fingerprints
@@ -487,8 +655,6 @@ class MetricsWriter:
                 logger.debug(f"Failed to load baseline metadata: {e}")
         
         try:
-            with open(baseline_metrics_file, 'r') as f:
-                baseline_data = json.load(f)
             
             # Extract baseline metrics
             if "metrics" in baseline_data:

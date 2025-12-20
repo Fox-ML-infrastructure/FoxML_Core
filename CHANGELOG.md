@@ -16,6 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-20 (Snapshot Index Symbol Key Fix & SST Metrics Architecture)
+- **Fixed Snapshot Index Overwrites**: Updated snapshot index key format from `run_id:stage:target:view` to `run_id:stage:target:view:symbol` to prevent overwrites when processing multiple symbols for the same target in SYMBOL_SPECIFIC view
+- **Backward Compatibility**: All snapshot index readers handle old formats (legacy, previous, and current) automatically
+- **SST Metrics Architecture**: Implemented Single Source of Truth for metrics:
+  - **Canonical Location**: `targets/<target>/reproducibility/<view>/cohort=<id>/metrics.parquet` (immutable, audit-grade)
+  - **Debug Export**: `metrics.json` in same location (derived from parquet)
+  - **Reference Pointers**: `targets/<target>/metrics/view=.../latest_ref.json` points to canonical location
+  - **No Duplication**: Full metrics payloads only in reproducibility/cohort directories, metrics/ contains only references
+  - **Reading Logic**: All readers check canonical location first, then reference pointers, then legacy locations
+- **Files Changed**: `diff_telemetry.py` (snapshot key format), `metrics.py` (SST architecture), `metrics_aggregator.py`, `diff_telemetry.py` (reading logic)
+
 #### 2025-12-20 (Legacy REPRODUCIBILITY Directory Cleanup)
 - **Removed Legacy Directory Creation**: Removed all code that creates the legacy `REPRODUCIBILITY/` directory structure
 - **Preserved Backward Compatibility**: Fallback reading logic still supports reading from existing legacy directories

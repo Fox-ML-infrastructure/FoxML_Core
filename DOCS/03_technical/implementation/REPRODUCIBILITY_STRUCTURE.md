@@ -28,8 +28,8 @@ All artifacts are organized under `targets/<target>/`, with global summaries in 
         │   ├── CROSS_SECTIONAL/
         │   │   └── cohort={cohort_id}/
         │   │       ├── metadata.json      # Full cohort metadata
-        │   │       ├── metrics.json       # Performance metrics
-        │   │       ├── metrics.parquet    # Metrics in parquet format
+        │   │       ├── metrics.parquet    # CANONICAL: Single Source of Truth (SST)
+        │   │       ├── metrics.json        # Debug export (derived from parquet)
         │   │       ├── snapshot.json      # Normalized snapshot for diff telemetry
         │   │       ├── diff_prev.json     # Diff vs previous run
         │   │       ├── diff_baseline.json # Diff vs baseline
@@ -39,7 +39,8 @@ All artifacts are organized under `targets/<target>/`, with global summaries in 
         │   │   └── symbol={symbol}/
         │   │       └── cohort={cohort_id}/
         │   │           ├── metadata.json
-        │   │           ├── metrics.json
+        │   │           ├── metrics.parquet # CANONICAL: Single Source of Truth (SST)
+        │   │           ├── metrics.json   # Debug export
         │   │           └── ...
         │   ├── feature_importances/  # Feature importance files
         │   │   ├── feature_importance_multi_model.csv
@@ -57,12 +58,12 @@ All artifacts are organized under `targets/<target>/`, with global summaries in 
         │   │   └── featureset_post_gatekeeper.json
         │   ├── feature_selection_rankings.csv
         │   └── selected_features.txt
-        ├── metrics/                 # Performance metrics (organized by view)
+        ├── metrics/                 # Convenience location (reference pointers only)
         │   ├── view=CROSS_SECTIONAL/
-        │   │   └── metrics.json
+        │   │   └── latest_ref.json  # Pointer to canonical metrics.parquet
         │   └── view=SYMBOL_SPECIFIC/
         │       └── symbol={symbol}/
-        │           └── metrics.json
+        │           └── latest_ref.json  # Pointer to canonical metrics.parquet
         ├── models/                  # Trained models
         │   └── {family}/
         │       └── {model_files}
@@ -95,16 +96,40 @@ Each target has a self-contained directory structure:
 - `feature_prioritization.yaml`: Feature prioritization results
 
 ### Reproducibility (`targets/<target>/reproducibility/`)
-- **Cohort directories**: `{view}/cohort={cohort_id}/` - Contains metadata, metrics, diffs, snapshots
+- **Purpose**: Full audit trail for reproducibility and debugging
+- **Cohort directories**: `{view}/cohort={cohort_id}/` - Contains:
+  - `metadata.json` - Complete metadata with all reproducibility factors
+  - **`metrics.parquet`** - **CANONICAL: Single Source of Truth (SST)** for metrics
+  - **`metrics.json`** - Debug export (derived from parquet, human-readable)
+  - `snapshot.json` - Normalized snapshot for diff telemetry
+  - `diff_prev.json` - Diff vs previous comparable run
+  - `diff_baseline.json` - Diff vs baseline run
+  - `metric_deltas.json` - Metric deltas summary
+  - `audit_report.json` - Audit report
 - **Feature importances**: Aggregated feature importance files from multi-model feature selection
 - **Feature importance snapshots**: Stability tracking snapshots for cross-run analysis
 - **Feature exclusions**: YAML files tracking excluded features
 - **Featureset artifacts**: JSON files tracking featureset state at various stages
 
 ### Metrics (`targets/<target>/metrics/`)
+- **Purpose**: Convenience location with reference pointers to canonical metrics
+- **SST Architecture**: Metrics are stored in **canonical location** (`reproducibility/{view}/cohort={id}/metrics.parquet`)
+- **Reference System**: `metrics/` directory contains only reference pointers, not full payloads
 - Organized by view: `view=CROSS_SECTIONAL/` and `view=SYMBOL_SPECIFIC/`
 - For SYMBOL_SPECIFIC, includes `symbol={symbol}/` subdirectories
-- Contains `metrics.json` and `metrics.parquet` files
+- Contains:
+  - **`latest_ref.json`** - Reference pointer to canonical metrics.parquet
+    - Format: `{run_id, cohort_id, canonical_path, relative_path, sha256, timestamp}`
+    - Points to: `../../reproducibility/{view}/cohort={id}/metrics.parquet`
+- **Reading Logic**: All readers check:
+  1. Canonical location first: `reproducibility/{view}/cohort={id}/metrics.parquet`
+  2. Reference pointer: `metrics/view={view}/latest_ref.json` → follow to canonical
+  3. Legacy locations: For backward compatibility with old runs
+- **Benefits**:
+  - Single Source of Truth: One canonical location per cohort
+  - No duplication: Full metrics payloads only in reproducibility/cohort directories
+  - Convenience: Reference pointers make it easy to find latest metrics
+  - Audit-grade: Canonical location is immutable and tied to cohort metadata
 
 ### Models (`targets/<target>/models/`)
 - Organized by model family: `{family}/`
@@ -118,9 +143,11 @@ Each target has a self-contained directory structure:
 
 The structure distinguishes between views:
 - **CROSS_SECTIONAL**: Cross-sectional analysis (pooled across symbols)
-  - Path: `targets/<target>/reproducibility/CROSS_SECTIONAL/cohort={cohort_id}/`
+  - Reproducibility path: `targets/<target>/reproducibility/CROSS_SECTIONAL/cohort={cohort_id}/`
+  - Metrics path: `targets/<target>/metrics/view=CROSS_SECTIONAL/`
 - **SYMBOL_SPECIFIC**: Symbol-specific analysis
-  - Path: `targets/<target>/reproducibility/SYMBOL_SPECIFIC/symbol={symbol}/cohort={cohort_id}/`
+  - Reproducibility path: `targets/<target>/reproducibility/SYMBOL_SPECIFIC/symbol={symbol}/cohort={cohort_id}/`
+  - Metrics path: `targets/<target>/metrics/view=SYMBOL_SPECIFIC/symbol={symbol}/`
   - Note: `symbol={symbol}` prevents overwriting when multiple symbols are processed
 
 ## Legacy Structure (Deprecated)

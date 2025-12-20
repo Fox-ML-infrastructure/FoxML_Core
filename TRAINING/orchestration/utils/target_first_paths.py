@@ -174,3 +174,158 @@ def initialize_run_structure(base_output_dir: Path) -> None:
     (base_output_dir / "cache").mkdir(exist_ok=True)
     (base_output_dir / "logs").mkdir(exist_ok=True)
 
+
+def get_metrics_path_from_cohort_dir(cohort_dir: Path, base_output_dir: Optional[Path] = None) -> Optional[Path]:
+    """
+    Map a cohort directory to the corresponding metrics directory.
+    
+    Maps from:
+    - targets/<target>/reproducibility/CROSS_SECTIONAL/cohort=<id>/ 
+      → targets/<target>/metrics/view=CROSS_SECTIONAL/
+    - targets/<target>/reproducibility/SYMBOL_SPECIFIC/symbol=<symbol>/cohort=<id>/
+      → targets/<target>/metrics/view=SYMBOL_SPECIFIC/symbol=<symbol>/
+    
+    Args:
+        cohort_dir: Cohort directory path (from reproducibility/)
+        base_output_dir: Optional base output directory (will be inferred if not provided)
+    
+    Returns:
+        Path to metrics directory, or None if path cannot be resolved
+    """
+    cohort_dir = Path(cohort_dir)
+    
+    # Find base_output_dir if not provided
+    if base_output_dir is None:
+        temp_dir = cohort_dir
+        for _ in range(10):
+            if temp_dir.name == "targets" and (temp_dir.parent / "targets").exists():
+                base_output_dir = temp_dir.parent
+                break
+            if not temp_dir.parent.exists():
+                break
+            temp_dir = temp_dir.parent
+        
+        if base_output_dir is None:
+            logger.warning(f"Could not find base_output_dir from cohort_dir: {cohort_dir}")
+            return None
+    
+    # Extract target, view, and symbol from cohort_dir path
+    parts = cohort_dir.parts
+    target = None
+    view = None
+    symbol = None
+    
+    # Find target (should be after "targets")
+    for i, part in enumerate(parts):
+        if part == "targets" and i + 1 < len(parts):
+            target = parts[i + 1]
+            break
+    
+    if not target:
+        logger.warning(f"Could not extract target from cohort_dir: {cohort_dir}")
+        return None
+    
+    # Find view (CROSS_SECTIONAL or SYMBOL_SPECIFIC) and symbol
+    for i, part in enumerate(parts):
+        if part == "reproducibility" and i + 1 < len(parts):
+            view = parts[i + 1]
+            if view == "SYMBOL_SPECIFIC" and i + 2 < len(parts):
+                symbol_part = parts[i + 2]
+                if symbol_part.startswith("symbol="):
+                    symbol = symbol_part.replace("symbol=", "")
+            break
+    
+    if not view:
+        logger.warning(f"Could not extract view from cohort_dir: {cohort_dir}")
+        return None
+    
+    # Build metrics path
+    metrics_dir = get_target_metrics_dir(base_output_dir, target) / f"view={view}"
+    if symbol:
+        metrics_dir = metrics_dir / f"symbol={symbol}"
+    
+    return metrics_dir
+
+
+def get_cohort_dir_from_metrics_path(metrics_path: Path, base_output_dir: Optional[Path] = None) -> Optional[Path]:
+    """
+    Map a metrics path to the corresponding cohort directory (for finding diffs).
+    
+    Maps from:
+    - targets/<target>/metrics/view=CROSS_SECTIONAL/metrics.json
+      → targets/<target>/reproducibility/CROSS_SECTIONAL/cohort=<id>/
+    - targets/<target>/metrics/view=SYMBOL_SPECIFIC/symbol=<symbol>/metrics.json
+      → targets/<target>/reproducibility/SYMBOL_SPECIFIC/symbol=<symbol>/cohort=<id>/
+    
+    Note: This function returns the view-level directory. The specific cohort directory
+    must be determined by finding the matching cohort_id.
+    
+    Args:
+        metrics_path: Metrics file or directory path (from metrics/)
+        base_output_dir: Optional base output directory (will be inferred if not provided)
+    
+    Returns:
+        Path to reproducibility view directory, or None if path cannot be resolved
+    """
+    metrics_path = Path(metrics_path)
+    
+    # If it's a file, get the parent directory
+    if metrics_path.is_file():
+        metrics_dir = metrics_path.parent
+    else:
+        metrics_dir = metrics_path
+    
+    # Find base_output_dir if not provided
+    if base_output_dir is None:
+        temp_dir = metrics_dir
+        for _ in range(10):
+            if temp_dir.name == "targets" and (temp_dir.parent / "targets").exists():
+                base_output_dir = temp_dir.parent
+                break
+            if not temp_dir.parent.exists():
+                break
+            temp_dir = temp_dir.parent
+        
+        if base_output_dir is None:
+            logger.warning(f"Could not find base_output_dir from metrics_path: {metrics_path}")
+            return None
+    
+    # Extract target, view, and symbol from metrics path
+    parts = metrics_dir.parts
+    target = None
+    view = None
+    symbol = None
+    
+    # Find target (should be after "targets")
+    for i, part in enumerate(parts):
+        if part == "targets" and i + 1 < len(parts):
+            target = parts[i + 1]
+            break
+    
+    if not target:
+        logger.warning(f"Could not extract target from metrics_path: {metrics_path}")
+        return None
+    
+    # Find view and symbol
+    for i, part in enumerate(parts):
+        if part == "metrics" and i + 1 < len(parts):
+            view_part = parts[i + 1]
+            if view_part.startswith("view="):
+                view = view_part.replace("view=", "")
+                if i + 2 < len(parts):
+                    symbol_part = parts[i + 2]
+                    if symbol_part.startswith("symbol="):
+                        symbol = symbol_part.replace("symbol=", "")
+            break
+    
+    if not view:
+        logger.warning(f"Could not extract view from metrics_path: {metrics_path}")
+        return None
+    
+    # Build reproducibility path
+    repro_dir = get_target_reproducibility_dir(base_output_dir, target) / view
+    if symbol:
+        repro_dir = repro_dir / f"symbol={symbol}"
+    
+    return repro_dir
+

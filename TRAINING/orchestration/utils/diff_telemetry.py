@@ -132,15 +132,30 @@ class DiffTelemetry:
                     break
                 temp_dir = temp_dir.parent
         
-        # Run-specific snapshot index: stored in run's REPRODUCIBILITY/METRICS/
-        if run_dir:
-            self.run_metrics_dir = run_dir / "REPRODUCIBILITY" / "METRICS"
-            self.run_metrics_dir.mkdir(parents=True, exist_ok=True)
+        # Run-specific snapshot index: stored in run's globals/ (target-first structure)
+        # Find run directory (where targets/ or globals/ exists)
+        run_dir_for_globals = None
+        temp_dir = self.output_dir
+        for _ in range(10):  # Limit depth
+            if (temp_dir / "targets").exists() or (temp_dir / "globals").exists() or temp_dir.name in ["RESULTS", "intelligent_output"]:
+                run_dir_for_globals = temp_dir
+                break
+            if not temp_dir.parent.exists():
+                break
+            temp_dir = temp_dir.parent
+        
+        if run_dir_for_globals:
+            from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+            globals_dir = get_globals_dir(run_dir_for_globals)
+            globals_dir.mkdir(parents=True, exist_ok=True)
+            self.run_metrics_dir = globals_dir
             self.snapshot_index = self.run_metrics_dir / "snapshot_index.json"
         else:
-            # Fallback: use output_dir if we can't find run directory
-            self.run_metrics_dir = self.output_dir / "REPRODUCIBILITY" / "METRICS"
-            self.run_metrics_dir.mkdir(parents=True, exist_ok=True)
+            # Fallback: use output_dir/globals/ if we can't find run directory
+            from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+            globals_dir = get_globals_dir(self.output_dir)
+            globals_dir.mkdir(parents=True, exist_ok=True)
+            self.run_metrics_dir = globals_dir
             self.snapshot_index = self.run_metrics_dir / "snapshot_index.json"
         
         # Baselines are stored per-cohort (in cohort directory), not in a global index
@@ -170,12 +185,27 @@ class DiffTelemetry:
                     data = json.load(f)
                     for key, snap_data in data.items():
                         snap = self._deserialize_snapshot(snap_data)
-                        # Extract run_id from key (format: "run_id" or "run_id:stage")
-                        if ':' in key:
-                            run_id = key.split(':', 1)[0]
+                        # Handle old formats:
+                        # - run_id:stage (legacy, 1 colon)
+                        # - run_id:stage:target:view (previous fix, 3 colons)
+                        # - run_id:stage:target:view:symbol (current format, 4 colons)
+                        if key.count(':') >= 4:
+                            # Current format: run_id:stage:target:view:symbol
+                            self._snapshots[key] = snap
+                        elif key.count(':') >= 3:
+                            # Previous format: run_id:stage:target:view - build new key with symbol
+                            target_clean = (snap.target or "unknown").replace('/', '_').replace('\\', '_')
+                            view_clean = snap.view or "UNKNOWN"
+                            symbol_clean = (snap.symbol or "NONE").replace('/', '_').replace('\\', '_')
+                            new_key = f"{snap.run_id}:{snap.stage}:{target_clean}:{view_clean}:{symbol_clean}"
+                            self._snapshots[new_key] = snap
                         else:
-                            run_id = key
-                        self._snapshots[run_id] = snap
+                            # Legacy format: run_id or run_id:stage - build new key with target, view, symbol
+                            target_clean = (snap.target or "unknown").replace('/', '_').replace('\\', '_')
+                            view_clean = snap.view or "UNKNOWN"
+                            symbol_clean = (snap.symbol or "NONE").replace('/', '_').replace('\\', '_')
+                            new_key = f"{snap.run_id}:{snap.stage}:{target_clean}:{view_clean}:{symbol_clean}"
+                            self._snapshots[new_key] = snap
             except Exception as e:
                 logger.warning(f"Failed to load snapshot index: {e}")
         
@@ -185,27 +215,43 @@ class DiffTelemetry:
         """
         Save snapshot index per-run (not one mega file).
         
-        CRITICAL: Uses (run_id, stage) as key to prevent cross-stage overwrites.
+        CRITICAL: Uses (run_id, stage, target, view, symbol) as key to prevent overwrites.
         A single run_id can produce multiple stages (TARGET_RANKING, FEATURE_SELECTION, TRAINING),
-        so deduping by just run_id would cause stage entries to overwrite each other.
+        and each stage can process multiple targets and symbols, so we need all five components in the key.
         
-        Index is stored per-run in: {run_dir}/REPRODUCIBILITY/METRICS/snapshot_index.json
+        Index is stored per-run in: {run_dir}/globals/snapshot_index.json (target-first structure)
         This keeps indices correlated by run and prevents one mega file from growing unbounded.
         
-        Only saves snapshots for the current run (identified by self.run_dir).
+        Merges with existing snapshots in the file to prevent overwriting snapshots from other targets/symbols.
         """
         if not self.run_dir or not self.snapshot_index:
             return
         
         try:
-            # Filter snapshots to only those from this run
-            # We identify by checking if the snapshot's run_id context matches this run
-            # For now, we save all snapshots in memory (they're scoped to this run's context)
-            # The index file is already per-run (in run_dir/REPRODUCIBILITY/METRICS/)
-            run_snapshots = {}
-            for run_id, snap in self._snapshots.items():
-                # Use (run_id, stage) as key to prevent cross-stage overwrites
-                run_snapshots[f"{run_id}:{snap.stage}"] = snap.to_dict()
+            # Load existing snapshots from file to merge with new ones
+            existing_snapshots = {}
+            if self.snapshot_index.exists():
+                try:
+                    with open(self.snapshot_index) as f:
+                        existing_data = json.load(f)
+                        # Handle old formats:
+                        # - run_id:stage (legacy)
+                        # - run_id:stage:target:view (previous fix)
+                        # - run_id:stage:target:view:symbol (current format)
+                        for key, snap_data in existing_data.items():
+                            existing_snapshots[key] = snap_data
+                except Exception as e:
+                    logger.debug(f"Failed to load existing snapshot index for merge: {e}")
+            
+            # Merge existing snapshots with new ones (new ones take precedence)
+            run_snapshots = existing_snapshots.copy()
+            for snapshot_key, snap in self._snapshots.items():
+                # Build key: run_id:stage:target:view:symbol
+                target_clean = (snap.target or "unknown").replace('/', '_').replace('\\', '_')
+                view_clean = snap.view or "UNKNOWN"
+                symbol_clean = (snap.symbol or "NONE").replace('/', '_').replace('\\', '_')
+                key = f"{snap.run_id}:{snap.stage}:{target_clean}:{view_clean}:{symbol_clean}"
+                run_snapshots[key] = snap.to_dict()
             
             _write_atomic_json(self.snapshot_index, run_snapshots)
         except Exception as e:
@@ -228,6 +274,10 @@ class DiffTelemetry:
     def _save_baseline_to_cohort(self, cohort_dir: Path, baseline: BaselineState):
         """Save baseline to cohort directory."""
         cohort_dir = Path(cohort_dir)
+        # NEVER create REPRODUCIBILITY directories - only use target-first structure
+        if "REPRODUCIBILITY" in str(cohort_dir):
+            logger.warning(f"⚠️ Skipping baseline save to legacy REPRODUCIBILITY path: {cohort_dir}")
+            return
         cohort_dir.mkdir(parents=True, exist_ok=True)
         baseline_file = cohort_dir / "baseline.json"
         try:
@@ -1508,14 +1558,13 @@ class DiffTelemetry:
         if not metrics_data and resolved_metadata:
             metrics_data = resolved_metadata.get('metrics', {})
         
-        # CRITICAL: If still empty, read from metrics files in cohort_dir
+        # SST Architecture: Read metrics from canonical location (cohort_dir) first
         # This is the most common case for TARGET_RANKING/FEATURE_SELECTION stages
         if not metrics_data and cohort_dir:
             cohort_path = Path(cohort_dir)
-            metrics_parquet = cohort_path / "metrics.parquet"
-            metrics_json_file = cohort_path / "metrics.json"
             
-            # Try parquet first (canonical format)
+            # 1. Try canonical metrics.parquet in cohort directory (SST)
+            metrics_parquet = cohort_path / "metrics.parquet"
             if metrics_parquet.exists():
                 try:
                     import pandas as pd
@@ -1530,24 +1579,28 @@ class DiffTelemetry:
                                        'composite_version', 'leakage', 'leakage_flag']
                             and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
                         }
+                        logger.debug(f"✅ Loaded metrics from canonical parquet: {metrics_parquet}")
                 except Exception as e:
                     logger.debug(f"Failed to read metrics.parquet from {cohort_dir}: {e}")
             
-            # Fall back to JSON if parquet doesn't exist or failed
-            if not metrics_data and metrics_json_file.exists():
-                try:
-                    with open(metrics_json_file, 'r') as f:
-                        metrics_json = json.load(f)
-                    # Extract all numeric metrics (exclude metadata fields)
-                    metrics_data = {
-                        k: v for k, v in metrics_json.items()
-                        if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
-                                   'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
-                                   'composite_version', 'leakage', 'leakage_flag']
-                        and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
-                    }
-                except Exception as e:
-                    logger.debug(f"Failed to read metrics.json from {cohort_dir}: {e}")
+            # 2. Fall back to metrics.json in cohort directory (debug export)
+            if not metrics_data:
+                metrics_json_file = cohort_path / "metrics.json"
+                if metrics_json_file.exists():
+                    try:
+                        with open(metrics_json_file, 'r') as f:
+                            metrics_json = json.load(f)
+                        # Extract all numeric metrics (exclude metadata fields)
+                        metrics_data = {
+                            k: v for k, v in metrics_json.items()
+                            if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
+                                       'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                       'composite_version', 'leakage', 'leakage_flag']
+                            and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
+                        }
+                        logger.debug(f"✅ Loaded metrics from JSON: {metrics_json_file}")
+                    except Exception as e:
+                        logger.debug(f"Failed to read metrics.json from {cohort_dir}: {e}")
             
             # Fallback: Try target-first structure if metrics not found in cohort_dir
             if not metrics_data:
@@ -1654,47 +1707,140 @@ class DiffTelemetry:
         if not metrics_data and resolved_metadata:
             metrics_data = resolved_metadata.get('metrics', {})
         
-        # CRITICAL: If still empty, try reading from metrics files in cohort_dir
-        # Prefer metrics.parquet (canonical format) if it exists, otherwise fall back to metrics.json
+        # SST Architecture: Read metrics from canonical location (cohort_dir) first
+        # Then fall back to reference pointers, then legacy locations
         if not metrics_data and cohort_dir:
             cohort_path = Path(cohort_dir)
-            metrics_parquet = cohort_path / "metrics.parquet"
-            metrics_json_file = cohort_path / "metrics.json"
             
-            # Try parquet first (canonical format)
+            # 1. Try canonical metrics.parquet in cohort directory (SST)
+            metrics_parquet = cohort_path / "metrics.parquet"
             if metrics_parquet.exists():
                 try:
                     import pandas as pd
                     df_metrics = pd.read_parquet(metrics_parquet)
-                    # Convert to dict (should be single row)
                     if len(df_metrics) > 0:
                         metrics_dict = df_metrics.iloc[0].to_dict()
                         # Extract key metrics (exclude diff_telemetry, run_id, timestamp, and other metadata for stable hash)
-                        # CRITICAL: Exclude diff_telemetry to prevent volatility in digest computation
                         metrics_data = {
                             k: v for k, v in metrics_dict.items()
                             if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode', 
                                        'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
                                        'composite_version', 'leakage', 'leakage_flag']
                         }
+                        logger.debug(f"✅ Loaded metrics from canonical parquet: {metrics_parquet}")
                 except Exception as e:
                     logger.debug(f"Failed to read metrics.parquet from {cohort_dir}: {e}")
             
-            # Fall back to JSON if parquet doesn't exist or failed
-            if not metrics_data and metrics_json_file.exists():
+            # 2. Fall back to metrics.json in cohort directory (debug export)
+            if not metrics_data:
+                metrics_json_file = cohort_path / "metrics.json"
+                if metrics_json_file.exists():
+                    try:
+                        with open(metrics_json_file, 'r') as f:
+                            metrics_json = json.load(f)
+                        metrics_data = {
+                            k: v for k, v in metrics_json.items()
+                            if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
+                                       'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                       'composite_version', 'leakage', 'leakage_flag']
+                        }
+                        logger.debug(f"✅ Loaded metrics from JSON: {metrics_json_file}")
+                    except Exception as e:
+                        logger.debug(f"Failed to read metrics.json from {cohort_dir}: {e}")
+            
+            # 3. Fallback to reference pointer in metrics/ directory
+            if not metrics_data:
                 try:
-                    with open(metrics_json_file, 'r') as f:
-                        metrics_json = json.load(f)
-                    # Extract key metrics (exclude diff_telemetry, run_id, timestamp, and other metadata for stable hash)
-                    # CRITICAL: Exclude diff_telemetry to prevent volatility in digest computation
-                    metrics_data = {
-                        k: v for k, v in metrics_json.items()
-                        if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
-                                   'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
-                                   'composite_version', 'leakage', 'leakage_flag']
-                    }
+                    from TRAINING.orchestration.utils.target_first_paths import get_target_metrics_dir
+                    # Try to extract target from path
+                    target = None
+                    current = cohort_path
+                    for _ in range(10):
+                        if current.name.startswith('cohort='):
+                            # Walk up to find target
+                            parent = current.parent
+                            if parent.name in ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC']:
+                                parent = parent.parent
+                            if parent.name not in ['reproducibility', 'CROSS_SECTIONAL', 'SYMBOL_SPECIFIC']:
+                                target = parent.name
+                                break
+                        if not current.parent.exists():
+                            break
+                        current = current.parent
+                    
+                    if target:
+                        # Find base output directory
+                        base_output_dir = cohort_path
+                        for _ in range(10):
+                            if (base_output_dir / "targets").exists():
+                                break
+                            if not base_output_dir.parent.exists():
+                                break
+                            base_output_dir = base_output_dir.parent
+                        
+                        if (base_output_dir / "targets").exists():
+                            target_name_clean = target.replace('/', '_').replace('\\', '_')
+                            target_metrics_dir = get_target_metrics_dir(base_output_dir, target_name_clean)
+                            
+                            # Try to find view from path
+                            view = None
+                            if 'CROSS_SECTIONAL' in cohort_path.parts:
+                                view = 'CROSS_SECTIONAL'
+                            elif 'SYMBOL_SPECIFIC' in cohort_path.parts:
+                                view = 'SYMBOL_SPECIFIC'
+                            
+                            if view:
+                                view_metrics_dir = target_metrics_dir / f"view={view}"
+                                ref_file = view_metrics_dir / "latest_ref.json"
+                                if ref_file.exists():
+                                    try:
+                                        with open(ref_file, 'r') as f:
+                                            ref_data = json.load(f)
+                                        canonical_path = Path(ref_data.get("canonical_path", ""))
+                                        if canonical_path.exists():
+                                            from TRAINING.common.utils.metrics import MetricsWriter
+                                            metrics_dict = MetricsWriter.export_metrics_json_from_parquet(canonical_path)
+                                            metrics_data = {
+                                                k: v for k, v in metrics_dict.items()
+                                                if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
+                                                           'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                                           'composite_version', 'leakage', 'leakage_flag']
+                                            }
+                                            logger.debug(f"✅ Loaded metrics via reference pointer: {canonical_path}")
+                                    except Exception as e:
+                                        logger.debug(f"Failed to follow reference pointer: {e}")
                 except Exception as e:
-                    logger.debug(f"Failed to read metrics.json from {cohort_dir}: {e}")
+                    logger.debug(f"Failed to load metrics via reference: {e}")
+            
+            # 4. Last resort: try legacy locations for backward compatibility
+            if not metrics_data:
+                try:
+                    from TRAINING.orchestration.utils.target_first_paths import get_metrics_path_from_cohort_dir
+                    metrics_dir = get_metrics_path_from_cohort_dir(cohort_dir)
+                    if metrics_dir:
+                        legacy_parquet = metrics_dir / "metrics.parquet"
+                        if legacy_parquet.exists():
+                            import pandas as pd
+                            df_metrics = pd.read_parquet(legacy_parquet)
+                            if len(df_metrics) > 0:
+                                metrics_dict = df_metrics.iloc[0].to_dict()
+                                metrics_data = {
+                                    k: v for k, v in metrics_dict.items()
+                                    if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode', 
+                                               'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                               'composite_version', 'leakage', 'leakage_flag']
+                                }
+                        elif (metrics_dir / "metrics.json").exists():
+                            with open(metrics_dir / "metrics.json", 'r') as f:
+                                metrics_json = json.load(f)
+                                metrics_data = {
+                                    k: v for k, v in metrics_json.items()
+                                    if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
+                                               'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                               'composite_version', 'leakage', 'leakage_flag']
+                                }
+                except Exception as e:
+                    logger.debug(f"Failed to load metrics from legacy location: {e}")
         
         if not metrics_data:
             return None
@@ -1976,10 +2122,15 @@ class DiffTelemetry:
                         target_cohort_dir.mkdir(parents=True, exist_ok=True)
                         logger.debug(f"✅ Created target-first cohort directory for snapshot: {target_cohort_dir}")
             except Exception as e:
-                logger.warning(f"Failed to create target-first structure for snapshot (falling back to cohort_dir): {e}")
-                target_cohort_dir = cohort_dir
+                logger.warning(f"Failed to create target-first structure for snapshot: {e}")
+                # Don't fall back to legacy path - fail instead to prevent REPRODUCIBILITY creation
+                target_cohort_dir = None
         
-        # Use target-first directory for all writes
+        # Use target-first directory for all writes - NEVER use legacy REPRODUCIBILITY paths
+        if target_cohort_dir is None:
+            logger.error(f"❌ Cannot save snapshot: failed to create target-first structure and legacy paths are not allowed")
+            return
+        
         cohort_dir = target_cohort_dir
         cohort_dir.mkdir(parents=True, exist_ok=True)
         
@@ -2010,23 +2161,39 @@ class DiffTelemetry:
                     
                     # Re-read snapshots to get latest sequence (another process may have updated it)
                     # Load from run-level snapshot index to get all snapshots for this run
-                    run_snapshot_index = None
-                    if self.run_dir:
-                        run_snapshot_index = self.run_dir / "REPRODUCIBILITY" / "METRICS" / "snapshot_index.json"
-                        if run_snapshot_index.exists():
-                            try:
-                                with open(run_snapshot_index) as f:
-                                    index_data = json.load(f)
-                                    for key, snap_data in index_data.items():
-                                        # Handle both formats
-                                        if ':' in key:
-                                            run_id = key.split(':', 1)[0]
-                                        else:
-                                            run_id = key
-                                        if run_id not in self._snapshots:
-                                            self._snapshots[run_id] = self._deserialize_snapshot(snap_data)
-                            except Exception:
-                                pass
+                    run_snapshot_index = self.snapshot_index
+                    if run_snapshot_index and run_snapshot_index.exists():
+                        try:
+                            with open(run_snapshot_index) as f:
+                                index_data = json.load(f)
+                                for key, snap_data in index_data.items():
+                                    snap = self._deserialize_snapshot(snap_data)
+                                    # Handle old formats:
+                                    # - run_id:stage (legacy, 1 colon)
+                                    # - run_id:stage:target:view (previous fix, 3 colons)
+                                    # - run_id:stage:target:view:symbol (current format, 4 colons)
+                                    if key.count(':') >= 4:
+                                        # Current format: use key as-is
+                                        if key not in self._snapshots:
+                                            self._snapshots[key] = snap
+                                    elif key.count(':') >= 3:
+                                        # Previous format (run_id:stage:target:view): build new key with symbol
+                                        target_clean = (snap.target or "unknown").replace('/', '_').replace('\\', '_')
+                                        view_clean = snap.view or "UNKNOWN"
+                                        symbol_clean = (snap.symbol or "NONE").replace('/', '_').replace('\\', '_')
+                                        new_key = f"{snap.run_id}:{snap.stage}:{target_clean}:{view_clean}:{symbol_clean}"
+                                        if new_key not in self._snapshots:
+                                            self._snapshots[new_key] = snap
+                                    else:
+                                        # Legacy format (run_id:stage): build new key with target, view, symbol
+                                        target_clean = (snap.target or "unknown").replace('/', '_').replace('\\', '_')
+                                        view_clean = snap.view or "UNKNOWN"
+                                        symbol_clean = (snap.symbol or "NONE").replace('/', '_').replace('\\', '_')
+                                        new_key = f"{snap.run_id}:{snap.stage}:{target_clean}:{view_clean}:{symbol_clean}"
+                                        if new_key not in self._snapshots:
+                                            self._snapshots[new_key] = snap
+                        except Exception:
+                            pass
                     
                     # Get next sequence number (max existing + 1, or 1 if none)
                     max_seq = 0
@@ -2111,8 +2278,13 @@ class DiffTelemetry:
         except Exception as e:
             logger.debug(f"Failed to save snapshot.json to target-first structure (non-critical): {e}")
         
-        # Update index (keyed by run_id for in-memory lookup, but saved as run_id:stage)
-        self._snapshots[snapshot.run_id] = snapshot
+        # Update index (keyed by run_id:stage:target:view:symbol for uniqueness across targets and symbols)
+        # Include target, view, and symbol in key to prevent overwrites when multiple targets/symbols are processed
+        target_clean = (snapshot.target or "unknown").replace('/', '_').replace('\\', '_')
+        view_clean = snapshot.view or "UNKNOWN"
+        symbol_clean = (snapshot.symbol or "NONE").replace('/', '_').replace('\\', '_')
+        snapshot_key = f"{snapshot.run_id}:{snapshot.stage}:{target_clean}:{view_clean}:{symbol_clean}"
+        self._snapshots[snapshot_key] = snapshot
         self._save_indices()
         
         logger.debug(f"✅ Saved snapshot to {snapshot_file}")
@@ -3499,7 +3671,10 @@ class DiffTelemetry:
             cohort_dir: Cohort directory
         """
         cohort_dir = Path(cohort_dir)
-        cohort_dir.mkdir(parents=True, exist_ok=True)
+        # NEVER create REPRODUCIBILITY directories - only use target-first structure
+        if "REPRODUCIBILITY" in str(cohort_dir):
+            logger.warning(f"⚠️ Skipping diff save to legacy REPRODUCIBILITY path: {cohort_dir}")
+            return
         
         # Extract identifiers from cohort_dir path for target-first structure
         # Path structure: .../STAGE/VIEW/item_name/cohort=.../
@@ -3582,8 +3757,22 @@ class DiffTelemetry:
                         logger.debug(f"Failed to create target-first structure for diffs (non-critical): {e}")
                         target_cohort_dir = None
         except Exception as e:
-            logger.debug(f"Failed to extract identifiers for target-first structure (non-critical): {e}")
+            logger.debug(f"Failed to extract identifiers for target-first structure: {e}")
             target_cohort_dir = None
+        
+        # Use target-first directory for all writes - NEVER use legacy REPRODUCIBILITY paths
+        if target_cohort_dir is None:
+            # If we couldn't create target-first structure, check if cohort_dir is already target-first
+            if "REPRODUCIBILITY" not in str(cohort_dir):
+                # It's already target-first, use it
+                target_cohort_dir = cohort_dir
+            else:
+                logger.warning(f"⚠️ Cannot save diff: failed to create target-first structure from {cohort_dir}")
+                return
+        
+        # Use target-first directory instead of original cohort_dir
+        cohort_dir = target_cohort_dir
+        cohort_dir.mkdir(parents=True, exist_ok=True)
         
         # Tier A: Summary in diff_prev.json (lightweight, always present)
         # This includes: metric_deltas_count, impact_label, top_regressions, top_improvements
@@ -3725,10 +3914,56 @@ class DiffTelemetry:
         if not rows:
             return
         
-        # Store at target level (one level up from cohort_dir) for aggregation
-        # This allows querying across all runs for the same target
-        target_dir = cohort_dir.parent
-        timeseries_file = target_dir / "metrics_timeseries.parquet"
+        # Store in metrics/ folder (not reproducibility/) for consistency
+        # Map cohort_dir to metrics/ folder using helper function
+        try:
+            from TRAINING.orchestration.utils.target_first_paths import get_metrics_path_from_cohort_dir
+            metrics_dir = get_metrics_path_from_cohort_dir(cohort_dir)
+            if metrics_dir:
+                timeseries_file = metrics_dir / "metrics_timeseries.parquet"
+            else:
+                # Fallback: try to construct path manually
+                logger.warning(f"Could not map cohort_dir to metrics path, using fallback: {cohort_dir}")
+                # Extract target and view from cohort_dir
+                parts = Path(cohort_dir).parts
+                target = None
+                view = None
+                symbol = None
+                for i, part in enumerate(parts):
+                    if part == "targets" and i + 1 < len(parts):
+                        target = parts[i + 1]
+                    if part == "reproducibility" and i + 1 < len(parts):
+                        view = parts[i + 1]
+                        if view == "SYMBOL_SPECIFIC" and i + 2 < len(parts):
+                            symbol_part = parts[i + 2]
+                            if symbol_part.startswith("symbol="):
+                                symbol = symbol_part.replace("symbol=", "")
+                
+                if target and view:
+                    # Find base_output_dir
+                    base_output_dir = Path(cohort_dir)
+                    for _ in range(10):
+                        if base_output_dir.name == "targets":
+                            base_output_dir = base_output_dir.parent
+                            break
+                        if not base_output_dir.parent.exists():
+                            break
+                        base_output_dir = base_output_dir.parent
+                    
+                    from TRAINING.orchestration.utils.target_first_paths import get_target_metrics_dir
+                    metrics_dir = get_target_metrics_dir(base_output_dir, target) / f"view={view}"
+                    if symbol:
+                        metrics_dir = metrics_dir / f"symbol={symbol}"
+                    timeseries_file = metrics_dir / "metrics_timeseries.parquet"
+                else:
+                    # Last resort: use old location
+                    target_dir = cohort_dir.parent
+                    timeseries_file = target_dir / "metrics_timeseries.parquet"
+        except Exception as e:
+            logger.warning(f"Failed to map cohort_dir to metrics path: {e}, using fallback")
+            # Fallback to old location
+            target_dir = cohort_dir.parent
+            timeseries_file = target_dir / "metrics_timeseries.parquet"
         
         try:
             # Read existing data if file exists
@@ -3976,8 +4211,12 @@ class DiffTelemetry:
         # Compute diff against baseline
         baseline_diff = None
         if baseline_state:
-            # Load baseline snapshot
-            baseline_snapshot = self._snapshots.get(baseline_state.baseline_run_id)
+            # Load baseline snapshot - search by run_id since keys now include target/view
+            baseline_snapshot = None
+            for snap in self._snapshots.values():
+                if snap.run_id == baseline_state.baseline_run_id:
+                    baseline_snapshot = snap
+                    break
             if baseline_snapshot:
                 # Try to find baseline snapshot's cohort directory
                 baseline_cohort_dir = None

@@ -177,9 +177,9 @@ def save_rankings(
     """
     Save target predictability rankings.
     
-    New structure:
-    - CSV (reproducibility artifact) → REPRODUCIBILITY/TARGET_RANKING/target_predictability_rankings.csv
-    - YAML (decision log) → DECISION/TARGET_RANKING/target_prioritization.yaml
+    Target-first structure:
+    - CSV (reproducibility artifact) → globals/target_predictability_rankings.csv
+    - YAML (decision log) → targets/<target>/decision/feature_prioritization.yaml (per-target)
     
     Args:
         results: List of TargetPredictabilityScore objects
@@ -209,8 +209,9 @@ def save_rankings(
             'mean_score', 'std_score', 'mean_r2', 'std_r2', 'mean_importance',
             'consistency', 'n_models', 'leakage_flag', 'recommendation'
         ])
-        empty_df.to_csv(repro_dir / "target_predictability_rankings.csv", index=False)
-        logger.info(f"Saved empty rankings file to {repro_dir / 'target_predictability_rankings.csv'}")
+        empty_csv_path = globals_dir / "target_predictability_rankings.csv"
+        empty_df.to_csv(empty_csv_path, index=False)
+        logger.info(f"Saved empty rankings file to {empty_csv_path}")
         return
     
     # Sort by composite score

@@ -191,9 +191,9 @@ def _save_dual_view_rankings(
     - Global routing decisions → globals/routing_decisions.json (global summary)
     - Per-target routing decision → targets/<target>/decision/routing_decision.json (optional, for fast local inspection)
     
-    Also maintains backward compatibility:
+    Reading logic maintains backward compatibility (reads from legacy locations if needed):
     - DECISION/TARGET_RANKING/routing_decisions.json (legacy location)
-    - REPRODUCIBILITY/TARGET_RANKING/routing_decisions.json (convenience copy)
+    - REPRODUCIBILITY/TARGET_RANKING/routing_decisions.json (legacy location)
     
     Args:
         output_dir: Base output directory (RESULTS/{run}/), not target_rankings subdirectory

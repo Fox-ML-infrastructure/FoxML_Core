@@ -64,49 +64,59 @@ def save_feature_importances(
     if output_dir is None:
         output_dir = _REPO_ROOT / "results"
     
-    # Create directory structure in REPRODUCIBILITY/TARGET_RANKING/{view}/{target}/{symbol}/feature_importances/
+    # Find base run directory for target-first structure
+    base_output_dir = output_dir
+    for _ in range(10):
+        if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
+            break
+        if not base_output_dir.parent.exists():
+            break
+        base_output_dir = base_output_dir.parent
+    
     target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-    if output_dir.name == "target_rankings":
-        repro_base = output_dir.parent / "REPRODUCIBILITY" / "TARGET_RANKING"
-    else:
-        repro_base = output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
     
-    if view == "SYMBOL_SPECIFIC" and symbol:
-        importances_dir = repro_base / view / target_name_clean / f"symbol={symbol}" / "feature_importances"
-    else:
-        importances_dir = repro_base / view / target_name_clean / "feature_importances"
-    importances_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Save per-model CSV files
-    for model_name in sorted(feature_importances.keys()):
-        importances = feature_importances[model_name]
-        if not importances:
-            continue
+    # Save to target-first structure only
+    try:
+        from TRAINING.orchestration.utils.target_first_paths import (
+            get_target_reproducibility_dir, ensure_target_structure
+        )
+        ensure_target_structure(base_output_dir, target_name_clean)
+        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+        target_importances_dir = target_repro_dir / "feature_importances"
+        target_importances_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create DataFrame sorted by importance
-        df = pd.DataFrame([
-            {'feature': feat, 'importance': imp}
-            for feat, imp in sorted(importances.items())
-        ])
-        df = df.sort_values('importance', ascending=False)
+        # Save per-model CSV files
+        for model_name in sorted(feature_importances.keys()):
+            importances = feature_importances[model_name]
+            if not importances:
+                continue
+            
+            # Create DataFrame sorted by importance
+            df = pd.DataFrame([
+                {'feature': feat, 'importance': imp}
+                for feat, imp in sorted(importances.items())
+            ])
+            df = df.sort_values('importance', ascending=False)
+            
+            # Normalize to percentages
+            total = df['importance'].sum()
+            if total > 0:
+                df['importance_pct'] = (df['importance'] / total * 100).round(2)
+                df['cumulative_pct'] = df['importance_pct'].cumsum().round(2)
+            else:
+                df['importance_pct'] = 0.0
+                df['cumulative_pct'] = 0.0
+            
+            # Reorder columns
+            df = df[['feature', 'importance', 'importance_pct', 'cumulative_pct']]
+            
+            # Save to target-first location
+            target_csv_file = target_importances_dir / f"{model_name}_importances.csv"
+            df.to_csv(target_csv_file, index=False)
         
-        # Normalize to percentages
-        total = df['importance'].sum()
-        if total > 0:
-            df['importance_pct'] = (df['importance'] / total * 100).round(2)
-            df['cumulative_pct'] = df['importance_pct'].cumsum().round(2)
-        else:
-            df['importance_pct'] = 0.0
-            df['cumulative_pct'] = 0.0
-        
-        # Reorder columns
-        df = df[['feature', 'importance', 'importance_pct', 'cumulative_pct']]
-        
-        # Save to CSV
-        csv_file = importances_dir / f"{model_name}_importances.csv"
-        df.to_csv(csv_file, index=False)
-    
-    logger.info(f"  💾 Saved feature importances to: {importances_dir}")
+        logger.info(f"  💾 Saved feature importances to: {target_importances_dir}")
+    except Exception as e:
+        logger.warning(f"Failed to save feature importances to target-first structure: {e}")
 
 
 def log_suspicious_features(

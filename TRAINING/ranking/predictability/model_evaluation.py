@@ -1319,46 +1319,34 @@ def train_and_evaluate_models(
             if 'full_importance_dict' in pruning_stats and output_dir is not None:
                 try:
                     from TRAINING.stability.feature_importance import save_snapshot_hook
-                    # Build REPRODUCIBILITY path for snapshots (same structure as feature importances)
+                    # Use target-first structure for snapshots
                     target_name_clean = (target_column if target_column else 'unknown').replace('/', '_').replace('\\', '_')
                     
-                    # Detect context: FEATURE_SELECTION or TARGET_RANKING
-                    # If output_dir is already at target level in FEATURE_SELECTION, use it directly
-                    if output_dir and "FEATURE_SELECTION" in output_dir.parts:
-                        # We're in FEATURE_SELECTION context - use output_dir directly (already at target level)
-                        # output_dir is: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
-                        snapshot_base_dir = output_dir
-                    else:
-                        # TARGET_RANKING context - construct path
-                        # Determine base output directory (RESULTS/{run}/)
-                        if output_dir and output_dir.name == "target_rankings":
-                            base_output_dir = output_dir.parent
-                        elif output_dir:
-                            base_output_dir = output_dir
-                            # Walk up to run level if we're inside REPRODUCIBILITY
-                            while "REPRODUCIBILITY" in base_output_dir.parts and base_output_dir.name != "RESULTS":
-                                base_output_dir = base_output_dir.parent
-                                if not base_output_dir.parent.exists():
-                                    break
-                        else:
-                            # No output_dir provided - skip snapshot
-                            snapshot_base_dir = None
+                    # Find base run directory
+                    base_output_dir = output_dir
+                    if base_output_dir:
+                        for _ in range(10):
+                            if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
+                                break
+                            if not base_output_dir.parent.exists():
+                                break
+                            base_output_dir = base_output_dir.parent
                         
-                        if snapshot_base_dir:
-                            repro_base = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
-                            if view == "SYMBOL_SPECIFIC" and symbol:
-                                snapshot_base_dir = repro_base / view / target_name_clean / f"symbol={symbol}"
-                            else:
-                                snapshot_base_dir = repro_base / view / target_name_clean
-                    
-                    save_snapshot_hook(
-                        target_name=target_column if target_column else 'unknown',
-                        method="quick_pruner",
-                        importance_dict=pruning_stats['full_importance_dict'],
-                        universe_id=view,  # Use view parameter
-                        output_dir=snapshot_base_dir,  # Save in REPRODUCIBILITY structure
-                        auto_analyze=None,  # Load from config
-                    )
+                        if base_output_dir.exists():
+                            from TRAINING.orchestration.utils.target_first_paths import (
+                                get_target_reproducibility_dir, ensure_target_structure
+                            )
+                            ensure_target_structure(base_output_dir, target_name_clean)
+                            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+                            
+                            save_snapshot_hook(
+                                target_name=target_column if target_column else 'unknown',
+                                method="quick_pruner",
+                                importance_dict=pruning_stats['full_importance_dict'],
+                                universe_id=view,  # Use view parameter
+                                output_dir=target_repro_dir,  # Use target-first structure
+                                auto_analyze=None,  # Load from config
+                            )
                 except Exception as e:
                     logger.debug(f"Stability snapshot save failed for quick_pruner (non-critical): {e}")
         except RuntimeError as e:

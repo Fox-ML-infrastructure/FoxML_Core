@@ -203,19 +203,46 @@ class TrendAnalyzer:
                                         continue
                                     
                                     metadata_file = cohort_dir / "metadata.json"
-                                    metrics_file = cohort_dir / "metrics.json"
+                                    # Try to read metrics from metrics/ folder first, fallback to cohort_dir
+                                    metrics_file = None
+                                    metrics_data = {}
+                                    try:
+                                        from TRAINING.orchestration.utils.target_first_paths import get_metrics_path_from_cohort_dir
+                                        metrics_dir = get_metrics_path_from_cohort_dir(cohort_dir, base_output_dir=run_dir)
+                                        if metrics_dir:
+                                            metrics_file = metrics_dir / "metrics.json"
+                                            if not metrics_file.exists():
+                                                # Try parquet
+                                                metrics_parquet = metrics_dir / "metrics.parquet"
+                                                if metrics_parquet.exists():
+                                                    import pandas as pd
+                                                    df = pd.read_parquet(metrics_parquet)
+                                                    if len(df) > 0:
+                                                        metrics_data = df.iloc[0].to_dict()
+                                                        metrics_file = metrics_parquet  # For path reference
+                                    except Exception as e:
+                                        logger.debug(f"Failed to map cohort_dir to metrics path: {e}")
                                     
-                                    if metadata_file.exists() or metrics_file.exists():
+                                    # Fallback to legacy location in cohort_dir
+                                    if not metrics_data and not metrics_file:
+                                        metrics_file = cohort_dir / "metrics.json"
+                                    
+                                    if metadata_file.exists() or (metrics_file and metrics_file.exists()):
                                         try:
                                             metadata = {}
                                             if metadata_file.exists():
                                                 with open(metadata_file, 'r') as f:
                                                     metadata = json.load(f)
                                             
-                                            metrics_data = {}
-                                            if metrics_file.exists():
-                                                with open(metrics_file, 'r') as f:
-                                                    metrics_data = json.load(f)
+                                            if not metrics_data and metrics_file and metrics_file.exists():
+                                                if metrics_file.suffix == '.parquet':
+                                                    import pandas as pd
+                                                    df = pd.read_parquet(metrics_file)
+                                                    if len(df) > 0:
+                                                        metrics_data = df.iloc[0].to_dict()
+                                                else:
+                                                    with open(metrics_file, 'r') as f:
+                                                        metrics_data = json.load(f)
                                             
                                             # Extract identifiers
                                             run_id = metadata.get('run_id') or metrics_data.get('run_id') or run_dir.name
@@ -244,19 +271,46 @@ class TrendAnalyzer:
                                     continue
                                 
                                 metadata_file = cohort_dir / "metadata.json"
-                                metrics_file = cohort_dir / "metrics.json"
+                                # Try to read metrics from metrics/ folder first, fallback to cohort_dir
+                                metrics_file = None
+                                metrics_data = {}
+                                try:
+                                    from TRAINING.orchestration.utils.target_first_paths import get_metrics_path_from_cohort_dir
+                                    metrics_dir = get_metrics_path_from_cohort_dir(cohort_dir, base_output_dir=run_dir)
+                                    if metrics_dir:
+                                        metrics_file = metrics_dir / "metrics.json"
+                                        if not metrics_file.exists():
+                                            # Try parquet
+                                            metrics_parquet = metrics_dir / "metrics.parquet"
+                                            if metrics_parquet.exists():
+                                                import pandas as pd
+                                                df = pd.read_parquet(metrics_parquet)
+                                                if len(df) > 0:
+                                                    metrics_data = df.iloc[0].to_dict()
+                                                    metrics_file = metrics_parquet  # For path reference
+                                except Exception as e:
+                                    logger.debug(f"Failed to map cohort_dir to metrics path: {e}")
                                 
-                                if metadata_file.exists() or metrics_file.exists():
+                                # Fallback to legacy location in cohort_dir
+                                if not metrics_data and not metrics_file:
+                                    metrics_file = cohort_dir / "metrics.json"
+                                
+                                if metadata_file.exists() or (metrics_file and metrics_file.exists()):
                                     try:
                                         metadata = {}
                                         if metadata_file.exists():
                                             with open(metadata_file, 'r') as f:
                                                 metadata = json.load(f)
                                         
-                                        metrics_data = {}
-                                        if metrics_file.exists():
-                                            with open(metrics_file, 'r') as f:
-                                                metrics_data = json.load(f)
+                                        if not metrics_data and metrics_file and metrics_file.exists():
+                                            if metrics_file.suffix == '.parquet':
+                                                import pandas as pd
+                                                df = pd.read_parquet(metrics_file)
+                                                if len(df) > 0:
+                                                    metrics_data = df.iloc[0].to_dict()
+                                            else:
+                                                with open(metrics_file, 'r') as f:
+                                                    metrics_data = json.load(f)
                                         
                                         # Extract identifiers
                                         run_id = metadata.get('run_id') or metrics_data.get('run_id') or run_dir.name
@@ -293,7 +347,29 @@ class TrendAnalyzer:
                     
                     # Load metadata and metrics
                     metadata_file = cohort_dir / "metadata.json"
-                    metrics_file = cohort_dir / "metrics.json"
+                    # Try to read metrics from metrics/ folder first, fallback to cohort_dir
+                    metrics_file = None
+                    metrics = {}
+                    try:
+                        from TRAINING.orchestration.utils.target_first_paths import get_metrics_path_from_cohort_dir
+                        metrics_dir = get_metrics_path_from_cohort_dir(cohort_dir, base_output_dir=self.reproducibility_dir.parent if self.reproducibility_dir.name == "REPRODUCIBILITY" else self.reproducibility_dir)
+                        if metrics_dir:
+                            metrics_file = metrics_dir / "metrics.json"
+                            if not metrics_file.exists():
+                                # Try parquet
+                                metrics_parquet = metrics_dir / "metrics.parquet"
+                                if metrics_parquet.exists():
+                                    import pandas as pd
+                                    df = pd.read_parquet(metrics_parquet)
+                                    if len(df) > 0:
+                                        metrics = df.iloc[0].to_dict()
+                                        metrics_file = metrics_parquet  # For path reference
+                    except Exception as e:
+                        logger.debug(f"Failed to map cohort_dir to metrics path: {e}")
+                    
+                    # Fallback to legacy location in cohort_dir
+                    if not metrics and not metrics_file:
+                        metrics_file = cohort_dir / "metrics.json"
                     
                     if not metadata_file.exists():
                         continue
@@ -302,10 +378,15 @@ class TrendAnalyzer:
                         with open(metadata_file, 'r') as f:
                             metadata = json.load(f)
                         
-                        metrics = {}
-                        if metrics_file.exists():
-                            with open(metrics_file, 'r') as f:
-                                metrics = json.load(f)
+                        if not metrics and metrics_file and metrics_file.exists():
+                            if metrics_file.suffix == '.parquet':
+                                import pandas as pd
+                                df = pd.read_parquet(metrics_file)
+                                if len(df) > 0:
+                                    metrics = df.iloc[0].to_dict()
+                            else:
+                                with open(metrics_file, 'r') as f:
+                                    metrics = json.load(f)
                         
                         # Extract normalized row
                         row = self._extract_index_row(stage, item_dir, cohort_dir, metadata, metrics)
@@ -454,12 +535,27 @@ class TrendAnalyzer:
                 'cv_folds': cv_details.get('folds') or cv_details.get('cv_folds'),
                 
                 # Metrics (stage-specific, store as JSON blob)
-                'metrics': json.dumps(metrics),
-                
-                # Paths
-                'metadata_path': str(metadata_file) if (metadata_file := cohort_dir / "metadata.json").exists() else None,
-                'metrics_path': str(metrics_file) if (metrics_file := cohort_dir / "metrics.json").exists() else None
+                'metrics': json.dumps(metrics)
             }
+            
+            # Paths - try to get metrics path from metrics/ folder (computed outside dict)
+            metadata_file_path = cohort_dir / "metadata.json"
+            metrics_file_path = None
+            try:
+                from TRAINING.orchestration.utils.target_first_paths import get_metrics_path_from_cohort_dir
+                metrics_dir = get_metrics_path_from_cohort_dir(cohort_dir)
+                if metrics_dir:
+                    metrics_file_path = metrics_dir / "metrics.json"
+                    if not metrics_file_path.exists():
+                        metrics_file_path = metrics_dir / "metrics.parquet"
+            except Exception:
+                pass
+            # Fallback to legacy location
+            if not metrics_file_path or not metrics_file_path.exists():
+                metrics_file_path = cohort_dir / "metrics.json"
+            
+            row['metadata_path'] = str(metadata_file_path) if metadata_file_path.exists() else None
+            row['metrics_path'] = str(metrics_file_path) if metrics_file_path and metrics_file_path.exists() else None
             
             # Extract stage-specific metric fields
             if stage == "TARGET_RANKING":

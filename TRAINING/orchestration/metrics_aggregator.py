@@ -109,16 +109,113 @@ class MetricsAggregator:
         
         target_name_clean = target.replace('/', '_').replace('\\', '_')
         
-        # Try target-first structure first: targets/<target>/reproducibility/
-        from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+        # SST Architecture: Read from canonical location (reproducibility/cohort) first
+        # Then check reference pointer, then legacy locations
+        from TRAINING.orchestration.utils.target_first_paths import (
+            get_target_reproducibility_dir, get_target_metrics_dir
+        )
         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
         target_fs_dir = target_repro_dir / "CROSS_SECTIONAL"
-        
-        # Look for multi_model_metadata.json or target_confidence.json in target-first structure
         metadata_path = target_fs_dir / "multi_model_metadata.json"
         confidence_path = target_fs_dir / "target_confidence.json"
         
-        # Fallback to legacy structure if not found in target-first
+        score = None
+        sample_size = None
+        failed_families = []
+        leakage_status = "UNKNOWN"
+        metrics_data = None
+        
+        # 1. Try canonical location: find latest cohort in reproducibility/CROSS_SECTIONAL
+        if target_fs_dir.exists():
+            cohort_dirs = [d for d in target_fs_dir.iterdir() 
+                          if d.is_dir() and d.name.startswith("cohort=")]
+            if cohort_dirs:
+                # Sort by cohort ID (assuming numeric or timestamp-based)
+                latest_cohort = sorted(cohort_dirs, key=lambda x: x.name, reverse=True)[0]
+                canonical_parquet = latest_cohort / "metrics.parquet"
+                canonical_json = latest_cohort / "metrics.json"
+                
+                # Try parquet first (canonical)
+                if canonical_parquet.exists():
+                    try:
+                        import pandas as pd
+                        df = pd.read_parquet(canonical_parquet)
+                        if len(df) > 0:
+                            metrics_data = df.iloc[0].to_dict()
+                            score = metrics_data.get('mean_score')
+                            sample_size = metrics_data.get('N_effective_cs')
+                            logger.debug(f"✅ Loaded metrics from canonical location: {canonical_parquet}")
+                    except Exception as e:
+                        logger.debug(f"Failed to load metrics from canonical parquet: {e}")
+                
+                # Fallback to JSON in canonical location
+                if metrics_data is None and canonical_json.exists():
+                    try:
+                        with open(canonical_json, 'r') as f:
+                            metrics_data = json.load(f)
+                            score = metrics_data.get('mean_score')
+                            sample_size = metrics_data.get('N_effective_cs')
+                            logger.debug(f"✅ Loaded metrics from canonical JSON: {canonical_json}")
+                    except Exception as e:
+                        logger.debug(f"Failed to load metrics from canonical JSON: {e}")
+        
+        # 2. Fallback to reference pointer in metrics/ directory
+        if metrics_data is None:
+            target_metrics_dir = get_target_metrics_dir(base_output_dir, target_name_clean)
+            view_metrics_dir = target_metrics_dir / "view=CROSS_SECTIONAL"
+            ref_file = view_metrics_dir / "latest_ref.json"
+            
+            if ref_file.exists():
+                try:
+                    with open(ref_file, 'r') as f:
+                        ref_data = json.load(f)
+                    canonical_path = Path(ref_data.get("canonical_path", ""))
+                    if canonical_path.exists():
+                        from TRAINING.common.utils.metrics import MetricsWriter
+                        metrics_data = MetricsWriter.export_metrics_json_from_parquet(canonical_path)
+                        score = metrics_data.get('mean_score')
+                        sample_size = metrics_data.get('N_effective_cs')
+                        logger.debug(f"✅ Loaded metrics via reference pointer: {canonical_path}")
+                except Exception as e:
+                    logger.debug(f"Failed to follow reference pointer: {e}")
+            
+            # Also try direct read from metrics/ (legacy compatibility)
+            if metrics_data is None:
+                metrics_parquet = view_metrics_dir / "metrics.parquet"
+                metrics_file = view_metrics_dir / "metrics.json"
+                
+                if metrics_parquet.exists():
+                    try:
+                        import pandas as pd
+                        df = pd.read_parquet(metrics_parquet)
+                        if len(df) > 0:
+                            metrics_data = df.iloc[0].to_dict()
+                            score = metrics_data.get('mean_score')
+                            sample_size = metrics_data.get('N_effective_cs')
+                    except Exception as e:
+                        logger.debug(f"Failed to load metrics from parquet: {e}")
+                elif metrics_file.exists():
+                    try:
+                        with open(metrics_file, 'r') as f:
+                            metrics_data = json.load(f)
+                            score = metrics_data.get('mean_score')
+                            sample_size = metrics_data.get('N_effective_cs')
+                    except Exception as e:
+                        logger.debug(f"Failed to load metrics from JSON: {e}")
+        
+        # 3. Last resort: legacy structure
+        if metrics_data is None:
+            legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_name_clean
+            legacy_metrics_file = legacy_fs_dir / "metrics.json"
+            if legacy_metrics_file.exists():
+                try:
+                    with open(legacy_metrics_file, 'r') as f:
+                        metrics_data = json.load(f)
+                        score = metrics_data.get('mean_score')
+                        sample_size = metrics_data.get('N_effective_cs')
+                except Exception as e:
+                    logger.debug(f"Failed to load metrics from legacy location: {e}")
+        
         if not metadata_path.exists() and not confidence_path.exists():
             legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_name_clean
             if not metadata_path.exists():
@@ -126,12 +223,7 @@ class MetricsAggregator:
             if not confidence_path.exists():
                 confidence_path = legacy_fs_dir / "target_confidence.json"
         
-        score = None
-        sample_size = None
-        failed_families = []
-        leakage_status = "UNKNOWN"
-        
-        # Load from model_metadata.json (aggregated across symbols)
+        # Load from model_metadata.json (aggregated across symbols) - fallback if metrics not found
         if metadata_path.exists():
             try:
                 with open(metadata_path) as f:

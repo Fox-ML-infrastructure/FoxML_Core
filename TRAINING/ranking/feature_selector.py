@@ -1301,29 +1301,32 @@ def select_features_for_target(
         if summary_df is not None and len(summary_df) > 0 and output_dir:
             importance_dict = summary_df.set_index('feature')['consensus_score'].to_dict()
             
-            # Build REPRODUCIBILITY path for snapshots (same structure as feature importances)
+            # Use target-first structure for snapshots
             target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-            # Determine base output directory (walk up from REPRODUCIBILITY/FEATURE_SELECTION structure)
+            # Find base run directory
             base_output_dir = output_dir
-            while base_output_dir.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "feature_selections", "target_rankings"]:
-                base_output_dir = base_output_dir.parent
-                if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
+            for _ in range(10):
+                if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
                     break
+                if not base_output_dir.parent.exists():
+                    break
+                base_output_dir = base_output_dir.parent
             
-            repro_base = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION"
-            if view == "SYMBOL_SPECIFIC" and symbol:
-                snapshot_base_dir = repro_base / view / target_name_clean / f"symbol={symbol}"
-            else:
-                snapshot_base_dir = repro_base / view / target_name_clean
-            
-            save_snapshot_hook(
-                target_name=target_column,
-                method="multi_model_aggregated",
-                importance_dict=importance_dict,
-                universe_id=view,  # Use view parameter
-                output_dir=snapshot_base_dir,  # Save in REPRODUCIBILITY structure
-                auto_analyze=None,  # Load from config
-            )
+            if base_output_dir.exists():
+                from TRAINING.orchestration.utils.target_first_paths import (
+                    get_target_reproducibility_dir, ensure_target_structure
+                )
+                ensure_target_structure(base_output_dir, target_name_clean)
+                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+                
+                save_snapshot_hook(
+                    target_name=target_column,
+                    method="multi_model_aggregated",
+                    importance_dict=importance_dict,
+                    universe_id=view,  # Use view parameter
+                    output_dir=target_repro_dir,  # Use target-first structure
+                    auto_analyze=None,  # Load from config
+                )
     except Exception as e:
         logger.debug(f"Stability snapshot save failed for aggregated selection (non-critical): {e}")
     

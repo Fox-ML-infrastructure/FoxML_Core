@@ -1341,44 +1341,26 @@ class ReproducibilityTracker:
         # CRITICAL: Initialize telemetry if not already initialized
         # Telemetry is needed for diff tracking and should be available for all runs
         # Check if telemetry exists as instance variable or needs to be created
+        # NOTE: We use self._repro_base_dir here since cohort_dir/target_cohort_dir may not be defined yet
+        # The actual cohort_dir will be passed to finalize_run() later
         telemetry = getattr(self, '_telemetry', None)
         if telemetry is None:
             try:
                 from TRAINING.orchestration.utils.diff_telemetry import DiffTelemetry
                 
-                # Determine base output directory for telemetry
-                # CRITICAL: Find the run directory (contains REPRODUCIBILITY), not just RESULTS
-                # The run directory is needed so DiffTelemetry can create snapshot_index.json in the right place
-                base_output_dir = Path(cohort_dir)
-                run_dir = None
+                # Use self._repro_base_dir directly - it points to the run directory
+                # DiffTelemetry will find the RESULTS directory from there
+                base_output_dir = self._repro_base_dir
                 
-                # Walk up from cohort_dir to find the run directory (has REPRODUCIBILITY subdirectory)
+                # Walk up to find run directory (has REPRODUCIBILITY or targets subdirectory)
                 temp_dir = base_output_dir
                 for _ in range(10):  # Limit depth
-                    if (temp_dir / "REPRODUCIBILITY").exists():
-                        run_dir = temp_dir
+                    if (temp_dir / "REPRODUCIBILITY").exists() or (temp_dir / "targets").exists():
+                        base_output_dir = temp_dir
                         break
                     if not temp_dir.parent.exists():
                         break
                     temp_dir = temp_dir.parent
-                
-                # If we found a run directory, use it; otherwise fall back to finding RESULTS
-                if run_dir:
-                    base_output_dir = run_dir
-                else:
-                    # Fallback: walk up to find RESULTS directory
-                    temp_dir = Path(cohort_dir)
-                    for _ in range(10):
-                        if temp_dir.name == "RESULTS":
-                            base_output_dir = temp_dir
-                            break
-                        if not temp_dir.parent.exists():
-                            break
-                        temp_dir = temp_dir.parent
-                    
-                    # If we couldn't find RESULTS, use the output_dir from tracker
-                    if base_output_dir.name != "RESULTS":
-                        base_output_dir = self._repro_base_dir
                 
                 # Initialize telemetry (creates TELEMETRY directory if needed)
                 telemetry = DiffTelemetry(output_dir=base_output_dir)
@@ -3944,13 +3926,32 @@ class ReproducibilityTracker:
         try:
             from TRAINING.common.utils.trend_analyzer import TrendAnalyzer, SeriesView
             
-            # Get reproducibility base directory
-            repro_base = self._repro_base_dir / "REPRODUCIBILITY"
-            if not repro_base.exists():
-                # Try alternative location
-                repro_base = self.output_dir / "REPRODUCIBILITY"
+            # Check for target-first structure first (targets/ and globals/)
+            # Fallback to legacy REPRODUCIBILITY structure for backward compatibility
+            repro_base = None
             
-            if not repro_base.exists():
+            # Try target-first structure: check for targets/ or globals/ directories
+            temp_dir = self._repro_base_dir
+            for _ in range(10):  # Limit depth
+                if (temp_dir / "targets").exists() or (temp_dir / "globals").exists():
+                    repro_base = temp_dir
+                    break
+                if not temp_dir.parent.exists():
+                    break
+                temp_dir = temp_dir.parent
+            
+            # Fallback to legacy REPRODUCIBILITY structure
+            if repro_base is None:
+                repro_base = self._repro_base_dir / "REPRODUCIBILITY"
+                if not repro_base.exists():
+                    # Try alternative location
+                    repro_base = self.output_dir / "REPRODUCIBILITY"
+            
+            # Check if we have either target-first or legacy structure
+            has_target_first = (self._repro_base_dir / "targets").exists() or (self._repro_base_dir / "globals").exists()
+            has_legacy = repro_base.exists() if repro_base else False
+            
+            if not has_target_first and not has_legacy:
                 return {"status": "reproducibility_directory_not_found"}
             
             trend_analyzer = TrendAnalyzer(

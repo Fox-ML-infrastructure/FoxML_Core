@@ -328,7 +328,14 @@ class DecisionEngine:
         if base_dir is None:
             base_dir = self.index_path.parent
         
-        decisions_dir = base_dir / "REPRODUCIBILITY" / "decisions"
+        # Try target-first structure first (globals/decisions/)
+        from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+        globals_dir = get_globals_dir(base_dir)
+        decisions_dir = globals_dir / "decisions"
+        
+        # Fallback to legacy REPRODUCIBILITY/decisions structure
+        if not decisions_dir.exists():
+            decisions_dir = base_dir / "REPRODUCIBILITY" / "decisions"
         
         if not decisions_dir.exists():
             return None

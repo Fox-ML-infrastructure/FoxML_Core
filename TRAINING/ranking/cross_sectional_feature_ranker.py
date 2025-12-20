@@ -542,32 +542,40 @@ def compute_cross_sectional_stability(
         if universe_id is None:
             universe_id = "ALL"  # Default universe ID for cross-sectional
         
-        # Build REPRODUCIBILITY path for snapshots (same structure as feature importances)
-        # Determine base output directory (walk up from REPRODUCIBILITY/FEATURE_SELECTION structure)
-        repro_base = None
+        # Use target-first structure for snapshots
+        snapshot_base_dir = None
         if output_dir:
+            # Find base run directory
             base_output_dir = output_dir
-            while base_output_dir.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "feature_selections", "target_rankings"]:
-                base_output_dir = base_output_dir.parent
-                if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
+            for _ in range(10):
+                if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
                     break
+                if not base_output_dir.parent.exists():
+                    break
+                base_output_dir = base_output_dir.parent
             
-            # Cross-sectional is always CROSS_SECTIONAL view
-            target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-            repro_base = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_name_clean
-            snapshot_base_dir = get_snapshot_base_dir(repro_base)
+            if base_output_dir.exists():
+                target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+                from TRAINING.orchestration.utils.target_first_paths import (
+                    get_target_reproducibility_dir, ensure_target_structure
+                )
+                ensure_target_structure(base_output_dir, target_name_clean)
+                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+                snapshot_base_dir = get_snapshot_base_dir(target_repro_dir)
         else:
             snapshot_base_dir = get_snapshot_base_dir(output_dir)
-            repro_base = output_dir
         
-        snapshot_path = save_snapshot_from_series_hook(
-            target_name=target_column,
-            method=method_name,
-            importance_series=cs_importance,
-            universe_id=universe_id,
-            output_dir=repro_base,  # Pass REPRODUCIBILITY base
-            auto_analyze=False  # We'll analyze manually to get metrics
-        )
+        if snapshot_base_dir:
+            snapshot_path = save_snapshot_from_series_hook(
+                target_name=target_column,
+                method=method_name,
+                importance_series=cs_importance,
+                universe_id=universe_id,
+                output_dir=snapshot_base_dir,  # Use target-first structure
+                auto_analyze=False  # We'll analyze manually to get metrics
+            )
+        else:
+            snapshot_path = None
         
         if snapshot_path is None:
             logger.debug("Failed to save CS importance snapshot")
