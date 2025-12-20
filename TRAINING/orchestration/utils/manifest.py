@@ -307,41 +307,84 @@ def create_target_metadata(
                     "cohorts": []
                 }
                 
-                # Find all cohort directories
-                for cohort_dir in view_dir.iterdir():
-                    if cohort_dir.is_dir() and cohort_dir.name.startswith("cohort="):
-                        cohort_id = cohort_dir.name.replace("cohort=", "")
-                        metadata_file = cohort_dir / "metadata.json"
-                        
-                        cohort_info = {
-                            "cohort_id": cohort_id,
-                            "path": str(cohort_dir.relative_to(output_dir))
-                        }
-                        
-                        # Load metadata if available
-                        if metadata_file.exists():
-                            try:
-                                with open(metadata_file) as f:
-                                    cohort_metadata = json.load(f)
-                                    cohort_info["metadata"] = {
-                                        "stage": cohort_metadata.get("stage"),
-                                        "route_type": cohort_metadata.get("route_type"),
-                                        "n_effective": cohort_metadata.get("N_effective"),
-                                        "n_symbols": cohort_metadata.get("n_symbols"),
-                                        "date_start": cohort_metadata.get("date_start"),
-                                        "date_end": cohort_metadata.get("date_end"),
-                                        "universe_id": cohort_metadata.get("universe_id"),
-                                        "min_cs": cohort_metadata.get("min_cs"),
-                                        "max_cs_samples": cohort_metadata.get("max_cs_samples")
+                # For SYMBOL_SPECIFIC, need to check symbol subdirectories
+                if view_name == "SYMBOL_SPECIFIC":
+                    for symbol_dir in view_dir.iterdir():
+                        if symbol_dir.is_dir() and symbol_dir.name.startswith("symbol="):
+                            symbol = symbol_dir.name.replace("symbol=", "")
+                            # Find all cohort directories under symbol
+                            for cohort_dir in symbol_dir.iterdir():
+                                if cohort_dir.is_dir() and cohort_dir.name.startswith("cohort="):
+                                    cohort_id = cohort_dir.name.replace("cohort=", "")
+                                    metadata_file = cohort_dir / "metadata.json"
+                                    
+                                    cohort_info = {
+                                        "cohort_id": cohort_id,
+                                        "symbol": symbol,
+                                        "path": str(cohort_dir.relative_to(output_dir))
                                     }
-                            except Exception as e:
-                                logger.debug(f"Failed to load metadata from {metadata_file}: {e}")
-                        
-                        target_metadata["views"][view_name]["cohorts"].append(cohort_info)
-                        target_metadata["cohorts"][cohort_id] = {
-                            "view": view_name,
-                            "path": str(cohort_dir.relative_to(output_dir))
-                        }
+                                    
+                                    # Load metadata if available
+                                    if metadata_file.exists():
+                                        try:
+                                            with open(metadata_file) as f:
+                                                cohort_metadata = json.load(f)
+                                                cohort_info["metadata"] = {
+                                                    "stage": cohort_metadata.get("stage"),
+                                                    "route_type": cohort_metadata.get("route_type"),
+                                                    "n_effective": cohort_metadata.get("N_effective") or cohort_metadata.get("n_effective"),
+                                                    "n_symbols": cohort_metadata.get("n_symbols"),
+                                                    "date_start": cohort_metadata.get("date_start") or cohort_metadata.get("date_range_start"),
+                                                    "date_end": cohort_metadata.get("date_end") or cohort_metadata.get("date_range_end"),
+                                                    "universe_id": cohort_metadata.get("universe_id"),
+                                                    "min_cs": cohort_metadata.get("min_cs"),
+                                                    "max_cs_samples": cohort_metadata.get("max_cs_samples")
+                                                }
+                                        except Exception as e:
+                                            logger.debug(f"Failed to load metadata from {metadata_file}: {e}")
+                                    
+                                    target_metadata["views"][view_name]["cohorts"].append(cohort_info)
+                                    target_metadata["cohorts"][cohort_id] = {
+                                        "view": view_name,
+                                        "symbol": symbol,
+                                        "path": str(cohort_dir.relative_to(output_dir))
+                                    }
+                else:
+                    # CROSS_SECTIONAL: cohorts directly under view
+                    for cohort_dir in view_dir.iterdir():
+                        if cohort_dir.is_dir() and cohort_dir.name.startswith("cohort="):
+                            cohort_id = cohort_dir.name.replace("cohort=", "")
+                            metadata_file = cohort_dir / "metadata.json"
+                            
+                            cohort_info = {
+                                "cohort_id": cohort_id,
+                                "path": str(cohort_dir.relative_to(output_dir))
+                            }
+                            
+                            # Load metadata if available
+                            if metadata_file.exists():
+                                try:
+                                    with open(metadata_file) as f:
+                                        cohort_metadata = json.load(f)
+                                        cohort_info["metadata"] = {
+                                            "stage": cohort_metadata.get("stage"),
+                                            "route_type": cohort_metadata.get("route_type"),
+                                            "n_effective": cohort_metadata.get("N_effective") or cohort_metadata.get("n_effective"),
+                                            "n_symbols": cohort_metadata.get("n_symbols"),
+                                            "date_start": cohort_metadata.get("date_start") or cohort_metadata.get("date_range_start"),
+                                            "date_end": cohort_metadata.get("date_end") or cohort_metadata.get("date_range_end"),
+                                            "universe_id": cohort_metadata.get("universe_id"),
+                                            "min_cs": cohort_metadata.get("min_cs"),
+                                            "max_cs_samples": cohort_metadata.get("max_cs_samples")
+                                        }
+                                except Exception as e:
+                                    logger.debug(f"Failed to load metadata from {metadata_file}: {e}")
+                            
+                            target_metadata["views"][view_name]["cohorts"].append(cohort_info)
+                            target_metadata["cohorts"][cohort_id] = {
+                                "view": view_name,
+                                "path": str(cohort_dir.relative_to(output_dir))
+                            }
     
     # Collect decision files
     decision_dir = get_target_decision_dir(output_dir, target_name_clean)
