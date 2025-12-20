@@ -165,13 +165,7 @@ def collect_run_level_confidence_summary(
         json.dump(all_confidence, f, indent=2)
     logger.info(f"✅ Saved run-level confidence summary: {len(all_confidence)} targets to {run_summary_path}")
     
-    # Also save to legacy location (backward compatibility)
-    legacy_json_path = output_dir / "target_confidence_summary.json"
-    with open(legacy_json_path, "w") as f:
-        json.dump(all_confidence, f, indent=2)
-    logger.debug(f"Saved confidence summary to legacy location: {legacy_json_path}")
-    
-    # Write CSV summary for easy inspection to globals/
+    # Write CSV summary for easy inspection to globals/ (target-first only)
     csv_path = globals_dir / "target_confidence_summary.csv"
     summary_rows = []
     for conf in all_confidence:
@@ -197,11 +191,6 @@ def collect_run_level_confidence_summary(
     df = df.sort_values(['confidence', 'score_tier'], ascending=[False, False])
     df.to_csv(csv_path, index=False)
     logger.info(f"✅ Saved confidence summary CSV: {csv_path}")
-    
-    # Also save to legacy location (backward compatibility)
-    legacy_csv_path = output_dir / "target_confidence_summary.csv"
-    df.to_csv(legacy_csv_path, index=False)
-    logger.debug(f"Saved confidence summary CSV to legacy location: {legacy_csv_path}")
     
     return all_confidence
 

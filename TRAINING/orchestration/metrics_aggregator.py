@@ -108,12 +108,23 @@ class MetricsAggregator:
                 break
         
         target_name_clean = target.replace('/', '_').replace('\\', '_')
-        # Look in REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
-        fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_name_clean
         
-        # Look for multi_model_metadata.json or target_confidence.json
-        metadata_path = fs_dir / "multi_model_metadata.json"
-        confidence_path = fs_dir / "target_confidence.json"
+        # Try target-first structure first: targets/<target>/reproducibility/
+        from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+        target_fs_dir = target_repro_dir / "CROSS_SECTIONAL"
+        
+        # Look for multi_model_metadata.json or target_confidence.json in target-first structure
+        metadata_path = target_fs_dir / "multi_model_metadata.json"
+        confidence_path = target_fs_dir / "target_confidence.json"
+        
+        # Fallback to legacy structure if not found in target-first
+        if not metadata_path.exists() and not confidence_path.exists():
+            legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_name_clean
+            if not metadata_path.exists():
+                metadata_path = legacy_fs_dir / "multi_model_metadata.json"
+            if not confidence_path.exists():
+                confidence_path = legacy_fs_dir / "target_confidence.json"
         
         score = None
         sample_size = None

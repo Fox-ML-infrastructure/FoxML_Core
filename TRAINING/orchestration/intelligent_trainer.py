@@ -819,7 +819,7 @@ class IntelligentTrainer:
         (self.output_dir / "DECISION" / "TARGET_RANKING").mkdir(parents=True, exist_ok=True)
         (self.output_dir / "DECISION" / "FEATURE_SELECTION").mkdir(parents=True, exist_ok=True)
         (self.output_dir / "REPRODUCIBILITY" / "TARGET_RANKING").mkdir(parents=True, exist_ok=True)
-        (self.output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION").mkdir(parents=True, exist_ok=True)
+        # Target-first structure only - no legacy REPRODUCIBILITY directory creation
         
         # Cache paths
         self.target_ranking_cache = self.cache_dir / "target_rankings.json"
