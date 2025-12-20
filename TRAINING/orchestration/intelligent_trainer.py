@@ -1184,15 +1184,9 @@ class IntelligentTrainer:
         if multi_model_config is None and feature_selection_config is None:
             multi_model_config = load_multi_model_config()
         
-        # Select features - write directly to REPRODUCIBILITY/FEATURE_SELECTION structure
-        target_name_clean = target.replace('/', '_').replace('\\', '_')
-        # FIX: Construct output_dir based on view (CROSS_SECTIONAL vs SYMBOL_SPECIFIC)
-        if view == "SYMBOL_SPECIFIC" and symbol:
-            # SYMBOL_SPECIFIC: REPRODUCIBILITY/FEATURE_SELECTION/SYMBOL_SPECIFIC/{target}/symbol={symbol}/
-            feature_output_dir = self.output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "SYMBOL_SPECIFIC" / target_name_clean / f"symbol={symbol}"
-        else:
-            # CROSS_SECTIONAL: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
-            feature_output_dir = self.output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_name_clean
+        # Select features - write to target-first structure (targets/<target>/reproducibility/)
+        # The feature selection code will handle the path construction based on view
+        feature_output_dir = self.output_dir
         
         # Extract explicit_interval from experiment_config for feature selection
         explicit_interval = None
@@ -2037,8 +2031,9 @@ class IntelligentTrainer:
             if multi_model_config:
                 routing_config = multi_model_config.get('confidence', {}).get('routing', {})
             
-            # Look for feature selection results in REPRODUCIBILITY/FEATURE_SELECTION structure
-            feature_selections_dir = self.output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION"
+            # Look for feature selection results in target-first structure (targets/<target>/reproducibility/)
+            # MetricsAggregator will check target-first structure first, then fall back to legacy
+            feature_selections_dir = self.output_dir
             if feature_selections_dir.exists():
                 all_confidence = collect_run_level_confidence_summary(
                     feature_selections_dir=feature_selections_dir,
