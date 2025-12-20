@@ -401,6 +401,11 @@ def rank_targets(
     # Results list for backward compatibility (will contain cross-sectional + aggregated symbol results)
     results = []
     
+    # Track all evaluated targets (for ensuring decision files are created)
+    all_evaluated_targets = set()
+    # Track all CS results (including failed ones) for decision computation
+    all_cs_results = {}  # {target_name: TargetPredictabilityScore}
+    
     # NEW: Use typed config if provided
     if target_ranking_config is not None and _NEW_CONFIG_AVAILABLE:
         # Extract values from typed config
@@ -678,6 +683,7 @@ def rank_targets(
         # Process parallel results
         for item, result_data in parallel_results:
             target_name = result_data['target_name']
+            all_evaluated_targets.add(target_name)  # Track that this target was evaluated
             if result_data['error']:
                 logger.error(f"  ❌ {target_name}: {result_data['error']}")
                 continue
@@ -685,6 +691,10 @@ def rank_targets(
             result_cs = result_data['result_cs']
             result_sym_dict = result_data.get('result_sym_dict', {})
             result_loso_dict = result_data.get('result_loso_dict', {})
+            
+            # Track CS result (even if failed) for decision computation
+            if result_cs:
+                all_cs_results[target_name] = result_cs
             
             # Process cross-sectional result
             skip_statuses = ["LEAKAGE_UNRESOLVED", "LEAKAGE_UNRESOLVED_MAX_RETRIES", "SUSPICIOUS", "SUSPICIOUS_STRONG"]
@@ -741,6 +751,7 @@ def rank_targets(
         
         # Evaluate each target in dual views
         for idx, (target_name, target_config) in enumerate(targets_to_evaluate.items(), 1):
+            all_evaluated_targets.add(target_name)  # Track that this target was evaluated
             logger.info(f"[{idx}/{total_to_evaluate}] Evaluating {target_name}...")
             
             try:
@@ -813,6 +824,10 @@ def rank_targets(
                     "SUSPICIOUS",
                     "SUSPICIOUS_STRONG"
                 ]
+                
+                # Track CS result (even if failed) for decision computation
+                if result_cs:
+                    all_cs_results[target_name] = result_cs
                 
                 cs_succeeded = result_cs.mean_score != -999.0 and result_cs.status not in skip_statuses
                 if cs_succeeded:
@@ -1040,6 +1055,31 @@ def rank_targets(
         results_loso=results_loso if enable_loso else {},
         symbol_skip_reasons=symbol_skip_reasons
     )
+    
+    # CRITICAL: Ensure ALL evaluated targets have routing decisions, even if they're not in routing_decisions
+    # This handles cases where CS failed and all symbols failed (target won't be in routing_decisions)
+    if output_dir:
+        from TRAINING.ranking.target_routing import (
+            _compute_single_target_routing_decision, _save_single_target_decision
+        )
+        for target_name in all_evaluated_targets:
+            if target_name not in routing_decisions:
+                # Target was evaluated but not in routing_decisions (CS failed + all symbols failed)
+                # Compute and save decision anyway
+                logger.debug(f"Computing routing decision for {target_name} (not in routing_decisions, likely all evaluations failed)")
+                target_sym_results = results_sym.get(target_name, {})
+                target_skip_reasons = symbol_skip_reasons.get(target_name, {}) if symbol_skip_reasons else {}
+                # Find CS result even if it failed (from all_cs_results which includes failed ones)
+                result_cs = all_cs_results.get(target_name)
+                decision = _compute_single_target_routing_decision(
+                    target_name=target_name,
+                    result_cs=result_cs,  # Will be None if CS was never evaluated or failed
+                    sym_results=target_sym_results,
+                    symbol_skip_reasons=target_skip_reasons
+                )
+                _save_single_target_decision(target_name, decision, output_dir)
+                # Also add to routing_decisions so it's in the global file
+                routing_decisions[target_name] = decision
     
     # Log routing summary
     cs_only = sum(1 for r in routing_decisions.values() if r.get('route') == 'CROSS_SECTIONAL')

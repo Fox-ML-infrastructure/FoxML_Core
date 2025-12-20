@@ -426,6 +426,8 @@ def _save_dual_view_rankings(
     logger.info(f"Saved routing decisions to {globals_file}")
     
     # Save per-target slices for fast local inspection
+    # CRITICAL: This ensures ALL targets in routing_decisions get decision files,
+    # even if incremental save failed earlier. This is a safety net.
     for target, decision in routing_decisions.items():
         try:
             ensure_target_structure(base_output_dir, target)
@@ -435,7 +437,9 @@ def _save_dual_view_rankings(
                 json.dump({target: decision}, f, indent=2, default=str)
             logger.debug(f"Saved per-target routing decision to {target_decision_file}")
         except Exception as e:
-            logger.debug(f"Failed to save per-target routing decision for {target}: {e}")
+            logger.warning(f"⚠️  Failed to save per-target routing decision for {target}: {e}")
+            import traceback
+            logger.debug(f"Traceback: {traceback.format_exc()}")
     
     # Target-first structure only - no legacy writes
     
