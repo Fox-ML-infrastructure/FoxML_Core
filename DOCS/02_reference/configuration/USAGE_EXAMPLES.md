@@ -498,7 +498,7 @@ Adjusting leakage detection?
 Changing GPU/memory/threads?
   → training_config/gpu_config.yaml
   → training_config/memory_config.yaml
-  → training_config/threading_config.yaml
+  → pipeline/threading.yaml (shared by feature selection, target ranking, and training)
 
 Tuning model hyperparameters?
   → model_config/{model_name}.yaml

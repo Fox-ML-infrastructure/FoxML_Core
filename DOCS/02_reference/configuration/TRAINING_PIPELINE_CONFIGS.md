@@ -147,16 +147,19 @@ memory:
 
 ---
 
-### `training_config/threading_config.yaml`
+### `pipeline/threading.yaml`
 
-**Purpose:** Thread allocation and OpenMP/MKL policies.
+**Purpose:** Thread allocation and OpenMP/MKL policies. **Shared by feature selection, target ranking, and model training.**
 
 **When to use:** When adjusting thread counts or thread allocation per model family.
 
 **Key Settings:**
-- `default_threads` - Default thread count
-- `per_family_policies` - Thread allocation per model family
+- `defaults.default_threads` - Default thread count (null = auto-detect)
+- `planning.reserve_threads` - Reserve threads for system
+- `family_allocation` - Per-family thread allocation (optional)
 - OpenMP/MKL thread planning
+
+**Note:** The threading utilities (`TRAINING/common/threads.py`) used by feature selection and target ranking automatically read from this config. Models use `plan_for_family()` to determine optimal OMP/MKL thread allocation and `thread_guard()` for GPU-aware thread limiting.
 
 **Example: Setting Default Threads**
 
@@ -541,11 +544,14 @@ export FOXML_DATA_DIR=/custom/data/path
 
 ### Scenario 4: Adjusting Thread Allocation
 
-1. **Edit `training_config/threading_config.yaml`:**
+1. **Edit `CONFIG/pipeline/threading.yaml`:**
 ```yaml
 threading:
-  default_threads: 16  # Increase from default
-  per_family_policies:
+  defaults:
+    default_threads: 16  # Override auto-detection
+  family_allocation:
+    QuantileLightGBM:
+      thread_clamp: [4, 8]  # Clamp threads to 4-8 range
     lightgbm:
       threads: 8
 ```

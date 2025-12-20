@@ -385,7 +385,7 @@ targets:
 - `training_config/pipeline_config.yaml` - Main pipeline settings
 - `training_config/gpu_config.yaml` - GPU/CUDA settings
 - `training_config/memory_config.yaml` - Memory management
-- `training_config/threading_config.yaml` - Thread allocation
+- `pipeline/threading.yaml` - Thread allocation (shared by feature selection, target ranking, and training)
 - `training_config/preprocessing_config.yaml` - Data preprocessing
 - `training_config/callbacks_config.yaml` - Training callbacks
 - `training_config/optimizer_config.yaml` - Optimizer defaults
