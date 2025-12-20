@@ -6,7 +6,7 @@ This document describes the parallel execution infrastructure added to speed up 
 
 **NEW (2025-12-12)**: GPU acceleration is now enabled for target ranking and feature selection in addition to parallel execution. LightGBM, XGBoost, and CatBoost automatically use GPU when available, providing 10-50x speedup on large datasets.
 
-**NEW (2025-12-20)**: Unified threading utilities from `TRAINING/common/threads.py` are now used across all models in feature selection and target ranking. This provides GPU-aware thread management (automatically limits CPU threads when GPU is enabled) and optimal OMP/MKL thread allocation based on model family type.
+**NEW (2025-12-20)**: Unified threading utilities from `TRAINING/common/threads.py` are now used across all models in feature selection and target ranking. This provides GPU-aware thread management (automatically limits CPU threads when GPU is enabled) and optimal OMP/MKL thread allocation based on model family type. The threading utilities read from `CONFIG/pipeline/threading.yaml`, which is shared with the training pipeline, ensuring consistent thread management across all phases.
 
 ## Architecture
 
@@ -23,15 +23,30 @@ This document describes the parallel execution infrastructure added to speed up 
 
 ### Configuration
 
-Settings in `CONFIG/training_config/threading_config.yaml`:
+Threading configuration is shared across feature selection, target ranking, and model training. Settings are in `CONFIG/pipeline/threading.yaml`:
 
 ```yaml
 threading:
+  # Default Thread Counts
+  defaults:
+    default_threads: null  # null = calculated as max(1, cpu_count() - 1)
+    mkl_threads: 1  # Default MKL threads
+    openblas_threads: 1  # Default OpenBLAS threads
+  
+  # Thread Planning
+  planning:
+    reserve_threads: 1  # Reserve threads for system
+    min_threads: 1  # Minimum threads to allocate
+    max_threads: null  # null = no limit
+  
+  # Parallel Execution (Task-Level Parallelization)
   parallel:
     max_workers_process: null  # Auto-detect for CPU-bound tasks
     max_workers_thread: null   # Auto-detect for I/O-bound tasks
     enabled: true               # Master switch
 ```
+
+**Note**: The threading utilities (`TRAINING/common/threads.py`) used by feature selection and target ranking read from this same config file. All models automatically use `plan_for_family()` to determine optimal OMP/MKL thread allocation and `thread_guard()` for GPU-aware thread limiting.
 
 Task-specific flags:
 - `CONFIG/target_configs.yaml`: `multi_target.parallel_targets: false` (default: sequential)

@@ -409,21 +409,29 @@ print(f"Max reruns: {auto_rerun['max_reruns']}")
 
 ## Example 11: Adjusting Thread Allocation
 
-**Goal:** Configure thread usage per model family.
+**Goal:** Configure thread usage per model family. This config is shared across feature selection, target ranking, and model training.
 
 **Steps:**
 
-1. **Edit `training_config/threading_config.yaml`:**
+1. **Edit `CONFIG/pipeline/threading.yaml`:**
 ```yaml
 threading:
-  default_threads: 16
-  per_family_policies:
-    lightgbm:
-      threads: 8
-    xgboost:
-      threads: 8
-    neural_network:
-      threads: 2
+  # Default Thread Counts
+  defaults:
+    default_threads: 16  # Override auto-detection
+    mkl_threads: 1
+    openblas_threads: 1
+  
+  # Thread Planning
+  planning:
+    reserve_threads: 1  # Reserve threads for system
+    min_threads: 1
+    max_threads: null  # null = no limit
+  
+  # Per-Family Thread Allocation (optional)
+  family_allocation:
+    QuantileLightGBM:
+      thread_clamp: [4, 8]  # Clamp threads to 4-8 range
 ```
 
 **Usage:**
@@ -431,9 +439,11 @@ threading:
 from CONFIG.config_loader import get_threading_config
 
 threading_config = get_threading_config()
-default_threads = threading_config["threading"]["default_threads"]
+default_threads = threading_config["threading"]["defaults"]["default_threads"]
 print(f"Default threads: {default_threads}")
 ```
+
+**Note**: The threading utilities (`TRAINING/common/threads.py`) automatically use this config for all models in feature selection and target ranking. Models use `plan_for_family()` to determine optimal OMP/MKL thread allocation based on model family type, and `thread_guard()` for GPU-aware thread limiting (automatically sets OMP=1, MKL=1 when GPU is enabled).
 
 ---
 

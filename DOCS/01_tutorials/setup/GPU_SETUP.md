@@ -8,6 +8,8 @@ GPU acceleration provides 10-50x speedup for target ranking, feature selection, 
 
 **NEW (2025-12-12)**: GPU acceleration is now enabled for target ranking and feature selection in addition to model training. LightGBM, XGBoost, and CatBoost automatically use GPU when available.
 
+**NEW (2025-12-20)**: All models in feature selection and target ranking now use unified threading utilities from `TRAINING/common/threads.py` that read from `CONFIG/pipeline/threading.yaml`. This provides GPU-aware thread management (automatically limits CPU threads when GPU is enabled) and optimal OMP/MKL thread allocation based on model family type.
+
 ## Prerequisites
 
 - NVIDIA GPU with CUDA support (current)
