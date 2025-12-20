@@ -239,8 +239,13 @@ class RankingHarness:
                 ensure_target_structure(base_output_dir, target_name_clean)
                 target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
                 target_exclusion_dir = target_repro_dir / "feature_exclusions"
-                
-                # Also maintain legacy location for backward compatibility
+            
+            target_exclusion_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Try to load existing exclusion list first (check target-first structure)
+            existing_exclusions = load_target_exclusion_list(target_name, target_exclusion_dir)
+            if existing_exclusions is None:
+                # Fallback to legacy location (for reading existing runs only)
                 if self.job_type == "rank_targets":
                     legacy_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / self.view / target_name_clean / "feature_exclusions"
                 elif self.job_type == "rank_features":
@@ -250,14 +255,6 @@ class RankingHarness:
                         legacy_exclusion_dir = legacy_exclusion_dir.parent.parent / f"symbol={self.symbol}" / "feature_exclusions"
                 else:
                     legacy_exclusion_dir = base_output_dir / "feature_exclusions"
-                legacy_exclusion_dir.mkdir(parents=True, exist_ok=True)
-            
-            target_exclusion_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Try to load existing exclusion list first (check both new and legacy locations)
-            existing_exclusions = load_target_exclusion_list(target_name, target_exclusion_dir)
-            if existing_exclusions is None and 'legacy_exclusion_dir' in locals():
-                # Fallback to legacy location
                 existing_exclusions = load_target_exclusion_list(target_name, legacy_exclusion_dir)
             if existing_exclusions is not None:
                 target_conditional_exclusions = existing_exclusions

@@ -4622,15 +4622,12 @@ def evaluate_target_predictability(
         target_exclusion_dir = target_repro_dir / "feature_exclusions"
         target_exclusion_dir.mkdir(parents=True, exist_ok=True)
         
-        # Also maintain legacy location for backward compatibility
-        legacy_repro_base = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
-        legacy_exclusion_dir = legacy_repro_base / view / target_name_clean / "feature_exclusions"
-        legacy_exclusion_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Try to load existing exclusion list first (check both new and legacy locations)
+        # Try to load existing exclusion list first (check target-first structure)
         existing_exclusions = load_target_exclusion_list(target_name, target_exclusion_dir)
         if existing_exclusions is None:
-            # Fallback to legacy location
+            # Fallback to legacy location (for reading existing runs only)
+            legacy_repro_base = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
+            legacy_exclusion_dir = legacy_repro_base / view / target_name_clean / "feature_exclusions"
             existing_exclusions = load_target_exclusion_list(target_name, legacy_exclusion_dir)
         if existing_exclusions is not None:
             target_conditional_exclusions = existing_exclusions
