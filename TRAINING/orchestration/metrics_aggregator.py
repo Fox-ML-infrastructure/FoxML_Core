@@ -211,13 +211,22 @@ class MetricsAggregator:
                 break
         
         target_name_clean = target.replace('/', '_').replace('\\', '_')
-        # Look in REPRODUCIBILITY/FEATURE_SELECTION/SYMBOL_SPECIFIC/{target}/symbol={symbol}/
-        fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "SYMBOL_SPECIFIC" / target_name_clean / f"symbol={symbol}"
         
-        # Look for multi_model_metadata.json
-        metadata_path = fs_dir / "multi_model_metadata.json"
+        # Try target-first structure first: targets/<target>/reproducibility/SYMBOL_SPECIFIC/symbol=<symbol>/
+        from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+        target_fs_dir = target_repro_dir / "SYMBOL_SPECIFIC" / f"symbol={symbol}"
+        
+        # Look for multi_model_metadata.json in target-first structure
+        metadata_path = target_fs_dir / "multi_model_metadata.json"
+        
+        # Fallback to legacy structure if not found
         if not metadata_path.exists():
-            metadata_path = None
+            legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "SYMBOL_SPECIFIC" / target_name_clean / f"symbol={symbol}"
+            if legacy_fs_dir.exists():
+                metadata_path = legacy_fs_dir / "multi_model_metadata.json"
+            else:
+                metadata_path = None
         
         score = None
         sample_size = None
@@ -344,9 +353,11 @@ class MetricsAggregator:
                 repro_base_tr = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / view / target_name_clean
                 snapshot_base_dir_tr = get_snapshot_base_dir(repro_base_tr)
             
-            # Try loading from both locations (feature selection and target ranking)
+            # Try loading from target-first first, then legacy locations (feature selection and target ranking)
             snapshots = []
-            for snapshot_base_dir in [snapshot_base_dir_fs, snapshot_base_dir_tr]:
+            for snapshot_base_dir in [snapshot_base_dir_target, snapshot_base_dir_fs, snapshot_base_dir_tr]:
+                if snapshot_base_dir is None:
+                    continue
                 if snapshot_base_dir.exists():
                     try:
                         found = load_snapshots(snapshot_base_dir, target, method)
