@@ -210,6 +210,15 @@ def _save_dual_view_rankings(
     else:
         base_output_dir = output_dir
     
+    # Ensure we have the actual run directory (where "targets" or "RESULTS" would be)
+    # Walk up to find it if needed
+    for _ in range(10):  # Limit depth
+        if (base_output_dir / "targets").exists() or base_output_dir.name == "RESULTS":
+            break
+        if not base_output_dir.parent.exists() or base_output_dir.parent == base_output_dir:
+            break
+        base_output_dir = base_output_dir.parent
+    
     # Prepare routing data
     routing_data = {
         'routing_decisions': routing_decisions,

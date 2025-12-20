@@ -115,24 +115,42 @@ def save_feature_selection_rankings(
             repro_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean
     
     # Find base run directory for target-first structure
+    # Walk up to find the run directory (where "targets" or "RESULTS" would be)
     base_output_dir = repro_dir
-    while base_output_dir.name not in ["RESULTS"] and "REPRODUCIBILITY" in base_output_dir.parts:
-        base_output_dir = base_output_dir.parent
-        if not base_output_dir.parent.exists():
+    for _ in range(10):  # Limit depth
+        if (base_output_dir / "targets").exists() or base_output_dir.name == "RESULTS" or (base_output_dir.parent / "targets").exists():
+            if (base_output_dir / "targets").exists():
+                break
+            elif base_output_dir.name == "RESULTS":
+                break
+            elif (base_output_dir.parent / "targets").exists():
+                base_output_dir = base_output_dir.parent
+                break
+        if not base_output_dir.parent.exists() or base_output_dir.parent == base_output_dir:
             break
+        base_output_dir = base_output_dir.parent
     
     # Target-first structure: save to targets/<target>/decision/
     from TRAINING.orchestration.utils.target_first_paths import (
         get_target_decision_dir, ensure_target_structure
     )
-    ensure_target_structure(base_output_dir, target_name_clean)
-    target_decision_dir = get_target_decision_dir(base_output_dir, target_name_clean)
+    try:
+        ensure_target_structure(base_output_dir, target_name_clean)
+        target_decision_dir = get_target_decision_dir(base_output_dir, target_name_clean)
+        target_decision_dir.mkdir(parents=True, exist_ok=True)
+        logger.debug(f"Target decision directory: {target_decision_dir}")
+    except Exception as e:
+        logger.warning(f"Failed to create target decision directory structure: {e}")
+        import traceback
+        logger.debug(f"Traceback: {traceback.format_exc()}")
+        target_decision_dir = None
     
     # Legacy structure: DECISION/FEATURE_SELECTION/{target}/ (for backward compatibility)
     legacy_decision_dir = base_output_dir / "DECISION" / "FEATURE_SELECTION" / target_name_clean
     
     repro_dir.mkdir(parents=True, exist_ok=True)
-    target_decision_dir.mkdir(parents=True, exist_ok=True)
+    if target_decision_dir:
+        target_decision_dir.mkdir(parents=True, exist_ok=True)
     legacy_decision_dir.mkdir(parents=True, exist_ok=True)
     
     # Handle empty results
@@ -211,16 +229,27 @@ def save_feature_selection_rankings(
         yaml_data['metadata'] = metadata
     
     # Save to target-first structure (primary location)
-    target_yaml_path = target_decision_dir / "feature_prioritization.yaml"
-    with open(target_yaml_path, 'w') as f:
-        yaml.dump(yaml_data, f, default_flow_style=False)
-    logger.info(f"Saved feature prioritization YAML to {target_yaml_path}")
+    if target_decision_dir:
+        try:
+            target_yaml_path = target_decision_dir / "feature_prioritization.yaml"
+            with open(target_yaml_path, 'w') as f:
+                yaml.dump(yaml_data, f, default_flow_style=False)
+            logger.info(f"✅ Saved feature prioritization YAML to {target_yaml_path}")
+        except Exception as e:
+            logger.warning(f"Failed to save feature prioritization YAML to target-first location: {e}")
+            import traceback
+            logger.debug(f"Traceback: {traceback.format_exc()}")
+    else:
+        logger.warning(f"Target decision directory not available, skipping target-first save")
     
     # Also save to legacy location (backward compatibility)
-    legacy_yaml_path = legacy_decision_dir / "feature_prioritization.yaml"
-    with open(legacy_yaml_path, 'w') as f:
-        yaml.dump(yaml_data, f, default_flow_style=False)
-    logger.debug(f"Saved feature prioritization YAML to legacy location {legacy_yaml_path} (backward compatibility)")
+    try:
+        legacy_yaml_path = legacy_decision_dir / "feature_prioritization.yaml"
+        with open(legacy_yaml_path, 'w') as f:
+            yaml.dump(yaml_data, f, default_flow_style=False)
+        logger.debug(f"Saved feature prioritization YAML to legacy location {legacy_yaml_path} (backward compatibility)")
+    except Exception as e:
+        logger.warning(f"Failed to save feature prioritization YAML to legacy location: {e}")
     
     # Save selected features list to both legacy and target-first structures (write directly to both)
     selected_features_path = repro_dir / "selected_features.txt"
