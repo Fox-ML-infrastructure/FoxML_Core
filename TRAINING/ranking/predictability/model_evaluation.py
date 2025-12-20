@@ -4585,17 +4585,28 @@ def evaluate_target_predictability(
         else:
             base_output_dir = output_dir
         
-        # Save feature exclusions to REPRODUCIBILITY/TARGET_RANKING/{view}/{target}/feature_exclusions/
-        # This keeps all target ranking outputs together in the reproducibility structure
+        # Save feature exclusions to target-first structure (targets/<target>/reproducibility/feature_exclusions/)
         # Note: Exclusions are shared at target level (not per-symbol, not per-cohort)
         target_name_clean = target_name.replace('/', '_').replace('\\', '_')
-        repro_base = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
-        target_exclusion_dir = repro_base / view / target_name_clean / "feature_exclusions"
+        
+        from TRAINING.orchestration.utils.target_first_paths import (
+            get_target_reproducibility_dir, ensure_target_structure
+        )
+        ensure_target_structure(base_output_dir, target_name_clean)
+        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+        target_exclusion_dir = target_repro_dir / "feature_exclusions"
         target_exclusion_dir.mkdir(parents=True, exist_ok=True)
         
-        # Try to load existing exclusion list first (from RESULTS/{cohort}/{run}/feature_exclusions/)
-        # This allows reusing exclusion lists across runs for consistency
+        # Also maintain legacy location for backward compatibility
+        legacy_repro_base = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
+        legacy_exclusion_dir = legacy_repro_base / view / target_name_clean / "feature_exclusions"
+        legacy_exclusion_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Try to load existing exclusion list first (check both new and legacy locations)
         existing_exclusions = load_target_exclusion_list(target_name, target_exclusion_dir)
+        if existing_exclusions is None:
+            # Fallback to legacy location
+            existing_exclusions = load_target_exclusion_list(target_name, legacy_exclusion_dir)
         if existing_exclusions is not None:
             target_conditional_exclusions = existing_exclusions
             logger.info(
@@ -4622,6 +4633,19 @@ def evaluate_target_predictability(
                 output_dir=target_exclusion_dir,
                 registry=registry
             )
+            
+            # Also save to legacy location for backward compatibility
+            if target_conditional_exclusions:
+                try:
+                    import shutil
+                    safe_target_name = target_name.replace('/', '_').replace('\\', '_')
+                    exclusion_file = target_exclusion_dir / f"{safe_target_name}_exclusions.yaml"
+                    legacy_exclusion_file = legacy_exclusion_dir / f"{safe_target_name}_exclusions.yaml"
+                    if exclusion_file.exists():
+                        shutil.copy2(exclusion_file, legacy_exclusion_file)
+                        logger.debug(f"Saved exclusion file to legacy location: {legacy_exclusion_file}")
+                except Exception as e:
+                    logger.debug(f"Failed to copy exclusion file to legacy location: {e}")
             
             if target_conditional_exclusions:
                 logger.info(

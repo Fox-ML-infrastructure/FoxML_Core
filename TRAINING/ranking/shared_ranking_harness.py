@@ -232,26 +232,33 @@ class RankingHarness:
                     if "REPRODUCIBILITY" in str(base_output_dir):
                         logger.warning(f"Could not resolve REPRODUCIBILITY base from {self.output_dir}, using as-is")
                 
-                # Determine stage based on job_type
+                # Save to target-first structure (targets/<target>/reproducibility/feature_exclusions/)
+                from TRAINING.orchestration.utils.target_first_paths import (
+                    get_target_reproducibility_dir, ensure_target_structure
+                )
+                ensure_target_structure(base_output_dir, target_name_clean)
+                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+                target_exclusion_dir = target_repro_dir / "feature_exclusions"
+                
+                # Also maintain legacy location for backward compatibility
                 if self.job_type == "rank_targets":
-                    # Save to REPRODUCIBILITY/TARGET_RANKING/{view}/{target}/feature_exclusions/
-                    target_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / self.view / target_name_clean / "feature_exclusions"
+                    legacy_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / self.view / target_name_clean / "feature_exclusions"
                 elif self.job_type == "rank_features":
-                    # Save to REPRODUCIBILITY/FEATURE_SELECTION/{view}/{target}/feature_exclusions/
-                    # FIX: Use self.view instead of hardcoding "CROSS_SECTIONAL"
                     view_subdir = self.view if self.view else "CROSS_SECTIONAL"
-                    target_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_subdir / target_name_clean / "feature_exclusions"
-                    # For SYMBOL_SPECIFIC, add symbol subdirectory if symbol is set
+                    legacy_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_subdir / target_name_clean / "feature_exclusions"
                     if view_subdir == "SYMBOL_SPECIFIC" and self.symbol:
-                        target_exclusion_dir = target_exclusion_dir.parent.parent / f"symbol={self.symbol}" / "feature_exclusions"
+                        legacy_exclusion_dir = legacy_exclusion_dir.parent.parent / f"symbol={self.symbol}" / "feature_exclusions"
                 else:
-                    # Fallback to old structure for backward compatibility
-                    target_exclusion_dir = base_output_dir / "feature_exclusions"
+                    legacy_exclusion_dir = base_output_dir / "feature_exclusions"
+                legacy_exclusion_dir.mkdir(parents=True, exist_ok=True)
             
             target_exclusion_dir.mkdir(parents=True, exist_ok=True)
             
-            # Try to load existing exclusion list first
+            # Try to load existing exclusion list first (check both new and legacy locations)
             existing_exclusions = load_target_exclusion_list(target_name, target_exclusion_dir)
+            if existing_exclusions is None and 'legacy_exclusion_dir' in locals():
+                # Fallback to legacy location
+                existing_exclusions = load_target_exclusion_list(target_name, legacy_exclusion_dir)
             if existing_exclusions is not None:
                 target_conditional_exclusions = existing_exclusions
                 logger.info(
@@ -281,6 +288,19 @@ class RankingHarness:
                     output_dir=target_exclusion_dir,
                     registry=registry
                 )
+                
+                # Also save to legacy location for backward compatibility
+                if target_conditional_exclusions and 'legacy_exclusion_dir' in locals():
+                    try:
+                        import shutil
+                        safe_target_name = target_name.replace('/', '_').replace('\\', '_')
+                        exclusion_file = target_exclusion_dir / f"{safe_target_name}_exclusions.yaml"
+                        legacy_exclusion_file = legacy_exclusion_dir / f"{safe_target_name}_exclusions.yaml"
+                        if exclusion_file.exists():
+                            shutil.copy2(exclusion_file, legacy_exclusion_file)
+                            logger.debug(f"Saved exclusion file to legacy location: {legacy_exclusion_file}")
+                    except Exception as e:
+                        logger.debug(f"Failed to copy exclusion file to legacy location: {e}")
                 
                 if target_conditional_exclusions:
                     logger.info(
