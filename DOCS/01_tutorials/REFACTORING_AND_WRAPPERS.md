@@ -118,7 +118,7 @@ from TRAINING.train_with_strategies import train_models_for_interval_comprehensi
 from TRAINING.models.specialized.core import train_model
 from TRAINING.models.specialized.wrappers import TFSeriesRegressor
 from TRAINING.ranking.predictability.model_evaluation import evaluate_target_predictability
-from TRAINING.training_strategies.training import train_models_for_interval_comprehensive
+from TRAINING.training_strategies.execution.training import train_models_for_interval_comprehensive
 ```
 
 **Benefits:**
@@ -270,7 +270,7 @@ results = train_models_for_interval_comprehensive(interval, ...)
 
 **New way (recommended):**
 ```python
-from TRAINING.training_strategies.training import train_models_for_interval_comprehensive
+from TRAINING.training_strategies.execution.training import train_models_for_interval_comprehensive
 
 results = train_models_for_interval_comprehensive(interval, ...)
 ```

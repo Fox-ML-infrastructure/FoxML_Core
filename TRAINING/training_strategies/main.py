@@ -115,7 +115,7 @@ from TRAINING.common.family_constants import TF_FAMS, TORCH_FAMS, CPU_FAMS, TORC
 """Main entry point for training strategies."""
 
 # Import all dependencies
-from TRAINING.training_strategies.training import train_models_for_interval_comprehensive, train_model_comprehensive
+from TRAINING.training_strategies.execution.training import train_models_for_interval_comprehensive, train_model_comprehensive
 from TRAINING.training_strategies.strategy_functions import load_mtf_data, discover_targets, prepare_training_data, create_strategy_config, train_with_strategy, compare_strategies
 from TRAINING.training_strategies.utils import (
     setup_logging, ALL_FAMILIES, THREADS, MKL_THREADS_DEFAULT,

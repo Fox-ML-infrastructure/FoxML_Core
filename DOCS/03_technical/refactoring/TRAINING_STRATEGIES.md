@@ -62,7 +62,7 @@ Provides multiple training strategies (single-task, multi-task, cascade) with su
 ### Direct Import (Recommended)
 
 ```python
-from TRAINING.training_strategies.training import train_models_for_interval_comprehensive
+from TRAINING.training_strategies.execution.training import train_models_for_interval_comprehensive
 from TRAINING.training_strategies.strategies import train_with_strategy
 from TRAINING.training_strategies.data_preparation import load_mtf_data
 ```

@@ -18,7 +18,10 @@ Training strategy implementations split from the original 2,523-line file for be
 
 ```python
 # Direct import (recommended)
-from TRAINING.training_strategies.training import train_models_for_interval_comprehensive
+from TRAINING.training_strategies.execution.training import train_models_for_interval_comprehensive
+
+# Via __init__ (also works)
+from TRAINING.training_strategies import train_models_for_interval_comprehensive
 
 # Backward compatible (still works)
 from TRAINING.train_with_strategies import train_models_for_interval_comprehensive
