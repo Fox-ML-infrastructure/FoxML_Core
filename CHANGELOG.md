@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-20 (Path Resolution Fix - Stop at Run Directory, Not RESULTS Root)
+- **Path Resolution Bug Fix**: Fixed path resolution logic that incorrectly stopped at `RESULTS/` directory instead of continuing to find the actual run directory
+- **Root Cause**: Bug was always present but only surfaced after removing legacy root-level writes - previously legacy writes masked the issue
+- **Fix**: Changed path resolution to only stop when it finds a run directory (has `targets/`, `globals/`, or `cache/` subdirectories), not at `RESULTS/` itself
+- **Impact**: No more `RESULTS/targets/` created outside run directories - all files now correctly go to `RESULTS/runs/{run}/targets/<target>/`
+- **Files Changed**: `multi_model_feature_selection.py`, `model_evaluation.py`, `feature_selection_reporting.py`, `target_routing.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-20-path-resolution-fix.md)
+
 #### 2025-12-20 (Feature Selection Output Organization and Elastic Net Fail-Fast)
 - **Output Organization**: Fixed feature selection outputs being overwritten at run root - now uses target-first structure (`targets/<target>/reproducibility/`) exclusively
 - **Decision Routing Updates**: Updated `load_target_confidence()` and `save_target_routing_metadata()` to use target-first structure with separate `globals/feature_selection_routing.json` (doesn't modify `routing_decisions.json`)

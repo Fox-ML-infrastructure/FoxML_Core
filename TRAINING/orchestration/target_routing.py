@@ -115,8 +115,10 @@ def load_target_confidence(output_dir: Path, target_name: str) -> Optional[Dict[
     from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
     base_dir = output_dir
     # Walk up to find run root if needed
-    while base_dir.name not in ["RESULTS", "targets"] and base_dir.parent.exists():
-        if (base_dir / "targets").exists():
+    # Only stop if we find a run directory (has targets/, globals/, or cache/)
+    # Don't stop at RESULTS/ - continue to find actual run directory
+    while base_dir.parent.exists():
+        if (base_dir / "targets").exists() or (base_dir / "globals").exists() or (base_dir / "cache").exists():
             break
         base_dir = base_dir.parent
     
@@ -242,8 +244,10 @@ def save_target_routing_metadata(
     
     # Find base run directory
     base_dir = output_dir
-    while base_dir.name not in ["RESULTS", "targets"] and base_dir.parent.exists():
-        if (base_dir / "targets").exists():
+    # Only stop if we find a run directory (has targets/, globals/, or cache/)
+    # Don't stop at RESULTS/ - continue to find actual run directory
+    while base_dir.parent.exists():
+        if (base_dir / "targets").exists() or (base_dir / "globals").exists() or (base_dir / "cache").exists():
             break
         base_dir = base_dir.parent
     

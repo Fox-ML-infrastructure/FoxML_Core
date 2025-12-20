@@ -3543,7 +3543,9 @@ def save_multi_model_results(
     
     # Walk up to find base run directory
     for _ in range(10):
-        if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
+        # Only stop if we find a run directory (has targets/, globals/, or cache/)
+        # Don't stop at RESULTS/ - continue to find actual run directory
+        if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
             break
         if not base_output_dir.parent.exists():
             break

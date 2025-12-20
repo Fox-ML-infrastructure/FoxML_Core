@@ -906,7 +906,9 @@ def train_and_evaluate_models(
                         # Find base run directory
                         base_output_dir = output_dir
                         for _ in range(10):
-                            if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
+                            # Only stop if we find a run directory (has targets/, globals/, or cache/)
+                            # Don't stop at RESULTS/ - continue to find actual run directory
+                            if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
                                 break
                             if not base_output_dir.parent.exists():
                                 break
@@ -1333,7 +1335,9 @@ def train_and_evaluate_models(
                     base_output_dir = output_dir
                     if base_output_dir:
                         for _ in range(10):
-                            if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
+                            # Only stop if we find a run directory (has targets/, globals/, or cache/)
+                            # Don't stop at RESULTS/ - continue to find actual run directory
+                            if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
                                 break
                             if not base_output_dir.parent.exists():
                                 break
@@ -5326,7 +5330,9 @@ def evaluate_target_predictability(
                     # Find base run directory
                     base_output_dir = output_dir
                     for _ in range(10):
-                        if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
+                        # Only stop if we find a run directory (has targets/, globals/, or cache/)
+                        # Don't stop at RESULTS/ - continue to find actual run directory
+                        if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
                             break
                         if not base_output_dir.parent.exists():
                             break

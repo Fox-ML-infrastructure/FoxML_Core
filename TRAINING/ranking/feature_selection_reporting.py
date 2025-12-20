@@ -115,17 +115,16 @@ def save_feature_selection_rankings(
             repro_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean
     
     # Find base run directory for target-first structure
-    # Walk up to find the run directory (where "targets" or "RESULTS" would be)
+    # Walk up to find the run directory (where "targets", "globals", or "cache" would be)
     base_output_dir = repro_dir
     for _ in range(10):  # Limit depth
-        if (base_output_dir / "targets").exists() or base_output_dir.name == "RESULTS" or (base_output_dir.parent / "targets").exists():
-            if (base_output_dir / "targets").exists():
-                break
-            elif base_output_dir.name == "RESULTS":
-                break
-            elif (base_output_dir.parent / "targets").exists():
-                base_output_dir = base_output_dir.parent
-                break
+        # Only stop if we find a run directory (has targets/, globals/, or cache/)
+        # Don't stop at RESULTS/ - continue to find actual run directory
+        if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
+            break
+        elif (base_output_dir.parent / "targets").exists() or (base_output_dir.parent / "globals").exists() or (base_output_dir.parent / "cache").exists():
+            base_output_dir = base_output_dir.parent
+            break
         if not base_output_dir.parent.exists() or base_output_dir.parent == base_output_dir:
             break
         base_output_dir = base_output_dir.parent
@@ -331,7 +330,9 @@ def save_feature_importances_for_reproducibility(
     # Find base run directory for target-first structure
     base_output_dir = output_dir
     for _ in range(10):
-        if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
+        # Only stop if we find a run directory (has targets/, globals/, or cache/)
+        # Don't stop at RESULTS/ - continue to find actual run directory
+        if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
             break
         if not base_output_dir.parent.exists():
             break
