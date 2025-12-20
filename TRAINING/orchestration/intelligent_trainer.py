@@ -777,11 +777,22 @@ class IntelligentTrainer:
             except Exception as e2:
                 logger.debug(f"Recursive search also failed: {e2}")
         
-        # Create subdirectories (target_rankings and feature_selections removed - now using DECISION/ and REPRODUCIBILITY/)
+        # Create target-first structure
+        from TRAINING.orchestration.utils.target_first_paths import initialize_run_structure
+        initialize_run_structure(self.output_dir)
+        
+        # Create initial manifest
+        from TRAINING.orchestration.utils.manifest import create_manifest
+        try:
+            create_manifest(self.output_dir, run_id=self.output_dir.name)
+        except Exception as e:
+            logger.warning(f"Failed to create initial manifest: {e}")
+        
+        # Keep legacy directories for backward compatibility during transition
         (self.output_dir / "training_results").mkdir(exist_ok=True)
         (self.output_dir / "leakage_diagnostics").mkdir(exist_ok=True)
         
-        # Create new structure directories
+        # Create new structure directories (keep for backward compatibility)
         (self.output_dir / "DECISION" / "TARGET_RANKING").mkdir(parents=True, exist_ok=True)
         (self.output_dir / "DECISION" / "FEATURE_SELECTION").mkdir(parents=True, exist_ok=True)
         (self.output_dir / "REPRODUCIBILITY" / "TARGET_RANKING").mkdir(parents=True, exist_ok=True)

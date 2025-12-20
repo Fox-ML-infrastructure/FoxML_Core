@@ -412,10 +412,18 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                         if model_result is not None and model_result.get('success', False):
                             symbol_results[family] = model_result
                             
-                            # Save model with symbol-specific path
-                            family_dir = Path(output_dir) / family
-                            symbol_target_dir = family_dir / target / symbol
+                            # Save model with target-first path (INDIVIDUAL/SYMBOL_SPECIFIC route)
+                            from TRAINING.orchestration.utils.target_first_paths import (
+                                get_target_models_dir, ensure_target_structure
+                            )
+                            ensure_target_structure(Path(output_dir), target)
+                            symbol_target_dir = get_target_models_dir(Path(output_dir), target, family) / f"symbol={symbol}"
                             symbol_target_dir.mkdir(parents=True, exist_ok=True)
+                            
+                            # Also create legacy path for backward compatibility
+                            legacy_family_dir = Path(output_dir) / "training_results" / family
+                            legacy_symbol_target_dir = legacy_family_dir / target / symbol
+                            legacy_symbol_target_dir.mkdir(parents=True, exist_ok=True)
                             
                             # Get the trained model from strategy manager
                             strategy_manager = model_result.get('strategy_manager')
@@ -438,6 +446,13 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                         model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.txt"
                                         wrapped_model.save_model(str(model_path))
                                         logger.info(f"  💾 LightGBM model saved: {model_path}")
+                                        
+                                        # Also save to legacy location for backward compatibility
+                                        legacy_model_path = legacy_symbol_target_dir / f"{family.lower()}_mtf_b0.txt"
+                                        legacy_model_path.parent.mkdir(parents=True, exist_ok=True)
+                                        import shutil
+                                        shutil.copy2(model_path, legacy_model_path)
+                                        logger.debug(f"  💾 Model saved to legacy location: {legacy_model_path}")
                                         
                                     elif save_info['is_tensorflow']:  # TensorFlow/Keras
                                         model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.keras"
@@ -494,7 +509,17 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                                 return "unknown"
                                     
                                     if save_info['is_lightgbm']:  # LightGBM - JSON format
-                                        meta_path = symbol_target_dir / "meta_b0.json"
+                                        # Save to target-first structure (primary location)
+                                        from TRAINING.orchestration.utils.target_first_paths import (
+                                            get_target_reproducibility_dir
+                                        )
+                                        repro_dir = get_target_reproducibility_dir(Path(output_dir), target)
+                                        repro_dir.mkdir(parents=True, exist_ok=True)
+                                        meta_path_repro = repro_dir / f"meta_{family}_{symbol}_b0.json"
+                                        
+                                        # Also keep copy in model directory (backward compatibility)
+                                        meta_path_legacy = symbol_target_dir / "meta_b0.json"
+                                        
                                         import json
                                         metadata = {
                                             "family": family,
@@ -554,12 +579,27 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                                 metadata["cv_mean"] = float(np.mean(cv_scores))
                                                 metadata["cv_std"] = float(np.std(cv_scores))
                                         
-                                        with open(meta_path, 'w') as f:
+                                        # Save to target-first structure
+                                        with open(meta_path_repro, 'w') as f:
                                             json.dump(metadata, f, indent=2)
-                                        logger.info(f"  💾 Metadata saved: {meta_path}")
+                                        logger.info(f"  💾 Metadata saved: {meta_path_repro}")
+                                        
+                                        # Also save to legacy location
+                                        with open(meta_path_legacy, 'w') as f:
+                                            json.dump(metadata, f, indent=2)
+                                        logger.debug(f"  💾 Metadata saved to legacy location: {meta_path_legacy}")
                                     
                                     else:  # Other model types - save as JSON too
-                                        meta_path = symbol_target_dir / "meta_b0.json"
+                                        # Save to target-first structure (primary location)
+                                        from TRAINING.orchestration.utils.target_first_paths import (
+                                            get_target_reproducibility_dir
+                                        )
+                                        repro_dir = get_target_reproducibility_dir(Path(output_dir), target)
+                                        repro_dir.mkdir(parents=True, exist_ok=True)
+                                        meta_path_repro = repro_dir / f"meta_{family}_{symbol}_b0.json"
+                                        
+                                        # Also keep copy in model directory (backward compatibility)
+                                        meta_path_legacy = symbol_target_dir / "meta_b0.json"
                                         import json
                                         metadata = {
                                             "family": family,
@@ -586,9 +626,15 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                                 metadata["cv_mean"] = float(np.mean(cv_scores))
                                                 metadata["cv_std"] = float(np.std(cv_scores))
                                         
-                                        with open(meta_path, 'w') as f:
+                                        # Save to target-first structure
+                                        with open(meta_path_repro, 'w') as f:
                                             json.dump(metadata, f, indent=2)
-                                        logger.info(f"  💾 Metadata saved: {meta_path}")
+                                        logger.info(f"  💾 Metadata saved: {meta_path_repro}")
+                                        
+                                        # Also save to legacy location
+                                        with open(meta_path_legacy, 'w') as f:
+                                            json.dump(metadata, f, indent=2)
+                                        logger.debug(f"  💾 Metadata saved to legacy location: {meta_path_legacy}")
                             else:
                                 # Fallback: save model directly if no strategy_manager
                                 model_path = symbol_target_dir / "model.joblib"
@@ -596,8 +642,15 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 joblib.dump(model_result.get('model'), model_path)
                                 logger.info(f"  ✅ Saved {family} model for {target}:{symbol} to {model_path}")
                                 
-                                # Save basic metadata
-                                meta_path = symbol_target_dir / "meta_b0.json"
+                                # Save basic metadata to target-first structure
+                                from TRAINING.orchestration.utils.target_first_paths import (
+                                    get_target_reproducibility_dir
+                                )
+                                repro_dir = get_target_reproducibility_dir(Path(output_dir), target)
+                                repro_dir.mkdir(parents=True, exist_ok=True)
+                                meta_path_repro = repro_dir / f"meta_{family}_{symbol}_b0.json"
+                                meta_path_legacy = symbol_target_dir / "meta_b0.json"
+                                
                                 import json
                                 metadata = {
                                     "family": family,
@@ -611,9 +664,15 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                         "view": "SYMBOL_SPECIFIC"
                                     }
                                 }
-                                with open(meta_path, 'w') as f:
+                                # Save to target-first structure
+                                with open(meta_path_repro, 'w') as f:
                                     json.dump(metadata, f, indent=2)
-                                logger.info(f"  💾 Basic metadata saved: {meta_path}")
+                                logger.info(f"  💾 Basic metadata saved: {meta_path_repro}")
+                                
+                                # Also save to legacy location
+                                with open(meta_path_legacy, 'w') as f:
+                                    json.dump(metadata, f, indent=2)
+                                logger.debug(f"  💾 Basic metadata saved to legacy location: {meta_path_legacy}")
                             
                             # Track reproducibility for symbol-specific model
                             if output_dir:
@@ -1022,10 +1081,18 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                             import traceback
                             logger.debug(f"Reproducibility tracking traceback: {traceback.format_exc()}")
                     
-                    # Save model using original structure: FamilyName/target_name/model_files
-                    family_dir = Path(output_dir) / family
-                    target_dir = family_dir / target
+                    # Save model using target-first structure (CROSS_SECTIONAL route)
+                    from TRAINING.orchestration.utils.target_first_paths import (
+                        get_target_models_dir, ensure_target_structure
+                    )
+                    ensure_target_structure(Path(output_dir), target)
+                    target_dir = get_target_models_dir(Path(output_dir), target, family)
                     target_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # Also create legacy path for backward compatibility
+                    legacy_family_dir = Path(output_dir) / "training_results" / family
+                    legacy_target_dir = legacy_family_dir / target
+                    legacy_target_dir.mkdir(parents=True, exist_ok=True)
                     
                     try:
                         # Get the trained model from strategy manager
@@ -1055,6 +1122,13 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 wrapped_model.save(str(model_path))
                                 logger.info(f"💾 Keras model saved: {model_path}")
                                 
+                                # Also save to legacy location
+                                legacy_model_path = legacy_target_dir / f"{family.lower()}_mtf_b0.keras"
+                                legacy_model_path.parent.mkdir(parents=True, exist_ok=True)
+                                import shutil
+                                shutil.copy2(model_path, legacy_model_path)
+                                logger.debug(f"💾 Model saved to legacy location: {legacy_model_path}")
+                                
                             elif save_info['is_pytorch']:  # PyTorch models
                                 model_path = target_dir / f"{family.lower()}_mtf_b0.pt"
                                 import torch, json
@@ -1077,10 +1151,24 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 }, str(model_path))
                                 logger.info(f"💾 PyTorch model saved: {model_path}")
                                 
+                                # Also save to legacy location
+                                legacy_model_path = legacy_target_dir / f"{family.lower()}_mtf_b0.pt"
+                                legacy_model_path.parent.mkdir(parents=True, exist_ok=True)
+                                import shutil
+                                shutil.copy2(model_path, legacy_model_path)
+                                logger.debug(f"💾 Model saved to legacy location: {legacy_model_path}")
+                                
                             else:  # Scikit-learn models
                                 model_path = target_dir / f"{family.lower()}_mtf_b0.joblib"
                                 wrapped_model.save(str(model_path))
                                 logger.info(f"💾 Scikit-learn model saved: {model_path}")
+                                
+                                # Also save to legacy location
+                                legacy_model_path = legacy_target_dir / f"{family.lower()}_mtf_b0.joblib"
+                                legacy_model_path.parent.mkdir(parents=True, exist_ok=True)
+                                import shutil
+                                shutil.copy2(model_path, legacy_model_path)
+                                logger.debug(f"💾 Model saved to legacy location: {legacy_model_path}")
                             
                             # Save preprocessors if available
                             if wrapped_model.scaler is not None:
@@ -1107,7 +1195,17 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                             
                             # Save metadata (match original format exactly)
                             if save_info['is_lightgbm']:  # LightGBM - JSON format
-                                meta_path = target_dir / "meta_b0.json"
+                                # Save to target-first structure (primary location)
+                                from TRAINING.orchestration.utils.target_first_paths import (
+                                    get_target_reproducibility_dir
+                                )
+                                repro_dir = get_target_reproducibility_dir(Path(output_dir), target)
+                                repro_dir.mkdir(parents=True, exist_ok=True)
+                                meta_path_repro = repro_dir / f"meta_{family}_b0.json"
+                                
+                                # Also keep copy in model directory (backward compatibility)
+                                meta_path_legacy = target_dir / "meta_b0.json"
+                                
                                 import json
                                 metadata = {
                                     "family": family,
@@ -1164,8 +1262,15 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     "rank_method": "scipy_dense",
                                     "feature_importance": {}
                                 }
-                                with open(meta_path, 'w') as f:
+                                # Save to target-first structure
+                                with open(meta_path_repro, 'w') as f:
                                     json.dump(metadata, f, indent=2)
+                                logger.info(f"💾 Metadata saved: {meta_path_repro}")
+                                
+                                # Also save to legacy location
+                                with open(meta_path_legacy, 'w') as f:
+                                    json.dump(metadata, f, indent=2)
+                                logger.debug(f"💾 Metadata saved to legacy location: {meta_path_legacy}")
                                     
                             else:  # TensorFlow/Scikit-learn - joblib format
                                 meta_path = target_dir / f"{family.lower()}_mtf_b0.meta.joblib"

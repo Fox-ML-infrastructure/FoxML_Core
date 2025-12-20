@@ -224,6 +224,51 @@ class MetricsWriter:
         except Exception as e:
             logger.warning(f"⚠️  Failed to write metrics to {cohort_dir}: {e}")
         
+        # Also write to target-first structure (targets/<target>/metrics/)
+        if target:
+            try:
+                from TRAINING.orchestration.utils.target_first_paths import (
+                    get_target_metrics_dir, ensure_target_structure
+                )
+                # Find base output directory (walk up from cohort_dir to find run root)
+                base_output_dir = cohort_dir
+                for _ in range(10):  # Limit depth
+                    if (base_output_dir / "REPRODUCIBILITY").exists() or (base_output_dir / "targets").exists():
+                        break
+                    if not base_output_dir.parent.exists():
+                        break
+                    base_output_dir = base_output_dir.parent
+                
+                # If we found a run directory, write to target-first location
+                if (base_output_dir / "targets").exists() or (base_output_dir / "REPRODUCIBILITY").exists():
+                    target_name_clean = target.replace('/', '_').replace('\\', '_')
+                    ensure_target_structure(base_output_dir, target_name_clean)
+                    target_metrics_dir = get_target_metrics_dir(base_output_dir, target_name_clean)
+                    
+                    # Organize by view if multiple views exist
+                    if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+                        view_metrics_dir = target_metrics_dir / f"view={view}"
+                        view_metrics_dir.mkdir(parents=True, exist_ok=True)
+                        # Write copy to view-specific location
+                        self._write_metrics(
+                            view_metrics_dir, run_id, metrics,
+                            stage=stage,
+                            reproducibility_mode="COHORT_AWARE",
+                            diff_telemetry=diff_telemetry
+                        )
+                        logger.debug(f"✅ Wrote metrics to target-first location: {view_metrics_dir}")
+                    else:
+                        # Write to canonical location
+                        self._write_metrics(
+                            target_metrics_dir, run_id, metrics,
+                            stage=stage,
+                            reproducibility_mode="COHORT_AWARE",
+                            diff_telemetry=diff_telemetry
+                        )
+                        logger.debug(f"✅ Wrote metrics to target-first location: {target_metrics_dir}")
+            except Exception as e:
+                logger.debug(f"Failed to write metrics to target-first location: {e}")
+        
         # Write metrics_drift.json (comparison to baseline)
         if baseline_key:
             try:

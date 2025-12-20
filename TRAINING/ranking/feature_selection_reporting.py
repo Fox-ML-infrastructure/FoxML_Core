@@ -114,18 +114,26 @@ def save_feature_selection_rankings(
         else:
             repro_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean
     
-    # DECISION folder should be at run level, not target level (matching TARGET_RANKING)
-    # Walk up to run level to find DECISION
+    # Find base run directory for target-first structure
     base_output_dir = repro_dir
     while base_output_dir.name not in ["RESULTS"] and "REPRODUCIBILITY" in base_output_dir.parts:
         base_output_dir = base_output_dir.parent
         if not base_output_dir.parent.exists():
             break
-    # DECISION is at run level: RESULTS/{run_id}/DECISION/FEATURE_SELECTION/{target}/
-    decision_dir = base_output_dir / "DECISION" / "FEATURE_SELECTION" / target_name_clean
+    
+    # Target-first structure: save to targets/<target>/decision/
+    from TRAINING.orchestration.utils.target_first_paths import (
+        get_target_decision_dir, ensure_target_structure
+    )
+    ensure_target_structure(base_output_dir, target_name_clean)
+    target_decision_dir = get_target_decision_dir(base_output_dir, target_name_clean)
+    
+    # Legacy structure: DECISION/FEATURE_SELECTION/{target}/ (for backward compatibility)
+    legacy_decision_dir = base_output_dir / "DECISION" / "FEATURE_SELECTION" / target_name_clean
     
     repro_dir.mkdir(parents=True, exist_ok=True)
-    decision_dir.mkdir(parents=True, exist_ok=True)
+    target_decision_dir.mkdir(parents=True, exist_ok=True)
+    legacy_decision_dir.mkdir(parents=True, exist_ok=True)
     
     # Handle empty results
     if summary_df is None or len(summary_df) == 0:
@@ -191,11 +199,17 @@ def save_feature_selection_rankings(
     if metadata:
         yaml_data['metadata'] = metadata
     
-    yaml_path = decision_dir / "feature_prioritization.yaml"
-    with open(yaml_path, 'w') as f:
+    # Save to target-first structure (primary location)
+    target_yaml_path = target_decision_dir / "feature_prioritization.yaml"
+    with open(target_yaml_path, 'w') as f:
         yaml.dump(yaml_data, f, default_flow_style=False)
+    logger.info(f"Saved feature prioritization YAML to {target_yaml_path}")
     
-    logger.info(f"Saved feature prioritization YAML to {yaml_path}")
+    # Also save to legacy location (backward compatibility)
+    legacy_yaml_path = legacy_decision_dir / "feature_prioritization.yaml"
+    with open(legacy_yaml_path, 'w') as f:
+        yaml.dump(yaml_data, f, default_flow_style=False)
+    logger.debug(f"Saved feature prioritization YAML to legacy location {legacy_yaml_path} (backward compatibility)")
     
     # Save selected features list to REPRODUCIBILITY (reproducibility artifact)
     selected_features_path = repro_dir / "selected_features.txt"

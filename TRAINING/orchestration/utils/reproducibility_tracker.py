@@ -3614,6 +3614,39 @@ class ReproducibilityTracker:
                                     target=target_name,
                                     trends={series_key_str: trends}  # Pass pre-computed trends
                                 )
+                                
+                                # Also write across-runs timeseries to trend_reports/
+                                try:
+                                    # Find RESULTS directory (walk up from reproducibility_dir)
+                                    results_dir = self._repro_base_dir.parent if hasattr(self, '_repro_base_dir') else None
+                                    if results_dir is None:
+                                        # Try to find RESULTS by walking up from cohort_dir
+                                        current = Path(cohort_dir)
+                                        for _ in range(10):
+                                            if current.name == "RESULTS":
+                                                results_dir = current
+                                                break
+                                            if not current.parent.exists():
+                                                break
+                                            current = current.parent
+                                    
+                                    if results_dir and results_dir.name == "RESULTS":
+                                        trend_analyzer.write_across_runs_timeseries(
+                                            results_dir=results_dir,
+                                            target=target_name,
+                                            stage=ctx.stage.upper(),
+                                            view=ctx.view if hasattr(ctx, 'view') else "CROSS_SECTIONAL"
+                                        )
+                                        
+                                        # Write run snapshot
+                                        if hasattr(ctx, 'run_id') and ctx.run_id:
+                                            trend_analyzer.write_run_snapshot(
+                                                results_dir=results_dir,
+                                                run_id=ctx.run_id,
+                                                trends={series_key_str: trends}
+                                            )
+                                except Exception as e2:
+                                    logger.debug(f"Failed to write across-runs timeseries: {e2}")
                             except Exception as e:
                                 logger.debug(f"Failed to write trend.json: {e}")
                         

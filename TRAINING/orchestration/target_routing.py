@@ -154,14 +154,25 @@ def collect_run_level_confidence_summary(
         logger.warning("No target confidence files found")
         return []
     
-    # Write run-level JSON (list of all targets)
-    run_summary_path = output_dir / "target_confidence_summary.json"
+    # Save to target-first structure (globals/)
+    from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+    globals_dir = get_globals_dir(output_dir)
+    globals_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Write run-level JSON (list of all targets) to globals/
+    run_summary_path = globals_dir / "target_confidence_summary.json"
     with open(run_summary_path, "w") as f:
         json.dump(all_confidence, f, indent=2)
-    logger.info(f"✅ Saved run-level confidence summary: {len(all_confidence)} targets")
+    logger.info(f"✅ Saved run-level confidence summary: {len(all_confidence)} targets to {run_summary_path}")
     
-    # Write CSV summary for easy inspection
-    csv_path = output_dir / "target_confidence_summary.csv"
+    # Also save to legacy location (backward compatibility)
+    legacy_json_path = output_dir / "target_confidence_summary.json"
+    with open(legacy_json_path, "w") as f:
+        json.dump(all_confidence, f, indent=2)
+    logger.debug(f"Saved confidence summary to legacy location: {legacy_json_path}")
+    
+    # Write CSV summary for easy inspection to globals/
+    csv_path = globals_dir / "target_confidence_summary.csv"
     summary_rows = []
     for conf in all_confidence:
         routing = classify_target_from_confidence(conf, routing_config=routing_config)
@@ -186,6 +197,11 @@ def collect_run_level_confidence_summary(
     df = df.sort_values(['confidence', 'score_tier'], ascending=[False, False])
     df.to_csv(csv_path, index=False)
     logger.info(f"✅ Saved confidence summary CSV: {csv_path}")
+    
+    # Also save to legacy location (backward compatibility)
+    legacy_csv_path = output_dir / "target_confidence_summary.csv"
+    df.to_csv(legacy_csv_path, index=False)
+    logger.debug(f"Saved confidence summary CSV to legacy location: {legacy_csv_path}")
     
     return all_confidence
 

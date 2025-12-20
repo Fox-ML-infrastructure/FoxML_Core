@@ -937,3 +937,224 @@ class TrendAnalyzer:
         except Exception as e:
             logger.debug(f"Failed to write trend.json to {cohort_dir}: {e}")
             return None
+    
+    def write_across_runs_timeseries(
+        self,
+        results_dir: Path,
+        target: str,
+        stage: str = "TRAINING",
+        view: str = "CROSS_SECTIONAL"
+    ) -> Optional[Dict[str, Path]]:
+        """
+        Write across-runs time series to trend_reports/by_target/<target>/.
+        
+        This creates time series files indexed by run_id and timestamp for:
+        - Performance metrics (performance_timeseries.parquet)
+        - Routing scores (routing_score_timeseries.parquet)
+        - Feature importance (feature_importance_timeseries.parquet)
+        
+        Args:
+            results_dir: RESULTS directory (parent of runs/)
+            target: Target name
+            stage: Stage name (default: "TRAINING")
+            view: View type (default: "CROSS_SECTIONAL")
+        
+        Returns:
+            Dict mapping metric name to file path, or None if failed
+        """
+        try:
+            # Find RESULTS directory (walk up from reproducibility_dir if needed)
+            if results_dir.name != "RESULTS":
+                # Try to find RESULTS directory
+                current = Path(results_dir)
+                for _ in range(10):
+                    if current.name == "RESULTS":
+                        results_dir = current
+                        break
+                    if not current.parent.exists():
+                        break
+                    current = current.parent
+            
+            # Create trend_reports structure outside run directories
+            trend_reports_dir = results_dir / "trend_reports"
+            by_target_dir = trend_reports_dir / "by_target"
+            target_trend_dir = by_target_dir / target.replace('/', '_').replace('\\', '_')
+            target_trend_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Load artifact index
+            df = self.load_artifact_index()
+            if len(df) == 0:
+                logger.debug(f"No runs found for across-runs timeseries for {target}")
+                return None
+            
+            # Filter for this target and stage
+            target_df = df[
+                (df['target'] == target) & 
+                (df.get('stage', '') == stage)
+            ].copy()
+            
+            if len(target_df) == 0:
+                logger.debug(f"No runs found for target={target}, stage={stage}")
+                return None
+            
+            # Sort by timestamp
+            if 'timestamp' in target_df.columns:
+                target_df = target_df.sort_values('timestamp')
+            
+            written_files = {}
+            
+            # 1. Performance timeseries
+            perf_columns = ['run_id', 'timestamp', 'auc_mean', 'composite_score', 'primary_metric', 
+                          'mean_score', 'std_score', 'importance_mean']
+            perf_cols = [c for c in perf_columns if c in target_df.columns]
+            if perf_cols:
+                perf_df = target_df[perf_cols].copy()
+                if 'timestamp' in perf_df.columns:
+                    perf_df['timestamp'] = pd.to_datetime(perf_df['timestamp'], errors='coerce')
+                perf_path = target_trend_dir / "performance_timeseries.parquet"
+                perf_df.to_parquet(perf_path, index=False, engine='pyarrow', compression='snappy')
+                written_files['performance'] = perf_path
+                logger.debug(f"Wrote performance timeseries: {perf_path}")
+            
+            # 2. Routing score timeseries (if available)
+            routing_cols = ['run_id', 'timestamp', 'routing_score', 'confidence', 'score_tier']
+            routing_cols = [c for c in routing_cols if c in target_df.columns]
+            if routing_cols:
+                routing_df = target_df[routing_cols].copy()
+                if 'timestamp' in routing_df.columns:
+                    routing_df['timestamp'] = pd.to_datetime(routing_df['timestamp'], errors='coerce')
+                routing_path = target_trend_dir / "routing_score_timeseries.parquet"
+                routing_df.to_parquet(routing_path, index=False, engine='pyarrow', compression='snappy')
+                written_files['routing_score'] = routing_path
+                logger.debug(f"Wrote routing score timeseries: {routing_path}")
+            
+            # 3. Feature importance timeseries (if available)
+            # This would need to be aggregated from feature importance snapshots
+            # For now, we'll create a placeholder structure
+            feat_importance_cols = ['run_id', 'timestamp', 'n_selected', 'feature_registry_hash']
+            feat_importance_cols = [c for c in feat_importance_cols if c in target_df.columns]
+            if feat_importance_cols:
+                feat_df = target_df[feat_importance_cols].copy()
+                if 'timestamp' in feat_df.columns:
+                    feat_df['timestamp'] = pd.to_datetime(feat_df['timestamp'], errors='coerce')
+                feat_path = target_trend_dir / "feature_importance_timeseries.parquet"
+                feat_df.to_parquet(feat_path, index=False, engine='pyarrow', compression='snappy')
+                written_files['feature_importance'] = feat_path
+                logger.debug(f"Wrote feature importance timeseries: {feat_path}")
+            
+            if written_files:
+                logger.info(f"✅ Wrote across-runs timeseries for {target}: {len(written_files)} files")
+                return written_files
+            else:
+                logger.debug(f"No timeseries data available for {target}")
+                return None
+                
+        except Exception as e:
+            logger.warning(f"Failed to write across-runs timeseries for {target}: {e}")
+            return None
+    
+    def write_run_snapshot(
+        self,
+        results_dir: Path,
+        run_id: str,
+        trends: Optional[Dict[str, List[TrendResult]]] = None
+    ) -> Optional[Path]:
+        """
+        Write cached snapshot for a run to trend_reports/by_run/<run_id>/.
+        
+        Args:
+            results_dir: RESULTS directory (parent of runs/)
+            run_id: Run identifier
+            trends: Optional pre-computed trends dict
+        
+        Returns:
+            Path to written snapshot file, or None if failed
+        """
+        try:
+            # Find RESULTS directory
+            if results_dir.name != "RESULTS":
+                current = Path(results_dir)
+                for _ in range(10):
+                    if current.name == "RESULTS":
+                        results_dir = current
+                        break
+                    if not current.parent.exists():
+                        break
+                    current = current.parent
+            
+            # Create trend_reports structure
+            trend_reports_dir = results_dir / "trend_reports"
+            by_run_dir = trend_reports_dir / "by_run"
+            run_snapshot_dir = by_run_dir / run_id
+            run_snapshot_dir.mkdir(parents=True, exist_ok=True)
+            
+            # If trends not provided, try to compute from artifact index
+            if trends is None:
+                df = self.load_artifact_index()
+                run_df = df[df.get('run_id', '') == run_id]
+                if len(run_df) == 0:
+                    logger.debug(f"No data found for run_id={run_id} in artifact index")
+                    return None
+                
+                # Group into series and compute trends
+                series = self.group_into_series(df, view=SeriesView.STRICT, use_comparison_group=True)
+                trends = {}
+                for series_key_str, runs in series.items():
+                    if any(r.get('run_id') == run_id for r in runs):
+                        # Compute trends for this series
+                        series_key = runs[0].get('_series_key') if runs else None
+                        if series_key:
+                            metric_fields = ['primary_metric', 'auc_mean', 'composite_score']
+                            trend_list = []
+                            for metric_field in metric_fields:
+                                if any(metric_field in r and pd.notna(r.get(metric_field)) for r in runs):
+                                    trend = self.analyze_series_trend(runs, metric_field, SeriesView.STRICT, series_key)
+                                    if trend.status == "ok":
+                                        trend_list.append(trend)
+                            if trend_list:
+                                trends[series_key_str] = trend_list
+            
+            if not trends:
+                logger.debug(f"No trends computed for run_id={run_id}")
+                return None
+            
+            # Build snapshot structure
+            snapshot = {
+                'run_id': run_id,
+                'generated_at': datetime.now(timezone.utc).isoformat(),
+                'half_life_days': self.half_life_days,
+                'min_runs_for_trend': self.min_runs_for_trend,
+                'series': {}
+            }
+            
+            for series_key_str, trend_list in trends.items():
+                series_data = {
+                    'n_trends': len(trend_list),
+                    'trends': []
+                }
+                for trend in trend_list:
+                    trend_dict = {
+                        'metric_name': trend.metric_name,
+                        'status': trend.status,
+                        'n_runs': trend.n_runs,
+                        'slope_per_day': trend.slope_per_day,
+                        'current_estimate': trend.current_estimate,
+                        'ewma_value': trend.ewma_value,
+                        'residual_std': trend.residual_std,
+                        'alerts': trend.alerts,
+                        'breakpoints': trend.breakpoints
+                    }
+                    series_data['trends'].append(trend_dict)
+                snapshot['series'][series_key_str] = series_data
+            
+            # Write snapshot
+            snapshot_path = run_snapshot_dir / f"{run_id}_summary.json"
+            with open(snapshot_path, 'w') as f:
+                json.dump(snapshot, f, indent=2, default=str)
+            
+            logger.info(f"✅ Wrote run snapshot: {snapshot_path}")
+            return snapshot_path
+            
+        except Exception as e:
+            logger.warning(f"Failed to write run snapshot for {run_id}: {e}")
+            return None

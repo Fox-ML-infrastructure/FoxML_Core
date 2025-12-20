@@ -187,23 +187,22 @@ def _save_dual_view_rankings(
     """
     Save dual-view ranking results and routing decisions.
     
-    New structure:
-    - Routing decisions (decision log) → DECISION/TARGET_RANKING/routing_decisions.json
-    - Also save copy to REPRODUCIBILITY/TARGET_RANKING/ for convenience
+    Target-first structure:
+    - Global routing decisions → globals/routing_decisions.json (global summary)
+    - Per-target routing decision → targets/<target>/decision/routing_decision.json (optional, for fast local inspection)
     
-    Structure:
-    REPRODUCIBILITY/TARGET_RANKING/{target}/
-      CROSS_SECTIONAL/cohort={cohort_id}/metrics.json
-      SYMBOL_SPECIFIC/{symbol}/cohort={cohort_id}/metrics.json
-      routing_decisions.json (convenience copy)
-    DECISION/TARGET_RANKING/
-      routing_decisions.json (primary location)
+    Also maintains backward compatibility:
+    - DECISION/TARGET_RANKING/routing_decisions.json (legacy location)
+    - REPRODUCIBILITY/TARGET_RANKING/routing_decisions.json (convenience copy)
     
     Args:
         output_dir: Base output directory (RESULTS/{run}/), not target_rankings subdirectory
     """
     import json
     from pathlib import Path
+    from TRAINING.orchestration.utils.target_first_paths import (
+        get_globals_dir, get_target_decision_dir, ensure_target_structure
+    )
     
     # Determine base output directory (handle both old and new call patterns)
     if output_dir.name == "target_rankings":
@@ -211,34 +210,53 @@ def _save_dual_view_rankings(
     else:
         base_output_dir = output_dir
     
-    repro_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
-    decision_dir = base_output_dir / "DECISION" / "TARGET_RANKING"
-    repro_dir.mkdir(parents=True, exist_ok=True)
-    decision_dir.mkdir(parents=True, exist_ok=True)
-    
     # Prepare routing data
     routing_data = {
         'routing_decisions': routing_decisions,
         'summary': {
             'total_targets': len(routing_decisions),
-            'cross_sectional_only': sum(1 for r in routing_decisions.values() if r['route'] == 'CROSS_SECTIONAL'),
-            'symbol_specific_only': sum(1 for r in routing_decisions.values() if r['route'] == 'SYMBOL_SPECIFIC'),
-            'both': sum(1 for r in routing_decisions.values() if r['route'] == 'BOTH'),
-            'blocked': sum(1 for r in routing_decisions.values() if r['route'] == 'BLOCKED')
+            'cross_sectional_only': sum(1 for r in routing_decisions.values() if r.get('route') == 'CROSS_SECTIONAL'),
+            'symbol_specific_only': sum(1 for r in routing_decisions.values() if r.get('route') == 'SYMBOL_SPECIFIC'),
+            'both': sum(1 for r in routing_decisions.values() if r.get('route') == 'BOTH'),
+            'blocked': sum(1 for r in routing_decisions.values() if r.get('route') == 'BLOCKED')
         }
     }
     
-    # Save to DECISION (primary location - decision log)
+    # Save to globals/ (target-first primary location)
+    globals_dir = get_globals_dir(base_output_dir)
+    globals_dir.mkdir(parents=True, exist_ok=True)
+    globals_file = globals_dir / "routing_decisions.json"
+    with open(globals_file, 'w') as f:
+        json.dump(routing_data, f, indent=2, default=str)
+    logger.info(f"Saved routing decisions to {globals_file}")
+    
+    # Save per-target slices for fast local inspection
+    for target, decision in routing_decisions.items():
+        try:
+            ensure_target_structure(base_output_dir, target)
+            target_decision_dir = get_target_decision_dir(base_output_dir, target)
+            target_decision_file = target_decision_dir / "routing_decision.json"
+            with open(target_decision_file, 'w') as f:
+                json.dump({target: decision}, f, indent=2, default=str)
+            logger.debug(f"Saved per-target routing decision to {target_decision_file}")
+        except Exception as e:
+            logger.debug(f"Failed to save per-target routing decision for {target}: {e}")
+    
+    # Backward compatibility: Save to legacy locations
+    repro_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
+    decision_dir = base_output_dir / "DECISION" / "TARGET_RANKING"
+    repro_dir.mkdir(parents=True, exist_ok=True)
+    decision_dir.mkdir(parents=True, exist_ok=True)
+    
     decision_file = decision_dir / "routing_decisions.json"
     with open(decision_file, 'w') as f:
         json.dump(routing_data, f, indent=2, default=str)
-    logger.info(f"Saved routing decisions to {decision_file}")
+    logger.debug(f"Saved routing decisions to legacy location {decision_file} (backward compatibility)")
     
-    # Also save copy to REPRODUCIBILITY for convenience
     repro_file = repro_dir / "routing_decisions.json"
     with open(repro_file, 'w') as f:
         json.dump(routing_data, f, indent=2, default=str)
-    logger.debug(f"Saved routing decisions copy to {repro_file} (for convenience)")
+    logger.debug(f"Saved routing decisions copy to {repro_file} (backward compatibility)")
     
     # Note: Individual view results are already saved by evaluate_target_predictability
     # via reproducibility tracker (with view/symbol metadata in RunContext)

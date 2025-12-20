@@ -191,7 +191,14 @@ def save_rankings(
     else:
         base_output_dir = output_dir
     
-    # Create directories
+    # Target-first structure: target prioritization is global (ranking of all targets)
+    from TRAINING.orchestration.utils.target_first_paths import (
+        get_globals_dir, get_target_decision_dir, ensure_target_structure
+    )
+    globals_dir = get_globals_dir(base_output_dir)
+    globals_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Legacy directories (for backward compatibility)
     repro_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
     decision_dir = base_output_dir / "DECISION" / "TARGET_RANKING"
     repro_dir.mkdir(parents=True, exist_ok=True)
@@ -265,11 +272,40 @@ def save_rankings(
         ]
     }
     
-    yaml_path = decision_dir / "target_prioritization.yaml"
-    with open(yaml_path, 'w') as f:
+    # Save to globals/ (target-first primary location - this is a global ranking)
+    globals_yaml_path = globals_dir / "target_prioritization.yaml"
+    with open(globals_yaml_path, 'w') as f:
         yaml.dump(yaml_data, f, default_flow_style=False)
+    logger.info(f"Saved target prioritization YAML to {globals_yaml_path}")
     
-    logger.info(f"Saved target prioritization YAML to {yaml_path}")
+    # Also save per-target slices for fast local inspection
+    for i, r in enumerate(results):
+        target_name_clean = r.target_name.replace('/', '_').replace('\\', '_')
+        try:
+            ensure_target_structure(base_output_dir, target_name_clean)
+            target_decision_dir = get_target_decision_dir(base_output_dir, target_name_clean)
+            target_yaml_path = target_decision_dir / "target_prioritization.yaml"
+            # Save per-target slice with rank and recommendation
+            target_yaml_data = {
+                'rank': i + 1,
+                'target': r.target_name,
+                'composite_score': float(r.composite_score),
+                'task_type': r.task_type.name,
+                'mean_score': float(r.mean_score),
+                'leakage_flag': r.leakage_flag,
+                'recommendation': _get_recommendation(r)
+            }
+            with open(target_yaml_path, 'w') as f:
+                yaml.dump(target_yaml_data, f, default_flow_style=False)
+            logger.debug(f"Saved per-target prioritization to {target_yaml_path}")
+        except Exception as e:
+            logger.debug(f"Failed to save per-target prioritization for {target_name_clean}: {e}")
+    
+    # Also save to legacy location (backward compatibility)
+    legacy_yaml_path = decision_dir / "target_prioritization.yaml"
+    with open(legacy_yaml_path, 'w') as f:
+        yaml.dump(yaml_data, f, default_flow_style=False)
+    logger.debug(f"Saved target prioritization YAML to legacy location {legacy_yaml_path} (backward compatibility)")
 
 
 def _get_recommendation(score: TargetPredictabilityScore) -> str:
