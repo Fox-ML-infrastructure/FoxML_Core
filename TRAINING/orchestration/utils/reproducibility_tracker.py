@@ -866,20 +866,8 @@ class ReproducibilityTracker:
         legacy_cohort_dir = self._get_cohort_dir(stage, item_name, cohort_id, route_type, symbol, model_family)
         # Don't create legacy directory - we only use target-first structure now
         
-        # Log where files are being written (INFO level so it's visible)
+        # Logging will happen after target_cohort_dir is created (below)
         main_logger = _get_main_logger()
-        try:
-            # Try to get a relative path for readability
-            repro_base = cohort_dir.parent.parent.parent.parent
-            rel_path = cohort_dir.relative_to(repro_base) if repro_base.exists() else cohort_dir
-            log_msg = f"📁 Reproducibility: Writing cohort data to {rel_path}"
-        except (ValueError, AttributeError):
-            log_msg = f"📁 Reproducibility: Writing cohort data to {cohort_dir}"
-        
-        if main_logger != logger:
-            main_logger.info(log_msg)
-        else:
-            logger.info(log_msg)
         
         # Generate run_id
         run_id = run_data.get('run_id') or run_data.get('timestamp', datetime.now().isoformat())
