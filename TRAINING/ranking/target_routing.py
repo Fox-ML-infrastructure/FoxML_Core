@@ -177,6 +177,186 @@ def _compute_target_routing_decisions(
     return routing_decisions
 
 
+def _compute_single_target_routing_decision(
+    target_name: str,
+    result_cs: Optional[Any],  # TargetPredictabilityScore or None
+    sym_results: Dict[str, Any],  # {symbol: TargetPredictabilityScore}
+    symbol_skip_reasons: Optional[Dict[str, Dict[str, Any]]] = None  # {symbol: {reason, status, ...}}
+) -> Dict[str, Any]:
+    """
+    Compute routing decision for a single target.
+    
+    This is a single-target version of _compute_target_routing_decisions for incremental saving.
+    
+    Args:
+        target_name: Target name
+        result_cs: Cross-sectional result (or None if failed)
+        sym_results: Symbol-specific results for this target
+        symbol_skip_reasons: Skip reasons for symbols (optional)
+    
+    Returns:
+        Routing decision dict for this target
+    """
+    # Load thresholds from config
+    try:
+        from CONFIG.config_loader import get_cfg
+        routing_cfg = get_cfg("target_ranking.routing", default={}, config_name="target_ranking_config")
+        T_cs = float(routing_cfg.get('cs_auc_threshold', 0.65))
+        T_frac = float(routing_cfg.get('frac_symbols_good_threshold', 0.5))
+        T_sym = float(routing_cfg.get('symbol_auc_threshold', 0.60))
+        T_suspicious_cs = float(routing_cfg.get('suspicious_cs_auc', 0.90))
+        T_suspicious_sym = float(routing_cfg.get('suspicious_symbol_auc', 0.95))
+    except Exception:
+        # Fallback defaults
+        T_cs = 0.65
+        T_frac = 0.5
+        T_sym = 0.60
+        T_suspicious_cs = 0.90
+        T_suspicious_sym = 0.95
+    
+    # Get CS AUC
+    cs_auc = result_cs.mean_score if result_cs and result_cs.mean_score != -999.0 else -999.0
+    
+    # Compute symbol distribution stats
+    symbol_aucs = []
+    if sym_results:
+        for symbol, result_sym in sym_results.items():
+            if result_sym.mean_score != -999.0:  # Valid result
+                symbol_aucs.append(result_sym.mean_score)
+    
+    if symbol_aucs:
+        symbol_auc_mean = np.mean(symbol_aucs)
+        symbol_auc_median = np.median(symbol_aucs)
+        symbol_auc_min = np.min(symbol_aucs)
+        symbol_auc_max = np.max(symbol_aucs)
+        symbol_auc_iqr = np.percentile(symbol_aucs, 75) - np.percentile(symbol_aucs, 25)
+        frac_symbols_good = sum(1 for auc in symbol_aucs if auc >= T_sym) / len(symbol_aucs)
+        winner_symbols = [sym for sym, result in sym_results.items() 
+                        if result.mean_score >= T_sym and result.mean_score != -999.0]
+    else:
+        symbol_auc_mean = None
+        symbol_auc_median = None
+        symbol_auc_min = None
+        symbol_auc_max = None
+        symbol_auc_iqr = None
+        frac_symbols_good = 0.0
+        winner_symbols = []
+    
+    # Handle case where CS failed (cs_auc = -999.0 or result_cs is None)
+    if result_cs is None or cs_auc == -999.0:
+        # CS failed - check if symbol-specific works
+        if symbol_aucs and max(symbol_aucs) >= T_sym:
+            route = "SYMBOL_SPECIFIC"
+            reason = f"cs_failed (mean_score=-999.0) BUT exists symbol with auc >= {T_sym}"
+            winner_symbols_str = ', '.join(winner_symbols[:5])
+            if len(winner_symbols) > 5:
+                winner_symbols_str += f", ... ({len(winner_symbols)} total)"
+            reason += f" (winners: {winner_symbols_str})"
+        else:
+            # CS failed and no good symbol-specific results
+            route = "BLOCKED"
+            if symbol_aucs:
+                reason = f"cs_failed AND max_symbol_auc={max(symbol_aucs):.3f} < {T_sym} (no viable route)"
+            else:
+                reason = f"cs_failed AND no symbol-specific results (no viable route)"
+    
+    # Check for suspicious scores (BLOCKED)
+    elif cs_auc >= T_suspicious_cs or (symbol_aucs and max(symbol_aucs) >= T_suspicious_sym):
+        route = "BLOCKED"
+        reason = f"cs_auc={cs_auc:.3f} >= {T_suspicious_cs}" if cs_auc >= T_suspicious_cs else \
+                f"max_symbol_auc={max(symbol_aucs):.3f} >= {T_suspicious_sym}"
+    
+    # CROSS_SECTIONAL only: strong CS performance + good symbol coverage
+    elif cs_auc >= T_cs and frac_symbols_good >= T_frac:
+        route = "CROSS_SECTIONAL"
+        reason = f"cs_auc={cs_auc:.3f} >= {T_cs} AND frac_symbols_good={frac_symbols_good:.2f} >= {T_frac}"
+    
+    # SYMBOL_SPECIFIC only: weak CS but some symbols work
+    elif cs_auc < T_cs and symbol_aucs and max(symbol_aucs) >= T_sym:
+        route = "SYMBOL_SPECIFIC"
+        reason = f"cs_auc={cs_auc:.3f} < {T_cs} BUT exists symbol with auc >= {T_sym}"
+        winner_symbols_str = ', '.join(winner_symbols[:5])
+        if len(winner_symbols) > 5:
+            winner_symbols_str += f", ... ({len(winner_symbols)} total)"
+        reason += f" (winners: {winner_symbols_str})"
+    
+    # BOTH: strong CS but concentrated performance
+    elif cs_auc >= T_cs and symbol_aucs and (symbol_auc_iqr > 0.15 or frac_symbols_good < T_frac):
+        route = "BOTH"
+        reason = f"cs_auc={cs_auc:.3f} >= {T_cs} BUT concentrated (IQR={symbol_auc_iqr:.3f}, frac_good={frac_symbols_good:.2f})"
+    
+    # Default: CROSS_SECTIONAL (fallback)
+    else:
+        route = "CROSS_SECTIONAL"
+        if len(symbol_aucs) == 0:
+            reason = f"default (cs_auc={cs_auc:.3f}, symbol_eval=0 symbols evaluable)"
+        else:
+            reason = f"default (cs_auc={cs_auc:.3f}, no strong symbol-specific signal)"
+    
+    # Get skip reasons for this target
+    target_skip_reasons = symbol_skip_reasons if symbol_skip_reasons else {}
+    
+    return {
+        'route': route,
+        'reason': reason,
+        'cs_auc': cs_auc,
+        'symbol_auc_mean': symbol_auc_mean,
+        'symbol_auc_median': symbol_auc_median,
+        'symbol_auc_min': symbol_auc_min,
+        'symbol_auc_max': symbol_auc_max,
+        'symbol_auc_iqr': symbol_auc_iqr,
+        'frac_symbols_good': frac_symbols_good,
+        'winner_symbols': winner_symbols,
+        'n_symbols_evaluated': len(symbol_aucs) if symbol_aucs else 0,
+        'symbol_skip_reasons': target_skip_reasons if target_skip_reasons else None
+    }
+
+
+def _save_single_target_decision(
+    target_name: str,
+    decision: Dict[str, Any],
+    output_dir: Path
+) -> None:
+    """
+    Save routing decision for a single target immediately after evaluation.
+    
+    This allows incremental saving so decisions are available as soon as each target completes.
+    
+    Args:
+        target_name: Target name
+        decision: Routing decision dict for this target
+        output_dir: Base output directory (RESULTS/{run}/)
+    """
+    import json
+    from TRAINING.orchestration.utils.target_first_paths import (
+        get_target_decision_dir, ensure_target_structure
+    )
+    
+    # Determine base output directory
+    if output_dir.name == "target_rankings":
+        base_output_dir = output_dir.parent
+    else:
+        base_output_dir = output_dir
+    
+    # Walk up to find run directory
+    for _ in range(10):
+        if (base_output_dir / "targets").exists() or base_output_dir.name == "RESULTS":
+            break
+        if not base_output_dir.parent.exists() or base_output_dir.parent == base_output_dir:
+            break
+        base_output_dir = base_output_dir.parent
+    
+    try:
+        ensure_target_structure(base_output_dir, target_name)
+        target_decision_dir = get_target_decision_dir(base_output_dir, target_name)
+        target_decision_file = target_decision_dir / "routing_decision.json"
+        with open(target_decision_file, 'w') as f:
+            json.dump({target_name: decision}, f, indent=2, default=str)
+        logger.debug(f"✅ Saved routing decision for {target_name} to {target_decision_file}")
+    except Exception as e:
+        logger.debug(f"Failed to save routing decision for {target_name}: {e}")
+
+
 def _save_dual_view_rankings(
     results_cs: List[Any],
     results_sym: Dict[str, Dict[str, Any]],

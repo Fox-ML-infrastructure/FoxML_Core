@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-20 (Incremental Decision File Saving)
+- **Incremental Decision Saving**: Routing decision files are now saved immediately after each target completes evaluation, not just at the end
+- **Crash Resilience**: If the process crashes, decisions for completed targets are already saved
+- **Per-Target Decisions**: Each target's decision is written to `targets/<target>/decision/routing_decision.json` as soon as that target finishes
+- **Global Summary Still Updated**: `globals/routing_decisions.json` is still written at the end with the complete summary
+- **Files Changed**: `target_routing.py` (added `_compute_single_target_routing_decision()` and `_save_single_target_decision()`), `target_ranker.py` (integrated incremental saving in both parallel and sequential paths)
+
 #### 2025-12-20 (Snapshot Index Symbol Key Fix & SST Metrics Architecture)
 - **Fixed Snapshot Index Overwrites**: Updated snapshot index key format from `run_id:stage:target:view` to `run_id:stage:target:view:symbol` to prevent overwrites when processing multiple symbols for the same target in SYMBOL_SPECIFIC view
 - **Backward Compatibility**: All snapshot index readers handle old formats (legacy, previous, and current) automatically

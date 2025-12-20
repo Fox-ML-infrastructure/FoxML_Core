@@ -717,6 +717,21 @@ def rank_targets(
                 for symbol, result_loso_sym in result_loso_dict.items():
                     if result_loso_sym.mean_score != -999.0 and result_loso_sym.status not in skip_statuses:
                         results_loso[target_name][symbol] = result_loso_sym
+            
+            # Save routing decision immediately after target evaluation (incremental)
+            if output_dir:
+                from TRAINING.ranking.target_routing import (
+                    _compute_single_target_routing_decision, _save_single_target_decision
+                )
+                target_sym_results = results_sym.get(target_name, {})
+                target_skip_reasons = symbol_skip_reasons.get(target_name, {}) if symbol_skip_reasons else {}
+                decision = _compute_single_target_routing_decision(
+                    target_name=target_name,
+                    result_cs=result_cs if cs_succeeded else None,
+                    sym_results=target_sym_results,
+                    symbol_skip_reasons=target_skip_reasons
+                )
+                _save_single_target_decision(target_name, decision, output_dir)
     else:
         # Sequential evaluation (original code path)
         if parallel_enabled and len(targets_to_evaluate) == 1:
@@ -979,6 +994,21 @@ def rank_targets(
                         logger.info(f"  ✅ Stored {stored_count} symbol-specific results for {target_name}")
                     elif len(result_sym_dict) > 0:
                         logger.warning(f"  ⚠️  All {len(result_sym_dict)} symbol-specific results for {target_name} were filtered out")
+                    
+                    # Save routing decision immediately after target evaluation (incremental)
+                    if output_dir:
+                        from TRAINING.ranking.target_routing import (
+                            _compute_single_target_routing_decision, _save_single_target_decision
+                        )
+                        target_sym_results = results_sym.get(target_name, {})
+                        target_skip_reasons = symbol_skip_reasons.get(target_name, {}) if symbol_skip_reasons else {}
+                        decision = _compute_single_target_routing_decision(
+                            target_name=target_name,
+                            result_cs=result_cs if cs_succeeded else None,
+                            sym_results=target_sym_results,
+                            symbol_skip_reasons=target_skip_reasons
+                        )
+                        _save_single_target_decision(target_name, decision, output_dir)
                 
                 # Store LOSO results
                 if enable_loso:
