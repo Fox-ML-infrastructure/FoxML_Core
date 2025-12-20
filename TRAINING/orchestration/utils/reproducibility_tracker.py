@@ -3759,15 +3759,14 @@ class ReproducibilityTracker:
                     logger.debug(f"Fallback write traceback: {traceback.format_exc()}")
                 
                 # Write audit report to target-first structure only
-                if target_cohort_dir:
-                    audit_report_path = target_cohort_dir / "audit_report.json"
-                    try:
-                        with open(audit_report_path, 'w') as f:
-                            json.dump(audit_report, f, indent=2)
-                            f.flush()
-                            os.fsync(f.fileno())
-                    except Exception as e:
-                        logger.debug(f"Could not write audit report to target-first structure: {e}")
+                audit_report_path = target_cohort_dir / "audit_report.json"
+                try:
+                    with open(audit_report_path, 'w') as f:
+                        json.dump(audit_report, f, indent=2)
+                        f.flush()
+                        os.fsync(f.fileno())
+                except Exception as e:
+                    logger.debug(f"Could not write audit report to target-first structure: {e}")
         except Exception as e:
             logger.debug(f"Could not write audit report: {e}")
         
