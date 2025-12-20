@@ -6,6 +6,21 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-20 (Untrack DATA_PROCESSING Folder)** — Untracked `DATA_PROCESSING/` folder from git (22 files), updated default output paths to use `RESULTS/` instead, removed DATA_PROCESSING-specific documentation. Verified TRAINING pipeline is completely independent - no core functionality affected.
+  → [View](2025-12-20-untrack-data-processing-folder.md)
+
+- **2025-12-20 (CatBoost Fail-Fast for 100% Training Accuracy)** — Added fail-fast mechanism for CatBoost when training accuracy reaches 100% (>= 99.9% threshold), preventing 40+ minutes wasted on expensive feature importance computation when model is overfitting.
+  → [View](2025-12-20-catboost-fail-fast-for-overfitting.md)
+
+- **2025-12-20 (Elastic Net Graceful Failure Handling)** — Fixed Elastic Net to gracefully handle "all coefficients zero" failures and prevent expensive full fit operations from running. Quick pre-check now sets a flag to skip expensive operations when failure is detected early.
+  → [View](2025-12-20-elastic-net-graceful-failure-handling.md)
+
+- **2025-12-20 (Path Resolution Fix)** — Fixed path resolution logic that incorrectly stopped at `RESULTS/` directory instead of continuing to find the actual run directory. Changed to only stop when it finds a run directory (has `targets/`, `globals/`, or `cache/` subdirectories).
+  → [View](2025-12-20-path-resolution-fix.md)
+
+- **2025-12-20 (Feature Selection Output Organization)** — Fixed feature selection outputs being overwritten at run root - now uses target-first structure exclusively. Added Elastic Net fail-fast mechanism and fixed syntax error in feature_selection_reporting.py.
+  → [View](2025-12-20-feature-selection-output-organization-and-elastic-net-fail-fast.md)
+
 - **2025-12-19 (Target Evaluation Config Fixes)** — Fixed config precedence issue where `max_targets_to_evaluate` from experiment config was not properly overriding test config values. Added `targets_to_evaluate` whitelist support that works with `auto_targets: true`, allowing users to specify a specific list of targets to evaluate while still using auto-discovery. Enhanced debug logging shows config precedence chain and config trace now includes `intelligent_training` section overrides.
   → [View](2025-12-19-target-evaluation-config-fixes.md)
 

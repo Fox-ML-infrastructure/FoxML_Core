@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-20 (Untrack DATA_PROCESSING Folder)
+- **Repository Cleanup**: Untracked `DATA_PROCESSING/` folder from git (22 files) - folder remains on disk but is now ignored
+- **Dependency Updates**: Updated default output paths in `multi_model_feature_selection.py` and `CONFIG/ranking/features/config.yaml` from `DATA_PROCESSING/` to `RESULTS/`
+- **Documentation Cleanup**: Removed 3 DATA_PROCESSING-specific documentation files and updated `DOCS/INDEX.md`
+- **No Core Impact**: Verified TRAINING pipeline is completely independent - no Python imports, runtime dependencies, or data dependencies on DATA_PROCESSING
+- **Files Changed**: `.gitignore`, `multi_model_feature_selection.py`, `config.yaml`, `DOCS/INDEX.md` (4 modified, 25 deleted)
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-20-untrack-data-processing-folder.md)
+
 #### 2025-12-20 (CatBoost Fail-Fast for 100% Training Accuracy)
 - **CatBoost Overfitting Detection**: Added fail-fast mechanism for CatBoost when training accuracy reaches 100% (or >= 99.9% threshold)
 - **Time Savings**: Prevents wasting 40+ minutes on expensive feature importance computation when model is overfitting/memorizing
