@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-20 (Legacy REPRODUCIBILITY Directory Cleanup)
+- **Removed Legacy Directory Creation**: Removed all code that creates the legacy `REPRODUCIBILITY/` directory structure
+- **Preserved Backward Compatibility**: Fallback reading logic still supports reading from existing legacy directories
+- **Target-First Only**: New runs now exclusively use the target-first structure (`targets/<target>/reproducibility/`)
+- **Files Changed**: `shared_ranking_harness.py`, `model_evaluation.py` - removed legacy directory creation while preserving reading fallback
+
 #### 2025-12-19 (Target-First Directory Structure Migration)
 - **Target-First Organization**: Migrated all output artifacts to target-first structure (`targets/<target>/`) for better organization and decision-making
 - **Global Summaries**: Added `globals/` directory for run-level summaries (routing decisions, target rankings, confidence summaries, stats)
