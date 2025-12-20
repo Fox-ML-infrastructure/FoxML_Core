@@ -3965,6 +3965,7 @@ def train_and_evaluate_models(
             
             # FAIL-FAST: Quick pre-check with very small max_iter to detect obvious failures early
             # This catches over-regularization cases that would zero out quickly
+            elastic_net_failed = False  # Flag to skip expensive operations if quick check fails
             if original_max_iter > 50:
                 try:
                     quick_config = elastic_net_config.copy()
@@ -3985,72 +3986,91 @@ def train_and_evaluate_models(
                     # If quick check shows all zeros, fail immediately without full fit
                     if np.all(quick_importance == 0) or np.sum(quick_importance) == 0:
                         raise ValueError("Elastic Net: All coefficients are zero (over-regularized or no signal). Model invalid.")
-                except ValueError:
-                    # Re-raise ValueError (our fail-fast signal)
-                    raise
+                except ValueError as e:
+                    # Handle fail-fast signal gracefully - skip expensive operations
+                    error_msg = str(e)
+                    if "All coefficients are zero" in error_msg or "over-regularized" in error_msg or "no signal" in error_msg:
+                        logger.debug(f"    Elastic Net: {error_msg} (skipping full fit)")
+                        primary_score = np.nan
+                        model_metrics['elastic_net'] = {'roc_auc': np.nan} if task_type == TaskType.BINARY_CLASSIFICATION else {'r2': np.nan} if task_type == TaskType.REGRESSION else {'accuracy': np.nan}
+                        model_scores['elastic_net'] = np.nan
+                        all_feature_importances['elastic_net'] = {}  # Record failure
+                        importance_magnitudes.append(0.0)
+                        elastic_net_failed = True  # Set flag to skip expensive operations
+                    else:
+                        # Other ValueErrors - re-raise
+                        raise
                 except Exception:
                     # Other exceptions from quick check - continue with full fit
                     pass
             
-            scores = cross_val_score(pipeline, X_dense, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
-            valid_scores = scores[~np.isnan(scores)]
-            primary_score = valid_scores.mean() if len(valid_scores) > 0 else np.nan
-            
-            # Fit on full data for importance extraction (CV is done elsewhere)
-            # Use threading utilities for smart thread management
-            if _THREADING_UTILITIES_AVAILABLE:
-                # Get thread plan based on family (linear models use MKL threads)
-                plan = plan_for_family('ElasticNet', total_threads=default_threads())
-                # Use thread_guard context manager for safe thread control
-                with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
-                    pipeline.fit(X_dense, y)
-            else:
-                # Fallback: manual thread management
-                pipeline.fit(X_dense, y)
-            
-            # Compute and store full task-aware metrics
-            if not np.isnan(primary_score):
-                _compute_and_store_metrics('elastic_net', pipeline, X_dense, y, primary_score, task_type)
-            
-            # Extract coefficients from the fitted model
-            model = pipeline.named_steps['model']
-            # FIX: Handle both 1D (binary) and 2D (multiclass) coef_ shapes
-            coef = model.coef_
-            if len(coef.shape) > 1:
-                # Multiclass: use max absolute coefficient across classes
-                importance = np.abs(coef).max(axis=0)
-            else:
-                # Binary or regression: use absolute coefficients
-                importance = np.abs(coef)
-            
-            # Update feature_names to match dense array
-            feature_names = feature_names_dense
-            
-            # FAIL-FAST: Validate importance immediately and fail fast if all zeros
-            if np.all(importance == 0) or np.sum(importance) == 0:
-                # Raise exception immediately - don't log warning first, just fail fast
-                raise ValueError("Elastic Net: All coefficients are zero (over-regularized or no signal). Model invalid.")
-            
-            # Store all feature importances for detailed export (same pattern as other models)
-            # CRITICAL: Align importance to feature_names order to ensure fingerprint match
-            importance_series = pd.Series(importance, index=feature_names)
-            importance_series = importance_series.reindex(feature_names, fill_value=0.0)
-            importance_dict = importance_series.to_dict()
-            all_feature_importances['elastic_net'] = importance_dict
-            
-            # Calculate importance ratio (for metrics)
-            if len(importance) > 0:
-                total_importance = np.sum(importance)
-                if total_importance > 0:
-                    top_fraction = _get_importance_top_fraction()
-                    top_k = max(1, int(len(importance) * top_fraction))
-                    top_importance_sum = np.sum(np.sort(importance)[-top_k:])
-                    importance_ratio = top_importance_sum / total_importance
+            # Skip expensive operations if quick check detected failure
+            if not elastic_net_failed:
+                scores = cross_val_score(pipeline, X_dense, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
+                valid_scores = scores[~np.isnan(scores)]
+                primary_score = valid_scores.mean() if len(valid_scores) > 0 else np.nan
+                
+                # Fit on full data for importance extraction (CV is done elsewhere)
+                # Use threading utilities for smart thread management
+                if _THREADING_UTILITIES_AVAILABLE:
+                    # Get thread plan based on family (linear models use MKL threads)
+                    plan = plan_for_family('ElasticNet', total_threads=default_threads())
+                    # Use thread_guard context manager for safe thread control
+                    with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                        pipeline.fit(X_dense, y)
                 else:
-                    importance_ratio = 0.0
-            else:
-                importance_ratio = 0.0
-            importance_magnitudes.append(importance_ratio)
+                    # Fallback: manual thread management
+                    pipeline.fit(X_dense, y)
+                
+                # Compute and store full task-aware metrics
+                if not np.isnan(primary_score):
+                    _compute_and_store_metrics('elastic_net', pipeline, X_dense, y, primary_score, task_type)
+                
+                # Extract coefficients from the fitted model
+                model = pipeline.named_steps['model']
+                # FIX: Handle both 1D (binary) and 2D (multiclass) coef_ shapes
+                coef = model.coef_
+                if len(coef.shape) > 1:
+                    # Multiclass: use max absolute coefficient across classes
+                    importance = np.abs(coef).max(axis=0)
+                else:
+                    # Binary or regression: use absolute coefficients
+                    importance = np.abs(coef)
+                
+                # Update feature_names to match dense array
+                feature_names = feature_names_dense
+                
+                # FAIL-FAST: Validate importance immediately and handle gracefully if all zeros
+                if np.all(importance == 0) or np.sum(importance) == 0:
+                    # Handle gracefully instead of raising
+                    logger.debug(f"    Elastic Net: All coefficients are zero after full fit (over-regularized or no signal)")
+                    primary_score = np.nan
+                    model_metrics['elastic_net'] = {'roc_auc': np.nan} if task_type == TaskType.BINARY_CLASSIFICATION else {'r2': np.nan} if task_type == TaskType.REGRESSION else {'accuracy': np.nan}
+                    model_scores['elastic_net'] = np.nan
+                    all_feature_importances['elastic_net'] = {}
+                    importance_magnitudes.append(0.0)
+                    # Don't raise - just mark as failed and continue
+                else:
+                    # Store all feature importances for detailed export (same pattern as other models)
+                    # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+                    importance_series = pd.Series(importance, index=feature_names)
+                    importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+                    importance_dict = importance_series.to_dict()
+                    all_feature_importances['elastic_net'] = importance_dict
+                    
+                    # Calculate importance ratio (for metrics)
+                    if len(importance) > 0:
+                        total_importance = np.sum(importance)
+                        if total_importance > 0:
+                            top_fraction = _get_importance_top_fraction()
+                            top_k = max(1, int(len(importance) * top_fraction))
+                            top_importance_sum = np.sum(np.sort(importance)[-top_k:])
+                            importance_ratio = top_importance_sum / total_importance
+                        else:
+                            importance_ratio = 0.0
+                    else:
+                        importance_ratio = 0.0
+                    importance_magnitudes.append(importance_ratio)
         except ImportError as e:
             logger.error(f"❌ Elastic Net not available: {e}")
             all_feature_importances['elastic_net'] = {}  # Record failure

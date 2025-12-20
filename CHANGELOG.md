@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-20 (Elastic Net Graceful Failure Handling - Prevent Full Fit)
+- **Elastic Net Error Handling**: Fixed Elastic Net to gracefully handle "all coefficients zero" failures and prevent expensive full fit operations from running
+- **Quick Pre-Check**: Quick pre-check now sets a flag to skip expensive operations (cross_val_score, pipeline.fit) when failure is detected early
+- **CROSS_SECTIONAL Fix**: Fixed issue where CROSS_SECTIONAL view would waste time running expensive operations even after detecting failure (SYMBOL_SPECIFIC already worked due to wrapper)
+- **Time Savings**: Prevents wasting 30+ minutes on operations that will fail - now fails fast in ~1-2 minutes
+- **Files Changed**: `model_evaluation.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-20-elastic-net-graceful-failure-handling.md)
+
 #### 2025-12-20 (Path Resolution Fix - Stop at Run Directory, Not RESULTS Root)
 - **Path Resolution Bug Fix**: Fixed path resolution logic that incorrectly stopped at `RESULTS/` directory instead of continuing to find the actual run directory
 - **Root Cause**: Bug was always present but only surfaced after removing legacy root-level writes - previously legacy writes masked the issue
