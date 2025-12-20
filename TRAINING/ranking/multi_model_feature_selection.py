@@ -108,6 +108,14 @@ except ImportError:
 # Import shared config cleaner utility
 from TRAINING.common.utils.config_cleaner import clean_config_for_estimator as _clean_config_for_estimator
 
+# Import threading utilities for smart thread management
+try:
+    from TRAINING.common.threads import plan_for_family, thread_guard, default_threads
+    _THREADING_UTILITIES_AVAILABLE = True
+except ImportError:
+    _THREADING_UTILITIES_AVAILABLE = False
+    logger.warning("Threading utilities not available; will use manual thread management")
+
 
 # Import from modular components
 from TRAINING.ranking.multi_model_feature_selection.types import (
@@ -1041,10 +1049,24 @@ def train_model_and_get_importance(
             # Add GPU params if available (will override any device in config)
             lgb_config.update(gpu_params)
             
-            # Instantiate with cleaned config + explicit params
-            model = est_cls(**lgb_config, **extra)
-            
-            model.fit(X, y)
+            # Use threading utilities for smart thread management
+            if _THREADING_UTILITIES_AVAILABLE:
+                # Detect if GPU is being used
+                using_gpu = gpu_params and 'device' in gpu_params and gpu_params['device'] in ['cuda', 'gpu']
+                # Get thread plan based on family and GPU usage
+                plan = plan_for_family('LightGBM', total_threads=default_threads())
+                # Set num_threads from plan (OMP threads for LightGBM)
+                lgb_config['num_threads'] = plan['OMP']
+                # Use thread_guard context manager for safe thread control
+                with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                    # Instantiate with cleaned config + explicit params
+                    model = est_cls(**lgb_config, **extra)
+                    model.fit(X, y)
+            else:
+                # Fallback: manual thread management
+                # Instantiate with cleaned config + explicit params
+                model = est_cls(**lgb_config, **extra)
+                model.fit(X, y)
             train_score = model.score(X, y)  # R² for regression, accuracy for classification
             
             # Log metric for debugging
@@ -1124,24 +1146,32 @@ def train_model_and_get_importance(
             # Add GPU params if available (will override any tree_method/device in config)
             xgb_config.update(gpu_params)
             
-            # Instantiate with cleaned config + explicit params
-            model = est_cls(**xgb_config, **extra)
-            
-            try:
-                # No eval_set needed - early stopping params already removed from config
-                model.fit(X, y)
-                train_score = model.score(X, y)  # R² for regression, accuracy for classification
-                
-                # Log metric for debugging
-                metric_name = 'R²' if not (is_binary or is_multiclass) else 'accuracy'
-                logger.debug(f"    xgboost: metric={metric_name}, score={train_score:.4f}")
-                
-            except (ValueError, TypeError) as e:
-                error_str = str(e).lower()
-                if any(kw in error_str for kw in ['invalid classes', 'expected', 'too few']):
-                    logger.debug(f"    XGBoost: Target degenerate")
-                    return None, pd.Series(0.0, index=feature_names), importance_method, 0.0
-                raise
+            # Use threading utilities for smart thread management
+            if _THREADING_UTILITIES_AVAILABLE:
+                # Detect if GPU is being used
+                using_gpu = gpu_params and 'device' in gpu_params and gpu_params['device'] == 'cuda'
+                # Get thread plan based on family and GPU usage
+                plan = plan_for_family('XGBoost', total_threads=default_threads())
+                # Set n_jobs from plan (OMP threads for XGBoost)
+                xgb_config['n_jobs'] = plan['OMP']
+                # Use thread_guard context manager for safe thread control
+                with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                    # Instantiate with cleaned config + explicit params
+                    model = est_cls(**xgb_config, **extra)
+                    try:
+                        # No eval_set needed - early stopping params already removed from config
+                        model.fit(X, y)
+                        train_score = model.score(X, y)  # R² for regression, accuracy for classification
+                        
+                        # Log metric for debugging
+                        metric_name = 'R²' if not (is_binary or is_multiclass) else 'accuracy'
+                        logger.debug(f"    xgboost: metric={metric_name}, score={train_score:.4f}")
+                    except (ValueError, TypeError) as e:
+                        error_str = str(e).lower()
+                        if any(kw in error_str for kw in ['invalid classes', 'expected', 'too few']):
+                            logger.debug(f"    XGBoost: Target degenerate")
+                            return None, pd.Series(0.0, index=feature_names), importance_method, 0.0
+                        raise
         except ImportError:
             logger.error("XGBoost not available")
             return None, pd.Series(0.0, index=feature_names), importance_method, 0.0
@@ -1165,9 +1195,22 @@ def train_model_and_get_importance(
         extra = {"random_state": model_seed}
         rf_config = _clean_config_for_estimator(est_cls, model_config, extra, "random_forest")
         
-        # Instantiate with cleaned config + explicit params
-        model = est_cls(**rf_config, **extra)
-        model.fit(X, y)
+        # Use threading utilities for smart thread management
+        if _THREADING_UTILITIES_AVAILABLE:
+            # Get thread plan based on family
+            plan = plan_for_family('RandomForest', total_threads=default_threads())
+            # Set n_jobs from plan (OMP threads for RandomForest)
+            rf_config['n_jobs'] = plan['OMP']
+            # Use thread_guard context manager for safe thread control
+            with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                # Instantiate with cleaned config + explicit params
+                model = est_cls(**rf_config, **extra)
+                model.fit(X, y)
+        else:
+            # Fallback: manual thread management
+            # Instantiate with cleaned config + explicit params
+            model = est_cls(**rf_config, **extra)
+            model.fit(X, y)
         train_score = model.score(X, y)
     
     elif model_family == 'neural_network':
@@ -1231,8 +1274,18 @@ def train_model_and_get_importance(
         # Instantiate with cleaned config + explicit params
         model = MLPRegressor(**nn_config, **extra)
         try:
-            model.fit(X_scaled, y_for_training)
-            train_score = model.score(X_scaled, y_for_training)
+            # Use threading utilities for smart thread management
+            if _THREADING_UTILITIES_AVAILABLE:
+                # Get thread plan based on family (neural networks are GPU families, so OMP=1, MKL=1)
+                plan = plan_for_family('MLP', total_threads=default_threads())
+                # Use thread_guard context manager for safe thread control
+                with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                    model.fit(X_scaled, y_for_training)
+                    train_score = model.score(X_scaled, y_for_training)
+            else:
+                # Fallback: manual thread management
+                model.fit(X_scaled, y_for_training)
+                train_score = model.score(X_scaled, y_for_training)
         except (ValueError, TypeError) as e:
             error_str = str(e).lower()
             if any(kw in error_str for kw in ['least populated class', 'too few', 'invalid classes']):
@@ -1361,19 +1414,22 @@ def train_model_and_get_importance(
             # CRITICAL: CatBoost REQUIRES task_type='GPU' to actually use GPU (devices alone is ignored)
             if gpu_params:
                 cb_config.update(gpu_params)
-                # Add thread_count from GPU config when using GPU
-                if gpu_params.get('task_type') == 'GPU' and 'thread_count' not in cb_config:
-                    try:
-                        from CONFIG.config_loader import get_cfg
-                        thread_count = get_cfg('gpu.catboost.thread_count', default=8, config_name='gpu_config')
+                # Use threading utilities for smart thread management
+                if _THREADING_UTILITIES_AVAILABLE:
+                    # Get thread plan based on family and GPU usage
+                    plan = plan_for_family('CatBoost', total_threads=default_threads())
+                    # Set thread_count from plan (OMP threads for CatBoost)
+                    if 'thread_count' not in cb_config:
+                        cb_config['thread_count'] = plan['OMP']
+                else:
+                    # Fallback: use thread_count variable already in scope (read at line 1272)
+                    if gpu_params.get('task_type') == 'GPU' and 'thread_count' not in cb_config:
                         cb_config['thread_count'] = thread_count
-                    except Exception:
-                        pass  # Non-critical, skip if config not available
                 # Explicit verification that task_type is set
                 if cb_config.get('task_type') != 'GPU':
                     logger.warning(f"    catboost: GPU params updated but task_type is '{cb_config.get('task_type')}', expected 'GPU'")
                 else:
-                    logger.debug(f"    catboost: GPU verified: task_type={cb_config.get('task_type')}, devices={cb_config.get('devices')}")
+                    logger.debug(f"    catboost: GPU verified: task_type={cb_config.get('task_type')}, devices={cb_config.get('devices')}, thread_count={cb_config.get('thread_count', 'not set')}")
             elif gpu_params is None or (isinstance(gpu_params, dict) and not gpu_params):
                 # GPU was requested but params are empty - log for debugging
                 logger.debug(f"    catboost: No GPU params to add (gpu_params={gpu_params})")
@@ -1483,7 +1539,7 @@ def train_model_and_get_importance(
             
             # Log final config for debugging (only if GPU was requested)
             if gpu_params and gpu_params.get('task_type') == 'GPU':
-                logger.debug(f"    catboost: Final config (sample): task_type={cb_config.get('task_type')}, devices={cb_config.get('devices')}")
+                logger.debug(f"    catboost: Final config (sample): task_type={cb_config.get('task_type')}, devices={cb_config.get('devices')}, thread_count={cb_config.get('thread_count', 'not set')}")
             
             # Instantiate with cleaned config + explicit params
             base_model = est_cls(**cb_config, **extra)
@@ -1674,8 +1730,18 @@ def train_model_and_get_importance(
                 if 'cat_features' not in cb_config:
                     cb_config['cat_features'] = []  # No categoricals by default
                 
-                model.fit(X_catboost, y)
-                train_score = model.score(X_catboost, y)
+                # Use threading utilities for smart thread management
+                if _THREADING_UTILITIES_AVAILABLE:
+                    # Get thread plan based on family and GPU usage
+                    plan = plan_for_family('CatBoost', total_threads=default_threads())
+                    # Use thread_guard context manager for safe thread control
+                    with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                        model.fit(X_catboost, y)
+                        train_score = model.score(X_catboost, y)
+                else:
+                    # Fallback: manual thread management
+                    model.fit(X_catboost, y)
+                    train_score = model.score(X_catboost, y)
             except (ValueError, TypeError) as e:
                 error_str = str(e).lower()
                 if any(kw in error_str for kw in ['invalid classes', 'expected', 'too few']):
@@ -1701,8 +1767,18 @@ def train_model_and_get_importance(
         
         # Instantiate with cleaned config + explicit params
         model = Lasso(**lasso_config, **extra)
-        model.fit(X_dense, y)
-        train_score = model.score(X_dense, y)
+        # Use threading utilities for smart thread management
+        if _THREADING_UTILITIES_AVAILABLE:
+            # Get thread plan based on family (linear models use MKL threads)
+            plan = plan_for_family('Lasso', total_threads=default_threads())
+            # Use thread_guard context manager for safe thread control
+            with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                model.fit(X_dense, y)
+                train_score = model.score(X_dense, y)
+        else:
+            # Fallback: manual thread management
+            model.fit(X_dense, y)
+            train_score = model.score(X_dense, y)
         
         # Update feature_names to match dense array
         feature_names = feature_names_dense
@@ -2047,7 +2123,18 @@ def train_model_and_get_importance(
             )
         
         selector = RFE(estimator, n_features_to_select=n_features_to_select, step=step)
-        selector.fit(X, y)
+        # Use threading utilities for smart thread management
+        if _THREADING_UTILITIES_AVAILABLE:
+            # Get thread plan based on family (RFE uses RandomForest estimator)
+            plan = plan_for_family('RandomForest', total_threads=default_threads())
+            # Set n_jobs on estimator from plan (OMP threads for RandomForest)
+            estimator.set_params(n_jobs=plan['OMP'])
+            # Use thread_guard context manager for safe thread control
+            with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                selector.fit(X, y)
+        else:
+            # Fallback: manual thread management
+            selector.fit(X, y)
         
         # Convert ranking to importance (lower rank = more important)
         # RFE ranking: 1 = selected, higher = eliminated
@@ -2172,7 +2259,18 @@ def train_model_and_get_importance(
                 perc=model_config.get('perc', 95)  # Higher threshold = more conservative (needs to beat shadow more decisively)
             )
             # Note: make_sklearn_dense_X imputes NaNs but doesn't filter rows, so y matches X_dense length
-            boruta.fit(X_dense, y)
+            # Use threading utilities for smart thread management
+            if _THREADING_UTILITIES_AVAILABLE:
+                # Get thread plan based on family (Boruta uses ExtraTrees estimator)
+                plan = plan_for_family('RandomForest', total_threads=default_threads())
+                # Set n_jobs on ExtraTrees from plan (OMP threads for tree models)
+                et_config['n_jobs'] = plan['OMP']
+                # Use thread_guard context manager for safe thread control
+                with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                    boruta.fit(X_dense, y)
+            else:
+                # Fallback: manual thread management
+                boruta.fit(X_dense, y)
             
             # Update feature_names to match dense array
             feature_names = feature_names_dense
@@ -2309,7 +2407,19 @@ def train_model_and_get_importance(
                     lasso_config_clean = clean_config_for_estimator(LassoCV, lasso_config, extra_kwargs={'random_state': stability_random_state}, family_name='stability_selection')
                     model = LassoCV(**lasso_config_clean, random_state=stability_random_state)
                 
-                model.fit(X_boot, y_boot)
+                # Use threading utilities for smart thread management
+                if _THREADING_UTILITIES_AVAILABLE:
+                    # Get thread plan based on family (linear models use MKL threads)
+                    plan = plan_for_family('Lasso', total_threads=default_threads())
+                    # Set n_jobs from plan if model supports it
+                    if hasattr(model, 'set_params') and 'n_jobs' in model.get_params():
+                        model.set_params(n_jobs=plan['OMP'])
+                    # Use thread_guard context manager for safe thread control
+                    with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                        model.fit(X_boot, y_boot)
+                else:
+                    # Fallback: manual thread management
+                    model.fit(X_boot, y_boot)
                 stability_scores += (np.abs(model.coef_[0] if len(model.coef_.shape) > 1 else model.coef_) > 1e-6).astype(int)
             except Exception as e:
                 # Skip failed bootstrap iterations (expected for some degenerate cases)

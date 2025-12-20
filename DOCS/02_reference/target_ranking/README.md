@@ -6,6 +6,8 @@ The target ranking system evaluates which targets (labels) are most predictable 
 
 **NEW (2025-12-12)**: GPU acceleration is automatically enabled for target ranking. LightGBM, XGBoost, and CatBoost use GPU when available, providing 10-50x speedup on large datasets. See [GPU Setup Guide](../../01_tutorials/setup/GPU_SETUP.md) for configuration.
 
+**NEW (2025-12-20)**: All models in target ranking now use unified threading utilities from `TRAINING/common/threads.py` for GPU-aware thread management and optimal OMP/MKL thread allocation, preventing CPU bottlenecks during GPU training.
+
 ## Dual-View Evaluation
 
 Each target is evaluated in two views:

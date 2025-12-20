@@ -6,6 +6,8 @@ This document describes the parallel execution infrastructure added to speed up 
 
 **NEW (2025-12-12)**: GPU acceleration is now enabled for target ranking and feature selection in addition to parallel execution. LightGBM, XGBoost, and CatBoost automatically use GPU when available, providing 10-50x speedup on large datasets.
 
+**NEW (2025-12-20)**: Unified threading utilities from `TRAINING/common/threads.py` are now used across all models in feature selection and target ranking. This provides GPU-aware thread management (automatically limits CPU threads when GPU is enabled) and optimal OMP/MKL thread allocation based on model family type.
+
 ## Architecture
 
 ### Components

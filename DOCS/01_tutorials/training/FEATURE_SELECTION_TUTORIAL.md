@@ -19,6 +19,7 @@ Feature selection reduces dimensionality and improves model performance by:
 **For automated feature selection**, the intelligent training pipeline uses:
 - Multi-model consensus (LightGBM, XGBoost, Random Forest, CatBoost, Neural Network, Lasso, Mutual Information, Univariate Selection, Boruta, Stability Selection)
 - **GPU acceleration** (NEW 2025-12-12): LightGBM, XGBoost, and CatBoost automatically use GPU when available for 10-50x speedup
+- **Unified threading utilities** (NEW 2025-12-20): All models use centralized threading control from `TRAINING/common/threads.py` for GPU-aware thread management, preventing CPU bottlenecks during GPU training and optimizing OMP/MKL thread allocation
 - Consistent preprocessing (shared `make_sklearn_dense_X()` helper for sklearn models)
 - Unified interval handling (respects `data.bar_interval` from experiment config)
 - **Systematic parameter validation**: All model constructors use `clean_config_for_estimator()` to prevent parameter passing errors (duplicate arguments, unknown parameters). Special handling for:

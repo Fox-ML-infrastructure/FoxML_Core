@@ -111,6 +111,7 @@ This document defines the exact order of operations for multi-model feature sele
 - **Global determinism** set before any ML imports
 - **Stable seeds** per symbol (using `stable_seed_from()`)
 - **Reproducibility tracking** via stability snapshots
+- **Unified threading control**: All models use `TRAINING/common/threads.py` utilities (`plan_for_family()`, `thread_guard()`) for GPU-aware thread management and optimal OMP/MKL allocation
 
 ### 5. Fallback Handling
 - **No signal**: Uniform importance (1e-6 per feature) instead of failure

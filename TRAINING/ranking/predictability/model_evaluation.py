@@ -134,6 +134,13 @@ from TRAINING.ranking.predictability.model_evaluation.leakage_helpers import com
 # Import from modular components
 from TRAINING.ranking.predictability.model_evaluation.reporting import log_canonical_summary as _log_canonical_summary
 
+# Import threading utilities for smart thread management
+try:
+    from TRAINING.common.threads import plan_for_family, thread_guard, default_threads
+    _THREADING_UTILITIES_AVAILABLE = True
+except ImportError:
+    _THREADING_UTILITIES_AVAILABLE = False
+
 def _enforce_final_safety_gate(
     X: np.ndarray,
     feature_names: List[str],
@@ -2468,11 +2475,26 @@ def train_and_evaluate_models(
                 if log_cfg.edu_hints:
                     logger.info(f"  💡 Note: GPU is most efficient for large datasets (>100k samples)")
             
-            model.fit(
-                X_train_final, y_train_final,
-                eval_set=[(X_val_final, y_val_final)],
-                callbacks=[lgb.early_stopping(early_stopping_rounds, verbose=False)]
-            )
+            # Use threading utilities for smart thread management
+            if _THREADING_UTILITIES_AVAILABLE:
+                # Get thread plan based on family and GPU usage
+                plan = plan_for_family('LightGBM', total_threads=default_threads())
+                # Set num_threads from plan (OMP threads for LightGBM)
+                model.set_params(num_threads=plan['OMP'])
+                # Use thread_guard context manager for safe thread control
+                with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                    model.fit(
+                        X_train_final, y_train_final,
+                        eval_set=[(X_val_final, y_val_final)],
+                        callbacks=[lgb.early_stopping(early_stopping_rounds, verbose=False)]
+                    )
+            else:
+                # Fallback: manual thread management
+                model.fit(
+                    X_train_final, y_train_final,
+                    eval_set=[(X_val_final, y_val_final)],
+                    callbacks=[lgb.early_stopping(early_stopping_rounds, verbose=False)]
+                )
             
             # Verify GPU was actually used (only if gpu_detail enabled)
             if 'device' in gpu_params and log_cfg.gpu_detail:
@@ -2594,7 +2616,18 @@ def train_and_evaluate_models(
             # TODO: Future enhancement - use permutation importance calculated on CV test folds
             # For now, this is acceptable but be aware that importance may be inflated
             # CRITICAL: The evaluation score (primary_score) is OOF, but importance is in-sample
-            model.fit(X, y)
+            # Use threading utilities for smart thread management
+            if _THREADING_UTILITIES_AVAILABLE:
+                # Get thread plan based on family
+                plan = plan_for_family('RandomForest', total_threads=default_threads())
+                # Set n_jobs from plan (OMP threads for RandomForest)
+                model.set_params(n_jobs=plan['OMP'])
+                # Use thread_guard context manager for safe thread control
+                with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                    model.fit(X, y)
+            else:
+                # Fallback: manual thread management
+                model.fit(X, y)
             
             # Check for suspicious scores (OOF score - this is the truth)
             has_leak = not np.isnan(primary_score) and primary_score >= _suspicious_score_threshold
@@ -2716,7 +2749,16 @@ def train_and_evaluate_models(
             # ⚠️ IMPORTANCE BIAS WARNING: This fits on the full dataset (in-sample)
             # See comment above for details
             if not np.isnan(primary_score):
-                model.fit(X, y_for_training)
+                # Use threading utilities for smart thread management
+                if _THREADING_UTILITIES_AVAILABLE:
+                    # Get thread plan based on family (neural networks are GPU families, so OMP=1, MKL=1)
+                    plan = plan_for_family('MLP', total_threads=default_threads())
+                    # Use thread_guard context manager for safe thread control
+                    with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                        model.fit(X, y_for_training)
+                else:
+                    # Fallback: manual thread management
+                    model.fit(X, y_for_training)
                 
                 # Compute and store full task-aware metrics (Pipeline handles preprocessing)
                 _compute_and_store_metrics('neural_network', model, X, y_for_training, primary_score, task_type)
@@ -2896,11 +2938,26 @@ def train_and_evaluate_models(
                     y_train_final, y_val_final = y, y
                 # XGBoost 2.0+: early_stopping_rounds is set in constructor, not passed to fit()
                 # The model already has it configured from the constructor above
-                model.fit(
-                    X_train_final, y_train_final,
-                    eval_set=[(X_val_final, y_val_final)],
-                    verbose=False
-                )
+                # Use threading utilities for smart thread management
+                if _THREADING_UTILITIES_AVAILABLE:
+                    # Get thread plan based on family and GPU usage
+                    plan = plan_for_family('XGBoost', total_threads=default_threads())
+                    # Set n_jobs from plan (OMP threads for XGBoost)
+                    model.set_params(n_jobs=plan['OMP'])
+                    # Use thread_guard context manager for safe thread control
+                    with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                        model.fit(
+                            X_train_final, y_train_final,
+                            eval_set=[(X_val_final, y_val_final)],
+                            verbose=False
+                        )
+                else:
+                    # Fallback: manual thread management
+                    model.fit(
+                        X_train_final, y_train_final,
+                        eval_set=[(X_val_final, y_val_final)],
+                        verbose=False
+                    )
                 
                 # Check for suspicious scores
                 has_leak = primary_score >= _suspicious_score_threshold
@@ -3009,9 +3066,17 @@ def train_and_evaluate_models(
             # Add GPU params if available (will override any task_type/devices in config)
             params.update(gpu_params)
             
-            # Add thread_count from GPU config when using GPU
-            if gpu_params and gpu_params.get('task_type') == 'GPU' and 'thread_count' not in params:
-                params['thread_count'] = thread_count
+            # Use threading utilities for smart thread management
+            if _THREADING_UTILITIES_AVAILABLE:
+                # Get thread plan based on family and GPU usage
+                plan = plan_for_family('CatBoost', total_threads=default_threads())
+                # Set thread_count from plan (OMP threads for CatBoost)
+                if 'thread_count' not in params:
+                    params['thread_count'] = plan['OMP']
+            else:
+                # Fallback: use thread_count from config variable
+                if gpu_params and gpu_params.get('task_type') == 'GPU' and 'thread_count' not in params:
+                    params['thread_count'] = thread_count
             
             # CatBoost Performance Diagnostics and Optimizations
             # Check for common issues that cause slow training (>20min for 50k samples)
@@ -3547,7 +3612,16 @@ def train_and_evaluate_models(
             # from a model fit on the full dataset
             model_fitted = False
             if not np.isnan(primary_score):
-                model.fit(X, y)
+                # Use threading utilities for smart thread management
+                if _THREADING_UTILITIES_AVAILABLE:
+                    # Get thread plan based on family and GPU usage
+                    plan = plan_for_family('CatBoost', total_threads=default_threads())
+                    # Use thread_guard context manager for safe thread control
+                    with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                        model.fit(X, y)
+                else:
+                    # Fallback: manual thread management
+                    model.fit(X, y)
                 model_fitted = True
                 
                 # Verify GPU is actually being used (post-fit check)
@@ -3573,7 +3647,16 @@ def train_and_evaluate_models(
                 # but can still provide useful feature importance from full-dataset fit
                 logger.info(f"  ℹ️  CatBoost CV returned NaN (likely degenerate folds), but fitting on full dataset to compute importance")
                 try:
-                    model.fit(X, y)
+                    # Use threading utilities for smart thread management
+                    if _THREADING_UTILITIES_AVAILABLE:
+                        # Get thread plan based on family and GPU usage
+                        plan = plan_for_family('CatBoost', total_threads=default_threads())
+                        # Use thread_guard context manager for safe thread control
+                        with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                            model.fit(X, y)
+                    else:
+                        # Fallback: manual thread management
+                        model.fit(X, y)
                     model_fitted = True
                 except Exception as e:
                     logger.warning(f"  ⚠️  CatBoost failed to fit on full dataset: {e}")
@@ -3676,7 +3759,16 @@ def train_and_evaluate_models(
             
             # ⚠️ IMPORTANCE BIAS WARNING: This fits on the full dataset (in-sample)
             # See comment above for details
-            pipeline.fit(X_dense, y)
+            # Use threading utilities for smart thread management
+            if _THREADING_UTILITIES_AVAILABLE:
+                # Get thread plan based on family (linear models use MKL threads)
+                plan = plan_for_family('Lasso', total_threads=default_threads())
+                # Use thread_guard context manager for safe thread control
+                with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                    pipeline.fit(X_dense, y)
+            else:
+                # Fallback: manual thread management
+                pipeline.fit(X_dense, y)
             
             # Compute and store full task-aware metrics (Lasso is regression-only)
             if not np.isnan(primary_score) and task_type == TaskType.REGRESSION:
@@ -3750,7 +3842,16 @@ def train_and_evaluate_models(
             primary_score = valid_scores.mean() if len(valid_scores) > 0 else np.nan
             
             # Fit on full data for importance extraction (CV is done elsewhere)
-            pipeline.fit(X_dense, y)
+            # Use threading utilities for smart thread management
+            if _THREADING_UTILITIES_AVAILABLE:
+                # Get thread plan based on family (linear models use MKL threads)
+                plan = plan_for_family('Ridge', total_threads=default_threads())
+                # Use thread_guard context manager for safe thread control
+                with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                    pipeline.fit(X_dense, y)
+            else:
+                # Fallback: manual thread management
+                pipeline.fit(X_dense, y)
             
             # Compute and store full task-aware metrics
             if not np.isnan(primary_score):
@@ -3852,7 +3953,16 @@ def train_and_evaluate_models(
             primary_score = valid_scores.mean() if len(valid_scores) > 0 else np.nan
             
             # Fit on full data for importance extraction (CV is done elsewhere)
-            pipeline.fit(X_dense, y)
+            # Use threading utilities for smart thread management
+            if _THREADING_UTILITIES_AVAILABLE:
+                # Get thread plan based on family (linear models use MKL threads)
+                plan = plan_for_family('ElasticNet', total_threads=default_threads())
+                # Use thread_guard context manager for safe thread control
+                with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                    pipeline.fit(X_dense, y)
+            else:
+                # Fallback: manual thread management
+                pipeline.fit(X_dense, y)
             
             # Compute and store full task-aware metrics
             if not np.isnan(primary_score):
@@ -4056,7 +4166,19 @@ def train_and_evaluate_models(
                 estimator = RandomForestRegressor(**rf_config)
             
             selector = RFE(estimator, n_features_to_select=n_features_to_select, step=step)
-            selector.fit(X_imputed, y)
+            # Use threading utilities for smart thread management
+            if _THREADING_UTILITIES_AVAILABLE:
+                # Get thread plan based on family (RFE uses RandomForest estimator)
+                plan = plan_for_family('RandomForest', total_threads=default_threads())
+                # Set n_jobs on estimator from plan (OMP threads for RandomForest)
+                if hasattr(estimator, 'set_params') and 'n_jobs' in estimator.get_params():
+                    estimator.set_params(n_jobs=plan['OMP'])
+                # Use thread_guard context manager for safe thread control
+                with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                    selector.fit(X_imputed, y)
+            else:
+                # Fallback: manual thread management
+                selector.fit(X_imputed, y)
             
             # Get R² using cross-validation on selected features (proper validation)
             selected_features = selector.support_
@@ -4249,7 +4371,19 @@ def train_and_evaluate_models(
                         lasso_config_clean = clean_config_for_estimator(LassoCV, lasso_config_clean_dict, extra_kwargs={'random_state': random_state}, family_name='stability_selection')
                         model = LassoCV(**lasso_config_clean, random_state=random_state)
                     
-                    model.fit(X_boot, y_boot)
+                    # Use threading utilities for smart thread management
+                    if _THREADING_UTILITIES_AVAILABLE:
+                        # Get thread plan based on family (linear models use MKL threads)
+                        plan = plan_for_family('Lasso', total_threads=default_threads())
+                        # Set n_jobs from plan if model supports it
+                        if hasattr(model, 'set_params') and 'n_jobs' in model.get_params():
+                            model.set_params(n_jobs=plan['OMP'])
+                        # Use thread_guard context manager for safe thread control
+                        with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                            model.fit(X_boot, y_boot)
+                    else:
+                        # Fallback: manual thread management
+                        model.fit(X_boot, y_boot)
                     coef = model.coef_[0] if len(model.coef_.shape) > 1 else model.coef_
                     stability_scores += (np.abs(coef) > 1e-6).astype(int)
                     
@@ -4333,7 +4467,18 @@ def train_and_evaluate_models(
             primary_score = valid_scores.mean() if len(valid_scores) > 0 else np.nan
             
             # Train once to get importance and full metrics
-            model.fit(X, y)
+            # Use threading utilities for smart thread management
+            if _THREADING_UTILITIES_AVAILABLE:
+                # Get thread plan based on family (HistGradientBoosting is OMP-heavy)
+                plan = plan_for_family('HistGradientBoosting', total_threads=default_threads())
+                # Set n_jobs from plan (OMP threads for HistGradientBoosting)
+                model.set_params(n_jobs=plan['OMP'])
+                # Use thread_guard context manager for safe thread control
+                with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                    model.fit(X, y)
+            else:
+                # Fallback: manual thread management
+                model.fit(X, y)
             
             # Compute and store full task-aware metrics
             if not np.isnan(primary_score):

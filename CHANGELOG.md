@@ -16,6 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-20 (Unified Threading Utilities for Feature Selection and Target Ranking)
+- **Threading Utilities Integration**: Refactored all model training in feature selection and target ranking to use centralized threading utilities from `TRAINING/common/threads.py`
+- **GPU-Aware Thread Management**: All models now automatically limit CPU threads (OMP=1, MKL=1) when GPU is enabled, preventing CPU bottlenecks during GPU training
+- **Smart Thread Allocation**: Models use `plan_for_family()` to determine optimal OMP vs MKL thread allocation based on model family type (tree models use OMP, linear models use MKL)
+- **Consistent Thread Control**: All model families (LightGBM, XGBoost, CatBoost, Random Forest, Neural Network, Lasso, Ridge, Elastic Net, RFE, Boruta, Stability Selection, HistGradientBoosting) now use `thread_guard()` context manager for safe thread limiting
+- **Feature Selection**: Updated `TRAINING/ranking/multi_model_feature_selection.py` - all 9 model families now use threading utilities
+- **Target Ranking**: Updated `TRAINING/ranking/predictability/model_evaluation.py` - all 11 model families now use threading utilities
+- **Benefits**: Prevents thread conflicts, optimizes resource usage, ensures GPU training doesn't get CPU-bound, maintains consistency across all training phases
+- **Files Changed**: `multi_model_feature_selection.py` (LightGBM, XGBoost, CatBoost, Random Forest, Neural Network, Lasso, RFE, Boruta, Stability Selection), `model_evaluation.py` (LightGBM, XGBoost, CatBoost, Random Forest, Neural Network, Lasso, Ridge, Elastic Net, RFE, Stability Selection, HistGradientBoosting)
+
 #### 2025-12-20 (Incremental Decision File Saving)
 - **Incremental Decision Saving**: Routing decision files are now saved immediately after each target completes evaluation, not just at the end
 - **Crash Resilience**: If the process crashes, decisions for completed targets are already saved
