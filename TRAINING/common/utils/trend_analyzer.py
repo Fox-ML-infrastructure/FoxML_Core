@@ -190,45 +190,93 @@ class TrendAnalyzer:
                             continue
                         view = view_dir.name
                         
-                        # Walk through cohort directories
-                        for cohort_dir in view_dir.iterdir():
-                            if not cohort_dir.is_dir() or not cohort_dir.name.startswith("cohort="):
-                                continue
-                            
-                            metadata_file = cohort_dir / "metadata.json"
-                            metrics_file = cohort_dir / "metrics.json"
-                            
-                            if metadata_file.exists() or metrics_file.exists():
-                                try:
-                                    metadata = {}
-                                    if metadata_file.exists():
-                                        with open(metadata_file, 'r') as f:
-                                            metadata = json.load(f)
+                        # For SYMBOL_SPECIFIC, need to check symbol subdirectories
+                        if view == "SYMBOL_SPECIFIC":
+                            for symbol_dir in view_dir.iterdir():
+                                if not symbol_dir.is_dir() or not symbol_dir.name.startswith("symbol="):
+                                    continue
+                                symbol = symbol_dir.name.replace("symbol=", "")
+                                
+                                # Walk through cohort directories under symbol
+                                for cohort_dir in symbol_dir.iterdir():
+                                    if not cohort_dir.is_dir() or not cohort_dir.name.startswith("cohort="):
+                                        continue
                                     
-                                    metrics_data = {}
-                                    if metrics_file.exists():
-                                        with open(metrics_file, 'r') as f:
-                                            metrics_data = json.load(f)
+                                    metadata_file = cohort_dir / "metadata.json"
+                                    metrics_file = cohort_dir / "metrics.json"
                                     
-                                    # Extract identifiers
-                                    run_id = metadata.get('run_id') or metrics_data.get('run_id') or run_dir.name
-                                    stage = metadata.get('stage', 'UNKNOWN')
-                                    cohort_id = cohort_dir.name.replace('cohort=', '')
-                                    
-                                    row = {
-                                        'run_id': run_id,
-                                        'stage': stage,
-                                        'target': target,
-                                        'view': view,
-                                        'cohort_id': cohort_id,
-                                        'metadata_path': str(metadata_file.relative_to(run_dir)) if metadata_file.exists() else None,
-                                        'metrics_path': str(metrics_file.relative_to(run_dir)) if metrics_file.exists() else None,
-                                        **metadata,
-                                        **{k: v for k, v in metrics_data.items() if k not in metadata}
-                                    }
-                                    rows.append(row)
-                                except Exception as e:
-                                    logger.debug(f"Failed to process target-first metrics for {target}/{view}/{cohort_dir.name}: {e}")
+                                    if metadata_file.exists() or metrics_file.exists():
+                                        try:
+                                            metadata = {}
+                                            if metadata_file.exists():
+                                                with open(metadata_file, 'r') as f:
+                                                    metadata = json.load(f)
+                                            
+                                            metrics_data = {}
+                                            if metrics_file.exists():
+                                                with open(metrics_file, 'r') as f:
+                                                    metrics_data = json.load(f)
+                                            
+                                            # Extract identifiers
+                                            run_id = metadata.get('run_id') or metrics_data.get('run_id') or run_dir.name
+                                            stage = metadata.get('stage', 'UNKNOWN')
+                                            cohort_id = cohort_dir.name.replace('cohort=', '')
+                                            
+                                            row = {
+                                                'run_id': run_id,
+                                                'stage': stage,
+                                                'target': target,
+                                                'view': view,
+                                                'symbol': symbol,
+                                                'cohort_id': cohort_id,
+                                                'metadata_path': str(metadata_file.relative_to(run_dir)) if metadata_file.exists() else None,
+                                                'metrics_path': str(metrics_file.relative_to(run_dir)) if metrics_file.exists() else None,
+                                                **metadata,
+                                                **{k: v for k, v in metrics_data.items() if k not in metadata}
+                                            }
+                                            rows.append(row)
+                                        except Exception as e:
+                                            logger.debug(f"Failed to process target-first metrics for {target}/{view}/{symbol}/{cohort_dir.name}: {e}")
+                        else:
+                            # CROSS_SECTIONAL: cohort directories directly under view
+                            for cohort_dir in view_dir.iterdir():
+                                if not cohort_dir.is_dir() or not cohort_dir.name.startswith("cohort="):
+                                    continue
+                                
+                                metadata_file = cohort_dir / "metadata.json"
+                                metrics_file = cohort_dir / "metrics.json"
+                                
+                                if metadata_file.exists() or metrics_file.exists():
+                                    try:
+                                        metadata = {}
+                                        if metadata_file.exists():
+                                            with open(metadata_file, 'r') as f:
+                                                metadata = json.load(f)
+                                        
+                                        metrics_data = {}
+                                        if metrics_file.exists():
+                                            with open(metrics_file, 'r') as f:
+                                                metrics_data = json.load(f)
+                                        
+                                        # Extract identifiers
+                                        run_id = metadata.get('run_id') or metrics_data.get('run_id') or run_dir.name
+                                        stage = metadata.get('stage', 'UNKNOWN')
+                                        cohort_id = cohort_dir.name.replace('cohort=', '')
+                                        
+                                        row = {
+                                            'run_id': run_id,
+                                            'stage': stage,
+                                            'target': target,
+                                            'view': view,
+                                            'cohort_id': cohort_id,
+                                            'metadata_path': str(metadata_file.relative_to(run_dir)) if metadata_file.exists() else None,
+                                            'metrics_path': str(metrics_file.relative_to(run_dir)) if metrics_file.exists() else None,
+                                            **metadata,
+                                            **{k: v for k, v in metrics_data.items() if k not in metadata}
+                                        }
+                                        rows.append(row)
+                                    except Exception as e:
+                                        logger.debug(f"Failed to process target-first metrics for {target}/{view}/{cohort_dir.name}: {e}")
         
         # Also walk legacy REPRODUCIBILITY directory
         for stage_dir in self.reproducibility_dir.iterdir():
