@@ -920,10 +920,7 @@ def train_and_evaluate_models(
                             except Exception as e2:
                                 logger.debug(f"Failed to save POST_PRUNE artifact to target-first location: {e2}")
                     
-                    # Also save to legacy location for backward compatibility
-                    legacy_artifact_dir = output_dir / "REPRODUCIBILITY" / "FEATURESET_ARTIFACTS"
-                    legacy_artifact_dir.mkdir(parents=True, exist_ok=True)
-                    post_prune_artifact.save(legacy_artifact_dir)
+                    # Target-first structure only - no legacy writes
                 except Exception as e:
                     logger.debug(f"  ⚠️  Failed to persist POST_PRUNE artifact: {e}")
             
@@ -5179,10 +5176,7 @@ def evaluate_target_predictability(
                         except Exception as e2:
                             logger.debug(f"Failed to save POST_GATEKEEPER artifact to target-first location: {e2}")
                 
-                # Also save to legacy location for backward compatibility
-                legacy_artifact_dir = output_dir / "REPRODUCIBILITY" / "FEATURESET_ARTIFACTS"
-                legacy_artifact_dir.mkdir(parents=True, exist_ok=True)
-                artifact.save(legacy_artifact_dir)
+                # Target-first structure only - no legacy writes
             except Exception as e:
                 logger.debug(f"  ⚠️  Failed to persist POST_GATEKEEPER artifact: {e}")
         if len(enforced_gatekeeper.unknown) > 0:

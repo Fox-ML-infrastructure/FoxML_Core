@@ -3415,40 +3415,35 @@ def save_multi_model_results(
         except Exception as e:
             logger.debug(f"Failed to set up target-first structure: {e}")
     
-    # Create organized subdirectories (matching target ranking structure exactly)
-    importances_dir = output_dir / "feature_importances"  # Legacy location
-    importances_dir.mkdir(parents=True, exist_ok=True)
-    
-    # 1. Selected features list → target level (matching TARGET_RANKING, no artifacts/ folder)
-    selected_features_path = output_dir / "selected_features.txt"  # Legacy location
-    with open(selected_features_path, "w") as f:
-        for feature in selected_features:
-            f.write(f"{feature}\n")
-    logger.info(f"✅ Saved {len(selected_features)} features to {selected_features_path}")
-    
-    # Also write directly to target-first structure
+    # Write to target-first structure only
+    # 1. Selected features list
     if target_selected_features_path:
         try:
+            target_selected_features_path.parent.mkdir(parents=True, exist_ok=True)
             with open(target_selected_features_path, "w") as f:
                 for feature in selected_features:
                     f.write(f"{feature}\n")
-            logger.debug(f"Also saved selected features to target-first location: {target_selected_features_path}")
+            logger.info(f"✅ Saved {len(selected_features)} features to {target_selected_features_path}")
         except Exception as e:
-            logger.debug(f"Failed to write selected features to target-first location: {e}")
+            logger.warning(f"Failed to write selected features to target-first location: {e}")
+            import traceback
+            logger.debug(f"Traceback: {traceback.format_exc()}")
+    else:
+        logger.warning(f"Target selected features path not available")
     
-    # 2. Detailed summary CSV (includes all columns including Boruta gatekeeper) → feature_importances/
-    summary_csv_path = importances_dir / "feature_importance_multi_model.csv"
-    summary_df.to_csv(summary_csv_path, index=False)
-    logger.info(f"✅ Saved detailed multi-model summary to {summary_csv_path}")
-    
-    # Also write directly to target-first structure
+    # 2. Detailed summary CSV (includes all columns including Boruta gatekeeper)
     if target_importances_dir:
         try:
+            target_importances_dir.mkdir(parents=True, exist_ok=True)
             target_csv_path = target_importances_dir / "feature_importance_multi_model.csv"
             summary_df.to_csv(target_csv_path, index=False)
-            logger.debug(f"Also saved feature importance summary to target-first location: {target_csv_path}")
+            logger.info(f"✅ Saved detailed multi-model summary to {target_csv_path}")
         except Exception as e:
-            logger.debug(f"Failed to write feature importance summary to target-first location: {e}")
+            logger.warning(f"Failed to write feature importance summary to target-first location: {e}")
+            import traceback
+            logger.debug(f"Traceback: {traceback.format_exc()}")
+    else:
+        logger.warning(f"Target importances directory not available")
     
     # 2b. Explicit debug view: Boruta gatekeeper effect analysis → feature_importances/
     # This is a stable, named file for quick inspection of Boruta's impact
@@ -3492,14 +3487,14 @@ def save_multi_model_results(
             family_csv = importances_dir / f"{model_name}_importances.csv"
             family_df.to_csv(family_csv, index=False)
             
-            # Also write directly to target-first structure
+            # Write to target-first structure only
             if target_importances_dir:
                 try:
                     target_family_csv = target_importances_dir / f"{model_name}_importances.csv"
                     family_df.to_csv(target_family_csv, index=False)
-                    logger.debug(f"Also saved {model_name} importances to target-first location: {target_family_csv}")
+                    logger.debug(f"✅ Saved {model_name} importances to target-first location: {target_family_csv}")
                 except Exception as e:
-                    logger.debug(f"Failed to write {model_name} importances to target-first location: {e}")
+                    logger.warning(f"Failed to write {model_name} importances to target-first location: {e}")
     
     # 4. Model agreement matrix → feature_importances/
     model_families = list(set(r.model_family for r in all_results))
