@@ -251,21 +251,7 @@ def _save_dual_view_rankings(
         except Exception as e:
             logger.debug(f"Failed to save per-target routing decision for {target}: {e}")
     
-    # Backward compatibility: Save to legacy locations
-    repro_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
-    decision_dir = base_output_dir / "DECISION" / "TARGET_RANKING"
-    repro_dir.mkdir(parents=True, exist_ok=True)
-    decision_dir.mkdir(parents=True, exist_ok=True)
-    
-    decision_file = decision_dir / "routing_decisions.json"
-    with open(decision_file, 'w') as f:
-        json.dump(routing_data, f, indent=2, default=str)
-    logger.debug(f"Saved routing decisions to legacy location {decision_file} (backward compatibility)")
-    
-    repro_file = repro_dir / "routing_decisions.json"
-    with open(repro_file, 'w') as f:
-        json.dump(routing_data, f, indent=2, default=str)
-    logger.debug(f"Saved routing decisions copy to {repro_file} (backward compatibility)")
+    # Target-first structure only - no legacy writes
     
     # Note: Individual view results are already saved by evaluate_target_predictability
     # via reproducibility tracker (with view/symbol metadata in RunContext)

@@ -145,13 +145,11 @@ def save_feature_selection_rankings(
         logger.debug(f"Traceback: {traceback.format_exc()}")
         target_decision_dir = None
     
-    # Legacy structure: DECISION/FEATURE_SELECTION/{target}/ (for backward compatibility)
-    legacy_decision_dir = base_output_dir / "DECISION" / "FEATURE_SELECTION" / target_name_clean
-    
-    repro_dir.mkdir(parents=True, exist_ok=True)
+    # Target-first structure only
     if target_decision_dir:
         target_decision_dir.mkdir(parents=True, exist_ok=True)
-    legacy_decision_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        logger.warning(f"Target decision directory not available for {target_name_clean}")
     
     # Handle empty results
     if summary_df is None or len(summary_df) == 0:
@@ -185,21 +183,18 @@ def save_feature_selection_rankings(
         'recommendation': _get_recommendation(row)
     } for i, (_, row) in enumerate(summary_df_sorted.iterrows())])
     
-    # Save CSV to both legacy and target-first structures (write directly to both)
-    csv_path = repro_dir / "feature_selection_rankings.csv"
-    df.to_csv(csv_path, index=False)
-    logger.info(f"Saved feature selection rankings CSV to {csv_path}")
-    
-    # Also write directly to target-first structure (targets/<target>/reproducibility/)
+    # Save CSV to target-first structure only
     try:
         from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
         target_repro_dir.mkdir(parents=True, exist_ok=True)
         target_csv_path = target_repro_dir / "feature_selection_rankings.csv"
         df.to_csv(target_csv_path, index=False)
-        logger.debug(f"Also saved feature selection rankings CSV to target-first location: {target_csv_path}")
+        logger.info(f"✅ Saved feature selection rankings CSV to {target_csv_path}")
     except Exception as e:
-        logger.debug(f"Failed to write feature selection rankings CSV to target-first location: {e}")
+        logger.warning(f"Failed to write feature selection rankings CSV to target-first location: {e}")
+        import traceback
+        logger.debug(f"Traceback: {traceback.format_exc()}")
     
     # Save YAML with recommendations to DECISION (decision log)
     yaml_data = {
@@ -242,23 +237,7 @@ def save_feature_selection_rankings(
     else:
         logger.warning(f"Target decision directory not available, skipping target-first save")
     
-    # Also save to legacy location (backward compatibility)
-    try:
-        legacy_yaml_path = legacy_decision_dir / "feature_prioritization.yaml"
-        with open(legacy_yaml_path, 'w') as f:
-            yaml.dump(yaml_data, f, default_flow_style=False)
-        logger.debug(f"Saved feature prioritization YAML to legacy location {legacy_yaml_path} (backward compatibility)")
-    except Exception as e:
-        logger.warning(f"Failed to save feature prioritization YAML to legacy location: {e}")
-    
-    # Save selected features list to both legacy and target-first structures (write directly to both)
-    selected_features_path = repro_dir / "selected_features.txt"
-    with open(selected_features_path, "w") as f:
-        for feature in selected_features:
-            f.write(f"{feature}\n")
-    logger.info(f"Saved {len(selected_features)} selected features to {selected_features_path}")
-    
-    # Also write directly to target-first structure
+    # Save selected features list to target-first structure only
     try:
         from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)

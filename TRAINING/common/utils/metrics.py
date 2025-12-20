@@ -212,7 +212,8 @@ class MetricsWriter:
                     logger.warning(f"⚠️  Cannot use fallback: missing target or view (target={target}, view={view})")
                 return
         
-        # Write metrics.json and metrics.parquet (unified canonical schema)
+        # Write metrics.json and metrics.parquet (unified canonical schema) to target-first structure
+        # cohort_dir is now always the target-first structure (targets/<target>/reproducibility/<view>/cohort=<id>/)
         try:
             self._write_metrics(
                 cohort_dir, run_id, metrics, 
@@ -223,62 +224,6 @@ class MetricsWriter:
             logger.debug(f"✅ Wrote unified metrics to {cohort_dir}")
         except Exception as e:
             logger.warning(f"⚠️  Failed to write metrics to {cohort_dir}: {e}")
-        
-        # Also write to target-first reproducibility structure (targets/<target>/reproducibility/<view>/cohort=<cohort_id>/)
-        # This matches where metadata.json and diff files are stored
-        if target and stage in ["TARGET_RANKING", "FEATURE_SELECTION"]:
-            try:
-                from TRAINING.orchestration.utils.target_first_paths import (
-                    get_target_reproducibility_dir, ensure_target_structure
-                )
-                
-                # Extract cohort_id from cohort_dir path
-                cohort_id = None
-                parts = Path(cohort_dir).parts
-                for part in parts:
-                    if part.startswith('cohort='):
-                        cohort_id = part.replace('cohort=', '')
-                        break
-                
-                if cohort_id:
-                    # Find base output directory (walk up from cohort_dir to find run root)
-                    base_output_dir = cohort_dir
-                    for _ in range(10):  # Limit depth
-                        if (base_output_dir / "REPRODUCIBILITY").exists() or (base_output_dir / "targets").exists():
-                            break
-                        if not base_output_dir.parent.exists():
-                            break
-                        base_output_dir = base_output_dir.parent
-                    
-                    # Normalize view for FEATURE_SELECTION (INDIVIDUAL -> SYMBOL_SPECIFIC)
-                    view_for_target = view
-                    if stage == "FEATURE_SELECTION" and view == "INDIVIDUAL":
-                        view_for_target = "SYMBOL_SPECIFIC"
-                    
-                    # Ensure target structure exists
-                    ensure_target_structure(base_output_dir, target)
-                    
-                    # Build target-first reproducibility path
-                    # For CROSS_SECTIONAL: targets/<target>/reproducibility/CROSS_SECTIONAL/cohort=<cohort_id>/
-                    # For SYMBOL_SPECIFIC: targets/<target>/reproducibility/SYMBOL_SPECIFIC/symbol=<symbol>/cohort=<cohort_id>/
-                    target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
-                    if view_for_target == "SYMBOL_SPECIFIC" and symbol:
-                        # Include symbol in path to prevent overwriting
-                        target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol}" / f"cohort={cohort_id}"
-                    else:
-                        target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
-                    target_cohort_dir.mkdir(parents=True, exist_ok=True)
-                    
-                    # Write metrics to target-first reproducibility directory
-                    self._write_metrics(
-                        target_cohort_dir, run_id, metrics,
-                        stage=stage,
-                        reproducibility_mode="COHORT_AWARE",
-                        diff_telemetry=diff_telemetry
-                    )
-                    logger.debug(f"✅ Also wrote metrics to target-first reproducibility structure: {target_cohort_dir}")
-            except Exception as e:
-                logger.debug(f"Failed to write metrics to target-first reproducibility structure (non-critical): {e}")
         
         # Also write to target-first structure (targets/<target>/metrics/)
         if target:

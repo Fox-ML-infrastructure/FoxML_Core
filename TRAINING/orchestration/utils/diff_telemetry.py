@@ -3540,53 +3540,48 @@ class DiffTelemetry:
                     'top_improvements': diff.summary.get('top_improvements', [])
                 }
             }
-            _write_atomic_json(metric_deltas_file, metric_deltas_data)
-            
-            # Also write to target-first structure
+            # Write to target-first structure only
             if target_cohort_dir:
                 try:
                     target_metric_deltas_file = target_cohort_dir / "metric_deltas.json"
                     _write_atomic_json(target_metric_deltas_file, metric_deltas_data)
-                    logger.debug(f"✅ Also saved metric_deltas.json to target-first structure")
+                    logger.debug(f"✅ Saved metric_deltas.json to target-first structure: {target_metric_deltas_file}")
                 except Exception as e:
-                    logger.debug(f"Failed to save metric_deltas.json to target-first structure (non-critical): {e}")
+                    logger.warning(f"Failed to save metric_deltas.json to target-first structure: {e}")
+            else:
+                logger.warning(f"Target cohort directory not available, cannot save metric_deltas.json")
         
         # Add reference to metric_deltas.json in diff_prev.json summary (before writing)
         if metric_deltas_file_path:
             prev_diff_dict['summary']['metric_deltas_file'] = metric_deltas_file_path
         
         # Ensure summary includes impact classification (already computed in compute_diff)
-        prev_diff_file = cohort_dir / "diff_prev.json"
-        _write_atomic_json(prev_diff_file, prev_diff_dict)
-        
-        # Also write to target-first structure
+        # Write to target-first structure only
         if target_cohort_dir:
             try:
                 target_prev_diff_file = target_cohort_dir / "diff_prev.json"
                 _write_atomic_json(target_prev_diff_file, prev_diff_dict)
-                logger.debug(f"✅ Also saved diff_prev.json to target-first structure")
+                logger.debug(f"✅ Saved diff_prev.json to target-first structure: {target_prev_diff_file}")
             except Exception as e:
-                logger.debug(f"Failed to save diff_prev.json to target-first structure (non-critical): {e}")
+                logger.warning(f"Failed to save diff_prev.json to target-first structure: {e}")
+        else:
+            logger.warning(f"Target cohort directory not available, cannot save diff_prev.json")
         
         # Tier C: Full raw metrics remain in metrics.json (already written by MetricsWriter)
         # We don't duplicate them here - just reference the path
         
-        # Save baseline diff if available (atomically)
-        if baseline_diff:
-            baseline_diff_file = cohort_dir / "diff_baseline.json"
-            baseline_diff_dict = baseline_diff.to_dict()
-            _write_atomic_json(baseline_diff_file, baseline_diff_dict)
-            
-            # Also write to target-first structure
-            if target_cohort_dir:
-                try:
-                    target_baseline_diff_file = target_cohort_dir / "diff_baseline.json"
-                    _write_atomic_json(target_baseline_diff_file, baseline_diff_dict)
-                    logger.debug(f"✅ Also saved diff_baseline.json to target-first structure")
-                except Exception as e:
-                    logger.debug(f"Failed to save diff_baseline.json to target-first structure (non-critical): {e}")
+        # Save baseline diff if available (atomically) to target-first structure only
+        if baseline_diff and target_cohort_dir:
+            try:
+                baseline_diff_dict = baseline_diff.to_dict()
+                target_baseline_diff_file = target_cohort_dir / "diff_baseline.json"
+                _write_atomic_json(target_baseline_diff_file, baseline_diff_dict)
+                logger.debug(f"✅ Saved diff_baseline.json to target-first structure: {target_baseline_diff_file}")
+            except Exception as e:
+                logger.warning(f"Failed to save diff_baseline.json to target-first structure: {e}")
         
-        logger.debug(f"✅ Saved diffs to {cohort_dir}")
+        if target_cohort_dir:
+            logger.debug(f"✅ Saved diffs to {target_cohort_dir}")
     
     def _emit_trend_time_series(
         self,

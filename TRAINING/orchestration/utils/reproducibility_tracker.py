@@ -1543,29 +1543,23 @@ class ReproducibilityTracker:
                 logger.debug(f"Target-first structure creation traceback: {traceback.format_exc()}")
                 target_cohort_dir = None
         
-        # Save metadata.json atomically to both old and new structures
-        metadata_file = cohort_dir / "metadata.json"
-        try:
-            _write_atomic_json(metadata_file, full_metadata)
-            # Log at INFO level so it's visible
-            main_logger = _get_main_logger()
-            if main_logger != logger:
-                main_logger.info(f"✅ Reproducibility: Saved metadata.json to {metadata_file.name} in {metadata_file.parent.name}/")
-            else:
-                logger.info(f"✅ Reproducibility: Saved metadata.json to {metadata_file.name} in {metadata_file.parent.name}/")
-        except (IOError, OSError) as e:
-            logger.warning(f"Failed to save metadata.json to {metadata_file}: {e}, error_type=IO_ERROR")
-            self._increment_error_counter("write_failures", "IO_ERROR")
-            raise  # Re-raise to prevent silent failure
-        
-        # Also write to target-first structure
+        # Save metadata.json to target-first structure only
         if target_cohort_dir:
             try:
                 target_metadata_file = target_cohort_dir / "metadata.json"
                 _write_atomic_json(target_metadata_file, full_metadata)
-                logger.debug(f"✅ Also saved metadata.json to target-first structure: {target_metadata_file}")
-            except Exception as e:
-                logger.debug(f"Failed to save metadata.json to target-first structure (non-critical): {e}")
+                # Log at INFO level so it's visible
+                main_logger = _get_main_logger()
+                if main_logger != logger:
+                    main_logger.info(f"✅ Reproducibility: Saved metadata.json to {target_metadata_file.relative_to(target_cohort_dir.parent.parent.parent.parent) if target_cohort_dir.parent.parent.parent.parent.exists() else target_metadata_file}")
+                else:
+                    logger.info(f"✅ Reproducibility: Saved metadata.json to {target_metadata_file}")
+            except (IOError, OSError) as e:
+                logger.warning(f"Failed to save metadata.json to {target_metadata_file}: {e}, error_type=IO_ERROR")
+                self._increment_error_counter("write_failures", "IO_ERROR")
+                raise  # Re-raise to prevent silent failure
+        else:
+            logger.warning(f"Target cohort directory not available for {item_name}/{stage_normalized}, cannot save metadata.json")
         
         # Write metrics sidecar files (if enabled)
         if self.metrics:
@@ -1608,18 +1602,22 @@ class ReproducibilityTracker:
                 if additional_data and 'diff_telemetry' in additional_data:
                     diff_telemetry = additional_data['diff_telemetry']
                 
-                self.metrics.write_cohort_metrics(
-                    cohort_dir=cohort_dir,
-                    stage=stage_normalized,
-                    view=view or "UNKNOWN",
-                    target=target,
-                    symbol=symbol,
-                    run_id=run_id_clean,
-                    metrics=run_data,
-                    baseline_key=baseline_key,
-                    diff_telemetry=diff_telemetry
-                )
-                metrics_written = True
+                # Write metrics to target-first structure only
+                if target_cohort_dir:
+                    self.metrics.write_cohort_metrics(
+                        cohort_dir=target_cohort_dir,
+                        stage=stage_normalized,
+                        view=view or "UNKNOWN",
+                        target=target,
+                        symbol=symbol,
+                        run_id=run_id_clean,
+                        metrics=run_data,
+                        baseline_key=baseline_key,
+                        diff_telemetry=diff_telemetry
+                    )
+                    metrics_written = True
+                else:
+                    logger.warning(f"Target cohort directory not available for metrics write: {item_name}/{stage_normalized}")
             except Exception as e:
                 logger.warning(f"⚠️  Failed to write metrics metadata to cohort directory: {e}")
                 import traceback

@@ -198,11 +198,7 @@ def save_rankings(
     globals_dir = get_globals_dir(base_output_dir)
     globals_dir.mkdir(parents=True, exist_ok=True)
     
-    # Legacy directories (for backward compatibility)
-    repro_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
-    decision_dir = base_output_dir / "DECISION" / "TARGET_RANKING"
-    repro_dir.mkdir(parents=True, exist_ok=True)
-    decision_dir.mkdir(parents=True, exist_ok=True)
+    # Target-first structure only - no legacy directories needed
     
     # Handle empty results
     if not results:
@@ -250,19 +246,15 @@ def save_rankings(
             )
         logger.warning("Review these targets - they may have leaked features or be degenerate!")
     
-    # Save CSV to REPRODUCIBILITY (reproducibility artifact with per-model scores) - legacy location
-    csv_path = repro_dir / "target_predictability_rankings.csv"
-    df.to_csv(csv_path, index=False)
-    logger.info(f"\nSaved rankings CSV to {csv_path}")
-    
-    # Also save to target-first structure (globals/ for global ranking)
+    # Save CSV to target-first structure (globals/ for global ranking) only
     try:
         target_csv_path = globals_dir / "target_predictability_rankings.csv"
-        import shutil
-        shutil.copy2(csv_path, target_csv_path)
-        logger.debug(f"Saved rankings CSV to target-first location: {target_csv_path}")
+        df.to_csv(target_csv_path, index=False)
+        logger.info(f"✅ Saved rankings CSV to {target_csv_path}")
     except Exception as e:
-        logger.debug(f"Failed to copy rankings CSV to target-first location: {e}")
+        logger.warning(f"Failed to save rankings CSV to target-first location: {e}")
+        import traceback
+        logger.debug(f"Traceback: {traceback.format_exc()}")
     
     # Save YAML with recommendations to DECISION (decision log)
     yaml_data = {
@@ -310,11 +302,7 @@ def save_rankings(
         except Exception as e:
             logger.debug(f"Failed to save per-target prioritization for {target_name_clean}: {e}")
     
-    # Also save to legacy location (backward compatibility)
-    legacy_yaml_path = decision_dir / "target_prioritization.yaml"
-    with open(legacy_yaml_path, 'w') as f:
-        yaml.dump(yaml_data, f, default_flow_style=False)
-    logger.debug(f"Saved target prioritization YAML to legacy location {legacy_yaml_path} (backward compatibility)")
+    # Target-first structure only - no legacy writes
 
 
 def _get_recommendation(score: TargetPredictabilityScore) -> str:
