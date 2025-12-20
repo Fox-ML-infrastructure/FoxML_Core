@@ -175,7 +175,7 @@ class TrendAnalyzer:
         elif (self.reproducibility_dir / "REPRODUCIBILITY").exists():
             run_dir = self.reproducibility_dir
         
-        # First, check target-first structure (targets/<target>/reproducibility/)
+        # First, check target-first structure (targets/<target>/reproducibility/<view>/cohort=<cohort_id>/)
         targets_dir = run_dir / "targets"
         if targets_dir.exists():
             for target_dir in targets_dir.iterdir():
@@ -184,46 +184,51 @@ class TrendAnalyzer:
                 target = target_dir.name
                 repro_dir = target_dir / "reproducibility"
                 if repro_dir.exists():
-                    # Look for metadata files in reproducibility directory
-                    metadata_file = repro_dir / "meta_b0.json"
-                    metrics_file = repro_dir / "metrics.json"
-                    if not metrics_file.exists():
-                        # Check view-organized metrics
-                        for item in repro_dir.iterdir():
-                            if item.is_dir() and item.name.startswith("view="):
-                                metrics_file = item / "metrics.json"
-                                if metrics_file.exists():
-                                    break
-                    
-                    if metadata_file.exists() or metrics_file.exists():
-                        try:
-                            metadata = {}
-                            if metadata_file.exists():
-                                with open(metadata_file, 'r') as f:
-                                    metadata = json.load(f)
+                    # Walk through view subdirectories (CROSS_SECTIONAL, SYMBOL_SPECIFIC, etc.)
+                    for view_dir in repro_dir.iterdir():
+                        if not view_dir.is_dir():
+                            continue
+                        view = view_dir.name
+                        
+                        # Walk through cohort directories
+                        for cohort_dir in view_dir.iterdir():
+                            if not cohort_dir.is_dir() or not cohort_dir.name.startswith("cohort="):
+                                continue
                             
-                            metrics_data = {}
-                            if metrics_file.exists():
-                                with open(metrics_file, 'r') as f:
-                                    metrics_data = json.load(f)
+                            metadata_file = cohort_dir / "metadata.json"
+                            metrics_file = cohort_dir / "metrics.json"
                             
-                            # Extract run_id from metadata or metrics
-                            run_id = metadata.get('run_id') or metrics_data.get('run_id') or run_dir.name
-                            
-                            row = {
-                                'run_id': run_id,
-                                'stage': metadata.get('stage', 'TRAINING'),
-                                'target': target,
-                                'view': metadata.get('view', 'CROSS_SECTIONAL'),
-                                'cohort_id': metadata.get('cohort_id', 'default'),
-                                'metadata_path': str(metadata_file.relative_to(run_dir)) if metadata_file.exists() else None,
-                                'metrics_path': str(metrics_file.relative_to(run_dir)) if metrics_file.exists() else None,
-                                **metadata,
-                                **{k: v for k, v in metrics_data.items() if k not in metadata}
-                            }
-                            rows.append(row)
-                        except Exception as e:
-                            logger.debug(f"Failed to process target-first metrics for {target}: {e}")
+                            if metadata_file.exists() or metrics_file.exists():
+                                try:
+                                    metadata = {}
+                                    if metadata_file.exists():
+                                        with open(metadata_file, 'r') as f:
+                                            metadata = json.load(f)
+                                    
+                                    metrics_data = {}
+                                    if metrics_file.exists():
+                                        with open(metrics_file, 'r') as f:
+                                            metrics_data = json.load(f)
+                                    
+                                    # Extract identifiers
+                                    run_id = metadata.get('run_id') or metrics_data.get('run_id') or run_dir.name
+                                    stage = metadata.get('stage', 'UNKNOWN')
+                                    cohort_id = cohort_dir.name.replace('cohort=', '')
+                                    
+                                    row = {
+                                        'run_id': run_id,
+                                        'stage': stage,
+                                        'target': target,
+                                        'view': view,
+                                        'cohort_id': cohort_id,
+                                        'metadata_path': str(metadata_file.relative_to(run_dir)) if metadata_file.exists() else None,
+                                        'metrics_path': str(metrics_file.relative_to(run_dir)) if metrics_file.exists() else None,
+                                        **metadata,
+                                        **{k: v for k, v in metrics_data.items() if k not in metadata}
+                                    }
+                                    rows.append(row)
+                                except Exception as e:
+                                    logger.debug(f"Failed to process target-first metrics for {target}/{view}/{cohort_dir.name}: {e}")
         
         # Also walk legacy REPRODUCIBILITY directory
         for stage_dir in self.reproducibility_dir.iterdir():

@@ -1969,7 +1969,73 @@ class DiffTelemetry:
         
         # Save full snapshot atomically
         snapshot_file = cohort_dir / "snapshot.json"
-        _write_atomic_json(snapshot_file, snapshot.to_dict())
+        snapshot_dict = snapshot.to_dict()
+        _write_atomic_json(snapshot_file, snapshot_dict)
+        
+        # Also write to target-first structure (for TARGET_RANKING and FEATURE_SELECTION stages)
+        try:
+            # Extract identifiers from cohort_dir path
+            # Path structure: .../STAGE/VIEW/item_name/cohort=.../
+            parts = Path(cohort_dir).parts
+            stage = None
+            view = None
+            item_name = None
+            cohort_id = None
+            
+            for i, part in enumerate(parts):
+                if part in ['TARGET_RANKING', 'FEATURE_SELECTION', 'TRAINING']:
+                    stage = part
+                    if i + 1 < len(parts) and parts[i+1] in ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC', 'LOSO', 'INDIVIDUAL']:
+                        view = parts[i+1]
+                        if i + 2 < len(parts) and not parts[i+2].startswith('cohort='):
+                            item_name = parts[i+2]
+                    # Find cohort_id
+                    for j in range(i, len(parts)):
+                        if parts[j].startswith('cohort='):
+                            cohort_id = parts[j].replace('cohort=', '')
+                            break
+                    break
+            
+            # Only create target-first structure for TARGET_RANKING and FEATURE_SELECTION
+            if stage in ['TARGET_RANKING', 'FEATURE_SELECTION'] and item_name and cohort_id:
+                # Find base output directory (run directory)
+                temp_dir = cohort_dir
+                for _ in range(10):  # Limit depth
+                    if (temp_dir / "targets").exists() or (temp_dir.parent / "targets").exists():
+                        # Found run directory
+                        if (temp_dir / "targets").exists():
+                            base_output_dir = temp_dir
+                        else:
+                            base_output_dir = temp_dir.parent
+                        break
+                    if not temp_dir.parent.exists() or temp_dir.parent == temp_dir:
+                        break
+                    temp_dir = temp_dir.parent
+                
+                if base_output_dir:
+                    from TRAINING.orchestration.utils.target_first_paths import (
+                        get_target_reproducibility_dir, ensure_target_structure
+                    )
+                    
+                    # Normalize view for FEATURE_SELECTION (INDIVIDUAL -> SYMBOL_SPECIFIC)
+                    view_for_target = view
+                    if stage == 'FEATURE_SELECTION' and view == 'INDIVIDUAL':
+                        view_for_target = 'SYMBOL_SPECIFIC'
+                    
+                    # Ensure target structure exists
+                    ensure_target_structure(base_output_dir, item_name)
+                    
+                    # Build target-first reproducibility path
+                    target_repro_dir = get_target_reproducibility_dir(base_output_dir, item_name)
+                    target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
+                    target_cohort_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # Write snapshot.json to target-first structure
+                    target_snapshot_file = target_cohort_dir / "snapshot.json"
+                    _write_atomic_json(target_snapshot_file, snapshot_dict)
+                    logger.debug(f"✅ Also saved snapshot.json to target-first structure")
+        except Exception as e:
+            logger.debug(f"Failed to save snapshot.json to target-first structure (non-critical): {e}")
         
         # Update index (keyed by run_id for in-memory lookup, but saved as run_id:stage)
         self._snapshots[snapshot.run_id] = snapshot
@@ -3361,6 +3427,71 @@ class DiffTelemetry:
         cohort_dir = Path(cohort_dir)
         cohort_dir.mkdir(parents=True, exist_ok=True)
         
+        # Extract identifiers from cohort_dir path for target-first structure
+        # Path structure: .../STAGE/VIEW/item_name/cohort=.../
+        stage = diff.prev_stage or "UNKNOWN"
+        view = diff.prev_view or "UNKNOWN"
+        item_name = "UNKNOWN"
+        cohort_id = None
+        base_output_dir = None
+        target_cohort_dir = None
+        
+        # Try to extract from cohort_dir path
+        try:
+            parts = Path(cohort_dir).parts
+            for i, part in enumerate(parts):
+                if part in ['TARGET_RANKING', 'FEATURE_SELECTION', 'TRAINING']:
+                    stage = part
+                    if i + 1 < len(parts) and parts[i+1] in ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC', 'LOSO', 'INDIVIDUAL']:
+                        view = parts[i+1]
+                        if i + 2 < len(parts) and not parts[i+2].startswith('cohort='):
+                            item_name = parts[i+2]
+                    # Find cohort_id
+                    for j in range(i, len(parts)):
+                        if parts[j].startswith('cohort='):
+                            cohort_id = parts[j].replace('cohort=', '')
+                            break
+                    break
+            
+            # Only create target-first structure for TARGET_RANKING and FEATURE_SELECTION
+            if stage in ['TARGET_RANKING', 'FEATURE_SELECTION'] and item_name != "UNKNOWN" and cohort_id:
+                # Find base output directory (run directory)
+                temp_dir = cohort_dir
+                for _ in range(10):  # Limit depth
+                    if (temp_dir / "targets").exists() or (temp_dir.parent / "targets").exists():
+                        # Found run directory
+                        if (temp_dir / "targets").exists():
+                            base_output_dir = temp_dir
+                        else:
+                            base_output_dir = temp_dir.parent
+                        break
+                    if not temp_dir.parent.exists() or temp_dir.parent == temp_dir:
+                        break
+                    temp_dir = temp_dir.parent
+                
+                if base_output_dir:
+                    try:
+                        from TRAINING.orchestration.utils.target_first_paths import (
+                            get_target_reproducibility_dir, ensure_target_structure
+                        )
+                        
+                        # Normalize view for FEATURE_SELECTION (INDIVIDUAL -> SYMBOL_SPECIFIC)
+                        view_for_target = view
+                        if stage == 'FEATURE_SELECTION' and view == 'INDIVIDUAL':
+                            view_for_target = 'SYMBOL_SPECIFIC'
+                        
+                        # Ensure target structure exists
+                        ensure_target_structure(base_output_dir, item_name)
+                        
+                        # Build target-first reproducibility path
+                        target_repro_dir = get_target_reproducibility_dir(base_output_dir, item_name)
+                        target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
+                        target_cohort_dir.mkdir(parents=True, exist_ok=True)
+                    except Exception as e:
+                        logger.debug(f"Failed to create target-first structure for diffs (non-critical): {e}")
+        except Exception:
+            pass
+        
         # Tier A: Summary in diff_prev.json (lightweight, always present)
         # This includes: metric_deltas_count, impact_label, top_regressions, top_improvements
         prev_diff_dict = diff.to_dict()
@@ -3372,25 +3503,6 @@ class DiffTelemetry:
             metric_deltas_file = cohort_dir / "metric_deltas.json"
             # Use relative path from cohort_dir for portability
             metric_deltas_file_path = "metric_deltas.json"
-            
-            # Extract identifiers from cohort_dir path or snapshot
-            # Path structure: .../STAGE/VIEW/item_name/cohort=.../
-            stage = diff.prev_stage or "UNKNOWN"
-            view = diff.prev_view or "UNKNOWN"
-            item_name = "UNKNOWN"
-            # Try to extract from cohort_dir path
-            try:
-                parts = Path(cohort_dir).parts
-                for i, part in enumerate(parts):
-                    if part in ['TARGET_RANKING', 'FEATURE_SELECTION', 'TRAINING']:
-                        stage = part
-                        if i + 1 < len(parts) and parts[i+1] in ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC', 'LOSO', 'INDIVIDUAL']:
-                            view = parts[i+1]
-                            if i + 2 < len(parts) and not parts[i+2].startswith('cohort='):
-                                item_name = parts[i+2]
-                                break
-            except Exception:
-                pass
             
             # Structure: keyed by metric name with full delta info
             metric_deltas_data = {
@@ -3410,6 +3522,15 @@ class DiffTelemetry:
                 }
             }
             _write_atomic_json(metric_deltas_file, metric_deltas_data)
+            
+            # Also write to target-first structure
+            if target_cohort_dir:
+                try:
+                    target_metric_deltas_file = target_cohort_dir / "metric_deltas.json"
+                    _write_atomic_json(target_metric_deltas_file, metric_deltas_data)
+                    logger.debug(f"✅ Also saved metric_deltas.json to target-first structure")
+                except Exception as e:
+                    logger.debug(f"Failed to save metric_deltas.json to target-first structure (non-critical): {e}")
         
         # Add reference to metric_deltas.json in diff_prev.json summary (before writing)
         if metric_deltas_file_path:
@@ -3419,13 +3540,32 @@ class DiffTelemetry:
         prev_diff_file = cohort_dir / "diff_prev.json"
         _write_atomic_json(prev_diff_file, prev_diff_dict)
         
+        # Also write to target-first structure
+        if target_cohort_dir:
+            try:
+                target_prev_diff_file = target_cohort_dir / "diff_prev.json"
+                _write_atomic_json(target_prev_diff_file, prev_diff_dict)
+                logger.debug(f"✅ Also saved diff_prev.json to target-first structure")
+            except Exception as e:
+                logger.debug(f"Failed to save diff_prev.json to target-first structure (non-critical): {e}")
+        
         # Tier C: Full raw metrics remain in metrics.json (already written by MetricsWriter)
         # We don't duplicate them here - just reference the path
         
         # Save baseline diff if available (atomically)
         if baseline_diff:
             baseline_diff_file = cohort_dir / "diff_baseline.json"
-            _write_atomic_json(baseline_diff_file, baseline_diff.to_dict())
+            baseline_diff_dict = baseline_diff.to_dict()
+            _write_atomic_json(baseline_diff_file, baseline_diff_dict)
+            
+            # Also write to target-first structure
+            if target_cohort_dir:
+                try:
+                    target_baseline_diff_file = target_cohort_dir / "diff_baseline.json"
+                    _write_atomic_json(target_baseline_diff_file, baseline_diff_dict)
+                    logger.debug(f"✅ Also saved diff_baseline.json to target-first structure")
+                except Exception as e:
+                    logger.debug(f"Failed to save diff_baseline.json to target-first structure (non-critical): {e}")
         
         logger.debug(f"✅ Saved diffs to {cohort_dir}")
     

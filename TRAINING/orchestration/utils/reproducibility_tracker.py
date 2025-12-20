@@ -1488,7 +1488,51 @@ class ReproducibilityTracker:
             else:
                 logger.warning("Skipping diff_telemetry in metadata.json due to computation failure")
         
-        # Save metadata.json atomically (temp file + rename for crash consistency)
+        # Determine target-first directory (for TARGET_RANKING and FEATURE_SELECTION stages)
+        target_cohort_dir = None
+        if stage_normalized in ["TARGET_RANKING", "FEATURE_SELECTION"]:
+            try:
+                from TRAINING.orchestration.utils.target_first_paths import (
+                    get_target_reproducibility_dir, ensure_target_structure
+                )
+                
+                # Determine view from route_type or additional_data
+                view_for_target = None
+                if stage_normalized == "TARGET_RANKING":
+                    # For TARGET_RANKING, view comes from route_type or additional_data
+                    if route_type and route_type.upper() in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "LOSO"]:
+                        view_for_target = route_type.upper()
+                    elif additional_data and 'view' in additional_data:
+                        view_for_target = additional_data['view'].upper()
+                    if not view_for_target:
+                        view_for_target = "CROSS_SECTIONAL"  # Default
+                elif stage_normalized == "FEATURE_SELECTION":
+                    # For FEATURE_SELECTION, map route_type to view
+                    if route_type:
+                        if route_type.upper() == "CROSS_SECTIONAL":
+                            view_for_target = "CROSS_SECTIONAL"
+                        elif route_type.upper() in ["INDIVIDUAL", "SYMBOL_SPECIFIC"]:
+                            view_for_target = "SYMBOL_SPECIFIC"  # Map INDIVIDUAL to SYMBOL_SPECIFIC for consistency
+                    elif additional_data and 'view' in additional_data:
+                        view_for_target = additional_data['view'].upper()
+                    if not view_for_target:
+                        view_for_target = "CROSS_SECTIONAL"  # Default
+                
+                # Get base output directory (run directory, not REPRODUCIBILITY subdirectory)
+                base_output_dir = self._repro_base_dir
+                
+                # Ensure target structure exists
+                ensure_target_structure(base_output_dir, item_name)
+                
+                # Build target-first reproducibility path: targets/<target>/reproducibility/<view>/cohort=<cohort_id>/
+                target_repro_dir = get_target_reproducibility_dir(base_output_dir, item_name)
+                target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
+                target_cohort_dir.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                # Don't fail if target-first structure creation fails - old structure is primary
+                logger.debug(f"Failed to create target-first structure (non-critical): {e}")
+        
+        # Save metadata.json atomically to both old and new structures
         metadata_file = cohort_dir / "metadata.json"
         try:
             _write_atomic_json(metadata_file, full_metadata)
@@ -1502,6 +1546,15 @@ class ReproducibilityTracker:
             logger.warning(f"Failed to save metadata.json to {metadata_file}: {e}, error_type=IO_ERROR")
             self._increment_error_counter("write_failures", "IO_ERROR")
             raise  # Re-raise to prevent silent failure
+        
+        # Also write to target-first structure
+        if target_cohort_dir:
+            try:
+                target_metadata_file = target_cohort_dir / "metadata.json"
+                _write_atomic_json(target_metadata_file, full_metadata)
+                logger.debug(f"✅ Also saved metadata.json to target-first structure: {target_metadata_file}")
+            except Exception as e:
+                logger.debug(f"Failed to save metadata.json to target-first structure (non-critical): {e}")
         
         # Write metrics sidecar files (if enabled)
         if self.metrics:
@@ -1673,6 +1726,17 @@ class ReproducibilityTracker:
                     df_metrics = pd.DataFrame([metrics_data])
                     metrics_parquet = cohort_dir / "metrics.parquet"
                     df_metrics.to_parquet(metrics_parquet, index=False, engine='pyarrow', compression='snappy')
+                    
+                    # Also write to target-first structure
+                    if target_cohort_dir:
+                        try:
+                            target_metrics_file = target_cohort_dir / "metrics.json"
+                            _write_atomic_json(target_metrics_file, metrics_data)
+                            target_metrics_parquet = target_cohort_dir / "metrics.parquet"
+                            df_metrics.to_parquet(target_metrics_parquet, index=False, engine='pyarrow', compression='snappy')
+                            logger.debug(f"✅ Also saved metrics.json/parquet to target-first structure")
+                        except Exception as e:
+                            logger.debug(f"Failed to save metrics to target-first structure (non-critical): {e}")
                 except Exception as e_parquet:
                     logger.debug(f"Failed to write metrics.parquet fallback: {e_parquet}")
                 # Log at INFO level so it's visible
@@ -1685,6 +1749,27 @@ class ReproducibilityTracker:
                 logger.warning(f"Failed to save metrics.json (fallback) to {metrics_file}: {e}, error_type=IO_ERROR")
                 self._increment_error_counter("write_failures", "IO_ERROR")
                 # Don't raise - metrics might have written it, or we'll try again
+        elif metrics_written and target_cohort_dir:
+            # Metrics were written by MetricsWriter, also write to target-first structure
+            try:
+                # Read the metrics.json that was written
+                if metrics_file.exists():
+                    import json
+                    with open(metrics_file, 'r') as f:
+                        metrics_data_written = json.load(f)
+                    target_metrics_file = target_cohort_dir / "metrics.json"
+                    _write_atomic_json(target_metrics_file, metrics_data_written)
+                    logger.debug(f"✅ Also saved metrics.json to target-first structure: {target_metrics_file}")
+                
+                # Also copy metrics.parquet if it exists
+                metrics_parquet = cohort_dir / "metrics.parquet"
+                if metrics_parquet.exists():
+                    import shutil
+                    target_metrics_parquet = target_cohort_dir / "metrics.parquet"
+                    shutil.copy2(metrics_parquet, target_metrics_parquet)
+                    logger.debug(f"✅ Also saved metrics.parquet to target-first structure: {target_metrics_parquet}")
+            except Exception as e:
+                logger.debug(f"Failed to save metrics to target-first structure (non-critical): {e}")
         
         # Update index.parquet
         try:
