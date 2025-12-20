@@ -315,7 +315,7 @@ def _compute_single_target_routing_decision(
 def _save_single_target_decision(
     target_name: str,
     decision: Dict[str, Any],
-    output_dir: Path
+    output_dir: Optional[Path]
 ) -> None:
     """
     Save routing decision for a single target immediately after evaluation.
@@ -325,12 +325,16 @@ def _save_single_target_decision(
     Args:
         target_name: Target name
         decision: Routing decision dict for this target
-        output_dir: Base output directory (RESULTS/{run}/)
+        output_dir: Base output directory (RESULTS/{run}/) - can be None, will try to infer
     """
     import json
     from TRAINING.orchestration.utils.target_first_paths import (
         get_target_decision_dir, ensure_target_structure
     )
+    
+    if output_dir is None:
+        logger.warning(f"⚠️  Cannot save routing decision for {target_name}: output_dir is None")
+        return
     
     # Determine base output directory
     if output_dir.name == "target_rankings":
@@ -354,7 +358,9 @@ def _save_single_target_decision(
             json.dump({target_name: decision}, f, indent=2, default=str)
         logger.debug(f"✅ Saved routing decision for {target_name} to {target_decision_file}")
     except Exception as e:
-        logger.debug(f"Failed to save routing decision for {target_name}: {e}")
+        logger.warning(f"⚠️  Failed to save routing decision for {target_name}: {e}")
+        import traceback
+        logger.debug(f"Traceback: {traceback.format_exc()}")
 
 
 def _save_dual_view_rankings(
