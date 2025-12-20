@@ -3762,8 +3762,20 @@ class ReproducibilityTracker:
             if _AUDIT_AVAILABLE:
                 from TRAINING.common.utils.trend_analyzer import TrendAnalyzer, SeriesView
                 
-                # Get reproducibility base directory
-                repro_base = cohort_dir.parent.parent.parent if cohort_dir and cohort_dir.exists() else self._repro_base_dir / "REPRODUCIBILITY"
+                # Get reproducibility base directory (use target-first structure)
+                # Walk up from target_cohort_dir to find run directory
+                if target_cohort_dir and target_cohort_dir.exists():
+                    repro_base = target_cohort_dir
+                    # Walk up to find run directory (should have targets/ or RESULTS/)
+                    for _ in range(5):
+                        if (repro_base / "targets").exists() or repro_base.name in ["RESULTS", "intelligent_output"]:
+                            break
+                        if not repro_base.parent.exists():
+                            break
+                        repro_base = repro_base.parent
+                else:
+                    # Fallback: use output_dir (should have targets/ structure)
+                    repro_base = self._repro_base_dir
                 
                 if repro_base.exists():
                     trend_analyzer = TrendAnalyzer(
@@ -3874,7 +3886,7 @@ class ReproducibilityTracker:
             "audit_report": audit_report,
             "audit_report_path": str(audit_report_path) if audit_report_path else None,
             "cohort_id": cohort_id,
-            "metadata_path": str(cohort_dir / "metadata.json") if cohort_dir and cohort_dir.exists() else None,
+            "metadata_path": str(target_cohort_dir / "metadata.json") if target_cohort_dir and target_cohort_dir.exists() else None,
             "trend_summary": trend_summary
         }
     
