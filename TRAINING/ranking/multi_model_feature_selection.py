@@ -3426,14 +3426,15 @@ def save_multi_model_results(
             f.write(f"{feature}\n")
     logger.info(f"✅ Saved {len(selected_features)} features to {selected_features_path}")
     
-    # Also save to target-first structure
+    # Also write directly to target-first structure
     if target_selected_features_path:
         try:
-            import shutil
-            shutil.copy2(selected_features_path, target_selected_features_path)
-            logger.debug(f"Saved selected features to target-first location: {target_selected_features_path}")
+            with open(target_selected_features_path, "w") as f:
+                for feature in selected_features:
+                    f.write(f"{feature}\n")
+            logger.debug(f"Also saved selected features to target-first location: {target_selected_features_path}")
         except Exception as e:
-            logger.debug(f"Failed to copy selected features to target-first location: {e}")
+            logger.debug(f"Failed to write selected features to target-first location: {e}")
     
     # 2. Detailed summary CSV (includes all columns including Boruta gatekeeper) → feature_importances/
     summary_csv_path = importances_dir / "feature_importance_multi_model.csv"
@@ -3543,18 +3544,18 @@ def save_multi_model_results(
         json.dump(metadata, f, indent=2)
     logger.info(f"✅ Saved feature selection summary to {summary_json_path}")
     
-    # Also save to target-first structure
+    # Also write directly to target-first structure
     if target_name and base_output_dir.exists():
         try:
             from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
             target_name_clean = target_name.replace('/', '_').replace('\\', '_')
             target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
             target_summary_path = target_repro_dir / "feature_selection_summary.json"
-            import shutil
-            shutil.copy2(summary_json_path, target_summary_path)
-            logger.debug(f"Saved feature selection summary to target-first location: {target_summary_path}")
+            with open(target_summary_path, "w") as f:
+                json.dump(metadata, f, indent=2)
+            logger.debug(f"Also saved feature selection summary to target-first location: {target_summary_path}")
         except Exception as e:
-            logger.debug(f"Failed to copy feature selection summary to target-first location: {e}")
+            logger.debug(f"Failed to write feature selection summary to target-first location: {e}")
     
     # 6. Family status tracking JSON (for debugging broken models)
     if 'family_statuses' in metadata and metadata['family_statuses']:
