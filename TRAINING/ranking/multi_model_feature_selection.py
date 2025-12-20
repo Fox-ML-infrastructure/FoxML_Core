@@ -1742,6 +1742,15 @@ def train_model_and_get_importance(
                     # Fallback: manual thread management
                     model.fit(X_catboost, y)
                     train_score = model.score(X_catboost, y)
+                
+                # FAIL-FAST: Check for suspiciously high training accuracy (overfitting/memorization)
+                # Tree-based models can easily overfit to 100% training accuracy
+                # This indicates the model is memorizing data and will take a long time to compute importance
+                # Skip expensive operations (feature importance computation) to save time
+                if train_score >= 0.999:  # 99.9% threshold (matches _check_for_perfect_correlation threshold)
+                    logger.debug(f"    CatBoost: Training accuracy {train_score:.1%} >= 99.9% (overfitting detected, skipping expensive operations)")
+                    # Mark as failed and return early - skip expensive feature importance computation
+                    return None, pd.Series(0.0, index=feature_names), importance_method, train_score
             except (ValueError, TypeError) as e:
                 error_str = str(e).lower()
                 if any(kw in error_str for kw in ['invalid classes', 'expected', 'too few']):

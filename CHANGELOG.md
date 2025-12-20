@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-20 (CatBoost Fail-Fast for 100% Training Accuracy)
+- **CatBoost Overfitting Detection**: Added fail-fast mechanism for CatBoost when training accuracy reaches 100% (or >= 99.9% threshold)
+- **Time Savings**: Prevents wasting 40+ minutes on expensive feature importance computation when model is overfitting/memorizing
+- **Early Detection**: Checks training accuracy immediately after fit, before expensive operations start
+- **Graceful Failure**: Skips expensive operations and continues with other models instead of blocking
+- **Files Changed**: `multi_model_feature_selection.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-20-catboost-fail-fast-for-overfitting.md)
+
 #### 2025-12-20 (Elastic Net Graceful Failure Handling - Prevent Full Fit)
 - **Elastic Net Error Handling**: Fixed Elastic Net to gracefully handle "all coefficients zero" failures and prevent expensive full fit operations from running
 - **Quick Pre-Check**: Quick pre-check now sets a flag to skip expensive operations (cross_val_score, pipeline.fit) when failure is detected early
