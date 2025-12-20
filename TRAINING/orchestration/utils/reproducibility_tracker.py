@@ -1808,8 +1808,14 @@ class ReproducibilityTracker:
             from TRAINING.decisioning.decision_engine import DecisionEngine
             from TRAINING.ranking.utils.resolved_config import get_cfg
             
-            repro_dir = self._repro_base_dir / "REPRODUCIBILITY"
-            index_file = repro_dir / "index.parquet"
+            # Read index from globals/ first, then fall back to legacy REPRODUCIBILITY/
+            from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+            globals_dir = get_globals_dir(self._repro_base_dir)
+            index_file = globals_dir / "index.parquet"
+            if not index_file.exists():
+                # Fallback to legacy
+                repro_dir = self._repro_base_dir / "REPRODUCIBILITY"
+                index_file = repro_dir / "index.parquet"
             if index_file.exists():
                 # Check if Bayesian policy is enabled
                 use_bayesian = get_cfg("training.decisions.use_bayesian", default=False, config_name="training_config")
@@ -2006,8 +2012,11 @@ class ReproducibilityTracker:
         cohort_dir: Path
     ) -> None:
         """Update the global index.parquet file."""
-        repro_dir = self._repro_base_dir / "REPRODUCIBILITY"
-        index_file = repro_dir / "index.parquet"
+        # Write index to globals/ instead of REPRODUCIBILITY/
+        from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+        globals_dir = get_globals_dir(self._repro_base_dir)
+        globals_dir.mkdir(parents=True, exist_ok=True)
+        index_file = globals_dir / "index.parquet"
         
         # Normalize stage
         if isinstance(stage, Stage):
@@ -2312,8 +2321,14 @@ class ReproducibilityTracker:
         model_family: Optional[str] = None
     ) -> Optional[str]:
         """Find matching cohort ID from index.parquet."""
-        repro_dir = self._repro_base_dir / "REPRODUCIBILITY"
-        index_file = repro_dir / "index.parquet"
+        # Read index from globals/ first, then fall back to legacy REPRODUCIBILITY/
+        from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+        globals_dir = get_globals_dir(self._repro_base_dir)
+        index_file = globals_dir / "index.parquet"
+        if not index_file.exists():
+            # Fallback to legacy
+            repro_dir = self._repro_base_dir / "REPRODUCIBILITY"
+            index_file = repro_dir / "index.parquet"
         
         if not index_file.exists():
             return None
@@ -2486,8 +2501,14 @@ class ReproducibilityTracker:
         Returns:
             Previous run metrics dict or None if no comparable run found
         """
-        repro_dir = self._repro_base_dir / "REPRODUCIBILITY"
-        index_file = repro_dir / "index.parquet"
+        # Read index from globals/ first, then fall back to legacy REPRODUCIBILITY/
+        from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+        globals_dir = get_globals_dir(self._repro_base_dir)
+        index_file = globals_dir / "index.parquet"
+        if not index_file.exists():
+            # Fallback to legacy
+            repro_dir = self._repro_base_dir / "REPRODUCIBILITY"
+            index_file = repro_dir / "index.parquet"
         
         if not index_file.exists():
             return None
@@ -3272,16 +3293,36 @@ class ReproducibilityTracker:
                             stage, item_name, route_type, symbol, model_family,
                             cohort_id, run_id_clean
                         )
-                        cohort_dir = self._get_cohort_dir(stage, item_name, cohort_id, route_type, symbol, model_family)
-                        drift_file = cohort_dir / "drift.json"
+                        # Write drift.json to target-first structure only
                         try:
+                            from TRAINING.orchestration.utils.target_first_paths import (
+                                get_target_reproducibility_dir, ensure_target_structure
+                            )
+                            base_output_dir = self._repro_base_dir
+                            ensure_target_structure(base_output_dir, item_name)
+                            target_repro_dir = get_target_reproducibility_dir(base_output_dir, item_name)
+                            
+                            # Determine view
+                            view = route_type.upper() if route_type else "CROSS_SECTIONAL"
+                            if view == "INDIVIDUAL":
+                                view = "SYMBOL_SPECIFIC"
+                            
+                            if view == "SYMBOL_SPECIFIC" and symbol:
+                                target_cohort_dir = target_repro_dir / view / f"symbol={symbol}" / f"cohort={cohort_id}"
+                            else:
+                                target_cohort_dir = target_repro_dir / view / f"cohort={cohort_id}"
+                            
+                            drift_file = target_cohort_dir / "drift.json"
+                            target_cohort_dir.mkdir(parents=True, exist_ok=True)
                             with open(drift_file, 'w') as f:
                                 json.dump(drift_data, f, indent=2)
                                 f.flush()  # Ensure immediate write
                                 os.fsync(f.fileno())  # Force write to disk
                         except (IOError, OSError) as e:
-                            logger.warning(f"Failed to save drift.json to {drift_file}: {e}, error_type=IO_ERROR")
+                            logger.warning(f"Failed to save drift.json to target-first structure: {e}, error_type=IO_ERROR")
                             self._increment_error_counter("write_failures", "IO_ERROR")
+                        except Exception as e:
+                            logger.debug(f"Could not write drift.json to target-first structure: {e}")
                             # Don't re-raise - drift file failure shouldn't break the run
                     except Exception as e:
                         logger.warning(f"Failed to compute drift for {stage}:{item_name}: {e}")
@@ -3511,14 +3552,35 @@ class ReproducibilityTracker:
         cohort_id = self._compute_cohort_id(cohort_metadata, route_type_for_cohort)
         previous_metadata = None
         try:
-            cohort_dir = self._get_cohort_dir(
+            # Use target-first structure for reading previous metadata
+            from TRAINING.orchestration.utils.target_first_paths import (
+                get_target_reproducibility_dir
+            )
+            base_output_dir = self._repro_base_dir
+            target_name = ctx.target_name or ctx.target_column or "unknown"
+            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name)
+            
+            # Determine view
+            view = route_type_for_cohort.upper() if route_type_for_cohort else "CROSS_SECTIONAL"
+            if view == "INDIVIDUAL":
+                view = "SYMBOL_SPECIFIC"
+            
+            if view == "SYMBOL_SPECIFIC" and ctx.symbol:
+                target_cohort_dir = target_repro_dir / view / f"symbol={ctx.symbol}" / f"cohort={cohort_id}"
+            else:
+                target_cohort_dir = target_repro_dir / view / f"cohort={cohort_id}"
+            
+            # Fallback to legacy structure if target-first doesn't exist
+            legacy_cohort_dir = self._get_cohort_dir(
                 ctx.stage,
-                ctx.target_name or ctx.target_column or "unknown",
+                target_name,
                 cohort_id,
-                route_type_for_cohort,  # Use view for TARGET_RANKING
+                route_type_for_cohort,
                 ctx.symbol,
                 ctx.model_family
             )
+            cohort_dir = target_cohort_dir if target_cohort_dir.exists() else legacy_cohort_dir
+            
             if cohort_dir.exists():
                 metadata_file = cohort_dir / "metadata.json"
                 if metadata_file.exists():
@@ -3599,18 +3661,43 @@ class ReproducibilityTracker:
                 elif ctx.view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
                     route_type_for_cohort_dir = "SYMBOL_SPECIFIC"  # Use SYMBOL_SPECIFIC to match directory structure
             
-            cohort_dir = self._get_cohort_dir(
+            # Use target-first structure
+            from TRAINING.orchestration.utils.target_first_paths import (
+                get_target_reproducibility_dir, ensure_target_structure
+            )
+            base_output_dir = self._repro_base_dir
+            target_name = ctx.target_name or ctx.target_column or "unknown"
+            ensure_target_structure(base_output_dir, target_name)
+            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name)
+            
+            # Determine view
+            view = route_type_for_cohort_dir.upper() if route_type_for_cohort_dir else "CROSS_SECTIONAL"
+            if view == "INDIVIDUAL":
+                view = "SYMBOL_SPECIFIC"
+            
+            if view == "SYMBOL_SPECIFIC" and ctx.symbol:
+                target_cohort_dir = target_repro_dir / view / f"symbol={ctx.symbol}" / f"cohort={cohort_id}"
+            else:
+                target_cohort_dir = target_repro_dir / view / f"cohort={cohort_id}"
+            
+            # Fallback to legacy for reading only
+            legacy_cohort_dir = self._get_cohort_dir(
                 ctx.stage,
-                ctx.target_name or ctx.target_column or "unknown",
+                target_name,
                 cohort_id,
-                route_type_for_cohort_dir,  # Use view for TARGET_RANKING
+                route_type_for_cohort_dir,
                 ctx.symbol,
                 ctx.model_family
             )
-            # CRITICAL: Ensure cohort_dir exists (it should have been created by _save_to_cohort)
-            if not cohort_dir.exists():
-                cohort_dir.mkdir(parents=True, exist_ok=True)
-                logger.warning(f"⚠️  Cohort directory {cohort_dir.name}/ did not exist - created it. This may indicate _save_to_cohort() was not called.")
+            cohort_dir = target_cohort_dir if target_cohort_dir.exists() else legacy_cohort_dir
+            
+            # CRITICAL: Ensure target-first cohort_dir exists (it should have been created by _save_to_cohort)
+            if not target_cohort_dir.exists():
+                target_cohort_dir.mkdir(parents=True, exist_ok=True)
+                logger.warning(f"⚠️  Target-first cohort directory {target_cohort_dir.name}/ did not exist - created it. This may indicate _save_to_cohort() was not called.")
+            
+            # Use target-first for all writes
+            cohort_dir = target_cohort_dir
             
             # Verify metadata files exist (should have been written by _save_to_cohort)
             metadata_file = cohort_dir / "metadata.json"
@@ -3656,8 +3743,9 @@ class ReproducibilityTracker:
                             "stage": ctx.stage,
                             **{k: v for k, v in metrics_with_cohort.items() if k not in ['timestamp', 'cohort_metadata', 'additional_data']}
                         }
+                        # Write metrics to target-first structure
                         self.metrics.write_cohort_metrics(
-                            cohort_dir=cohort_dir,
+                            cohort_dir=target_cohort_dir,  # Use target-first, not legacy
                             stage=ctx.stage,
                             view=ctx.view if hasattr(ctx, 'view') else "UNKNOWN",
                             target=ctx.target_name or ctx.target_column or "unknown",
@@ -3670,11 +3758,16 @@ class ReproducibilityTracker:
                     logger.error(f"❌ Failed to write fallback metadata/metrics: {e}")
                     logger.debug(f"Fallback write traceback: {traceback.format_exc()}")
                 
-                audit_report_path = cohort_dir / "audit_report.json"
-                with open(audit_report_path, 'w') as f:
-                    json.dump(audit_report, f, indent=2)
-                    f.flush()
-                    os.fsync(f.fileno())
+                # Write audit report to target-first structure only
+                if target_cohort_dir:
+                    audit_report_path = target_cohort_dir / "audit_report.json"
+                    try:
+                        with open(audit_report_path, 'w') as f:
+                            json.dump(audit_report, f, indent=2)
+                            f.flush()
+                            os.fsync(f.fileno())
+                    except Exception as e:
+                        logger.debug(f"Could not write audit report to target-first structure: {e}")
         except Exception as e:
             logger.debug(f"Could not write audit report: {e}")
         
@@ -3908,25 +4001,10 @@ class ReproducibilityTracker:
         if not self.metrics:
             return
         
-        repro_dir = self._repro_base_dir / "REPRODUCIBILITY"
-        if not repro_dir.exists():
-            repro_dir = self.output_dir / "REPRODUCIBILITY"
-        
-        if not repro_dir.exists():
-            return
-        
-        stage_dir = repro_dir / stage.upper()
-        if not stage_dir.exists():
-            return
-        
-        # Generate view-level rollups
-        for view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
-            view_dir = stage_dir / view
-            if view_dir.exists():
-                self.metrics.generate_view_rollup(view_dir, stage.upper(), view, run_id)
-        
-        # Generate stage-level rollup
-        self.metrics.generate_stage_rollup(stage_dir, stage.upper(), run_id)
+        # Rollups are now generated per-target in targets/<target>/metrics/
+        # This method is kept for backward compatibility but does nothing
+        # (rollups are handled by MetricsWriter in target-first structure)
+        return
         
         # Aggregate metrics facts table (append to Parquet)
         try:
