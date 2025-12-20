@@ -17,6 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """Simple working stub for Neuralnetwork trainer."""
 
+import os
 import numpy as np
 from TRAINING.common.determinism import get_deterministic_params, seed_for
 import logging
@@ -58,6 +59,12 @@ class NeuralNetworkTrainer(BaseModelTrainer):
             max_epochs = 50  # FALLBACK_DEFAULT_OK
             if epochs == 50:
                 epochs = max_epochs
+        
+        # CRITICAL: Check if TensorFlow is disabled in this child process
+        # This prevents tensorflow from being imported when TRAINER_CHILD_NO_TF=1
+        if os.getenv("TRAINER_CHILD_NO_TF", "0") == "1":
+            logger.error("Neural Network training failed: tensorflow is disabled in this child process (TRAINER_CHILD_NO_TORCH/NO_TF)")
+            return None
         
         try:
             import tensorflow as tf

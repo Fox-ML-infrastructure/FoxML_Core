@@ -119,6 +119,15 @@ CROSS_SECTIONAL_POLICIES: Dict[str, RuntimePolicy] = {
         force_isolation_reason="TensorFlow CUDA context persists in-process"
     ),
     
+    "neural_network": RuntimePolicy(
+        run_mode="process",
+        needs_gpu=True,
+        backends=frozenset({"tf"}),
+        omp_user_api="openmp",
+        cap_vram_mb=_get_vram_cap("neural_network", 4096),
+        force_isolation_reason="TensorFlow CUDA context persists in-process"
+    ),
+    
     "vae": RuntimePolicy(
         run_mode="process",
         needs_gpu=True,

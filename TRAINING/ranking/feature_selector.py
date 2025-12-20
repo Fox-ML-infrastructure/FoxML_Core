@@ -1731,6 +1731,12 @@ def select_features_for_target(
     # Track reproducibility: compare to previous feature selection run with trend analysis
     # This runs regardless of which entry point calls this function
     if output_dir and summary_df is not None and len(summary_df) > 0:
+        # FIX: Initialize cohort metadata variables at the very beginning (before any try-except)
+        # This ensures they exist even if an exception occurs early in the try block
+        cohort_metadata = None
+        cohort_metrics = {}
+        cohort_additional_data = {}
+        
         try:
             from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
             
@@ -1755,11 +1761,6 @@ def select_features_for_target(
             std_consensus = summary_df['consensus_score'].std()
             n_features_selected = len(selected_features)
             n_successful_families = len([s for s in all_family_statuses if s.get('status') == 'success'])
-            
-            # Initialize cohort metadata variables to safe defaults
-            cohort_metadata = None
-            cohort_metrics = {}
-            cohort_additional_data = {}
             
             # Extract cohort metadata using unified extractor
             try:

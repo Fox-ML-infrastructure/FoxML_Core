@@ -314,16 +314,21 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
             missing_normalized = {norm for _, norm in invalid_families}
             
             if missing_normalized & known_missing:
-                logger.warning(
-                    f"⚠️ Preflight [{target}]: {len(invalid_families)} families not in trainer registry "
+                # These families are used in feature selection but not as trainers (expected behavior)
+                # Log at INFO level instead of WARNING to reduce noise
+                logger.info(
+                    f"ℹ️ Preflight [{target}]: {len(invalid_families)} families not in trainer registry "
                     f"(known missing: {sorted(missing_normalized & known_missing)}). "
-                    f"These families are used in feature selection but not registered as trainers. "
-                    f"Either: 1) Register them in TRAINER_MODULE_MAP, or 2) Remove from training_families config."
+                    f"These families are used in feature selection but not registered as trainers (expected)."
                 )
             else:
                 logger.warning(f"⚠️ Preflight [{target}]: {len(invalid_families)} families not in trainer registry:")
             for raw, norm in invalid_families:
-                logger.warning(f"  - {raw} (normalized: {norm}) → SKIP")
+                # Only log individual families at WARNING if they're not known missing
+                if norm not in known_missing:
+                    logger.warning(f"  - {raw} (normalized: {norm}) → SKIP")
+                else:
+                    logger.debug(f"  - {raw} (normalized: {norm}) → SKIP (known missing, expected)")
         if skipped_families:
             logger.info(f"ℹ️ Preflight [{target}]: {len(skipped_families)} families are selectors (not trainers):")
             for raw, norm, reason in skipped_families:
@@ -703,13 +708,72 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         allowed_count = len(feature_names) if feature_names else 0
         used_count = X.shape[1] if X is not None else 0
         
-        if requested_count > 0 and used_count < requested_count * 0.5:
-            logger.warning(
+        # Load threshold from config (default: 0.5 = 50%)
+        try:
+            from CONFIG.config_loader import get_cfg
+            collapse_threshold = get_cfg("training.feature_collapse_threshold", default=0.5, config_name="training_config")
+        except Exception:
+            collapse_threshold = 0.5  # Default: 50%
+        
+        if requested_count > 0 and used_count < requested_count * collapse_threshold:
+            # Calculate breakdown of where features were dropped
+            dropped_by_registry = max(0, requested_count - allowed_count)
+            dropped_after_allowed = max(0, allowed_count - used_count)
+            
+            # Try to get more detailed breakdown from feature audit report if available
+            audit_details = None
+            try:
+                from pathlib import Path
+                audit_dir = Path(output_dir) / "artifacts" / "feature_audits"
+                audit_file = audit_dir / f"{target}_audit_summary.csv"
+                if audit_file.exists():
+                    import pandas as pd
+                    audit_df = pd.read_csv(audit_file)
+                    # Get counts by stage
+                    stage_counts = {}
+                    for _, row in audit_df.iterrows():
+                        stage = row.get('stage', 'unknown')
+                        count = row.get('count', 0)
+                        if stage not in stage_counts:
+                            stage_counts[stage] = 0
+                        stage_counts[stage] = count
+                    
+                    audit_details = {
+                        'dropped_by_registry': stage_counts.get('registry_filter', 0),
+                        'dropped_by_dtype_nan': stage_counts.get('nan_drop', 0) + stage_counts.get('non_numeric_drop', 0),
+                        'dropped_after_kept': stage_counts.get('final_filter', 0),
+                        'audit_report': str(audit_file)
+                    }
+            except Exception as e:
+                logger.debug(f"Could not load feature audit report for detailed breakdown: {e}")
+            
+            # Build detailed warning message
+            retained_pct = used_count/requested_count*100 if requested_count > 0 else 0
+            warning_msg = (
                 f"⚠️ Feature count collapse for {target}: "
                 f"requested={requested_count} → allowed={allowed_count} → used={used_count} "
-                f"({used_count/requested_count*100:.1f}% retained). "
-                f"This may indicate data quality issues or overly aggressive filtering."
+                f"({retained_pct:.1f}% retained, threshold={collapse_threshold*100:.0f}%)."
             )
+            
+            # Add breakdown details
+            if audit_details:
+                warning_msg += (
+                    f"\n   Breakdown: dropped_by_registry={audit_details['dropped_by_registry']}, "
+                    f"dropped_by_dtype/nan={audit_details['dropped_by_dtype_nan']}, "
+                    f"dropped_after_kept={audit_details['dropped_after_kept']}"
+                )
+                warning_msg += f"\n   Detailed audit report: {audit_details['audit_report']}"
+            else:
+                # Fallback to calculated breakdown
+                warning_msg += (
+                    f"\n   Breakdown (estimated): dropped_by_registry={dropped_by_registry}, "
+                    f"dropped_after_allowed={dropped_after_allowed} "
+                    f"(includes dtype/nan filtering and other drops)"
+                )
+            
+            warning_msg += "\n   This may indicate data quality issues or overly aggressive filtering."
+            
+            logger.warning(warning_msg)
         
         logger.info(
             f"📊 Feature pipeline for {target}: "

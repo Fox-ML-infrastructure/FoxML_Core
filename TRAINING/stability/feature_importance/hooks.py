@@ -123,10 +123,29 @@ def save_snapshot_hook(
                 )
                 # Log when analysis is skipped due to insufficient snapshots
                 if stability_metrics is None:
-                    logger.info(
-                        f"📊 Stability analysis for {target_name}/{method}: "
-                        f"Snapshot saved (analysis will run once more snapshots are available)"
-                    )
+                    # Get snapshot count for informative message
+                    from .io import load_snapshots
+                    try:
+                        snapshots = load_snapshots(base_dir, target_name, method)
+                        snapshot_count = len(snapshots)
+                        if snapshot_count == 1:
+                            logger.info(
+                                f"📊 Stability analysis for {target_name}/{method}: "
+                                f"Snapshot saved (1 snapshot available, need 2+ for analysis). "
+                                f"Stats will be available after the next symbol/run."
+                            )
+                        else:
+                            logger.info(
+                                f"📊 Stability analysis for {target_name}/{method}: "
+                                f"Snapshot saved ({snapshot_count} snapshots available, need 2+ for analysis). "
+                                f"Analysis will run automatically once more snapshots are available."
+                            )
+                    except Exception:
+                        # Fallback if loading snapshots fails
+                        logger.info(
+                            f"📊 Stability analysis for {target_name}/{method}: "
+                            f"Snapshot saved (analysis will run once more snapshots are available)"
+                        )
             except Exception as e:
                 logger.debug(f"Auto-analysis failed (non-critical): {e}")
         
