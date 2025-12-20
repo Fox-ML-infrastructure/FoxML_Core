@@ -968,6 +968,9 @@ def select_features_for_target(
                         
                         # Create RunContext for reproducibility tracking (CRITICAL: Must have all required fields)
                         # This ensures COHORT_AWARE mode works correctly
+                        # FIX: Get min_cs and max_cs_samples from resolved_config for diff telemetry
+                        min_cs_for_ctx = resolved_config.effective_min_cs if resolved_config else None
+                        max_cs_samples_for_ctx = resolved_config.max_cs_samples if resolved_config else None
                         ctx = harness.create_run_context(
                             X=X,
                             y=y,
@@ -978,7 +981,9 @@ def select_features_for_target(
                             horizon_minutes=horizon_minutes,
                             purge_minutes=purge_minutes,
                             embargo_minutes=embargo_minutes,
-                            data_interval_minutes=data_interval_minutes
+                            data_interval_minutes=data_interval_minutes,
+                            min_cs=min_cs_for_ctx,  # FIX: Populate for diff telemetry
+                            max_cs_samples=max_cs_samples_for_ctx  # FIX: Populate for diff telemetry
                         )
                         
                         logger.info(f"✅ Shared harness completed: {len(all_results)} model results")
@@ -1835,28 +1840,71 @@ def select_features_for_target(
                 
                 if ctx_to_use is None:
                     # Build RunContext from available data (fallback for per-symbol processing)
+                    # FIX: Try to get X, y, time_vals from available sources (per-symbol contexts, cohort_context, etc.)
                     X_for_ctx = None
                     y_for_ctx = None
-                    feature_names_for_ctx = selected_features if selected_features else []
-                    
-                    # Try to get X, y from cohort_context if available (for data fingerprint)
-                    if 'cohort_context' in locals() and cohort_context:
-                        mtf_data_for_ctx = cohort_context.get('mtf_data')
-                        if mtf_data_for_ctx:
-                            # We can't easily reconstruct X, y here, so pass None
-                            # The data fingerprint will be computed from symbols/time_vals if available
-                            pass
-                    
-                    # Build RunContext
-                    # FIX: Try to get time_vals and horizon_minutes from available data
                     time_vals_for_ctx = None
+                    feature_names_for_ctx = selected_features if selected_features else []
                     horizon_minutes_for_ctx = None
-                    if use_shared_harness and 'time_vals' in locals():
-                        time_vals_for_ctx = time_vals
-                    if use_shared_harness and 'horizon_minutes' in locals():
-                        horizon_minutes_for_ctx = horizon_minutes
-                    elif target_column:
-                        # Try to extract horizon from target column name
+                    purge_minutes_for_ctx = None
+                    embargo_minutes_for_ctx = None
+                    cv_folds_for_ctx = None
+                    
+                    # Try to get data from symbol_ctx_map (for SYMBOL_SPECIFIC view with per-symbol processing)
+                    min_cs_for_ctx = None
+                    max_cs_samples_for_ctx = None
+                    if view == "SYMBOL_SPECIFIC" and 'symbol_ctx_map' in locals() and symbol_ctx_map:
+                        # Use first symbol's ctx data (aggregation-level tracking)
+                        first_symbol = next(iter(symbol_ctx_map.keys()))
+                        first_ctx = symbol_ctx_map[first_symbol]
+                        X_for_ctx = first_ctx.X
+                        y_for_ctx = first_ctx.y
+                        time_vals_for_ctx = first_ctx.time_vals
+                        horizon_minutes_for_ctx = first_ctx.horizon_minutes
+                        purge_minutes_for_ctx = first_ctx.purge_minutes
+                        embargo_minutes_for_ctx = first_ctx.embargo_minutes
+                        cv_folds_for_ctx = first_ctx.cv_folds
+                        min_cs_for_ctx = first_ctx.min_cs  # FIX: Get from ctx for diff telemetry
+                        max_cs_samples_for_ctx = first_ctx.max_cs_samples  # FIX: Get from ctx for diff telemetry
+                    
+                    # Fallback: Try to get from shared harness variables if available
+                    if X_for_ctx is None and use_shared_harness:
+                        if 'X' in locals() and X is not None:
+                            X_for_ctx = X
+                        if 'y' in locals() and y is not None:
+                            y_for_ctx = y
+                        if 'time_vals' in locals() and time_vals is not None:
+                            time_vals_for_ctx = time_vals
+                        if 'horizon_minutes' in locals() and horizon_minutes is not None:
+                            horizon_minutes_for_ctx = horizon_minutes
+                    
+                    # Fallback: Try to get from cohort_context
+                    if X_for_ctx is None and 'cohort_context' in locals() and cohort_context:
+                        X_for_ctx = cohort_context.get('X')
+                        y_for_ctx = cohort_context.get('y')
+                        time_vals_for_ctx = cohort_context.get('time_vals')
+                        if min_cs_for_ctx is None:
+                            min_cs_for_ctx = cohort_context.get('min_cs')  # FIX: Get from cohort_context for diff telemetry
+                        if max_cs_samples_for_ctx is None:
+                            max_cs_samples_for_ctx = cohort_context.get('max_cs_samples')  # FIX: Get from cohort_context for diff telemetry
+                        if 'horizon_minutes' not in locals() or horizon_minutes_for_ctx is None:
+                            # Try to extract from target if not already set
+                            if target_column:
+                                try:
+                                    from TRAINING.ranking.utils.leakage_filtering import _extract_horizon, _load_leakage_config
+                                    leakage_config = _load_leakage_config()
+                                    horizon_minutes_for_ctx = _extract_horizon(target_column, leakage_config)
+                                except Exception:
+                                    pass
+                    
+                    # Fallback: Try to get from resolved_config if available
+                    if min_cs_for_ctx is None and 'resolved_config' in locals() and resolved_config:
+                        min_cs_for_ctx = getattr(resolved_config, 'effective_min_cs', None) or getattr(resolved_config, 'requested_min_cs', None)
+                    if max_cs_samples_for_ctx is None and 'resolved_config' in locals() and resolved_config:
+                        max_cs_samples_for_ctx = getattr(resolved_config, 'max_cs_samples', None)
+                    
+                    # Final fallback: Extract horizon from target column name if still not set
+                    if horizon_minutes_for_ctx is None and target_column:
                         try:
                             from TRAINING.ranking.utils.leakage_filtering import _extract_horizon, _load_leakage_config
                             leakage_config = _load_leakage_config()
@@ -1879,20 +1927,22 @@ def select_features_for_target(
                         stage="FEATURE_SELECTION",
                         target_name=target_column,
                         target_column=target_column,
-                        X=X_for_ctx,  # May be None - fingerprint will use symbols/time_vals
-                        y=y_for_ctx,  # May be None
+                        X=X_for_ctx,  # FIX: Populated from available sources (symbol_ctx_map, shared harness, or cohort_context)
+                        y=y_for_ctx,  # FIX: Populated from available sources
                         feature_names=feature_names_for_ctx,
                         symbols=symbols,
-                        time_vals=time_vals_for_ctx,  # Use from shared harness if available
+                        time_vals=time_vals_for_ctx,  # FIX: Populated from available sources
                         horizon_minutes=horizon_minutes_for_ctx,  # Extract from target if available
-                        purge_minutes=None,
-                        embargo_minutes=None,
-                        cv_folds=None,
+                        purge_minutes=purge_minutes_for_ctx,  # FIX: Use from symbol_ctx_map if available
+                        embargo_minutes=embargo_minutes_for_ctx,  # FIX: Use from symbol_ctx_map if available
+                        cv_folds=cv_folds_for_ctx,  # FIX: Use from symbol_ctx_map if available
                         fold_timestamps=None,
                         data_interval_minutes=None,
                         seed=seed_value,
                         view=view,  # FIX: Set view for proper telemetry scoping (CROSS_SECTIONAL vs SYMBOL_SPECIFIC)
-                        symbol=symbol_for_ctx  # FIX: Set symbol for SYMBOL_SPECIFIC view only (None for CROSS_SECTIONAL to prevent history forking)
+                        symbol=symbol_for_ctx,  # FIX: Set symbol for SYMBOL_SPECIFIC view only (None for CROSS_SECTIONAL to prevent history forking)
+                        min_cs=min_cs_for_ctx,  # FIX: Populate for diff telemetry
+                        max_cs_samples=max_cs_samples_for_ctx  # FIX: Populate for diff telemetry
                     )
                 
                 # Build metrics dict
@@ -2138,6 +2188,14 @@ def select_features_for_target(
                     symbol=symbol  # FIX: Properly scoped by symbol (for SYMBOL_SPECIFIC view)
                 )
         except Exception as e:
+            # FIX: Ensure cohort variables exist before logging (may not be initialized if exception occurred early)
+            if 'cohort_metadata' not in locals():
+                cohort_metadata = None
+            if 'cohort_metrics' not in locals():
+                cohort_metrics = {}
+            if 'cohort_additional_data' not in locals():
+                cohort_additional_data = {}
+            
             logger.warning(f"Reproducibility tracking failed for {target_column}: {e}")
             import traceback
             logger.debug(f"Reproducibility tracking traceback: {traceback.format_exc()}")

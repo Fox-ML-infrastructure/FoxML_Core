@@ -597,7 +597,9 @@ class RankingHarness:
         horizon_minutes: Optional[float] = None,
         purge_minutes: Optional[float] = None,
         embargo_minutes: Optional[float] = None,
-        data_interval_minutes: Optional[float] = None
+        data_interval_minutes: Optional[float] = None,
+        min_cs: Optional[int] = None,  # FIX: Add min_cs for diff telemetry
+        max_cs_samples: Optional[int] = None  # FIX: Add max_cs_samples for diff telemetry
     ) -> Any:
         """
         Create RunContext for reproducibility tracking.
@@ -650,7 +652,9 @@ class RankingHarness:
             cv_splitter=cv_splitter,
             cv_folds=cv_folds,  # FIX: Extract and pass cv_folds for COHORT_AWARE mode
             view=self.view,
-            symbol=self.symbol
+            symbol=self.symbol,
+            min_cs=min_cs if min_cs is not None else self.min_cs,  # FIX: Populate min_cs for diff telemetry
+            max_cs_samples=max_cs_samples if max_cs_samples is not None else self.max_cs_samples  # FIX: Populate max_cs_samples for diff telemetry
         )
         
         return ctx

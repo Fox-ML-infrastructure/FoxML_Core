@@ -6244,6 +6244,9 @@ def evaluate_target_predictability(
                     seed_value = 42
                 
                 # Build RunContext
+                # FIX: Set view in constructor for consistency (already has min_cs and max_cs_samples)
+                view_for_ctx = view if 'view' in locals() else None
+                symbol_for_ctx = symbol if 'symbol' in locals() and symbol else None
                 ctx = RunContext(
                     X=cohort_context.get('X') if 'cohort_context' in locals() and cohort_context else None,
                     y=cohort_context.get('y') if 'cohort_context' in locals() and cohort_context else None,
@@ -6264,13 +6267,10 @@ def evaluate_target_predictability(
                     data_interval_minutes=data_interval_minutes if 'data_interval_minutes' in locals() else None,
                     stage="target_ranking",
                     output_dir=output_dir,
-                    seed=seed_value
+                    seed=seed_value,
+                    view=view_for_ctx,  # FIX: Set view in constructor for diff telemetry
+                    symbol=symbol_for_ctx  # FIX: Set symbol in constructor for consistency
                 )
-                # Add view and symbol to RunContext if available
-                if 'view' in locals():
-                    ctx.view = view
-                if 'symbol' in locals() and symbol:
-                    ctx.symbol = symbol
                 
                 # Build metrics dict with regression features
                 # FIX: Remove redundancy - use n_features_post_prune (more descriptive) and drop features_final
