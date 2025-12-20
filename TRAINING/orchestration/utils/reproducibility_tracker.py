@@ -3466,11 +3466,22 @@ class ReproducibilityTracker:
         if self.cohort_aware:
             missing = ctx.validate_required_fields("COHORT_AWARE")
             if missing:
-                logger.warning(
-                    f"⚠️  Missing required fields for COHORT_AWARE mode: {missing}. "
-                    f"Downgrading to NON_COHORT mode for this run. "
-                    f"RunContext should contain: {ctx.get_required_fields('COHORT_AWARE')}"
-                )
+                # Check if this is a fallback scenario (all core data fields are None)
+                # In fallback scenarios, this is expected behavior, so use debug level
+                is_fallback = (ctx.X is None and ctx.y is None and ctx.time_vals is None)
+                
+                if is_fallback:
+                    logger.debug(
+                        f"Missing required fields for COHORT_AWARE mode: {missing}. "
+                        f"Downgrading to NON_COHORT mode (expected in fallback scenario). "
+                        f"RunContext should contain: {ctx.get_required_fields('COHORT_AWARE')}"
+                    )
+                else:
+                    logger.warning(
+                        f"⚠️  Missing required fields for COHORT_AWARE mode: {missing}. "
+                        f"Downgrading to NON_COHORT mode for this run. "
+                        f"RunContext should contain: {ctx.get_required_fields('COHORT_AWARE')}"
+                    )
                 # Downgrade to NON_COHORT mode for this run (don't fail)
                 use_cohort_aware = False
             else:

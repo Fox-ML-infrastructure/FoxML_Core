@@ -1909,6 +1909,18 @@ def train_model_and_get_importance(
         
         # Clean config using systematic helper
         extra = {"random_state": model_seed}
+        
+        # FAIL-FAST: Set reasonable max_iter limit to avoid long-running fits
+        # Default max_iter is 1000, but saga solver can be very slow
+        # Use a lower limit (500) to fail faster if it's not converging or going to zero
+        original_max_iter = elastic_net_config.get('max_iter', 1000)
+        if 'max_iter' not in elastic_net_config:
+            elastic_net_config['max_iter'] = 500  # Reduced from default 1000 for fail-fast
+        elif elastic_net_config.get('max_iter', 1000) > 500:
+            # Cap at 500 for fail-fast behavior
+            logger.debug(f"    elastic_net: Capping max_iter at 500 for fail-fast (was {elastic_net_config['max_iter']})")
+            elastic_net_config['max_iter'] = 500
+        
         elastic_net_config_clean = _clean_config_for_estimator(est_cls, elastic_net_config, extra, "elastic_net")
         
         # CRITICAL: Elastic Net requires scaling for proper convergence
@@ -1918,6 +1930,35 @@ def train_model_and_get_importance(
             ('model', est_cls(**elastic_net_config_clean, **extra))
         ]
         pipeline = Pipeline(steps)
+        
+        # FAIL-FAST: Quick pre-check with very small max_iter to detect obvious failures early
+        # This catches over-regularization cases that would zero out quickly
+        if original_max_iter > 50:
+            try:
+                quick_config = elastic_net_config_clean.copy()
+                quick_config['max_iter'] = 50  # Very quick check
+                quick_steps = [
+                    ('scaler', StandardScaler()),
+                    ('model', est_cls(**quick_config, **extra))
+                ]
+                quick_pipeline = Pipeline(quick_steps)
+                quick_pipeline.fit(X_dense, y)
+                quick_model = quick_pipeline.named_steps['model']
+                quick_coef = quick_model.coef_
+                if len(quick_coef.shape) > 1:
+                    quick_importance = np.abs(quick_coef).max(axis=0)
+                else:
+                    quick_importance = np.abs(quick_coef)
+                
+                # If quick check shows all zeros, fail immediately without full fit
+                if np.all(quick_importance == 0) or np.sum(quick_importance) == 0:
+                    raise ValueError("elastic_net: All coefficients are zero (over-regularized or no signal). Model invalid.")
+            except ValueError:
+                # Re-raise ValueError (our fail-fast signal)
+                raise
+            except Exception:
+                # Other exceptions from quick check - continue with full fit
+                pass
         
         # Fit on full data for importance extraction (CV is done elsewhere)
         try:
@@ -1935,6 +1976,7 @@ def train_model_and_get_importance(
             model = type('DummyModel', (), {'importance': importance_values, '_fallback_reason': fallback_reason})()
             feature_names = feature_names_dense
         else:
+            # FAIL-FAST: Check coefficients immediately after fit
             # Extract coefficients from the fitted model
             model = pipeline.named_steps['model']
             # FIX: Handle both 1D (binary) and 2D (multiclass) coef_ shapes
@@ -1949,11 +1991,10 @@ def train_model_and_get_importance(
             # Update feature_names to match dense array
             feature_names = feature_names_dense
             
-            # Validate importance is not all zeros
+            # FAIL-FAST: Validate importance immediately and raise exception right away
+            # This prevents wasting time on downstream processing
             if np.all(importance_values == 0) or np.sum(importance_values) == 0:
-                logger.warning(f"    elastic_net: All coefficients are zero (over-regularized or no signal). Marking as invalid.")
-                # FIX: Don't use uniform fallback - it injects randomness into consensus
-                # Instead, raise exception to mark model as invalid (will be caught and marked as failed)
+                # Raise exception immediately - don't log warning first, just fail fast
                 raise ValueError("elastic_net: All coefficients are zero (over-regularized or no signal). Model invalid.")
             else:
                 # Normalize importance to sum to 1.0 for consistency
@@ -3637,12 +3678,7 @@ def save_multi_model_results(
 
     # Save summary metadata at target level (detailed metadata is in cohort/ from reproducibility tracker)
     # This matches TARGET_RANKING structure where summary files are at target level
-    summary_json_path = output_dir / "feature_selection_summary.json"  # Legacy location
-    with open(summary_json_path, "w") as f:
-        json.dump(metadata, f, indent=2)
-    logger.info(f"✅ Saved feature selection summary to {summary_json_path}")
-    
-    # Also write directly to target-first structure
+    # Write only to target-first structure (no legacy root-level writes)
     if target_name and base_output_dir.exists():
         try:
             from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
@@ -3651,9 +3687,11 @@ def save_multi_model_results(
             target_summary_path = target_repro_dir / "feature_selection_summary.json"
             with open(target_summary_path, "w") as f:
                 json.dump(metadata, f, indent=2)
-            logger.debug(f"Also saved feature selection summary to target-first location: {target_summary_path}")
+            logger.info(f"✅ Saved feature selection summary to {target_summary_path}")
         except Exception as e:
-            logger.debug(f"Failed to write feature selection summary to target-first location: {e}")
+            logger.warning(f"Failed to write feature selection summary to target-first location: {e}")
+            import traceback
+            logger.debug(f"Traceback: {traceback.format_exc()}")
     
     # 6. Family status tracking JSON (for debugging broken models)
     if 'family_statuses' in metadata and metadata['family_statuses']:
@@ -3703,13 +3741,23 @@ def save_multi_model_results(
         for family_summary in status_summary.values():
             family_summary['error_types'] = list(family_summary['error_types'])
         
-        # Save detailed status file → target level (matching TARGET_RANKING structure)
-        with open(output_dir / "model_family_status.json", "w") as f:
-            json.dump({
-                'summary': status_summary,
-                'detailed': family_statuses
-            }, f, indent=2)
-        logger.info(f"✅ Saved model family status tracking to {output_dir / 'model_family_status.json'}")
+        # Save detailed status file → target-first structure only (matching TARGET_RANKING structure)
+        if target_name and base_output_dir.exists():
+            try:
+                from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+                target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+                status_path = target_repro_dir / "model_family_status.json"
+                with open(status_path, "w") as f:
+                    json.dump({
+                        'summary': status_summary,
+                        'detailed': family_statuses
+                    }, f, indent=2)
+                logger.info(f"✅ Saved model family status tracking to {status_path}")
+            except Exception as e:
+                logger.warning(f"Failed to write model family status to target-first location: {e}")
+                import traceback
+                logger.debug(f"Traceback: {traceback.format_exc()}")
         
         # Log summary (only hard failures, not soft fallbacks)
         failed_families = [f for f, s in status_summary.items() if s['failed'] > 0]
@@ -3744,21 +3792,31 @@ def save_multi_model_results(
                 top_k=None  # Will use config or default
             )
             
-            # Save target confidence at target level (matching TARGET_RANKING structure)
-            with open(output_dir / "target_confidence.json", "w") as f:
-                json.dump(confidence_metrics, f, indent=2)
-            
-            # Log confidence summary
-            confidence = confidence_metrics['confidence']
-            reason = confidence_metrics.get('low_confidence_reason', '')
-            if confidence == 'LOW':
-                logger.warning(f"⚠️  Target {target_name}: confidence={confidence} ({reason})")
-            elif confidence == 'MEDIUM':
-                logger.info(f"ℹ️  Target {target_name}: confidence={confidence}")
-            else:
-                logger.info(f"✅ Target {target_name}: confidence={confidence}")
-            
-            logger.info(f"✅ Saved target confidence metrics to {output_dir / 'target_confidence.json'}")
+            # Save target confidence at target-first structure only (matching TARGET_RANKING structure)
+            if target_name and base_output_dir.exists():
+                try:
+                    from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+                    target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+                    target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+                    confidence_path = target_repro_dir / "target_confidence.json"
+                    with open(confidence_path, "w") as f:
+                        json.dump(confidence_metrics, f, indent=2)
+                    
+                    # Log confidence summary
+                    confidence = confidence_metrics['confidence']
+                    reason = confidence_metrics.get('low_confidence_reason', '')
+                    if confidence == 'LOW':
+                        logger.warning(f"⚠️  Target {target_name}: confidence={confidence} ({reason})")
+                    elif confidence == 'MEDIUM':
+                        logger.info(f"ℹ️  Target {target_name}: confidence={confidence}")
+                    else:
+                        logger.info(f"✅ Target {target_name}: confidence={confidence}")
+                    
+                    logger.info(f"✅ Saved target confidence metrics to {confidence_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to write target confidence to target-first location: {e}")
+                    import traceback
+                    logger.debug(f"Traceback: {traceback.format_exc()}")
     except Exception as e:
         logger.warning(f"Failed to compute target confidence metrics: {e}")
         logger.debug("Confidence computation requires model_families_config in metadata", exc_info=True)

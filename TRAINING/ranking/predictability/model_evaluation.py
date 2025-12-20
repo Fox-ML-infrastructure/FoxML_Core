@@ -3940,6 +3940,17 @@ def train_and_evaluate_models(
                 # ElasticNet regression
                 est_cls = ElasticNet
             
+            # FAIL-FAST: Set reasonable max_iter limit to avoid long-running fits
+            # Default max_iter is 1000, but saga solver can be very slow
+            # Use a lower limit (500) to fail faster if it's not converging or going to zero
+            original_max_iter = elastic_net_config.get('max_iter', 1000)
+            if 'max_iter' not in elastic_net_config:
+                elastic_net_config['max_iter'] = 500  # Reduced from default 1000 for fail-fast
+            elif elastic_net_config.get('max_iter', 1000) > 500:
+                # Cap at 500 for fail-fast behavior
+                logger.debug(f"Elastic Net: Capping max_iter at 500 for fail-fast (was {elastic_net_config['max_iter']})")
+                elastic_net_config['max_iter'] = 500
+            
             # CRITICAL: Elastic Net requires scaling for proper convergence
             # Pipeline ensures scaling happens within each CV fold (no leakage)
             steps = [
@@ -3947,6 +3958,35 @@ def train_and_evaluate_models(
                 ('model', est_cls(**elastic_net_config))
             ]
             pipeline = Pipeline(steps)
+            
+            # FAIL-FAST: Quick pre-check with very small max_iter to detect obvious failures early
+            # This catches over-regularization cases that would zero out quickly
+            if original_max_iter > 50:
+                try:
+                    quick_config = elastic_net_config.copy()
+                    quick_config['max_iter'] = 50  # Very quick check
+                    quick_steps = [
+                        ('scaler', StandardScaler()),
+                        ('model', est_cls(**quick_config))
+                    ]
+                    quick_pipeline = Pipeline(quick_steps)
+                    quick_pipeline.fit(X_dense, y)
+                    quick_model = quick_pipeline.named_steps['model']
+                    quick_coef = quick_model.coef_
+                    if len(quick_coef.shape) > 1:
+                        quick_importance = np.abs(quick_coef).max(axis=0)
+                    else:
+                        quick_importance = np.abs(quick_coef)
+                    
+                    # If quick check shows all zeros, fail immediately without full fit
+                    if np.all(quick_importance == 0) or np.sum(quick_importance) == 0:
+                        raise ValueError("Elastic Net: All coefficients are zero (over-regularized or no signal). Model invalid.")
+                except ValueError:
+                    # Re-raise ValueError (our fail-fast signal)
+                    raise
+                except Exception:
+                    # Other exceptions from quick check - continue with full fit
+                    pass
             
             scores = cross_val_score(pipeline, X_dense, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
             valid_scores = scores[~np.isnan(scores)]
@@ -3982,6 +4022,11 @@ def train_and_evaluate_models(
             # Update feature_names to match dense array
             feature_names = feature_names_dense
             
+            # FAIL-FAST: Validate importance immediately and fail fast if all zeros
+            if np.all(importance == 0) or np.sum(importance) == 0:
+                # Raise exception immediately - don't log warning first, just fail fast
+                raise ValueError("Elastic Net: All coefficients are zero (over-regularized or no signal). Model invalid.")
+            
             # Store all feature importances for detailed export (same pattern as other models)
             # CRITICAL: Align importance to feature_names order to ensure fingerprint match
             importance_series = pd.Series(importance, index=feature_names)
@@ -3989,22 +4034,18 @@ def train_and_evaluate_models(
             importance_dict = importance_series.to_dict()
             all_feature_importances['elastic_net'] = importance_dict
             
-            # Validate importance is not all zeros
-            if np.all(importance == 0) or np.sum(importance) == 0:
-                logger.warning(f"Elastic Net: All coefficients are zero (over-regularized or no signal)")
-                importance_ratio = 0.0
-            else:
-                if len(importance) > 0:
-                    total_importance = np.sum(importance)
-                    if total_importance > 0:
-                        top_fraction = _get_importance_top_fraction()
-                        top_k = max(1, int(len(importance) * top_fraction))
-                        top_importance_sum = np.sum(np.sort(importance)[-top_k:])
-                        importance_ratio = top_importance_sum / total_importance
-                    else:
-                        importance_ratio = 0.0
+            # Calculate importance ratio (for metrics)
+            if len(importance) > 0:
+                total_importance = np.sum(importance)
+                if total_importance > 0:
+                    top_fraction = _get_importance_top_fraction()
+                    top_k = max(1, int(len(importance) * top_fraction))
+                    top_importance_sum = np.sum(np.sort(importance)[-top_k:])
+                    importance_ratio = top_importance_sum / total_importance
                 else:
                     importance_ratio = 0.0
+            else:
+                importance_ratio = 0.0
             importance_magnitudes.append(importance_ratio)
         except ImportError as e:
             logger.error(f"❌ Elastic Net not available: {e}")

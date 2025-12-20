@@ -1293,10 +1293,14 @@ class IntelligentTrainer:
                 # Try to extract from typed config
                 routing_config = feature_selection_config.config.get('confidence', {}).get('routing', {})
             
-            conf = load_target_confidence(feature_output_dir, target)
+            # Get target-specific directory for routing (functions will walk up to find base if needed)
+            from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+            target_repro_dir = get_target_reproducibility_dir(self.output_dir, target)
+            
+            conf = load_target_confidence(target_repro_dir, target)
             if conf:
                 routing = classify_target_from_confidence(conf, routing_config=routing_config)
-                save_target_routing_metadata(feature_output_dir, target, conf, routing)
+                save_target_routing_metadata(self.output_dir, target, conf, routing)
                 
                 # Log routing decision
                 logger.info(
@@ -1316,6 +1320,119 @@ class IntelligentTrainer:
         logger.info(f"✅ Selected {len(selected_features)} features for {target}")
         
         return selected_features
+    
+    def _aggregate_feature_selection_summaries(self) -> None:
+        """
+        Aggregate feature selection summaries from all targets into globals/ directory.
+        
+        Collects per-target summaries from targets/*/reproducibility/ and creates
+        aggregated summaries in globals/:
+        - globals/feature_selection_summary.json
+        - globals/model_family_status_summary.json
+        """
+        from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+        import json
+        
+        globals_dir = get_globals_dir(self.output_dir)
+        globals_dir.mkdir(parents=True, exist_ok=True)
+        
+        targets_dir = self.output_dir / "targets"
+        if not targets_dir.exists():
+            logger.debug("No targets directory found, skipping aggregation")
+            return
+        
+        # Collect all per-target summaries
+        all_summaries = {}
+        all_family_statuses = {}
+        
+        for target_dir in targets_dir.iterdir():
+            if not target_dir.is_dir():
+                continue
+            
+            target_name = target_dir.name
+            repro_dir = target_dir / "reproducibility"
+            
+            if not repro_dir.exists():
+                continue
+            
+            # Load feature_selection_summary.json
+            summary_path = repro_dir / "feature_selection_summary.json"
+            if summary_path.exists():
+                try:
+                    with open(summary_path) as f:
+                        summary = json.load(f)
+                        all_summaries[target_name] = summary
+                except Exception as e:
+                    logger.debug(f"Failed to load summary for {target_name}: {e}")
+            
+            # Load model_family_status.json
+            status_path = repro_dir / "model_family_status.json"
+            if status_path.exists():
+                try:
+                    with open(status_path) as f:
+                        status_data = json.load(f)
+                        all_family_statuses[target_name] = status_data
+                except Exception as e:
+                    logger.debug(f"Failed to load family status for {target_name}: {e}")
+        
+        # Write aggregated feature_selection_summary.json
+        if all_summaries:
+            aggregated_summary = {
+                'total_targets': len(all_summaries),
+                'targets': all_summaries,
+                'summary': {
+                    'total_features_selected': sum(
+                        s.get('top_n', 0) if isinstance(s, dict) else 0
+                        for s in all_summaries.values()
+                    ),
+                    'avg_features_per_target': sum(
+                        s.get('top_n', 0) if isinstance(s, dict) else 0
+                        for s in all_summaries.values()
+                    ) / len(all_summaries) if all_summaries else 0
+                }
+            }
+            
+            summary_path = globals_dir / "feature_selection_summary.json"
+            with open(summary_path, "w") as f:
+                json.dump(aggregated_summary, f, indent=2, default=str)
+            logger.info(f"✅ Aggregated feature selection summaries to {summary_path}")
+        
+        # Write aggregated model_family_status_summary.json
+        if all_family_statuses:
+            # Aggregate family statuses across all targets
+            aggregated_family_status = {
+                'total_targets': len(all_family_statuses),
+                'targets': all_family_statuses,
+                'summary': {}
+            }
+            
+            # Aggregate summary statistics across all targets
+            all_families = set()
+            for status_data in all_family_statuses.values():
+                if isinstance(status_data, dict) and 'summary' in status_data:
+                    all_families.update(status_data['summary'].keys())
+            
+            for family in all_families:
+                total_success = 0
+                total_failed = 0
+                total_fallback = 0
+                for status_data in all_family_statuses.values():
+                    if isinstance(status_data, dict) and 'summary' in status_data:
+                        family_summary = status_data['summary'].get(family, {})
+                        total_success += family_summary.get('success', 0)
+                        total_failed += family_summary.get('failed', 0)
+                        total_fallback += family_summary.get('no_signal_fallback', 0)
+                
+                aggregated_family_status['summary'][family] = {
+                    'total_success': total_success,
+                    'total_failed': total_failed,
+                    'total_fallback': total_fallback
+                }
+            
+            status_path = globals_dir / "model_family_status_summary.json"
+            with open(status_path, "w") as f:
+                json.dump(aggregated_family_status, f, indent=2, default=str)
+            logger.info(f"✅ Aggregated model family status summaries to {status_path}")
     
     def train_with_intelligence(
         self,
@@ -1742,6 +1859,15 @@ class IntelligentTrainer:
             # Use same features for all filtered targets
             for target in filtered_targets:
                 target_features[target] = features
+        
+        # Aggregate feature selection summaries after all targets are processed
+        if auto_features and target_features:
+            try:
+                self._aggregate_feature_selection_summaries()
+            except Exception as e:
+                logger.warning(f"Failed to aggregate feature selection summaries: {e}")
+                import traceback
+                logger.debug(f"Traceback: {traceback.format_exc()}")
         
         # Generate metrics rollups after feature selection completes (all targets processed)
         if auto_features and target_features:

@@ -16,6 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-20 (Feature Selection Output Organization and Elastic Net Fail-Fast)
+- **Output Organization**: Fixed feature selection outputs being overwritten at run root - now uses target-first structure (`targets/<target>/reproducibility/`) exclusively
+- **Decision Routing Updates**: Updated `load_target_confidence()` and `save_target_routing_metadata()` to use target-first structure with separate `globals/feature_selection_routing.json` (doesn't modify `routing_decisions.json`)
+- **Aggregation Function**: Added `_aggregate_feature_selection_summaries()` to collect per-target summaries into `globals/` after all targets complete
+- **Elastic Net Fail-Fast**: Added quick pre-check (max_iter=50) and reduced max_iter cap (500) to fail in ~1-2 minutes instead of 30+ minutes when over-regularized
+- **Syntax Error Fix**: Fixed missing `except` block in `feature_selection_reporting.py` causing import failures
+- **Reduced Log Noise**: Changed reproducibility tracker warning to debug level for expected fallback scenarios
+- **Files Changed**: `feature_selection_reporting.py`, `multi_model_feature_selection.py`, `target_routing.py`, `intelligent_trainer.py`, `reproducibility_tracker.py`, `model_evaluation.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-20-feature-selection-output-organization-and-elastic-net-fail-fast.md)
+
 #### 2025-12-20 (Unified Threading Utilities for Feature Selection and Target Ranking)
 - **Threading Utilities Integration**: Refactored all model training in feature selection and target ranking to use centralized threading utilities from `TRAINING/common/threads.py`
 - **GPU-Aware Thread Management**: All models now automatically limit CPU threads (OMP=1, MKL=1) when GPU is enabled, preventing CPU bottlenecks during GPU training

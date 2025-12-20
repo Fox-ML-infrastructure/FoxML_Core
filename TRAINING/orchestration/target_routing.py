@@ -105,22 +105,42 @@ def load_target_confidence(output_dir: Path, target_name: str) -> Optional[Dict[
     Load target confidence JSON for a specific target.
     
     Args:
-        output_dir: Target output directory (e.g., REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target})
+        output_dir: Target output directory or base run directory
         target_name: Target column name
     
     Returns:
         Confidence dict or None if not found
     """
-    conf_path = output_dir / "target_confidence.json"
-    if not conf_path.exists():
-        return None
+    # Try target-first structure first
+    from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+    base_dir = output_dir
+    # Walk up to find run root if needed
+    while base_dir.name not in ["RESULTS", "targets"] and base_dir.parent.exists():
+        if (base_dir / "targets").exists():
+            break
+        base_dir = base_dir.parent
     
-    try:
-        with open(conf_path) as f:
-            return json.load(f)
-    except Exception as e:
-        logger.warning(f"Failed to load confidence for {target_name}: {e}")
-        return None
+    target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+    target_repro_dir = get_target_reproducibility_dir(base_dir, target_name_clean)
+    conf_path = target_repro_dir / "target_confidence.json"
+    
+    if conf_path.exists():
+        try:
+            with open(conf_path) as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load confidence from target-first structure: {e}")
+    
+    # Fallback to legacy location
+    legacy_path = output_dir / "target_confidence.json"
+    if legacy_path.exists():
+        try:
+            with open(legacy_path) as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load confidence from legacy location: {e}")
+    
+    return None
 
 
 def collect_run_level_confidence_summary(
@@ -204,30 +224,92 @@ def save_target_routing_metadata(
     """
     Save routing decision metadata alongside confidence metrics.
     
-    Structure matches target ranking layout:
-    REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
-      metadata/
-        target_routing.json
+    Structure (target-first):
+    - Per-target: targets/<target>/decision/routing_decision.json (detailed record)
+    - Global summary: globals/feature_selection_routing.json (lightweight, references per-target files)
+    
+    NOTE: This is separate from globals/routing_decisions.json (which is for target ranking routing only)
     
     Args:
-        output_dir: Target-specific output directory (REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/)
+        output_dir: Base run output directory or target-specific directory
         target_name: Target column name
         conf: Confidence metrics
         routing: Routing decision from classify_target_from_confidence()
     """
-    # Create metadata subdirectory (matching target ranking structure)
-    metadata_dir = output_dir / "metadata"
-    metadata_dir.mkdir(parents=True, exist_ok=True)
+    from TRAINING.orchestration.utils.target_first_paths import (
+        get_target_decision_dir, get_globals_dir, ensure_target_structure
+    )
     
-    routing_path = metadata_dir / "target_routing.json"
+    # Find base run directory
+    base_dir = output_dir
+    while base_dir.name not in ["RESULTS", "targets"] and base_dir.parent.exists():
+        if (base_dir / "targets").exists():
+            break
+        base_dir = base_dir.parent
+    
+    target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+    ensure_target_structure(base_dir, target_name_clean)
+    decision_dir = get_target_decision_dir(base_dir, target_name_clean)
+    decision_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Save per-target decision (detailed record with full confidence and routing info)
+    routing_path = decision_dir / "routing_decision.json"
     routing_data = {
-        'target_name': target_name,
-        'confidence': conf,
-        'routing': routing
+        target_name: {
+            'target_name': target_name,
+            'confidence': conf,
+            'routing': routing,
+            # Reference to where selected features can be found
+            'selected_features_path': f"targets/{target_name_clean}/reproducibility/selected_features.txt",
+            'feature_selection_summary_path': f"targets/{target_name_clean}/reproducibility/feature_selection_summary.json"
+        }
     }
     
     with open(routing_path, "w") as f:
         json.dump(routing_data, f, indent=2)
     
-    logger.debug(f"Saved routing metadata for {target_name} to {routing_path}")
+    logger.debug(f"Saved per-target routing decision for {target_name} to {routing_path}")
+    
+    # CRITICAL: Update lightweight summary in globals/feature_selection_routing.json
+    # This is separate from globals/routing_decisions.json (which is for target ranking)
+    globals_dir = get_globals_dir(base_dir)
+    globals_dir.mkdir(parents=True, exist_ok=True)
+    feature_routing_file = globals_dir / "feature_selection_routing.json"
+    
+    # Load existing feature selection routing (merge, don't overwrite)
+    existing_routing = {}
+    if feature_routing_file.exists():
+        try:
+            with open(feature_routing_file) as f:
+                data = json.load(f)
+                existing_routing = data.get('routing_decisions', {})
+        except Exception as e:
+            logger.warning(f"Failed to load existing feature selection routing: {e}")
+    
+    # Update with this target's routing decision (lightweight - just key info)
+    existing_routing[target_name] = {
+        'confidence': conf.get('confidence', 'LOW'),
+        'score_tier': conf.get('score_tier', 'LOW'),
+        'bucket': routing.get('bucket', 'experimental'),
+        'allowed_in_production': routing.get('allowed_in_production', False),
+        # Reference to per-target file for full details
+        'details_path': f"targets/{target_name_clean}/decision/routing_decision.json"
+    }
+    
+    # Save updated feature selection routing summary
+    routing_data_globals = {
+        'routing_decisions': existing_routing,
+        'summary': {
+            'total_targets': len(existing_routing),
+            'high_confidence': sum(1 for r in existing_routing.values() if r.get('confidence') == 'HIGH'),
+            'medium_confidence': sum(1 for r in existing_routing.values() if r.get('confidence') == 'MEDIUM'),
+            'low_confidence': sum(1 for r in existing_routing.values() if r.get('confidence') == 'LOW'),
+            'production_allowed': sum(1 for r in existing_routing.values() if r.get('allowed_in_production', False))
+        }
+    }
+    
+    with open(feature_routing_file, "w") as f:
+        json.dump(routing_data_globals, f, indent=2, default=str)
+    
+    logger.info(f"Updated feature selection routing summary in {feature_routing_file}")
 

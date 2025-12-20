@@ -348,6 +348,13 @@ def save_feature_importances_for_reproducibility(
         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
         importances_dir = target_repro_dir / "feature_importances"
         importances_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        logger.warning(f"Failed to set up target-first structure for feature importances: {e}")
+        import traceback
+        logger.debug(f"Traceback: {traceback.format_exc()}")
+        # Fallback: use output_dir directly
+        importances_dir = output_dir / "feature_importances"
+        importances_dir.mkdir(parents=True, exist_ok=True)
     
     # Save per-model-family importances as CSV (same format as target ranking)
     for model_family, importance_dict in all_feature_importances.items():
