@@ -118,19 +118,44 @@ def load_snapshots(
     return snapshots
 
 
-def get_snapshot_base_dir(output_dir: Optional[Path] = None) -> Path:
+def get_snapshot_base_dir(output_dir: Optional[Path] = None, target_name: Optional[str] = None) -> Path:
     """
     Get base directory for snapshots.
     
-    Uses output_dir if provided, otherwise defaults to artifacts/feature_importance.
+    Uses target-first structure if output_dir and target_name are provided, otherwise uses legacy structure.
     
     Args:
-        output_dir: Optional output directory (snapshots go in {output_dir}/feature_importance_snapshots)
+        output_dir: Optional output directory (snapshots go in target-first or legacy structure)
+        target_name: Optional target name for target-first structure
     
     Returns:
         Path to base snapshot directory
     """
     if output_dir is not None:
+        # Try to use target-first structure if target_name is provided
+        if target_name:
+            # Find base run directory
+            base_output_dir = output_dir
+            for _ in range(10):
+                if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
+                    break
+                if not base_output_dir.parent.exists():
+                    break
+                base_output_dir = base_output_dir.parent
+            
+            if base_output_dir.exists() and (base_output_dir / "targets").exists():
+                try:
+                    from TRAINING.orchestration.utils.target_first_paths import (
+                        get_target_reproducibility_dir, ensure_target_structure
+                    )
+                    target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+                    ensure_target_structure(base_output_dir, target_name_clean)
+                    target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+                    return target_repro_dir / "feature_importance_snapshots"
+                except Exception:
+                    pass  # Fall through to legacy structure
+        
+        # Legacy structure: {output_dir}/feature_importance_snapshots
         return output_dir / "feature_importance_snapshots"
     else:
         # Default: artifacts/feature_importance

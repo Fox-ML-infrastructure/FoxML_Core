@@ -894,8 +894,36 @@ def train_and_evaluate_models(
                         stage="POST_PRUNE",
                         removal_reasons={f: "pruned" for f in set(feature_names) - set(enforced_post_prune.features)}
                     )
-                    artifact_dir = output_dir / "REPRODUCIBILITY" / "FEATURESET_ARTIFACTS"
-                    post_prune_artifact.save(artifact_dir)
+                    # Save to target-first structure (targets/<target>/reproducibility/featureset_artifacts/)
+                    if target_column:
+                        # Find base run directory
+                        base_output_dir = output_dir
+                        for _ in range(10):
+                            if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
+                                break
+                            if not base_output_dir.parent.exists():
+                                break
+                            base_output_dir = base_output_dir.parent
+                        
+                        if base_output_dir.exists():
+                            try:
+                                from TRAINING.orchestration.utils.target_first_paths import (
+                                    get_target_reproducibility_dir, ensure_target_structure
+                                )
+                                target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+                                ensure_target_structure(base_output_dir, target_name_clean)
+                                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+                                target_artifact_dir = target_repro_dir / "featureset_artifacts"
+                                target_artifact_dir.mkdir(parents=True, exist_ok=True)
+                                post_prune_artifact.save(target_artifact_dir)
+                                logger.debug(f"Saved POST_PRUNE artifact to target-first location: {target_artifact_dir}")
+                            except Exception as e2:
+                                logger.debug(f"Failed to save POST_PRUNE artifact to target-first location: {e2}")
+                    
+                    # Also save to legacy location for backward compatibility
+                    legacy_artifact_dir = output_dir / "REPRODUCIBILITY" / "FEATURESET_ARTIFACTS"
+                    legacy_artifact_dir.mkdir(parents=True, exist_ok=True)
+                    post_prune_artifact.save(legacy_artifact_dir)
                 except Exception as e:
                     logger.debug(f"  ⚠️  Failed to persist POST_PRUNE artifact: {e}")
             
@@ -5125,8 +5153,36 @@ def evaluate_target_predictability(
                     stage="POST_GATEKEEPER",
                     removal_reasons={}
                 )
-                artifact_dir = output_dir / "REPRODUCIBILITY" / "FEATURESET_ARTIFACTS"
-                artifact.save(artifact_dir)
+                # Save to target-first structure (targets/<target>/reproducibility/featureset_artifacts/)
+                if target_column:
+                    # Find base run directory
+                    base_output_dir = output_dir
+                    for _ in range(10):
+                        if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
+                            break
+                        if not base_output_dir.parent.exists():
+                            break
+                        base_output_dir = base_output_dir.parent
+                    
+                    if base_output_dir.exists():
+                        try:
+                            from TRAINING.orchestration.utils.target_first_paths import (
+                                get_target_reproducibility_dir, ensure_target_structure
+                            )
+                            target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+                            ensure_target_structure(base_output_dir, target_name_clean)
+                            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+                            target_artifact_dir = target_repro_dir / "featureset_artifacts"
+                            target_artifact_dir.mkdir(parents=True, exist_ok=True)
+                            artifact.save(target_artifact_dir)
+                            logger.debug(f"Saved POST_GATEKEEPER artifact to target-first location: {target_artifact_dir}")
+                        except Exception as e2:
+                            logger.debug(f"Failed to save POST_GATEKEEPER artifact to target-first location: {e2}")
+                
+                # Also save to legacy location for backward compatibility
+                legacy_artifact_dir = output_dir / "REPRODUCIBILITY" / "FEATURESET_ARTIFACTS"
+                legacy_artifact_dir.mkdir(parents=True, exist_ok=True)
+                artifact.save(legacy_artifact_dir)
             except Exception as e:
                 logger.debug(f"  ⚠️  Failed to persist POST_GATEKEEPER artifact: {e}")
         if len(enforced_gatekeeper.unknown) > 0:
