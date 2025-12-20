@@ -3503,10 +3503,13 @@ class DiffTelemetry:
                         else:
                             target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
                         target_cohort_dir.mkdir(parents=True, exist_ok=True)
+                        logger.debug(f"Created target-first cohort directory for diffs: {target_cohort_dir}")
                     except Exception as e:
                         logger.debug(f"Failed to create target-first structure for diffs (non-critical): {e}")
-        except Exception:
-            pass
+                        target_cohort_dir = None
+        except Exception as e:
+            logger.debug(f"Failed to extract identifiers for target-first structure (non-critical): {e}")
+            target_cohort_dir = None
         
         # Tier A: Summary in diff_prev.json (lightweight, always present)
         # This includes: metric_deltas_count, impact_label, top_regressions, top_improvements

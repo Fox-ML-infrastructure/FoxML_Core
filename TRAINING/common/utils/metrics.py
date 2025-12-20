@@ -305,14 +305,29 @@ class MetricsWriter:
                     if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
                         view_metrics_dir = target_metrics_dir / f"view={view}"
                         view_metrics_dir.mkdir(parents=True, exist_ok=True)
-                        # Write copy to view-specific location
-                        self._write_metrics(
-                            view_metrics_dir, run_id, metrics,
-                            stage=stage,
-                            reproducibility_mode="COHORT_AWARE",
-                            diff_telemetry=diff_telemetry
-                        )
-                        logger.debug(f"✅ Wrote metrics to target-first location: {view_metrics_dir}")
+                        
+                        # For SYMBOL_SPECIFIC, organize by symbol: view=SYMBOL_SPECIFIC/symbol=<symbol>/
+                        if view == "SYMBOL_SPECIFIC" and symbol:
+                            symbol_metrics_dir = view_metrics_dir / f"symbol={symbol}"
+                            symbol_metrics_dir.mkdir(parents=True, exist_ok=True)
+                            # Write to symbol-specific location
+                            self._write_metrics(
+                                symbol_metrics_dir, run_id, metrics,
+                                stage=stage,
+                                reproducibility_mode="COHORT_AWARE",
+                                diff_telemetry=diff_telemetry
+                            )
+                            logger.debug(f"✅ Wrote metrics to target-first symbol location: {symbol_metrics_dir}")
+                        else:
+                            # CROSS_SECTIONAL or SYMBOL_SPECIFIC without symbol (aggregated)
+                            # Write copy to view-specific location
+                            self._write_metrics(
+                                view_metrics_dir, run_id, metrics,
+                                stage=stage,
+                                reproducibility_mode="COHORT_AWARE",
+                                diff_telemetry=diff_telemetry
+                            )
+                            logger.debug(f"✅ Wrote metrics to target-first location: {view_metrics_dir}")
                     else:
                         # Write to canonical location
                         self._write_metrics(
