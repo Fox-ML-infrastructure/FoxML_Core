@@ -250,10 +250,19 @@ def save_rankings(
             )
         logger.warning("Review these targets - they may have leaked features or be degenerate!")
     
-    # Save CSV to REPRODUCIBILITY (reproducibility artifact with per-model scores)
+    # Save CSV to REPRODUCIBILITY (reproducibility artifact with per-model scores) - legacy location
     csv_path = repro_dir / "target_predictability_rankings.csv"
     df.to_csv(csv_path, index=False)
     logger.info(f"\nSaved rankings CSV to {csv_path}")
+    
+    # Also save to target-first structure (globals/ for global ranking)
+    try:
+        target_csv_path = globals_dir / "target_predictability_rankings.csv"
+        import shutil
+        shutil.copy2(csv_path, target_csv_path)
+        logger.debug(f"Saved rankings CSV to target-first location: {target_csv_path}")
+    except Exception as e:
+        logger.debug(f"Failed to copy rankings CSV to target-first location: {e}")
     
     # Save YAML with recommendations to DECISION (decision log)
     yaml_data = {

@@ -3359,39 +3359,96 @@ def save_multi_model_results(
 ):
     """Save multi-model feature selection results
     
-    Structure matches target ranking layout exactly:
-    REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
-      feature_importances/
-        {model}_importances.csv
-        feature_importance_multi_model.csv
-        feature_importance_with_boruta_debug.csv
-        model_agreement_matrix.csv
-      feature_importance_snapshots/
-        {target}/
-          {method}/
-            {snapshot_id}.json
-      feature_exclusions/
-        {target}_exclusions.yaml
-      cohort={cohort_id}/
-        [telemetry files from reproducibility tracker]
-      selected_features.txt  (at target level, not in artifacts/)
+    Target-first structure:
+    targets/<target>/reproducibility/feature_importances/
+      {model}_importances.csv
+      feature_importance_multi_model.csv
+      feature_importance_with_boruta_debug.csv
+      model_agreement_matrix.csv
+    targets/<target>/reproducibility/selected_features.txt
+    
+    Also maintains legacy structure for backward compatibility.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     
+    # Find base run directory and target name
+    base_output_dir = output_dir
+    target_name = None
+    
+    # Try to extract target from metadata
+    if metadata and 'target_name' in metadata:
+        target_name = metadata['target_name']
+    elif metadata and 'target_column' in metadata:
+        target_name = metadata['target_column']
+    
+    # If not in metadata, try to extract from output_dir path
+    if not target_name:
+        # output_dir is typically: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
+        parts = output_dir.parts
+        if 'FEATURE_SELECTION' in parts:
+            idx = parts.index('FEATURE_SELECTION')
+            if idx + 2 < len(parts):
+                target_name = parts[idx + 2]
+    
+    # Walk up to find base run directory
+    for _ in range(10):
+        if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
+            break
+        if not base_output_dir.parent.exists():
+            break
+        base_output_dir = base_output_dir.parent
+    
+    # Set up target-first structure if we found target and base directory
+    target_importances_dir = None
+    target_selected_features_path = None
+    if target_name and base_output_dir.exists():
+        try:
+            from TRAINING.orchestration.utils.target_first_paths import (
+                get_target_reproducibility_dir, ensure_target_structure
+            )
+            target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+            ensure_target_structure(base_output_dir, target_name_clean)
+            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+            target_importances_dir = target_repro_dir / "feature_importances"
+            target_importances_dir.mkdir(parents=True, exist_ok=True)
+            target_selected_features_path = target_repro_dir / "selected_features.txt"
+        except Exception as e:
+            logger.debug(f"Failed to set up target-first structure: {e}")
+    
     # Create organized subdirectories (matching target ranking structure exactly)
-    importances_dir = output_dir / "feature_importances"  # Match target ranking
+    importances_dir = output_dir / "feature_importances"  # Legacy location
     importances_dir.mkdir(parents=True, exist_ok=True)
     
     # 1. Selected features list → target level (matching TARGET_RANKING, no artifacts/ folder)
-    selected_features_path = output_dir / "selected_features.txt"
+    selected_features_path = output_dir / "selected_features.txt"  # Legacy location
     with open(selected_features_path, "w") as f:
         for feature in selected_features:
             f.write(f"{feature}\n")
     logger.info(f"✅ Saved {len(selected_features)} features to {selected_features_path}")
     
+    # Also save to target-first structure
+    if target_selected_features_path:
+        try:
+            import shutil
+            shutil.copy2(selected_features_path, target_selected_features_path)
+            logger.debug(f"Saved selected features to target-first location: {target_selected_features_path}")
+        except Exception as e:
+            logger.debug(f"Failed to copy selected features to target-first location: {e}")
+    
     # 2. Detailed summary CSV (includes all columns including Boruta gatekeeper) → feature_importances/
-    summary_df.to_csv(importances_dir / "feature_importance_multi_model.csv", index=False)
-    logger.info(f"✅ Saved detailed multi-model summary to {importances_dir / 'feature_importance_multi_model.csv'}")
+    summary_csv_path = importances_dir / "feature_importance_multi_model.csv"
+    summary_df.to_csv(summary_csv_path, index=False)
+    logger.info(f"✅ Saved detailed multi-model summary to {summary_csv_path}")
+    
+    # Also save to target-first structure
+    if target_importances_dir:
+        try:
+            import shutil
+            target_csv_path = target_importances_dir / "feature_importance_multi_model.csv"
+            shutil.copy2(summary_csv_path, target_csv_path)
+            logger.debug(f"Saved feature importance summary to target-first location: {target_csv_path}")
+        except Exception as e:
+            logger.debug(f"Failed to copy feature importance summary to target-first location: {e}")
     
     # 2b. Explicit debug view: Boruta gatekeeper effect analysis → feature_importances/
     # This is a stable, named file for quick inspection of Boruta's impact
@@ -3412,8 +3469,19 @@ def save_multi_model_results(
     if available_debug_columns:
         debug_df = summary_df[available_debug_columns].copy()
         debug_df = debug_df.sort_values('consensus_score', ascending=False)  # Sort by final score
-        debug_df.to_csv(importances_dir / "feature_importance_with_boruta_debug.csv", index=False)
-        logger.info(f"✅ Saved Boruta gatekeeper debug view to {importances_dir / 'feature_importance_with_boruta_debug.csv'}")
+        debug_csv_path = importances_dir / "feature_importance_with_boruta_debug.csv"
+        debug_df.to_csv(debug_csv_path, index=False)
+        logger.info(f"✅ Saved Boruta gatekeeper debug view to {debug_csv_path}")
+        
+        # Also save to target-first structure
+        if target_importances_dir:
+            try:
+                import shutil
+                target_debug_path = target_importances_dir / "feature_importance_with_boruta_debug.csv"
+                shutil.copy2(debug_csv_path, target_debug_path)
+                logger.debug(f"Saved Boruta debug view to target-first location: {target_debug_path}")
+            except Exception as e:
+                logger.debug(f"Failed to copy Boruta debug view to target-first location: {e}")
     
     # 3. Per-model-family breakdowns → feature_importances/ (matching target ranking naming)
     for family_name in summary_df.columns:
@@ -3424,6 +3492,15 @@ def save_multi_model_results(
             model_name = family_name.replace('_score', '')
             family_csv = importances_dir / f"{model_name}_importances.csv"
             family_df.to_csv(family_csv, index=False)
+            
+            # Also save to target-first structure
+            if target_importances_dir:
+                try:
+                    import shutil
+                    target_family_csv = target_importances_dir / f"{model_name}_importances.csv"
+                    shutil.copy2(family_csv, target_family_csv)
+                except Exception as e:
+                    logger.debug(f"Failed to copy {model_name} importances to target-first location: {e}")
     
     # 4. Model agreement matrix → feature_importances/
     model_families = list(set(r.model_family for r in all_results))
@@ -3442,8 +3519,19 @@ def save_multi_model_results(
                 else:
                     agreement_matrix.loc[feature, result.model_family] = max(current, score)
     
-    agreement_matrix.to_csv(importances_dir / "model_agreement_matrix.csv")
-    logger.info(f"✅ Saved model agreement matrix to {importances_dir / 'model_agreement_matrix.csv'}")
+    agreement_csv_path = importances_dir / "model_agreement_matrix.csv"
+    agreement_matrix.to_csv(agreement_csv_path)
+    logger.info(f"✅ Saved model agreement matrix to {agreement_csv_path}")
+    
+    # Also save to target-first structure
+    if target_importances_dir:
+        try:
+            import shutil
+            target_agreement_path = target_importances_dir / "model_agreement_matrix.csv"
+            shutil.copy2(agreement_csv_path, target_agreement_path)
+            logger.debug(f"Saved model agreement matrix to target-first location: {target_agreement_path}")
+        except Exception as e:
+            logger.debug(f"Failed to copy model agreement matrix to target-first location: {e}")
     
     # 5. Metadata JSON → target level (matching TARGET_RANKING, metadata goes in cohort/ folder from reproducibility tracker)
     # For now, save a summary at target level for quick access (detailed metadata is in cohort/)
@@ -3453,9 +3541,23 @@ def save_multi_model_results(
 
     # Save summary metadata at target level (detailed metadata is in cohort/ from reproducibility tracker)
     # This matches TARGET_RANKING structure where summary files are at target level
-    with open(output_dir / "feature_selection_summary.json", "w") as f:
+    summary_json_path = output_dir / "feature_selection_summary.json"  # Legacy location
+    with open(summary_json_path, "w") as f:
         json.dump(metadata, f, indent=2)
-    logger.info(f"✅ Saved feature selection summary to {output_dir / 'feature_selection_summary.json'}")
+    logger.info(f"✅ Saved feature selection summary to {summary_json_path}")
+    
+    # Also save to target-first structure
+    if target_name and base_output_dir.exists():
+        try:
+            from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+            target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+            target_summary_path = target_repro_dir / "feature_selection_summary.json"
+            import shutil
+            shutil.copy2(summary_json_path, target_summary_path)
+            logger.debug(f"Saved feature selection summary to target-first location: {target_summary_path}")
+        except Exception as e:
+            logger.debug(f"Failed to copy feature selection summary to target-first location: {e}")
     
     # 6. Family status tracking JSON (for debugging broken models)
     if 'family_statuses' in metadata and metadata['family_statuses']:
