@@ -221,9 +221,37 @@ def save_feature_importances(
         # Reorder columns
         df = df[['feature', 'importance', 'importance_pct', 'cumulative_pct']]
         
-        # Save to CSV
+        # Save to CSV (legacy location)
         csv_file = importances_dir / f"{model_name}_importances.csv"
         df.to_csv(csv_file, index=False)
+        
+        # Also save to target-first structure
+        try:
+            # Find base run directory
+            base_output_dir = output_dir
+            for _ in range(10):
+                if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
+                    break
+                if not base_output_dir.parent.exists():
+                    break
+                base_output_dir = base_output_dir.parent
+            
+            if base_output_dir.exists():
+                from TRAINING.orchestration.utils.target_first_paths import (
+                    get_target_reproducibility_dir, ensure_target_structure
+                )
+                target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+                ensure_target_structure(base_output_dir, target_name_clean)
+                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+                target_importances_dir = target_repro_dir / "feature_importances"
+                target_importances_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Save to target-first location
+                target_csv_file = target_importances_dir / f"{model_name}_importances.csv"
+                df.to_csv(target_csv_file, index=False)
+                logger.debug(f"Also saved {model_name} importances to target-first location: {target_csv_file}")
+        except Exception as e:
+            logger.debug(f"Failed to save feature importances to target-first structure (non-critical): {e}")
         
         # Save stability snapshot (non-invasive hook)
         # Pass the same repro_base directory so snapshots are saved alongside feature importances
