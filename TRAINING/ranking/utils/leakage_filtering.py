@@ -696,10 +696,10 @@ def filter_features_for_target(
     
     # CRITICAL: Hardcoded always-exclude patterns as safety net (even if config fails)
     # These are known leaky patterns that should NEVER be used as features
-    # IMPORTANT: These exclude TARGET columns (y_*, fwd_ret_*, etc.) from being features,
+    # IMPORTANT: These exclude TARGET columns (y_*, fwd_ret_*, ret_zscore_*, etc.) from being features,
     # but the target columns themselves remain in the dataset for evaluation
     hardcoded_leaky_patterns = {
-        'prefix_patterns': ['p_', 'y_', 'fwd_ret_', 'tth_', 'mfe_', 'mdd_', 'barrier_', 'next_', 'future_'],
+        'prefix_patterns': ['p_', 'y_', 'fwd_ret_', 'ret_zscore_', 'tth_', 'mfe_', 'mdd_', 'barrier_', 'next_', 'future_'],
         'exact_patterns': ['ts', 'timestamp', 'symbol', 'date', 'time']
     }
     excluded_hardcoded = _apply_exclusion_patterns(safe_columns, hardcoded_leaky_patterns, "hardcoded-safety-net")
@@ -708,7 +708,7 @@ def filter_features_for_target(
         # INFO: Count + sample prefixes only (readable)
         sample_prefixes = set()
         for col in excluded_hardcoded[:20]:  # Sample first 20 to identify patterns
-            for prefix in ['y_', 'fwd_ret_', 'barrier_', 'p_', 'tth_', 'mfe_', 'mdd_']:
+            for prefix in ['y_', 'fwd_ret_', 'ret_zscore_', 'barrier_', 'p_', 'tth_', 'mfe_', 'mdd_']:
                 if col.startswith(prefix):
                     sample_prefixes.add(prefix)
                     break

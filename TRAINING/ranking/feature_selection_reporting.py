@@ -129,17 +129,39 @@ def save_feature_selection_rankings(
             break
         base_output_dir = base_output_dir.parent
     
+    # CRITICAL: Validate base_output_dir is not root and is absolute
+    # If we walked all the way to root, fall back to original output_dir
+    if base_output_dir == Path('/') or not base_output_dir.is_absolute() or str(base_output_dir) == '/':
+        logger.warning(f"Path resolution failed - base_output_dir resolved to root or invalid: {base_output_dir}. Using original output_dir: {output_dir}")
+        base_output_dir = output_dir
+        # Try to find run directory from output_dir instead
+        temp_dir = output_dir
+        for _ in range(10):
+            if (temp_dir / "targets").exists() or (temp_dir / "globals").exists() or (temp_dir / "cache").exists():
+                base_output_dir = temp_dir
+                break
+            if not temp_dir.parent.exists() or temp_dir.parent == temp_dir:
+                break
+            temp_dir = temp_dir.parent
+    
     # Target-first structure: save to targets/<target>/decision/
     from TRAINING.orchestration.utils.target_first_paths import (
         get_target_decision_dir, ensure_target_structure
     )
     try:
+        # Validate base_output_dir before using it
+        if not base_output_dir.exists():
+            logger.warning(f"base_output_dir does not exist: {base_output_dir}, using output_dir: {output_dir}")
+            base_output_dir = output_dir
+        
         ensure_target_structure(base_output_dir, target_name_clean)
         target_decision_dir = get_target_decision_dir(base_output_dir, target_name_clean)
         target_decision_dir.mkdir(parents=True, exist_ok=True)
         logger.debug(f"Target decision directory: {target_decision_dir}")
     except Exception as e:
         logger.warning(f"Failed to create target decision directory structure: {e}")
+        logger.warning(f"  base_output_dir: {base_output_dir} (exists: {base_output_dir.exists()}, absolute: {base_output_dir.is_absolute()})")
+        logger.warning(f"  output_dir: {output_dir} (exists: {output_dir.exists()})")
         import traceback
         logger.debug(f"Traceback: {traceback.format_exc()}")
         target_decision_dir = None
@@ -161,6 +183,24 @@ def save_feature_selection_rankings(
         # Save to target-first structure only
         try:
             from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+            # Validate base_output_dir before using it
+            if base_output_dir == Path('/') or not base_output_dir.is_absolute() or str(base_output_dir) == '/':
+                logger.warning(f"Invalid base_output_dir for CSV save: {base_output_dir}, using output_dir: {output_dir}")
+                base_output_dir = output_dir
+                # Try to find run directory from output_dir
+                temp_dir = output_dir
+                for _ in range(10):
+                    if (temp_dir / "targets").exists() or (temp_dir / "globals").exists() or (temp_dir / "cache").exists():
+                        base_output_dir = temp_dir
+                        break
+                    if not temp_dir.parent.exists() or temp_dir.parent == temp_dir:
+                        break
+                    temp_dir = temp_dir.parent
+            
+            if not base_output_dir.exists():
+                logger.warning(f"base_output_dir does not exist for CSV save: {base_output_dir}, using output_dir: {output_dir}")
+                base_output_dir = output_dir
+            
             target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
             target_repro_dir.mkdir(parents=True, exist_ok=True)
             empty_csv_path = target_repro_dir / "feature_selection_rankings.csv"
@@ -247,6 +287,13 @@ def save_feature_selection_rankings(
     # Save selected features list to target-first structure only
     try:
         from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+        # Validate base_output_dir before using it
+        if base_output_dir == Path('/') or not base_output_dir.is_absolute() or str(base_output_dir) == '/':
+            logger.warning(f"Invalid base_output_dir for selected features: {base_output_dir}, using output_dir: {output_dir}")
+            base_output_dir = output_dir
+        if not base_output_dir.exists():
+            logger.warning(f"base_output_dir does not exist for selected features: {base_output_dir}, using output_dir: {output_dir}")
+            base_output_dir = output_dir
         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
         target_repro_dir.mkdir(parents=True, exist_ok=True)
         target_selected_path = target_repro_dir / "selected_features.txt"
@@ -338,6 +385,21 @@ def save_feature_importances_for_reproducibility(
             break
         base_output_dir = base_output_dir.parent
     
+    # CRITICAL: Validate base_output_dir is not root and is absolute
+    # If we walked all the way to root, fall back to original output_dir
+    if base_output_dir == Path('/') or not base_output_dir.is_absolute() or str(base_output_dir) == '/':
+        logger.warning(f"Path resolution failed for feature importances - base_output_dir resolved to root or invalid: {base_output_dir}. Using original output_dir: {output_dir}")
+        base_output_dir = output_dir
+        # Try to find run directory from output_dir instead
+        temp_dir = output_dir
+        for _ in range(10):
+            if (temp_dir / "targets").exists() or (temp_dir / "globals").exists() or (temp_dir / "cache").exists():
+                base_output_dir = temp_dir
+                break
+            if not temp_dir.parent.exists() or temp_dir.parent == temp_dir:
+                break
+            temp_dir = temp_dir.parent
+    
     target_name_clean = target_column.replace('/', '_').replace('\\', '_')
     
     # Save to target-first structure only
@@ -345,12 +407,19 @@ def save_feature_importances_for_reproducibility(
         from TRAINING.orchestration.utils.target_first_paths import (
             get_target_reproducibility_dir, ensure_target_structure
         )
+        # Validate base_output_dir before using it
+        if not base_output_dir.exists():
+            logger.warning(f"base_output_dir does not exist for feature importances: {base_output_dir}, using output_dir: {output_dir}")
+            base_output_dir = output_dir
+        
         ensure_target_structure(base_output_dir, target_name_clean)
         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
         importances_dir = target_repro_dir / "feature_importances"
         importances_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
         logger.warning(f"Failed to set up target-first structure for feature importances: {e}")
+        logger.warning(f"  base_output_dir: {base_output_dir} (exists: {base_output_dir.exists()}, absolute: {base_output_dir.is_absolute()})")
+        logger.warning(f"  output_dir: {output_dir} (exists: {output_dir.exists()})")
         import traceback
         logger.debug(f"Traceback: {traceback.format_exc()}")
         # Fallback: use output_dir directly

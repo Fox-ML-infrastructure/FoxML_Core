@@ -959,6 +959,21 @@ def train_model_and_get_importance(
     importance_method = family_config['importance_method']
     model_config = family_config['config']
     
+    # Load cv_n_jobs for parallelization (same logic as model_evaluation.py)
+    cv_n_jobs = 1  # Default to single-threaded
+    try:
+        from CONFIG.config_loader import get_cfg
+        cv_n_jobs = int(get_cfg("training.cv_n_jobs", default=1, config_name="intelligent_training_config"))
+    except Exception:
+        # Fallback: try to get from multi_model_config if available
+        try:
+            cv_config = model_config.get('cross_validation', {})
+            if cv_config is None:
+                cv_config = {}
+            cv_n_jobs = cv_config.get('n_jobs', 1)
+        except Exception:
+            cv_n_jobs = 1
+    
     # Train model based on family
     if model_family == 'lightgbm':
         # Use sklearn wrapper for consistent scoring (same as xgboost)
@@ -1730,6 +1745,48 @@ def train_model_and_get_importance(
                 if 'cat_features' not in cb_config:
                     cb_config['cat_features'] = []  # No categoricals by default
                 
+                # Add cross_val_score for parallelization (matching target ranking behavior)
+                # Determine task type and scoring
+                unique_vals = np.unique(y[~np.isnan(y)])
+                is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
+                is_multiclass = len(unique_vals) <= 10 and all(
+                    isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer())
+                    for v in unique_vals
+                )
+                
+                # Set up CV splitter and scoring
+                from sklearn.model_selection import cross_val_score
+                from TRAINING.ranking.utils.purged_time_series_split import PurgedTimeSeriesSplit
+                from TRAINING.ranking.utils.leakage_filtering import _extract_horizon, _load_leakage_config
+                
+                # Calculate purge_overlap from target horizon
+                leakage_config = _load_leakage_config()
+                target_horizon_minutes = _extract_horizon(target_column, leakage_config) if target_column else None
+                purge_buffer_bars = model_config.get('purge_buffer_bars', 5)
+                if target_horizon_minutes is not None:
+                    target_horizon_bars = target_horizon_minutes // data_interval_minutes
+                    purge_overlap = target_horizon_bars + purge_buffer_bars
+                else:
+                    purge_overlap = 17  # Conservative default
+                
+                n_splits = model_config.get('n_splits', 3)
+                tscv = PurgedTimeSeriesSplit(n_splits=n_splits, purge_overlap=purge_overlap)
+                
+                # Determine scoring metric
+                if is_binary or is_multiclass:
+                    from sklearn.metrics import make_scorer, roc_auc_score, accuracy_score
+                    scoring = 'roc_auc' if is_binary else 'accuracy'
+                else:
+                    scoring = 'r2'
+                
+                # Run cross_val_score for parallelization (if cv_n_jobs > 1)
+                if cv_n_jobs > 1:
+                    try:
+                        cv_scores = cross_val_score(model, X_catboost, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
+                        logger.debug(f"    CatBoost: CV scores (mean={np.nanmean(cv_scores):.4f}, std={np.nanstd(cv_scores):.4f})")
+                    except Exception as e:
+                        logger.debug(f"    CatBoost: CV failed (continuing with single fit): {e}")
+                
                 # Use threading utilities for smart thread management
                 if _THREADING_UTILITIES_AVAILABLE:
                     # Get thread plan based on family and GPU usage
@@ -1968,6 +2025,42 @@ def train_model_and_get_importance(
             except Exception:
                 # Other exceptions from quick check - continue with full fit
                 pass
+        
+        # Add cross_val_score for parallelization (matching target ranking behavior)
+        # Set up CV splitter and scoring
+        from sklearn.model_selection import cross_val_score
+        from TRAINING.ranking.utils.purged_time_series_split import PurgedTimeSeriesSplit
+        from TRAINING.ranking.utils.leakage_filtering import _extract_horizon, _load_leakage_config
+        
+        # Calculate purge_overlap from target horizon
+        leakage_config = _load_leakage_config()
+        target_horizon_minutes = _extract_horizon(target_column, leakage_config) if target_column else None
+        purge_buffer_bars = elastic_net_config_clean.get('purge_buffer_bars', 5)
+        if target_horizon_minutes is not None:
+            target_horizon_bars = target_horizon_minutes // data_interval_minutes
+            purge_overlap = target_horizon_bars + purge_buffer_bars
+        else:
+            purge_overlap = 17  # Conservative default
+        
+        n_splits = elastic_net_config_clean.get('n_splits', 3)
+        tscv = PurgedTimeSeriesSplit(n_splits=n_splits, purge_overlap=purge_overlap)
+        
+        # Determine task type and scoring
+        unique_vals = np.unique(y[~np.isnan(y)])
+        is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
+        is_multiclass = len(unique_vals) <= 10 and all(
+            isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer())
+            for v in unique_vals
+        )
+        scoring = 'roc_auc' if is_binary else ('accuracy' if is_multiclass else 'r2')
+        
+        # Run cross_val_score for parallelization (if cv_n_jobs > 1)
+        if cv_n_jobs > 1:
+            try:
+                cv_scores = cross_val_score(pipeline, X_dense, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
+                logger.debug(f"    elastic_net: CV scores (mean={np.nanmean(cv_scores):.4f}, std={np.nanstd(cv_scores):.4f})")
+            except Exception as e:
+                logger.debug(f"    elastic_net: CV failed (continuing with single fit): {e}")
         
         # Fit on full data for importance extraction (CV is done elsewhere)
         try:
