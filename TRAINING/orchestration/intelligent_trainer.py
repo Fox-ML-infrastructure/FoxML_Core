@@ -2805,7 +2805,7 @@ Examples:
         force_refresh_config = False
         manual_targets = []
         manual_features = []
-        config_families = []
+        config_families = None  # None = not set, [] = explicitly empty, [list] = explicitly set
         
         # NEW: Extract manual_targets from experiment config if available
         # Load the raw YAML to access intelligent_training section
