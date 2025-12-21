@@ -469,45 +469,45 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     # Determine file extensions based on model type
                                     if save_info['is_lightgbm']:  # LightGBM
                                         model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.txt"
-                                    wrapped_model.save_model(str(model_path))
-                                    logger.info(f"  💾 LightGBM model saved: {model_path}")
-                                    symbol_family_status[family]["saved"] = True
-                                    
-                                    # Note: Legacy paths removed - using target-first structure only
-                                    
-                                elif save_info['is_tensorflow']:  # TensorFlow/Keras
-                                    model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.keras"
-                                    wrapped_model.save(str(model_path))
-                                    logger.info(f"  💾 Keras model saved: {model_path}")
-                                    symbol_family_status[family]["saved"] = True
-                                    
-                                elif save_info['is_pytorch']:  # PyTorch models
-                                    model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.pt"
-                                    import torch
-                                    
-                                    # Extract the actual PyTorch model
-                                    if hasattr(wrapped_model, 'core') and hasattr(wrapped_model.core, 'model'):
-                                        torch_model = wrapped_model.core.model
-                                    elif hasattr(wrapped_model, 'model'):
-                                        torch_model = wrapped_model.model
-                                    else:
-                                        torch_model = wrapped_model
-                                    
-                                    # Save state dict + metadata
-                                    torch.save({
-                                        "state_dict": torch_model.state_dict(),
-                                        "config": getattr(wrapped_model, "config", {}),
-                                        "arch": family,
-                                        "input_shape": X.shape
-                                    }, str(model_path))
-                                    logger.info(f"  💾 PyTorch model saved: {model_path}")
-                                    symbol_family_status[family]["saved"] = True
-                                    
-                                else:  # Scikit-learn models
-                                    model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.joblib"
-                                    wrapped_model.save(str(model_path))
-                                    logger.info(f"  💾 Scikit-learn model saved: {model_path}")
-                                    symbol_family_status[family]["saved"] = True
+                                        wrapped_model.save_model(str(model_path))
+                                        logger.info(f"  💾 LightGBM model saved: {model_path}")
+                                        symbol_family_status[family]["saved"] = True
+                                        
+                                        # Note: Legacy paths removed - using target-first structure only
+                                        
+                                    elif save_info['is_tensorflow']:  # TensorFlow/Keras
+                                        model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.keras"
+                                        wrapped_model.save(str(model_path))
+                                        logger.info(f"  💾 Keras model saved: {model_path}")
+                                        symbol_family_status[family]["saved"] = True
+                                        
+                                    elif save_info['is_pytorch']:  # PyTorch models
+                                        model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.pt"
+                                        import torch
+                                        
+                                        # Extract the actual PyTorch model
+                                        if hasattr(wrapped_model, 'core') and hasattr(wrapped_model.core, 'model'):
+                                            torch_model = wrapped_model.core.model
+                                        elif hasattr(wrapped_model, 'model'):
+                                            torch_model = wrapped_model.model
+                                        else:
+                                            torch_model = wrapped_model
+                                        
+                                        # Save state dict + metadata
+                                        torch.save({
+                                            "state_dict": torch_model.state_dict(),
+                                            "config": getattr(wrapped_model, "config", {}),
+                                            "arch": family,
+                                            "input_shape": X.shape
+                                        }, str(model_path))
+                                        logger.info(f"  💾 PyTorch model saved: {model_path}")
+                                        symbol_family_status[family]["saved"] = True
+                                        
+                                    else:  # Scikit-learn models
+                                        model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.joblib"
+                                        wrapped_model.save(str(model_path))
+                                        logger.info(f"  💾 Scikit-learn model saved: {model_path}")
+                                        symbol_family_status[family]["saved"] = True
                                 
                                 # Save preprocessors if available
                                 if wrapped_model.scaler is not None:
