@@ -1555,6 +1555,20 @@ def train_model_and_get_importance(
                 cb_config['od_wait'] = model_config.get('od_wait', 20)
                 logger.debug(f"    catboost: Added od_wait={cb_config['od_wait']} for early stopping")
             
+            # 5. CRITICAL: Cap iterations for feature selection to prevent 2-3 hour training times
+            # For feature selection, we don't need full training - just enough for importance ranking
+            max_iterations_feature_selection = 2000  # Hard cap for feature selection
+            current_iterations = cb_config.get('iterations', 300)
+            if current_iterations > max_iterations_feature_selection:
+                logger.info(f"    catboost: Capping iterations from {current_iterations} to {max_iterations_feature_selection} for feature selection")
+                cb_config['iterations'] = max_iterations_feature_selection
+                cb_config['use_best_model'] = True  # Use best model from early stopping
+            
+            # Also ensure depth is reasonable (exponential complexity: 2^d)
+            if cb_config.get('depth', 6) > 8:
+                logger.info(f"    catboost: Reducing depth from {cb_config.get('depth')} to 6 for faster feature selection")
+                cb_config['depth'] = 6
+            
             # Log warnings if any
             if warnings_issued:
                 logger.warning(f"    catboost: Performance Warnings:")
@@ -1564,6 +1578,15 @@ def train_model_and_get_importance(
             # Log final config for debugging (only if GPU was requested)
             if gpu_params and gpu_params.get('task_type') == 'GPU':
                 logger.debug(f"    catboost: Final config (sample): task_type={cb_config.get('task_type')}, devices={cb_config.get('devices')}, thread_count={cb_config.get('thread_count', 'not set')}")
+            
+            # CRITICAL: Explicitly set GPU params right before model instantiation to ensure they're not dropped
+            # This prevents cases where GPU params might be lost in config processing
+            if gpu_params and gpu_params.get('task_type') == 'GPU':
+                cb_config.update({
+                    "task_type": "GPU",
+                    "devices": gpu_params.get('devices', '0'),
+                })
+                logger.debug(f"    catboost: Explicitly set GPU params before instantiation: task_type={cb_config.get('task_type')}, devices={cb_config.get('devices')}")
             
             # Instantiate with cleaned config + explicit params
             base_model = est_cls(**cb_config, **extra)
@@ -1850,20 +1873,100 @@ def train_model_and_get_importance(
                     elif hasattr(model, 'set_params'):
                         model.set_params(od_type='Iter', od_wait=20)
                 
-                # Use threading utilities for smart thread management
-                if _THREADING_UTILITIES_AVAILABLE:
-                    # Get thread plan based on family and GPU usage
-                    plan = plan_for_family('CatBoost', total_threads=default_threads())
-                    # Use thread_guard context manager for safe thread control
-                    with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                # CRITICAL: Verify GPU is actually configured before training
+                # The log line "✅ Using GPU" may be a capability check, not actual execution mode
+                if use_gpu:
+                    # Get actual model params (from base_model if wrapped)
+                    if hasattr(model, 'base_model'):
+                        actual_params = model.base_model.get_params()
+                    elif hasattr(model, 'get_params'):
+                        actual_params = model.get_params()
+                    else:
+                        actual_params = {}
+                    
+                    task_type = actual_params.get('task_type')
+                    if task_type != 'GPU':
+                        raise RuntimeError(
+                            f"CatBoost not configured for GPU! Expected task_type='GPU', got task_type='{task_type}'. "
+                            f"Model params: {list(actual_params.keys())[:10]}. "
+                            f"To verify GPU usage, run 'nvidia-smi -l 1' in another terminal during training."
+                        )
+                    else:
+                        logger.info(f"    CatBoost: Verified GPU configuration (task_type={task_type}, devices={actual_params.get('devices', 'not set')})")
+                        # Add verbose logging to confirm GPU usage during training
+                        if hasattr(model, 'base_model'):
+                            model.base_model.set_params(verbose=50, logging_level='Verbose')
+                        elif hasattr(model, 'set_params'):
+                            model.set_params(verbose=50, logging_level='Verbose')
+                
+                # CRITICAL: Add timeout mechanism and duration logging for CatBoost training
+                # This helps identify if "hours" is actually CatBoost or cumulative overhead
+                import time
+                import signal
+                
+                fit_start_time = time.time()
+                max_training_time_seconds = 30 * 60  # 30 minutes hard limit
+                training_timed_out = False
+                
+                def timeout_handler(signum, frame):
+                    nonlocal training_timed_out
+                    training_timed_out = True
+                    raise TimeoutError(f"CatBoost training exceeded {max_training_time_seconds/60:.0f} minute timeout")
+                
+                # Set up timeout (Unix only - Windows will skip this)
+                try:
+                    signal.signal(signal.SIGALRM, timeout_handler)
+                    signal.alarm(int(max_training_time_seconds))
+                except (AttributeError, OSError):
+                    # Windows doesn't support SIGALRM - log warning but continue
+                    logger.warning(f"    CatBoost: Timeout not available on this platform (Windows), using soft timeout check")
+                
+                try:
+                    # Use threading utilities for smart thread management
+                    if _THREADING_UTILITIES_AVAILABLE:
+                        # Get thread plan based on family and GPU usage
+                        plan = plan_for_family('CatBoost', total_threads=default_threads())
+                        # Use thread_guard context manager for safe thread control
+                        with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                            # Fit with early stopping using eval_set
+                            model.fit(X_train_fit, y_train_fit, eval_set=[(X_val_fit, y_val_fit)])
+                            train_score = model.score(X_train_fit, y_train_fit)
+                    else:
+                        # Fallback: manual thread management
                         # Fit with early stopping using eval_set
                         model.fit(X_train_fit, y_train_fit, eval_set=[(X_val_fit, y_val_fit)])
                         train_score = model.score(X_train_fit, y_train_fit)
-                else:
-                    # Fallback: manual thread management
-                    # Fit with early stopping using eval_set
-                    model.fit(X_train_fit, y_train_fit, eval_set=[(X_val_fit, y_val_fit)])
-                    train_score = model.score(X_train_fit, y_train_fit)
+                    
+                    # Check soft timeout (for Windows or if SIGALRM didn't fire)
+                    fit_elapsed = time.time() - fit_start_time
+                    if fit_elapsed > max_training_time_seconds:
+                        logger.error(f"    CatBoost: Training took {fit_elapsed/60:.1f} minutes (exceeded {max_training_time_seconds/60:.0f} min limit)")
+                        raise TimeoutError(f"CatBoost training exceeded {max_training_time_seconds/60:.0f} minute timeout")
+                    
+                    # Log actual iteration count vs max (to verify early stopping worked)
+                    if hasattr(model, 'base_model'):
+                        actual_iterations = getattr(model.base_model, 'tree_count_', None) or getattr(model.base_model, 'iteration_count_', None)
+                    elif hasattr(model, 'tree_count_') or hasattr(model, 'iteration_count_'):
+                        actual_iterations = getattr(model, 'tree_count_', None) or getattr(model, 'iteration_count_', None)
+                    else:
+                        actual_iterations = None
+                    
+                    max_iterations = cb_config.get('iterations', 300)
+                    fit_elapsed_minutes = fit_elapsed / 60
+                    logger.info(f"    CatBoost: Training completed in {fit_elapsed_minutes:.2f} minutes "
+                              f"(iterations: {actual_iterations if actual_iterations else 'unknown'}/{max_iterations}, "
+                              f"early_stopping: {'triggered' if actual_iterations and actual_iterations < max_iterations else 'not triggered'})")
+                    
+                except TimeoutError:
+                    logger.error(f"    CatBoost: Training timeout after {max_training_time_seconds/60:.0f} minutes - aborting")
+                    # Return early with empty importance
+                    return None, pd.Series(0.0, index=feature_names), importance_method, 0.0
+                finally:
+                    # Cancel timeout
+                    try:
+                        signal.alarm(0)
+                    except (AttributeError, OSError):
+                        pass  # Windows doesn't support SIGALRM
                 
                 # FAIL-FAST: Check for suspiciously high training accuracy (overfitting/memorization)
                 # Tree-based models can easily overfit to 100% training accuracy

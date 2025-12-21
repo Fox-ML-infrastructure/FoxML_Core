@@ -1765,6 +1765,12 @@ def select_features_for_target(
             n_features_selected = len(selected_features)
             n_successful_families = len([s for s in all_family_statuses if s.get('status') == 'success'])
             
+            # CRITICAL: Initialize cohort variables before any try blocks to prevent "referenced before assignment" errors
+            # This ensures they're always defined, even if extraction fails or exception occurs
+            cohort_metadata = None
+            cohort_metrics = {}
+            cohort_additional_data = {}
+            
             # Extract cohort metadata using unified extractor
             try:
                 from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker

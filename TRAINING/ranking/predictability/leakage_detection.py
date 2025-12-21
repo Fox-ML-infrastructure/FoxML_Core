@@ -348,25 +348,25 @@ def _detect_leaking_features(
     # CRITICAL: If we suspect a leak (force_report=True) or found suspicious features,
     # always print top 10 features to help identify the leak
     if force_report or suspicious:
-        logger.error(f"  📊 TOP 10 FEATURES BY IMPORTANCE ({model_name}):")
-        logger.error(f"  {'='*70}")
+        logger.info(f"  📊 TOP 10 FEATURES BY IMPORTANCE ({model_name}):")
+        logger.info(f"  {'='*70}")
         for i, (feat, imp) in enumerate(feature_imp_pairs[:10], 1):
             marker = "🚨" if (feat, imp) in suspicious else "  "
-            logger.error(f"    {marker} {i:2d}. {feat:50s} = {imp:.2%}")
+            logger.info(f"    {marker} {i:2d}. {feat:50s} = {imp:.2%}")
         
         # Also check cumulative importance of top features
         top_5_importance = sum(imp for _, imp in feature_imp_pairs[:5])
         top_10_importance = sum(imp for _, imp in feature_imp_pairs[:10])
-        logger.error(f"  📈 Cumulative: Top 5 = {top_5_importance:.1%}, Top 10 = {top_10_importance:.1%}")
+        logger.info(f"  📈 Cumulative: Top 5 = {top_5_importance:.1%}, Top 10 = {top_10_importance:.1%}")
         if top_5_importance > 0.80:
-            logger.error(f"  ⚠️  WARNING: Top 5 features account for {top_5_importance:.1%} of importance - likely leakage!")
+            logger.warning(f"  ⚠️  WARNING: Top 5 features account for {top_5_importance:.1%} of importance - likely leakage!")
         
         # Provide actionable next steps
-        logger.error(f"  💡 NEXT STEPS:")
-        logger.error(f"     1. Review the top features above - they likely contain future information")
-        logger.error(f"     2. Check feature importance CSV for full analysis")
-        logger.error(f"     3. Add leaking features to CONFIG/excluded_features.yaml")
-        logger.error(f"     4. Restart Python process and re-run to apply new filters")
+        logger.info(f"  💡 NEXT STEPS:")
+        logger.info(f"     1. Review the top features above - they likely contain future information")
+        logger.info(f"     2. Check feature importance CSV for full analysis")
+        logger.info(f"     3. Add leaking features to CONFIG/excluded_features.yaml")
+        logger.info(f"     4. Restart Python process and re-run to apply new filters")
     
     return suspicious
 

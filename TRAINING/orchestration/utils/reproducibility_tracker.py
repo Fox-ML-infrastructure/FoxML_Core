@@ -953,15 +953,33 @@ class ReproducibilityTracker:
                 symbols_list = None
         
         # Build full metadata with schema version and explicit IDs
-        # For TARGET_RANKING, include view metadata
+        # For TARGET_RANKING, FEATURE_SELECTION, and TRAINING, include view metadata
         # Schema v2: Use tagged unions for ambiguous nulls (omit non-applicable fields)
+        
+        # Extract view for stages that require it (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
+        view_value = None
+        if stage_normalized in ["TARGET_RANKING", "FEATURE_SELECTION", "TRAINING"]:
+            # Try to get view from additional_data first
+            if additional_data and 'view' in additional_data:
+                view_value = additional_data['view'].upper() if isinstance(additional_data['view'], str) else additional_data['view']
+            # Fallback: derive from route_type
+            elif route_type:
+                route_normalized = route_type.upper() if isinstance(route_type, str) else (route_type.value if hasattr(route_type, 'value') else str(route_type).upper() if route_type else None)
+                if route_normalized == "CROSS_SECTIONAL":
+                    view_value = "CROSS_SECTIONAL"
+                elif route_normalized in ["INDIVIDUAL", "SYMBOL_SPECIFIC"]:
+                    view_value = "SYMBOL_SPECIFIC"  # Map INDIVIDUAL to SYMBOL_SPECIFIC for consistency
+            # Default to CROSS_SECTIONAL if not found
+            if not view_value:
+                view_value = "CROSS_SECTIONAL"
+        
         full_metadata = {
             "schema_version": REPRODUCIBILITY_SCHEMA_VERSION,
             "cohort_id": cohort_id,
             "run_id": run_id_clean,
             "stage": stage_normalized,  # Already normalized to uppercase
             "route_type": route_type.upper() if (route_type and isinstance(route_type, str)) else (route_type.value if hasattr(route_type, 'value') else str(route_type).upper() if route_type else None),
-            "view": (additional_data.get('view') if additional_data else None) if stage_normalized == "TARGET_RANKING" else None,  # Add view for TARGET_RANKING
+            "view": view_value,  # Set for TARGET_RANKING, FEATURE_SELECTION, and TRAINING stages
             "target_name": item_name,  # Changed from "target" to match finalize_run() expectations
             "n_effective": cohort_metadata.get('N_effective_cs', 0),  # Changed from "N_effective" to match finalize_run() expectations
             "n_symbols": cohort_metadata.get('n_symbols', 0),
