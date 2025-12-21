@@ -3958,6 +3958,7 @@ class ReproducibilityTracker:
             # Check for target-first structure first (targets/ and globals/)
             # Fallback to legacy REPRODUCIBILITY structure for backward compatibility
             repro_base = None
+            comparison_group_dir = None
             
             # Try target-first structure: check for targets/ or globals/ directories
             temp_dir = self._repro_base_dir
@@ -3968,6 +3969,22 @@ class ReproducibilityTracker:
                 if not temp_dir.parent.exists():
                     break
                 temp_dir = temp_dir.parent
+            
+            # If we found a run directory, check if it's in a comparison group structure
+            # Structure: RESULTS/runs/cg-*/run_name/
+            if repro_base:
+                temp_dir = repro_base
+                for _ in range(5):  # Limit depth
+                    if temp_dir.parent.name == "runs" and temp_dir.parent.parent.name == "RESULTS":
+                        # We're in RESULTS/runs/cg-*/run_name/
+                        comparison_group_dir = temp_dir.parent
+                        # Pass the comparison group directory to TrendAnalyzer so it searches all runs
+                        repro_base = comparison_group_dir
+                        logger.info(f"Found comparison group directory: {comparison_group_dir.name}, will search across all runs")
+                        break
+                    if not temp_dir.parent.exists() or temp_dir.parent == temp_dir:
+                        break
+                    temp_dir = temp_dir.parent
             
             # Fallback to legacy REPRODUCIBILITY structure
             if repro_base is None:

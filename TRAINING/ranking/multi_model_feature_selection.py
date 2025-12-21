@@ -1546,6 +1546,15 @@ def train_model_and_get_importance(
                 cb_config['metric_period'] = model_config.get('metric_period', 50)
                 logger.debug(f"    catboost: Added metric_period={cb_config['metric_period']} to reduce evaluation overhead")
             
+            # 4. Automatic early stopping injection (od_type and od_wait) to prevent long training times
+            # Early stopping will stop training if validation doesn't improve, dramatically reducing training time
+            if 'od_type' not in cb_config:
+                cb_config['od_type'] = model_config.get('od_type', 'Iter')
+                logger.debug(f"    catboost: Added od_type={cb_config['od_type']} for early stopping")
+            if 'od_wait' not in cb_config:
+                cb_config['od_wait'] = model_config.get('od_wait', 20)
+                logger.debug(f"    catboost: Added od_wait={cb_config['od_wait']} for early stopping")
+            
             # Log warnings if any
             if warnings_issued:
                 logger.warning(f"    catboost: Performance Warnings:")
@@ -1633,18 +1642,42 @@ def train_model_and_get_importance(
                         self.base_model.set_params(**params)
                         return self
                     
-                    def fit(self, X, y=None, **kwargs):
+                    def fit(self, X, y=None, eval_set=None, **kwargs):
                         """Convert numpy arrays to Pool objects when GPU is enabled."""
+                        # Handle eval_set if provided (for early stopping)
+                        eval_set_pools = None
+                        if eval_set is not None:
+                            eval_set_pools = []
+                            for X_eval, y_eval in eval_set:
+                                if isinstance(X_eval, np.ndarray):
+                                    eval_pool = Pool(data=X_eval, label=y_eval, cat_features=self.cat_features)
+                                    eval_set_pools.append(eval_pool)
+                                elif isinstance(X_eval, Pool):
+                                    eval_set_pools.append(X_eval)
+                                else:
+                                    # Fallback: try to create Pool from other types
+                                    eval_pool = Pool(data=X_eval, label=y_eval, cat_features=self.cat_features)
+                                    eval_set_pools.append(eval_pool)
+                        
                         # Convert X and y to Pool objects for GPU mode
                         if isinstance(X, np.ndarray):
                             train_pool = Pool(data=X, label=y, cat_features=self.cat_features)
-                            return self.base_model.fit(train_pool, **kwargs)
+                            if eval_set_pools:
+                                return self.base_model.fit(train_pool, eval_set=eval_set_pools, **kwargs)
+                            else:
+                                return self.base_model.fit(train_pool, **kwargs)
                         elif isinstance(X, Pool):
                             # Already a Pool object
-                            return self.base_model.fit(X, y, **kwargs)
+                            if eval_set_pools:
+                                return self.base_model.fit(X, eval_set=eval_set_pools, **kwargs)
+                            else:
+                                return self.base_model.fit(X, y, **kwargs)
                         else:
                             # Fallback: try direct fit (for other data types)
-                            return self.base_model.fit(X, y, **kwargs)
+                            if eval_set_pools:
+                                return self.base_model.fit(X, y, eval_set=eval_set_pools, **kwargs)
+                            else:
+                                return self.base_model.fit(X, y, **kwargs)
                     
                     def predict(self, X, **kwargs):
                         """Delegate predict to base model."""
@@ -1787,18 +1820,50 @@ def train_model_and_get_importance(
                     except Exception as e:
                         logger.debug(f"    CatBoost: CV failed (continuing with single fit): {e}")
                 
+                # CRITICAL: Add early stopping to final fit to prevent 3-hour training times
+                # Split data into train/val for early stopping (use 80/20 split)
+                # This will stop training early if validation doesn't improve, dramatically reducing training time
+                from sklearn.model_selection import train_test_split
+                # Use model_seed for deterministic split (same seed as model training)
+                X_train_fit, X_val_fit, y_train_fit, y_val_fit = train_test_split(
+                    X_catboost, y, test_size=0.2, random_state=model_seed
+                )
+                
+                # Early stopping should already be configured in cb_config (added above during config processing)
+                # Verify it's set on the model (should be set from config during instantiation)
+                if hasattr(model, 'base_model'):
+                    model_params = model.base_model.get_params()
+                elif hasattr(model, 'get_params'):
+                    model_params = model.get_params()
+                else:
+                    model_params = {}
+                
+                od_type_set = model_params.get('od_type')
+                od_wait_set = model_params.get('od_wait')
+                if od_type_set and od_wait_set:
+                    logger.debug(f"    CatBoost: Early stopping configured (od_type={od_type_set}, od_wait={od_wait_set})")
+                else:
+                    # Fallback: set directly if not already configured (shouldn't happen if config is correct)
+                    logger.debug(f"    CatBoost: Setting early stopping params directly (od_type='Iter', od_wait=20)")
+                    if hasattr(model, 'base_model'):
+                        model.base_model.set_params(od_type='Iter', od_wait=20)
+                    elif hasattr(model, 'set_params'):
+                        model.set_params(od_type='Iter', od_wait=20)
+                
                 # Use threading utilities for smart thread management
                 if _THREADING_UTILITIES_AVAILABLE:
                     # Get thread plan based on family and GPU usage
                     plan = plan_for_family('CatBoost', total_threads=default_threads())
                     # Use thread_guard context manager for safe thread control
                     with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
-                        model.fit(X_catboost, y)
-                        train_score = model.score(X_catboost, y)
+                        # Fit with early stopping using eval_set
+                        model.fit(X_train_fit, y_train_fit, eval_set=[(X_val_fit, y_val_fit)])
+                        train_score = model.score(X_train_fit, y_train_fit)
                 else:
                     # Fallback: manual thread management
-                    model.fit(X_catboost, y)
-                    train_score = model.score(X_catboost, y)
+                    # Fit with early stopping using eval_set
+                    model.fit(X_train_fit, y_train_fit, eval_set=[(X_val_fit, y_val_fit)])
+                    train_score = model.score(X_train_fit, y_train_fit)
                 
                 # FAIL-FAST: Check for suspiciously high training accuracy (overfitting/memorization)
                 # Tree-based models can easily overfit to 100% training accuracy

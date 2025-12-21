@@ -3402,8 +3402,18 @@ class DiffTelemetry:
                             if not run_subdir.is_dir() or run_subdir.name == "METRICS":
                                 continue
                             
-                            run_snapshot_index = run_subdir / "REPRODUCIBILITY" / "METRICS" / "snapshot_index.json"
-                            if run_snapshot_index.exists():
+                            # Check both target-first (globals/) and legacy (REPRODUCIBILITY/METRICS/)
+                            # Prioritize target-first structure
+                            run_snapshot_index = None
+                            globals_snapshot_index = run_subdir / "globals" / "snapshot_index.json"
+                            legacy_snapshot_index = run_subdir / "REPRODUCIBILITY" / "METRICS" / "snapshot_index.json"
+                            
+                            if globals_snapshot_index.exists():
+                                run_snapshot_index = globals_snapshot_index
+                            elif legacy_snapshot_index.exists():
+                                run_snapshot_index = legacy_snapshot_index
+                            
+                            if run_snapshot_index and run_snapshot_index.exists():
                                 try:
                                     with open(run_snapshot_index) as f:
                                         data = json.load(f)
@@ -3440,59 +3450,135 @@ class DiffTelemetry:
                                                     # The snapshot_index.json might reference a snapshot from a deleted run
                                                     # We need to verify the snapshot.json file exists before using it
                                                     snapshot_file_exists = False
+                                                    cohort_subdir_found = None
                                                     if snap.stage and snap.view and snap.target:
                                                         target_clean = snap.target.replace('/', '_').replace('\\', '_')
-                                                        # Try to find snapshot.json in the run's cohort directories
-                                                        # Look for cohort directories matching the snapshot's stage/view/target
-                                                        stage_dir = run_subdir / "REPRODUCIBILITY" / snap.stage / snap.view / target_clean
-                                                        if stage_dir.exists():
-                                                            # Search for cohort directories
-                                                            for cohort_subdir in stage_dir.iterdir():
-                                                                if cohort_subdir.is_dir() and cohort_subdir.name.startswith("cohort="):
-                                                                    snapshot_file = cohort_subdir / "snapshot.json"
-                                                                    if snapshot_file.exists():
-                                                                        # Verify this snapshot.json matches the run_id
-                                                                        try:
-                                                                            with open(snapshot_file, 'r') as f:
-                                                                                snapshot_data = json.load(f)
-                                                                                if snapshot_data.get('run_id') == snap.run_id:
-                                                                                    snapshot_file_exists = True
-                                                                                    break
-                                                                        except Exception:
-                                                                            continue
-                                                            
-                                                            # If we found a matching snapshot file, use it
-                                                            if snapshot_file_exists:
-                                                                # CRITICAL: Reload metrics from actual metrics.json file
-                                                                # The snapshot might have been saved before we fixed _normalize_outputs
-                                                                metrics_file = cohort_subdir / "metrics.json"
-                                                                if metrics_file.exists():
-                                                                    try:
-                                                                        with open(metrics_file, 'r') as f:
-                                                                            metrics_json = json.load(f)
-                                                                        # Extract all numeric metrics (same logic as _normalize_outputs)
-                                                                        metrics_data = {
-                                                                            k: v for k, v in metrics_json.items()
-                                                                            if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
-                                                                                       'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
-                                                                                       'composite_version', 'leakage', 'leakage_flag']
-                                                                            and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
-                                                                        }
-                                                                        # Update snapshot's outputs.metrics
-                                                                        if metrics_data:
-                                                                            snap.outputs['metrics'] = metrics_data
-                                                                            logger.debug(f"Reloaded metrics for snapshot {snap.run_id} from {metrics_file}")
-                                                                    except Exception as e:
-                                                                        logger.debug(f"Failed to reload metrics from {metrics_file}: {e}")
-                                                                
-                                                                # Mark source for auditability
-                                                                if bin_dir.name.startswith("cg-"):
-                                                                    snap._comparison_source = "comparison_group_directory"
+                                                        
+                                                        # First, try target-first structure: targets/<target>/reproducibility/<view>/cohort=<cohort_id>/
+                                                        target_repro_dir = run_subdir / "targets" / target_clean / "reproducibility"
+                                                        if target_repro_dir.exists():
+                                                            view_dir = target_repro_dir / snap.view
+                                                            if view_dir.exists():
+                                                                # For SYMBOL_SPECIFIC, check symbol subdirectories
+                                                                if snap.view == "SYMBOL_SPECIFIC" and snap.symbol:
+                                                                    symbol_dir = view_dir / f"symbol={snap.symbol}"
+                                                                    if symbol_dir.exists():
+                                                                        for cohort_subdir in symbol_dir.iterdir():
+                                                                            if cohort_subdir.is_dir() and cohort_subdir.name.startswith("cohort="):
+                                                                                snapshot_file = cohort_subdir / "snapshot.json"
+                                                                                if snapshot_file.exists():
+                                                                                    try:
+                                                                                        with open(snapshot_file, 'r') as f:
+                                                                                            snapshot_data = json.load(f)
+                                                                                            if snapshot_data.get('run_id') == snap.run_id:
+                                                                                                snapshot_file_exists = True
+                                                                                                cohort_subdir_found = cohort_subdir
+                                                                                                break
+                                                                                    except Exception:
+                                                                                        continue
                                                                 else:
-                                                                    snap._comparison_source = "snapshot_index"
-                                                                candidates.append((snap.timestamp, snap))
+                                                                    # CROSS_SECTIONAL or other views without symbol
+                                                                    for cohort_subdir in view_dir.iterdir():
+                                                                        if cohort_subdir.is_dir() and cohort_subdir.name.startswith("cohort="):
+                                                                            snapshot_file = cohort_subdir / "snapshot.json"
+                                                                            if snapshot_file.exists():
+                                                                                try:
+                                                                                    with open(snapshot_file, 'r') as f:
+                                                                                        snapshot_data = json.load(f)
+                                                                                        if snapshot_data.get('run_id') == snap.run_id:
+                                                                                            snapshot_file_exists = True
+                                                                                            cohort_subdir_found = cohort_subdir
+                                                                                            break
+                                                                                except Exception:
+                                                                                    continue
+                                                        
+                                                        # Fallback to legacy structure: REPRODUCIBILITY/<stage>/<view>/<target>/cohort=<cohort_id>/
+                                                        if not snapshot_file_exists:
+                                                            stage_dir = run_subdir / "REPRODUCIBILITY" / snap.stage / snap.view / target_clean
+                                                            if stage_dir.exists():
+                                                                # Search for cohort directories
+                                                                for cohort_subdir in stage_dir.iterdir():
+                                                                    if cohort_subdir.is_dir() and cohort_subdir.name.startswith("cohort="):
+                                                                        snapshot_file = cohort_subdir / "snapshot.json"
+                                                                        if snapshot_file.exists():
+                                                                            # Verify this snapshot.json matches the run_id
+                                                                            try:
+                                                                                with open(snapshot_file, 'r') as f:
+                                                                                    snapshot_data = json.load(f)
+                                                                                    if snapshot_data.get('run_id') == snap.run_id:
+                                                                                        snapshot_file_exists = True
+                                                                                        cohort_subdir_found = cohort_subdir
+                                                                                        break
+                                                                            except Exception:
+                                                                                continue
+                                                            
+                                                    # If we found a matching snapshot file, use it
+                                                    if snapshot_file_exists and cohort_subdir_found:
+                                                        # CRITICAL: Reload metrics from actual metrics.json file
+                                                        # The snapshot might have been saved before we fixed _normalize_outputs
+                                                        # Try target-first metrics location first, then legacy
+                                                        metrics_file = None
+                                                        metrics_json = None
+                                                        try:
+                                                            from TRAINING.orchestration.utils.target_first_paths import get_metrics_path_from_cohort_dir
+                                                            metrics_dir = get_metrics_path_from_cohort_dir(cohort_subdir_found, base_output_dir=run_subdir)
+                                                            if metrics_dir:
+                                                                metrics_file = metrics_dir / "metrics.json"
+                                                                if not metrics_file.exists():
+                                                                    metrics_parquet = metrics_dir / "metrics.parquet"
+                                                                    if metrics_parquet.exists():
+                                                                        # Handle parquet separately
+                                                                        import pandas as pd
+                                                                        df = pd.read_parquet(metrics_parquet)
+                                                                        if len(df) > 0:
+                                                                            metrics_json = df.iloc[0].to_dict()
+                                                                        metrics_file = None  # Mark as handled
+                                                                    else:
+                                                                        metrics_file = None
+                                                        except Exception as e:
+                                                            logger.debug(f"Failed to get metrics path from cohort_dir: {e}")
+                                                        
+                                                        # Fallback to legacy location
+                                                        if not metrics_file and not metrics_json:
+                                                            metrics_file = cohort_subdir_found / "metrics.json"
+                                                        
+                                                        if metrics_file and metrics_file.exists():
+                                                            try:
+                                                                if metrics_file.suffix == '.parquet':
+                                                                    # Handle parquet
+                                                                    import pandas as pd
+                                                                    df = pd.read_parquet(metrics_file)
+                                                                    if len(df) > 0:
+                                                                        metrics_json = df.iloc[0].to_dict()
+                                                                else:
+                                                                    with open(metrics_file, 'r') as f:
+                                                                        metrics_json = json.load(f)
+                                                            except Exception as e:
+                                                                logger.debug(f"Failed to reload metrics from {metrics_file}: {e}")
+                                                        
+                                                        # Process metrics_json if we have it
+                                                        if metrics_json:
+                                                            # Extract all numeric metrics (same logic as _normalize_outputs)
+                                                            metrics_data = {
+                                                                k: v for k, v in metrics_json.items()
+                                                                if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
+                                                                           'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                                                           'composite_version', 'leakage', 'leakage_flag']
+                                                                and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
+                                                            }
+                                                            # Update snapshot's outputs.metrics
+                                                            if metrics_data:
+                                                                snap.outputs['metrics'] = metrics_data
+                                                                logger.debug(f"Reloaded metrics for snapshot {snap.run_id} from {metrics_file or 'parquet'}")
+                                                            
+                                                            # Mark source for auditability
+                                                            if bin_dir.name.startswith("cg-"):
+                                                                snap._comparison_source = "comparison_group_directory"
                                                             else:
-                                                                logger.debug(f"Skipping snapshot {snap.run_id} from {run_snapshot_index} - snapshot.json file not found on disk (run may have been deleted)")
+                                                                snap._comparison_source = "snapshot_index"
+                                                            candidates.append((snap.timestamp, snap))
+                                                        else:
+                                                            logger.debug(f"Skipping snapshot {snap.run_id} from {run_snapshot_index} - snapshot.json file not found on disk (run may have been deleted)")
                                                     else:
                                                         # If we can't determine the path, skip it (safety first)
                                                         logger.debug(f"Skipping snapshot {snap.run_id} - missing stage/view/target for path reconstruction")
@@ -3597,8 +3683,18 @@ class DiffTelemetry:
                         # Search all runs in this bin
                         for run_subdir in bin_dir.iterdir():
                             if run_subdir.is_dir() and run_subdir.name != "METRICS":
-                                run_snapshot_index = run_subdir / "REPRODUCIBILITY" / "METRICS" / "snapshot_index.json"
-                                if run_snapshot_index.exists():
+                                # Check both target-first (globals/) and legacy (REPRODUCIBILITY/METRICS/)
+                                # Prioritize target-first structure
+                                run_snapshot_index = None
+                                globals_snapshot_index = run_subdir / "globals" / "snapshot_index.json"
+                                legacy_snapshot_index = run_subdir / "REPRODUCIBILITY" / "METRICS" / "snapshot_index.json"
+                                
+                                if globals_snapshot_index.exists():
+                                    run_snapshot_index = globals_snapshot_index
+                                elif legacy_snapshot_index.exists():
+                                    run_snapshot_index = legacy_snapshot_index
+                                
+                                if run_snapshot_index and run_snapshot_index.exists():
                                     try:
                                         with open(run_snapshot_index) as f:
                                             data = json.load(f)

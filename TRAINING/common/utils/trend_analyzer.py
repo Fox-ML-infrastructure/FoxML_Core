@@ -175,8 +175,32 @@ class TrendAnalyzer:
         elif (self.reproducibility_dir / "REPRODUCIBILITY").exists():
             run_dir = self.reproducibility_dir
         
-        # First, check target-first structure (targets/<target>/reproducibility/<view>/cohort=<cohort_id>/)
-        targets_dir = run_dir / "targets"
+        # Detect if we're in a comparison group directory structure (RESULTS/runs/cg-*/)
+        # If so, search across all runs in the same comparison group
+        comparison_group_dir = None
+        runs_to_process = [run_dir]  # Default: just process the single run
+        
+        # Check if we're in RESULTS/runs/cg-*/run_name/ structure
+        temp_dir = run_dir
+        for _ in range(5):  # Limit depth
+            if temp_dir.parent.name == "runs" and temp_dir.parent.parent.name == "RESULTS":
+                # We're in RESULTS/runs/cg-*/run_name/
+                comparison_group_dir = temp_dir.parent
+                # Get all runs in this comparison group
+                runs_to_process = [
+                    d for d in comparison_group_dir.iterdir()
+                    if d.is_dir() and (d / "targets").exists() or (d / "globals").exists() or (d / "REPRODUCIBILITY").exists()
+                ]
+                logger.info(f"Found comparison group directory: {comparison_group_dir.name}, processing {len(runs_to_process)} runs")
+                break
+            if not temp_dir.parent.exists() or temp_dir.parent == temp_dir:
+                break
+            temp_dir = temp_dir.parent
+        
+        # Process all runs in the comparison group (or just the single run if not in comparison group structure)
+        for current_run_dir in runs_to_process:
+            # First, check target-first structure (targets/<target>/reproducibility/<view>/cohort=<cohort_id>/)
+            targets_dir = current_run_dir / "targets"
         if targets_dir.exists():
             for target_dir in targets_dir.iterdir():
                 if not target_dir.is_dir():
@@ -208,7 +232,7 @@ class TrendAnalyzer:
                                     metrics_data = {}
                                     try:
                                         from TRAINING.orchestration.utils.target_first_paths import get_metrics_path_from_cohort_dir
-                                        metrics_dir = get_metrics_path_from_cohort_dir(cohort_dir, base_output_dir=run_dir)
+                                        metrics_dir = get_metrics_path_from_cohort_dir(cohort_dir, base_output_dir=current_run_dir)
                                         if metrics_dir:
                                             metrics_file = metrics_dir / "metrics.json"
                                             if not metrics_file.exists():
@@ -245,7 +269,7 @@ class TrendAnalyzer:
                                                         metrics_data = json.load(f)
                                             
                                             # Extract identifiers
-                                            run_id = metadata.get('run_id') or metrics_data.get('run_id') or run_dir.name
+                                            run_id = metadata.get('run_id') or metrics_data.get('run_id') or current_run_dir.name
                                             stage = metadata.get('stage', 'UNKNOWN')
                                             cohort_id = cohort_dir.name.replace('cohort=', '')
                                             
@@ -256,8 +280,8 @@ class TrendAnalyzer:
                                                 'view': view,
                                                 'symbol': symbol,
                                                 'cohort_id': cohort_id,
-                                                'metadata_path': str(metadata_file.relative_to(run_dir)) if metadata_file.exists() else None,
-                                                'metrics_path': str(metrics_file.relative_to(run_dir)) if metrics_file.exists() else None,
+                                                'metadata_path': str(metadata_file.relative_to(current_run_dir)) if metadata_file.exists() else None,
+                                                'metrics_path': str(metrics_file.relative_to(current_run_dir)) if metrics_file.exists() else None,
                                                 **metadata,
                                                 **{k: v for k, v in metrics_data.items() if k not in metadata}
                                             }
@@ -274,9 +298,9 @@ class TrendAnalyzer:
                                 # Try to read metrics from metrics/ folder first, fallback to cohort_dir
                                 metrics_file = None
                                 metrics_data = {}
-                                try:
-                                    from TRAINING.orchestration.utils.target_first_paths import get_metrics_path_from_cohort_dir
-                                    metrics_dir = get_metrics_path_from_cohort_dir(cohort_dir, base_output_dir=run_dir)
+                                    try:
+                                        from TRAINING.orchestration.utils.target_first_paths import get_metrics_path_from_cohort_dir
+                                        metrics_dir = get_metrics_path_from_cohort_dir(cohort_dir, base_output_dir=current_run_dir)
                                     if metrics_dir:
                                         metrics_file = metrics_dir / "metrics.json"
                                         if not metrics_file.exists():
@@ -313,7 +337,7 @@ class TrendAnalyzer:
                                                     metrics_data = json.load(f)
                                         
                                         # Extract identifiers
-                                        run_id = metadata.get('run_id') or metrics_data.get('run_id') or run_dir.name
+                                        run_id = metadata.get('run_id') or metrics_data.get('run_id') or current_run_dir.name
                                         stage = metadata.get('stage', 'UNKNOWN')
                                         cohort_id = cohort_dir.name.replace('cohort=', '')
                                         
@@ -323,8 +347,8 @@ class TrendAnalyzer:
                                             'target': target,
                                             'view': view,
                                             'cohort_id': cohort_id,
-                                            'metadata_path': str(metadata_file.relative_to(run_dir)) if metadata_file.exists() else None,
-                                            'metrics_path': str(metrics_file.relative_to(run_dir)) if metrics_file.exists() else None,
+                                            'metadata_path': str(metadata_file.relative_to(current_run_dir)) if metadata_file.exists() else None,
+                                            'metrics_path': str(metrics_file.relative_to(current_run_dir)) if metrics_file.exists() else None,
                                             **metadata,
                                             **{k: v for k, v in metrics_data.items() if k not in metadata}
                                         }
@@ -332,69 +356,71 @@ class TrendAnalyzer:
                                     except Exception as e:
                                         logger.debug(f"Failed to process target-first metrics for {target}/{view}/{cohort_dir.name}: {e}")
         
-        # Also walk legacy REPRODUCIBILITY directory
-        for stage_dir in self.reproducibility_dir.iterdir():
-            if not stage_dir.is_dir() or stage_dir.name.startswith('.'):
-                continue
-            
-            stage = stage_dir.name
-            
-            # Handle nested structure: STAGE/MODE/target/cohort=.../
-            for item_dir in self._walk_stage_directory(stage_dir):
-                for cohort_dir in item_dir.iterdir():
-                    if not cohort_dir.is_dir() or not cohort_dir.name.startswith('cohort='):
-                        continue
-                    
-                    # Load metadata and metrics
-                    metadata_file = cohort_dir / "metadata.json"
-                    # Try to read metrics from metrics/ folder first, fallback to cohort_dir
-                    metrics_file = None
-                    metrics = {}
-                    try:
-                        from TRAINING.orchestration.utils.target_first_paths import get_metrics_path_from_cohort_dir
-                        metrics_dir = get_metrics_path_from_cohort_dir(cohort_dir, base_output_dir=self.reproducibility_dir.parent if self.reproducibility_dir.name == "REPRODUCIBILITY" else self.reproducibility_dir)
-                        if metrics_dir:
-                            metrics_file = metrics_dir / "metrics.json"
-                            if not metrics_file.exists():
-                                # Try parquet
-                                metrics_parquet = metrics_dir / "metrics.parquet"
-                                if metrics_parquet.exists():
+        # Also walk legacy REPRODUCIBILITY directory (only for the original reproducibility_dir, not all runs)
+        # This handles legacy structure that might not be in target-first format
+        if self.reproducibility_dir.exists() and not comparison_group_dir:
+            for stage_dir in self.reproducibility_dir.iterdir():
+                if not stage_dir.is_dir() or stage_dir.name.startswith('.'):
+                    continue
+                
+                stage = stage_dir.name
+                
+                # Handle nested structure: STAGE/MODE/target/cohort=.../
+                for item_dir in self._walk_stage_directory(stage_dir):
+                    for cohort_dir in item_dir.iterdir():
+                        if not cohort_dir.is_dir() or not cohort_dir.name.startswith('cohort='):
+                            continue
+                        
+                        # Load metadata and metrics
+                        metadata_file = cohort_dir / "metadata.json"
+                        # Try to read metrics from metrics/ folder first, fallback to cohort_dir
+                        metrics_file = None
+                        metrics = {}
+                        try:
+                            from TRAINING.orchestration.utils.target_first_paths import get_metrics_path_from_cohort_dir
+                            metrics_dir = get_metrics_path_from_cohort_dir(cohort_dir, base_output_dir=self.reproducibility_dir.parent if self.reproducibility_dir.name == "REPRODUCIBILITY" else self.reproducibility_dir)
+                            if metrics_dir:
+                                metrics_file = metrics_dir / "metrics.json"
+                                if not metrics_file.exists():
+                                    # Try parquet
+                                    metrics_parquet = metrics_dir / "metrics.parquet"
+                                    if metrics_parquet.exists():
+                                        import pandas as pd
+                                        df = pd.read_parquet(metrics_parquet)
+                                        if len(df) > 0:
+                                            metrics = df.iloc[0].to_dict()
+                                            metrics_file = metrics_parquet  # For path reference
+                        except Exception as e:
+                            logger.debug(f"Failed to map cohort_dir to metrics path: {e}")
+                        
+                        # Fallback to legacy location in cohort_dir
+                        if not metrics and not metrics_file:
+                            metrics_file = cohort_dir / "metrics.json"
+                        
+                        if not metadata_file.exists():
+                            continue
+                        
+                        try:
+                            with open(metadata_file, 'r') as f:
+                                metadata = json.load(f)
+                            
+                            if not metrics and metrics_file and metrics_file.exists():
+                                if metrics_file.suffix == '.parquet':
                                     import pandas as pd
-                                    df = pd.read_parquet(metrics_parquet)
+                                    df = pd.read_parquet(metrics_file)
                                     if len(df) > 0:
                                         metrics = df.iloc[0].to_dict()
-                                        metrics_file = metrics_parquet  # For path reference
-                    except Exception as e:
-                        logger.debug(f"Failed to map cohort_dir to metrics path: {e}")
-                    
-                    # Fallback to legacy location in cohort_dir
-                    if not metrics and not metrics_file:
-                        metrics_file = cohort_dir / "metrics.json"
-                    
-                    if not metadata_file.exists():
-                        continue
-                    
-                    try:
-                        with open(metadata_file, 'r') as f:
-                            metadata = json.load(f)
-                        
-                        if not metrics and metrics_file and metrics_file.exists():
-                            if metrics_file.suffix == '.parquet':
-                                import pandas as pd
-                                df = pd.read_parquet(metrics_file)
-                                if len(df) > 0:
-                                    metrics = df.iloc[0].to_dict()
-                            else:
-                                with open(metrics_file, 'r') as f:
-                                    metrics = json.load(f)
-                        
-                        # Extract normalized row
-                        row = self._extract_index_row(stage, item_dir, cohort_dir, metadata, metrics)
-                        if row:
-                            rows.append(row)
-                    except Exception as e:
-                        logger.debug(f"Failed to load {metadata_file}: {e}")
-                        continue
+                                else:
+                                    with open(metrics_file, 'r') as f:
+                                        metrics = json.load(f)
+                            
+                            # Extract normalized row
+                            row = self._extract_index_row(stage, item_dir, cohort_dir, metadata, metrics)
+                            if row:
+                                rows.append(row)
+                        except Exception as e:
+                            logger.debug(f"Failed to load {metadata_file}: {e}")
+                            continue
         
         if not rows:
             logger.warning("No runs found in REPRODUCIBILITY directory")

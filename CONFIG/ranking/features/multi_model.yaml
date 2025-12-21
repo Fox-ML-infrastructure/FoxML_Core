@@ -143,6 +143,8 @@ model_families:
       loss_function: "RMSE"
       verbose: false
       metric_period: 50  # Calculate metrics every 50 trees (reduces evaluation overhead)
+      od_type: "Iter"  # Early stopping type: Iter (stop if no improvement for od_wait iterations)
+      od_wait: 20  # Early stopping patience: stop if no improvement for 20 iterations
       # random_seed: auto-injected from global.random_state (or pipeline.determinism.base_seed)
       # Note: If training is slow (>20min for 50k samples), check for:
       #   - Text features (add text_features=['col_name'] if present)

@@ -16,109 +16,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-21 (CatBoost Early Stopping Fix for Feature Selection)
+- **Performance Fix**: Added early stopping to CatBoost final fit in feature selection, reducing training time from ~3 hours to <30 minutes
+- **Files Changed**: `multi_model_feature_selection.py`, `multi_model.yaml`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-21-catboost-early-stopping-fix.md)
+
+#### 2025-12-21 (Run Comparison Fixes for Target-First Structure)
+- **Bug Fix**: Fixed diff telemetry and trend analyzer to properly find and compare runs across target-first structure
+- **Files Changed**: `diff_telemetry.py`, `trend_analyzer.py`, `reproducibility_tracker.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-21-run-comparison-fixes.md)
+
 #### 2025-12-20 (Threading, Feature Pruning, and Path Resolution Fixes)
-- **Threading/Parallelization**: Added `cross_val_score` with `n_jobs` for CatBoost and Elastic Net in feature selection, matching target ranking performance (2-4x speedup expected)
-- **Feature Pruning**: Added `ret_zscore_*` to exclusion patterns to prevent target columns from being used as features (fixes data leakage)
-- **Path Resolution**: Fixed path resolution errors causing permission denied when saving files - now validates paths and falls back safely
-- **Files Changed**: `multi_model_feature_selection.py`, `leakage_filtering.py`, `feature_selection_reporting.py`
+- **Performance**: Added threading for CatBoost/Elastic Net in feature selection (2-4x speedup)
+- **Bug Fix**: Added `ret_zscore_*` to exclusion patterns (fixes data leakage)
+- **Bug Fix**: Fixed path resolution errors causing permission denied
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-20-threading-feature-pruning-path-fixes.md)
 
 #### 2025-12-20 (Untrack DATA_PROCESSING Folder)
-- **Repository Cleanup**: Untracked `DATA_PROCESSING/` folder from git (22 files) - folder remains on disk but is now ignored
-- **Dependency Updates**: Updated default output paths in `multi_model_feature_selection.py` and `CONFIG/ranking/features/config.yaml` from `DATA_PROCESSING/` to `RESULTS/`
-- **Documentation Cleanup**: Removed 3 DATA_PROCESSING-specific documentation files and updated `DOCS/INDEX.md`
-- **No Core Impact**: Verified TRAINING pipeline is completely independent - no Python imports, runtime dependencies, or data dependencies on DATA_PROCESSING
-- **Files Changed**: `.gitignore`, `multi_model_feature_selection.py`, `config.yaml`, `DOCS/INDEX.md` (4 modified, 25 deleted)
+- **Repository Cleanup**: Untracked `DATA_PROCESSING/` folder from git, updated paths to `RESULTS/`
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-20-untrack-data-processing-folder.md)
 
 #### 2025-12-20 (CatBoost Fail-Fast for 100% Training Accuracy)
-- **CatBoost Overfitting Detection**: Added fail-fast mechanism for CatBoost when training accuracy reaches 100% (or >= 99.9% threshold)
-- **Time Savings**: Prevents wasting 40+ minutes on expensive feature importance computation when model is overfitting/memorizing
-- **Early Detection**: Checks training accuracy immediately after fit, before expensive operations start
-- **Graceful Failure**: Skips expensive operations and continues with other models instead of blocking
-- **Files Changed**: `multi_model_feature_selection.py`
+- **Performance**: Added fail-fast for CatBoost when training accuracy >= 99.9% (saves 40+ minutes)
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-20-catboost-fail-fast-for-overfitting.md)
 
-#### 2025-12-20 (Elastic Net Graceful Failure Handling - Prevent Full Fit)
-- **Elastic Net Error Handling**: Fixed Elastic Net to gracefully handle "all coefficients zero" failures and prevent expensive full fit operations from running
-- **Quick Pre-Check**: Quick pre-check now sets a flag to skip expensive operations (cross_val_score, pipeline.fit) when failure is detected early
-- **CROSS_SECTIONAL Fix**: Fixed issue where CROSS_SECTIONAL view would waste time running expensive operations even after detecting failure (SYMBOL_SPECIFIC already worked due to wrapper)
-- **Time Savings**: Prevents wasting 30+ minutes on operations that will fail - now fails fast in ~1-2 minutes
-- **Files Changed**: `model_evaluation.py`
+#### 2025-12-20 (Elastic Net Graceful Failure Handling)
+- **Performance**: Fixed Elastic Net to fail-fast when all coefficients are zero (saves 30+ minutes)
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-20-elastic-net-graceful-failure-handling.md)
 
-#### 2025-12-20 (Path Resolution Fix - Stop at Run Directory, Not RESULTS Root)
-- **Path Resolution Bug Fix**: Fixed path resolution logic that incorrectly stopped at `RESULTS/` directory instead of continuing to find the actual run directory
-- **Root Cause**: Bug was always present but only surfaced after removing legacy root-level writes - previously legacy writes masked the issue
-- **Fix**: Changed path resolution to only stop when it finds a run directory (has `targets/`, `globals/`, or `cache/` subdirectories), not at `RESULTS/` itself
-- **Impact**: No more `RESULTS/targets/` created outside run directories - all files now correctly go to `RESULTS/runs/{run}/targets/<target>/`
-- **Files Changed**: `multi_model_feature_selection.py`, `model_evaluation.py`, `feature_selection_reporting.py`, `target_routing.py`
+#### 2025-12-20 (Path Resolution Fix)
+- **Bug Fix**: Fixed path resolution stopping at `RESULTS/` instead of finding run directory
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-20-path-resolution-fix.md)
 
 #### 2025-12-20 (Feature Selection Output Organization and Elastic Net Fail-Fast)
-- **Output Organization**: Fixed feature selection outputs being overwritten at run root - now uses target-first structure (`targets/<target>/reproducibility/`) exclusively
-- **Decision Routing Updates**: Updated `load_target_confidence()` and `save_target_routing_metadata()` to use target-first structure with separate `globals/feature_selection_routing.json` (doesn't modify `routing_decisions.json`)
-- **Aggregation Function**: Added `_aggregate_feature_selection_summaries()` to collect per-target summaries into `globals/` after all targets complete
-- **Elastic Net Fail-Fast**: Added quick pre-check (max_iter=50) and reduced max_iter cap (500) to fail in ~1-2 minutes instead of 30+ minutes when over-regularized
-- **Syntax Error Fix**: Fixed missing `except` block in `feature_selection_reporting.py` causing import failures
-- **Reduced Log Noise**: Changed reproducibility tracker warning to debug level for expected fallback scenarios
-- **Files Changed**: `feature_selection_reporting.py`, `multi_model_feature_selection.py`, `target_routing.py`, `intelligent_trainer.py`, `reproducibility_tracker.py`, `model_evaluation.py`
+- **Bug Fix**: Fixed feature selection outputs using target-first structure, added Elastic Net fail-fast
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-20-feature-selection-output-organization-and-elastic-net-fail-fast.md)
 
-#### 2025-12-20 (Unified Threading Utilities for Feature Selection and Target Ranking)
-- **Threading Utilities Integration**: Refactored all model training in feature selection and target ranking to use centralized threading utilities from `TRAINING/common/threads.py`
-- **GPU-Aware Thread Management**: All models now automatically limit CPU threads (OMP=1, MKL=1) when GPU is enabled, preventing CPU bottlenecks during GPU training
-- **Smart Thread Allocation**: Models use `plan_for_family()` to determine optimal OMP vs MKL thread allocation based on model family type (tree models use OMP, linear models use MKL)
-- **Consistent Thread Control**: All model families (LightGBM, XGBoost, CatBoost, Random Forest, Neural Network, Lasso, Ridge, Elastic Net, RFE, Boruta, Stability Selection, HistGradientBoosting) now use `thread_guard()` context manager for safe thread limiting
-- **Feature Selection**: Updated `TRAINING/ranking/multi_model_feature_selection.py` - all 9 model families now use threading utilities
-- **Target Ranking**: Updated `TRAINING/ranking/predictability/model_evaluation.py` - all 11 model families now use threading utilities
-- **Benefits**: Prevents thread conflicts, optimizes resource usage, ensures GPU training doesn't get CPU-bound, maintains consistency across all training phases
-- **Files Changed**: `multi_model_feature_selection.py` (LightGBM, XGBoost, CatBoost, Random Forest, Neural Network, Lasso, RFE, Boruta, Stability Selection), `model_evaluation.py` (LightGBM, XGBoost, CatBoost, Random Forest, Neural Network, Lasso, Ridge, Elastic Net, RFE, Stability Selection, HistGradientBoosting)
+#### 2025-12-20 (Unified Threading Utilities)
+- **Refactoring**: Centralized threading utilities for all model families in feature selection and target ranking
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-20-threading-feature-pruning-path-fixes.md)
 
 #### 2025-12-20 (Incremental Decision File Saving)
-- **Incremental Decision Saving**: Routing decision files are now saved immediately after each target completes evaluation, not just at the end
-- **Crash Resilience**: If the process crashes, decisions for completed targets are already saved
-- **Per-Target Decisions**: Each target's decision is written to `targets/<target>/decision/routing_decision.json` as soon as that target finishes
-- **Global Summary Still Updated**: `globals/routing_decisions.json` is still written at the end with the complete summary
-- **Files Changed**: `target_routing.py` (added `_compute_single_target_routing_decision()` and `_save_single_target_decision()`), `target_ranker.py` (integrated incremental saving in both parallel and sequential paths)
+- **Feature**: Routing decisions saved immediately after each target completes (crash resilience)
 
 #### 2025-12-20 (Snapshot Index Symbol Key Fix & SST Metrics Architecture)
-- **Fixed Snapshot Index Overwrites**: Updated snapshot index key format from `run_id:stage:target:view` to `run_id:stage:target:view:symbol` to prevent overwrites when processing multiple symbols for the same target in SYMBOL_SPECIFIC view
-- **Backward Compatibility**: All snapshot index readers handle old formats (legacy, previous, and current) automatically
-- **SST Metrics Architecture**: Implemented Single Source of Truth for metrics:
-  - **Canonical Location**: `targets/<target>/reproducibility/<view>/cohort=<id>/metrics.parquet` (immutable, audit-grade)
-  - **Debug Export**: `metrics.json` in same location (derived from parquet)
-  - **Reference Pointers**: `targets/<target>/metrics/view=.../latest_ref.json` points to canonical location
-  - **No Duplication**: Full metrics payloads only in reproducibility/cohort directories, metrics/ contains only references
-  - **Reading Logic**: All readers check canonical location first, then reference pointers, then legacy locations
-- **Files Changed**: `diff_telemetry.py` (snapshot key format), `metrics.py` (SST architecture), `metrics_aggregator.py`, `diff_telemetry.py` (reading logic)
+- **Bug Fix**: Fixed snapshot index key format to include symbol, implemented SST metrics architecture
 
 #### 2025-12-20 (Legacy REPRODUCIBILITY Directory Cleanup)
-- **Removed Legacy Directory Creation**: Removed all code that creates the legacy `REPRODUCIBILITY/` directory structure
-- **Preserved Backward Compatibility**: Fallback reading logic still supports reading from existing legacy directories
-- **Target-First Only**: New runs now exclusively use the target-first structure (`targets/<target>/reproducibility/`)
-- **Files Changed**: `shared_ranking_harness.py`, `model_evaluation.py` - removed legacy directory creation while preserving reading fallback
+- **Refactoring**: Removed legacy directory creation, new runs use target-first structure only
 
 #### 2025-12-19 (Target-First Directory Structure Migration)
-- **Target-First Organization**: Migrated all output artifacts to target-first structure (`targets/<target>/`) for better organization and decision-making
-- **Global Summaries**: Added `globals/` directory for run-level summaries (routing decisions, target rankings, confidence summaries, stats)
-- **Per-Target Metadata**: Added `targets/<target>/metadata.json` aggregating all target information
-- **Run Manifest**: Added `manifest.json` at run root with experiment config and target index
-- **Legacy Support**: All reading logic checks target-first structure first, then falls back to legacy for backward compatibility
-- **No Legacy Writes**: Removed all writes to legacy `REPRODUCIBILITY/` structure - new runs only create target-first structure
-- **Complete Migration**: All artifacts (metadata, metrics, diffs, snapshots, decisions, models, feature selection) now use target-first structure
+- **Architecture**: Migrated all output artifacts to target-first structure (`targets/<target>/`)
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-19-target-first-structure-migration.md)
 
 #### 2025-12-19 (Feature Selection Error Fixes)
-- **cohort_metadata undefined error fix**: Fixed `NameError` in feature selection when cohort metadata extraction fails. Added safe initialization and guards in fallback paths.
-- **Improved error messaging**: Updated insufficient data span error message to clarify that fallback to per-symbol processing is expected for long-horizon targets.
-- **Reduced log noise**: Changed log level from WARNING to INFO for expected fallback scenarios.
+- **Bug Fix**: Fixed `NameError` in feature selection, improved error messaging
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-19-feature-selection-error-fixes.md)
 
 #### 2025-12-19 (Target Evaluation Config Fixes)
-- **Config Precedence Fix**: Fixed `max_targets_to_evaluate` from experiment config not overriding test config. Experiment config now correctly takes priority.
-- **Target Whitelist Support**: Added `targets_to_evaluate` whitelist that works with `auto_targets: true` for fine-grained control.
-- **Enhanced Debug Logging**: Added config precedence chain logging and config trace for `intelligent_training` overrides.
+- **Bug Fix**: Fixed config precedence for `max_targets_to_evaluate`, added target whitelist support
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-19-target-evaluation-config-fixes.md)
 
 #### 2025-12-18 (TRAINING Folder Reorganization)
