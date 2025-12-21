@@ -3085,14 +3085,26 @@ Examples:
     # End of config trace
     # ============================================================================
     
-    # Manual overrides (targets/features/families) - CLI > config > defaults
+    # Manual overrides (targets/features/families) - CLI > config (SST) > defaults
+    # Priority: CLI args > experiment config (SST) > intelligent_training_config > hardcoded defaults
     targets = args.targets if args.targets else (manual_targets if manual_targets else None)
     features = args.features if args.features else (manual_features if manual_features else None)
-    families = args.families if args.families else (config_families if config_families else None)
     
-    # If families still not set, use defaults
-    if not families:
+    # Families: CLI overrides config, but config is SST if CLI not provided
+    if args.families:
+        families = args.families
+        logger.info(f"📋 Using model families from CLI (overrides config): {families}")
+    elif config_families is not None:
+        # Config explicitly set (even if empty list) - use it as SST
+        families = config_families if config_families else []
+        if families:
+            logger.info(f"📋 Using model families from config (SST): {families}")
+        else:
+            logger.warning(f"⚠️ Config specifies empty model_families list - no families will be trained")
+    else:
+        # No config specified - use defaults (backward compatibility)
         families = ['lightgbm', 'xgboost', 'random_forest']
+        logger.warning(f"⚠️ No model families in config, using defaults: {families}")
     
     # Create orchestrator
     # Pass config limits for output directory binning (use configured values, not full dataset size)
