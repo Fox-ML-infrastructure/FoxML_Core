@@ -451,222 +451,222 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                         
                         # Get the trained model from strategy manager
                         strategy_manager = model_result.get('strategy_manager')
-                            if strategy_manager and hasattr(strategy_manager, 'models'):
-                                models = strategy_manager.models
+                        if strategy_manager and hasattr(strategy_manager, 'models'):
+                            models = strategy_manager.models
+                            
+                            # Import model wrapper for saving compatibility
+                            from TRAINING.common.model_wrapper import wrap_model_for_saving, get_model_saving_info
+                            
+                            # Save each model component
+                            for model_name, model in models.items():
+                                # Wrap model for saving compatibility
+                                wrapped_model = wrap_model_for_saving(model, family)
                                 
-                                # Import model wrapper for saving compatibility
-                                from TRAINING.common.model_wrapper import wrap_model_for_saving, get_model_saving_info
+                                # Get saving info
+                                save_info = get_model_saving_info(wrapped_model)
                                 
-                                # Save each model component
-                                for model_name, model in models.items():
-                                    # Wrap model for saving compatibility
-                                    wrapped_model = wrap_model_for_saving(model, family)
+                                # Determine file extensions based on model type
+                                if save_info['is_lightgbm']:  # LightGBM
+                                    model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.txt"
+                                    wrapped_model.save_model(str(model_path))
+                                    logger.info(f"  💾 LightGBM model saved: {model_path}")
+                                    symbol_family_status[family]["saved"] = True
                                     
-                                    # Get saving info
-                                    save_info = get_model_saving_info(wrapped_model)
+                                    # Also save to legacy location for backward compatibility
+                                    legacy_model_path = legacy_symbol_target_dir / f"{family.lower()}_mtf_b0.txt"
+                                    legacy_model_path.parent.mkdir(parents=True, exist_ok=True)
+                                    import shutil
+                                    shutil.copy2(model_path, legacy_model_path)
+                                    logger.debug(f"  💾 Model saved to legacy location: {legacy_model_path}")
                                     
-                                    # Determine file extensions based on model type
-                                    if save_info['is_lightgbm']:  # LightGBM
-                                        model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.txt"
-                                        wrapped_model.save_model(str(model_path))
-                                        logger.info(f"  💾 LightGBM model saved: {model_path}")
-                                        symbol_family_status[family]["saved"] = True
-                                        
-                                        # Also save to legacy location for backward compatibility
-                                        legacy_model_path = legacy_symbol_target_dir / f"{family.lower()}_mtf_b0.txt"
-                                        legacy_model_path.parent.mkdir(parents=True, exist_ok=True)
-                                        import shutil
-                                        shutil.copy2(model_path, legacy_model_path)
-                                        logger.debug(f"  💾 Model saved to legacy location: {legacy_model_path}")
-                                        
-                                    elif save_info['is_tensorflow']:  # TensorFlow/Keras
-                                        model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.keras"
-                                        wrapped_model.save(str(model_path))
-                                        logger.info(f"  💾 Keras model saved: {model_path}")
-                                        symbol_family_status[family]["saved"] = True
-                                        
-                                    elif save_info['is_pytorch']:  # PyTorch models
-                                        model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.pt"
-                                        import torch
-                                        
-                                        # Extract the actual PyTorch model
-                                        if hasattr(wrapped_model, 'core') and hasattr(wrapped_model.core, 'model'):
-                                            torch_model = wrapped_model.core.model
-                                        elif hasattr(wrapped_model, 'model'):
-                                            torch_model = wrapped_model.model
-                                        else:
-                                            torch_model = wrapped_model
-                                        
-                                        # Save state dict + metadata
-                                        torch.save({
-                                            "state_dict": torch_model.state_dict(),
-                                            "config": getattr(wrapped_model, "config", {}),
-                                            "arch": family,
-                                            "input_shape": X.shape
-                                        }, str(model_path))
-                                        logger.info(f"  💾 PyTorch model saved: {model_path}")
-                                        symbol_family_status[family]["saved"] = True
-                                        
-                                    else:  # Scikit-learn models
-                                        model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.joblib"
-                                        wrapped_model.save(str(model_path))
-                                        logger.info(f"  💾 Scikit-learn model saved: {model_path}")
-                                        symbol_family_status[family]["saved"] = True
+                                elif save_info['is_tensorflow']:  # TensorFlow/Keras
+                                    model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.keras"
+                                    wrapped_model.save(str(model_path))
+                                    logger.info(f"  💾 Keras model saved: {model_path}")
+                                    symbol_family_status[family]["saved"] = True
                                     
-                                    # Save preprocessors if available
-                                    if wrapped_model.scaler is not None:
-                                        scaler_path = symbol_target_dir / f"{family.lower()}_mtf_b0_scaler.joblib"
-                                        joblib.dump(wrapped_model.scaler, scaler_path)
-                                        logger.info(f"  💾 Scaler saved: {scaler_path}")
+                                elif save_info['is_pytorch']:  # PyTorch models
+                                    model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.pt"
+                                    import torch
                                     
-                                    if wrapped_model.imputer is not None:
-                                        imputer_path = symbol_target_dir / f"{family.lower()}_mtf_b0_imputer.joblib"
-                                        joblib.dump(wrapped_model.imputer, imputer_path)
-                                        logger.info(f"  💾 Imputer saved: {imputer_path}")
+                                    # Extract the actual PyTorch model
+                                    if hasattr(wrapped_model, 'core') and hasattr(wrapped_model.core, 'model'):
+                                        torch_model = wrapped_model.core.model
+                                    elif hasattr(wrapped_model, 'model'):
+                                        torch_model = wrapped_model.model
+                                    else:
+                                        torch_model = wrapped_model
                                     
-                                    # Save metadata (match cross-sectional format)
-                                    # Define _pkg_ver BEFORE conditional blocks to avoid "referenced before assignment"
-                                    def _pkg_ver(pkg_name):
+                                    # Save state dict + metadata
+                                    torch.save({
+                                        "state_dict": torch_model.state_dict(),
+                                        "config": getattr(wrapped_model, "config", {}),
+                                        "arch": family,
+                                        "input_shape": X.shape
+                                    }, str(model_path))
+                                    logger.info(f"  💾 PyTorch model saved: {model_path}")
+                                    symbol_family_status[family]["saved"] = True
+                                    
+                                else:  # Scikit-learn models
+                                    model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.joblib"
+                                    wrapped_model.save(str(model_path))
+                                    logger.info(f"  💾 Scikit-learn model saved: {model_path}")
+                                    symbol_family_status[family]["saved"] = True
+                                
+                                # Save preprocessors if available
+                                if wrapped_model.scaler is not None:
+                                    scaler_path = symbol_target_dir / f"{family.lower()}_mtf_b0_scaler.joblib"
+                                    joblib.dump(wrapped_model.scaler, scaler_path)
+                                    logger.info(f"  💾 Scaler saved: {scaler_path}")
+                                
+                                if wrapped_model.imputer is not None:
+                                    imputer_path = symbol_target_dir / f"{family.lower()}_mtf_b0_imputer.joblib"
+                                    joblib.dump(wrapped_model.imputer, imputer_path)
+                                    logger.info(f"  💾 Imputer saved: {imputer_path}")
+                                
+                                # Save metadata (match cross-sectional format)
+                                # Define _pkg_ver BEFORE conditional blocks to avoid "referenced before assignment"
+                                def _pkg_ver(pkg_name):
+                                    try:
+                                        import importlib.metadata
+                                        return importlib.metadata.version(pkg_name)
+                                    except:
                                         try:
-                                            import importlib.metadata
-                                            return importlib.metadata.version(pkg_name)
+                                            return __import__(pkg_name).__version__
                                         except:
-                                            try:
-                                                return __import__(pkg_name).__version__
-                                            except:
-                                                return "unknown"
+                                            return "unknown"
+                                
+                                if save_info['is_lightgbm']:  # LightGBM - JSON format
+                                    # Save to target-first structure (primary location)
+                                    from TRAINING.orchestration.utils.target_first_paths import (
+                                        get_target_reproducibility_dir
+                                    )
+                                    repro_dir = get_target_reproducibility_dir(Path(output_dir), target)
+                                    repro_dir.mkdir(parents=True, exist_ok=True)
+                                    meta_path_repro = repro_dir / f"meta_{family}_{symbol}_b0.json"
                                     
-                                    if save_info['is_lightgbm']:  # LightGBM - JSON format
-                                        # Save to target-first structure (primary location)
-                                        from TRAINING.orchestration.utils.target_first_paths import (
-                                            get_target_reproducibility_dir
-                                        )
-                                        repro_dir = get_target_reproducibility_dir(Path(output_dir), target)
-                                        repro_dir.mkdir(parents=True, exist_ok=True)
-                                        meta_path_repro = repro_dir / f"meta_{family}_{symbol}_b0.json"
-                                        
-                                        # Also keep copy in model directory (backward compatibility)
-                                        meta_path_legacy = symbol_target_dir / "meta_b0.json"
-                                        
-                                        import json
-                                        metadata = {
-                                            "family": family,
-                                            "target": target,
-                                            "symbol": symbol,
-                                            "route": "SYMBOL_SPECIFIC",  # Add route indicator
-                                            "view": "SYMBOL_SPECIFIC",  # Add view indicator
-                                            "min_cs": 1,  # Per-symbol training doesn't use min_cs
-                                            "features": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
-                                            "feature_names": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
-                                            "n_features": len(feature_names),
-                                            "package_versions": {
-                                                "numpy": _pkg_ver("numpy"),
-                                                "pandas": _pkg_ver("pandas"),
-                                                "sklearn": _pkg_ver("sklearn"),
-                                                "lightgbm": _pkg_ver("lightgbm"),
-                                                "xgboost": _pkg_ver("xgboost"),
-                                                "tensorflow": _pkg_ver("tensorflow"),
-                                                "ngboost": _pkg_ver("ngboost"),
-                                            },
-                                            "cli_args": {
-                                                "min_cs": 1,
-                                                "max_cs_samples": max_cs_samples,
-                                                "cs_normalize": "per_ts_split",
-                                                "cs_block": 32,
-                                                "cs_winsor_p": 0.01,
-                                                "cs_ddof": 1,
-                                                "batch_id": 0,
-                                                "families": [family],
-                                                "symbol": symbol
-                                            },
-                                            "n_rows_train": len(X),
-                                            "n_rows_val": 0,
-                                            "train_timestamps": int(np.unique(time_vals).size) if time_vals is not None else len(X),
-                                            "val_timestamps": 0,
-                                            "time_col": None,
-                                            "val_start_ts": None,
-                                            "metrics": {
-                                                "mean_IC": 0.0,
-                                                "mean_RankIC": 0.0,
-                                                "IC_IR": 0.0,
-                                                "n_times": 0,
-                                                "hit_rate": 0.0,
-                                                "skipped_timestamps": 0,
-                                                "total_timestamps": 0
-                                            },
-                                            "routing": {
-                                                "route": "SYMBOL_SPECIFIC",
-                                                "symbol": symbol,
-                                                "view": "SYMBOL_SPECIFIC"
-                                            }
-                                        }
-                                        
-                                        # Add CV scores if available
-                                        if strategy_manager and hasattr(strategy_manager, 'cv_scores'):
-                                            cv_scores = strategy_manager.cv_scores
-                                            if cv_scores and len(cv_scores) > 0:
-                                                metadata["cv_scores"] = [float(s) for s in cv_scores]
-                                                metadata["cv_mean"] = float(np.mean(cv_scores))
-                                                metadata["cv_std"] = float(np.std(cv_scores))
-                                        
-                                        # Save to target-first structure
-                                        with open(meta_path_repro, 'w') as f:
-                                            json.dump(metadata, f, indent=2)
-                                        logger.info(f"  💾 Metadata saved: {meta_path_repro}")
-                                        
-                                        # Target-first structure only - no legacy writes
+                                    # Also keep copy in model directory (backward compatibility)
+                                    meta_path_legacy = symbol_target_dir / "meta_b0.json"
                                     
-                                    else:  # Other model types - save as JSON too
-                                        # Save to target-first structure (primary location)
-                                        from TRAINING.orchestration.utils.target_first_paths import (
-                                            get_target_reproducibility_dir
-                                        )
-                                        repro_dir = get_target_reproducibility_dir(Path(output_dir), target)
-                                        repro_dir.mkdir(parents=True, exist_ok=True)
-                                        meta_path_repro = repro_dir / f"meta_{family}_{symbol}_b0.json"
-                                        
-                                        # Target-first structure only - metadata is in target-first location
-                                        import json
-                                        metadata = {
-                                            "family": family,
-                                            "target": target,
-                                            "symbol": symbol,
-                                            "route": "SYMBOL_SPECIFIC",  # Add route indicator
-                                            "view": "SYMBOL_SPECIFIC",  # Add view indicator
+                                    import json
+                                    metadata = {
+                                        "family": family,
+                                        "target": target,
+                                        "symbol": symbol,
+                                        "route": "SYMBOL_SPECIFIC",  # Add route indicator
+                                        "view": "SYMBOL_SPECIFIC",  # Add view indicator
+                                        "min_cs": 1,  # Per-symbol training doesn't use min_cs
+                                        "features": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
+                                        "feature_names": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
+                                        "n_features": len(feature_names),
+                                        "package_versions": {
+                                            "numpy": _pkg_ver("numpy"),
+                                            "pandas": _pkg_ver("pandas"),
+                                            "sklearn": _pkg_ver("sklearn"),
+                                            "lightgbm": _pkg_ver("lightgbm"),
+                                            "xgboost": _pkg_ver("xgboost"),
+                                            "tensorflow": _pkg_ver("tensorflow"),
+                                            "ngboost": _pkg_ver("ngboost"),
+                                        },
+                                        "cli_args": {
                                             "min_cs": 1,
-                                            "features": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
-                                            "feature_names": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
-                                            "n_features": len(feature_names),
-                                            "n_rows_train": len(X),
-                                            "train_timestamps": int(np.unique(time_vals).size) if time_vals is not None else len(X),
-                                            "routing": {
-                                                "route": "SYMBOL_SPECIFIC",
-                                                "symbol": symbol,
-                                                "view": "SYMBOL_SPECIFIC"
-                                            }
+                                            "max_cs_samples": max_cs_samples,
+                                            "cs_normalize": "per_ts_split",
+                                            "cs_block": 32,
+                                            "cs_winsor_p": 0.01,
+                                            "cs_ddof": 1,
+                                            "batch_id": 0,
+                                            "families": [family],
+                                            "symbol": symbol
+                                        },
+                                        "n_rows_train": len(X),
+                                        "n_rows_val": 0,
+                                        "train_timestamps": int(np.unique(time_vals).size) if time_vals is not None else len(X),
+                                        "val_timestamps": 0,
+                                        "time_col": None,
+                                        "val_start_ts": None,
+                                        "metrics": {
+                                            "mean_IC": 0.0,
+                                            "mean_RankIC": 0.0,
+                                            "IC_IR": 0.0,
+                                            "n_times": 0,
+                                            "hit_rate": 0.0,
+                                            "skipped_timestamps": 0,
+                                            "total_timestamps": 0
+                                        },
+                                        "routing": {
+                                            "route": "SYMBOL_SPECIFIC",
+                                            "symbol": symbol,
+                                            "view": "SYMBOL_SPECIFIC"
                                         }
-                                        
-                                        # Add CV scores if available
-                                        if strategy_manager and hasattr(strategy_manager, 'cv_scores'):
-                                            cv_scores = strategy_manager.cv_scores
-                                            if cv_scores and len(cv_scores) > 0:
-                                                metadata["cv_scores"] = [float(s) for s in cv_scores]
-                                                metadata["cv_mean"] = float(np.mean(cv_scores))
-                                                metadata["cv_std"] = float(np.std(cv_scores))
-                                        
-                                        # Save to target-first structure
-                                        with open(meta_path_repro, 'w') as f:
-                                            json.dump(metadata, f, indent=2)
-                                        logger.info(f"  💾 Metadata saved: {meta_path_repro}")
-                                        
-                                        # Target-first structure only - no legacy writes
-                            else:
-                                # Fallback: save model directly if no strategy_manager
-                                model_path = symbol_target_dir / "model.joblib"
-                                # joblib already imported at top of file (line 176)
-                                joblib.dump(model_result.get('model'), model_path)
-                                logger.info(f"  ✅ Saved {family} model for {target}:{symbol} to {model_path}")
-                                symbol_family_status[family]["saved"] = True
+                                    }
+                                    
+                                    # Add CV scores if available
+                                    if strategy_manager and hasattr(strategy_manager, 'cv_scores'):
+                                        cv_scores = strategy_manager.cv_scores
+                                        if cv_scores and len(cv_scores) > 0:
+                                            metadata["cv_scores"] = [float(s) for s in cv_scores]
+                                            metadata["cv_mean"] = float(np.mean(cv_scores))
+                                            metadata["cv_std"] = float(np.std(cv_scores))
+                                    
+                                    # Save to target-first structure
+                                    with open(meta_path_repro, 'w') as f:
+                                        json.dump(metadata, f, indent=2)
+                                    logger.info(f"  💾 Metadata saved: {meta_path_repro}")
+                                    
+                                    # Target-first structure only - no legacy writes
+                                
+                                else:  # Other model types - save as JSON too
+                                    # Save to target-first structure (primary location)
+                                    from TRAINING.orchestration.utils.target_first_paths import (
+                                        get_target_reproducibility_dir
+                                    )
+                                    repro_dir = get_target_reproducibility_dir(Path(output_dir), target)
+                                    repro_dir.mkdir(parents=True, exist_ok=True)
+                                    meta_path_repro = repro_dir / f"meta_{family}_{symbol}_b0.json"
+                                    
+                                    # Target-first structure only - metadata is in target-first location
+                                    import json
+                                    metadata = {
+                                        "family": family,
+                                        "target": target,
+                                        "symbol": symbol,
+                                        "route": "SYMBOL_SPECIFIC",  # Add route indicator
+                                        "view": "SYMBOL_SPECIFIC",  # Add view indicator
+                                        "min_cs": 1,
+                                        "features": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
+                                        "feature_names": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
+                                        "n_features": len(feature_names),
+                                        "n_rows_train": len(X),
+                                        "train_timestamps": int(np.unique(time_vals).size) if time_vals is not None else len(X),
+                                        "routing": {
+                                            "route": "SYMBOL_SPECIFIC",
+                                            "symbol": symbol,
+                                            "view": "SYMBOL_SPECIFIC"
+                                        }
+                                    }
+                                    
+                                    # Add CV scores if available
+                                    if strategy_manager and hasattr(strategy_manager, 'cv_scores'):
+                                        cv_scores = strategy_manager.cv_scores
+                                        if cv_scores and len(cv_scores) > 0:
+                                            metadata["cv_scores"] = [float(s) for s in cv_scores]
+                                            metadata["cv_mean"] = float(np.mean(cv_scores))
+                                            metadata["cv_std"] = float(np.std(cv_scores))
+                                    
+                                    # Save to target-first structure
+                                    with open(meta_path_repro, 'w') as f:
+                                        json.dump(metadata, f, indent=2)
+                                    logger.info(f"  💾 Metadata saved: {meta_path_repro}")
+                                    
+                                    # Target-first structure only - no legacy writes
+                        else:
+                            # Fallback: save model directly if no strategy_manager
+                            model_path = symbol_target_dir / "model.joblib"
+                            # joblib already imported at top of file (line 176)
+                            joblib.dump(model_result.get('model'), model_path)
+                            logger.info(f"  ✅ Saved {family} model for {target}:{symbol} to {model_path}")
+                            symbol_family_status[family]["saved"] = True
                         
                         except Exception as e:
                             symbol_family_status[family]["error"] = f"Save failed: {str(e)}"
