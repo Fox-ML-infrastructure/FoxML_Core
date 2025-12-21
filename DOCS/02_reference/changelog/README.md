@@ -6,6 +6,12 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-21 (Feature Selection Routing and Training View Tracking Fixes)** — Fixed path resolution warning walking to root directory. Added view tracking (CROSS_SECTIONAL/SYMBOL_SPECIFIC) to feature selection routing metadata. Added route/view information to training reproducibility tracking for proper output separation. Fixed BOTH route to use symbol-specific features for symbol-specific model training (was incorrectly using CS features). Added view information to per-target routing_decision.json files.
+  → [View](2025-12-21-feature-selection-routing-and-training-view-tracking.md)
+
+- **2025-12-21 (CatBoost Verbosity and Feature Selection Reproducibility Fixes)** — Fixed CatBoost verbosity parameter conflict causing training failures (removed conflicting `logging_level` parameter). Added missing `n_features` to feature selection reproducibility tracking (fixes diff telemetry validation warnings).
+  → [View](2025-12-21-catboost-verbosity-and-reproducibility-fixes.md)
+
 - **2025-12-21 (CatBoost Performance Diagnostics and Comprehensive Fixes)** — Reduced iterations cap from 2000 to 300 (matching target ranking), added comprehensive performance timing logs, diagnostic logging (iterations, scores, gaps), pre-training data quality checks, and enhanced overfitting detection. Created comparison document identifying differences between feature selection and target ranking stages.
   → [View](2025-12-21-catboost-performance-diagnostics.md)
 

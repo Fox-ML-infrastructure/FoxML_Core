@@ -221,7 +221,8 @@ def save_target_routing_metadata(
     output_dir: Path,
     target_name: str,
     conf: Dict[str, Any],
-    routing: Dict[str, Any]
+    routing: Dict[str, Any],
+    view: Optional[str] = None
 ) -> None:
     """
     Save routing decision metadata alongside confidence metrics.
@@ -237,6 +238,7 @@ def save_target_routing_metadata(
         target_name: Target column name
         conf: Confidence metrics
         routing: Routing decision from classify_target_from_confidence()
+        view: View type (CROSS_SECTIONAL, SYMBOL_SPECIFIC) - if None, defaults to CROSS_SECTIONAL
     """
     from TRAINING.orchestration.utils.target_first_paths import (
         get_target_decision_dir, get_globals_dir, ensure_target_structure
@@ -256,11 +258,17 @@ def save_target_routing_metadata(
     decision_dir = get_target_decision_dir(base_dir, target_name_clean)
     decision_dir.mkdir(parents=True, exist_ok=True)
     
+    # Normalize view (default to CROSS_SECTIONAL if not provided)
+    view_normalized = (view or "CROSS_SECTIONAL").upper()
+    if view_normalized not in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+        view_normalized = "CROSS_SECTIONAL"
+    
     # Save per-target decision (detailed record with full confidence and routing info)
     routing_path = decision_dir / "routing_decision.json"
     routing_data = {
         target_name: {
             'target_name': target_name,
+            'view': view_normalized,  # Add view information for completeness
             'confidence': conf,
             'routing': routing,
             # Reference to where selected features can be found
@@ -290,12 +298,21 @@ def save_target_routing_metadata(
         except Exception as e:
             logger.warning(f"Failed to load existing feature selection routing: {e}")
     
+    # Normalize view (default to CROSS_SECTIONAL if not provided)
+    view_normalized = (view or "CROSS_SECTIONAL").upper()
+    if view_normalized not in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+        view_normalized = "CROSS_SECTIONAL"
+    
+    # Create key with view: target_name:view (e.g., "fwd_ret_5d:CROSS_SECTIONAL")
+    routing_key = f"{target_name}:{view_normalized}"
+    
     # Update with this target's routing decision (lightweight - just key info)
-    existing_routing[target_name] = {
+    existing_routing[routing_key] = {
         'confidence': conf.get('confidence', 'LOW'),
         'score_tier': conf.get('score_tier', 'LOW'),
         'bucket': routing.get('bucket', 'experimental'),
         'allowed_in_production': routing.get('allowed_in_production', False),
+        'view': view_normalized,  # Add view information
         # Reference to per-target file for full details
         'details_path': f"targets/{target_name_clean}/decision/routing_decision.json"
     }

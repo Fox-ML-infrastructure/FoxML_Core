@@ -2162,6 +2162,7 @@ def select_features_for_target(
                 # Add fields needed for enhanced metadata (matching target ranking)
                 if selected_features:
                     additional_data_with_cohort['feature_names'] = selected_features
+                    additional_data_with_cohort['n_features'] = len(selected_features)  # Required for diff_telemetry validation
                 
                 # Add data interval for data_source metadata
                 if 'detected_interval' in locals() and detected_interval is not None:

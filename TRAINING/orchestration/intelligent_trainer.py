@@ -1300,7 +1300,7 @@ class IntelligentTrainer:
             conf = load_target_confidence(target_repro_dir, target)
             if conf:
                 routing = classify_target_from_confidence(conf, routing_config=routing_config)
-                save_target_routing_metadata(self.output_dir, target, conf, routing)
+                save_target_routing_metadata(self.output_dir, target, conf, routing, view=view)
                 
                 # Log routing decision
                 logger.info(

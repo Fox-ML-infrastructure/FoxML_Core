@@ -1954,10 +1954,11 @@ def train_model_and_get_importance(
                     else:
                         logger.info(f"    CatBoost: Verified GPU configuration (task_type={task_type}, devices={actual_params.get('devices', 'not set')})")
                         # Add verbose logging to confirm GPU usage during training
+                        # Note: Only set 'verbose' parameter - 'logging_level' conflicts with it
                         if hasattr(model, 'base_model'):
-                            model.base_model.set_params(verbose=50, logging_level='Verbose')
+                            model.base_model.set_params(verbose=1)
                         elif hasattr(model, 'set_params'):
-                            model.set_params(verbose=50, logging_level='Verbose')
+                            model.set_params(verbose=1)
                 
                 # CRITICAL: Add timeout mechanism and duration logging for CatBoost training
                 # This helps identify if "hours" is actually CatBoost or cumulative overhead

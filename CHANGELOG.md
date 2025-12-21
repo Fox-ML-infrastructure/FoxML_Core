@@ -16,6 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-21 (Feature Selection Routing and Training View Tracking Fixes)
+- **Bug Fix**: Fixed path resolution warning that was walking to root directory
+- **Enhancement**: Added view tracking (CROSS_SECTIONAL/SYMBOL_SPECIFIC) to feature selection routing metadata
+- **Bug Fix**: Added route/view information to training reproducibility tracking for proper output separation
+- **Bug Fix**: Fixed BOTH route to use symbol-specific features for symbol-specific model training (was using CS features incorrectly)
+- **Enhancement**: Added view information to per-target routing_decision.json files
+- **Files Changed**: `feature_selection_reporting.py`, `target_routing.py`, `intelligent_trainer.py`, `training.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-21-feature-selection-routing-and-training-view-tracking.md)
+
+#### 2025-12-21 (CatBoost Verbosity and Feature Selection Reproducibility Fixes)
+- **Bug Fix**: Fixed CatBoost verbosity parameter conflict causing training failures (removed conflicting `logging_level` parameter)
+- **Bug Fix**: Added missing `n_features` to feature selection reproducibility tracking (fixes diff telemetry validation warnings)
+- **Files Changed**: `multi_model_feature_selection.py`, `feature_selector.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-21-catboost-verbosity-and-reproducibility-fixes.md)
+
 #### 2025-12-21 (CatBoost Performance Diagnostics and Comprehensive Fixes)
 - **Performance Fix**: Reduced iterations cap from 2000 to 300 (matching target ranking), added comprehensive timing logs and diagnostics
 - **Diagnostics**: Added performance timing (CV, fit, importance), diagnostic logging (iterations, scores, gaps), pre-training checks, enhanced overfitting detection

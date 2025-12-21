@@ -127,34 +127,53 @@ def save_feature_selection_rankings(
             repro_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean
     
     # Find base run directory for target-first structure
+    # IMPROVED: Start from output_dir when available (more reliable than starting from repro_dir)
     # Walk up to find the run directory (where "targets", "globals", or "cache" would be)
-    base_output_dir = repro_dir
-    for _ in range(10):  # Limit depth
-        # Only stop if we find a run directory (has targets/, globals/, or cache/)
-        # Don't stop at RESULTS/ - continue to find actual run directory
-        if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
-            break
-        elif (base_output_dir.parent / "targets").exists() or (base_output_dir.parent / "globals").exists() or (base_output_dir.parent / "cache").exists():
-            base_output_dir = base_output_dir.parent
-            break
-        if not base_output_dir.parent.exists() or base_output_dir.parent == base_output_dir:
-            break
-        base_output_dir = base_output_dir.parent
+    base_output_dir = None
     
-    # CRITICAL: Validate base_output_dir is not root and is absolute
-    # If we walked all the way to root, fall back to original output_dir
-    if base_output_dir == Path('/') or not base_output_dir.is_absolute() or str(base_output_dir) == '/':
-        logger.warning(f"Path resolution failed - base_output_dir resolved to root or invalid: {base_output_dir}. Using original output_dir: {output_dir}")
-        base_output_dir = output_dir
-        # Try to find run directory from output_dir instead
-        temp_dir = output_dir
-        for _ in range(10):
+    # First, try to find run directory from output_dir (preferred method)
+    if output_dir and output_dir.exists():
+        temp_dir = Path(output_dir)
+        for _ in range(10):  # Limit depth
+            # Only stop if we find a run directory (has targets/, globals/, or cache/)
+            # Don't stop at RESULTS/ - continue to find actual run directory
             if (temp_dir / "targets").exists() or (temp_dir / "globals").exists() or (temp_dir / "cache").exists():
                 base_output_dir = temp_dir
                 break
             if not temp_dir.parent.exists() or temp_dir.parent == temp_dir:
                 break
             temp_dir = temp_dir.parent
+    
+    # Fallback: If output_dir method didn't work, try from repro_dir
+    if base_output_dir is None or base_output_dir == Path('/') or str(base_output_dir) == '/':
+        base_output_dir = repro_dir
+        for _ in range(10):  # Limit depth
+            # Only stop if we find a run directory (has targets/, globals/, or cache/)
+            # Don't stop at RESULTS/ - continue to find actual run directory
+            if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
+                break
+            elif (base_output_dir.parent / "targets").exists() or (base_output_dir.parent / "globals").exists() or (base_output_dir.parent / "cache").exists():
+                base_output_dir = base_output_dir.parent
+                break
+            if not base_output_dir.parent.exists() or base_output_dir.parent == base_output_dir:
+                break
+            base_output_dir = base_output_dir.parent
+    
+    # CRITICAL: Validate base_output_dir is not root and is absolute
+    # If we walked all the way to root, fall back to original output_dir
+    if base_output_dir is None or base_output_dir == Path('/') or not base_output_dir.is_absolute() or str(base_output_dir) == '/':
+        logger.warning(f"Path resolution failed - base_output_dir resolved to root or invalid: {base_output_dir}. Using original output_dir: {output_dir}")
+        base_output_dir = Path(output_dir) if output_dir else repro_dir
+        # Final attempt: Try to find run directory from output_dir
+        if output_dir:
+            temp_dir = Path(output_dir)
+            for _ in range(10):
+                if (temp_dir / "targets").exists() or (temp_dir / "globals").exists() or (temp_dir / "cache").exists():
+                    base_output_dir = temp_dir
+                    break
+                if not temp_dir.parent.exists() or temp_dir.parent == temp_dir:
+                    break
+                temp_dir = temp_dir.parent
     
     # Target-first structure: save to targets/<target>/decision/
     from TRAINING.orchestration.utils.target_first_paths import (
