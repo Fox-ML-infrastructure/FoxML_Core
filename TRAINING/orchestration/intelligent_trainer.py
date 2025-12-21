@@ -2650,8 +2650,9 @@ Examples:
         top_m_features = features_cfg.get('top_m_features', 100)
         manual_features = features_cfg.get('manual_features', [])
         
-        # Model families from config (can be overridden by CLI)
-        config_families = intel_config_data.get('model_families', [])
+        # Model families from config (can be overridden by CLI or experiment config)
+        # Default to None (not empty list) so we can distinguish "not set" from "empty list"
+        config_families = intel_config_data.get('model_families', None)
         
         strategy = intel_config_data.get('strategy', 'single_task')
         min_cs = data_cfg.get('min_cs', 10)
@@ -2832,13 +2833,18 @@ Examples:
                             top_n_targets = exp_top_n
                             logger.info(f"📋 Using top_n_targets={top_n_targets} from experiment config")
                     
-                    # Extract training.model_families from experiment config (NEW)
+                    # Extract training.model_families from experiment config (NEW - SST)
+                    # This is the Single Source of Truth for model families unless CLI overrides
                     exp_training = exp_yaml.get('training', {})
                     if exp_training:
-                        exp_model_families = exp_training.get('model_families', [])
-                        if exp_model_families and isinstance(exp_model_families, list):
-                            config_families = exp_model_families
-                            logger.info(f"📋 Using training.model_families from experiment config: {config_families}")
+                        exp_model_families = exp_training.get('model_families', None)
+                        if exp_model_families is not None:
+                            # Explicitly set in config - use it (even if empty list)
+                            if isinstance(exp_model_families, list):
+                                config_families = exp_model_families
+                                logger.info(f"📋 Using training.model_families from experiment config (SST): {config_families}")
+                            else:
+                                logger.warning(f"⚠️ training.model_families in experiment config is not a list: {type(exp_model_families)}, ignoring")
             except Exception as e:
                 logger.debug(f"Could not load intelligent_training from experiment config: {e}")
             
