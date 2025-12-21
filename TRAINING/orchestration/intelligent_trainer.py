@@ -2892,7 +2892,7 @@ Examples:
         force_refresh_config = False
         manual_targets = []
         manual_features = []
-        config_families = []
+        config_families = None  # None = not set, [] = explicitly empty, [list] = explicitly set
     
     # ============================================================================
     # CONFIG TRACE: Comprehensive logging of config loading and precedence
