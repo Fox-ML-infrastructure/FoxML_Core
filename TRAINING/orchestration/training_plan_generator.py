@@ -70,7 +70,13 @@ class TrainingPlanGenerator:
             default_families: Default families if model_families not provided
         """
         self.routing_plan = routing_plan
-        self.model_families = model_families or default_families or ["lightgbm", "xgboost"]
+        # Respect empty list from config (SST) - only use defaults if None
+        if model_families is not None:
+            self.model_families = model_families
+        elif default_families is not None:
+            self.model_families = default_families
+        else:
+            self.model_families = ["lightgbm", "xgboost"]
     
     def generate_training_plan(
         self,
@@ -110,9 +116,10 @@ class TrainingPlanGenerator:
             logger.warning(f"model_families is not a list, using default")
             self.model_families = ["lightgbm", "xgboost"]
         
+        # Respect empty list from config (SST) - empty list means "no families to train"
+        # Only warn if it's empty (config explicitly set it to empty)
         if not self.model_families:
-            logger.warning("model_families is empty, using default")
-            self.model_families = ["lightgbm", "xgboost"]
+            logger.warning("⚠️ model_families is empty - no families will be trained (this may be intentional from config)")
         
         jobs = []
         
