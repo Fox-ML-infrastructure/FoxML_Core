@@ -454,20 +454,20 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                             strategy_manager = model_result.get('strategy_manager')
                             if strategy_manager and hasattr(strategy_manager, 'models'):
                                 models = strategy_manager.models
-                            
-                            # Import model wrapper for saving compatibility
-                            from TRAINING.common.model_wrapper import wrap_model_for_saving, get_model_saving_info
-                            
-                            # Save each model component
-                            for model_name, model in models.items():
-                                # Wrap model for saving compatibility
-                                wrapped_model = wrap_model_for_saving(model, family)
                                 
-                                # Get saving info
-                                save_info = get_model_saving_info(wrapped_model)
+                                # Import model wrapper for saving compatibility
+                                from TRAINING.common.model_wrapper import wrap_model_for_saving, get_model_saving_info
                                 
-                                # Determine file extensions based on model type
-                                if save_info['is_lightgbm']:  # LightGBM
+                                # Save each model component
+                                for model_name, model in models.items():
+                                    # Wrap model for saving compatibility
+                                    wrapped_model = wrap_model_for_saving(model, family)
+                                    
+                                    # Get saving info
+                                    save_info = get_model_saving_info(wrapped_model)
+                                    
+                                    # Determine file extensions based on model type
+                                    if save_info['is_lightgbm']:  # LightGBM
                                     model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.txt"
                                     wrapped_model.save_model(str(model_path))
                                     logger.info(f"  💾 LightGBM model saved: {model_path}")
