@@ -437,21 +437,22 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                         symbol_results[family] = model_result
                         
                         # Save model with target-first path (INDIVIDUAL/SYMBOL_SPECIFIC route)
-                        from TRAINING.orchestration.utils.target_first_paths import (
-                            get_target_models_dir, ensure_target_structure
-                        )
-                        ensure_target_structure(Path(output_dir), target)
-                        # Add view indicator to path for SYMBOL_SPECIFIC models
-                        base_target_dir = get_target_models_dir(Path(output_dir), target, family)
-                        symbol_target_dir = base_target_dir / "view=SYMBOL_SPECIFIC" / f"symbol={symbol}"
-                        symbol_target_dir.mkdir(parents=True, exist_ok=True)
-                        logger.info(f"💾 Saving SYMBOL_SPECIFIC model for {symbol} to: {symbol_target_dir}")
-                        
-                        # Target-first structure only - no legacy paths
-                        
-                        # Get the trained model from strategy manager
-                        strategy_manager = model_result.get('strategy_manager')
-                        if strategy_manager and hasattr(strategy_manager, 'models'):
+                        try:
+                            from TRAINING.orchestration.utils.target_first_paths import (
+                                get_target_models_dir, ensure_target_structure
+                            )
+                            ensure_target_structure(Path(output_dir), target)
+                            # Add view indicator to path for SYMBOL_SPECIFIC models
+                            base_target_dir = get_target_models_dir(Path(output_dir), target, family)
+                            symbol_target_dir = base_target_dir / "view=SYMBOL_SPECIFIC" / f"symbol={symbol}"
+                            symbol_target_dir.mkdir(parents=True, exist_ok=True)
+                            logger.info(f"💾 Saving SYMBOL_SPECIFIC model for {symbol} to: {symbol_target_dir}")
+                            
+                            # Target-first structure only - no legacy paths
+                            
+                            # Get the trained model from strategy manager
+                            strategy_manager = model_result.get('strategy_manager')
+                            if strategy_manager and hasattr(strategy_manager, 'models'):
                             models = strategy_manager.models
                             
                             # Import model wrapper for saving compatibility
@@ -472,12 +473,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     logger.info(f"  💾 LightGBM model saved: {model_path}")
                                     symbol_family_status[family]["saved"] = True
                                     
-                                    # Also save to legacy location for backward compatibility
-                                    legacy_model_path = legacy_symbol_target_dir / f"{family.lower()}_mtf_b0.txt"
-                                    legacy_model_path.parent.mkdir(parents=True, exist_ok=True)
-                                    import shutil
-                                    shutil.copy2(model_path, legacy_model_path)
-                                    logger.debug(f"  💾 Model saved to legacy location: {legacy_model_path}")
+                                    # Note: Legacy paths removed - using target-first structure only
                                     
                                 elif save_info['is_tensorflow']:  # TensorFlow/Keras
                                     model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.keras"
@@ -667,7 +663,6 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                             joblib.dump(model_result.get('model'), model_path)
                             logger.info(f"  ✅ Saved {family} model for {target}:{symbol} to {model_path}")
                             symbol_family_status[family]["saved"] = True
-                        
                         except Exception as e:
                             symbol_family_status[family]["error"] = f"Save failed: {str(e)}"
                             logger.error(f"  ❌ Failed to save {family} model for {target}:{symbol}: {e}")
