@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-21 (CatBoost Performance Diagnostics and Comprehensive Fixes)
+- **Performance Fix**: Reduced iterations cap from 2000 to 300 (matching target ranking), added comprehensive timing logs and diagnostics
+- **Diagnostics**: Added performance timing (CV, fit, importance), diagnostic logging (iterations, scores, gaps), pre-training checks, enhanced overfitting detection
+- **Analysis**: Created comparison document identifying differences between feature selection and target ranking stages
+- **Files Changed**: `multi_model_feature_selection.py`, `docs/analysis/catboost_feature_selection_vs_target_ranking_comparison.md`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-21-catboost-performance-diagnostics.md)
+
 #### 2025-12-21 (CatBoost Early Stopping Fix for Feature Selection)
 - **Performance Fix**: Added early stopping to CatBoost final fit in feature selection, reducing training time from ~3 hours to <30 minutes
 - **Files Changed**: `multi_model_feature_selection.py`, `multi_model.yaml`

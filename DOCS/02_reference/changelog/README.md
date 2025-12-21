@@ -6,6 +6,15 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-21 (CatBoost Performance Diagnostics and Comprehensive Fixes)** — Reduced iterations cap from 2000 to 300 (matching target ranking), added comprehensive performance timing logs, diagnostic logging (iterations, scores, gaps), pre-training data quality checks, and enhanced overfitting detection. Created comparison document identifying differences between feature selection and target ranking stages.
+  → [View](2025-12-21-catboost-performance-diagnostics.md)
+
+- **2025-12-21 (CatBoost Early Stopping Fix for Feature Selection)** — Fixed CatBoost training taking 3 hours by adding early stopping to final fit. Added train/val split and eval_set support to enable early stopping, reducing training time from ~3 hours to <30 minutes.
+  → [View](2025-12-21-catboost-early-stopping-fix.md)
+
+- **2025-12-21 (Run Comparison Fixes for Target-First Structure)** — Fixed diff telemetry and trend analyzer to properly find and compare runs across target-first structure.
+  → [View](2025-12-21-run-comparison-fixes.md)
+
 - **2025-12-20 (Threading, Feature Pruning, and Path Resolution Fixes)** — Added threading/parallelization to feature selection (CatBoost/Elastic Net), excluded `ret_zscore_*` targets from features to prevent leakage, and fixed path resolution errors causing permission denied. Feature selection now matches target ranking performance.
   → [View](2025-12-20-threading-feature-pruning-path-fixes.md)
 

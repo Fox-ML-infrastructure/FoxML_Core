@@ -1557,10 +1557,12 @@ def train_model_and_get_importance(
             
             # 5. CRITICAL: Cap iterations for feature selection to prevent 2-3 hour training times
             # For feature selection, we don't need full training - just enough for importance ranking
-            max_iterations_feature_selection = 2000  # Hard cap for feature selection
+            # Match target ranking approach: use 300 iterations (same as target ranking config)
+            # Early stopping will further reduce actual iterations if validation doesn't improve
+            max_iterations_feature_selection = 300  # Match target ranking (was 2000, too high)
             current_iterations = cb_config.get('iterations', 300)
             if current_iterations > max_iterations_feature_selection:
-                logger.info(f"    catboost: Capping iterations from {current_iterations} to {max_iterations_feature_selection} for feature selection")
+                logger.info(f"    catboost: Capping iterations from {current_iterations} to {max_iterations_feature_selection} for feature selection (matching target ranking)")
                 cb_config['iterations'] = max_iterations_feature_selection
                 cb_config['use_best_model'] = True  # Use best model from early stopping
             
@@ -1810,6 +1812,46 @@ def train_model_and_get_importance(
                     for v in unique_vals
                 )
                 
+                # PRE-TRAINING DATA QUALITY CHECKS (quick verification only)
+                # Note: Extensive checks skipped - feature pruning already filtered low-quality features
+                logger.debug(f"    CatBoost: Pre-training data quality checks")
+                
+                # Check 1: Constant features (should already be filtered by pruning)
+                constant_features = []
+                for i, feat_name in enumerate(feature_names):
+                    if i < X_catboost.shape[1]:
+                        feat_values = X_catboost[:, i]
+                        if len(np.unique(feat_values[~np.isnan(feat_values)])) <= 1:
+                            constant_features.append(feat_name)
+                if constant_features:
+                    logger.warning(f"    CatBoost: Found {len(constant_features)} constant features (should have been filtered by pruning): {constant_features[:5]}")
+                
+                # Check 2: Perfect separability (could explain 100% accuracy on small dataset)
+                # Quick check: if any single feature perfectly separates classes, log warning
+                if is_binary:
+                    perfect_separators = []
+                    for i, feat_name in enumerate(feature_names):
+                        if i < X_catboost.shape[1]:
+                            feat_values = X_catboost[:, i]
+                            # Check if feature values perfectly separate classes
+                            unique_vals_feat = np.unique(feat_values[~np.isnan(feat_values)])
+                            if len(unique_vals_feat) == 2:  # Binary feature
+                                # Check if this binary feature perfectly separates classes
+                                class_0_mask = y == 0
+                                class_1_mask = y == 1
+                                if np.all(feat_values[class_0_mask] == unique_vals_feat[0]) and np.all(feat_values[class_1_mask] == unique_vals_feat[1]):
+                                    perfect_separators.append(feat_name)
+                    if perfect_separators:
+                        logger.warning(f"    CatBoost: Found {len(perfect_separators)} features that perfectly separate classes (may explain 100% accuracy): {perfect_separators[:5]}")
+                
+                # Check 3: Dataset size vs feature count (high feature-to-sample ratio can cause overfitting)
+                n_samples, n_features = X_catboost.shape
+                feature_to_sample_ratio = n_features / n_samples if n_samples > 0 else 0
+                if feature_to_sample_ratio > 0.2:
+                    logger.warning(f"    CatBoost: High feature-to-sample ratio ({feature_to_sample_ratio:.3f}, {n_features} features / {n_samples} samples) - risk of overfitting")
+                
+                logger.debug(f"    CatBoost: Pre-training checks completed (dataset: {n_samples} samples, {n_features} features)")
+                
                 # Set up CV splitter and scoring
                 from sklearn.model_selection import cross_val_score
                 from TRAINING.ranking.utils.purged_time_series_split import PurgedTimeSeriesSplit
@@ -1835,13 +1877,31 @@ def train_model_and_get_importance(
                 else:
                     scoring = 'r2'
                 
-                # Run cross_val_score for parallelization (if cv_n_jobs > 1)
+                # CRITICAL: Add performance timing to identify bottlenecks
+                import time
+                total_start_time = time.time()
+                cv_start_time = None
+                cv_elapsed = None
+                
+                # PERFORMANCE FIX: Skip CV in feature selection to match target ranking approach
+                # CV adds significant overhead (3 folds × iterations) and doesn't use early stopping
+                # Target ranking does CV but then fits on full dataset - we'll do the same
+                # Skip CV for feature selection to reduce training time from hours to minutes
+                cv_scores = None
                 if cv_n_jobs > 1:
+                    cv_start_time = time.time()
                     try:
+                        logger.info(f"    CatBoost: Starting CV phase (n_splits={n_splits}, cv_n_jobs={cv_n_jobs})")
+                        logger.info(f"    CatBoost: NOTE: CV in feature selection can be slow (no early stopping per fold). Consider skipping CV for faster feature selection.")
                         cv_scores = cross_val_score(model, X_catboost, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
-                        logger.debug(f"    CatBoost: CV scores (mean={np.nanmean(cv_scores):.4f}, std={np.nanstd(cv_scores):.4f})")
+                        cv_elapsed = time.time() - cv_start_time
+                        logger.info(f"    CatBoost: CV phase completed in {cv_elapsed/60:.2f} minutes "
+                                  f"(scores: mean={np.nanmean(cv_scores):.4f}, std={np.nanstd(cv_scores):.4f})")
                     except Exception as e:
-                        logger.debug(f"    CatBoost: CV failed (continuing with single fit): {e}")
+                        cv_elapsed = time.time() - cv_start_time if cv_start_time else None
+                        logger.debug(f"    CatBoost: CV failed after {cv_elapsed/60:.2f} minutes (continuing with single fit): {e}")
+                else:
+                    logger.debug(f"    CatBoost: Skipping CV (cv_n_jobs={cv_n_jobs} <= 1) - using single fit like target ranking")
                 
                 # CRITICAL: Add early stopping to final fit to prevent 3-hour training times
                 # Split data into train/val for early stopping (use 80/20 split)
@@ -1901,7 +1961,6 @@ def train_model_and_get_importance(
                 
                 # CRITICAL: Add timeout mechanism and duration logging for CatBoost training
                 # This helps identify if "hours" is actually CatBoost or cumulative overhead
-                import time
                 import signal
                 
                 fit_start_time = time.time()
@@ -1931,11 +1990,13 @@ def train_model_and_get_importance(
                             # Fit with early stopping using eval_set
                             model.fit(X_train_fit, y_train_fit, eval_set=[(X_val_fit, y_val_fit)])
                             train_score = model.score(X_train_fit, y_train_fit)
+                            val_score = model.score(X_val_fit, y_val_fit)
                     else:
                         # Fallback: manual thread management
                         # Fit with early stopping using eval_set
                         model.fit(X_train_fit, y_train_fit, eval_set=[(X_val_fit, y_val_fit)])
                         train_score = model.score(X_train_fit, y_train_fit)
+                        val_score = model.score(X_val_fit, y_val_fit)
                     
                     # Check soft timeout (for Windows or if SIGALRM didn't fire)
                     fit_elapsed = time.time() - fit_start_time
@@ -1946,16 +2007,36 @@ def train_model_and_get_importance(
                     # Log actual iteration count vs max (to verify early stopping worked)
                     if hasattr(model, 'base_model'):
                         actual_iterations = getattr(model.base_model, 'tree_count_', None) or getattr(model.base_model, 'iteration_count_', None)
+                        # Try to get best iteration from early stopping
+                        best_iteration = getattr(model.base_model, 'best_iteration_', None)
                     elif hasattr(model, 'tree_count_') or hasattr(model, 'iteration_count_'):
                         actual_iterations = getattr(model, 'tree_count_', None) or getattr(model, 'iteration_count_', None)
+                        best_iteration = getattr(model, 'best_iteration_', None)
                     else:
                         actual_iterations = None
+                        best_iteration = None
                     
                     max_iterations = cb_config.get('iterations', 300)
                     fit_elapsed_minutes = fit_elapsed / 60
-                    logger.info(f"    CatBoost: Training completed in {fit_elapsed_minutes:.2f} minutes "
+                    
+                    # Log train/val scores and overfitting indicators
+                    train_val_gap = train_score - val_score if 'val_score' in locals() else None
+                    logger.info(f"    CatBoost: Final fit completed in {fit_elapsed_minutes:.2f} minutes "
                               f"(iterations: {actual_iterations if actual_iterations else 'unknown'}/{max_iterations}, "
+                              f"best_iteration: {best_iteration if best_iteration else 'N/A'}, "
                               f"early_stopping: {'triggered' if actual_iterations and actual_iterations < max_iterations else 'not triggered'})")
+                    logger.info(f"    CatBoost: Scores - Train: {train_score:.4f}, Val: {val_score:.4f if 'val_score' in locals() else 'N/A'}, "
+                              f"Gap: {train_val_gap:.4f if train_val_gap is not None else 'N/A'} "
+                              f"{'(OVERFITTING)' if train_val_gap and train_val_gap > 0.3 else ''}")
+                    
+                    # Log total time breakdown
+                    total_elapsed = time.time() - total_start_time
+                    total_elapsed_minutes = total_elapsed / 60
+                    cv_time_str = f"{cv_elapsed/60:.2f}" if cv_elapsed else "0.00"
+                    fit_time_str = f"{fit_elapsed_minutes:.2f}"
+                    remaining_time = total_elapsed - (cv_elapsed if cv_elapsed else 0) - fit_elapsed
+                    remaining_time_str = f"{remaining_time/60:.2f}" if remaining_time > 0 else "0.00"
+                    logger.info(f"    CatBoost: Total time breakdown - CV: {cv_time_str} min, Fit: {fit_time_str} min, Other: {remaining_time_str} min, Total: {total_elapsed_minutes:.2f} min")
                     
                 except TimeoutError:
                     logger.error(f"    CatBoost: Training timeout after {max_training_time_seconds/60:.0f} minutes - aborting")
@@ -1968,14 +2049,35 @@ def train_model_and_get_importance(
                     except (AttributeError, OSError):
                         pass  # Windows doesn't support SIGALRM
                 
-                # FAIL-FAST: Check for suspiciously high training accuracy (overfitting/memorization)
+                # OVERFITTING DETECTION: Check for suspiciously high training accuracy (overfitting/memorization)
                 # Tree-based models can easily overfit to 100% training accuracy
                 # This indicates the model is memorizing data and will take a long time to compute importance
-                # Skip expensive operations (feature importance computation) to save time
+                
+                # Check 1: Early 100% accuracy detection
                 if train_score >= 0.999:  # 99.9% threshold (matches _check_for_perfect_correlation threshold)
-                    logger.debug(f"    CatBoost: Training accuracy {train_score:.1%} >= 99.9% (overfitting detected, skipping expensive operations)")
+                    logger.warning(f"    CatBoost: ⚠️  OVERFITTING DETECTED - Training accuracy {train_score:.1%} >= 99.9% (model is memorizing data)")
+                    logger.warning(f"    CatBoost: This indicates severe overfitting. Model will not generalize. Skipping expensive operations to save time.")
                     # Mark as failed and return early - skip expensive feature importance computation
                     return None, pd.Series(0.0, index=feature_names), importance_method, train_score
+                
+                # Check 2: Train/Val gap analysis (overfitting indicator)
+                if 'val_score' in locals() and val_score is not None:
+                    train_val_gap = train_score - val_score
+                    if train_val_gap > 0.3:
+                        logger.warning(f"    CatBoost: ⚠️  OVERFITTING WARNING - Large train/val gap: {train_val_gap:.4f} (train={train_score:.4f}, val={val_score:.4f})")
+                        logger.warning(f"    CatBoost: Model is overfitting. Consider: reduce depth, increase regularization, reduce iterations")
+                    elif train_val_gap > 0.1:
+                        logger.info(f"    CatBoost: Moderate train/val gap: {train_val_gap:.4f} (train={train_score:.4f}, val={val_score:.4f}) - monitor for overfitting")
+                
+                # Check 3: CV vs Train gap (if CV was run)
+                if cv_elapsed and cv_scores is not None and len(cv_scores) > 0:
+                    cv_mean = np.nanmean(cv_scores)
+                    cv_train_gap = train_score - cv_mean
+                    if cv_train_gap > 0.3:
+                        logger.warning(f"    CatBoost: ⚠️  OVERFITTING WARNING - Large CV/Train gap: {cv_train_gap:.4f} (train={train_score:.4f}, CV={cv_mean:.4f})")
+                        logger.warning(f"    CatBoost: CV score is much lower than training score - model is overfitting to training data")
+                    elif cv_train_gap > 0.1:
+                        logger.info(f"    CatBoost: Moderate CV/Train gap: {cv_train_gap:.4f} (train={train_score:.4f}, CV={cv_mean:.4f})")
             except (ValueError, TypeError) as e:
                 error_str = str(e).lower()
                 if any(kw in error_str for kw in ['invalid classes', 'expected', 'too few']):
@@ -2764,9 +2866,31 @@ def train_model_and_get_importance(
         return None, pd.Series(0.0, index=feature_names), importance_method, 0.0
     
     # Extract importance based on method
+    import time
+    importance_start_time = time.time() if model_family == 'catboost' else None
     try:
         if importance_method == 'native':
+            if model_family == 'catboost':
+                logger.info(f"    CatBoost: Starting feature importance computation")
             importance = extract_native_importance(model, feature_names)
+            if model_family == 'catboost' and importance_start_time:
+                importance_elapsed = time.time() - importance_start_time
+                logger.info(f"    CatBoost: Feature importance computation completed in {importance_elapsed/60:.2f} minutes")
+                
+                # Log top 10 features by importance
+                if isinstance(importance, pd.Series) and len(importance) > 0:
+                    top_10 = importance.nlargest(10)
+                    logger.info(f"    CatBoost: Top 10 features by importance:")
+                    for idx, (feat, imp) in enumerate(top_10.items(), 1):
+                        logger.info(f"      {idx:2d}. {feat}: {imp:.6f} ({imp/importance.sum()*100:.2f}%)")
+                    
+                    # Check for importance concentration (potential leakage indicator)
+                    top_5_sum = top_10.head(5).sum()
+                    total_importance = importance.sum()
+                    if total_importance > 0:
+                        top_5_pct = (top_5_sum / total_importance) * 100
+                        if top_5_pct > 50:
+                            logger.warning(f"    CatBoost: Top 5 features account for {top_5_pct:.1f}% of importance - potential overfitting or leakage")
         elif importance_method == 'shap':
             importance = extract_shap_importance(model, X, feature_names,
                                                 model_family=model_family,
