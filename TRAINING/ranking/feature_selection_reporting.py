@@ -7,6 +7,18 @@ Saves feature selection results in the same structure as target ranking:
 - Feature importances
 - Stability snapshots
 - Cross-sectional ranking results
+
+File Naming Conventions (to distinguish from target ranking):
+- Feature selection files:
+  * feature_prioritization.yaml (ranks features for a target)
+  * feature_selection_rankings.csv (feature rankings for a target)
+  * selected_features.txt (list of selected features)
+- Target ranking files (for reference, not saved here):
+  * target_prioritization.yaml (ranks targets themselves)
+  * target_predictability_rankings.csv (target rankings)
+  * routing_decision.json (routing decisions for targets)
+- Shared files (no conflicts):
+  * target_confidence.json (feature selection writes, target ranking may read)
 """
 
 import logging
@@ -231,6 +243,10 @@ def save_feature_selection_rankings(
     } for i, (_, row) in enumerate(summary_df_sorted.iterrows())])
     
     # Save CSV to target-first structure only
+    # NOTE: File naming convention to distinguish from target ranking:
+    #   - Feature selection uses: "feature_selection_rankings.csv" (feature rankings for a target)
+    #   - Target ranking uses: "target_predictability_rankings.csv" (target rankings)
+    #   - These are distinct files with different purposes, no conflicts
     try:
         from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
@@ -271,6 +287,10 @@ def save_feature_selection_rankings(
         yaml_data['metadata'] = metadata
     
     # Save to target-first structure (primary location)
+    # NOTE: File naming convention to distinguish from target ranking:
+    #   - Feature selection uses: "feature_prioritization.yaml" (ranks features for a target)
+    #   - Target ranking uses: "target_prioritization.yaml" (ranks targets themselves)
+    #   - These are distinct files with different purposes, no conflicts
     if target_decision_dir:
         try:
             target_yaml_path = target_decision_dir / "feature_prioritization.yaml"

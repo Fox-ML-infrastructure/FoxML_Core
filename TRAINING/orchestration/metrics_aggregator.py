@@ -71,12 +71,25 @@ class MetricsAggregator:
             cs_metrics = self._load_cross_sectional_metrics(target)
             if cs_metrics:
                 rows.append(cs_metrics)
+                logger.debug(f"✅ Loaded CS metrics for {target}")
+            else:
+                logger.warning(f"⚠️  No CS metrics found for {target}")
             
             # Symbol-specific metrics
+            symbols_found = 0
+            symbols_missing = []
             for symbol in symbols:
                 sym_metrics = self._load_symbol_metrics(target, symbol)
                 if sym_metrics:
                     rows.append(sym_metrics)
+                    symbols_found += 1
+                else:
+                    symbols_missing.append(symbol)
+            
+            if symbols_found > 0:
+                logger.debug(f"✅ Loaded symbol metrics for {target}: {symbols_found}/{len(symbols)} symbols")
+            if symbols_missing:
+                logger.warning(f"⚠️  No symbol metrics found for {target}: {len(symbols_missing)}/{len(symbols)} symbols missing: {symbols_missing[:5]}{'...' if len(symbols_missing) > 5 else ''}")
         
         if not rows:
             logger.warning("No routing candidates found")

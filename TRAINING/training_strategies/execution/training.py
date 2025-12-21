@@ -190,6 +190,21 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
             logger.warning(f"No families available for {target}, using global families")
             target_families = families
         
+        # Validate configured families are being attempted (diagnostic)
+        try:
+            from CONFIG.config_loader import get_cfg
+            configured_families = get_cfg("training.model_families", default=None, config_name="training_config")
+            if isinstance(configured_families, list) and configured_families:
+                logger.info(f"📋 Config specifies {len(configured_families)} families: {configured_families}")
+                # Check if all configured families are in the training list
+                missing = set(configured_families) - set(target_families)
+                if missing:
+                    logger.warning(f"⚠️ Config specifies {len(missing)} families not in training list for {target}: {missing}")
+                else:
+                    logger.debug(f"✅ All configured families are in training list for {target}")
+        except Exception as e:
+            logger.debug(f"Could not validate configured families: {e}")
+        
         # Prepare training data with cross-sectional sampling
         print(f"🔄 Preparing training data for target: {target}")  # Debug print
         prep_start = _t.time()
@@ -401,24 +416,36 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                 
                 # Train models for this symbol
                 symbol_results = {}
+                # Track family status for symbol-specific training
+                symbol_family_status = {family: {"attempted": False, "saved": False, "error": None} for family in families_to_train}
+                logger.info(f"🎯 Attempting to train {len(families_to_train)} model families for {target}:{symbol}: {families_to_train}")
+                
                 for family in families_to_train:
                     try:
+                        symbol_family_status[family]["attempted"] = True
                         logger.info(f"  🤖 Training {family} for {target}:{symbol}")
                         model_result = train_model_comprehensive(
                             family, X, y, target, strategy, feature_names,
                             caps={}, routing_meta=routing_meta
                         )
                         
-                        if model_result is not None and model_result.get('success', False):
-                            symbol_results[family] = model_result
+                        if model_result is None or not model_result.get('success', False):
+                            symbol_family_status[family]["error"] = "Training returned None or success=False"
+                            logger.warning(f"  ⚠️ {family} training for {target}:{symbol} did not succeed")
+                            continue
+                        
+                        symbol_results[family] = model_result
                             
                             # Save model with target-first path (INDIVIDUAL/SYMBOL_SPECIFIC route)
                             from TRAINING.orchestration.utils.target_first_paths import (
                                 get_target_models_dir, ensure_target_structure
                             )
                             ensure_target_structure(Path(output_dir), target)
-                            symbol_target_dir = get_target_models_dir(Path(output_dir), target, family) / f"symbol={symbol}"
+                            # Add view indicator to path for SYMBOL_SPECIFIC models
+                            base_target_dir = get_target_models_dir(Path(output_dir), target, family)
+                            symbol_target_dir = base_target_dir / "view=SYMBOL_SPECIFIC" / f"symbol={symbol}"
                             symbol_target_dir.mkdir(parents=True, exist_ok=True)
+                            logger.info(f"💾 Saving SYMBOL_SPECIFIC model for {symbol} to: {symbol_target_dir}")
                             
                             # Target-first structure only - no legacy paths
                             
@@ -443,6 +470,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                         model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.txt"
                                         wrapped_model.save_model(str(model_path))
                                         logger.info(f"  💾 LightGBM model saved: {model_path}")
+                                        symbol_family_status[family]["saved"] = True
                                         
                                         # Also save to legacy location for backward compatibility
                                         legacy_model_path = legacy_symbol_target_dir / f"{family.lower()}_mtf_b0.txt"
@@ -455,6 +483,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                         model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.keras"
                                         wrapped_model.save(str(model_path))
                                         logger.info(f"  💾 Keras model saved: {model_path}")
+                                        symbol_family_status[family]["saved"] = True
                                         
                                     elif save_info['is_pytorch']:  # PyTorch models
                                         model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.pt"
@@ -476,11 +505,13 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                             "input_shape": X.shape
                                         }, str(model_path))
                                         logger.info(f"  💾 PyTorch model saved: {model_path}")
+                                        symbol_family_status[family]["saved"] = True
                                         
                                     else:  # Scikit-learn models
                                         model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.joblib"
                                         wrapped_model.save(str(model_path))
                                         logger.info(f"  💾 Scikit-learn model saved: {model_path}")
+                                        symbol_family_status[family]["saved"] = True
                                     
                                     # Save preprocessors if available
                                     if wrapped_model.scaler is not None:
@@ -522,6 +553,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                             "family": family,
                                             "target": target,
                                             "symbol": symbol,
+                                            "route": "SYMBOL_SPECIFIC",  # Add route indicator
+                                            "view": "SYMBOL_SPECIFIC",  # Add view indicator
                                             "min_cs": 1,  # Per-symbol training doesn't use min_cs
                                             "features": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
                                             "feature_names": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
@@ -598,6 +631,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                             "family": family,
                                             "target": target,
                                             "symbol": symbol,
+                                            "route": "SYMBOL_SPECIFIC",  # Add route indicator
+                                            "view": "SYMBOL_SPECIFIC",  # Add view indicator
                                             "min_cs": 1,
                                             "features": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
                                             "feature_names": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
@@ -631,6 +666,23 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 # joblib already imported at top of file (line 176)
                                 joblib.dump(model_result.get('model'), model_path)
                                 logger.info(f"  ✅ Saved {family} model for {target}:{symbol} to {model_path}")
+                                symbol_family_status[family]["saved"] = True
+                        
+                        except Exception as e:
+                            symbol_family_status[family]["error"] = f"Save failed: {str(e)}"
+                            logger.error(f"  ❌ Failed to save {family} model for {target}:{symbol}: {e}")
+                    except Exception as e:
+                        symbol_family_status[family]["error"] = f"Training failed: {str(e)}"
+                        logger.error(f"  ❌ Training failed for {family} on {target}:{symbol}: {e}")
+                        continue
+                
+                # Summary for this symbol
+                symbol_failed = [f for f, s in symbol_family_status.items() if not s["saved"] and s["attempted"]]
+                if symbol_failed:
+                    logger.warning(f"  ⚠️ {len(symbol_failed)} families failed for {target}:{symbol}: {symbol_failed}")
+                symbol_successful = [f for f, s in symbol_family_status.items() if s["saved"]]
+                if symbol_successful:
+                    logger.info(f"  ✅ {len(symbol_successful)} families saved for {target}:{symbol}: {symbol_successful}")
                                 
                                 # Save basic metadata to target-first structure
                                 from TRAINING.orchestration.utils.target_first_paths import (
@@ -646,6 +698,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     "family": family,
                                     "target": target,
                                     "symbol": symbol,
+                                    "route": "SYMBOL_SPECIFIC",  # Add route indicator
+                                    "view": "SYMBOL_SPECIFIC",  # Add view indicator
                                     "n_features": len(feature_names) if feature_names else 0,
                                     "n_rows_train": len(X),
                                     "routing": {
@@ -897,6 +951,10 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
             'skipped': []
         }
         
+        # Track family status for diagnostics
+        family_status = {family: {"attempted": False, "saved": False, "error": None} for family in ordered_families}
+        logger.info(f"🎯 Attempting to train {len(ordered_families)} model families: {ordered_families}")
+        
         for i, family in enumerate(ordered_families, 1):
             logger.info(f"🎯 [{i}/{len(ordered_families)}] Training {family} for {target}")
             logger.info(f"📊 Data shape: X={X.shape}, y={y.shape}")
@@ -952,6 +1010,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                         logger.warning(f"⚠️ [{family}] train_model_comprehensive returned None")
                 except Exception as train_err:
                     elapsed = _now() - start_time
+                    family_status[family]["attempted"] = True
+                    family_status[family]["error"] = str(train_err)
                     logger.error(f"❌ [{normalized_family}] Training failed after {elapsed:.2f} seconds: {train_err}")
                     logger.exception(f"Full traceback for {normalized_family}:")
                     family_results['failed'].append((family, normalized_family, str(train_err)))
@@ -959,6 +1019,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                     continue
                 
                 if model_result is not None and model_result.get('success', False):
+                    family_status[family]["attempted"] = True
                     target_results[normalized_family] = model_result
                     family_results['trained_ok'].append((family, normalized_family))
                     
@@ -1076,8 +1137,11 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                         get_target_models_dir, ensure_target_structure
                     )
                     ensure_target_structure(Path(output_dir), target)
-                    target_dir = get_target_models_dir(Path(output_dir), target, family)
+                    # Add view indicator to path for CROSS_SECTIONAL models
+                    base_target_dir = get_target_models_dir(Path(output_dir), target, family)
+                    target_dir = base_target_dir / "view=CROSS_SECTIONAL"
                     target_dir.mkdir(parents=True, exist_ok=True)
+                    logger.info(f"💾 Saving CROSS_SECTIONAL model to: {target_dir}")
                     
                     # Also create legacy path for backward compatibility
                     legacy_family_dir = Path(output_dir) / "training_results" / family
@@ -1198,6 +1262,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 metadata = {
                                     "family": family,
                                     "target": target,
+                                    "route": "CROSS_SECTIONAL",  # Add route indicator
+                                    "view": "CROSS_SECTIONAL",  # Add view indicator
                                     "min_cs": min_cs,
                                     "features": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
                                     "feature_names": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
@@ -1267,7 +1333,12 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 joblib.dump(metadata, meta_path)
                                 
                     except Exception as e:
+                        family_status[family]["error"] = f"Save failed: {str(e)}"
                         logger.warning(f"Failed to save model {family}_{target}: {e}")
+                    else:
+                        # If no exception, mark as saved
+                        family_status[family]["saved"] = True
+                        logger.info(f"✅ {family} model saved successfully for {target}")
                     
                     logger.info(f"✅ {family} completed for {target}")
                     
@@ -1325,6 +1396,22 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         except Exception as e:
             logger.debug(f"[Cleanup] Minor cleanup issue after target {target}: {e}")
             pass
+    
+    # Summary of family status (if family_status was defined)
+    if 'family_status' in locals():
+        failed_families = [f for f, s in family_status.items() if not s["saved"] and s["attempted"]]
+        if failed_families:
+            logger.warning(f"⚠️ {len(failed_families)} families failed to save: {failed_families}")
+            for family in failed_families:
+                logger.warning(f"  - {family}: {family_status[family]['error'] or 'Save failed'}")
+        
+        skipped_families = [f for f, s in family_status.items() if not s["attempted"]]
+        if skipped_families:
+            logger.info(f"ℹ️ {len(skipped_families)} families were skipped: {skipped_families}")
+        
+        successful_families = [f for f, s in family_status.items() if s["saved"]]
+        if successful_families:
+            logger.info(f"✅ {len(successful_families)} families saved successfully: {successful_families}")
     
     # Count and log saved models with detailed summary
     # CRITICAL: Use consistent counting logic (single source of truth)

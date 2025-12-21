@@ -170,7 +170,7 @@ python -m TRAINING.training_strategies.main \
     --data-dir data \
     --symbols AAPL MSFT GOOGL \
     --model-types sequential \
-    --training-plan-dir results/METRICS/training_plan
+    --training-plan-dir results/globals/training_plan
 ```
 
 **Filters targets and families based on plan, then applies 2-stage ordering.**

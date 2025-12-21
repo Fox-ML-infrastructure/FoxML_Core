@@ -39,10 +39,12 @@ python -m TRAINING.training_strategies.train_sequential
 
 The system automatically looks for training plans in these locations (in order):
 
-1. `output_dir/../METRICS/training_plan/` (same level as output)
-2. `output_dir/METRICS/training_plan/` (inside output_dir)
-3. `results/METRICS/training_plan/` (common results location)
-4. `./results/METRICS/training_plan/` (current directory)
+1. `output_dir/globals/training_plan/` (primary - new location)
+2. `output_dir/../globals/training_plan/` (same level as output)
+3. `output_dir/METRICS/training_plan/` (legacy fallback - inside output_dir)
+4. `output_dir/../METRICS/training_plan/` (legacy fallback - same level as output)
+5. `results/METRICS/training_plan/` (legacy fallback - common results location)
+6. `./results/METRICS/training_plan/` (legacy fallback - current directory)
 
 **If found:**
 - Logs: `"📋 Auto-detected training plan: ..."`
@@ -67,7 +69,7 @@ python -m TRAINING.training_strategies.main \
 
 **Output:**
 ```
-📋 Auto-detected training plan: results/METRICS/training_plan
+📋 Auto-detected training plan: results/globals/training_plan (or results/METRICS/training_plan as fallback)
 📋 Training plan filter applied: 10 → 7 targets
 🎯 Training all sequential models: ['CNN1D', 'LSTM', 'Transformer', 'TabCNN', 'TabLSTM', 'TabTransformer']
 ```
@@ -79,7 +81,7 @@ python -m TRAINING.training_strategies.main \
     --data-dir data \
     --symbols AAPL MSFT GOOGL \
     --model-types sequential \
-    --training-plan-dir results/METRICS/training_plan \
+    --training-plan-dir results/globals/training_plan \
     --output-dir output/sequential
 ```
 
@@ -189,7 +191,7 @@ python -m TRAINING.training_strategies.main \
 ## Troubleshooting
 
 **Plan not detected?**
-- Check if `METRICS/training_plan/master_training_plan.json` exists
+- Check if `globals/training_plan/master_training_plan.json` exists (or `METRICS/training_plan/master_training_plan.json` as fallback)
 - Or specify `--training-plan-dir` explicitly
 - Or use `--no-training-plan` to disable
 

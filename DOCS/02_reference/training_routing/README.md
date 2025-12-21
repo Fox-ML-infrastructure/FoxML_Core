@@ -59,7 +59,7 @@ See `QUICK_START.md` and `ONE_COMMAND_TRAINING.md` for more examples.
 - `routing_plan.yaml` - YAML format
 - `routing_plan.md` - Human-readable report
 
-### Training Plan (`METRICS/training_plan/`)
+### Training Plan (`globals/training_plan/` - primary, `METRICS/training_plan/` - legacy fallback)
 - `master_training_plan.json` - **Single source of truth**
 - `training_plan.json` - Convenience mirror
 - `training_plan.yaml` - YAML format
@@ -95,7 +95,7 @@ Edit `CONFIG/training_config/routing_config.yaml` to adjust:
 - Location: `METRICS/routing_plan/`
 
 **Training Plan** - Actionable job specifications derived from routing decisions
-- Location: `METRICS/training_plan/`
+- Location: `globals/training_plan/` (primary), `METRICS/training_plan/` (legacy fallback)
 - Master file: `master_training_plan.json` (single source of truth)
 
 **Metrics Aggregation** - Collecting metrics from feature selection, stability, leakage detection

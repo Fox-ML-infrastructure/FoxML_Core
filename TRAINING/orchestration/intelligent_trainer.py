@@ -1895,7 +1895,8 @@ class IntelligentTrainer:
                 if routing_plan:
                     logger.info("✅ Training routing plan generated - see METRICS/routing_plan/ for details")
                     # Set training plan directory for filtering
-                    training_plan_dir = self.output_dir / "METRICS" / "training_plan"
+                    from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+                    training_plan_dir = get_globals_dir(self.output_dir) / "training_plan"
             except Exception as e:
                 logger.debug(f"Failed to generate routing plan (non-critical): {e}")
         
@@ -1907,10 +1908,14 @@ class IntelligentTrainer:
         # Apply training plan filter if available (may have been applied earlier)
         # If not already filtered, try to filter now
         if training_plan_dir is None:
-            # Try to find training plan directory
-            potential_plan_dir = self.output_dir / "METRICS" / "training_plan"
-            if potential_plan_dir.exists():
-                training_plan_dir = potential_plan_dir
+            # Try to find training plan directory - check globals/ first, then METRICS/ as fallback
+            from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+            potential_plan_dir_globals = get_globals_dir(self.output_dir) / "training_plan"
+            potential_plan_dir_legacy = self.output_dir / "METRICS" / "training_plan"
+            if potential_plan_dir_globals.exists():
+                training_plan_dir = potential_plan_dir_globals
+            elif potential_plan_dir_legacy.exists():
+                training_plan_dir = potential_plan_dir_legacy
         
         if training_plan_dir:
             try:

@@ -79,7 +79,7 @@ METRICS/
 1. **Feature Selection** completes
 2. **Metrics Aggregation** → `METRICS/routing_candidates.parquet`
 3. **Routing Plan Generation** → `METRICS/routing_plan/`
-4. **Training Plan Generation** → `METRICS/training_plan/` (with master plan + derived views)
+4. **Training Plan Generation** → `globals/training_plan/` (primary, with master plan + derived views), `METRICS/training_plan/` (legacy fallback)
 5. **Training Plan Consumption**:
    - Loads `master_training_plan.json`
    - Filters targets for CS training ✅
@@ -138,7 +138,7 @@ results = trainer.train_with_intelligence(
 from TRAINING.orchestration.training_plan_utils import print_training_plan_summary
 from pathlib import Path
 
-print_training_plan_summary(Path("results/METRICS/training_plan"))
+print_training_plan_summary(Path("results/globals/training_plan"))  # Primary location, METRICS/training_plan supported as fallback
 ```
 
 ### Compare Two Plans
@@ -147,8 +147,8 @@ from TRAINING.orchestration.training_plan_utils import compare_training_plans
 from pathlib import Path
 
 diff = compare_training_plans(
-    Path("results/run1/METRICS/training_plan"),
-    Path("results/run2/METRICS/training_plan")
+    Path("results/run1/globals/training_plan"),  # Primary location
+    Path("results/run2/globals/training_plan")  # Primary location
 )
 print(f"Added: {len(diff['added_jobs'])}")
 print(f"Removed: {len(diff['removed_jobs'])}")
@@ -164,7 +164,7 @@ from TRAINING.orchestration.training_plan_consumer import (
 )
 from pathlib import Path
 
-plan = load_training_plan(Path("results/METRICS/training_plan"))
+plan = load_training_plan(Path("results/globals/training_plan"))  # Primary location, METRICS/training_plan supported as fallback
 cs_jobs = get_cs_jobs(plan)
 families = get_model_families_for_job(plan, "y_will_swing_low_10m_0.20", None, "cross_sectional")
 ```

@@ -27,7 +27,7 @@ python -m TRAINING.orchestration.intelligent_trainer \
 - ✅ Ranks all targets, selects top N
 - ✅ Selects features for each target
 - ✅ Generates routing plan (`METRICS/routing_plan/`)
-- ✅ Generates training plan (`METRICS/training_plan/master_training_plan.json`)
+- ✅ Generates training plan (`globals/training_plan/master_training_plan.json` - primary, `METRICS/training_plan/` - legacy fallback)
 - ✅ Trains models using the plan (2-stage: CPU → GPU)
 - ✅ All 20 models trained (sequential + cross-sectional)
 
@@ -54,11 +54,12 @@ Both stages respect the **training plan**:
 
 ### Training Plan (Single Source of Truth)
 
-- `METRICS/training_plan/master_training_plan.json` - Canonical plan
-- `METRICS/training_plan/training_plan.json` - Convenience mirror
-- `METRICS/training_plan/by_target/<target>.json` - Derived views
-- `METRICS/training_plan/by_symbol/<symbol>.json`
-- `METRICS/training_plan/by_type/<type>.json`
+- `globals/training_plan/master_training_plan.json` - Canonical plan (primary location)
+- `globals/training_plan/training_plan.json` - Convenience mirror
+- `globals/training_plan/by_target/<target>.json` - Derived views
+- `globals/training_plan/by_symbol/<symbol>.json`
+- `globals/training_plan/by_type/<type>.json`
+- Note: `METRICS/training_plan/` is supported as legacy fallback for backward compatibility
 
 ### Routing Plan
 
@@ -102,7 +103,7 @@ python -m TRAINING.training_strategies.main \
     --data-dir data \
     --symbols AAPL MSFT GOOGL \
     --model-types sequential \
-    --training-plan-dir results/METRICS/training_plan
+    --training-plan-dir results/globals/training_plan
 ```
 
 ## Documentation

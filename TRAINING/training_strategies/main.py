@@ -391,9 +391,15 @@ def main():
         elif args.training_plan_dir:
             training_plan_dir = Path(args.training_plan_dir)
         else:
-            # Auto-detect: check if output_dir has METRICS/training_plan
+            # Auto-detect: check globals/ first (new location), then METRICS/ as fallback (legacy)
             # This handles the case where intelligent_trainer was run first
+            from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+            
             potential_plan_dirs = [
+                # New location: globals/training_plan (preferred)
+                get_globals_dir(output_dir) / "training_plan",
+                get_globals_dir(output_dir.parent) / "training_plan",
+                # Legacy location: METRICS/training_plan (fallback)
                 output_dir.parent / "METRICS" / "training_plan",  # Same level as output
                 output_dir / "METRICS" / "training_plan",  # Inside output_dir
                 Path("results") / "METRICS" / "training_plan",  # Common results location

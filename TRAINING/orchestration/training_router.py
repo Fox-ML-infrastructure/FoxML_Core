@@ -500,10 +500,44 @@ class TrainingRouter:
             symbol_rows = target_rows[target_rows["mode"] == "SYMBOL"]
             symbols = symbol_rows["symbol"].unique() if "symbol" in symbol_rows.columns else []
             
+            if len(symbols) == 0:
+                logger.warning(f"  [{target}]: No symbol metrics found in routing candidates (expected for SYMBOL mode rows)")
+            
+            # Evaluate CS eligibility and get detailed reasons if disabled
+            cs_state_eval = None
+            if cs_metrics:
+                cs_state_eval = self.evaluate_cross_sectional_eligibility(cs_metrics)
+            
+            cs_route = "ENABLED" if cs_metrics and cs_state_eval != SignalState.DISALLOWED else "DISABLED"
+            
+            # Build detailed reason if disabled
+            if cs_route == "DISABLED":
+                reason_parts = []
+                if not cs_metrics:
+                    reason_parts.append("no_metrics")
+                else:
+                    min_sample_size = self.config["min_sample_size"]["cross_sectional"]
+                    cs_config = self.config["cross_sectional"]
+                    stability_allowlist = self.config["stability_allowlist"]["cross_sectional"]
+                    
+                    if cs_metrics.stability.value not in stability_allowlist:
+                        reason_parts.append(f"stability={cs_metrics.stability.value} not in {stability_allowlist}")
+                    if cs_metrics.score < cs_config["min_score"]:
+                        reason_parts.append(f"score={cs_metrics.score:.3f} < {cs_config['min_score']}")
+                    if cs_metrics.sample_size < min_sample_size:
+                        reason_parts.append(f"sample_size={cs_metrics.sample_size} < {min_sample_size}")
+                    if self.config.get("block_on_leakage", True) and cs_metrics.leakage_status == LeakageStatus.BLOCKED:
+                        reason_parts.append(f"leakage_status=BLOCKED")
+                
+                detailed_reason = "; ".join(reason_parts) if reason_parts else "unknown_reason"
+                logger.info(f"    CS DISABLED: {detailed_reason}")
+            else:
+                logger.info(f"    CS ENABLED: score={cs_metrics.score:.3f}, stability={cs_metrics.stability.value}")
+            
             target_plan = {
                 "cross_sectional": {
                     "state": cs_metrics.stability.value if cs_metrics else "DISALLOWED",
-                    "route": "ENABLED" if cs_metrics and self.evaluate_cross_sectional_eligibility(cs_metrics) != SignalState.DISALLOWED else "DISABLED",
+                    "route": cs_route,
                     "reason": f"score={cs_metrics.score:.3f}, stability={cs_metrics.stability.value}, sample_size={cs_metrics.sample_size}" if cs_metrics else "No CS metrics"
                 },
                 "symbols": {}

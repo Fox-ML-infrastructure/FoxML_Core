@@ -71,10 +71,12 @@ When you use `--model-types sequential`, it trains **all 20 models** in a 2-stag
 ## 🔍 Auto-Detection
 
 Training plan is automatically detected from:
-1. `output_dir/../METRICS/training_plan/`
-2. `output_dir/METRICS/training_plan/`
-3. `results/METRICS/training_plan/`
-4. `./results/METRICS/training_plan/`
+1. `output_dir/globals/training_plan/` (primary - new location)
+2. `output_dir/../globals/training_plan/` (same level as output)
+3. `output_dir/METRICS/training_plan/` (legacy fallback - inside output_dir)
+4. `output_dir/../METRICS/training_plan/` (legacy fallback - same level as output)
+5. `results/METRICS/training_plan/` (legacy fallback - common results location)
+6. `./results/METRICS/training_plan/` (legacy fallback - current directory)
 
 **No need to specify `--training-plan-dir`** unless you want a custom location!
 

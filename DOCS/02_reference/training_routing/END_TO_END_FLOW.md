@@ -43,7 +43,7 @@ python -m TRAINING.orchestration.intelligent_trainer \
 
 4. **Training Plan Generation**
    - Converts routing plan into training jobs
-   - Creates `METRICS/training_plan/master_training_plan.json`
+   - Creates `globals/training_plan/master_training_plan.json` (primary location)
    - Generates derived views (by_target, by_symbol, etc.)
 
 5. **Training Execution**
@@ -61,7 +61,7 @@ python -m TRAINING.orchestration.intelligent_trainer \
 ✅ Feature selection complete
 
 [ROUTER] ✅ Training routing plan generated
-[ROUTER] ✅ Training plan generated: METRICS/training_plan
+[ROUTER] ✅ Training plan generated: globals/training_plan (primary location)
 📋 Training plan filter applied: 10 → 7 targets
 
 📊 Stage 1 (CPU): 10 models
@@ -85,7 +85,7 @@ python -m TRAINING.orchestration.intelligent_trainer \
 
 This creates:
 - `METRICS/routing_plan/`
-- `METRICS/training_plan/master_training_plan.json`
+- `globals/training_plan/master_training_plan.json` (primary location)
 
 ### Step 2: Train Using Plan
 
@@ -94,7 +94,7 @@ python -m TRAINING.training_strategies.main \
     --data-dir data \
     --symbols AAPL MSFT GOOGL \
     --model-types sequential \
-    --training-plan-dir results/METRICS/training_plan
+    --training-plan-dir results/globals/training_plan
 ```
 
 Or with auto-detection:
@@ -104,7 +104,7 @@ python -m TRAINING.training_strategies.main \
     --data-dir data \
     --symbols AAPL MSFT GOOGL \
     --model-types sequential
-# Auto-detects plan from results/METRICS/training_plan
+# Auto-detects plan from results/globals/training_plan (primary) or results/METRICS/training_plan (legacy fallback)
 ```
 
 ## Artifacts Created

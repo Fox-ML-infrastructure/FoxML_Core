@@ -39,7 +39,7 @@ python -m TRAINING.training_strategies.main \
     --data-dir data \
     --symbols AAPL MSFT GOOGL \
     --model-types sequential \
-    --training-plan-dir results/METRICS/training_plan \
+    --training-plan-dir results/globals/training_plan \
     --output-dir output/sequential_models
 ```
 
@@ -58,10 +58,12 @@ python -m TRAINING.training_strategies.main \
 ## Auto-Detection
 
 The system automatically looks for training plans in:
-1. `output_dir/../METRICS/training_plan/` (same level as output)
-2. `output_dir/METRICS/training_plan/` (inside output_dir)
-3. `results/METRICS/training_plan/` (common results location)
-4. `./results/METRICS/training_plan/` (current directory)
+1. `output_dir/globals/training_plan/` (primary - new location)
+2. `output_dir/../globals/training_plan/` (same level as output)
+3. `output_dir/METRICS/training_plan/` (legacy fallback - inside output_dir)
+4. `output_dir/../METRICS/training_plan/` (legacy fallback - same level as output)
+5. `results/METRICS/training_plan/` (legacy fallback - common results location)
+6. `./results/METRICS/training_plan/` (legacy fallback - current directory)
 
 If found, it automatically:
 - Filters targets based on plan
@@ -150,7 +152,7 @@ python -m TRAINING.training_strategies.main \
     --data-dir data \
     --symbols AAPL MSFT GOOGL \
     --model-types sequential \
-    --training-plan-dir results/METRICS/training_plan
+    --training-plan-dir results/globals/training_plan
 ```
 
 ### What Gets Filtered
@@ -173,7 +175,7 @@ python -m TRAINING.training_strategies.main \
 
 **Output:**
 ```
-📋 Auto-detected training plan: results/METRICS/training_plan
+📋 Auto-detected training plan: results/globals/training_plan (or results/METRICS/training_plan as fallback)
 📋 Training plan filter applied: 10 → 7 targets
 🎯 Training only sequential models: 6 models
 ```
@@ -185,7 +187,7 @@ python -m TRAINING.training_strategies.main \
     --data-dir data \
     --symbols AAPL MSFT GOOGL \
     --model-types both \
-    --training-plan-dir results/METRICS/training_plan \
+    --training-plan-dir results/globals/training_plan \
     --output-dir output/all_models
 ```
 
@@ -197,7 +199,7 @@ python -m TRAINING.training_strategies.main \
     --symbols AAPL MSFT \
     --families LSTM Transformer CNN1D \
     --model-types sequential \
-    --training-plan-dir results/METRICS/training_plan
+    --training-plan-dir results/globals/training_plan
 ```
 
 ## Tips
@@ -210,16 +212,16 @@ python -m TRAINING.training_strategies.main \
 ## Troubleshooting
 
 **No training plan detected:**
-- Check if `METRICS/training_plan/master_training_plan.json` exists
+- Check if `globals/training_plan/master_training_plan.json` exists (or `METRICS/training_plan/master_training_plan.json` as fallback)
 - Or specify `--training-plan-dir` explicitly
 - Or use `--no-training-plan` to disable
 
 **All targets filtered out:**
 - Check training plan has jobs for your targets
-- Review `METRICS/training_plan/training_plan.md` for details
+- Review `globals/training_plan/training_plan.md` for details (or `METRICS/training_plan/training_plan.md` as fallback)
 - Use `--no-training-plan` to train all targets
 
 **Wrong model families:**
 - Training plan specifies families per target
-- Check plan: `METRICS/training_plan/master_training_plan.json`
+- Check plan: `globals/training_plan/master_training_plan.json` (or `METRICS/training_plan/master_training_plan.json` as fallback)
 - Or use `--no-training-plan` to use all families

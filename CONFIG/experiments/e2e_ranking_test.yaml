@@ -65,10 +65,10 @@ safety:
 # Intelligent training settings
 intelligent_training:
   auto_targets: true
-  top_n_targets: 6
-  max_targets_to_evaluate: 40  # Limit evaluation for faster testing
+  top_n_targets: 5
+  max_targets_to_evaluate: 10  # Limit evaluation for faster testing
   auto_features: true
-  top_m_features: 70
+  top_m_features: 50
   strategy: single_task
   run_leakage_diagnostics: false
   # Exclude target patterns (targets matching any pattern will be excluded)
@@ -78,28 +78,28 @@ intelligent_training:
     - "will_valley"
 
 # Feature selection model families
+# Note: mutual_information and univariate_selection are feature selectors only (not trainers)
 feature_selection:
   model_families:
     - lightgbm
     - xgboost
-    - random_forest
-    - catboost
     - neural_network
-    - lasso
-    - mutual_information
-    - univariate_selection
+    # Note: random_forest, catboost, lasso are not implemented as trainers (only feature selectors)
+    # mutual_information and univariate_selection are feature selectors only
 
-# Training model families (same as feature selection for consistency)
+# Training model families
+# Only include actual trainer families (mutual_information, univariate_selection, random_forest, catboost, lasso are NOT trainers)
+# Available trainers: lightgbm, xgboost, mlp, neural_network, ensemble, quantile_lightgbm, ngboost, reward_based, etc.
 training:
   model_families:
     - lightgbm
     - xgboost
-    - random_forest
-    - catboost
     - neural_network
-    - lasso
-    - mutual_information
-    - univariate_selection
+    # Add more trainer families for comprehensive testing:
+    - ensemble
+    - quantile_lightgbm
+    # Note: random_forest, catboost, lasso, mutual_information, univariate_selection are NOT trainers
+    # They are feature selectors only and will be automatically skipped during training
 
 # Decision configuration (SST: all values config-driven)
 decisions:

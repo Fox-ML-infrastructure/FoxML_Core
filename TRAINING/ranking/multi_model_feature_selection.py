@@ -3145,11 +3145,23 @@ def aggregate_multi_model_importance(
     
     for family_name, results in family_results.items():
         # Combine importances across symbols for this family
+        # CRITICAL: Check if we have any importance scores before concatenation
+        importance_series_list = [r.importance_scores for r in results if hasattr(r, 'importance_scores') and r.importance_scores is not None]
+        
+        if not importance_series_list:
+            logger.warning(f"⚠️  {family_name}: No importance scores available (all results have None or missing importance_scores)")
+            continue  # Skip this family
+        
         importances_df = pd.concat(
-            [r.importance_scores for r in results],
+            importance_series_list,
             axis=1,
             sort=False
         ).fillna(0)
+        
+        # CRITICAL: Check if importances_df is empty after concatenation
+        if importances_df.empty:
+            logger.warning(f"⚠️  {family_name}: Empty importance DataFrame after concatenation (no features available)")
+            continue  # Skip this family
         
         # Aggregate across symbols (mean by default)
         method = aggregation_config.get('per_symbol_method', 'mean')
@@ -3159,6 +3171,11 @@ def aggregate_multi_model_importance(
             family_score = importances_df.median(axis=1)
         else:
             family_score = importances_df.mean(axis=1)
+        
+        # CRITICAL: Check if family_score is empty after aggregation
+        if len(family_score) == 0 or family_score.empty:
+            logger.warning(f"⚠️  {family_name}: Empty family_score after aggregation (no features with importance scores)")
+            continue  # Skip this family
         
         # Apply family weight
         weight = model_families_config[family_name].get('weight', 1.0)
@@ -3171,13 +3188,17 @@ def aggregate_multi_model_importance(
         if n_symbols == 1 and results and hasattr(results[0], 'symbol') and results[0].symbol == "ALL":
             symbol_str = "all symbols (CROSS_SECTIONAL)"
         
+        # CRITICAL: Safe idxmax() call - family_score is guaranteed non-empty at this point
+        # but add defensive check anyway for robustness
+        top_feature = family_score.idxmax() if len(family_score) > 0 else "N/A"
+        
         if family_name == 'boruta':
             boruta_scores = family_score  # Store for gatekeeper role only
             logger.info(f"🔒 {family_name}: Aggregated {symbol_str} (gatekeeper, excluded from base consensus)")
         else:
             family_scores[family_name] = family_score * weight
             logger.info(f"📊 {family_name}: Aggregated {symbol_str}, "
-                       f"weight={weight}, top={family_score.idxmax()}")
+                       f"weight={weight}, top={top_feature}")
     
     # Combine across families (EXCLUDING Boruta - it's a gatekeeper, not a scorer)
     if not family_scores:
@@ -3185,6 +3206,11 @@ def aggregate_multi_model_importance(
         return pd.DataFrame(), []
     
     combined_df = pd.DataFrame(family_scores)
+    
+    # CRITICAL: Check if combined_df is empty before creating consensus scores
+    if combined_df.empty:
+        logger.warning("Empty combined DataFrame after aggregating family scores - no features available for consensus")
+        return pd.DataFrame(), []
     
     # Calculate BASE consensus score (from non-Boruta families only)
     # Keep this separate from final score so we can see Boruta's effect

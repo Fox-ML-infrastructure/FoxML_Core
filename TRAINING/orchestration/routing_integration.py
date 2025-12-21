@@ -146,6 +146,9 @@ def generate_routing_plan_after_feature_selection(
             logger.info(f"  [{target}]")
             logger.info(f"    CS: {cs_info['route']} ({cs_info['state']})")
             
+            if len(symbols_data) == 0:
+                logger.warning(f"    ⚠️  No symbol-specific decisions for {target} (no symbol metrics found)")
+            
             for symbol, sym_data in symbols_data.items():
                 route = sym_data['route']
                 route_counts[route] = route_counts.get(route, 0) + 1
@@ -153,6 +156,10 @@ def generate_routing_plan_after_feature_selection(
                 # Log decision for each symbol (if log_decision_reasons is enabled)
                 if routing_config.get("routing", {}).get("log_decision_reasons", False):
                     logger.info(f"      {symbol}: {route} (CS={sym_data['cs_state']}, LOCAL={sym_data['local_state']})")
+        
+        # Warn if no symbols found for any target
+        if total_symbols == 0:
+            logger.warning("⚠️  Routing plan has no symbol-specific decisions for any target. This may indicate symbol metrics are not being aggregated correctly.")
         
         logger.info("\nRoute distribution:")
         for route, count in sorted(route_counts.items(), key=lambda x: -x[1]):
@@ -172,7 +179,8 @@ def generate_routing_plan_after_feature_selection(
                 if not isinstance(plan, dict):
                     logger.warning(f"Routing plan is not a dict, got {type(plan)}, skipping training plan generation")
                 else:
-                    training_plan_dir = metrics_dir / "training_plan"
+                    from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+                    training_plan_dir = get_globals_dir(output_dir) / "training_plan"
                     
                     # Validate model_families
                     if model_families is not None and not isinstance(model_families, list):

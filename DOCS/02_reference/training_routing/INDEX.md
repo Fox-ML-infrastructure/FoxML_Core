@@ -76,7 +76,7 @@ DOCS/02_reference/training_routing/
 - Location: `METRICS/routing_plan/`
 
 **Training Plan** - Actionable job specifications derived from routing decisions
-- Location: `METRICS/training_plan/`
+- Location: `globals/training_plan/` (primary), `METRICS/training_plan/` (legacy fallback)
 - Master file: `master_training_plan.json` (single source of truth)
 
 **Metrics Aggregation** - Collecting metrics from feature selection, stability, leakage detection
