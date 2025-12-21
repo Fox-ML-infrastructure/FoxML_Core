@@ -678,102 +678,101 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                 symbol_successful = [f for f, s in symbol_family_status.items() if s["saved"]]
                 if symbol_successful:
                     logger.info(f"  ✅ {len(symbol_successful)} families saved for {target}:{symbol}: {symbol_successful}")
-                                
-                                # Save basic metadata to target-first structure
-                                from TRAINING.orchestration.utils.target_first_paths import (
-                                    get_target_reproducibility_dir
-                                )
-                                repro_dir = get_target_reproducibility_dir(Path(output_dir), target)
-                                repro_dir.mkdir(parents=True, exist_ok=True)
-                                meta_path_repro = repro_dir / f"meta_{family}_{symbol}_b0.json"
-                                meta_path_legacy = symbol_target_dir / "meta_b0.json"
-                                
-                                import json
-                                metadata = {
-                                    "family": family,
-                                    "target": target,
-                                    "symbol": symbol,
-                                    "route": "SYMBOL_SPECIFIC",  # Add route indicator
-                                    "view": "SYMBOL_SPECIFIC",  # Add view indicator
-                                    "n_features": len(feature_names) if feature_names else 0,
-                                    "n_rows_train": len(X),
-                                    "routing": {
-                                        "route": "SYMBOL_SPECIFIC",
-                                        "symbol": symbol,
-                                        "view": "SYMBOL_SPECIFIC"
-                                    }
-                                }
-                                # Save to target-first structure
-                                with open(meta_path_repro, 'w') as f:
-                                    json.dump(metadata, f, indent=2)
-                                logger.info(f"  💾 Basic metadata saved: {meta_path_repro}")
-                                
-                                # Also save to legacy location
-                                with open(meta_path_legacy, 'w') as f:
-                                    json.dump(metadata, f, indent=2)
-                                logger.debug(f"  💾 Basic metadata saved to legacy location: {meta_path_legacy}")
+                    
+                    # Save basic metadata to target-first structure
+                    from TRAINING.orchestration.utils.target_first_paths import (
+                        get_target_reproducibility_dir
+                    )
+                    repro_dir = get_target_reproducibility_dir(Path(output_dir), target)
+                    repro_dir.mkdir(parents=True, exist_ok=True)
+                    meta_path_repro = repro_dir / f"meta_{family}_{symbol}_b0.json"
+                    meta_path_legacy = symbol_target_dir / "meta_b0.json"
+                    
+                    import json
+                    metadata = {
+                        "family": family,
+                        "target": target,
+                        "symbol": symbol,
+                        "route": "SYMBOL_SPECIFIC",  # Add route indicator
+                        "view": "SYMBOL_SPECIFIC",  # Add view indicator
+                        "n_features": len(feature_names) if feature_names else 0,
+                        "n_rows_train": len(X),
+                        "routing": {
+                            "route": "SYMBOL_SPECIFIC",
+                            "symbol": symbol,
+                            "view": "SYMBOL_SPECIFIC"
+                        }
+                    }
+                    # Save to target-first structure
+                    with open(meta_path_repro, 'w') as f:
+                        json.dump(metadata, f, indent=2)
+                    logger.info(f"  💾 Basic metadata saved: {meta_path_repro}")
+                    
+                    # Also save to legacy location
+                    with open(meta_path_legacy, 'w') as f:
+                        json.dump(metadata, f, indent=2)
+                    logger.debug(f"  💾 Basic metadata saved to legacy location: {meta_path_legacy}")
+                    
+                    # Track reproducibility for symbol-specific model
+                    if output_dir:
+                        try:
+                            from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
+                            from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
                             
-                            # Track reproducibility for symbol-specific model
-                            if output_dir:
-                                try:
-                                    from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
-                                    from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
-                                    
-                                    module_output_dir = Path(output_dir)
-                                    if module_output_dir.name != 'training_results':
-                                        module_output_dir = module_output_dir.parent / 'training_results'
-                                    
-                                    tracker = ReproducibilityTracker(
-                                        output_dir=module_output_dir,
-                                        search_previous_runs=True
-                                    )
-                                    
-                                    # Extract metrics
-                                    strategy_manager = model_result.get('strategy_manager')
-                                    metrics = {}
-                                    if strategy_manager and hasattr(strategy_manager, 'cv_scores'):
-                                        cv_scores = strategy_manager.cv_scores
-                                        if cv_scores and len(cv_scores) > 0:
-                                            metrics = {
-                                                "metric_name": "CV Score",
-                                                "mean_score": float(np.mean(cv_scores)),
-                                                "std_score": float(np.std(cv_scores)),
-                                                "composite_score": float(np.mean(cv_scores))
-                                            }
-                                    
-                                    if metrics:
-                                        cohort_metadata = extract_cohort_metadata(
-                                            X=X,
-                                            symbols=[symbol],
-                                            time_vals=time_vals,
-                                            mtf_data=symbol_mtf_data,
-                                            min_cs=1,
-                                            max_cs_samples=max_cs_samples
-                                        )
-                                        cohort_metrics, cohort_additional_data = format_for_reproducibility_tracker(cohort_metadata)
-                                        
-                                        metrics_with_cohort = {**metrics, **cohort_metrics}
-                                        additional_data_with_cohort = {
-                                            "strategy": strategy,
-                                            "n_features": len(feature_names) if feature_names else 0,
-                                            "model_family": family,
-                                            "symbol": symbol,
-                                            **cohort_additional_data
-                                        }
-                                        
-                                        tracker.log_comparison(
-                                            stage="model_training",
-                                            item_name=f"{target}:{symbol}:{family}",
-                                            metrics=metrics_with_cohort,
-                                            additional_data=additional_data_with_cohort,
-                                            symbol=symbol
-                                        )
-                                except Exception as e:
-                                    logger.warning(f"Reproducibility tracking failed for {family}:{target}:{symbol}: {e}")
-                    except Exception as e:
-                        logger.error(f"❌ Failed to train {family} for {target}:{symbol}: {e}")
-                        import traceback
-                        logger.debug(f"Full traceback for {family}:{symbol}:\n{traceback.format_exc()}")
+                            module_output_dir = Path(output_dir)
+                            if module_output_dir.name != 'training_results':
+                                module_output_dir = module_output_dir.parent / 'training_results'
+                            
+                            tracker = ReproducibilityTracker(
+                                output_dir=module_output_dir,
+                                search_previous_runs=True
+                            )
+                            
+                            # Extract metrics
+                            strategy_manager = model_result.get('strategy_manager')
+                            metrics = {}
+                            if strategy_manager and hasattr(strategy_manager, 'cv_scores'):
+                                cv_scores = strategy_manager.cv_scores
+                                if cv_scores and len(cv_scores) > 0:
+                                    metrics = {
+                                        "metric_name": "CV Score",
+                                        "mean_score": float(np.mean(cv_scores)),
+                                        "std_score": float(np.std(cv_scores)),
+                                        "composite_score": float(np.mean(cv_scores))
+                                    }
+                            
+                            if metrics:
+                                cohort_metadata = extract_cohort_metadata(
+                                    X=X,
+                                    symbols=[symbol],
+                                    time_vals=time_vals,
+                                    mtf_data=symbol_mtf_data,
+                                    min_cs=1,
+                                    max_cs_samples=max_cs_samples
+                                )
+                                cohort_metrics, cohort_additional_data = format_for_reproducibility_tracker(cohort_metadata)
+                                
+                                metrics_with_cohort = {**metrics, **cohort_metrics}
+                                additional_data_with_cohort = {
+                                    "strategy": strategy,
+                                    "n_features": len(feature_names) if feature_names else 0,
+                                    "model_family": family,
+                                    "symbol": symbol,
+                                    **cohort_additional_data
+                                }
+                                
+                                tracker.log_comparison(
+                                    stage="model_training",
+                                    item_name=f"{target}:{symbol}:{family}",
+                                    metrics=metrics_with_cohort,
+                                    additional_data=additional_data_with_cohort,
+                                    symbol=symbol
+                                )
+                        except Exception as e:
+                            logger.warning(f"Reproducibility tracking failed for {family}:{target}:{symbol}: {e}")
+                except Exception as e:
+                    symbol_family_status[family]["error"] = f"Save failed: {str(e)}"
+                    logger.error(f"  ❌ Failed to save {family} model for {target}:{symbol}: {e}")
                 
                 # Store symbol results
                 if symbol_results:
