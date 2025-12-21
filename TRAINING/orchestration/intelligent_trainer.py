@@ -1703,9 +1703,15 @@ class IntelligentTrainer:
         training_plan_dir = None
         
         # Check if training plan exists (from previous run or generated earlier)
-        potential_plan_dir = self.output_dir / "METRICS" / "training_plan"
-        if potential_plan_dir.exists():
-            training_plan_dir = potential_plan_dir
+        # Check globals/ first (new structure), then METRICS/ as fallback (legacy)
+        from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+        potential_plan_dir_globals = get_globals_dir(self.output_dir) / "training_plan"
+        potential_plan_dir_legacy = self.output_dir / "METRICS" / "training_plan"
+        if potential_plan_dir_globals.exists():
+            training_plan_dir = potential_plan_dir_globals
+        elif potential_plan_dir_legacy.exists():
+            training_plan_dir = potential_plan_dir_legacy
+        if training_plan_dir:
             try:
                 from TRAINING.orchestration.training_plan_consumer import (
                     apply_training_plan_filter,
@@ -1890,8 +1896,9 @@ class IntelligentTrainer:
                     targets=list(target_features.keys()),
                     symbols=self.symbols,
                     generate_training_plan=True,  # Generate training plan
-                    model_families=families  # Use specified families
+                    model_families=families  # Use specified families (from config SST or CLI)
                 )
+                logger.debug(f"📋 Passed model_families={families} to routing_integration for training plan generation")
                 if routing_plan:
                     logger.info("✅ Training routing plan generated - see METRICS/routing_plan/ for details")
                     # Set training plan directory for filtering
@@ -2007,7 +2014,10 @@ class IntelligentTrainer:
         interval = 'cross_sectional'  # Use cross-sectional training
         
         # Extract model families from training plan if available, otherwise use provided/default
+        # Trace: families parameter comes from config (SST) or CLI
+        logger.debug(f"📋 Training phase: Starting with families parameter={families}")
         families_list = families or ALL_FAMILIES
+        logger.debug(f"📋 Training phase: Initial families_list={families_list} (families={families} or ALL_FAMILIES)")
         target_families_map = {}  # Per-target families from training plan
         
         if training_plan and filtered_targets:
@@ -2031,12 +2041,15 @@ class IntelligentTrainer:
                             logger.warning(f"plan_families for {target} is not a list: {type(plan_families)}")
                             continue
                         
+                        logger.debug(f"📋 Target {target}: Found {len(plan_families)} families in plan: {plan_families}")
                         # Filter to only include families that are in the provided/default list
                         try:
                             filtered_plan_families = [f for f in plan_families if f in families_list]
                             if filtered_plan_families:
                                 target_families_map[target] = filtered_plan_families
-                                logger.debug(f"📋 Target {target}: using {len(filtered_plan_families)} families from plan")
+                                logger.debug(f"📋 Target {target}: Using {len(filtered_plan_families)} families from plan (filtered from {len(plan_families)}): {filtered_plan_families}")
+                            else:
+                                logger.warning(f"📋 Target {target}: All {len(plan_families)} plan families filtered out (not in families_list={families_list})")
                         except Exception as e:
                             logger.warning(f"Failed to filter plan families for {target}: {e}")
                 except Exception as e:
@@ -2059,7 +2072,7 @@ class IntelligentTrainer:
                     
                     if common_families:
                         families_list = sorted(common_families)
-                        logger.info(f"📋 Using common model families from training plan: {families_list}")
+                        logger.info(f"📋 Using common model families from training plan (intersection): {families_list}")
                     else:
                         # Targets have different families - will need per-target filtering
                         logger.info(f"📋 Targets have different model families in plan - using union: {sorted(all_target_families)}")
@@ -2068,9 +2081,9 @@ class IntelligentTrainer:
                     # No targets in map, use union of all families found
                     if all_target_families:
                         families_list = sorted(all_target_families)
-                        logger.info(f"📋 Using model families from training plan: {families_list}")
+                        logger.info(f"📋 Using model families from training plan (union): {families_list}")
             else:
-                logger.debug("No model families found in training plan, using provided/default families")
+                logger.debug(f"📋 No model families found in training plan, using provided/default families: {families_list}")
         
         # Validate families_list is not empty
         if not families_list:

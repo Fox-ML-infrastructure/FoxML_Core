@@ -188,10 +188,12 @@ def generate_routing_plan_after_feature_selection(
                         model_families = None
                     
                     try:
+                        logger.debug(f"📋 Creating TrainingPlanGenerator with model_families={model_families}")
                         generator = TrainingPlanGenerator(
                             routing_plan=plan,
                             model_families=model_families
                         )
+                        logger.debug(f"📋 TrainingPlanGenerator initialized with families: {generator.model_families}")
                     except Exception as e:
                         logger.error(f"Failed to create TrainingPlanGenerator: {e}", exc_info=True)
                         raise

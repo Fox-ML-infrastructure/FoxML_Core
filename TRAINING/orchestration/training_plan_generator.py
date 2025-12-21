@@ -73,10 +73,13 @@ class TrainingPlanGenerator:
         # Respect empty list from config (SST) - only use defaults if None
         if model_families is not None:
             self.model_families = model_families
+            logger.debug(f"📋 TrainingPlanGenerator: Using provided model_families={model_families} (SST)")
         elif default_families is not None:
             self.model_families = default_families
+            logger.debug(f"📋 TrainingPlanGenerator: Using default_families={default_families}")
         else:
             self.model_families = ["lightgbm", "xgboost"]
+            logger.debug(f"📋 TrainingPlanGenerator: Using hardcoded defaults={self.model_families}")
     
     def generate_training_plan(
         self,
