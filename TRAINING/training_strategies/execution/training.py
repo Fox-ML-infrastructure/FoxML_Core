@@ -656,13 +656,13 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     logger.info(f"  💾 Metadata saved: {meta_path_repro}")
                                     
                                     # Target-first structure only - no legacy writes
-                        else:
-                            # Fallback: save model directly if no strategy_manager
-                            model_path = symbol_target_dir / "model.joblib"
-                            # joblib already imported at top of file (line 176)
-                            joblib.dump(model_result.get('model'), model_path)
-                            logger.info(f"  ✅ Saved {family} model for {target}:{symbol} to {model_path}")
-                            symbol_family_status[family]["saved"] = True
+                            else:
+                                # Fallback: save model directly if no strategy_manager
+                                model_path = symbol_target_dir / "model.joblib"
+                                # joblib already imported at top of file (line 176)
+                                joblib.dump(model_result.get('model'), model_path)
+                                logger.info(f"  ✅ Saved {family} model for {target}:{symbol} to {model_path}")
+                                symbol_family_status[family]["saved"] = True
                         except Exception as e:
                             symbol_family_status[family]["error"] = f"Save failed: {str(e)}"
                             logger.error(f"  ❌ Failed to save {family} model for {target}:{symbol}: {e}")
