@@ -468,7 +468,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     
                                     # Determine file extensions based on model type
                                     if save_info['is_lightgbm']:  # LightGBM
-                                    model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.txt"
+                                        model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.txt"
                                     wrapped_model.save_model(str(model_path))
                                     logger.info(f"  💾 LightGBM model saved: {model_path}")
                                     symbol_family_status[family]["saved"] = True
