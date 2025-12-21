@@ -453,7 +453,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                             # Get the trained model from strategy manager
                             strategy_manager = model_result.get('strategy_manager')
                             if strategy_manager and hasattr(strategy_manager, 'models'):
-                            models = strategy_manager.models
+                                models = strategy_manager.models
                             
                             # Import model wrapper for saving compatibility
                             from TRAINING.common.model_wrapper import wrap_model_for_saving, get_model_saving_info
