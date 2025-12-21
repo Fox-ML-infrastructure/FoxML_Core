@@ -770,9 +770,6 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 )
                         except Exception as e:
                             logger.warning(f"Reproducibility tracking failed for {family}:{target}:{symbol}: {e}")
-                except Exception as e:
-                    symbol_family_status[family]["error"] = f"Save failed: {str(e)}"
-                    logger.error(f"  ❌ Failed to save {family} model for {target}:{symbol}: {e}")
                 
                 # Store symbol results
                 if symbol_results:
