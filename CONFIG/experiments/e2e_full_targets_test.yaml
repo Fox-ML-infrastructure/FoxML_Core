@@ -86,16 +86,31 @@ feature_selection:
 # TRAINING CONFIGURATION
 # ============================================================================
 training:
-  # Model families to train (same as feature selection for consistency)
+  # Model families to train (ONLY actual trainer families)
+  # Note: mutual_information, univariate_selection, random_forest, catboost, lasso are NOT trainers
+  # They are feature selectors only and will be automatically skipped during training
+  # Available trainers: lightgbm, xgboost, mlp, neural_network, ensemble, quantile_lightgbm, ngboost, reward_based, etc.
+  # GPU families: mlp, vae, gan, multitask (TensorFlow), cnn1d, lstm, transformer (PyTorch/TensorFlow)
   model_families:
+    # CPU families (fast, reliable)
     - lightgbm
     - xgboost
-    - random_forest
-    - catboost
-    - neural_network
-    - lasso
-    - mutual_information
-    - univariate_selection
+    - ensemble
+    - quantile_lightgbm
+    # GPU families (TensorFlow) - requires TensorFlow
+    - mlp  # MLP/Neural Network (GPU-enabled)
+    # Additional CPU families (uncomment for more comprehensive testing):
+    # - ngboost
+    # - reward_based
+    # - gmm_regime
+    # - change_point
+    # Additional GPU families (uncomment for comprehensive GPU testing - requires GPU setup):
+    # - cnn1d
+    # - lstm
+    # - transformer
+    # - vae
+    # - gan
+    # - multitask
 
 # ============================================================================
 # DECISION CONFIGURATION (Auto-Config Application)

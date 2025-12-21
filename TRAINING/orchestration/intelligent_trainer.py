@@ -2831,6 +2831,14 @@ Examples:
                         if exp_top_n is not None:
                             top_n_targets = exp_top_n
                             logger.info(f"📋 Using top_n_targets={top_n_targets} from experiment config")
+                    
+                    # Extract training.model_families from experiment config (NEW)
+                    exp_training = exp_yaml.get('training', {})
+                    if exp_training:
+                        exp_model_families = exp_training.get('model_families', [])
+                        if exp_model_families and isinstance(exp_model_families, list):
+                            config_families = exp_model_families
+                            logger.info(f"📋 Using training.model_families from experiment config: {config_families}")
             except Exception as e:
                 logger.debug(f"Could not load intelligent_training from experiment config: {e}")
             
@@ -2978,6 +2986,13 @@ Examples:
                             trace_value(key, exp_intel[key],
                                         f"experiment: {experiment_config.name}.yaml → intelligent_training.{key} = {exp_intel[key]} (OVERRIDE)",
                                         "targets" if key in ['max_targets_to_evaluate', 'top_n_targets', 'auto_targets'] else "")
+                
+                # Trace training.model_families from experiment config
+                exp_training = exp_yaml.get('training', {})
+                if exp_training and 'model_families' in exp_training:
+                    trace_value("model_families", exp_training['model_families'],
+                                f"experiment: {experiment_config.name}.yaml → training.model_families = {exp_training['model_families']} (OVERRIDE)",
+                                "training")
             except Exception as e:
                 logger.debug(f"Could not trace experiment config: {e}")
     
