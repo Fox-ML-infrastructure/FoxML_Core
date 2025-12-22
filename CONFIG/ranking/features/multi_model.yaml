@@ -11,6 +11,20 @@ global:
   random_state: null
 
 # Model families configuration
+# 
+# NOTE: Some families are used for FEATURE SELECTION only (not training):
+#   - random_forest: Feature selection only (not a trainer)
+#   - catboost: Feature selection only (not a trainer)  
+#   - lasso: Feature selection only (not a trainer)
+#   - mutual_information: Feature selection only (not a trainer)
+#   - univariate_selection: Feature selection only (not a trainer)
+#
+# These will be automatically filtered out before training execution.
+# For clarity, consider using separate lists:
+#   - feature_selection_families: [lightgbm, xgboost, random_forest, catboost, neural_network, lasso, ...]
+#   - training_families: [lightgbm, xgboost, neural_network, ...]
+#
+# If only model_families is provided, it will be used for both selection and training (with selectors filtered at runtime).
 model_families:
   # ============================================================================
   # TREE-BASED MODELS (fast, native importance)

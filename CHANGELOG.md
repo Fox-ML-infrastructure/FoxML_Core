@@ -16,6 +16,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-22 (Training Results Organization and Pipeline Integrity Fixes)
+- **Bug Fix**: Fixed nested `training_results/training_results/` folder structure - models now save to simple `training_results/<family>/` structure
+- **Bug Fix**: Filtered feature selectors (lasso, mutual_information, univariate_selection, etc.) before training execution to prevent training errors
+- **Bug Fix**: Fixed family name normalization in isolation_runner (NeuralNetwork → neural_network) before TRAINER_MODULE_MAP lookup
+- **Bug Fix**: Fixed reproducibility tracking Path/string handling to prevent `'str' object has no attribute 'name'` errors
+- **Enhancement**: Made training plan 0 jobs explicit (downgraded ERROR to WARNING with clear disabled state message)
+- **Enhancement**: Added fingerprint validation for routing decisions to prevent stale data reuse from previous runs
+- **Enhancement**: Added routing decisions target matching validation (set equality check)
+- **Enhancement**: Moved feature registry filtering upstream into feature selection (strict mode, same as training)
+- **Enhancement**: Fixed horizon→bars logic to use trading days calendar (390 minutes per trading session, not 1440)
+- **Enhancement**: Added registry filtering metadata to feature selection output (selected_features_total, selected_features_registry_allowed)
+- **Enhancement**: Added config documentation clarifying which families are selectors vs trainers
+- **Impact**: Prevents feature count collapse (selecting 100 features where 92 are forbidden), eliminates training errors from invalid families, ensures consistent folder structure
+- **Files Changed**: `intelligent_trainer.py`, `training.py`, `isolation_runner.py`, `training_plan_consumer.py`, `target_routing.py`, `multi_model_feature_selection.py`, `sst_contract.py`, `feature_selector.py`, `multi_model.yaml`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-22-training-results-organization-fixes.md)
+
 #### 2025-12-22 (CatBoost CV Efficiency with Early Stopping in Feature Selection)
 - **Performance Improvement**: Implemented efficient CV with early stopping per fold for CatBoost in feature selection
 - **Feature Enhancement**: Added fold-level stability analysis (mean importance, variance tracking) for rigorous feature selection

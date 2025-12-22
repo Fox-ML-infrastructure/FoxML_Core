@@ -129,10 +129,13 @@ def resolve_target_horizon_minutes(target_name: str, config: Optional[Dict[str, 
             pass
     
     # Default patterns (from excluded_features.yaml structure)
+    # CRITICAL FIX: Use trading days calendar for day-based horizons
+    # Trading session = 6.5 hours = 390 minutes (9:30 AM - 4:00 PM ET)
+    # This matches the calendar used by target labels (trading days, not calendar days)
     patterns = [
         {'regex': r'(\d+)m', 'multiplier': 1},      # 60m -> 60
         {'regex': r'(\d+)h', 'multiplier': 60},     # 2h -> 120
-        {'regex': r'(\d+)d', 'multiplier': 1440},  # 1d -> 1440, 5d -> 7200
+        {'regex': r'(\d+)d', 'multiplier': 390},   # 1d -> 390 (trading session), 5d -> 1950 (5 trading sessions)
     ]
     
     if config and 'horizon_extraction' in config:

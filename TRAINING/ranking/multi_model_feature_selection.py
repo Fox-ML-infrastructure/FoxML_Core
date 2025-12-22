@@ -3125,36 +3125,76 @@ def process_single_symbol(
             experiment_config=experiment_config
         )
         
+        # Track registry filtering stats for metadata
+        registry_stats = {
+            'features_before_registry': 0,
+            'features_after_registry': 0,
+            'features_rejected_by_registry': 0
+        }
+        
         # FIX: Use pruned feature list from shared harness if available (ensures consistency)
         # This prevents features like "adjusted" from "coming back" after pruning
+        # CRITICAL: Re-validate with STRICT registry filtering even if selected_features provided
+        # Shared harness uses permissive ranking mode, but we need strict mode for feature selection
         if selected_features is not None and len(selected_features) > 0:
-            # Use the pruned feature list from shared harness
-            # Only keep features that exist in the dataframe
-            available_features = [f for f in selected_features if f in df.columns]
-            if len(available_features) < len(selected_features):
-                missing = set(selected_features) - set(available_features)
-                logger.debug(f"  {symbol}: {len(missing)} pruned features not in dataframe: {list(missing)[:5]}")
+            # Track stats before filtering
+            registry_stats['features_before_registry'] = len(selected_features)
             
-            # Keep only pruned features + target + required ID columns (ts, symbol, etc.)
+            # Re-validate selected_features with STRICT registry filtering
+            # This ensures features that passed permissive ranking mode also pass strict training mode
+            from TRAINING.ranking.utils.leakage_filtering import filter_features_for_target
+            validated_features = filter_features_for_target(
+                selected_features,
+                target_column,
+                verbose=False,
+                use_registry=True,
+                data_interval_minutes=detected_interval,
+                for_ranking=False  # CRITICAL: Use strict mode (same as training)
+            )
+            
+            # Track stats after filtering
+            registry_stats['features_after_registry'] = len(validated_features)
+            registry_stats['features_rejected_by_registry'] = len(selected_features) - len(validated_features)
+            
+            # Only keep features that exist in the dataframe AND pass strict registry validation
+            available_features = [f for f in validated_features if f in df.columns]
+            
+            if len(available_features) < len(selected_features):
+                rejected = set(selected_features) - set(available_features)
+                logger.debug(f"  {symbol}: Registry strict mode rejected {len(rejected)} features from shared harness: {list(rejected)[:5]}")
+            
+            # Keep only validated features + target + required ID columns (ts, symbol, etc.)
             required_cols = ['ts', 'symbol'] if 'ts' in df.columns else []
             keep_cols = available_features + [target_column] + [c for c in required_cols if c in df.columns]
             df = df[keep_cols]
-            logger.debug(f"  {symbol}: Using {len(available_features)} pruned features from shared harness")
+            logger.debug(f"  {symbol}: Using {len(available_features)} features (validated with strict registry filtering)")
         else:
             # Fallback: rebuild feature list (original behavior)
             all_columns = df.columns.tolist()
-            # Use target-aware filtering with registry validation
+            # Track stats before filtering
+            registry_stats['features_before_registry'] = len([c for c in all_columns if c != target_column])
+            
+            # CRITICAL FIX: Use STRICT registry filtering (not permissive ranking mode)
+            # This ensures features selected here will also pass training-time registry validation
+            # If we use permissive mode here, we'll select features that get rejected at training time
             safe_columns = filter_features_for_target(
                 all_columns, 
                 target_column, 
                 verbose=False,
                 use_registry=True,  # Enable registry validation
-                data_interval_minutes=detected_interval
+                data_interval_minutes=detected_interval,
+                for_ranking=False  # CRITICAL: Use strict mode (same as training), not permissive ranking mode
             )
+            
+            # Track stats after filtering
+            registry_stats['features_after_registry'] = len([c for c in safe_columns if c != target_column])
+            registry_stats['features_rejected_by_registry'] = registry_stats['features_before_registry'] - registry_stats['features_after_registry']
             
             # Keep only safe features + target
             safe_columns_with_target = [c for c in safe_columns if c != target_column] + [target_column]
             df = df[safe_columns_with_target]
+            
+            logger.debug(f"  {symbol}: Registry filtering (strict mode): {registry_stats['features_before_registry']} → {registry_stats['features_after_registry']} features ({registry_stats['features_rejected_by_registry']} rejected)")
         
         # Prepare features (target already in safe list, so exclude it explicitly)
         X = df.drop(columns=[target_column], errors='ignore')

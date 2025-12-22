@@ -1517,6 +1517,23 @@ def select_features_for_target(
     # Save results if output_dir provided
     if output_dir:
         output_dir.mkdir(parents=True, exist_ok=True)
+        # Compute registry filtering stats for metadata
+        # Track how many features were available before/after registry filtering
+        registry_filtering_stats = {
+            'selected_features_total': len(selected_features),
+            'selected_features_registry_allowed': len(selected_features),  # Will be updated if we have tracking
+            'registry_filtering_applied': True,
+            'registry_mode': 'strict'  # Feature selection uses strict mode (same as training)
+        }
+        
+        # If we used shared harness, feature_names already passed strict registry filtering
+        # Count how many features were in the original dataset vs after filtering
+        if use_shared_harness and 'feature_names' in locals() and feature_names:
+            # feature_names from shared harness are already registry-filtered (strict mode)
+            # We don't have the "before" count easily, but we can note that filtering was applied
+            registry_filtering_stats['features_after_registry'] = len(feature_names)
+            registry_filtering_stats['registry_filtering_note'] = 'Applied via shared harness (strict mode)'
+        
         metadata = {
             'target_column': target_column,
             'symbols': symbols,
@@ -1526,7 +1543,8 @@ def select_features_for_target(
             'model_families_config': model_families_config,  # Include for confidence computation
             'family_statuses': all_family_statuses,  # Include family status tracking for debugging
             'view': view,
-            'symbol': symbol if view == "SYMBOL_SPECIFIC" else None
+            'symbol': symbol if view == "SYMBOL_SPECIFIC" else None,
+            'registry_filtering': registry_filtering_stats  # Add registry filtering metadata
         }
         
         # Add cross-sectional stability to metadata if available
