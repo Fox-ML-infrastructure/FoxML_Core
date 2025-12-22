@@ -1903,6 +1903,7 @@ def train_model_and_get_importance(
                 total_start_time = time.time()
                 cv_start_time = None
                 cv_elapsed = None
+                importance_elapsed = 0.0  # Initialize early for timing breakdown (used at line 2126)
                 
                 # PERFORMANCE FIX: Use manual CV loop with early stopping per fold for CatBoost
                 # This keeps CV for rigor and stability analysis while making it efficient
