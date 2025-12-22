@@ -1327,10 +1327,15 @@ class IntelligentTrainer:
         
         Collects per-target summaries from targets/*/reproducibility/ and creates
         aggregated summaries in globals/:
-        - globals/feature_selection_summary.json
+        - globals/feature_selection_summary.json (metadata only)
+        - globals/selected_features_summary.json (actual feature lists per target per view)
         - globals/model_family_status_summary.json
+        
+        Feature lists are read from targets/{target}/reproducibility/selected_features.txt
+        and organized by target and view (CROSS_SECTIONAL or SYMBOL_SPECIFIC).
         """
         from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+        from TRAINING.ranking.target_routing import load_routing_decisions
         import json
         
         globals_dir = get_globals_dir(self.output_dir)
@@ -1341,9 +1346,17 @@ class IntelligentTrainer:
             logger.debug("No targets directory found, skipping aggregation")
             return
         
+        # Load routing decisions to determine view per target
+        routing_decisions = {}
+        try:
+            routing_decisions = load_routing_decisions(output_dir=self.output_dir)
+        except Exception as e:
+            logger.debug(f"Could not load routing decisions for view determination: {e}")
+        
         # Collect all per-target summaries
         all_summaries = {}
         all_family_statuses = {}
+        feature_selections = {}  # New: actual feature lists per target per view
         
         for target_dir in targets_dir.iterdir():
             if not target_dir.is_dir():
@@ -1374,6 +1387,34 @@ class IntelligentTrainer:
                         all_family_statuses[target_name] = status_data
                 except Exception as e:
                     logger.debug(f"Failed to load family status for {target_name}: {e}")
+            
+            # NEW: Load actual feature list from selected_features.txt
+            selected_features_path = repro_dir / "selected_features.txt"
+            if selected_features_path.exists():
+                try:
+                    with open(selected_features_path, 'r') as f:
+                        features = [line.strip() for line in f if line.strip()]
+                    
+                    if features:
+                        # Determine view from routing decisions or default to CROSS_SECTIONAL
+                        route_info = routing_decisions.get(target_name, {})
+                        route = route_info.get('route', 'CROSS_SECTIONAL')
+                        view = 'CROSS_SECTIONAL' if route in ['CROSS_SECTIONAL', 'BOTH'] else 'SYMBOL_SPECIFIC'
+                        
+                        # Create key: target_name:view
+                        key = f"{target_name}:{view}"
+                        
+                        feature_selections[key] = {
+                            'target_name': target_name,
+                            'view': view,
+                            'n_features': len(features),
+                            'features': features,
+                            'selected_features_path': f"targets/{target_name}/reproducibility/selected_features.txt",
+                            'feature_selection_summary_path': f"targets/{target_name}/reproducibility/feature_selection_summary.json"
+                        }
+                        logger.debug(f"Loaded {len(features)} features for {key}")
+                except Exception as e:
+                    logger.debug(f"Failed to load selected features for {target_name}: {e}")
         
         # Write aggregated feature_selection_summary.json
         if all_summaries:
@@ -1433,6 +1474,30 @@ class IntelligentTrainer:
             with open(status_path, "w") as f:
                 json.dump(aggregated_family_status, f, indent=2, default=str)
             logger.info(f"✅ Aggregated model family status summaries to {status_path}")
+        
+        # NEW: Write selected_features_summary.json with actual feature lists
+        if feature_selections:
+            # Calculate summary statistics
+            by_view = {}
+            total_features = 0
+            for key, selection in feature_selections.items():
+                view = selection['view']
+                by_view[view] = by_view.get(view, 0) + 1
+                total_features += selection['n_features']
+            
+            selected_features_summary = {
+                'feature_selections': feature_selections,
+                'summary': {
+                    'total_targets': len(feature_selections),
+                    'by_view': by_view,
+                    'total_features': total_features
+                }
+            }
+            
+            summary_path = globals_dir / "selected_features_summary.json"
+            with open(summary_path, "w") as f:
+                json.dump(selected_features_summary, f, indent=2, default=str)
+            logger.info(f"✅ Aggregated selected features summary to {summary_path} ({len(feature_selections)} target/view combinations)")
     
     def train_with_intelligence(
         self,
@@ -1735,6 +1800,25 @@ class IntelligentTrainer:
         # Step 2: Feature selection (per target if auto_features)
         # CRITICAL: Use same view as target ranking for consistency
         # Only select features for filtered_targets to avoid waste
+        # 
+        # FEATURE STORAGE DOCUMENTATION:
+        # Features are stored in multiple locations:
+        # 1. Memory: target_features dict (built here, lines 1738-1867)
+        #    - Structure: {target: [features]} for CROSS_SECTIONAL
+        #    - Structure: {target: {symbol: [features]}} for SYMBOL_SPECIFIC
+        #    - Structure: {target: {'cross_sectional': [...], 'symbol_specific': {...}}} for BOTH
+        # 2. Disk: targets/{target_name}/reproducibility/selected_features.txt
+        #    - Saved by TRAINING/ranking/feature_selection_reporting.py (line 338-342)
+        #    - One feature per line, plain text format
+        # 3. Routing decisions: targets/{target}/decision/routing_decision.json
+        #    - Contains 'selected_features_path' field (line 275 in target_routing.py)
+        # 4. Global summary: globals/selected_features_summary.json (created by _aggregate_feature_selection_summaries)
+        #    - Aggregated view of all features per target per view for auditing
+        # 
+        # PASSING TO PHASE 3:
+        # target_features dict is passed to train_models_for_interval_comprehensive via
+        # target_features parameter (line 2173). Training function uses this to filter
+        # features before training models.
         target_features = {}
         if auto_features and features is None:
             logger.info("="*80)
@@ -1891,6 +1975,13 @@ class IntelligentTrainer:
         if target_features and not training_plan_dir:
             try:
                 from TRAINING.orchestration.routing_integration import generate_routing_plan_after_feature_selection
+                
+                # Log families source for debugging
+                logger.info(f"📋 Training plan generation: families parameter={families}")
+                logger.info(f"📋 Training plan generation: families type={type(families)}, length={len(families) if isinstance(families, list) else 'N/A'}")
+                if isinstance(families, list):
+                    logger.info(f"📋 Training plan generation: families contents={families}")
+                
                 routing_plan = generate_routing_plan_after_feature_selection(
                     output_dir=self.output_dir,
                     targets=list(target_features.keys()),
@@ -1898,7 +1989,7 @@ class IntelligentTrainer:
                     generate_training_plan=True,  # Generate training plan
                     model_families=families  # Use specified families (from config SST or CLI)
                 )
-                logger.debug(f"📋 Passed model_families={families} to routing_integration for training plan generation")
+                logger.info(f"📋 Passed model_families={families} to routing_integration for training plan generation")
                 if routing_plan:
                     logger.info("✅ Training routing plan generated - see METRICS/routing_plan/ for details")
                     # Set training plan directory for filtering
@@ -2015,9 +2106,13 @@ class IntelligentTrainer:
         
         # Extract model families from training plan if available, otherwise use provided/default
         # Trace: families parameter comes from config (SST) or CLI
-        logger.debug(f"📋 Training phase: Starting with families parameter={families}")
-        families_list = families or ALL_FAMILIES
-        logger.debug(f"📋 Training phase: Initial families_list={families_list} (families={families} or ALL_FAMILIES)")
+        logger.info(f"📋 Training phase: Starting with families parameter={families}")
+        if families:
+            families_list = families
+            logger.info(f"📋 Training phase: Using families from parameter (config/CLI): {families_list}")
+        else:
+            families_list = ALL_FAMILIES
+            logger.warning(f"📋 Training phase: No families provided, falling back to ALL_FAMILIES: {families_list}")
         target_families_map = {}  # Per-target families from training plan
         
         if training_plan and filtered_targets:
@@ -2083,7 +2178,10 @@ class IntelligentTrainer:
                         families_list = sorted(all_target_families)
                         logger.info(f"📋 Using model families from training plan (union): {families_list}")
             else:
-                logger.debug(f"📋 No model families found in training plan, using provided/default families: {families_list}")
+                logger.info(f"📋 No model families found in training plan, using provided/default families: {families_list}")
+        
+        # Log final families list for debugging
+        logger.info(f"📋 Final families_list for training: {families_list} (length: {len(families_list)})")
         
         # Validate families_list is not empty
         if not families_list:

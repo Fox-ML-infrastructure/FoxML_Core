@@ -41,6 +41,14 @@ This directory contains comprehensive reference documentation for developers, ML
 - **[Training Routing System](training_routing/README.md)** - Routing decisions and training plans
 - **[Target Ranking](target_ranking/README.md)** - Target ranking system
 
+### Trading Reference
+- **[Trading Modules Overview](trading/TRADING_MODULES.md)** - Complete guide to ALPACA and IBKR trading modules
+- **[Trading Reference Documentation](trading/README.md)** - Trading modules reference docs
+  - [ALPACA Configuration](trading/ALPACA_CONFIGURATION.md) - ALPACA configuration guide
+  - [ALPACA Scripts](trading/ALPACA_SCRIPTS.md) - ALPACA scripts guide
+  - [IBKR Configuration](trading/IBKR_CONFIGURATION.md) - IBKR configuration guide
+  - [IBKR Scripts](trading/IBKR_SCRIPTS.md) - IBKR scripts guide
+
 ### Changelog
 - **[Changelog Index](changelog/README.md)** - Per-day detailed changelogs
 

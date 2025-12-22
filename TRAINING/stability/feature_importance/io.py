@@ -122,10 +122,11 @@ def get_snapshot_base_dir(output_dir: Optional[Path] = None, target_name: Option
     """
     Get base directory for snapshots.
     
-    Uses target-first structure if output_dir and target_name are provided, otherwise uses legacy structure.
+    Uses target-first structure if output_dir and target_name are provided.
+    Never creates root-level feature_importance_snapshots directory.
     
     Args:
-        output_dir: Optional output directory (snapshots go in target-first or legacy structure)
+        output_dir: Optional output directory (snapshots go in target-first structure)
         target_name: Optional target name for target-first structure
     
     Returns:
@@ -152,11 +153,22 @@ def get_snapshot_base_dir(output_dir: Optional[Path] = None, target_name: Option
                     ensure_target_structure(base_output_dir, target_name_clean)
                     target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
                     return target_repro_dir / "feature_importance_snapshots"
-                except Exception:
-                    pass  # Fall through to legacy structure
+                except Exception as e:
+                    logger.warning(f"Failed to use target-first structure for snapshots: {e}, falling back to artifacts")
+                    # Fall through to use artifacts directory
         
-        # Legacy structure: {output_dir}/feature_importance_snapshots
-        return output_dir / "feature_importance_snapshots"
+        # If target_name not provided or target-first structure failed, use artifacts directory
+        # Never create root-level feature_importance_snapshots
+        if not target_name:
+            logger.warning(
+                f"target_name not provided for snapshot base directory. "
+                f"Using artifacts directory instead of root-level structure. "
+                f"output_dir={output_dir}"
+            )
+        # else: target_name was provided but structure failed - already logged warning above
+        from pathlib import Path
+        repo_root = Path(__file__).resolve().parents[4]  # TRAINING/stability/feature_importance/io.py -> repo root
+        return repo_root / "artifacts" / "feature_importance"
     else:
         # Default: artifacts/feature_importance
         from pathlib import Path

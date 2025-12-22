@@ -1883,25 +1883,14 @@ def train_model_and_get_importance(
                 cv_start_time = None
                 cv_elapsed = None
                 
-                # PERFORMANCE FIX: Skip CV in feature selection to match target ranking approach
-                # CV adds significant overhead (3 folds × iterations) and doesn't use early stopping
-                # Target ranking does CV but then fits on full dataset - we'll do the same
-                # Skip CV for feature selection to reduce training time from hours to minutes
+                # PERFORMANCE FIX: Always skip CV in feature selection to prevent 3-hour training times
+                # CV doesn't use early stopping per fold and runs full iterations, causing excessive overhead (2-3 hours)
+                # Feature selection only needs feature importance, not CV scores - early stopping in final fit is sufficient
+                # This matches the intent of the comment above and previous performance fixes (early stopping + iteration cap)
+                # Backward compatible: Users with cv_n_jobs <= 1 already skip CV, so no change for them
                 cv_scores = None
-                if cv_n_jobs > 1:
-                    cv_start_time = time.time()
-                    try:
-                        logger.info(f"    CatBoost: Starting CV phase (n_splits={n_splits}, cv_n_jobs={cv_n_jobs})")
-                        logger.info(f"    CatBoost: NOTE: CV in feature selection can be slow (no early stopping per fold). Consider skipping CV for faster feature selection.")
-                        cv_scores = cross_val_score(model, X_catboost, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
-                        cv_elapsed = time.time() - cv_start_time
-                        logger.info(f"    CatBoost: CV phase completed in {cv_elapsed/60:.2f} minutes "
-                                  f"(scores: mean={np.nanmean(cv_scores):.4f}, std={np.nanstd(cv_scores):.4f})")
-                    except Exception as e:
-                        cv_elapsed = time.time() - cv_start_time if cv_start_time else None
-                        logger.debug(f"    CatBoost: CV failed after {cv_elapsed/60:.2f} minutes (continuing with single fit): {e}")
-                else:
-                    logger.debug(f"    CatBoost: Skipping CV (cv_n_jobs={cv_n_jobs} <= 1) - using single fit like target ranking")
+                logger.info(f"    CatBoost: Skipping CV for feature selection (CV adds 2-3 hours overhead with no early stopping per fold)")
+                logger.info(f"    CatBoost: Using single fit with early stopping instead (matches target ranking approach)")
                 
                 # CRITICAL: Add early stopping to final fit to prevent 3-hour training times
                 # Split data into train/val for early stopping (use 80/20 split)
@@ -2026,8 +2015,10 @@ def train_model_and_get_importance(
                               f"(iterations: {actual_iterations if actual_iterations else 'unknown'}/{max_iterations}, "
                               f"best_iteration: {best_iteration if best_iteration else 'N/A'}, "
                               f"early_stopping: {'triggered' if actual_iterations and actual_iterations < max_iterations else 'not triggered'})")
-                    logger.info(f"    CatBoost: Scores - Train: {train_score:.4f}, Val: {val_score:.4f if 'val_score' in locals() else 'N/A'}, "
-                              f"Gap: {train_val_gap:.4f if train_val_gap is not None else 'N/A'} "
+                    val_score_str = f"{val_score:.4f}" if 'val_score' in locals() else 'N/A'
+                    train_val_gap_str = f"{train_val_gap:.4f}" if train_val_gap is not None else 'N/A'
+                    logger.info(f"    CatBoost: Scores - Train: {train_score:.4f}, Val: {val_score_str}, "
+                              f"Gap: {train_val_gap_str} "
                               f"{'(OVERFITTING)' if train_val_gap and train_val_gap > 0.3 else ''}")
                     
                     # Log total time breakdown

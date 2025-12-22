@@ -5,7 +5,8 @@ Step-by-step guides for data processing pipelines.
 ## Contents
 
 - **[First Pipeline Run](FIRST_PIPELINE_RUN.md)** - Run your first pipeline
-- **[Data Processing Walkthrough](DATA_PROCESSING_WALKTHROUGH.md)** - Data pipeline guide
+- **[Data Processing README](DATA_PROCESSING_README.md)** - Data processing module overview
+- **[Data Processing Walkthrough](DATA_PROCESSING_WALKTHROUGH.md)** - Step-by-step data processing guide
 - **[Feature Engineering Tutorial](FEATURE_ENGINEERING_TUTORIAL.md)** - Feature creation guide
 
 ## Related Documentation

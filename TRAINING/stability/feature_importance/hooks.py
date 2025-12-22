@@ -86,19 +86,9 @@ def save_snapshot_hook(
         
         # Save snapshot
         # Use target_name for target-first structure
+        # Snapshots should only be saved to target-specific directories, never at root level
         base_dir = get_snapshot_base_dir(output_dir, target_name=target_name)
         snapshot_path = save_importance_snapshot(snapshot, base_dir)
-        
-        # Also save to legacy location if using target-first structure
-        if output_dir and target_name:
-            try:
-                legacy_base_dir = get_snapshot_base_dir(output_dir, target_name=None)
-                if legacy_base_dir != base_dir:
-                    # Save copy to legacy location for backward compatibility
-                    legacy_snapshot_path = save_importance_snapshot(snapshot, legacy_base_dir)
-                    logger.debug(f"Saved snapshot to legacy location: {legacy_snapshot_path}")
-            except Exception as e:
-                logger.debug(f"Failed to save snapshot to legacy location: {e}")
         
         logger.debug(f"Saved importance snapshot: {snapshot_path}")
         

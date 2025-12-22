@@ -70,13 +70,33 @@ class TrainingPlanGenerator:
             default_families: Default families if model_families not provided
         """
         self.routing_plan = routing_plan
+        
+        # Known feature selectors that should NOT be in training plan
+        # These are used for feature selection only, not for training
+        FEATURE_SELECTORS = {
+            'random_forest', 'catboost', 'lasso', 'mutual_information', 
+            'univariate_selection', 'elastic_net', 'ridge', 'lasso_cv'
+        }
+        
         # Respect empty list from config (SST) - only use defaults if None
         if model_families is not None:
-            self.model_families = model_families
-            logger.debug(f"📋 TrainingPlanGenerator: Using provided model_families={model_families} (SST)")
+            # Filter out feature selectors from model_families
+            filtered_families = [f for f in model_families if f not in FEATURE_SELECTORS]
+            removed = set(model_families) - set(filtered_families)
+            
+            if removed:
+                logger.warning(
+                    f"⚠️ TrainingPlanGenerator: Filtered out {len(removed)} feature selector(s) from model_families: {sorted(removed)}. "
+                    f"Feature selectors are not trainers and should not be in training plan."
+                )
+            
+            self.model_families = filtered_families
+            logger.info(f"📋 TrainingPlanGenerator: Using provided model_families={self.model_families} (after filtering, original had {len(model_families)})")
         elif default_families is not None:
-            self.model_families = default_families
-            logger.debug(f"📋 TrainingPlanGenerator: Using default_families={default_families}")
+            # Filter defaults too
+            filtered_defaults = [f for f in default_families if f not in FEATURE_SELECTORS]
+            self.model_families = filtered_defaults
+            logger.debug(f"📋 TrainingPlanGenerator: Using default_families={self.model_families} (after filtering)")
         else:
             self.model_families = ["lightgbm", "xgboost"]
             logger.debug(f"📋 TrainingPlanGenerator: Using hardcoded defaults={self.model_families}")

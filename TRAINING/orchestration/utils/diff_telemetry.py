@@ -475,8 +475,24 @@ class DiffTelemetry:
         )
         
         # Feature provenance
+        # Check multiple sources in priority order:
+        # 1. resolved_metadata['evaluation']['n_features'] (nested - where it's actually stored)
+        # 2. resolved_metadata['n_features'] (top-level fallback)
+        # 3. metadata['evaluation']['n_features'] (from filesystem, nested)
+        # 4. metadata['n_features'] (from filesystem, top-level)
+        # 5. additional_data['n_features'] (direct pass-through)
+        # Also check n_features_selected as alternative key name
         ctx.n_features = (
-            additional_data.get('n_features') if additional_data else None
+            (resolved_metadata.get('evaluation', {}).get('n_features') if resolved_metadata else None) or
+            (resolved_metadata.get('n_features') if resolved_metadata else None) or
+            (resolved_metadata.get('evaluation', {}).get('n_features_selected') if resolved_metadata else None) or
+            (resolved_metadata.get('n_features_selected') if resolved_metadata else None) or
+            metadata.get('evaluation', {}).get('n_features') or
+            metadata.get('n_features') or
+            metadata.get('evaluation', {}).get('n_features_selected') or
+            metadata.get('n_features_selected') or
+            (additional_data.get('n_features') if additional_data else None) or
+            (additional_data.get('n_features_selected') if additional_data else None)
         )
         ctx.feature_names = (
             additional_data.get('feature_names') if additional_data else None
@@ -2337,8 +2353,13 @@ class DiffTelemetry:
             
             # Update internal references
             self.run_dir = target_dir
-            self.run_metrics_dir = target_dir / "REPRODUCIBILITY" / "METRICS"
-            self.run_metrics_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Use target-first structure (globals/) instead of legacy REPRODUCIBILITY/
+            # REPRODUCIBILITY should only exist within run directories, not at RESULTS root
+            from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+            globals_dir = get_globals_dir(target_dir)
+            globals_dir.mkdir(parents=True, exist_ok=True)
+            self.run_metrics_dir = globals_dir
             self.snapshot_index = self.run_metrics_dir / "snapshot_index.json"
             
             # Update output_dir if it was pointing to run_dir
@@ -4375,7 +4396,7 @@ class DiffTelemetry:
             logger.info(f"   Changes: {len(diff.changed_keys)} keys, severity={diff.severity.value}")
             if diff.metric_deltas:
                 for metric, delta in diff.metric_deltas.items():
-                    logger.info(f"   {metric}: {delta['absolute']:+.4f} ({delta['percent']:+.2f}%)")
+                    logger.info(f"   {metric}: {delta['delta_abs']:+.4f} ({delta['delta_pct']:+.2f}%)")
             # Surface excluded factors loudly
             if diff.excluded_factors_changed and diff.summary.get('excluded_factors_summary'):
                 logger.warning(f"   ⚠️  Excluded factors changed: {diff.summary['excluded_factors_summary']}")

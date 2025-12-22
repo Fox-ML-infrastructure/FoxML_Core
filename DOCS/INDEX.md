@@ -65,6 +65,8 @@ Step-by-step guides for common tasks. See [01_tutorials/README.md](01_tutorials/
 
 ### Pipelines
 - [First Pipeline Run](01_tutorials/pipelines/FIRST_PIPELINE_RUN.md) - Run your first pipeline
+- [Data Processing README](01_tutorials/pipelines/DATA_PROCESSING_README.md) - Data processing module overview
+- [Data Processing Walkthrough](01_tutorials/pipelines/DATA_PROCESSING_WALKTHROUGH.md) - Step-by-step data processing guide
 
 ### Development & Architecture
 - [Refactoring & Wrappers](01_tutorials/REFACTORING_AND_WRAPPERS.md) - Understanding the modular structure and backward compatibility wrappers
@@ -100,6 +102,7 @@ Complete technical reference for daily use. See [02_reference/README.md](02_refe
 - [Module Reference](02_reference/api/MODULE_REFERENCE.md) - Python API (includes `target_utils.py` and `sklearn_safe.py` utilities)
 - [Intelligent Trainer API](02_reference/api/INTELLIGENT_TRAINER_API.md) - Intelligent training pipeline API reference
 - [CLI Reference](02_reference/api/CLI_REFERENCE.md) - Command-line tools
+- [Data Processing API](02_reference/api/DATA_PROCESSING_API.md) - Data processing module API
 - [Config Schema](02_reference/api/CONFIG_SCHEMA.md) - Configuration schema
 
 ### Project Reference
@@ -132,10 +135,6 @@ Complete technical reference for daily use. See [02_reference/README.md](02_refe
 - **Status**: Highly experimental, under active testing. See [TESTING_NOTICE.md](02_reference/testing/TESTING_NOTICE.md) for details.
 - [Training Routing System](02_reference/training_routing/README.md) - **NEW**: Config-driven routing decisions for cross-sectional vs symbol-specific training with automatic plan generation, 2-stage training (CPU→GPU), and one-command end-to-end pipeline
 
-### API Reference
-- [Module Reference](02_reference/api/MODULE_REFERENCE.md) - Python API for all modules
-- [Intelligent Trainer API](02_reference/api/INTELLIGENT_TRAINER_API.md) - Intelligent training pipeline API
-- [CLI Reference](02_reference/api/CLI_REFERENCE.md) - Command-line interface reference
 
 ### Configuration Reference
 - **[Modular Config System](02_reference/configuration/MODULAR_CONFIG_SYSTEM.md)** - Complete guide to modular configs, experiment configs, typed configs, migration (includes `logging_config.yaml`)
@@ -251,6 +250,13 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 - [Systemd Deployment](03_technical/operations/SYSTEMD_DEPLOYMENT.md) - Deployment guide
 
 ### Trading Modules
+- [Trading Modules Overview](02_reference/trading/TRADING_MODULES.md) - Complete guide to ALPACA and IBKR trading modules
+  - ⚠️ **Status**: ALPACA module is BROKEN, IBKR module is UNTESTED. Focus on TRAINING pipeline first.
+- [Trading Reference Documentation](02_reference/trading/README.md) - Trading modules reference docs
+  - [ALPACA Configuration](02_reference/trading/ALPACA_CONFIGURATION.md) - ALPACA configuration guide
+  - [ALPACA Scripts](02_reference/trading/ALPACA_SCRIPTS.md) - ALPACA scripts guide
+  - [IBKR Configuration](02_reference/trading/IBKR_CONFIGURATION.md) - IBKR configuration guide
+  - [IBKR Scripts](02_reference/trading/IBKR_SCRIPTS.md) - IBKR scripts guide
 - [Trading Technical Docs](03_technical/trading/README.md) - Technical documentation for trading modules
   - **Architecture**: [Mathematical Foundations](03_technical/trading/architecture/MATHEMATICAL_FOUNDATIONS.md), [Optimization Architecture](03_technical/trading/architecture/OPTIMIZATION_ARCHITECTURE.md)
   - **Implementation**: [Live Trading Integration](03_technical/trading/implementation/LIVE_TRADING_INTEGRATION.md), [C++ Integration](03_technical/trading/implementation/C++_INTEGRATION_SUMMARY.md)

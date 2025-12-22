@@ -139,6 +139,143 @@ import pandas as pd
 # Setup logger
 logger = logging.getLogger(__name__)
 
+def train_model_comprehensive(family: str, X: np.ndarray, y: np.ndarray, 
+                            target: str, strategy: str, feature_names: List[str],
+                            caps: Dict[str, Any], routing_meta: Dict[str, Any] = None) -> Dict[str, Any]:
+    """Train model using modular trainers directly - enforces runtime policy and routing."""
+    
+    # CRITICAL: Normalize family name before all registry lookups
+    from TRAINING.training_strategies.utils import normalize_family_name
+    family = normalize_family_name(family)
+    
+    logger.info(f"🎯 Training {family} model with {strategy} strategy")
+    
+    # Extract routing info
+    if routing_meta is None:
+        routing_meta = {
+            'spec': TaskSpec('regression', 'regression', ['rmse', 'mae']),
+            'sample_weights': None,
+            'group_sizes': None
+        }
+    
+    # Safety check: ensure spec exists (defensive programming)
+    spec = routing_meta.get('spec')
+    if spec is None:
+        # Fallback to default regression spec if missing
+        spec = TaskSpec('regression', 'regression', ['rmse', 'mae'])
+        routing_meta['spec'] = spec
+        logger.warning(f"[{family}] routing_meta missing 'spec', using default regression spec")
+    
+    sample_weights = routing_meta.get('sample_weights')
+    group_sizes = routing_meta.get('group_sizes')
+    
+    logger.info(f"[{family}] Task={spec.task}, Objective={spec.objective}, Has weights={sample_weights is not None}, Has groups={group_sizes is not None}")
+    
+    # Get runtime policy for this family (single source of truth)
+    from common.runtime_policy import get_policy
+    policy = get_policy(family)
+    
+    # Log policy decision
+    if policy.force_isolation_reason:
+        logger.info(f"[{family}] Policy: {policy.run_mode} mode ({policy.force_isolation_reason})")
+    else:
+        logger.info(f"[{family}] Policy: {policy.run_mode} mode, GPU={policy.needs_gpu}, backends={list(policy.backends)}")
+    
+    # Determine backend for logging
+    if "tf" in policy.backends:
+        backend = "TF"
+    elif "torch" in policy.backends:
+        backend = "PyTorch"
+    elif "xgb" in policy.backends:
+        backend = "XGBoost"
+    elif policy.omp_user_api == "blas":
+        backend = "BLAS"
+    else:
+        backend = "OpenMP"
+    
+    # Honor user override for in-process training (but policy can force isolation)
+    user_wants_inproc = os.getenv("TRAINER_NO_ISOLATION", "0") in ("1", "true", "True")
+    user_force_iso = os.getenv("TRAINER_FORCE_ISOLATION_FOR", "")
+    family_force_isolated = family in [f.strip() for f in user_force_iso.replace(",", " ").split() if f.strip()]
+    
+    # Final decision: policy OR user override
+    if policy.run_mode == "process" or family_force_isolated:
+        USE_INPROC = False
+    elif policy.run_mode == "inproc" and user_wants_inproc:
+        USE_INPROC = True
+    else:
+        # Default to policy
+        USE_INPROC = (policy.run_mode == "inproc")
+    
+    # Build trainer config with routing info
+    from TRAINING.orchestration.routing.target_router import get_objective_for_family
+    
+    trainer_config = {
+        "num_threads": THREADS,
+        "objective": get_objective_for_family(family, spec),
+        "task_type": spec.task,
+    }
+    
+    # Add routing-specific config for supported families
+    if family in ['LightGBM', 'QuantileLightGBM']:
+        if spec.task == 'multiclass' and routing_meta.get('label_map'):
+            trainer_config["num_class"] = len(routing_meta['label_map'])
+        if group_sizes is not None:
+            try:
+                gs = np.asarray(group_sizes).ravel().tolist()
+            except Exception:
+                gs = group_sizes
+            trainer_config["groups"] = gs
+        if sample_weights is not None:
+            try:
+                sw = np.asarray(sample_weights).ravel().tolist()
+            except Exception:
+                sw = sample_weights
+            trainer_config["sample_weight"] = sw
+    
+    elif family == 'XGBoost':
+        if spec.task == 'multiclass' and routing_meta.get('label_map'):
+            trainer_config["num_class"] = len(routing_meta['label_map'])
+        if sample_weights is not None:
+            try:
+                sw = np.asarray(sample_weights).ravel().tolist()
+            except Exception:
+                sw = sample_weights
+            trainer_config["sample_weight"] = sw
+    
+    logger.info(f"[{family}] Trainer config: {trainer_config}")
+    
+    # Execute based on decision
+    if USE_INPROC:
+        logger.info("🔄 [%s] using in-process training (no isolation) with %s threads", family, THREADS)
+        print(f"🔄 [{family}] using in-process training with {THREADS} threads...")
+        model = _run_family_inproc(
+            family, X, y,
+            total_threads=THREADS,
+            trainer_kwargs={"config": trainer_config}
+        )
+    else:
+        logger.info("🔄 [%s] using isolation runner (%s backend)…", family, backend)
+        print(f"🔄 [{family}] using isolation runner ({backend} backend)...")
+        # Pass None to use optimal thread planning from plan_for_family()
+        model = _run_family_isolated(
+            family, X, y,
+            omp_threads=None,  # Use optimal planning
+            mkl_threads=None,  # Use optimal planning
+            trainer_kwargs={"config": trainer_config}
+        )
+    
+    # Wrap model in strategy manager
+    manager = SingleTaskStrategy({'family': family})
+    manager.models[family] = model
+    return {
+        'model': model,
+        'trainer': None, 'test_predictions': None, 'success': True,
+        'family': family, 'target': target, 'strategy': strategy,
+        'strategy_manager': manager
+    }
+
+
 def train_models_for_interval_comprehensive(interval: str, targets: List[str], 
                                            mtf_data: Dict[str, pd.DataFrame],
                                            families: List[str],
@@ -1479,12 +1616,10 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                 symbol_results = {}
                 for family in families:
                     try:
-                        from TRAINING.training_strategies.execution.train_model_comprehensive import train_model_comprehensive
+                        # train_model_comprehensive is defined in this file
                         model_result = train_model_comprehensive(
-                            X=X, y=y, feature_names=feature_names,
-                            family=family, strategy=strategy,
-                            output_dir=str(output_dir), target=target,
-                            batch_id=0, metadata={}
+                            family=family, X=X, y=y, target=target, strategy=strategy,
+                            feature_names=feature_names, caps={}, routing_meta=routing_meta
                         )
                         
                         if model_result and model_result.get('success', False):
@@ -1623,136 +1758,6 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
     logger.info("=" * 80)
     
     return results
-
-def train_model_comprehensive(family: str, X: np.ndarray, y: np.ndarray, 
-                            target: str, strategy: str, feature_names: List[str],
-                            caps: Dict[str, Any], routing_meta: Dict[str, Any] = None) -> Dict[str, Any]:
-    """Train model using modular trainers directly - enforces runtime policy and routing."""
-    
-    # CRITICAL: Normalize family name before all registry lookups
-    from TRAINING.training_strategies.utils import normalize_family_name
-    family = normalize_family_name(family)
-    
-    logger.info(f"🎯 Training {family} model with {strategy} strategy")
-    
-    # Extract routing info
-    if routing_meta is None:
-        routing_meta = {
-            'spec': TaskSpec('regression', 'regression', ['rmse', 'mae']),
-            'sample_weights': None,
-            'group_sizes': None
-        }
-    
-    spec = routing_meta.get('spec')
-    sample_weights = routing_meta.get('sample_weights')
-    group_sizes = routing_meta.get('group_sizes')
-    
-    logger.info(f"[{family}] Task={spec.task}, Objective={spec.objective}, Has weights={sample_weights is not None}, Has groups={group_sizes is not None}")
-    
-    # Get runtime policy for this family (single source of truth)
-    from common.runtime_policy import get_policy
-    policy = get_policy(family)
-    
-    # Log policy decision
-    if policy.force_isolation_reason:
-        logger.info(f"[{family}] Policy: {policy.run_mode} mode ({policy.force_isolation_reason})")
-    else:
-        logger.info(f"[{family}] Policy: {policy.run_mode} mode, GPU={policy.needs_gpu}, backends={list(policy.backends)}")
-    
-    # Determine backend for logging
-    if "tf" in policy.backends:
-        backend = "TF"
-    elif "torch" in policy.backends:
-        backend = "PyTorch"
-    elif "xgb" in policy.backends:
-        backend = "XGBoost"
-    elif policy.omp_user_api == "blas":
-        backend = "BLAS"
-    else:
-        backend = "OpenMP"
-    
-    # Honor user override for in-process training (but policy can force isolation)
-    user_wants_inproc = os.getenv("TRAINER_NO_ISOLATION", "0") in ("1", "true", "True")
-    user_force_iso = os.getenv("TRAINER_FORCE_ISOLATION_FOR", "")
-    family_force_isolated = family in [f.strip() for f in user_force_iso.replace(",", " ").split() if f.strip()]
-    
-    # Final decision: policy OR user override
-    if policy.run_mode == "process" or family_force_isolated:
-        USE_INPROC = False
-    elif policy.run_mode == "inproc" and user_wants_inproc:
-        USE_INPROC = True
-    else:
-        # Default to policy
-        USE_INPROC = (policy.run_mode == "inproc")
-    
-    # Build trainer config with routing info
-    from target_router import get_objective_for_family
-    
-    trainer_config = {
-        "num_threads": THREADS,
-        "objective": get_objective_for_family(family, spec),
-        "task_type": spec.task,
-    }
-    
-    # Add routing-specific config for supported families
-    if family in ['LightGBM', 'QuantileLightGBM']:
-        if spec.task == 'multiclass' and routing_meta.get('label_map'):
-            trainer_config["num_class"] = len(routing_meta['label_map'])
-        if group_sizes is not None:
-            try:
-                gs = np.asarray(group_sizes).ravel().tolist()
-            except Exception:
-                gs = group_sizes
-            trainer_config["groups"] = gs
-        if sample_weights is not None:
-            try:
-                sw = np.asarray(sample_weights).ravel().tolist()
-            except Exception:
-                sw = sample_weights
-            trainer_config["sample_weight"] = sw
-    
-    elif family == 'XGBoost':
-        if spec.task == 'multiclass' and routing_meta.get('label_map'):
-            trainer_config["num_class"] = len(routing_meta['label_map'])
-        if sample_weights is not None:
-            try:
-                sw = np.asarray(sample_weights).ravel().tolist()
-            except Exception:
-                sw = sample_weights
-            trainer_config["sample_weight"] = sw
-    
-    logger.info(f"[{family}] Trainer config: {trainer_config}")
-    
-    # Execute based on decision
-    if USE_INPROC:
-        logger.info("🔄 [%s] using in-process training (no isolation) with %s threads", family, THREADS)
-        print(f"🔄 [{family}] using in-process training with {THREADS} threads...")
-        model = _run_family_inproc(
-            family, X, y,
-            total_threads=THREADS,
-            trainer_kwargs={"config": trainer_config}
-        )
-    else:
-        logger.info("🔄 [%s] using isolation runner (%s backend)…", family, backend)
-        print(f"🔄 [{family}] using isolation runner ({backend} backend)...")
-        # Pass None to use optimal thread planning from plan_for_family()
-        model = _run_family_isolated(
-            family, X, y,
-            omp_threads=None,  # Use optimal planning
-            mkl_threads=None,  # Use optimal planning
-            trainer_kwargs={"config": trainer_config}
-        )
-    
-    # Wrap model in strategy manager
-    manager = SingleTaskStrategy({'family': family})
-    manager.models[family] = model
-    return {
-        'model': model,
-        'trainer': None, 'test_predictions': None, 'success': True,
-        'family': family, 'target': target, 'strategy': strategy,
-        'strategy_manager': manager
-    }
-
 
 # Legacy code path - kept for backwards compatibility but shouldn't be reached
 def _legacy_train_fallback(family: str, X: np.ndarray, y: np.ndarray, target: str = None, strategy: str = None, feature_names: List[str] = None, **kwargs):
