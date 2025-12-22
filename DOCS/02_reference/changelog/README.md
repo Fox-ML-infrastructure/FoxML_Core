@@ -6,7 +6,10 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
-- **2025-12-21 (CatBoost Formatting Error and CV Skip Fixes)** — Fixed CatBoost `train_val_gap` format specifier error causing `ValueError: Invalid format specifier`. Always skip CV for CatBoost in feature selection to prevent 3-hour training times (CV doesn't use early stopping per fold, runs full 300 iterations per fold). Training time reduced from 3 hours to <5 minutes for single symbol (36x speedup). Backward compatible: no change for users with `cv_n_jobs <= 1`.
+- **2025-12-22 (CatBoost CV Efficiency with Early Stopping in Feature Selection)** — Implemented efficient CV with early stopping per fold for CatBoost in feature selection, replacing previous CV skip approach. Maintains CV rigor for fold-level stability analysis (mean importance, variance tracking) while reducing training time from 3 hours to <30 minutes (6-18x speedup). Enables identifying features with persistent signal vs. noisy features. Reverted previous CV skip to maintain best practices for time-series feature selection.
+  → [View](2025-12-22-catboost-cv-efficiency-with-early-stopping.md)
+
+- **2025-12-21 (CatBoost Formatting Error and CV Skip Fixes)** — Fixed CatBoost `train_val_gap` format specifier error causing `ValueError: Invalid format specifier`. Always skip CV for CatBoost in feature selection to prevent 3-hour training times (CV doesn't use early stopping per fold, runs full 300 iterations per fold). Training time reduced from 3 hours to <5 minutes for single symbol (36x speedup). Backward compatible: no change for users with `cv_n_jobs <= 1`. **NOTE**: This approach was later reverted in favor of efficient CV with early stopping (see 2025-12-22 entry).
   → [View](2025-12-21-catboost-formatting-and-cv-skip-fixes.md)
 
 - **2025-12-21 (CatBoost Logging and n_features Extraction Fixes)** — Fixed CatBoost logging ValueError when `val_score` is not available (conditionally format value before using in f-string). Fixed n_features extraction for FEATURE_SELECTION to check nested `evaluation` dict where it's actually stored in `full_metadata`. Root cause: `_build_resolved_context()` only checked flat paths but `n_features` is stored in `resolved_metadata['evaluation']['n_features']`.

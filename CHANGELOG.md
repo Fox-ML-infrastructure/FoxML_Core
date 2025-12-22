@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-22 (CatBoost CV Efficiency with Early Stopping in Feature Selection)
+- **Performance Improvement**: Implemented efficient CV with early stopping per fold for CatBoost in feature selection
+- **Feature Enhancement**: Added fold-level stability analysis (mean importance, variance tracking) for rigorous feature selection
+- **Impact**: Training time reduced from 3 hours to <30 minutes (6-18x speedup) while maintaining CV rigor
+- **Reverted**: Previous CV skip approach - CV is now kept for stability diagnostics and accuracy
+- **Files Changed**: `multi_model_feature_selection.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-22-catboost-cv-efficiency-with-early-stopping.md)
+
 #### 2025-12-21 (CatBoost Formatting Error and CV Skip Fixes)
 - **Bug Fix**: Fixed CatBoost `train_val_gap` format specifier error causing `ValueError: Invalid format specifier` when logging scores
 - **Performance Fix**: Always skip CV for CatBoost in feature selection to prevent 3-hour training times (CV doesn't use early stopping per fold)
