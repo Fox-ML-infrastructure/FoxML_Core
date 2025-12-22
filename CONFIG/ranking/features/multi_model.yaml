@@ -234,6 +234,8 @@ model_families:
       max_iter: 1000  # Maximum iterations for LassoCV/LogisticRegressionCV
       purge_buffer_bars: 5  # Safety buffer bars for PurgedTimeSeriesSplit (added to target horizon)
       n_splits: 3  # Number of CV splits for PurgedTimeSeriesSplit
+      # PERFORMANCE NOTE: PredictionValuesChange importance is computed only once after final fit (not during CV)
+      # This avoids 3× overhead (one per fold). CV scores provide stability signal; importance is for explanation only.
 
 # Aggregation strategies
 aggregation:

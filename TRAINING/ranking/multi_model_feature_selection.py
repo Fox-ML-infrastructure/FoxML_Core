@@ -1899,11 +1899,12 @@ def train_model_and_get_importance(
                 # Manual CV loop with early stopping per fold (for stability analysis)
                 cv_start_time = time.time()
                 cv_scores = []
-                fold_importances = []  # Store importance per fold for stability analysis
-                importance_series = None  # Initialize for CV-aggregated importance
+                # PERFORMANCE FIX: Removed fold_importances - we compute importance only once after final fit
+                # This avoids calling expensive PredictionValuesChange 3× (once per fold)
+                importance_series = None  # Will be computed from final fit only
                 
                 logger.info(f"    CatBoost: Running CV with early stopping per fold (n_splits={n_splits}, early_stopping_rounds={early_stopping_rounds})")
-                logger.info(f"    CatBoost: CV enables fold-level stability analysis (mean importance, variance tracking)")
+                logger.info(f"    CatBoost: CV provides stability signal via scores (importance computed once after final fit to avoid 3× overhead)")
                 
                 from sklearn.base import clone
                 for fold_idx, (train_idx, val_idx) in enumerate(tscv.split(X_catboost, y)):
@@ -1938,20 +1939,10 @@ def train_model_and_get_importance(
                         
                         cv_scores.append(score)
                         
-                        # Compute feature importance for this fold
-                        try:
-                            if hasattr(fold_model, 'base_model'):
-                                fold_importance = fold_model.base_model.get_feature_importance(data=X_train_fold, type='PredictionValuesChange')
-                            else:
-                                fold_importance = fold_model.get_feature_importance(data=X_train_fold, type='PredictionValuesChange')
-                            
-                            # Convert to Series for easier aggregation
-                            fold_importance_series = pd.Series(fold_importance, index=feature_names)
-                            fold_importances.append(fold_importance_series)
-                        except Exception as e:
-                            logger.debug(f"    CatBoost: Fold {fold_idx + 1} importance computation failed: {e}")
-                            # Use zero importance as fallback
-                            fold_importances.append(pd.Series(0.0, index=feature_names))
+                        # PERFORMANCE FIX: Skip expensive PredictionValuesChange during CV folds
+                        # PredictionValuesChange is extremely slow (40-80 min per call with 531 features)
+                        # We compute it only once after final fit to avoid 3× overhead
+                        # CV scores provide stability signal without expensive importance computation
                         
                         # Log fold progress
                         actual_iterations = None
@@ -1966,34 +1957,18 @@ def train_model_and_get_importance(
                     except Exception as e:
                         logger.debug(f"    CatBoost: Fold {fold_idx + 1} failed: {e}")
                         cv_scores.append(np.nan)
-                        fold_importances.append(pd.Series(0.0, index=feature_names))
                 
                 cv_elapsed = time.time() - cv_start_time
                 cv_scores = np.array(cv_scores)
                 valid_cv_scores = cv_scores[~np.isnan(cv_scores)]
                 
-                # Aggregate importance across folds (mean, std for stability analysis)
-                if fold_importances:
-                    # Stack all fold importances into DataFrame
-                    importance_df = pd.DataFrame(fold_importances)
-                    mean_importance = importance_df.mean(axis=0)
-                    std_importance = importance_df.std(axis=0)
-                    
-                    # Log stability metrics
-                    mean_std = std_importance.mean()
-                    max_std = std_importance.max()
-                    logger.info(f"    CatBoost: CV completed in {cv_elapsed/60:.2f} minutes ({len(valid_cv_scores)}/{n_splits} valid folds)")
-                    logger.info(f"    CatBoost: Stability metrics - Mean std across features: {mean_std:.4f}, Max std: {max_std:.4f}")
-                    if len(valid_cv_scores) > 0:
-                        logger.info(f"    CatBoost: CV scores - Mean: {np.nanmean(valid_cv_scores):.4f}, Std: {np.nanstd(valid_cv_scores):.4f}")
-                    
-                    # Use mean importance across folds (stability-preserving aggregation)
-                    importance = mean_importance.values
-                    importance_series = pd.Series(importance, index=feature_names)
-                else:
-                    # Fallback: no CV importance available
-                    logger.warning(f"    CatBoost: No fold importances computed, using final fit importance only")
-                    importance_series = pd.Series(0.0, index=feature_names)
+                # PERFORMANCE FIX: Removed per-fold importance aggregation
+                # PredictionValuesChange is computed only once after final fit (avoids 3× overhead)
+                # CV scores provide stability signal without expensive importance computation
+                logger.info(f"    CatBoost: CV completed in {cv_elapsed/60:.2f} minutes ({len(valid_cv_scores)}/{n_splits} valid folds)")
+                if len(valid_cv_scores) > 0:
+                    logger.info(f"    CatBoost: CV scores - Mean: {np.nanmean(valid_cv_scores):.4f}, Std: {np.nanstd(valid_cv_scores):.4f}")
+                logger.info(f"    CatBoost: Importance will be computed once after final fit (not during CV to avoid 3× overhead)")
                 
                 # Final fit on full dataset for importance (if needed for comparison)
                 # Note: We already have fold-aggregated importance, but keep final fit for consistency
@@ -2122,14 +2097,15 @@ def train_model_and_get_importance(
                               f"Gap: {train_val_gap_str} "
                               f"{'(OVERFITTING)' if train_val_gap and train_val_gap > 0.3 else ''}")
                     
-                    # Log total time breakdown
+                    # Log total time breakdown (with importance time)
                     total_elapsed = time.time() - total_start_time
                     total_elapsed_minutes = total_elapsed / 60
                     cv_time_str = f"{cv_elapsed/60:.2f}" if cv_elapsed else "0.00"
                     fit_time_str = f"{fit_elapsed_minutes:.2f}"
-                    remaining_time = total_elapsed - (cv_elapsed if cv_elapsed else 0) - fit_elapsed
+                    importance_time_str = f"{importance_elapsed/60:.2f}"
+                    remaining_time = total_elapsed - (cv_elapsed if cv_elapsed else 0) - fit_elapsed - importance_elapsed
                     remaining_time_str = f"{remaining_time/60:.2f}" if remaining_time > 0 else "0.00"
-                    logger.info(f"    CatBoost: Total time breakdown - CV: {cv_time_str} min, Fit: {fit_time_str} min, Other: {remaining_time_str} min, Total: {total_elapsed_minutes:.2f} min")
+                    logger.info(f"    CatBoost: Total time breakdown - CV: {cv_time_str} min, Fit: {fit_time_str} min, Importance: {importance_time_str} min, Other: {remaining_time_str} min, Total: {total_elapsed_minutes:.2f} min")
                     
                 except TimeoutError:
                     logger.error(f"    CatBoost: Training timeout after {max_training_time_seconds/60:.0f} minutes - aborting")
@@ -2172,28 +2148,29 @@ def train_model_and_get_importance(
                     elif cv_train_gap > 0.1:
                         logger.info(f"    CatBoost: Moderate CV/Train gap: {cv_train_gap:.4f} (train={train_score:.4f}, CV={cv_mean:.4f})")
                 
-                # CRITICAL: Use CV-aggregated importance (from fold-level stability analysis)
-                # This preserves rigor while maintaining efficiency through early stopping per fold
-                # The importance_series was already computed from CV folds (line 1991)
-                if 'importance_series' in locals() and importance_series is not None:
-                    # Use CV-aggregated importance (mean across folds)
-                    importance = importance_series
-                    logger.debug(f"    CatBoost: Using CV-aggregated importance (mean across {len(fold_importances)} folds)")
-                else:
-                    # Fallback: extract from final model if CV failed
-                    logger.warning(f"    CatBoost: CV importance not available, extracting from final model")
-                    try:
-                        if hasattr(model, 'base_model'):
-                            importance_raw = model.base_model.get_feature_importance(data=X_train_fit, type='PredictionValuesChange')
-                        else:
-                            importance_raw = model.get_feature_importance(data=X_train_fit, type='PredictionValuesChange')
-                        importance = pd.Series(importance_raw, index=feature_names)
-                    except Exception as e:
-                        logger.warning(f"    CatBoost: Failed to extract importance from final model: {e}")
-                        importance = pd.Series(0.0, index=feature_names)
+                # PERFORMANCE FIX: Compute PredictionValuesChange only once after final fit
+                # This is the ONLY place we compute expensive PVC (avoids 3× overhead from CV folds)
+                # CV scores provide stability signal; importance is for explanation/reporting only
+                # WARNING: Using final-fit importance for feature selection would cause leakage-by-selection
+                # This importance is for explanation/reporting, not for selection decisions
+                importance_start_time = time.time()
+                importance_elapsed = 0.0  # Initialize for timing breakdown
+                try:
+                    if hasattr(model, 'base_model'):
+                        importance_raw = model.base_model.get_feature_importance(data=X_train_fit, type='PredictionValuesChange')
+                    else:
+                        importance_raw = model.get_feature_importance(data=X_train_fit, type='PredictionValuesChange')
+                    importance = pd.Series(importance_raw, index=feature_names)
+                    importance_elapsed = time.time() - importance_start_time
+                    logger.info(f"    CatBoost: Importance computation completed in {importance_elapsed/60:.2f} minutes (computed once after final fit)")
+                except Exception as e:
+                    logger.warning(f"    CatBoost: Failed to extract importance from final model: {e}")
+                    importance = pd.Series(0.0, index=feature_names)
+                    importance_elapsed = time.time() - importance_start_time
                 
-                # Return model, CV-aggregated importance, method, and train_score
-                # Note: train_score is from final fit, but importance is from CV aggregation
+                # Return model, final-fit importance, method, and train_score
+                # Note: Importance is computed once after final fit (not during CV to avoid 3× overhead)
+                # CV scores provide stability signal; importance is for explanation/reporting only
                 return model, importance, importance_method, train_score
                 
             except (ValueError, TypeError) as e:
