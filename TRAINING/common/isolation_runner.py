@@ -486,7 +486,18 @@ def child_isolated(payload_path, mod, cls, X_or_spec, y_unused, omp_t, mkl_t, kw
             
             # CRITICAL: Lazy import - only load the specific trainer module needed
             # This prevents CPU families from importing TF/Torch modules
-            family_base = cls.replace("Trainer", "")
+            family_base_raw = cls.replace("Trainer", "")
+            
+            # CRITICAL: Normalize family name to snake_case before lookup
+            # TRAINER_MODULE_MAP uses snake_case keys (e.g., "neural_network", not "NeuralNetwork")
+            try:
+                from TRAINING.common.utils.sst_contract import normalize_family
+                family_base = normalize_family(family_base_raw)
+            except ImportError:
+                # Fallback: simple lowercase conversion if normalize_family not available
+                import re
+                # Convert CamelCase to snake_case
+                family_base = re.sub(r'(?<!^)(?=[A-Z])', '_', family_base_raw).lower()
             
             # Look up the specific module for this family
             if family_base in TRAINER_MODULE_MAP:
@@ -496,7 +507,7 @@ def child_isolated(payload_path, mod, cls, X_or_spec, y_unused, omp_t, mkl_t, kw
                 # Fallback to old behavior for unknown families
                 module_path = mod
                 class_name = cls
-                logger.warning("⚠️  [child] Family %s not in TRAINER_MODULE_MAP, using fallback", family_base)
+                logger.warning("⚠️  [child] Family %s (normalized from %s) not in TRAINER_MODULE_MAP, using fallback", family_base, family_base_raw)
             
             # Bootstrap framework runtime (TF/Torch) BEFORE importing trainer
             # This centralizes GPU detection and avoids duplicating it in every trainer

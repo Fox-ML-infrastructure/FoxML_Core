@@ -2107,9 +2107,20 @@ class IntelligentTrainer:
         # Extract model families from training plan if available, otherwise use provided/default
         # Trace: families parameter comes from config (SST) or CLI
         logger.info(f"📋 Training phase: Starting with families parameter={families}")
+        
+        # Known feature selectors that should NOT be trained (used for feature selection only)
+        FEATURE_SELECTORS = {
+            'random_forest', 'catboost', 'lasso', 'mutual_information', 
+            'univariate_selection', 'elastic_net', 'ridge', 'lasso_cv'
+        }
+        
         if families:
-            families_list = families
-            logger.info(f"📋 Training phase: Using families from parameter (config/CLI): {families_list}")
+            # Filter out feature selectors from families list
+            families_list = [f for f in families if f not in FEATURE_SELECTORS]
+            removed = set(families) - set(families_list)
+            if removed:
+                logger.warning(f"📋 Filtered out {len(removed)} feature selector(s) from families: {sorted(removed)}. Feature selectors are not trainers and should not be in training.")
+            logger.info(f"📋 Training phase: Using families from parameter (config/CLI) after filtering: {families_list}")
         else:
             families_list = ALL_FAMILIES
             logger.warning(f"📋 Training phase: No families provided, falling back to ALL_FAMILIES: {families_list}")
@@ -2180,13 +2191,17 @@ class IntelligentTrainer:
             else:
                 logger.info(f"📋 No model families found in training plan, using provided/default families: {families_list}")
         
+        # Final filter to ensure no feature selectors made it through (defensive programming)
+        families_list = [f for f in families_list if f not in FEATURE_SELECTORS]
+        
         # Log final families list for debugging
         logger.info(f"📋 Final families_list for training: {families_list} (length: {len(families_list)})")
         
         # Validate families_list is not empty
         if not families_list:
             logger.warning("⚠️ No model families available after filtering! Using default families.")
-            families_list = ALL_FAMILIES if not families else families
+            fallback_families = ALL_FAMILIES if not families else families
+            families_list = [f for f in fallback_families if f not in FEATURE_SELECTORS]
         
         # Validate filtered_targets is not empty
         if not filtered_targets:

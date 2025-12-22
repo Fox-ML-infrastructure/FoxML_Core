@@ -604,19 +604,22 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                         
                         symbol_results[family] = model_result
                         
-                        # Save model with target-first path (INDIVIDUAL/SYMBOL_SPECIFIC route)
+                        # Save model to simple training_results/<family>/symbol=<symbol>/ structure
                         try:
-                            from TRAINING.orchestration.utils.target_first_paths import (
-                                get_target_models_dir, ensure_target_structure
-                            )
-                            ensure_target_structure(Path(output_dir), target)
-                            # Add view indicator to path for SYMBOL_SPECIFIC models
-                            base_target_dir = get_target_models_dir(Path(output_dir), target, family)
-                            symbol_target_dir = base_target_dir / "view=SYMBOL_SPECIFIC" / f"symbol={symbol}"
-                            symbol_target_dir.mkdir(parents=True, exist_ok=True)
-                            logger.info(f"💾 Saving SYMBOL_SPECIFIC model for {symbol} to: {symbol_target_dir}")
+                            # Ensure output_dir is a Path object
+                            output_dir_path = Path(output_dir) if not isinstance(output_dir, Path) else output_dir
                             
-                            # Target-first structure only - no legacy paths
+                            # Save symbol-specific models to training_results/<family>/symbol=<symbol>/
+                            family_dir = output_dir_path / family
+                            symbol_dir = family_dir / f"symbol={symbol}"
+                            symbol_dir.mkdir(parents=True, exist_ok=True)
+                            logger.info(f"💾 Saving SYMBOL_SPECIFIC model for {symbol} to: {symbol_dir}")
+                            
+                            # Keep target-first structure ONLY for reproducibility metadata (not for model files)
+                            from TRAINING.orchestration.utils.target_first_paths import (
+                                ensure_target_structure
+                            )
+                            ensure_target_structure(output_dir_path, target)
                             
                             # Get the trained model from strategy manager
                             strategy_manager = model_result.get('strategy_manager')
@@ -635,22 +638,21 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     save_info = get_model_saving_info(wrapped_model)
                                     
                                     # Determine file extensions based on model type
+                                    # Save directly to training_results/<family>/symbol=<symbol>/ structure
                                     if save_info['is_lightgbm']:  # LightGBM
-                                        model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.txt"
+                                        model_path = symbol_dir / f"{family.lower()}_mtf_b0.txt"
                                         wrapped_model.save_model(str(model_path))
                                         logger.info(f"  💾 LightGBM model saved: {model_path}")
                                         symbol_family_status[family]["saved"] = True
                                         
-                                        # Note: Legacy paths removed - using target-first structure only
-                                        
                                     elif save_info['is_tensorflow']:  # TensorFlow/Keras
-                                        model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.keras"
+                                        model_path = symbol_dir / f"{family.lower()}_mtf_b0.keras"
                                         wrapped_model.save(str(model_path))
                                         logger.info(f"  💾 Keras model saved: {model_path}")
                                         symbol_family_status[family]["saved"] = True
                                         
                                     elif save_info['is_pytorch']:  # PyTorch models
-                                        model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.pt"
+                                        model_path = symbol_dir / f"{family.lower()}_mtf_b0.pt"
                                         import torch
                                         
                                         # Extract the actual PyTorch model
@@ -672,19 +674,19 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                         symbol_family_status[family]["saved"] = True
                                         
                                     else:  # Scikit-learn models
-                                        model_path = symbol_target_dir / f"{family.lower()}_mtf_b0.joblib"
+                                        model_path = symbol_dir / f"{family.lower()}_mtf_b0.joblib"
                                         wrapped_model.save(str(model_path))
                                         logger.info(f"  💾 Scikit-learn model saved: {model_path}")
                                         symbol_family_status[family]["saved"] = True
                                 
                                 # Save preprocessors if available
                                 if wrapped_model.scaler is not None:
-                                    scaler_path = symbol_target_dir / f"{family.lower()}_mtf_b0_scaler.joblib"
+                                    scaler_path = symbol_dir / f"{family.lower()}_mtf_b0_scaler.joblib"
                                     joblib.dump(wrapped_model.scaler, scaler_path)
                                     logger.info(f"  💾 Scaler saved: {scaler_path}")
                                 
                                 if wrapped_model.imputer is not None:
-                                    imputer_path = symbol_target_dir / f"{family.lower()}_mtf_b0_imputer.joblib"
+                                    imputer_path = symbol_dir / f"{family.lower()}_mtf_b0_imputer.joblib"
                                     joblib.dump(wrapped_model.imputer, imputer_path)
                                     logger.info(f"  💾 Imputer saved: {imputer_path}")
                                 
@@ -826,7 +828,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     # Target-first structure only - no legacy writes
                             else:
                                 # Fallback: save model directly if no strategy_manager
-                                model_path = symbol_target_dir / "model.joblib"
+                                model_path = symbol_dir / "model.joblib"
                                 # joblib already imported at top of file (line 176)
                                 joblib.dump(model_result.get('model'), model_path)
                                 logger.info(f"  ✅ Saved {family} model for {target}:{symbol} to {model_path}")
@@ -1214,18 +1216,23 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                     if output_dir and model_result.get('success', False):
                         try:
                             from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
+                            from pathlib import Path
+                            
+                            # Ensure output_dir is a Path object
+                            output_dir_path = Path(output_dir) if not isinstance(output_dir, Path) else output_dir
+                            
                             # Use module-specific directory for reproducibility log
                             # output_dir is typically: output_dir_YYYYMMDD_HHMMSS/training_results/
                             # We want to store in training_results/ subdirectory for this module
-                            if output_dir.name == 'training_results' or (output_dir.parent / 'training_results').exists():
+                            if output_dir_path.name == 'training_results' or (output_dir_path.parent / 'training_results').exists():
                                 # Already in or can find training_results subdirectory
-                                if output_dir.name != 'training_results':
-                                    module_output_dir = output_dir.parent / 'training_results'
+                                if output_dir_path.name != 'training_results':
+                                    module_output_dir = output_dir_path.parent / 'training_results'
                                 else:
-                                    module_output_dir = output_dir
+                                    module_output_dir = output_dir_path
                             else:
                                 # Fallback: use output_dir directly (for standalone runs)
-                                module_output_dir = output_dir
+                                module_output_dir = output_dir_path
                             
                             tracker = ReproducibilityTracker(
                                 output_dir=module_output_dir,
@@ -1327,21 +1334,21 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                             import traceback
                             logger.debug(f"Reproducibility tracking traceback: {traceback.format_exc()}")
                     
-                    # Save model using target-first structure (CROSS_SECTIONAL route)
+                    # Save model to simple training_results/<family>/ structure
+                    # Ensure output_dir is a Path object
+                    output_dir_path = Path(output_dir) if not isinstance(output_dir, Path) else output_dir
+                    
+                    # Save models directly to training_results/<family>/ (no nested training_results, no target subfolders)
+                    family_dir = output_dir_path / family
+                    family_dir.mkdir(parents=True, exist_ok=True)
+                    logger.info(f"💾 Saving {family} model to: {family_dir}")
+                    
+                    # Keep target-first structure ONLY for reproducibility metadata (not for model files)
                     from TRAINING.orchestration.utils.target_first_paths import (
                         get_target_models_dir, ensure_target_structure
                     )
-                    ensure_target_structure(Path(output_dir), target)
-                    # Add view indicator to path for CROSS_SECTIONAL models
-                    base_target_dir = get_target_models_dir(Path(output_dir), target, family)
-                    target_dir = base_target_dir / "view=CROSS_SECTIONAL"
-                    target_dir.mkdir(parents=True, exist_ok=True)
-                    logger.info(f"💾 Saving CROSS_SECTIONAL model to: {target_dir}")
-                    
-                    # Also create legacy path for backward compatibility
-                    legacy_family_dir = Path(output_dir) / "training_results" / family
-                    legacy_target_dir = legacy_family_dir / target
-                    legacy_target_dir.mkdir(parents=True, exist_ok=True)
+                    ensure_target_structure(output_dir_path, target)
+                    # This is only used for metadata tracking, not for actual model files
                     
                     try:
                         # Get the trained model from strategy manager
@@ -1361,25 +1368,19 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                             logger.info(f"💾 Saving {family} model: {save_info}")
                             
                             # Determine file extensions based on model type
+                            # Save directly to training_results/<family>/ structure
                             if save_info['is_lightgbm']:  # LightGBM
-                                model_path = target_dir / f"{family.lower()}_mtf_b0.txt"
+                                model_path = family_dir / f"{family.lower()}_mtf_b0.txt"
                                 wrapped_model.save_model(str(model_path))
                                 logger.info(f"💾 LightGBM model saved: {model_path}")
                                 
                             elif save_info['is_tensorflow']:  # TensorFlow/Keras
-                                model_path = target_dir / f"{family.lower()}_mtf_b0.keras"
+                                model_path = family_dir / f"{family.lower()}_mtf_b0.keras"
                                 wrapped_model.save(str(model_path))
                                 logger.info(f"💾 Keras model saved: {model_path}")
                                 
-                                # Also save to legacy location
-                                legacy_model_path = legacy_target_dir / f"{family.lower()}_mtf_b0.keras"
-                                legacy_model_path.parent.mkdir(parents=True, exist_ok=True)
-                                import shutil
-                                shutil.copy2(model_path, legacy_model_path)
-                                logger.debug(f"💾 Model saved to legacy location: {legacy_model_path}")
-                                
                             elif save_info['is_pytorch']:  # PyTorch models
-                                model_path = target_dir / f"{family.lower()}_mtf_b0.pt"
+                                model_path = family_dir / f"{family.lower()}_mtf_b0.pt"
                                 import torch, json
                                 
                                 # Extract the actual PyTorch model from wrapped_model
@@ -1400,33 +1401,19 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 }, str(model_path))
                                 logger.info(f"💾 PyTorch model saved: {model_path}")
                                 
-                                # Also save to legacy location
-                                legacy_model_path = legacy_target_dir / f"{family.lower()}_mtf_b0.pt"
-                                legacy_model_path.parent.mkdir(parents=True, exist_ok=True)
-                                import shutil
-                                shutil.copy2(model_path, legacy_model_path)
-                                logger.debug(f"💾 Model saved to legacy location: {legacy_model_path}")
-                                
                             else:  # Scikit-learn models
-                                model_path = target_dir / f"{family.lower()}_mtf_b0.joblib"
+                                model_path = family_dir / f"{family.lower()}_mtf_b0.joblib"
                                 wrapped_model.save(str(model_path))
                                 logger.info(f"💾 Scikit-learn model saved: {model_path}")
-                                
-                                # Also save to legacy location
-                                legacy_model_path = legacy_target_dir / f"{family.lower()}_mtf_b0.joblib"
-                                legacy_model_path.parent.mkdir(parents=True, exist_ok=True)
-                                import shutil
-                                shutil.copy2(model_path, legacy_model_path)
-                                logger.debug(f"💾 Model saved to legacy location: {legacy_model_path}")
                             
                             # Save preprocessors if available
                             if wrapped_model.scaler is not None:
-                                scaler_path = target_dir / f"{family.lower()}_mtf_b0_scaler.joblib"
+                                scaler_path = family_dir / f"{family.lower()}_mtf_b0_scaler.joblib"
                                 joblib.dump(wrapped_model.scaler, scaler_path)
                                 logger.info(f"💾 Scaler saved: {scaler_path}")
                                 
                             if wrapped_model.imputer is not None:
-                                imputer_path = target_dir / f"{family.lower()}_mtf_b0_imputer.joblib"
+                                imputer_path = family_dir / f"{family.lower()}_mtf_b0_imputer.joblib"
                                 joblib.dump(wrapped_model.imputer, imputer_path)
                                 logger.info(f"💾 Imputer saved: {imputer_path}")
                             # Note: If wrapped_model.imputer is None, no imputer was used/needed
@@ -1625,28 +1612,84 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                         if model_result and model_result.get('success', False):
                             symbol_results[family] = model_result
                             
-                            # Save model with target-first path
+                            # Save model to simple training_results/<family>/symbol=<symbol>/ structure
                             try:
+                                # Ensure output_dir is a Path object
+                                output_dir_path = Path(output_dir) if not isinstance(output_dir, Path) else output_dir
+                                
+                                # Save symbol-specific models to training_results/<family>/symbol=<symbol>/
+                                family_dir = output_dir_path / family
+                                symbol_dir = family_dir / f"symbol={symbol}"
+                                symbol_dir.mkdir(parents=True, exist_ok=True)
+                                logger.info(f"💾 Saving SYMBOL_SPECIFIC model for {symbol} (BOTH route) to: {symbol_dir}")
+                                
+                                # Keep target-first structure ONLY for reproducibility metadata (not for model files)
                                 from TRAINING.orchestration.utils.target_first_paths import (
-                                    get_target_models_dir, ensure_target_structure
+                                    ensure_target_structure
                                 )
-                                ensure_target_structure(Path(output_dir), target)
-                                base_target_dir = get_target_models_dir(Path(output_dir), target, family)
-                                symbol_target_dir = base_target_dir / "view=SYMBOL_SPECIFIC" / f"symbol={symbol}"
-                                symbol_target_dir.mkdir(parents=True, exist_ok=True)
-                                logger.info(f"💾 Saving SYMBOL_SPECIFIC model for {symbol} (BOTH route) to: {symbol_target_dir}")
+                                ensure_target_structure(output_dir_path, target)
                                 
                                 # Save model (same logic as SYMBOL_SPECIFIC route)
                                 from common.model_wrapper import wrap_model_for_saving, get_model_saving_info
                                 strategy_manager = model_result.get('strategy_manager')
-                                if strategy_manager:
+                                if strategy_manager and hasattr(strategy_manager, 'models'):
                                     models = strategy_manager.models
                                     for model_name, model in models.items():
                                         wrapped_model = wrap_model_for_saving(model, family)
                                         save_info = get_model_saving_info(wrapped_model)
-                                        # Save model files (implementation depends on model type)
-                                        # This is a simplified version - actual saving logic is more complex
-                                        logger.debug(f"  Model {model_name} saved for {target}:{symbol}")
+                                        
+                                        # Determine file extensions based on model type
+                                        if save_info['is_lightgbm']:  # LightGBM
+                                            model_path = symbol_dir / f"{family.lower()}_mtf_b0.txt"
+                                            wrapped_model.save_model(str(model_path))
+                                            logger.info(f"  💾 LightGBM model saved: {model_path}")
+                                            
+                                        elif save_info['is_tensorflow']:  # TensorFlow/Keras
+                                            model_path = symbol_dir / f"{family.lower()}_mtf_b0.keras"
+                                            wrapped_model.save(str(model_path))
+                                            logger.info(f"  💾 Keras model saved: {model_path}")
+                                            
+                                        elif save_info['is_pytorch']:  # PyTorch models
+                                            model_path = symbol_dir / f"{family.lower()}_mtf_b0.pt"
+                                            import torch
+                                            
+                                            # Extract the actual PyTorch model
+                                            if hasattr(wrapped_model, 'core') and hasattr(wrapped_model.core, 'model'):
+                                                torch_model = wrapped_model.core.model
+                                            elif hasattr(wrapped_model, 'model'):
+                                                torch_model = wrapped_model.model
+                                            else:
+                                                torch_model = wrapped_model
+                                            
+                                            # Save state dict + metadata
+                                            torch.save({
+                                                "state_dict": torch_model.state_dict(),
+                                                "config": getattr(wrapped_model, "config", {}),
+                                                "arch": family,
+                                                "input_shape": X.shape
+                                            }, str(model_path))
+                                            logger.info(f"  💾 PyTorch model saved: {model_path}")
+                                            
+                                        else:  # Scikit-learn models
+                                            model_path = symbol_dir / f"{family.lower()}_mtf_b0.joblib"
+                                            wrapped_model.save(str(model_path))
+                                            logger.info(f"  💾 Scikit-learn model saved: {model_path}")
+                                        
+                                        # Save preprocessors if available
+                                        if wrapped_model.scaler is not None:
+                                            scaler_path = symbol_dir / f"{family.lower()}_mtf_b0_scaler.joblib"
+                                            joblib.dump(wrapped_model.scaler, scaler_path)
+                                            logger.info(f"  💾 Scaler saved: {scaler_path}")
+                                        
+                                        if wrapped_model.imputer is not None:
+                                            imputer_path = symbol_dir / f"{family.lower()}_mtf_b0_imputer.joblib"
+                                            joblib.dump(wrapped_model.imputer, imputer_path)
+                                            logger.info(f"  💾 Imputer saved: {imputer_path}")
+                                else:
+                                    # Fallback: save model directly if no strategy_manager
+                                    model_path = symbol_dir / "model.joblib"
+                                    joblib.dump(model_result.get('model'), model_path)
+                                    logger.info(f"  ✅ Saved {family} model for {target}:{symbol} to {model_path}")
                             except Exception as e:
                                 logger.warning(f"Failed to save model for {target}:{symbol}: {e}")
                     except Exception as e:
