@@ -928,13 +928,11 @@ def train_model_and_get_importance(
     """
     Train a single model family and extract importance
     
-    PERFORMANCE AUDIT: This function is tracked for call counts and timing.
-    """
-    Train a single model family and extract importance
-    
     FIX #2: For proper CV-based normalization, pass X_train/X_test separately.
     When provided, normalization (imputation/scaling) will fit only on X_train.
     If not provided, falls back to full-dataset normalization (leakage risk).
+    
+    PERFORMANCE AUDIT: This function is tracked for call counts and timing.
     """
     
     # Generate deterministic seed for this model/symbol/target combination
