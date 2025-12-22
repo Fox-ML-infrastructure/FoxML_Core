@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-22 (Performance Audit System for Multiplicative Work Detection)
+- **Feature**: Added comprehensive performance audit system to detect "accidental multiplicative work"
+- **Instrumentation**: Tracks call counts and timing for heavy functions (CatBoost importance, build_panel, train_model, etc.)
+- **Automatic Reports**: Generates audit report at end of training run showing multipliers, nested loops, and cache opportunities
+- **Impact**: Proactively identifies performance bottlenecks where expensive operations are called multiple times unnecessarily
+- **Files Changed**: `performance_audit.py` (NEW), `intelligent_trainer.py`, `multi_model_feature_selection.py`, `shared_ranking_harness.py`, `model_evaluation.py`, `leakage_detection.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-22-performance-audit-system.md)
+
 #### 2025-12-22 (Training Results Organization and Pipeline Integrity Fixes)
 - **Bug Fix**: Fixed nested `training_results/training_results/` folder structure - models now save to simple `training_results/<family>/` structure
 - **Bug Fix**: Filtered feature selectors (lasso, mutual_information, univariate_selection, etc.) before training execution to prevent training errors
