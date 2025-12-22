@@ -405,9 +405,32 @@ def _save_dual_view_rankings(
             break
         base_output_dir = base_output_dir.parent
     
+    # Compute fingerprint for routing decisions to prevent stale data reuse
+    # Fingerprint includes: target set, symbol set, and config hash
+    import hashlib
+    target_set = sorted(set(routing_decisions.keys()))
+    # Extract symbols from routing decisions (if available)
+    symbols_set = set()
+    for decision in routing_decisions.values():
+        if 'symbols' in decision and isinstance(decision['symbols'], dict):
+            symbols_set.update(decision['symbols'].keys())
+    symbols_list = sorted(symbols_set) if symbols_set else []
+    
+    # Create fingerprint from targets and symbols
+    fingerprint_data = {
+        'targets': target_set,
+        'symbols': symbols_list,
+        'target_count': len(target_set),
+        'symbol_count': len(symbols_list)
+    }
+    fingerprint_str = json.dumps(fingerprint_data, sort_keys=True)
+    fingerprint_hash = hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]
+    
     # Prepare routing data
     routing_data = {
         'routing_decisions': routing_decisions,
+        'fingerprint': fingerprint_hash,
+        'fingerprint_data': fingerprint_data,  # Store for debugging
         'summary': {
             'total_targets': len(routing_decisions),
             'cross_sectional_only': sum(1 for r in routing_decisions.values() if r.get('route') == 'CROSS_SECTIONAL'),
@@ -447,7 +470,12 @@ def _save_dual_view_rankings(
     # via reproducibility tracker (with view/symbol metadata in RunContext)
 
 
-def load_routing_decisions(routing_file: Optional[Path] = None, output_dir: Optional[Path] = None) -> Dict[str, Dict[str, Any]]:
+def load_routing_decisions(
+    routing_file: Optional[Path] = None, 
+    output_dir: Optional[Path] = None,
+    expected_targets: Optional[List[str]] = None,
+    validate_fingerprint: bool = True
+) -> Dict[str, Dict[str, Any]]:
     """
     Load routing decisions from file.
     
@@ -460,18 +488,46 @@ def load_routing_decisions(routing_file: Optional[Path] = None, output_dir: Opti
     Args:
         routing_file: Optional explicit path to routing_decisions.json
         output_dir: Optional base output directory (will search for routing decisions)
+        expected_targets: Optional list of expected targets (for fingerprint validation)
+        validate_fingerprint: If True, validate fingerprint matches expected targets (default: True)
     
     Returns:
         Dict mapping target_name -> routing decision dict
     """
     import json
+    import hashlib
     
     # If explicit file provided, use it
     if routing_file and routing_file.exists():
         try:
             with open(routing_file, 'r') as f:
                 data = json.load(f)
-            return data.get('routing_decisions', {})
+            routing_decisions = data.get('routing_decisions', {})
+            
+            # Validate fingerprint if expected_targets provided
+            if validate_fingerprint and expected_targets:
+                stored_fingerprint = data.get('fingerprint')
+                if stored_fingerprint:
+                    # Compute expected fingerprint
+                    target_set = sorted(set(expected_targets))
+                    fingerprint_data = {
+                        'targets': target_set,
+                        'target_count': len(target_set)
+                    }
+                    fingerprint_str = json.dumps(fingerprint_data, sort_keys=True)
+                    expected_fingerprint = hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]
+                    
+                    if stored_fingerprint != expected_fingerprint:
+                        logger.warning(
+                            f"⚠️ Routing decisions fingerprint mismatch: stored={stored_fingerprint[:8]}... "
+                            f"expected={expected_fingerprint[:8]}... "
+                            f"This may indicate stale routing decisions. Ignoring loaded decisions."
+                        )
+                        return {}
+                else:
+                    logger.debug("Routing decisions file has no fingerprint - skipping validation")
+            
+            return routing_decisions
         except Exception as e:
             logger.error(f"Failed to load routing decisions from {routing_file}: {e}")
             return {}
@@ -486,8 +542,34 @@ def load_routing_decisions(routing_file: Optional[Path] = None, output_dir: Opti
             try:
                 with open(globals_file, 'r') as f:
                     data = json.load(f)
+                routing_decisions = data.get('routing_decisions', {})
+                
+                # Validate fingerprint if expected_targets provided
+                if validate_fingerprint and expected_targets:
+                    stored_fingerprint = data.get('fingerprint')
+                    if stored_fingerprint:
+                        # Compute expected fingerprint
+                        target_set = sorted(set(expected_targets))
+                        fingerprint_data = {
+                            'targets': target_set,
+                            'target_count': len(target_set)
+                        }
+                        fingerprint_str = json.dumps(fingerprint_data, sort_keys=True)
+                        expected_fingerprint = hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]
+                        
+                        if stored_fingerprint != expected_fingerprint:
+                            logger.warning(
+                                f"⚠️ Routing decisions fingerprint mismatch: stored={stored_fingerprint[:8]}... "
+                                f"expected={expected_fingerprint[:8]}... "
+                                f"Loaded {len(routing_decisions)} decisions but fingerprint doesn't match expected targets. "
+                                f"This may indicate stale routing decisions. Returning empty dict."
+                            )
+                            return {}
+                    else:
+                        logger.debug("Routing decisions file has no fingerprint - skipping validation")
+                
                 logger.debug(f"Loaded routing decisions from target-first structure: {globals_file}")
-                return data.get('routing_decisions', {})
+                return routing_decisions
             except Exception as e:
                 logger.debug(f"Failed to load from globals: {e}")
         

@@ -1830,7 +1830,12 @@ class IntelligentTrainer:
             try:
                 from TRAINING.ranking.target_routing import load_routing_decisions
                 # load_routing_decisions now automatically checks new and legacy locations
-                routing_decisions = load_routing_decisions(output_dir=self.output_dir)
+                # Note: filtered_targets may not be available yet at this stage, so skip fingerprint validation
+                routing_decisions = load_routing_decisions(
+                    output_dir=self.output_dir,
+                    expected_targets=None,  # Not available at feature selection stage
+                    validate_fingerprint=False  # Skip validation at this stage
+                )
                 if routing_decisions:
                     # CRITICAL FIX: Log routing decision count and validate consistency
                     n_decisions = len(routing_decisions)
@@ -2256,18 +2261,35 @@ class IntelligentTrainer:
         try:
             from TRAINING.ranking.target_routing import load_routing_decisions
             # load_routing_decisions now automatically checks new and legacy locations
-            routing_decisions_for_training = load_routing_decisions(output_dir=self.output_dir)
+            # Pass filtered_targets for fingerprint validation
+            routing_decisions_for_training = load_routing_decisions(
+                output_dir=self.output_dir,
+                expected_targets=filtered_targets if 'filtered_targets' in locals() and filtered_targets else None,
+                validate_fingerprint=True
+            )
             if routing_decisions_for_training:
                 # CRITICAL FIX: Log routing decision count and validate consistency
                 n_decisions = len(routing_decisions_for_training)
                 logger.info(f"Loaded routing decisions for training: {n_decisions} targets")
-                # Validate count matches expected (if we have filtered_targets)
+                # Validate that routing decisions match filtered targets
                 if 'filtered_targets' in locals() and filtered_targets:
-                    if n_decisions != len(filtered_targets):
-                        logger.warning(
-                            f"⚠️ Routing decision count mismatch: {n_decisions} decisions vs {len(filtered_targets)} filtered targets. "
-                            f"This may indicate duplicate entries or stale routing decisions."
-                        )
+                    routing_targets = set(routing_decisions_for_training.keys())
+                    filtered_targets_set = set(filtered_targets)
+                    
+                    if routing_targets != filtered_targets_set:
+                        missing = filtered_targets_set - routing_targets
+                        extra = routing_targets - filtered_targets_set
+                        if missing:
+                            logger.warning(
+                                f"⚠️ Routing decisions missing for {len(missing)} targets: {sorted(missing)[:5]}{'...' if len(missing) > 5 else ''}"
+                            )
+                        if extra:
+                            logger.warning(
+                                f"⚠️ Routing decisions contain {len(extra)} unexpected targets: {sorted(extra)[:5]}{'...' if len(extra) > 5 else ''}. "
+                                f"These may be from a previous run."
+                            )
+                    else:
+                        logger.debug(f"✅ Routing decisions match filtered targets: {n_decisions} targets")
         except Exception as e:
             logger.debug(f"Could not load routing decisions for training: {e}")
         

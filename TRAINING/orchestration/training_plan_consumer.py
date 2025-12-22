@@ -132,14 +132,16 @@ def filter_targets_by_training_plan(
     jobs = training_plan.get("jobs", [])
     
     if not jobs:
-        # CRITICAL: 0 jobs is a logic error, not expected behavior
-        # Either the plan generation failed, or routing produced no valid jobs
-        logger.error(
-            f"🚨 Training plan has 0 jobs - this indicates a logic error. "
-            f"Either: 1) Plan generation failed, 2) Routing produced no valid jobs, or "
-            f"3) All targets were filtered out. Returning all targets as fallback, but this should be investigated."
+        # CRITICAL: 0 jobs indicates plan is disabled or routing produced no valid jobs
+        # Make this explicit rather than silent fallback
+        logger.warning(
+            f"⚠️ Training plan has 0 jobs - plan is disabled. "
+            f"Possible reasons: 1) Plan generation failed, 2) Routing produced no valid jobs, "
+            f"3) All targets were filtered out, or 4) Plan generation was skipped. "
+            f"Using fallback: returning all {len(targets)} targets without plan filtering."
         )
-        # Return all targets as fallback, but log as error
+        # Return all targets as fallback, but make it explicit that plan is disabled
+        # This allows the pipeline to continue while making the disabled state clear
         return targets
     
     # Get targets that have jobs of the specified type
