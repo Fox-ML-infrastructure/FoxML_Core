@@ -122,6 +122,8 @@ class RankingHarness:
             - time_vals: Timestamp array (np.ndarray)
             - mtf_data: Multi-timeframe data dict (Dict[str, pd.DataFrame])
             - detected_interval: Detected data interval in minutes (float)
+        
+        PERFORMANCE AUDIT: This function is tracked for call counts and timing.
             - resolved_config: ResolvedConfig object with purge/embargo settings
             - resolved_data_config: Dict with resolved data mode and loader contract
             Any can be None if data preparation fails
@@ -138,6 +140,25 @@ class RankingHarness:
         )
         from TRAINING.ranking.utils.resolved_config import create_resolved_config
         from TRAINING.ranking.predictability.scoring import TaskType
+        
+        # PERFORMANCE AUDIT: Track build_panel calls
+        import time
+        build_start_time = time.time()
+        try:
+            from TRAINING.common.utils.performance_audit import get_auditor
+            auditor = get_auditor()
+            if auditor.enabled:
+                fingerprint_kwargs = {
+                    'target': target_column,
+                    'n_symbols': len(self.symbols),
+                    'view': self.view,
+                    'symbol': self.symbol,
+                    'n_features_requested': len(feature_names) if feature_names else None
+                }
+                fingerprint = auditor._compute_fingerprint('RankingHarness.build_panel', **fingerprint_kwargs)
+        except Exception:
+            auditor = None
+            fingerprint = None
         
         # Filter symbols based on view
         symbols_to_load = self.symbols
@@ -447,6 +468,21 @@ class RankingHarness:
             # If frozen, would need dataclasses.replace, but ResolvedConfig is not frozen
             resolved_config.features_dropped_nan = features_dropped_nan
             resolved_config.features_final = features_final
+        
+        # PERFORMANCE AUDIT: Track build_panel completion
+        build_duration = time.time() - build_start_time
+        if auditor and auditor.enabled:
+            rows = X.shape[0] if X is not None else None
+            cols = len(feature_names_out) if feature_names_out else None
+            auditor.track_call(
+                func_name='RankingHarness.build_panel',
+                duration=build_duration,
+                rows=rows,
+                cols=cols,
+                stage=self.job_type,  # 'rank_targets' or 'rank_features'
+                cache_hit=False,  # build_panel doesn't use cache currently
+                input_fingerprint=fingerprint
+            )
         
         return X, y, feature_names_out, symbols_array, time_vals, mtf_data, detected_interval, resolved_config, resolved_data_config
     

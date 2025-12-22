@@ -2493,6 +2493,43 @@ class IntelligentTrainer:
         except Exception as e:
             logger.debug(f"Failed to create target metadata files: {e}")
         
+        # PERFORMANCE AUDIT: Save audit report at end of run
+        try:
+            from TRAINING.common.utils.performance_audit import get_auditor
+            auditor = get_auditor()
+            if auditor.enabled and auditor.calls:
+                audit_report_path = self.output_dir / "globals" / "performance_audit_report.json"
+                auditor.save_report(audit_report_path)
+                
+                # Also generate summary log
+                summary = auditor.report_summary()
+                multipliers = auditor.report_multipliers(min_calls=2)
+                nested_loops = auditor.report_nested_loops()
+                
+                logger.info("="*80)
+                logger.info("📊 PERFORMANCE AUDIT SUMMARY")
+                logger.info("="*80)
+                logger.info(f"Total function calls tracked: {summary.get('total_calls', 0)}")
+                logger.info(f"Unique functions: {summary.get('unique_functions', 0)}")
+                
+                if multipliers:
+                    logger.info(f"\n⚠️  MULTIPLIERS FOUND: {len(multipliers)} functions called multiple times with same input")
+                    for func_name, findings in multipliers.items():
+                        for finding in findings:
+                            logger.info(f"  - {func_name}: {finding['call_count']}× calls, {finding['total_duration']:.2f}s total "
+                                      f"(wasted: {finding['wasted_duration']:.2f}s, stage: {finding['stage']})")
+                
+                if nested_loops:
+                    logger.info(f"\n⚠️  NESTED LOOP PATTERNS: {len(nested_loops)} potential nested loop issues")
+                    for finding in nested_loops[:5]:  # Show top 5
+                        logger.info(f"  - {finding['func_name']}: {finding['consecutive_calls']} consecutive calls "
+                                  f"in {finding['time_span']:.2f}s (stage: {finding['stage']})")
+                
+                logger.info(f"\n💾 Full audit report saved to: {audit_report_path}")
+                logger.info("="*80)
+        except Exception as e:
+            logger.debug(f"Failed to save performance audit report: {e}")
+        
         return {
             'targets': targets,
             'target_features': target_features,

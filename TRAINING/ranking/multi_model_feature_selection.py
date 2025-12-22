@@ -928,6 +928,10 @@ def train_model_and_get_importance(
     """
     Train a single model family and extract importance
     
+    PERFORMANCE AUDIT: This function is tracked for call counts and timing.
+    """
+    Train a single model family and extract importance
+    
     FIX #2: For proper CV-based normalization, pass X_train/X_test separately.
     When provided, normalization (imputation/scaling) will fit only on X_train.
     If not provided, falls back to full-dataset normalization (leakage risk).
@@ -940,6 +944,25 @@ def train_model_and_get_importance(
     if target_column:
         seed_parts.append(target_column)
     model_seed = stable_seed_from(seed_parts)
+    
+    # PERFORMANCE AUDIT: Track train_model_and_get_importance calls
+    import time
+    train_start_time = time.time()
+    try:
+        from TRAINING.common.utils.performance_audit import get_auditor
+        auditor = get_auditor()
+        if auditor.enabled:
+            fingerprint_kwargs = {
+                'model_family': model_family,
+                'data_shape': X.shape,
+                'n_features': len(feature_names),
+                'target': target_column,
+                'symbol': symbol
+            }
+            fingerprint = auditor._compute_fingerprint('train_model_and_get_importance', **fingerprint_kwargs)
+    except Exception:
+        auditor = None
+        fingerprint = None
     
     # Validate target before training
     try:
@@ -2155,6 +2178,22 @@ def train_model_and_get_importance(
                 # This importance is for explanation/reporting, not for selection decisions
                 importance_start_time = time.time()
                 importance_elapsed = 0.0  # Initialize for timing breakdown
+                
+                # PERFORMANCE AUDIT: Track CatBoost importance computation
+                try:
+                    from TRAINING.common.utils.performance_audit import get_auditor
+                    auditor = get_auditor()
+                    if auditor.enabled:
+                        fingerprint_kwargs = {
+                            'data_shape': X_train_fit.shape,
+                            'n_features': len(feature_names),
+                            'importance_type': 'PredictionValuesChange'
+                        }
+                        fingerprint = auditor._compute_fingerprint('catboost.get_feature_importance', **fingerprint_kwargs)
+                except Exception:
+                    auditor = None
+                    fingerprint = None
+                
                 try:
                     if hasattr(model, 'base_model'):
                         importance_raw = model.base_model.get_feature_importance(data=X_train_fit, type='PredictionValuesChange')
@@ -2163,10 +2202,36 @@ def train_model_and_get_importance(
                     importance = pd.Series(importance_raw, index=feature_names)
                     importance_elapsed = time.time() - importance_start_time
                     logger.info(f"    CatBoost: Importance computation completed in {importance_elapsed/60:.2f} minutes (computed once after final fit)")
+                    
+                    # Track call
+                    if auditor and auditor.enabled:
+                        auditor.track_call(
+                            func_name='catboost.get_feature_importance',
+                            duration=importance_elapsed,
+                            rows=X_train_fit.shape[0],
+                            cols=len(feature_names),
+                            stage='feature_selection',
+                            cache_hit=False,
+                            input_fingerprint=fingerprint
+                        )
                 except Exception as e:
                     logger.warning(f"    CatBoost: Failed to extract importance from final model: {e}")
                     importance = pd.Series(0.0, index=feature_names)
                     importance_elapsed = time.time() - importance_start_time
+                
+                # PERFORMANCE AUDIT: Track train_model_and_get_importance completion
+                train_duration = time.time() - train_start_time
+                if auditor and auditor.enabled:
+                    auditor.track_call(
+                        func_name='train_model_and_get_importance',
+                        duration=train_duration,
+                        rows=X.shape[0],
+                        cols=len(feature_names),
+                        stage='feature_selection',
+                        cache_hit=False,
+                        input_fingerprint=fingerprint,
+                        model_family=model_family
+                    )
                 
                 # Return model, final-fit importance, method, and train_score
                 # Note: Importance is computed once after final fit (not during CV to avoid 3× overhead)

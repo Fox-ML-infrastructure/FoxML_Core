@@ -1494,8 +1494,39 @@ def train_and_evaluate_models(
                 # Compute and store full task-aware metrics
                 _compute_and_store_metrics('catboost', model, X, y, primary_score, task_type)
                 
+                # PERFORMANCE AUDIT: Track CatBoost importance computation
+                import time
+                importance_start_time = time.time()
+                try:
+                    from TRAINING.common.utils.performance_audit import get_auditor
+                    auditor = get_auditor()
+                    if auditor.enabled:
+                        fingerprint_kwargs = {
+                            'data_shape': X.shape,
+                            'n_features': X.shape[1] if len(X.shape) > 1 else None,
+                            'importance_type': 'PredictionValuesChange',
+                            'stage': 'leakage_detection'
+                        }
+                        fingerprint = auditor._compute_fingerprint('catboost.get_feature_importance', **fingerprint_kwargs)
+                except Exception:
+                    auditor = None
+                    fingerprint = None
+                
                 # CatBoost requires training dataset to compute feature importance
                 importance = model.get_feature_importance(data=X, type='PredictionValuesChange')
+                
+                # Track call
+                if auditor and auditor.enabled:
+                    importance_elapsed = time.time() - importance_start_time
+                    auditor.track_call(
+                        func_name='catboost.get_feature_importance',
+                        duration=importance_elapsed,
+                        rows=X.shape[0],
+                        cols=X.shape[1] if len(X.shape) > 1 else None,
+                        stage='leakage_detection',
+                        cache_hit=False,
+                        input_fingerprint=fingerprint
+                    )
             else:
                 importance = np.array([])
             if len(importance) > 0:

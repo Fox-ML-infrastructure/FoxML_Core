@@ -2769,6 +2769,23 @@ def train_and_evaluate_models(
             
             baseline_score = model.score(X, y_for_training)
             
+            # PERFORMANCE AUDIT: Track permutation importance computation
+            import time
+            perm_start_time = time.time()
+            try:
+                from TRAINING.common.utils.performance_audit import get_auditor
+                auditor = get_auditor()
+                if auditor.enabled:
+                    fingerprint_kwargs = {
+                        'data_shape': X.shape,
+                        'n_features_sampled': min(10, X.shape[1]),
+                        'stage': 'target_ranking'
+                    }
+                    fingerprint = auditor._compute_fingerprint('neural_network.permutation_importance', **fingerprint_kwargs)
+            except Exception:
+                auditor = None
+                fingerprint = None
+            
             perm_scores = []
             importance = np.zeros(X.shape[1])  # Initialize importance array
             for i in range(min(10, X.shape[1])):  # Sample 10 features
@@ -2782,6 +2799,20 @@ def train_and_evaluate_models(
                 perm_importance = abs(baseline_score - perm_score)
                 perm_scores.append(perm_importance)
                 importance[i] = perm_importance
+            
+            # Track call
+            if auditor and auditor.enabled:
+                perm_elapsed = time.time() - perm_start_time
+                auditor.track_call(
+                    func_name='neural_network.permutation_importance',
+                    duration=perm_elapsed,
+                    rows=X.shape[0],
+                    cols=X.shape[1],
+                    stage='target_ranking',
+                    cache_hit=False,
+                    input_fingerprint=fingerprint,
+                    n_features_sampled=min(10, X.shape[1])
+                )
             
             # Normalize importance to match sampled features
             if len(perm_scores) > 0 and np.max(perm_scores) > 0:
@@ -3671,6 +3702,24 @@ def train_and_evaluate_models(
             # CRITICAL: Always compute and store importance if model trained successfully (even if CV failed)
             importance = None
             if model_fitted:
+                # PERFORMANCE AUDIT: Track CatBoost importance computation
+                import time
+                importance_start_time = time.time()
+                try:
+                    from TRAINING.common.utils.performance_audit import get_auditor
+                    auditor = get_auditor()
+                    if auditor.enabled:
+                        fingerprint_kwargs = {
+                            'data_shape': X.shape,
+                            'n_features': len(feature_names),
+                            'importance_type': 'PredictionValuesChange',
+                            'stage': 'target_ranking'
+                        }
+                        fingerprint = auditor._compute_fingerprint('catboost.get_feature_importance', **fingerprint_kwargs)
+                except Exception:
+                    auditor = None
+                    fingerprint = None
+                
                 try:
                     if hasattr(model, 'base_model'):
                         # Wrapper model - use base model
@@ -3683,6 +3732,19 @@ def train_and_evaluate_models(
                     else:
                         # Direct model (CPU mode)
                         importance = model.get_feature_importance(data=X, type='PredictionValuesChange')
+                    
+                    # Track call
+                    if auditor and auditor.enabled:
+                        importance_elapsed = time.time() - importance_start_time
+                        auditor.track_call(
+                            func_name='catboost.get_feature_importance',
+                            duration=importance_elapsed,
+                            rows=X.shape[0],
+                            cols=len(feature_names),
+                            stage='target_ranking',
+                            cache_hit=False,
+                            input_fingerprint=fingerprint
+                        )
                 except Exception as e:
                     logger.warning(f"  ⚠️  CatBoost feature importance computation failed: {e}")
                     logger.debug(f"  CatBoost importance error details:", exc_info=True)
