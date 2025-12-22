@@ -16,6 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-22 (License Banner Pricing Structure Update)
+- **Enhancement**: Restructured license banner with more realistic and approachable pricing ladder
+- **New Tiers**: Added Commercial Evaluation ($1k–$5k) and Commercial License tiers ($10k–$25k small team, $25k–$60k team)
+- **Clarification**: Split License vs Support (Enterprise tier includes SLA, response times, on-call)
+- **Fix**: Corrected AGPL wording - "make source available to users" (can be internal, not necessarily public)
+- **Pricing**: Reduced Pilot from $35k to $10k–$20k, Enterprise starts at $120k+/year with SLA
+- **Impact**: More approachable entry point for organizations, clearer value proposition at each tier
+- **Files Changed**: `license_banner.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-22-license-banner-pricing-update.md)
+
 #### 2025-12-22 (Performance Audit System for Multiplicative Work Detection)
 - **Feature**: Added comprehensive performance audit system to detect "accidental multiplicative work"
 - **Instrumentation**: Tracks call counts and timing for heavy functions (CatBoost importance, build_panel, train_model, etc.)
