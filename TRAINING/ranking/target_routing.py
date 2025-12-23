@@ -518,12 +518,31 @@ def load_routing_decisions(
                     expected_fingerprint = hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]
                     
                     if stored_fingerprint != expected_fingerprint:
-                        logger.warning(
-                            f"⚠️ Routing decisions fingerprint mismatch: stored={stored_fingerprint[:8]}... "
+                        # Check dev_mode to decide whether to raise or return empty
+                        dev_mode = False
+                        try:
+                            from CONFIG.config_loader import get_cfg
+                            routing_config = get_cfg("training_config.routing", default={}, config_name="training_config")
+                            dev_mode = routing_config.get("dev_mode", False)
+                        except Exception:
+                            pass
+                        
+                        error_msg = (
+                            f"🚨 Routing decisions fingerprint mismatch: stored={stored_fingerprint[:8]}... "
                             f"expected={expected_fingerprint[:8]}... "
-                            f"This may indicate stale routing decisions. Ignoring loaded decisions."
+                            f"This indicates stale routing decisions. "
+                            f"Re-run feature selection to generate fresh routing decisions."
                         )
-                        return {}
+                        
+                        if dev_mode:
+                            logger.warning(f"{error_msg} Dev mode: Proceeding with empty routing decisions (may cause issues)")
+                            return {}
+                        else:
+                            logger.error(error_msg)
+                            raise ValueError(
+                                "Stale routing decisions detected. Re-run feature selection to generate fresh decisions. "
+                                f"Fingerprint mismatch: stored={stored_fingerprint[:8]}... expected={expected_fingerprint[:8]}..."
+                            )
                 else:
                     logger.debug("Routing decisions file has no fingerprint - skipping validation")
             
@@ -558,13 +577,32 @@ def load_routing_decisions(
                         expected_fingerprint = hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]
                         
                         if stored_fingerprint != expected_fingerprint:
-                            logger.warning(
-                                f"⚠️ Routing decisions fingerprint mismatch: stored={stored_fingerprint[:8]}... "
+                            # Check dev_mode to decide whether to raise or return empty
+                            dev_mode = False
+                            try:
+                                from CONFIG.config_loader import get_cfg
+                                routing_config = get_cfg("training_config.routing", default={}, config_name="training_config")
+                                dev_mode = routing_config.get("dev_mode", False)
+                            except Exception:
+                                pass
+                            
+                            error_msg = (
+                                f"🚨 Routing decisions fingerprint mismatch: stored={stored_fingerprint[:8]}... "
                                 f"expected={expected_fingerprint[:8]}... "
                                 f"Loaded {len(routing_decisions)} decisions but fingerprint doesn't match expected targets. "
-                                f"This may indicate stale routing decisions. Returning empty dict."
+                                f"This indicates stale routing decisions. "
+                                f"Re-run feature selection to generate fresh routing decisions."
                             )
-                            return {}
+                            
+                            if dev_mode:
+                                logger.warning(f"{error_msg} Dev mode: Proceeding with empty routing decisions (may cause issues)")
+                                return {}
+                            else:
+                                logger.error(error_msg)
+                                raise ValueError(
+                                    "Stale routing decisions detected. Re-run feature selection to generate fresh decisions. "
+                                    f"Fingerprint mismatch: stored={stored_fingerprint[:8]}... expected={expected_fingerprint[:8]}..."
+                                )
                     else:
                         logger.debug("Routing decisions file has no fingerprint - skipping validation")
                 

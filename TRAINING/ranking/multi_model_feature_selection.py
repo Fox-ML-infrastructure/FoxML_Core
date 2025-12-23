@@ -886,6 +886,22 @@ def extract_shap_importance(model, X: np.ndarray, feature_names: List[str],
                                                target_column=target_column if 'target_column' in locals() else None,
                                                symbol=symbol if 'symbol' in locals() else None)
 
+# Module-level function for CatBoost importance computation (must be picklable for multiprocessing)
+def _compute_catboost_importance_worker(model_data, X_data, feature_names_data, result_queue):
+    """
+    Worker process to compute CatBoost importance.
+    
+    This must be a module-level function (not nested) to be picklable for multiprocessing.
+    """
+    try:
+        if hasattr(model_data, 'base_model'):
+            importance_raw = model_data.base_model.get_feature_importance(data=X_data, type='PredictionValuesChange')
+        else:
+            importance_raw = model_data.get_feature_importance(data=X_data, type='PredictionValuesChange')
+        result_queue.put(('success', pd.Series(importance_raw, index=feature_names_data)))
+    except Exception as e:
+        result_queue.put(('error', str(e)))
+
 
 def extract_permutation_importance(model, X: np.ndarray, y: np.ndarray,
                                    feature_names: List[str],
@@ -2305,21 +2321,11 @@ def train_model_and_get_importance(
                         # Process-based timeout for PVC
                         import multiprocessing
                         
-                        def compute_importance_worker(model_data, X_data, feature_names_data, result_queue):
-                            """Worker process to compute importance."""
-                            try:
-                                if hasattr(model_data, 'base_model'):
-                                    importance_raw = model_data.base_model.get_feature_importance(data=X_data, type='PredictionValuesChange')
-                                else:
-                                    importance_raw = model_data.get_feature_importance(data=X_data, type='PredictionValuesChange')
-                                result_queue.put(('success', pd.Series(importance_raw, index=feature_names_data)))
-                            except Exception as e:
-                                result_queue.put(('error', str(e)))
-                        
+                        # Use module-level function (picklable for multiprocessing)
                         # Create process and queue
                         result_queue = multiprocessing.Queue()
                         p = multiprocessing.Process(
-                            target=compute_importance_worker,
+                            target=_compute_catboost_importance_worker,
                             args=(model, X_train_fit, feature_names, result_queue)
                         )
                         p.start()

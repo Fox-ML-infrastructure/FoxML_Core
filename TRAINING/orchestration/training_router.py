@@ -211,10 +211,25 @@ class TrainingRouter:
         Returns:
             SignalState
         """
-        min_sample_size = self.config["min_sample_size"]["cross_sectional"]
+        # Check dev_mode and use adaptive thresholds if enabled
+        dev_mode = self.config.get("dev_mode", False)
+        base_min_sample_size = self.config["min_sample_size"]["cross_sectional"]
+        if dev_mode:
+            # Use adaptive threshold: max(dev_mode_min, 10% of cohort, base_min)
+            dev_mode_min = self.config.get("dev_mode_min_sample_size", 5000)
+            adaptive_min = max(dev_mode_min, int(cs_metrics.sample_size * 0.1), 5000)
+            min_sample_size = min(adaptive_min, base_min_sample_size)  # Don't exceed base
+            logger.debug(f"Dev mode: Using adaptive min_sample_size={min_sample_size} (base={base_min_sample_size}, cohort={cs_metrics.sample_size})")
+        else:
+            min_sample_size = base_min_sample_size
+        
         block_on_leakage = self.config.get("block_on_leakage", True)
         cs_config = self.config["cross_sectional"]
         stability_allowlist = self.config["stability_allowlist"]["cross_sectional"]
+        # In dev_mode, allow UNKNOWN stability if sample_size is below threshold
+        if dev_mode and cs_metrics.sample_size < base_min_sample_size:
+            stability_allowlist = list(stability_allowlist) + ["UNKNOWN"]
+            logger.debug(f"Dev mode: Allowing UNKNOWN stability for small cohorts (sample_size={cs_metrics.sample_size} < {base_min_sample_size})")
         experimental_config = self.config.get("experimental", {})
         enable_experimental = self.config.get("enable_experimental_lane", False)
         
@@ -516,9 +531,21 @@ class TrainingRouter:
                 if not cs_metrics:
                     reason_parts.append("no_metrics")
                 else:
-                    min_sample_size = self.config["min_sample_size"]["cross_sectional"]
+                    # Use same adaptive logic as evaluate_cross_sectional_eligibility
+                    dev_mode = self.config.get("dev_mode", False)
+                    base_min_sample_size = self.config["min_sample_size"]["cross_sectional"]
+                    if dev_mode:
+                        dev_mode_min = self.config.get("dev_mode_min_sample_size", 5000)
+                        adaptive_min = max(dev_mode_min, int(cs_metrics.sample_size * 0.1), 5000)
+                        min_sample_size = min(adaptive_min, base_min_sample_size)
+                    else:
+                        min_sample_size = base_min_sample_size
+                    
                     cs_config = self.config["cross_sectional"]
                     stability_allowlist = self.config["stability_allowlist"]["cross_sectional"]
+                    # In dev_mode, allow UNKNOWN stability for small cohorts
+                    if dev_mode and cs_metrics.sample_size < base_min_sample_size:
+                        stability_allowlist = list(stability_allowlist) + ["UNKNOWN"]
                     
                     if cs_metrics.stability.value not in stability_allowlist:
                         reason_parts.append(f"stability={cs_metrics.stability.value} not in {stability_allowlist}")

@@ -112,19 +112,41 @@ def generate_routing_plan_after_feature_selection(
         
         logger.info(f"✅ Found {len(candidates_df)} routing candidates")
         
-        # Save routing candidates
-        metrics_dir = output_dir / "METRICS"
-        metrics_dir.mkdir(parents=True, exist_ok=True)
+        # Save routing candidates to globals/ (with backward compatibility for METRICS/)
+        from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+        globals_dir = get_globals_dir(output_dir)
+        globals_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Also create METRICS/ for backward compatibility (legacy)
+        metrics_dir_legacy = output_dir / "METRICS"
+        metrics_dir_legacy.mkdir(parents=True, exist_ok=True)
+        
+        # Save to globals/ (primary location)
         metrics_path = aggregator.save_routing_candidates(
             candidates_df,
-            output_path=metrics_dir / "routing_candidates.parquet"
+            output_path=globals_dir / "routing_candidates.parquet"
         )
+        
+        # Also save to METRICS/ for backward compatibility
+        legacy_path = metrics_dir_legacy / "routing_candidates.parquet"
+        try:
+            import shutil
+            shutil.copy2(metrics_path, legacy_path)
+            logger.debug(f"Also saved routing candidates to legacy location: {legacy_path}")
+        except Exception as e:
+            logger.debug(f"Could not copy to legacy METRICS location: {e}")
         
         # Step 2: Generate routing plan
         logger.info("Step 2: Generating routing decisions...")
         router = TrainingRouter(routing_config)
         
-        plan_output = metrics_dir / "routing_plan"
+        # Save routing plan to globals/routing_plan/ (primary)
+        plan_output = globals_dir / "routing_plan"
+        plan_output.mkdir(parents=True, exist_ok=True)
+        
+        # Also create METRICS/routing_plan/ for backward compatibility
+        plan_output_legacy = metrics_dir_legacy / "routing_plan"
+        plan_output_legacy.mkdir(parents=True, exist_ok=True)
         plan = router.generate_routing_plan(
             routing_candidates=candidates_df,
             output_dir=plan_output,
@@ -164,6 +186,18 @@ def generate_routing_plan_after_feature_selection(
         logger.info("\nRoute distribution:")
         for route, count in sorted(route_counts.items(), key=lambda x: -x[1]):
             logger.info(f"  {route}: {count} symbols")
+        
+        # Also save routing plan to legacy METRICS location for backward compatibility
+        try:
+            import shutil
+            for file_name in ["routing_plan.json", "routing_plan.yaml", "routing_plan.md"]:
+                src_file = plan_output / file_name
+                if src_file.exists():
+                    dst_file = plan_output_legacy / file_name
+                    shutil.copy2(src_file, dst_file)
+            logger.debug(f"Also saved routing plan to legacy location: {plan_output_legacy}")
+        except Exception as e:
+            logger.debug(f"Could not copy routing plan to legacy METRICS location: {e}")
         
         logger.info(f"\n✅ Routing plan generated: {plan_output}")
         logger.info(f"   Total targets: {len(plan['targets'])}")

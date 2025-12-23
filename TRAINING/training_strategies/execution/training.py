@@ -377,15 +377,29 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                     results['failed_reasons'][target] = f"CS: DISABLED in routing plan ({cs_info.get('reason', 'unknown')})"
                     continue
                 # Simple list of features
-                selected_features = target_feat_data
+                # CRITICAL: Handle dict structures (from BOTH route) before conversion
+                if isinstance(target_feat_data, dict):
+                    # Check if it's a BOTH structure that needs extraction
+                    if 'cross_sectional' in target_feat_data:
+                        selected_features = target_feat_data['cross_sectional']
+                    elif 'CROSS_SECTIONAL' in target_feat_data:
+                        selected_features = target_feat_data['CROSS_SECTIONAL']
+                    else:
+                        # Invalid dict structure - raise immediately
+                        raise ValueError(
+                            f"selected_features for {target} is dict but missing 'cross_sectional' key. "
+                            f"Keys: {list(target_feat_data.keys())}. Expected list[str] or dict with 'cross_sectional' key."
+                        )
+                else:
+                    selected_features = target_feat_data
+                
+                # Validate it's a list
                 if selected_features is not None:
                     if not isinstance(selected_features, (list, tuple)):
-                        logger.warning(f"selected_features for {target} is not a list/tuple (type: {type(selected_features)}), converting...")
-                        try:
-                            selected_features = list(selected_features)
-                        except Exception as e:
-                            logger.error(f"Failed to convert selected_features to list: {e}")
-                            selected_features = None
+                        raise TypeError(
+                            f"selected_features for {target} must be list[str], got {type(selected_features)}. "
+                            f"Value: {selected_features}"
+                        )
                     elif len(selected_features) == 0:
                         logger.warning(f"selected_features for {target} is empty, will auto-discover features")
                         selected_features = None
@@ -394,18 +408,30 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
             elif route == 'SYMBOL_SPECIFIC':
                 # Dict mapping symbol -> list of features
                 # Train separate models per symbol (not cross-sectional)
-                if isinstance(target_feat_data, dict):
-                    # Will handle per-symbol training below
-                    logger.info(f"SYMBOL_SPECIFIC route: will train {len(target_feat_data)} separate models (one per symbol)")
-                else:
-                    logger.warning(f"Expected dict for SYMBOL_SPECIFIC route, got {type(target_feat_data)}")
-                    # Fallback: skip this target
-                    results['failed_targets'].append(target)
-                    results['failed_reasons'][target] = f"SYMBOL_SPECIFIC route requires dict, got {type(target_feat_data)}"
-                    continue
+                if not isinstance(target_feat_data, dict):
+                    raise TypeError(
+                        f"SYMBOL_SPECIFIC route requires dict for {target}, got {type(target_feat_data)}. "
+                        f"Expected: {{symbol: [features...]}}"
+                    )
+                
+                # Validate dict structure: all values should be lists
+                for symbol, features in target_feat_data.items():
+                    if not isinstance(features, (list, tuple)):
+                        raise TypeError(
+                            f"SYMBOL_SPECIFIC route: features for symbol {symbol} must be list, got {type(features)}"
+                        )
+                
+                # Will handle per-symbol training below
+                logger.info(f"SYMBOL_SPECIFIC route: will train {len(target_feat_data)} separate models (one per symbol)")
             elif route == 'BOTH':
                 # Structured dict: {'cross_sectional': [...], 'symbol_specific': {symbol: [...]}}
-                if isinstance(target_feat_data, dict) and 'cross_sectional' in target_feat_data:
+                if not isinstance(target_feat_data, dict):
+                    raise TypeError(
+                        f"BOTH route requires dict structure for {target}, got {type(target_feat_data)}. "
+                        f"Expected: {{'cross_sectional': [...], 'symbol_specific': {{symbol: [...]}}}}"
+                    )
+                
+                if 'cross_sectional' in target_feat_data:
                     # Extract cross-sectional features for CS training
                     selected_features = target_feat_data['cross_sectional']
                     if selected_features and isinstance(selected_features, (list, tuple)):
@@ -413,46 +439,42 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                     else:
                         logger.warning(f"Cross-sectional features not found in BOTH structure for {target}")
                         selected_features = None
-                    
-                    # For BOTH route, also check if we need symbol-specific training
-                    # Extract symbol-specific features and check routing plan
-                    symbol_specific_features = target_feat_data.get('symbol_specific', {})
-                    if symbol_specific_features and isinstance(symbol_specific_features, dict) and len(symbol_specific_features) > 0:
-                        # Check routing plan to see which symbols need symbol-specific training
-                        winner_symbols = route_info.get('winner_symbols', [])
-                        if not winner_symbols:
-                            # If no winner_symbols specified, check symbol_specific section of routing plan
-                            sym_info = route_info.get('symbol_specific', {})
-                            if isinstance(sym_info, dict):
-                                # Get all symbols that have symbol-specific routing enabled
-                                winner_symbols = [sym for sym, sym_data in sym_info.items() 
-                                                 if isinstance(sym_data, dict) and sym_data.get('route') == 'ENABLED']
-                        
-                        if winner_symbols:
-                            # Filter symbol-specific features to only those symbols that need training
-                            filtered_symbol_features = {sym: symbol_specific_features[sym] 
-                                                       for sym in winner_symbols 
-                                                       if sym in symbol_specific_features}
-                            if filtered_symbol_features:
-                                logger.info(f"BOTH route: Will train symbol-specific models for {len(filtered_symbol_features)} symbols: {list(filtered_symbol_features.keys())}")
-                                # Temporarily store symbol-specific features for symbol-specific training path
-                                # We'll restore the full structure after symbol-specific training
-                                target_features[target] = filtered_symbol_features
-                            else:
-                                logger.warning(f"BOTH route: No symbol-specific features found for winner symbols: {winner_symbols}")
-                        else:
-                            logger.info(f"BOTH route: No symbol-specific training needed (no winner_symbols or all disabled)")
-                    else:
-                        logger.warning(f"BOTH route: No symbol-specific features found in structure")
                 else:
-                    # Fallback: treat as simple list
-                    selected_features = target_feat_data
-                    if selected_features and not isinstance(selected_features, (list, tuple)):
-                        logger.warning(f"BOTH route but unexpected structure, treating as list")
-                        try:
-                            selected_features = list(selected_features)
-                        except Exception:
-                            selected_features = None
+                    raise ValueError(
+                        f"BOTH route dict for {target} missing 'cross_sectional' key. "
+                        f"Keys: {list(target_feat_data.keys())}"
+                    )
+                
+                # For BOTH route, also check if we need symbol-specific training
+                # Extract symbol-specific features and check routing plan
+                symbol_specific_features = target_feat_data.get('symbol_specific', {})
+                if symbol_specific_features and isinstance(symbol_specific_features, dict) and len(symbol_specific_features) > 0:
+                    # Check routing plan to see which symbols need symbol-specific training
+                    winner_symbols = route_info.get('winner_symbols', [])
+                    if not winner_symbols:
+                        # If no winner_symbols specified, check symbol_specific section of routing plan
+                        sym_info = route_info.get('symbol_specific', {})
+                        if isinstance(sym_info, dict):
+                            # Get all symbols that have symbol-specific routing enabled
+                            winner_symbols = [sym for sym, sym_data in sym_info.items() 
+                                             if isinstance(sym_data, dict) and sym_data.get('route') == 'ENABLED']
+                    
+                    if winner_symbols:
+                        # Filter symbol-specific features to only those symbols that need training
+                        filtered_symbol_features = {sym: symbol_specific_features[sym] 
+                                                   for sym in winner_symbols 
+                                                   if sym in symbol_specific_features}
+                        if filtered_symbol_features:
+                            logger.info(f"BOTH route: Will train symbol-specific models for {len(filtered_symbol_features)} symbols: {list(filtered_symbol_features.keys())}")
+                            # Temporarily store symbol-specific features for symbol-specific training path
+                            # We'll restore the full structure after symbol-specific training
+                            target_features[target] = filtered_symbol_features
+                        else:
+                            logger.warning(f"BOTH route: No symbol-specific features found for winner symbols: {winner_symbols}")
+                    else:
+                        logger.info(f"BOTH route: No symbol-specific training needed (no winner_symbols or all disabled)")
+                else:
+                    logger.warning(f"BOTH route: No symbol-specific features found in structure")
             else:
                 # Unknown route, try to extract as list
                 selected_features = target_feat_data
@@ -609,17 +631,25 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                             # Ensure output_dir is a Path object
                             output_dir_path = Path(output_dir) if not isinstance(output_dir, Path) else output_dir
                             
-                            # Save symbol-specific models to training_results/<family>/symbol=<symbol>/
+                            # Save symbol-specific models to training_results/<family>/view=SYMBOL_SPECIFIC/symbol=<symbol>/
                             family_dir = output_dir_path / family
-                            symbol_dir = family_dir / f"symbol={symbol}"
+                            view_dir = family_dir / "view=SYMBOL_SPECIFIC"
+                            symbol_dir = view_dir / f"symbol={symbol}"
                             symbol_dir.mkdir(parents=True, exist_ok=True)
                             logger.info(f"💾 Saving SYMBOL_SPECIFIC model for {symbol} to: {symbol_dir}")
                             
                             # Keep target-first structure ONLY for reproducibility metadata (not for model files)
+                            # Find base run directory (parent of training_results/) for target-first structure
+                            base_run_dir = output_dir_path
+                            if output_dir_path.name == 'training_results':
+                                base_run_dir = output_dir_path.parent
+                            elif (output_dir_path.parent / 'training_results').exists():
+                                base_run_dir = output_dir_path.parent
+                            
                             from TRAINING.orchestration.utils.target_first_paths import (
                                 ensure_target_structure
                             )
-                            ensure_target_structure(output_dir_path, target)
+                            ensure_target_structure(base_run_dir, target)  # Use base run dir, not training_results/
                             
                             # Get the trained model from strategy manager
                             strategy_manager = model_result.get('strategy_manager')
@@ -1338,16 +1368,37 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                     # Ensure output_dir is a Path object
                     output_dir_path = Path(output_dir) if not isinstance(output_dir, Path) else output_dir
                     
-                    # Save models directly to training_results/<family>/ (no nested training_results, no target subfolders)
-                    family_dir = output_dir_path / family
+                    # Save models with view separation: training_results/<family>/view=CROSS_SECTIONAL/ or view=SYMBOL_SPECIFIC/symbol=<symbol>/
+                    # Determine view from route (route is defined earlier in function scope at line 353)
+                    # For CROSS_SECTIONAL or BOTH routes, use CROSS_SECTIONAL view
+                    view = "CROSS_SECTIONAL"  # Default for CROSS_SECTIONAL route
+                    if route in ['CROSS_SECTIONAL', 'BOTH']:
+                        view = "CROSS_SECTIONAL"
+                    elif route == 'SYMBOL_SPECIFIC':
+                        view = "SYMBOL_SPECIFIC"
+                    
+                    if view == 'CROSS_SECTIONAL':
+                        family_dir = output_dir_path / family / "view=CROSS_SECTIONAL"
+                    else:
+                        # SYMBOL_SPECIFIC: This block shouldn't be reached for CROSS_SECTIONAL route
+                        # But handle it gracefully if route is SYMBOL_SPECIFIC
+                        logger.warning(f"SYMBOL_SPECIFIC route in CROSS_SECTIONAL saving block - this should not happen")
+                        family_dir = output_dir_path / family / "view=CROSS_SECTIONAL"  # Fallback
                     family_dir.mkdir(parents=True, exist_ok=True)
-                    logger.info(f"💾 Saving {family} model to: {family_dir}")
+                    logger.info(f"💾 Saving {family} model to: {family_dir} (view={view}, route={route})")
                     
                     # Keep target-first structure ONLY for reproducibility metadata (not for model files)
+                    # Find base run directory (parent of training_results/) for target-first structure
+                    base_run_dir = output_dir_path
+                    if output_dir_path.name == 'training_results':
+                        base_run_dir = output_dir_path.parent
+                    elif (output_dir_path.parent / 'training_results').exists():
+                        base_run_dir = output_dir_path.parent
+                    
                     from TRAINING.orchestration.utils.target_first_paths import (
                         get_target_models_dir, ensure_target_structure
                     )
-                    ensure_target_structure(output_dir_path, target)
+                    ensure_target_structure(base_run_dir, target)  # Use base run dir, not training_results/
                     # This is only used for metadata tracking, not for actual model files
                     
                     try:
@@ -1506,13 +1557,17 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 # Target-first structure only - no legacy writes
                                     
                             else:  # TensorFlow/Scikit-learn - joblib format
-                                meta_path = target_dir / f"{family.lower()}_mtf_b0.meta.joblib"
+                                # Use target-first structure for metadata
+                                target_models_dir = get_target_models_dir(output_dir_path, target)
+                                target_models_dir.mkdir(parents=True, exist_ok=True)
+                                meta_path = target_models_dir / f"{family.lower()}_mtf_b0.meta.joblib"
                                 metadata = {
                                     "family": family,
                                     "target": target,
                                     "features": tuple(feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names))
                                 }
                                 joblib.dump(metadata, meta_path)
+                                logger.info(f"💾 Metadata saved: {meta_path}")
                                 
                     except Exception as e:
                         family_status[family]["error"] = f"Save failed: {str(e)}"

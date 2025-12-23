@@ -133,44 +133,49 @@ def get_snapshot_base_dir(output_dir: Optional[Path] = None, target_name: Option
         Path to base snapshot directory
     """
     if output_dir is not None:
-        # Try to use target-first structure if target_name is provided
-        if target_name:
-            # Find base run directory
-            # Only stop if we find a run directory (has targets/, globals/, or cache/)
-            # Don't stop at RESULTS/ - continue to find actual run directory
-            base_output_dir = output_dir
-            for _ in range(10):
-                if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
-                    break
-                if not base_output_dir.parent.exists():
-                    break
-                base_output_dir = base_output_dir.parent
-            
-            if base_output_dir.exists() and (base_output_dir / "targets").exists():
-                try:
-                    from TRAINING.orchestration.utils.target_first_paths import (
-                        get_target_reproducibility_dir, ensure_target_structure
-                    )
-                    target_name_clean = target_name.replace('/', '_').replace('\\', '_')
-                    ensure_target_structure(base_output_dir, target_name_clean)
-                    target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
-                    return target_repro_dir / "feature_importance_snapshots"
-                except Exception as e:
-                    logger.warning(f"Failed to use target-first structure for snapshots: {e}, falling back to artifacts")
-                    # Fall through to use artifacts directory
-        
-        # If target_name not provided or target-first structure failed, use artifacts directory
-        # Never create root-level feature_importance_snapshots
+        # REQUIRE target_name when output_dir is provided (saving case)
+        # This ensures snapshots are written to the SST directory structure that aggregators scan
         if not target_name:
-            logger.warning(
-                f"target_name not provided for snapshot base directory. "
-                f"Using artifacts directory instead of root-level structure. "
+            raise ValueError(
+                "target_name is required for snapshot base directory when output_dir is provided. "
+                "This ensures snapshots are written to the SST directory structure that aggregators scan. "
                 f"output_dir={output_dir}"
             )
-        # else: target_name was provided but structure failed - already logged warning above
-        from pathlib import Path
-        repo_root = Path(__file__).resolve().parents[4]  # TRAINING/stability/feature_importance/io.py -> repo root
-        return repo_root / "artifacts" / "feature_importance"
+        
+        # Try to use target-first structure
+        # Find base run directory
+        # Only stop if we find a run directory (has targets/, globals/, or cache/)
+        # Don't stop at RESULTS/ - continue to find actual run directory
+        base_output_dir = output_dir
+        for _ in range(10):
+            if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
+                break
+            if not base_output_dir.parent.exists():
+                break
+            base_output_dir = base_output_dir.parent
+        
+        if base_output_dir.exists() and (base_output_dir / "targets").exists():
+            try:
+                from TRAINING.orchestration.utils.target_first_paths import (
+                    get_target_reproducibility_dir, ensure_target_structure
+                )
+                target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+                ensure_target_structure(base_output_dir, target_name_clean)
+                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+                return target_repro_dir / "feature_importance_snapshots"
+            except Exception as e:
+                # If target-first structure fails, raise error (no fallback to artifacts)
+                raise RuntimeError(
+                    f"Failed to use target-first structure for snapshots with target_name={target_name}. "
+                    f"output_dir={output_dir}, base_output_dir={base_output_dir}. "
+                    f"Error: {e}. This is required for SST compliance."
+                ) from e
+        
+        # If we can't find a valid run directory, raise error
+        raise RuntimeError(
+            f"Could not find valid run directory (with targets/ or globals/) from output_dir={output_dir}. "
+            f"target_name={target_name}. This is required for SST compliance."
+        )
     else:
         # Default: artifacts/feature_importance
         from pathlib import Path

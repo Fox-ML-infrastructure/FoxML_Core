@@ -1996,7 +1996,7 @@ class IntelligentTrainer:
                 )
                 logger.info(f"📋 Passed model_families={families} to routing_integration for training plan generation")
                 if routing_plan:
-                    logger.info("✅ Training routing plan generated - see METRICS/routing_plan/ for details")
+                    logger.info("✅ Training routing plan generated - see globals/routing_plan/ for details (legacy: METRICS/routing_plan/)")
                     # Set training plan directory for filtering
                     from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
                     training_plan_dir = get_globals_dir(self.output_dir) / "training_plan"
@@ -2120,12 +2120,31 @@ class IntelligentTrainer:
         }
         
         if families:
-            # Filter out feature selectors from families list
-            families_list = [f for f in families if f not in FEATURE_SELECTORS]
-            removed = set(families) - set(families_list)
+            # Normalize family names first (mlp -> neural_network, etc.)
+            from TRAINING.training_strategies.utils import normalize_family_name
+            normalized_families = []
+            normalization_map = {}  # Track what was normalized
+            for f in families:
+                normalized = normalize_family_name(f)
+                if normalized != f:
+                    normalization_map[normalized] = f
+                normalized_families.append(normalized)
+            
+            # Map mlp -> neural_network explicitly (common config variant)
+            for i, f in enumerate(normalized_families):
+                if f == 'mlp':
+                    normalized_families[i] = 'neural_network'
+                    normalization_map['neural_network'] = 'mlp'
+            
+            if normalization_map:
+                logger.debug(f"📋 Normalized family names: {normalization_map}")
+            
+            # Filter out feature selectors from normalized families list
+            families_list = [f for f in normalized_families if f not in FEATURE_SELECTORS]
+            removed = set(normalized_families) - set(families_list)
             if removed:
                 logger.warning(f"📋 Filtered out {len(removed)} feature selector(s) from families: {sorted(removed)}. Feature selectors are not trainers and should not be in training.")
-            logger.info(f"📋 Training phase: Using families from parameter (config/CLI) after filtering: {families_list}")
+            logger.info(f"📋 Training phase: Using families from parameter (config/CLI) after normalization and filtering: {families_list}")
         else:
             families_list = ALL_FAMILIES
             logger.warning(f"📋 Training phase: No families provided, falling back to ALL_FAMILIES: {families_list}")

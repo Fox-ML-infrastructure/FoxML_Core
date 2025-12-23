@@ -96,7 +96,8 @@ class RankingHarness:
         self,
         target_column: str,
         target_name: Optional[str] = None,
-        feature_names: Optional[List[str]] = None
+        feature_names: Optional[List[str]] = None,
+        use_strict_registry: bool = False  # If True, use strict registry mode (for feature selection), else permissive (for target ranking)
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[List[str]], 
                Optional[np.ndarray], Optional[np.ndarray], Optional[Dict[str, pd.DataFrame]], 
                Optional[float], Optional[Any], Optional[Dict[str, Any]]]:
@@ -360,7 +361,7 @@ class RankingHarness:
                 verbose=True,
                 use_registry=True,
                 data_interval_minutes=detected_interval,
-                for_ranking=True  # Use permissive rules for ranking
+                for_ranking=not use_strict_registry  # Use strict mode for feature selection, permissive for target ranking
             )
             feature_names = safe_columns
         

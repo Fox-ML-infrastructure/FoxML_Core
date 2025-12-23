@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-23 (Boruta Timeout and CatBoost Pickle Error Fixes)** — Fixed two critical errors in feature selection: (1) Improved Boruta timeout error handling to detect timeout errors even when wrapped as ValueError, preventing confusing error messages and pipeline crashes. (2) Fixed CatBoost pickle error by moving importance worker function to module level, enabling multiprocessing for importance extraction. Both fixes improve pipeline stability and error clarity.
+  → [View](2025-12-23-boruta-catboost-error-handling-fixes.md)
+
 - **2025-12-23 (Comprehensive Model Timing Metrics)** — Added comprehensive timing metrics (start-time and elapsed-time logging) for all 12 model families in target ranking and feature selection. Provides visibility into execution sequence, individual model performance, and overall pipeline timing to help identify bottlenecks. All models now log start time (🚀) and elapsed time (⏱️) with percentage breakdown in overall summary.
   → [View](2025-12-23-comprehensive-model-timing-metrics.md)
 

@@ -133,16 +133,33 @@ def filter_targets_by_training_plan(
     
     if not jobs:
         # CRITICAL: 0 jobs indicates plan is disabled or routing produced no valid jobs
-        # Make this explicit rather than silent fallback
-        logger.warning(
-            f"⚠️ Training plan has 0 jobs - plan is disabled. "
-            f"Possible reasons: 1) Plan generation failed, 2) Routing produced no valid jobs, "
-            f"3) All targets were filtered out, or 4) Plan generation was skipped. "
-            f"Using fallback: returning all {len(targets)} targets without plan filtering."
-        )
-        # Return all targets as fallback, but make it explicit that plan is disabled
-        # This allows the pipeline to continue while making the disabled state clear
-        return targets
+        # Check if dev_mode is enabled (allows fallback)
+        dev_mode = False
+        try:
+            from CONFIG.config_loader import get_cfg
+            routing_config = get_cfg("training_config.routing", default={}, config_name="training_config")
+            dev_mode = routing_config.get("dev_mode", False)
+        except Exception:
+            pass
+        
+        if dev_mode:
+            # Dev mode: allow fallback but mark as non-production
+            logger.warning(
+                f"⚠️ Training plan has 0 jobs - plan is disabled (dev_mode=true). "
+                f"Possible reasons: 1) Plan generation failed, 2) Routing produced no valid jobs, "
+                f"3) All targets were filtered out, or 4) Plan generation was skipped. "
+                f"Using fallback: returning all {len(targets)} targets without plan filtering (non_production=true)."
+            )
+            return targets
+        else:
+            # Production mode: hard fail
+            raise ValueError(
+                f"Training plan has 0 jobs. This indicates routing produced no valid jobs. "
+                f"Possible reasons: 1) All targets failed routing thresholds, 2) Stability requirements not met, "
+                f"3) Sample sizes too small, 4) Scores too low. "
+                f"Check routing_config.yaml thresholds or enable dev_mode for testing. "
+                f"Targets attempted: {targets}"
+            )
     
     # Get targets that have jobs of the specified type
     allowed_targets = set()

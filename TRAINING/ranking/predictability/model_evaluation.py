@@ -4621,23 +4621,49 @@ def train_and_evaluate_models(
                         logger.warning(f"  ⚠️  Boruta BORUTA_BUDGET_HIT - Training took {boruta_fit_elapsed/60:.1f} minutes (exceeded {boruta_max_time_seconds/60:.0f} min budget)")
                         # Continue with current results (quality-safe: use what we have)
                         
-                except TimeoutError as te:
+                except (TimeoutError, ValueError) as e:
+                    # TimeoutError can be raised directly, or Boruta may catch it and re-raise as ValueError
+                    # Check if this is actually a timeout by examining the error message
+                    error_msg = str(e)
+                    is_timeout = (
+                        isinstance(e, TimeoutError) or
+                        "timeout" in error_msg.lower() or
+                        "time budget" in error_msg.lower() or
+                        "exceeded" in error_msg.lower()
+                    )
+                    
                     boruta_fit_elapsed = time.time() - boruta_fit_start
-                    boruta_budget_hit = True
-                    logger.warning(f"  ⚠️  Boruta BORUTA_BUDGET_HIT - Training exceeded {boruta_max_time_seconds/60:.0f} minute budget after {boruta_fit_elapsed/60:.1f} minutes")
-                    # Cancel timeout
-                    if timeout_set:
-                        try:
-                            signal.alarm(0)
-                        except (AttributeError, OSError):
-                            pass
-                    # Check if Boruta has partial results we can use
-                    if hasattr(boruta, 'ranking_') and boruta.ranking_ is not None:
-                        logger.info(f"  Boruta: Using partial results from interrupted fit")
-                        # Continue with partial results (quality-safe: better than nothing)
+                    
+                    if is_timeout:
+                        boruta_budget_hit = True
+                        logger.warning(
+                            f"  ⚠️  Boruta BORUTA_BUDGET_HIT - Training exceeded {boruta_max_time_seconds/60:.0f} minute budget "
+                            f"after {boruta_fit_elapsed/60:.1f} minutes. Error: {error_msg}"
+                        )
+                        # Cancel timeout
+                        if timeout_set:
+                            try:
+                                signal.alarm(0)
+                            except (AttributeError, OSError):
+                                pass
+                        # Check if Boruta has partial results we can use
+                        if hasattr(boruta, 'ranking_') and boruta.ranking_ is not None:
+                            logger.info(f"  Boruta: Using partial results from interrupted fit")
+                            # Continue with partial results (quality-safe: better than nothing)
+                        else:
+                            # No partial results - log and skip Boruta gracefully
+                            logger.warning(f"  Boruta: No partial results available, skipping Boruta feature selection")
+                            boruta_timed_out = True
+                            boruta_budget_hit = True
+                            # Skip the rest of Boruta processing
+                            raise  # Re-raise to be caught by outer handler which will skip Boruta
                     else:
-                        # No partial results - raise to be caught by outer exception handler
+                        # Not a timeout - re-raise the original error
                         raise
+                
+                # Only continue if Boruta completed successfully (not timed out)
+                if boruta_timed_out or boruta_budget_hit:
+                    raise ValueError(f"Boruta timed out or exceeded budget - skipping")
                 
                 boruta_fit_elapsed = time.time() - boruta_fit_start
                 boruta_iteration_times.append(boruta_fit_elapsed)  # Store overall fit time
@@ -4707,8 +4733,23 @@ def train_and_evaluate_models(
             except Exception as e:
                 boruta_elapsed = time.time() - boruta_start_time
                 timing_data['boruta'] = boruta_elapsed
-                if timing_log_enabled:
-                    logger.error(f"❌ Boruta failed after {boruta_elapsed:.2f} seconds: {e}", exc_info=True)
+                error_msg = str(e)
+                # Check if this is a timeout/budget error (already handled gracefully)
+                # Boruta may catch TimeoutError and re-raise as ValueError with "Please check your X and y variable"
+                # We detect this by checking if the error occurred after a timeout period
+                is_timeout_error = (
+                    "timeout" in error_msg.lower() or
+                    "time budget" in error_msg.lower() or
+                    "exceeded" in error_msg.lower() or
+                    "Boruta timed out" in error_msg or
+                    "BORUTA_BUDGET_HIT" in error_msg or
+                    ("Please check your X and y variable" in error_msg and boruta_elapsed >= (boruta_max_time_seconds or 600))
+                )
+                if is_timeout_error:
+                    logger.warning(f"⚠️  Boruta skipped due to timeout/budget after {boruta_elapsed:.2f} seconds: {error_msg}")
+                else:
+                    if timing_log_enabled:
+                        logger.error(f"❌ Boruta failed after {boruta_elapsed:.2f} seconds: {e}", exc_info=True)
                 all_feature_importances['boruta'] = {}  # Record failure
     
     # Stability Selection

@@ -561,9 +561,18 @@ class MetricsAggregator:
             Path where file was saved
         """
         if output_path is None:
-            metrics_dir = self.output_dir.parent / "METRICS"
-            metrics_dir.mkdir(parents=True, exist_ok=True)
-            output_path = metrics_dir / "routing_candidates.parquet"
+            # Use globals/ (primary location) with backward compatibility for METRICS/
+            from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+            # Find base run directory
+            base_dir = self.output_dir
+            while base_dir.name in ["FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "feature_selections", "target_rankings"]:
+                if not base_dir.parent.exists():
+                    break
+                base_dir = base_dir.parent
+            
+            globals_dir = get_globals_dir(base_dir)
+            globals_dir.mkdir(parents=True, exist_ok=True)
+            output_path = globals_dir / "routing_candidates.parquet"
         
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)

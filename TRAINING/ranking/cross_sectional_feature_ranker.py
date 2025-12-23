@@ -561,9 +561,9 @@ def compute_cross_sectional_stability(
                 )
                 ensure_target_structure(base_output_dir, target_name_clean)
                 target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
-                snapshot_base_dir = get_snapshot_base_dir(target_repro_dir)
+                snapshot_base_dir = get_snapshot_base_dir(target_repro_dir, target_name=target_column)
         else:
-            snapshot_base_dir = get_snapshot_base_dir(output_dir)
+            snapshot_base_dir = get_snapshot_base_dir(output_dir, target_name=target_column)
         
         if snapshot_base_dir:
             snapshot_path = save_snapshot_from_series_hook(

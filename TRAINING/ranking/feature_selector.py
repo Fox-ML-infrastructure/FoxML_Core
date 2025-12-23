@@ -439,7 +439,8 @@ def select_features_for_target(
                     build_result = harness.build_panel(
                         target_column=target_column,
                         target_name=target_column,  # Use target_column as target_name for exclusions
-                        feature_names=None
+                        feature_names=None,
+                        use_strict_registry=True  # Use strict registry mode for feature selection (same as training)
                     )
                     # FIX: Unpack with tolerance for signature changes, but log what we got
                     # This prevents silently masking real breakage (signature changes)
@@ -736,7 +737,8 @@ def select_features_for_target(
                 build_result = harness.build_panel(
                     target_column=target_column,
                     target_name=target_column,  # Use target_column as target_name for exclusions
-                    feature_names=None  # Will filter automatically
+                    feature_names=None,  # Will filter automatically
+                    use_strict_registry=True  # Use strict registry mode for feature selection (same as training)
                 )
                 # FIX: Unpack with tolerance for signature changes, but log what we got
                 actual_len = len(build_result)

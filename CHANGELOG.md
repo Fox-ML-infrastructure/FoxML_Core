@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-23 (Boruta Timeout and CatBoost Pickle Error Fixes)
+- **Bug Fix**: Improved Boruta timeout error handling to detect timeout errors even when wrapped as ValueError
+- **Bug Fix**: Fixed CatBoost pickle error by moving importance worker function to module level for multiprocessing
+- **Impact**: Prevents pipeline crashes, improves error clarity, enables CatBoost importance extraction to complete successfully
+- **Files Changed**: `model_evaluation.py`, `multi_model_feature_selection.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-23-boruta-catboost-error-handling-fixes.md)
+
 #### 2025-12-23 (Comprehensive Model Timing Metrics)
 - **Enhancement**: Added comprehensive timing metrics (start-time and elapsed-time logging) for all 12 model families in target ranking and feature selection
 - **New Models**: Added timing for XGBoost, Random Forest, Lasso, Elastic Net, Ridge, Neural Network, Mutual Information, Stability Selection, Histogram Gradient Boosting

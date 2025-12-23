@@ -3,6 +3,10 @@
 # for each (target, symbol) pair based on metrics from feature selection, stability, and leakage detection
 
 routing:
+  # --- Dev Mode (for testing with smaller datasets) ---
+  dev_mode: false                # If true, use adaptive thresholds for smaller datasets
+  dev_mode_min_sample_size: 5_000  # Minimum sample size when dev_mode is enabled
+  
   # --- General Safety Rails ---
   min_sample_size:
     cross_sectional: 50_000      # Total rows required for CS training

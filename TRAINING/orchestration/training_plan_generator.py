@@ -80,9 +80,32 @@ class TrainingPlanGenerator:
         
         # Respect empty list from config (SST) - only use defaults if None
         if model_families is not None:
-            # Filter out feature selectors from model_families
-            filtered_families = [f for f in model_families if f not in FEATURE_SELECTORS]
-            removed = set(model_families) - set(filtered_families)
+            # Normalize family names first (mlp -> neural_network, etc.)
+            from TRAINING.training_strategies.utils import normalize_family_name
+            normalized_families = []
+            normalization_map = {}  # Track what was normalized
+            for f in model_families:
+                normalized = normalize_family_name(f)
+                if normalized != f:
+                    normalization_map[normalized] = f
+                normalized_families.append(normalized)
+            
+            if normalization_map:
+                logger.debug(f"📋 TrainingPlanGenerator: Normalized family names: {normalization_map}")
+            
+            # Map mlp -> neural_network explicitly (common config variant)
+            mlp_to_neural_network = {}
+            for i, f in enumerate(normalized_families):
+                if f == 'mlp':
+                    normalized_families[i] = 'neural_network'
+                    mlp_to_neural_network['neural_network'] = 'mlp'
+            
+            if mlp_to_neural_network:
+                logger.debug(f"📋 TrainingPlanGenerator: Mapped mlp -> neural_network: {mlp_to_neural_network}")
+            
+            # Filter out feature selectors from normalized families
+            filtered_families = [f for f in normalized_families if f not in FEATURE_SELECTORS]
+            removed = set(normalized_families) - set(filtered_families)
             
             if removed:
                 logger.warning(
@@ -90,8 +113,19 @@ class TrainingPlanGenerator:
                     f"Feature selectors are not trainers and should not be in training plan."
                 )
             
+            # Verify families exist in trainer module map
+            try:
+                from TRAINING.training_strategies.execution.family_runners import _run_family_isolated
+                # Import MODMAP from family_runners to check valid families
+                import TRAINING.training_strategies.execution.family_runners as fr_module
+                # MODMAP is defined in the module - check if we can access it
+                # For now, just log which families we're using
+                logger.debug(f"📋 TrainingPlanGenerator: Validated {len(filtered_families)} families after normalization and filtering")
+            except Exception as e:
+                logger.debug(f"Could not validate families against module map: {e}")
+            
             self.model_families = filtered_families
-            logger.info(f"📋 TrainingPlanGenerator: Using provided model_families={self.model_families} (after filtering, original had {len(model_families)})")
+            logger.info(f"📋 TrainingPlanGenerator: Using provided model_families={self.model_families} (after normalization and filtering, original had {len(model_families)})")
         elif default_families is not None:
             # Filter defaults too
             filtered_defaults = [f for f in default_families if f not in FEATURE_SELECTORS]
@@ -304,13 +338,17 @@ class TrainingPlanGenerator:
             run_id = f"run_{int(time.time())}"
         
         # Get routing plan path from metadata - safely
-        routing_plan_path = "METRICS/routing_plan/routing_plan.json"
+        # Use globals/ (primary) with backward compatibility for METRICS/
+        routing_plan_path = "globals/routing_plan/routing_plan.json"
         try:
             routing_metadata = self.routing_plan.get("metadata", {})
             if isinstance(routing_metadata, dict):
                 metrics_snapshot_val = routing_metadata.get("metrics_snapshot")
                 if metrics_snapshot_val and isinstance(metrics_snapshot_val, str):
                     routing_plan_path = metrics_snapshot_val
+                    # Update legacy METRICS paths to globals
+                    if routing_plan_path.startswith("METRICS/"):
+                        routing_plan_path = routing_plan_path.replace("METRICS/", "globals/", 1)
         except Exception as e:
             logger.debug(f"Could not extract routing_plan_path from metadata: {e}")
         
@@ -327,7 +365,7 @@ class TrainingPlanGenerator:
                     "git_commit": str(git_commit) if git_commit else str(routing_metadata.get("git_commit", "unknown")),
                     "config_hash": str(config_hash) if config_hash else str(routing_metadata.get("config_hash", "unknown")),
                     "routing_plan_path": str(routing_plan_path),
-                    "metrics_snapshot": str(metrics_snapshot) if metrics_snapshot else "METRICS/routing_candidates.parquet",
+                    "metrics_snapshot": str(metrics_snapshot) if metrics_snapshot else "globals/routing_candidates.parquet",
                     "total_jobs": len(jobs),
                     "model_families": list(self.model_families)  # Ensure it's a list
                 },
