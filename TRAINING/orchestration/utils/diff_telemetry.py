@@ -1160,10 +1160,20 @@ class DiffTelemetry:
         
         This prevents storing null placeholders for fields that aren't stage-relevant.
         """
-        # Routing signature from view
+        # Routing signature from resolved_mode (SST) - use resolved_mode if available, fallback to view
         routing_signature = None
-        if ctx.view:
-            routing_signature = hashlib.sha256(ctx.view.encode()).hexdigest()[:16]
+        resolved_mode_for_fingerprint = None
+        try:
+            from TRAINING.orchestration.utils.run_context import get_resolved_mode
+            if hasattr(self, '_repro_base_dir'):
+                resolved_mode_for_fingerprint = get_resolved_mode(self._repro_base_dir)
+        except Exception:
+            pass
+        
+        # Use resolved_mode (SST) if available, otherwise fallback to view
+        mode_for_signature = resolved_mode_for_fingerprint if resolved_mode_for_fingerprint else ctx.view
+        if mode_for_signature:
+            routing_signature = hashlib.sha256(mode_for_signature.encode()).hexdigest()[:16]
         
         # Stage-specific fields
         model_family = None
@@ -1877,10 +1887,10 @@ class DiffTelemetry:
         This enables comparison of artifacts (feature_importances.parquet, etc.) across reruns.
         Creates a manifest of artifact files with their sizes and modification times.
         
-        Artifacts are stored at the target level (one level up from cohort directory):
-        - TARGET_RANKING: REPRODUCIBILITY/TARGET_RANKING/{view}/{target}/feature_importances/, target_confidence.json
-        - FEATURE_SELECTION: REPRODUCIBILITY/FEATURE_SELECTION/{view}/{target}/feature_importances/, selected_features.txt, target_confidence.json
-        - TRAINING: REPRODUCIBILITY/TRAINING/{view}/{target}/model_family={family}/cohort={cohort_id}/ (artifacts in cohort dir)
+        Artifacts are stored at the view level (one level up from cohort directory):
+        - TARGET_RANKING: targets/{target}/reproducibility/{view}/feature_importances/, target_confidence.json
+        - FEATURE_SELECTION: targets/{target}/reproducibility/{view}/feature_importances/, selected_features.txt, target_confidence.json
+        - TRAINING: targets/{target}/reproducibility/{view}/cohort={cohort_id}/ (artifacts in cohort dir)
         """
         if not cohort_dir or not cohort_dir.exists():
             return None

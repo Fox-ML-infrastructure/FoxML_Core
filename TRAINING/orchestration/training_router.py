@@ -213,6 +213,18 @@ class TrainingRouter:
         """
         # Check dev_mode and use adaptive thresholds if enabled
         dev_mode = self.config.get("dev_mode", False)
+        # Auto-enable dev thresholds if dataset is small (unless explicitly disabled)
+        if not dev_mode:
+            # Check if dataset is small (heuristic: if max_samples_per_symbol is set and < 10000)
+            try:
+                from CONFIG.config_loader import get_cfg
+                max_samples = get_cfg("experiment.data.max_samples_per_symbol", default=None)
+                if max_samples and max_samples < 10000:
+                    logger.info(f"Auto-enabling dev_mode thresholds (dataset size: {max_samples} < 10000)")
+                    dev_mode = True
+            except Exception:
+                pass
+        
         base_min_sample_size = self.config["min_sample_size"]["cross_sectional"]
         if dev_mode:
             # Use adaptive threshold: max(dev_mode_min, 10% of cohort, base_min)
@@ -474,6 +486,16 @@ class TrainingRouter:
         Returns:
             Routing plan dict
         """
+        # Load resolved_mode from run context (SST)
+        resolved_mode = None
+        try:
+            from TRAINING.orchestration.utils.run_context import get_resolved_mode
+            resolved_mode = get_resolved_mode(output_dir)
+            if resolved_mode:
+                logger.info(f"📋 Using resolved_mode={resolved_mode} from run context (SST) for routing plan generation")
+        except Exception as e:
+            logger.debug(f"Could not load resolved_mode from run context: {e}, will use mode from routing candidates")
+        
         # Group by target
         targets = routing_candidates["target"].unique()
         
@@ -482,7 +504,8 @@ class TrainingRouter:
                 "generated_at": datetime.utcnow().isoformat() + "Z",
                 "git_commit": git_commit or "unknown",
                 "config_hash": config_hash or "unknown",
-                "metrics_snapshot": "routing_candidates.parquet"
+                "metrics_snapshot": "routing_candidates.parquet",
+                "resolved_mode": resolved_mode  # Include in metadata
             },
             "targets": {}
         }
@@ -490,8 +513,9 @@ class TrainingRouter:
         for target in targets:
             target_rows = routing_candidates[routing_candidates["target"] == target]
             
-            # Extract CS metrics
-            cs_rows = target_rows[target_rows["mode"] == "CROSS_SECTIONAL"]
+            # Extract CS metrics - use resolved_mode if available, otherwise fallback to CROSS_SECTIONAL
+            cs_mode_filter = resolved_mode if resolved_mode else "CROSS_SECTIONAL"
+            cs_rows = target_rows[target_rows["mode"] == cs_mode_filter]
             cs_metrics = None
             if len(cs_rows) > 0:
                 cs_row = cs_rows.iloc[0]
@@ -511,8 +535,9 @@ class TrainingRouter:
                 if cs_metrics.stability == StabilityCategory.UNKNOWN and cs_metrics.stability_metrics:
                     cs_metrics.stability = self.classify_stability(cs_metrics.stability_metrics)
             
-            # Extract symbol metrics
-            symbol_rows = target_rows[target_rows["mode"] == "SYMBOL"]
+            # Extract symbol metrics - use resolved_mode if available (could be SYMBOL_SPECIFIC), otherwise fallback to SYMBOL
+            symbol_mode_filter = resolved_mode if resolved_mode else "SYMBOL"
+            symbol_rows = target_rows[target_rows["mode"] == symbol_mode_filter]
             symbols = symbol_rows["symbol"].unique() if "symbol" in symbol_rows.columns else []
             
             if len(symbols) == 0:
@@ -533,6 +558,16 @@ class TrainingRouter:
                 else:
                     # Use same adaptive logic as evaluate_cross_sectional_eligibility
                     dev_mode = self.config.get("dev_mode", False)
+                    # Auto-enable dev thresholds if dataset is small (unless explicitly disabled)
+                    if not dev_mode:
+                        try:
+                            from CONFIG.config_loader import get_cfg
+                            max_samples = get_cfg("experiment.data.max_samples_per_symbol", default=None)
+                            if max_samples and max_samples < 10000:
+                                logger.info(f"Auto-enabling dev_mode thresholds (dataset size: {max_samples} < 10000)")
+                                dev_mode = True
+                        except Exception:
+                            pass
                     base_min_sample_size = self.config["min_sample_size"]["cross_sectional"]
                     if dev_mode:
                         dev_mode_min = self.config.get("dev_mode_min_sample_size", 5000)

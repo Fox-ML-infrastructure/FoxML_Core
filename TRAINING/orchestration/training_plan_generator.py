@@ -134,6 +134,14 @@ class TrainingPlanGenerator:
         else:
             self.model_families = ["lightgbm", "xgboost"]
             logger.debug(f"📋 TrainingPlanGenerator: Using hardcoded defaults={self.model_families}")
+        
+        # Invariant: model_families must not contain feature selectors
+        selector_violations = set(self.model_families) & FEATURE_SELECTORS
+        if selector_violations:
+            raise RuntimeError(
+                f"🚨 TrainingPlanGenerator INVARIANT VIOLATION: model_families contains feature selectors: {selector_violations}. "
+                f"Full list: {self.model_families}"
+            )
     
     def generate_training_plan(
         self,
@@ -322,6 +330,44 @@ class TrainingPlanGenerator:
             except Exception as e:
                 logger.error(f"Error processing target {target}: {e}", exc_info=True)
                 continue
+        
+        # Dev mode fallback: Generate jobs if router produced 0 jobs
+        dev_mode = False
+        try:
+            from CONFIG.config_loader import get_cfg
+            dev_mode = get_cfg("training_config.routing.dev_mode", default=False)
+        except Exception:
+            pass
+        
+        if dev_mode and len(jobs) == 0:
+            # Dev mode: generate fallback jobs (at least 1 per target × trainer)
+            logger.warning(
+                f"⚠️  Dev mode: Router produced 0 jobs. Generating fallback jobs: "
+                f"1 CS job per target × trainer (ignoring thresholds)."
+            )
+            # Get trainers from model_families (already filtered to trainers only)
+            trainers = self.model_families if self.model_families else ["lightgbm", "xgboost"]
+            
+            # Generate minimal jobs for each target
+            targets = self.routing_plan.get("targets", {})
+            for target in targets.keys():
+                for trainer in trainers:
+                    job = TrainingJob(
+                        job_id=f"dev_fallback_cs_{target}_{trainer}",
+                        target=target,
+                        symbol=None,
+                        route="ROUTE_CROSS_SECTIONAL",
+                        training_type="cross_sectional",
+                        model_families=[trainer],  # One trainer per job for dev fallback
+                        priority=1,  # Lower priority than normal jobs
+                        reason="Dev mode fallback: router produced 0 jobs",
+                        metadata={
+                            "dev_mode_fallback": True,  # Mark as fallback
+                            "cs_state": "UNKNOWN"
+                        }
+                    )
+                    jobs.append(job)
+            logger.info(f"✅ Dev mode: Generated {len(jobs)} fallback jobs")
         
         # Sort by priority (higher first) - with error handling
         try:

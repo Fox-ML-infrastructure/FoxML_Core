@@ -324,9 +324,9 @@ def analyze_all_stability_hook(
                             if len(snapshots) < 2:
                                 continue
                             
-                            # Analyze stability
+                            # Analyze stability (filter by universe_id to avoid cross-symbol comparisons)
                             from .analysis import compute_stability_metrics
-                            metrics = compute_stability_metrics(snapshots, top_k=20)
+                            metrics = compute_stability_metrics(snapshots, top_k=20, filter_by_universe_id=True)
                             if metrics:
                                 all_metrics[f"{target}/{method_name}"] = metrics
                                 # Log per-method stability with context
@@ -375,9 +375,9 @@ def analyze_all_stability_hook(
                         if len(snapshots) < 2:
                             continue
                         
-                        # Analyze stability
+                        # Analyze stability (filter by universe_id to avoid cross-symbol comparisons)
                         from .analysis import compute_stability_metrics
-                        metrics = compute_stability_metrics(snapshots, top_k=20)
+                        metrics = compute_stability_metrics(snapshots, top_k=20, filter_by_universe_id=True)
                         if metrics:
                             all_metrics[f"{target}/{method_name}"] = metrics
                             # Log per-method stability with context

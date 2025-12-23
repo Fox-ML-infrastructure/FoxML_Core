@@ -129,12 +129,9 @@ def generate_routing_plan_after_feature_selection(
         router = TrainingRouter(routing_config)
         
         # Save routing plan to globals/routing_plan/ (primary)
-        plan_output = globals_dir / "routing_plan"
+        plan_output = globals_dir(run_root_dir, "routing_plan")
+        assert isinstance(plan_output, Path), f"globals_dir() must return Path, got {type(plan_output)}"
         plan_output.mkdir(parents=True, exist_ok=True)
-        
-        # Also create METRICS/routing_plan/ for backward compatibility
-        plan_output_legacy = metrics_dir_legacy / "routing_plan"
-        plan_output_legacy.mkdir(parents=True, exist_ok=True)
         plan = router.generate_routing_plan(
             routing_candidates=candidates_df,
             output_dir=plan_output,

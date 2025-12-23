@@ -276,6 +276,81 @@ def train_model_comprehensive(family: str, X: np.ndarray, y: np.ndarray,
     }
 
 
+def normalize_selected_features(
+    target: str,
+    target_feat_data: Any,
+    symbols: List[str],
+    route: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Normalize selected_features to canonical shape.
+    
+    Input shapes accepted:
+    - List[str]: CROSS_SECTIONAL features
+    - Dict with 'cross_sectional' key: CROSS_SECTIONAL features
+    - Dict with symbol keys (e.g., {'AAPL': [...], 'MSFT': [...]}): SYMBOL_SPECIFIC
+    - Dict with 'symbol_specific' key: SYMBOL_SPECIFIC
+    - Dict with 'BOTH' structure: {'cross_sectional': [...], 'symbol_specific': {...}}
+    
+    Returns canonical shape:
+    - CROSS_SECTIONAL: {'cross_sectional': [features...]}
+    - SYMBOL_SPECIFIC: {'symbol_specific': {symbol: [features...]}}
+    - BOTH: {'cross_sectional': [...], 'symbol_specific': {...}}
+    
+    Raises:
+        ValueError: If shape cannot be normalized
+    """
+    # Known meta keys that indicate structure type
+    META_KEYS = {'cross_sectional', 'symbol_specific', 'route', 'CROSS_SECTIONAL', 'SYMBOL_SPECIFIC'}
+    
+    if target_feat_data is None:
+        return {'cross_sectional': []}
+    
+    # Case 1: Simple list -> CROSS_SECTIONAL
+    if isinstance(target_feat_data, (list, tuple)):
+        return {'cross_sectional': list(target_feat_data)}
+    
+    # Case 2: Dict
+    if not isinstance(target_feat_data, dict):
+        raise ValueError(
+            f"selected_features for {target} must be list or dict, got {type(target_feat_data)}. "
+            f"Value: {target_feat_data}"
+        )
+    
+    keys = set(target_feat_data.keys())
+    
+    # Case 2a: Already normalized (has 'cross_sectional' or 'symbol_specific')
+    if 'cross_sectional' in keys or 'CROSS_SECTIONAL' in keys:
+        cs_key = 'cross_sectional' if 'cross_sectional' in keys else 'CROSS_SECTIONAL'
+        cs_features = target_feat_data[cs_key]
+        if isinstance(cs_features, (list, tuple)):
+            result = {'cross_sectional': list(cs_features)}
+            if 'symbol_specific' in keys or 'SYMBOL_SPECIFIC' in keys:
+                ss_key = 'symbol_specific' if 'symbol_specific' in keys else 'SYMBOL_SPECIFIC'
+                result['symbol_specific'] = target_feat_data[ss_key]
+            return result
+        else:
+            raise ValueError(f"cross_sectional value must be list, got {type(cs_features)}")
+    
+    if 'symbol_specific' in keys or 'SYMBOL_SPECIFIC' in keys:
+        ss_key = 'symbol_specific' if 'symbol_specific' in keys else 'SYMBOL_SPECIFIC'
+        return {'symbol_specific': target_feat_data[ss_key]}
+    
+    # Case 2b: Dict keys are symbol names (SYMBOL_SPECIFIC shape)
+    symbol_keys = keys & set(symbols)  # Intersection with known symbols
+    if symbol_keys and not (keys & META_KEYS):
+        # All keys are symbols -> SYMBOL_SPECIFIC
+        return {'symbol_specific': {sym: target_feat_data[sym] for sym in symbol_keys}}
+    
+    # Case 2c: Unknown structure
+    raise ValueError(
+        f"selected_features for {target} has unrecognized dict structure. "
+        f"Keys: {list(keys)}. "
+        f"Expected: list[str], dict with 'cross_sectional' key, dict with symbol keys, or BOTH structure. "
+        f"Route: {route}"
+    )
+
+
 def train_models_for_interval_comprehensive(interval: str, targets: List[str], 
                                            mtf_data: Dict[str, pd.DataFrame],
                                            families: List[str],
@@ -347,7 +422,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         prep_start = _t.time()
         
         # Use selected features for this target if provided
-        # Handle different structures: list, dict (symbol-specific), or structured dict (BOTH route)
+        # Normalize to canonical shape using single normalization function
         selected_features = None
         route_info = routing_decisions.get(target, {}) if routing_decisions else {}
         route = route_info.get('route', 'CROSS_SECTIONAL')
@@ -366,7 +441,24 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                 results['failed_targets'].append(target)
                 results['failed_reasons'][target] = f"BLOCKED: {route_info.get('reason', 'suspicious score')}"
                 continue
-            elif route == 'CROSS_SECTIONAL':
+            
+            # Normalize selected_features to canonical shape
+            symbols_list = list(mtf_data.keys())
+            try:
+                normalized = normalize_selected_features(
+                    target=target,
+                    target_feat_data=target_feat_data,
+                    symbols=symbols_list,
+                    route=route
+                )
+            except ValueError as e:
+                logger.error(f"Failed to normalize selected_features for {target}: {e}")
+                results['failed_targets'].append(target)
+                results['failed_reasons'][target] = f"Normalization error: {e}"
+                continue
+            
+            # Extract features based on route from normalized structure
+            if route == 'CROSS_SECTIONAL':
                 # CRITICAL FIX: Respect routing plan - skip CS training if DISABLED
                 if cs_route_status == 'DISABLED':
                     logger.warning(
@@ -376,22 +468,15 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                     results['failed_targets'].append(target)
                     results['failed_reasons'][target] = f"CS: DISABLED in routing plan ({cs_info.get('reason', 'unknown')})"
                     continue
-                # Simple list of features
-                # CRITICAL: Handle dict structures (from BOTH route) before conversion
-                if isinstance(target_feat_data, dict):
-                    # Check if it's a BOTH structure that needs extraction
-                    if 'cross_sectional' in target_feat_data:
-                        selected_features = target_feat_data['cross_sectional']
-                    elif 'CROSS_SECTIONAL' in target_feat_data:
-                        selected_features = target_feat_data['CROSS_SECTIONAL']
-                    else:
-                        # Invalid dict structure - raise immediately
-                        raise ValueError(
-                            f"selected_features for {target} is dict but missing 'cross_sectional' key. "
-                            f"Keys: {list(target_feat_data.keys())}. Expected list[str] or dict with 'cross_sectional' key."
-                        )
+                
+                # Extract cross-sectional features from normalized structure
+                if 'cross_sectional' in normalized:
+                    selected_features = normalized['cross_sectional']
                 else:
-                    selected_features = target_feat_data
+                    raise ValueError(
+                        f"Normalized structure for {target} missing 'cross_sectional' key for CROSS_SECTIONAL route. "
+                        f"Keys: {list(normalized.keys())}"
+                    )
                 
                 # Validate it's a list
                 if selected_features is not None:
@@ -406,34 +491,34 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                     else:
                         logger.info(f"Using {len(selected_features)} cross-sectional features for {target}")
             elif route == 'SYMBOL_SPECIFIC':
-                # Dict mapping symbol -> list of features
-                # Train separate models per symbol (not cross-sectional)
-                if not isinstance(target_feat_data, dict):
-                    raise TypeError(
-                        f"SYMBOL_SPECIFIC route requires dict for {target}, got {type(target_feat_data)}. "
-                        f"Expected: {{symbol: [features...]}}"
-                    )
-                
-                # Validate dict structure: all values should be lists
-                for symbol, features in target_feat_data.items():
-                    if not isinstance(features, (list, tuple)):
+                # Extract symbol-specific features from normalized structure
+                if 'symbol_specific' in normalized:
+                    symbol_specific_features = normalized['symbol_specific']
+                    if not isinstance(symbol_specific_features, dict):
                         raise TypeError(
-                            f"SYMBOL_SPECIFIC route: features for symbol {symbol} must be list, got {type(features)}"
+                            f"SYMBOL_SPECIFIC route: normalized['symbol_specific'] must be dict, got {type(symbol_specific_features)}"
                         )
-                
-                # Will handle per-symbol training below
-                logger.info(f"SYMBOL_SPECIFIC route: will train {len(target_feat_data)} separate models (one per symbol)")
-            elif route == 'BOTH':
-                # Structured dict: {'cross_sectional': [...], 'symbol_specific': {symbol: [...]}}
-                if not isinstance(target_feat_data, dict):
-                    raise TypeError(
-                        f"BOTH route requires dict structure for {target}, got {type(target_feat_data)}. "
-                        f"Expected: {{'cross_sectional': [...], 'symbol_specific': {{symbol: [...]}}}}"
+                    
+                    # Validate dict structure: all values should be lists
+                    for symbol, features in symbol_specific_features.items():
+                        if not isinstance(features, (list, tuple)):
+                            raise TypeError(
+                                f"SYMBOL_SPECIFIC route: features for symbol {symbol} must be list, got {type(features)}"
+                            )
+                    
+                    # Will handle per-symbol training below
+                    logger.info(f"SYMBOL_SPECIFIC route: will train {len(symbol_specific_features)} separate models (one per symbol)")
+                    # Store in target_features for per-symbol training below
+                    target_features[target] = symbol_specific_features
+                else:
+                    raise ValueError(
+                        f"Normalized structure for {target} missing 'symbol_specific' key for SYMBOL_SPECIFIC route. "
+                        f"Keys: {list(normalized.keys())}"
                     )
-                
-                if 'cross_sectional' in target_feat_data:
-                    # Extract cross-sectional features for CS training
-                    selected_features = target_feat_data['cross_sectional']
+            elif route == 'BOTH':
+                # Extract both cross-sectional and symbol-specific from normalized structure
+                if 'cross_sectional' in normalized:
+                    selected_features = normalized['cross_sectional']
                     if selected_features and isinstance(selected_features, (list, tuple)):
                         logger.info(f"Using {len(selected_features)} cross-sectional features for {target} (BOTH route - CS training)")
                     else:
@@ -441,13 +526,13 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                         selected_features = None
                 else:
                     raise ValueError(
-                        f"BOTH route dict for {target} missing 'cross_sectional' key. "
-                        f"Keys: {list(target_feat_data.keys())}"
+                        f"BOTH route normalized structure for {target} missing 'cross_sectional' key. "
+                        f"Keys: {list(normalized.keys())}"
                     )
                 
                 # For BOTH route, also check if we need symbol-specific training
-                # Extract symbol-specific features and check routing plan
-                symbol_specific_features = target_feat_data.get('symbol_specific', {})
+                # Extract symbol-specific features from normalized structure
+                symbol_specific_features = normalized.get('symbol_specific', {})
                 if symbol_specific_features and isinstance(symbol_specific_features, dict) and len(symbol_specific_features) > 0:
                     # Check routing plan to see which symbols need symbol-specific training
                     winner_symbols = route_info.get('winner_symbols', [])
@@ -626,30 +711,29 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                         
                         symbol_results[family] = model_result
                         
-                        # Save model to simple training_results/<family>/symbol=<symbol>/ structure
+                        # Save model to canonical target-first structure using ArtifactPaths
                         try:
                             # Ensure output_dir is a Path object
                             output_dir_path = Path(output_dir) if not isinstance(output_dir, Path) else output_dir
                             
-                            # Save symbol-specific models to training_results/<family>/view=SYMBOL_SPECIFIC/symbol=<symbol>/
-                            family_dir = output_dir_path / family
-                            view_dir = family_dir / "view=SYMBOL_SPECIFIC"
-                            symbol_dir = view_dir / f"symbol={symbol}"
-                            symbol_dir.mkdir(parents=True, exist_ok=True)
-                            logger.info(f"💾 Saving SYMBOL_SPECIFIC model for {symbol} to: {symbol_dir}")
-                            
-                            # Keep target-first structure ONLY for reproducibility metadata (not for model files)
-                            # Find base run directory (parent of training_results/) for target-first structure
+                            # Find base run directory (parent of training_results/ if output_dir is training_results/)
                             base_run_dir = output_dir_path
                             if output_dir_path.name == 'training_results':
                                 base_run_dir = output_dir_path.parent
                             elif (output_dir_path.parent / 'training_results').exists():
                                 base_run_dir = output_dir_path.parent
                             
-                            from TRAINING.orchestration.utils.target_first_paths import (
-                                ensure_target_structure
+                            # Use ArtifactPaths to get canonical model directory
+                            from TRAINING.orchestration.utils.artifact_paths import ArtifactPaths
+                            model_dir = ArtifactPaths.model_dir(
+                                run_root=base_run_dir,
+                                target=target,
+                                view="SYMBOL_SPECIFIC",
+                                family=family,
+                                symbol=symbol
                             )
-                            ensure_target_structure(base_run_dir, target)  # Use base run dir, not training_results/
+                            model_dir.mkdir(parents=True, exist_ok=True)
+                            logger.info(f"💾 Saving SYMBOL_SPECIFIC model for {symbol} to: {model_dir}")
                             
                             # Get the trained model from strategy manager
                             strategy_manager = model_result.get('strategy_manager')
@@ -668,21 +752,21 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     save_info = get_model_saving_info(wrapped_model)
                                     
                                     # Determine file extensions based on model type
-                                    # Save directly to training_results/<family>/symbol=<symbol>/ structure
+                                    # Save to canonical location using ArtifactPaths
                                     if save_info['is_lightgbm']:  # LightGBM
-                                        model_path = symbol_dir / f"{family.lower()}_mtf_b0.txt"
+                                        model_path = ArtifactPaths.model_file(model_dir, family, extension='txt')
                                         wrapped_model.save_model(str(model_path))
                                         logger.info(f"  💾 LightGBM model saved: {model_path}")
                                         symbol_family_status[family]["saved"] = True
                                         
                                     elif save_info['is_tensorflow']:  # TensorFlow/Keras
-                                        model_path = symbol_dir / f"{family.lower()}_mtf_b0.keras"
+                                        model_path = ArtifactPaths.model_file(model_dir, family, extension='keras')
                                         wrapped_model.save(str(model_path))
                                         logger.info(f"  💾 Keras model saved: {model_path}")
                                         symbol_family_status[family]["saved"] = True
                                         
                                     elif save_info['is_pytorch']:  # PyTorch models
-                                        model_path = symbol_dir / f"{family.lower()}_mtf_b0.pt"
+                                        model_path = ArtifactPaths.model_file(model_dir, family, extension='pt')
                                         import torch
                                         
                                         # Extract the actual PyTorch model
@@ -704,19 +788,19 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                         symbol_family_status[family]["saved"] = True
                                         
                                     else:  # Scikit-learn models
-                                        model_path = symbol_dir / f"{family.lower()}_mtf_b0.joblib"
+                                        model_path = ArtifactPaths.model_file(model_dir, family, extension='joblib')
                                         wrapped_model.save(str(model_path))
                                         logger.info(f"  💾 Scikit-learn model saved: {model_path}")
                                         symbol_family_status[family]["saved"] = True
                                 
                                 # Save preprocessors if available
                                 if wrapped_model.scaler is not None:
-                                    scaler_path = symbol_dir / f"{family.lower()}_mtf_b0_scaler.joblib"
+                                    scaler_path = ArtifactPaths.scaler_file(model_dir, family)
                                     joblib.dump(wrapped_model.scaler, scaler_path)
                                     logger.info(f"  💾 Scaler saved: {scaler_path}")
                                 
                                 if wrapped_model.imputer is not None:
-                                    imputer_path = symbol_dir / f"{family.lower()}_mtf_b0_imputer.joblib"
+                                    imputer_path = ArtifactPaths.imputer_file(model_dir, family)
                                     joblib.dump(wrapped_model.imputer, imputer_path)
                                     logger.info(f"  💾 Imputer saved: {imputer_path}")
                                 
@@ -733,16 +817,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                             return "unknown"
                                 
                                 if save_info['is_lightgbm']:  # LightGBM - JSON format
-                                    # Save to target-first structure (primary location)
-                                    from TRAINING.orchestration.utils.target_first_paths import (
-                                        get_target_reproducibility_dir
-                                    )
-                                    repro_dir = get_target_reproducibility_dir(Path(output_dir), target)
-                                    repro_dir.mkdir(parents=True, exist_ok=True)
-                                    meta_path_repro = repro_dir / f"meta_{family}_{symbol}_b0.json"
-                                    
-                                    # Also keep copy in model directory (backward compatibility)
-                                    meta_path_legacy = symbol_target_dir / "meta_b0.json"
+                                    # Save metadata to canonical location using ArtifactPaths
+                                    meta_path = ArtifactPaths.metadata_file(model_dir)
                                     
                                     import json
                                     metadata = {
@@ -805,23 +881,14 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                             metadata["cv_mean"] = float(np.mean(cv_scores))
                                             metadata["cv_std"] = float(np.std(cv_scores))
                                     
-                                    # Save to target-first structure
-                                    with open(meta_path_repro, 'w') as f:
+                                    # Save metadata to canonical location
+                                    with open(meta_path, 'w') as f:
                                         json.dump(metadata, f, indent=2)
-                                    logger.info(f"  💾 Metadata saved: {meta_path_repro}")
-                                    
-                                    # Target-first structure only - no legacy writes
+                                    logger.info(f"  💾 Metadata saved: {meta_path}")
                                 
                                 else:  # Other model types - save as JSON too
-                                    # Save to target-first structure (primary location)
-                                    from TRAINING.orchestration.utils.target_first_paths import (
-                                        get_target_reproducibility_dir
-                                    )
-                                    repro_dir = get_target_reproducibility_dir(Path(output_dir), target)
-                                    repro_dir.mkdir(parents=True, exist_ok=True)
-                                    meta_path_repro = repro_dir / f"meta_{family}_{symbol}_b0.json"
-                                    
-                                    # Target-first structure only - metadata is in target-first location
+                                    # Save metadata to canonical location using ArtifactPaths
+                                    meta_path = ArtifactPaths.metadata_file(model_dir)
                                     import json
                                     metadata = {
                                         "family": family,
@@ -850,15 +917,13 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                             metadata["cv_mean"] = float(np.mean(cv_scores))
                                             metadata["cv_std"] = float(np.std(cv_scores))
                                     
-                                    # Save to target-first structure
-                                    with open(meta_path_repro, 'w') as f:
+                                    # Save metadata to canonical location
+                                    with open(meta_path, 'w') as f:
                                         json.dump(metadata, f, indent=2)
-                                    logger.info(f"  💾 Metadata saved: {meta_path_repro}")
-                                    
-                                    # Target-first structure only - no legacy writes
+                                    logger.info(f"  💾 Metadata saved: {meta_path}")
                             else:
                                 # Fallback: save model directly if no strategy_manager
-                                model_path = symbol_dir / "model.joblib"
+                                model_path = ArtifactPaths.model_file(model_dir, family, extension='joblib')
                                 # joblib already imported at top of file (line 176)
                                 joblib.dump(model_result.get('model'), model_path)
                                 logger.info(f"  ✅ Saved {family} model for {target}:{symbol} to {model_path}")
@@ -1364,42 +1429,37 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                             import traceback
                             logger.debug(f"Reproducibility tracking traceback: {traceback.format_exc()}")
                     
-                    # Save model to simple training_results/<family>/ structure
+                    # Save model to canonical target-first structure using ArtifactPaths
                     # Ensure output_dir is a Path object
                     output_dir_path = Path(output_dir) if not isinstance(output_dir, Path) else output_dir
                     
-                    # Save models with view separation: training_results/<family>/view=CROSS_SECTIONAL/ or view=SYMBOL_SPECIFIC/symbol=<symbol>/
-                    # Determine view from route (route is defined earlier in function scope at line 353)
+                    # Determine view from route (route is defined earlier in function scope)
                     # For CROSS_SECTIONAL or BOTH routes, use CROSS_SECTIONAL view
                     view = "CROSS_SECTIONAL"  # Default for CROSS_SECTIONAL route
                     if route in ['CROSS_SECTIONAL', 'BOTH']:
                         view = "CROSS_SECTIONAL"
                     elif route == 'SYMBOL_SPECIFIC':
                         view = "SYMBOL_SPECIFIC"
-                    
-                    if view == 'CROSS_SECTIONAL':
-                        family_dir = output_dir_path / family / "view=CROSS_SECTIONAL"
-                    else:
-                        # SYMBOL_SPECIFIC: This block shouldn't be reached for CROSS_SECTIONAL route
-                        # But handle it gracefully if route is SYMBOL_SPECIFIC
                         logger.warning(f"SYMBOL_SPECIFIC route in CROSS_SECTIONAL saving block - this should not happen")
-                        family_dir = output_dir_path / family / "view=CROSS_SECTIONAL"  # Fallback
-                    family_dir.mkdir(parents=True, exist_ok=True)
-                    logger.info(f"💾 Saving {family} model to: {family_dir} (view={view}, route={route})")
                     
-                    # Keep target-first structure ONLY for reproducibility metadata (not for model files)
-                    # Find base run directory (parent of training_results/) for target-first structure
+                    # Find base run directory (parent of training_results/ if output_dir is training_results/)
                     base_run_dir = output_dir_path
                     if output_dir_path.name == 'training_results':
                         base_run_dir = output_dir_path.parent
                     elif (output_dir_path.parent / 'training_results').exists():
                         base_run_dir = output_dir_path.parent
                     
-                    from TRAINING.orchestration.utils.target_first_paths import (
-                        get_target_models_dir, ensure_target_structure
+                    # Use ArtifactPaths to get canonical model directory
+                    from TRAINING.orchestration.utils.artifact_paths import ArtifactPaths
+                    model_dir = ArtifactPaths.model_dir(
+                        run_root=base_run_dir,
+                        target=target,
+                        view=view,
+                        family=family,
+                        symbol=None  # CROSS_SECTIONAL doesn't have symbol
                     )
-                    ensure_target_structure(base_run_dir, target)  # Use base run dir, not training_results/
-                    # This is only used for metadata tracking, not for actual model files
+                    model_dir.mkdir(parents=True, exist_ok=True)
+                    logger.info(f"💾 Saving {family} model to: {model_dir} (view={view}, route={route})")
                     
                     try:
                         # Get the trained model from strategy manager
@@ -1419,19 +1479,19 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                             logger.info(f"💾 Saving {family} model: {save_info}")
                             
                             # Determine file extensions based on model type
-                            # Save directly to training_results/<family>/ structure
+                            # Save to canonical location using ArtifactPaths
                             if save_info['is_lightgbm']:  # LightGBM
-                                model_path = family_dir / f"{family.lower()}_mtf_b0.txt"
+                                model_path = ArtifactPaths.model_file(model_dir, family, extension='txt')
                                 wrapped_model.save_model(str(model_path))
                                 logger.info(f"💾 LightGBM model saved: {model_path}")
                                 
                             elif save_info['is_tensorflow']:  # TensorFlow/Keras
-                                model_path = family_dir / f"{family.lower()}_mtf_b0.keras"
+                                model_path = ArtifactPaths.model_file(model_dir, family, extension='keras')
                                 wrapped_model.save(str(model_path))
                                 logger.info(f"💾 Keras model saved: {model_path}")
                                 
                             elif save_info['is_pytorch']:  # PyTorch models
-                                model_path = family_dir / f"{family.lower()}_mtf_b0.pt"
+                                model_path = ArtifactPaths.model_file(model_dir, family, extension='pt')
                                 import torch, json
                                 
                                 # Extract the actual PyTorch model from wrapped_model
@@ -1453,18 +1513,18 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 logger.info(f"💾 PyTorch model saved: {model_path}")
                                 
                             else:  # Scikit-learn models
-                                model_path = family_dir / f"{family.lower()}_mtf_b0.joblib"
+                                model_path = ArtifactPaths.model_file(model_dir, family, extension='joblib')
                                 wrapped_model.save(str(model_path))
                                 logger.info(f"💾 Scikit-learn model saved: {model_path}")
                             
                             # Save preprocessors if available
                             if wrapped_model.scaler is not None:
-                                scaler_path = family_dir / f"{family.lower()}_mtf_b0_scaler.joblib"
+                                scaler_path = ArtifactPaths.scaler_file(model_dir, family)
                                 joblib.dump(wrapped_model.scaler, scaler_path)
                                 logger.info(f"💾 Scaler saved: {scaler_path}")
                                 
                             if wrapped_model.imputer is not None:
-                                imputer_path = family_dir / f"{family.lower()}_mtf_b0_imputer.joblib"
+                                imputer_path = ArtifactPaths.imputer_file(model_dir, family)
                                 joblib.dump(wrapped_model.imputer, imputer_path)
                                 logger.info(f"💾 Imputer saved: {imputer_path}")
                             # Note: If wrapped_model.imputer is None, no imputer was used/needed
@@ -1482,15 +1542,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                             
                             # Save metadata (match original format exactly)
                             if save_info['is_lightgbm']:  # LightGBM - JSON format
-                                # Save to target-first structure (primary location)
-                                from TRAINING.orchestration.utils.target_first_paths import (
-                                    get_target_reproducibility_dir
-                                )
-                                repro_dir = get_target_reproducibility_dir(Path(output_dir), target)
-                                repro_dir.mkdir(parents=True, exist_ok=True)
-                                meta_path_repro = repro_dir / f"meta_{family}_b0.json"
-                                
-                                # Target-first structure only - metadata is in target-first location
+                                # Save metadata to canonical location using ArtifactPaths
+                                meta_path = ArtifactPaths.metadata_file(model_dir)
                                 import json
                                 metadata = {
                                     "family": family,
@@ -1549,18 +1602,14 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     "rank_method": "scipy_dense",
                                     "feature_importance": {}
                                 }
-                                # Save to target-first structure
-                                with open(meta_path_repro, 'w') as f:
+                                # Save metadata to canonical location
+                                with open(meta_path, 'w') as f:
                                     json.dump(metadata, f, indent=2)
-                                logger.info(f"💾 Metadata saved: {meta_path_repro}")
-                                
-                                # Target-first structure only - no legacy writes
+                                logger.info(f"💾 Metadata saved: {meta_path}")
                                     
                             else:  # TensorFlow/Scikit-learn - joblib format
-                                # Use target-first structure for metadata
-                                target_models_dir = get_target_models_dir(output_dir_path, target)
-                                target_models_dir.mkdir(parents=True, exist_ok=True)
-                                meta_path = target_models_dir / f"{family.lower()}_mtf_b0.meta.joblib"
+                                # Save metadata to canonical location using ArtifactPaths
+                                meta_path = ArtifactPaths.metadata_file(model_dir)
                                 metadata = {
                                     "family": family,
                                     "target": target,

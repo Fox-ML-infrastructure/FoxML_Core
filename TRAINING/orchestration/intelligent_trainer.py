@@ -870,7 +870,7 @@ class IntelligentTrainer:
             logger.warning(f"Failed to create initial manifest: {e}")
         
         # Keep legacy directories for backward compatibility during transition
-        (self.output_dir / "training_results").mkdir(exist_ok=True)
+        # NOTE: training_results/ directory removed - all models now go to targets/<target>/models/
         (self.output_dir / "leakage_diagnostics").mkdir(exist_ok=True)
         
         # Create new structure directories (keep for backward compatibility)
@@ -1307,7 +1307,8 @@ class IntelligentTrainer:
             from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
             target_repro_dir = get_target_reproducibility_dir(self.output_dir, target)
             
-            conf = load_target_confidence(target_repro_dir, target)
+            # Pass view to load_target_confidence so it checks the correct view-scoped location
+            conf = load_target_confidence(target_repro_dir, target, view=view)
             if conf:
                 routing = classify_target_from_confidence(conf, routing_config=routing_config)
                 save_target_routing_metadata(self.output_dir, target, conf, routing, view=view)
@@ -1378,53 +1379,92 @@ class IntelligentTrainer:
             if not repro_dir.exists():
                 continue
             
-            # Load feature_selection_summary.json
-            summary_path = repro_dir / "feature_selection_summary.json"
-            if summary_path.exists():
-                try:
-                    with open(summary_path) as f:
-                        summary = json.load(f)
-                        all_summaries[target_name] = summary
-                except Exception as e:
-                    logger.debug(f"Failed to load summary for {target_name}: {e}")
+            # Determine view from routing decisions or check both views
+            route_info = routing_decisions.get(target_name, {})
+            route = route_info.get('route', 'CROSS_SECTIONAL')
             
-            # Load model_family_status.json
-            status_path = repro_dir / "model_family_status.json"
-            if status_path.exists():
-                try:
-                    with open(status_path) as f:
-                        status_data = json.load(f)
-                        all_family_statuses[target_name] = status_data
-                except Exception as e:
-                    logger.debug(f"Failed to load family status for {target_name}: {e}")
+            # Check both CROSS_SECTIONAL and SYMBOL_SPECIFIC views (files are now view-scoped)
+            views_to_check = []
+            if route in ['CROSS_SECTIONAL', 'BOTH']:
+                views_to_check.append('CROSS_SECTIONAL')
+            if route in ['SYMBOL_SPECIFIC', 'BOTH']:
+                # For SYMBOL_SPECIFIC, check all symbol subdirectories
+                sym_specific_dir = repro_dir / "SYMBOL_SPECIFIC"
+                if sym_specific_dir.exists():
+                    for sym_dir in sym_specific_dir.iterdir():
+                        if sym_dir.is_dir() and sym_dir.name.startswith("symbol="):
+                            views_to_check.append(('SYMBOL_SPECIFIC', sym_dir.name.replace("symbol=", "")))
             
-            # NEW: Load actual feature list from selected_features.txt
-            selected_features_path = repro_dir / "selected_features.txt"
-            if selected_features_path.exists():
-                try:
-                    with open(selected_features_path, 'r') as f:
-                        features = [line.strip() for line in f if line.strip()]
-                    
-                    if features:
-                        # Determine view from routing decisions or default to CROSS_SECTIONAL
-                        route_info = routing_decisions.get(target_name, {})
-                        route = route_info.get('route', 'CROSS_SECTIONAL')
-                        view = 'CROSS_SECTIONAL' if route in ['CROSS_SECTIONAL', 'BOTH'] else 'SYMBOL_SPECIFIC'
+            # If no routing info, check both views
+            if not views_to_check:
+                views_to_check = ['CROSS_SECTIONAL']
+                sym_specific_dir = repro_dir / "SYMBOL_SPECIFIC"
+                if sym_specific_dir.exists():
+                    for sym_dir in sym_specific_dir.iterdir():
+                        if sym_dir.is_dir() and sym_dir.name.startswith("symbol="):
+                            views_to_check.append(('SYMBOL_SPECIFIC', sym_dir.name.replace("symbol=", "")))
+            
+            # Load files from view-scoped locations
+            for view_info in views_to_check:
+                if isinstance(view_info, tuple):
+                    view, symbol = view_info
+                    view_dir = repro_dir / "SYMBOL_SPECIFIC" / f"symbol={symbol}"
+                else:
+                    view = view_info
+                    symbol = None
+                    view_dir = repro_dir / "CROSS_SECTIONAL"
+                
+                if not view_dir.exists():
+                    continue
+                
+                # Load feature_selection_summary.json (view-scoped)
+                summary_path = view_dir / "feature_selection_summary.json"
+                if summary_path.exists() and target_name not in all_summaries:
+                    try:
+                        with open(summary_path) as f:
+                            summary = json.load(f)
+                            all_summaries[target_name] = summary
+                    except Exception as e:
+                        logger.debug(f"Failed to load summary for {target_name} ({view}): {e}")
+                
+                # Load model_family_status.json (view-scoped)
+                status_path = view_dir / "model_family_status.json"
+                if status_path.exists() and target_name not in all_family_statuses:
+                    try:
+                        with open(status_path) as f:
+                            status_data = json.load(f)
+                            all_family_statuses[target_name] = status_data
+                    except Exception as e:
+                        logger.debug(f"Failed to load family status for {target_name} ({view}): {e}")
+                
+                # Load actual feature list from selected_features.txt (view-scoped)
+                selected_features_path = view_dir / "selected_features.txt"
+                if selected_features_path.exists():
+                    try:
+                        with open(selected_features_path, 'r') as f:
+                            features = [line.strip() for line in f if line.strip()]
                         
-                        # Create key: target_name:view
-                        key = f"{target_name}:{view}"
-                        
-                        feature_selections[key] = {
-                            'target_name': target_name,
-                            'view': view,
-                            'n_features': len(features),
-                            'features': features,
-                            'selected_features_path': f"targets/{target_name}/reproducibility/selected_features.txt",
-                            'feature_selection_summary_path': f"targets/{target_name}/reproducibility/feature_selection_summary.json"
-                        }
-                        logger.debug(f"Loaded {len(features)} features for {key}")
-                except Exception as e:
-                    logger.debug(f"Failed to load selected features for {target_name}: {e}")
+                        if features:
+                            # Create key: target_name:view[:symbol]
+                            if symbol:
+                                key = f"{target_name}:{view}:{symbol}"
+                                view_display = f"{view}:{symbol}"
+                            else:
+                                key = f"{target_name}:{view}"
+                                view_display = view
+                            
+                            feature_selections[key] = {
+                                'target_name': target_name,
+                                'view': view,
+                                'symbol': symbol,
+                                'n_features': len(features),
+                                'features': features,
+                                'selected_features_path': f"targets/{target_name}/reproducibility/{view}/{'symbol=' + symbol + '/' if symbol else ''}selected_features.txt",
+                                'feature_selection_summary_path': f"targets/{target_name}/reproducibility/{view}/{'symbol=' + symbol + '/' if symbol else ''}feature_selection_summary.json"
+                            }
+                            logger.debug(f"Loaded {len(features)} features for {key}")
+                    except Exception as e:
+                        logger.debug(f"Failed to load selected features for {target_name} ({view_display}): {e}")
         
         # Write aggregated feature_selection_summary.json
         if all_summaries:
@@ -2001,20 +2041,54 @@ class IntelligentTrainer:
             try:
                 from TRAINING.orchestration.routing_integration import generate_routing_plan_after_feature_selection
                 
+                # Extract training.model_families from experiment_config (SST)
+                train_families = None
+                if self.experiment_config:
+                    exp_yaml = self.experiment_config.to_dict() if hasattr(self.experiment_config, 'to_dict') else {}
+                    if isinstance(self.experiment_config, dict):
+                        exp_yaml = self.experiment_config
+                    exp_training = exp_yaml.get('training', {})
+                    if exp_training:
+                        train_families = exp_training.get('model_families', None)
+                        if train_families is None:
+                            # Fallback to families parameter if training.model_families not set
+                            train_families = families
+                        else:
+                            logger.info(f"📋 Using training.model_families from config (SST): {train_families}")
+                    else:
+                        train_families = families
+                else:
+                    train_families = families
+                
+                # Assert training families match config (if config provided)
+                if self.experiment_config:
+                    exp_yaml = self.experiment_config.to_dict() if hasattr(self.experiment_config, 'to_dict') else {}
+                    if isinstance(self.experiment_config, dict):
+                        exp_yaml = self.experiment_config
+                    exp_training = exp_yaml.get('training', {})
+                    if exp_training and 'model_families' in exp_training:
+                        expected = set(exp_training['model_families'])
+                        actual = set(train_families) if train_families else set()
+                        if expected != actual:
+                            raise RuntimeError(
+                                f"Training families mismatch: expected {sorted(expected)} from config, "
+                                f"got {sorted(actual)}. This indicates a bug in family resolution."
+                            )
+                
                 # Log families source for debugging
-                logger.info(f"📋 Training plan generation: families parameter={families}")
-                logger.info(f"📋 Training plan generation: families type={type(families)}, length={len(families) if isinstance(families, list) else 'N/A'}")
-                if isinstance(families, list):
-                    logger.info(f"📋 Training plan generation: families contents={families}")
+                logger.info(f"📋 Training plan generation: families parameter={train_families}")
+                logger.info(f"📋 Training plan generation: families type={type(train_families)}, length={len(train_families) if isinstance(train_families, list) else 'N/A'}")
+                if isinstance(train_families, list):
+                    logger.info(f"📋 Training plan generation: families contents={train_families}")
                 
                 routing_plan = generate_routing_plan_after_feature_selection(
                     output_dir=self.output_dir,
                     targets=list(target_features.keys()),
                     symbols=self.symbols,
                     generate_training_plan=True,  # Generate training plan
-                    model_families=families  # Use specified families (from config SST or CLI)
+                    model_families=train_families  # Use training families (SST)
                 )
-                logger.info(f"📋 Passed model_families={families} to routing_integration for training plan generation")
+                logger.info(f"📋 Passed model_families={train_families} to routing_integration for training plan generation")
                 if routing_plan:
                     logger.info("✅ Training routing plan generated - see globals/routing_plan/ for details (legacy: METRICS/routing_plan/)")
                     # Set training plan directory for filtering
@@ -2241,6 +2315,27 @@ class IntelligentTrainer:
         # Log final families list for debugging
         logger.info(f"📋 Final families_list for training: {families_list} (length: {len(families_list)})")
         
+        # Invariant: families_list must not contain feature selectors
+        selector_violations = set(families_list) & FEATURE_SELECTORS
+        if selector_violations:
+            raise RuntimeError(
+                f"🚨 INVARIANT VIOLATION: families_list contains feature selectors: {selector_violations}. "
+                f"These should have been filtered. Full list: {families_list}"
+            )
+        
+        # Invariant: families_list must only contain config-enabled trainers (if config provided)
+        if families is not None:  # Config was provided
+            from TRAINING.training_strategies.utils import normalize_family_name
+            config_families_set = set(normalize_family_name(f) for f in families)
+            families_list_normalized = [normalize_family_name(f) for f in families_list]
+            extra_families = set(families_list_normalized) - config_families_set
+            if extra_families:
+                raise RuntimeError(
+                    f"🚨 INVARIANT VIOLATION: families_list contains families not in config: {extra_families}. "
+                    f"Config families: {sorted(config_families_set)}, "
+                    f"Produced families: {sorted(families_list_normalized)}"
+                )
+        
         # Validate families_list is not empty
         if not families_list:
             logger.warning("⚠️ No model families available after filtering! Using default families.")
@@ -2252,7 +2347,8 @@ class IntelligentTrainer:
             logger.warning("⚠️ All targets were filtered out by training plan! Training will be skipped.")
             logger.warning("   This may indicate an issue with the training plan or routing decisions.")
         
-        output_dir_str = str(self.output_dir / "training_results")
+        # Use run root directly (no training_results/ subdirectory)
+        output_dir_str = str(self.output_dir)
         
         # Get training parameters from kwargs or config (min_cs and max_cs_samples already extracted above)
         max_rows_train = train_kwargs.get('max_rows_train')

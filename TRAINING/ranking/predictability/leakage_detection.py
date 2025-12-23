@@ -2091,13 +2091,116 @@ def _log_suspicious_features(
     logger.info(f"  Leak detection report saved to: {leak_report_file}")
 
 
+def _triage_high_r2(
+    X: np.ndarray,
+    y: np.ndarray,
+    time_vals: Optional[np.ndarray] = None,
+    symbols: Optional[np.ndarray] = None,
+    target_name: str = ""
+) -> Dict[str, Any]:
+    """
+    Run triage checks for high R² scores to validate if they indicate real leakage.
+    
+    Args:
+        X: Feature matrix
+        y: Target vector
+        time_vals: Optional timestamps for holdout block test
+        symbols: Optional symbol array for panel data (shuffle within symbol)
+        target_name: Target name (for logging)
+    
+    Returns:
+        Dict with triage results:
+        - permutation_r2: R² after shuffling y (should be ~0/negative if no leakage)
+        - holdout_r2: R² on last 20% holdout block (should be lower if no leakage)
+        - shift_correlation: Correlation between y and ret_oc (should be < 0.9 if target is properly shifted)
+        - passed: True if all triage checks pass (no leakage), False otherwise
+    """
+    try:
+        from sklearn.metrics import r2_score
+        from sklearn.linear_model import Ridge
+    except ImportError:
+        logger.warning("sklearn not available for triage checks")
+        return {"permutation_r2": None, "holdout_r2": None, "shift_correlation": None, "passed": False}
+    
+    triage_results = {
+        "permutation_r2": None,
+        "holdout_r2": None,
+        "shift_correlation": None,
+        "passed": False
+    }
+    
+    try:
+        # Check 1: Permutation test - shuffle y within symbol, R² should collapse
+        if symbols is not None and len(np.unique(symbols)) > 1:
+            # Panel data: shuffle within each symbol
+            y_shuffled = y.copy()
+            for sym in np.unique(symbols):
+                sym_mask = symbols == sym
+                y_shuffled[sym_mask] = np.random.permutation(y[sym_mask])
+        else:
+            # Single symbol: shuffle globally
+            y_shuffled = np.random.permutation(y)
+        
+        # Fit simple model on shuffled y
+        model_perm = Ridge(alpha=1.0)
+        model_perm.fit(X, y_shuffled)
+        y_pred_perm = model_perm.predict(X)
+        triage_results["permutation_r2"] = float(r2_score(y_shuffled, y_pred_perm))
+        
+        # Check 2: Single holdout block - last 20% of time
+        if time_vals is not None and len(time_vals) > 10:
+            time_quantile = np.quantile(time_vals, 0.8)
+            train_idx = time_vals < time_quantile
+            test_idx = ~train_idx
+            
+            if np.sum(train_idx) > 5 and np.sum(test_idx) > 5:
+                model_holdout = Ridge(alpha=1.0)
+                model_holdout.fit(X[train_idx], y[train_idx])
+                y_pred_holdout = model_holdout.predict(X[test_idx])
+                triage_results["holdout_r2"] = float(r2_score(y[test_idx], y_pred_holdout))
+        
+        # Check 3: Shift sanity - correlate y with ret_oc (if available in feature names)
+        # Look for ret_oc or similar "current bar return" features
+        if hasattr(X, 'columns') or (isinstance(X, pd.DataFrame)):
+            # X is DataFrame - check for ret_oc column
+            if 'ret_oc' in X.columns:
+                ret_oc = X['ret_oc'].values
+                triage_results["shift_correlation"] = float(np.corrcoef(y, ret_oc)[0, 1])
+        else:
+            # X is numpy array - try to find ret_oc in feature_names if available
+            # (This is a limitation - we'd need feature_names passed in)
+            pass
+        
+        # Determine if triage passed (all checks suggest no leakage)
+        passed = True
+        if triage_results["permutation_r2"] is not None and triage_results["permutation_r2"] > 0.1:
+            passed = False  # Permutation R² should be ~0/negative
+        if triage_results["holdout_r2"] is not None and triage_results["holdout_r2"] > 0.4:
+            passed = False  # Holdout R² should be lower
+        if triage_results["shift_correlation"] is not None and abs(triage_results["shift_correlation"]) > 0.9:
+            passed = False  # Shift correlation should be < 0.9
+        
+        triage_results["passed"] = passed
+        
+    except Exception as e:
+        logger.debug(f"Triage checks failed: {e}")
+        # If triage fails, assume leakage (fail-safe)
+        triage_results["passed"] = False
+    
+    return triage_results
+
+
 def detect_leakage(
     mean_score: float,
     composite_score: float,
     mean_importance: float,
     target_name: str = "",
     model_scores: Dict[str, float] = None,
-    task_type: TaskType = TaskType.REGRESSION
+    task_type: TaskType = TaskType.REGRESSION,
+    X: Optional[np.ndarray] = None,  # NEW: Optional data for triage checks
+    y: Optional[np.ndarray] = None,  # NEW: Optional target for triage checks
+    time_vals: Optional[np.ndarray] = None,  # NEW: Optional timestamps for triage checks
+    symbols: Optional[np.ndarray] = None  # NEW: Optional symbols for triage checks
 ) -> str:
     """
     Detect potential data leakage based on suspicious patterns.
@@ -2151,19 +2254,59 @@ def detect_leakage(
         very_high_threshold = float(class_cfg.get('very_high', 0.95))
         metric_name = "Accuracy"
     
-    # Check 1: Suspiciously high mean score
+    # Check 1: Suspiciously high mean score (with triage for R²)
     if mean_score > very_high_threshold:
         flags.append("HIGH_SCORE")
-        logger.warning(
-            f"LEAKAGE WARNING: {metric_name}={mean_score:.3f} > {very_high_threshold:.2f} "
-            f"(extremely high - likely leakage)"
-        )
+        # Run triage checks if data is available and this is R²
+        triage_results = None
+        if metric_name == "R²" and X is not None and y is not None:
+            triage_results = _triage_high_r2(X, y, time_vals=time_vals, symbols=symbols, target_name=target_name)
+            if triage_results["passed"]:
+                logger.info(
+                    f"R²={mean_score:.3f} > {very_high_threshold:.2f}, but triage passed: "
+                    f"permutation={triage_results.get('permutation_r2', 'N/A'):.3f}, "
+                    f"holdout={triage_results.get('holdout_r2', 'N/A'):.3f}, "
+                    f"shift_corr={triage_results.get('shift_correlation', 'N/A'):.3f}"
+                )
+            else:
+                logger.warning(
+                    f"LEAKAGE WARNING: {metric_name}={mean_score:.3f} > {very_high_threshold:.2f} "
+                    f"(extremely high - likely leakage). Triage: "
+                    f"permutation={triage_results.get('permutation_r2', 'N/A'):.3f}, "
+                    f"holdout={triage_results.get('holdout_r2', 'N/A'):.3f}, "
+                    f"shift_corr={triage_results.get('shift_correlation', 'N/A'):.3f}"
+                )
+        else:
+            logger.warning(
+                f"LEAKAGE WARNING: {metric_name}={mean_score:.3f} > {very_high_threshold:.2f} "
+                f"(extremely high - likely leakage)"
+            )
     elif mean_score > high_threshold:
         flags.append("HIGH_SCORE")
-        logger.warning(
-            f"LEAKAGE WARNING: {metric_name}={mean_score:.3f} > {high_threshold:.2f} "
-            f"(suspiciously high - investigate)"
-        )
+        # Run triage checks if data is available and this is R²
+        triage_results = None
+        if metric_name == "R²" and X is not None and y is not None:
+            triage_results = _triage_high_r2(X, y, time_vals=time_vals, symbols=symbols, target_name=target_name)
+            if triage_results["passed"]:
+                logger.info(
+                    f"R²={mean_score:.3f} > {high_threshold:.2f}, but triage passed: "
+                    f"permutation={triage_results.get('permutation_r2', 'N/A'):.3f}, "
+                    f"holdout={triage_results.get('holdout_r2', 'N/A'):.3f}, "
+                    f"shift_corr={triage_results.get('shift_correlation', 'N/A'):.3f}"
+                )
+            else:
+                logger.warning(
+                    f"LEAKAGE WARNING: {metric_name}={mean_score:.3f} > {high_threshold:.2f} "
+                    f"(suspiciously high - investigate). Triage: "
+                    f"permutation={triage_results.get('permutation_r2', 'N/A'):.3f}, "
+                    f"holdout={triage_results.get('holdout_r2', 'N/A'):.3f}, "
+                    f"shift_corr={triage_results.get('shift_correlation', 'N/A'):.3f}"
+                )
+        else:
+            logger.warning(
+                f"LEAKAGE WARNING: {metric_name}={mean_score:.3f} > {high_threshold:.2f} "
+                f"(suspiciously high - investigate)"
+            )
     
     # Check 2: Individual model scores too high (even if mean is lower)
     if model_scores:

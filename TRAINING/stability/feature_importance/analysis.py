@@ -140,7 +140,8 @@ def selection_frequency(
 
 def compute_stability_metrics(
     snapshots: List[FeatureImportanceSnapshot],
-    top_k: int = 20
+    top_k: int = 20,
+    filter_by_universe_id: bool = True  # NEW: Filter by universe_id to avoid cross-symbol comparisons
 ) -> Dict[str, float]:
     """
     Compute stability metrics for a list of snapshots.
@@ -150,6 +151,11 @@ def compute_stability_metrics(
     Comparing snapshots from different methods (RFE vs Boruta vs Lasso) will
     naturally have low overlap because they use different importance definitions.
     
+    **CRITICAL**: For SYMBOL_SPECIFIC mode, snapshots should be from the SAME symbol.
+    Comparing snapshots across different symbols (AAPL vs MSFT) will show low overlap
+    due to symbol heterogeneity, not instability. Use filter_by_universe_id=True to
+    filter snapshots by the symbol part of universe_id.
+    
     The snapshots should be sorted by importance (descending) already, so we
     compare top-K by feature name (not magnitude, since magnitudes are not comparable
     across different importance definitions).
@@ -157,6 +163,8 @@ def compute_stability_metrics(
     Args:
         snapshots: List of snapshots to analyze (must be same method/family)
         top_k: Number of top features to consider for overlap
+        filter_by_universe_id: If True, filter snapshots to only include those with
+            the same universe_id (or same symbol prefix if universe_id format is "SYMBOL:...")
     
     Returns:
         Dictionary with stability metrics:
@@ -168,6 +176,36 @@ def compute_stability_metrics(
         - n_comparisons: Number of pairwise comparisons
         - status: "stable", "drifting", "diverged", or "insufficient"
     """
+    # Filter snapshots by universe_id if requested (for SYMBOL_SPECIFIC mode)
+    if filter_by_universe_id and len(snapshots) > 0:
+        # Extract symbol from universe_id if format is "SYMBOL:..."
+        # Group snapshots by symbol (first part before ":")
+        universe_id_groups = {}
+        for snapshot in snapshots:
+            if snapshot.universe_id:
+                # Extract symbol part (before ":")
+                symbol_part = snapshot.universe_id.split(":")[0] if ":" in snapshot.universe_id else snapshot.universe_id
+                if symbol_part not in universe_id_groups:
+                    universe_id_groups[symbol_part] = []
+                universe_id_groups[symbol_part].append(snapshot)
+            else:
+                # No universe_id - treat as separate group
+                if "NO_UNIVERSE" not in universe_id_groups:
+                    universe_id_groups["NO_UNIVERSE"] = []
+                universe_id_groups["NO_UNIVERSE"].append(snapshot)
+        
+        # If we have multiple groups (different symbols), use the largest group
+        # and log a warning that we're filtering to avoid cross-symbol comparisons
+        if len(universe_id_groups) > 1:
+            largest_group = max(universe_id_groups.values(), key=len)
+            symbol_for_group = [k for k, v in universe_id_groups.items() if v == largest_group][0]
+            logger.warning(
+                f"⚠️  Stability computation: Found snapshots from {len(universe_id_groups)} different symbols/universes. "
+                f"Filtering to largest group (symbol={symbol_for_group}, n={len(largest_group)} snapshots) to avoid "
+                f"cross-symbol comparisons. Low overlap across symbols is expected (symbol heterogeneity), not instability."
+            )
+            snapshots = largest_group
+    
     if len(snapshots) < 2:
         return {
             "mean_overlap": np.nan,

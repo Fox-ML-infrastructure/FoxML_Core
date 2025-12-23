@@ -416,12 +416,21 @@ def _save_dual_view_rankings(
             symbols_set.update(decision['symbols'].keys())
     symbols_list = sorted(symbols_set) if symbols_set else []
     
-    # Create fingerprint from targets and symbols
+    # Load resolved_mode from run context (SST) for fingerprint
+    resolved_mode = None
+    try:
+        from TRAINING.orchestration.utils.run_context import get_resolved_mode
+        resolved_mode = get_resolved_mode(output_dir)
+    except Exception:
+        pass
+    
+    # Create fingerprint from targets, symbols, and resolved_mode
     fingerprint_data = {
         'targets': target_set,
         'symbols': symbols_list,
         'target_count': len(target_set),
-        'symbol_count': len(symbols_list)
+        'symbol_count': len(symbols_list),
+        'resolved_mode': resolved_mode  # Include resolved_mode in fingerprint (SST)
     }
     fingerprint_str = json.dumps(fingerprint_data, sort_keys=True)
     fingerprint_hash = hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]
@@ -508,11 +517,20 @@ def load_routing_decisions(
             if validate_fingerprint and expected_targets:
                 stored_fingerprint = data.get('fingerprint')
                 if stored_fingerprint:
-                    # Compute expected fingerprint
+                    # Load resolved_mode from run context (SST) for fingerprint validation
+                    resolved_mode = None
+                    try:
+                        from TRAINING.orchestration.utils.run_context import get_resolved_mode
+                        resolved_mode = get_resolved_mode(output_dir)
+                    except Exception:
+                        pass
+                    
+                    # Compute expected fingerprint (include resolved_mode)
                     target_set = sorted(set(expected_targets))
                     fingerprint_data = {
                         'targets': target_set,
-                        'target_count': len(target_set)
+                        'target_count': len(target_set),
+                        'resolved_mode': resolved_mode  # Include resolved_mode in fingerprint (SST)
                     }
                     fingerprint_str = json.dumps(fingerprint_data, sort_keys=True)
                     expected_fingerprint = hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]
@@ -535,8 +553,22 @@ def load_routing_decisions(
                         )
                         
                         if dev_mode:
-                            logger.warning(f"{error_msg} Dev mode: Proceeding with empty routing decisions (may cause issues)")
-                            return {}
+                            logger.warning(f"{error_msg} Dev mode: Ignoring stale decisions, attempting regeneration...")
+                            # Try to regenerate from current candidates
+                            try:
+                                # Check if fresh candidates exist
+                                from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+                                globals_dir = get_globals_dir(output_dir) if output_dir else None
+                                if globals_dir:
+                                    candidates_file = globals_dir / "routing" / "routing_candidates.parquet"
+                                    if candidates_file.exists():
+                                        logger.info("Fresh routing candidates found, but regeneration not yet implemented. Returning empty decisions.")
+                                        # TODO: Implement regeneration from candidates
+                                        return {"_STALE_DECISIONS_IGNORED": True, "_regenerate": True}
+                            except Exception as e:
+                                logger.warning(f"Failed to check for fresh candidates: {e}")
+                            # Return marker indicating stale decisions were ignored
+                            return {"_STALE_DECISIONS_IGNORED": True}
                         else:
                             logger.error(error_msg)
                             raise ValueError(
@@ -551,11 +583,11 @@ def load_routing_decisions(
             logger.error(f"Failed to load routing decisions from {routing_file}: {e}")
             return {}
     
-    # If output_dir provided, search for routing decisions in new and legacy locations
+    # If output_dir provided, enforce single known path (globals/routing_decisions.json)
     if output_dir:
         output_dir = Path(output_dir)
         
-        # Try target-first structure first (globals/routing_decisions.json)
+        # PRIMARY: globals/routing_decisions.json (current run only)
         globals_file = output_dir / "globals" / "routing_decisions.json"
         if globals_file.exists():
             try:
@@ -568,10 +600,19 @@ def load_routing_decisions(
                     stored_fingerprint = data.get('fingerprint')
                     if stored_fingerprint:
                         # Compute expected fingerprint
+                        # Load resolved_mode from run context (SST) for fingerprint validation
+                        resolved_mode = None
+                        try:
+                            from TRAINING.orchestration.utils.run_context import get_resolved_mode
+                            resolved_mode = get_resolved_mode(output_dir)
+                        except Exception:
+                            pass
+                        
                         target_set = sorted(set(expected_targets))
                         fingerprint_data = {
                             'targets': target_set,
-                            'target_count': len(target_set)
+                            'target_count': len(target_set),
+                            'resolved_mode': resolved_mode  # Include resolved_mode in fingerprint (SST)
                         }
                         fingerprint_str = json.dumps(fingerprint_data, sort_keys=True)
                         expected_fingerprint = hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]
@@ -595,8 +636,21 @@ def load_routing_decisions(
                             )
                             
                             if dev_mode:
-                                logger.warning(f"{error_msg} Dev mode: Proceeding with empty routing decisions (may cause issues)")
-                                return {}
+                                logger.warning(f"{error_msg} Dev mode: Ignoring stale decisions, attempting regeneration...")
+                                # Try to regenerate from current candidates
+                                try:
+                                    from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+                                    globals_dir = get_globals_dir(output_dir) if output_dir else None
+                                    if globals_dir:
+                                        candidates_file = globals_dir / "routing" / "routing_candidates.parquet"
+                                        if candidates_file.exists():
+                                            logger.info("Fresh routing candidates found, but regeneration not yet implemented. Returning empty decisions.")
+                                            # TODO: Implement regeneration from candidates
+                                            return {"_STALE_DECISIONS_IGNORED": True, "_regenerate": True}
+                                except Exception as e:
+                                    logger.warning(f"Failed to check for fresh candidates: {e}")
+                                # Return marker indicating stale decisions were ignored
+                                return {"_STALE_DECISIONS_IGNORED": True}
                             else:
                                 logger.error(error_msg)
                                 raise ValueError(
@@ -611,23 +665,16 @@ def load_routing_decisions(
             except Exception as e:
                 logger.debug(f"Failed to load from globals: {e}")
         
-        # Try legacy locations
-        legacy_locations = [
-            output_dir / "DECISION" / "TARGET_RANKING" / "routing_decisions.json",
-            output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / "routing_decisions.json",
-            output_dir / "target_rankings" / "REPRODUCIBILITY" / "TARGET_RANKING" / "routing_decisions.json"
-        ]
-        
-        for legacy_file in legacy_locations:
-            if legacy_file.exists():
-                try:
-                    with open(legacy_file, 'r') as f:
-                        data = json.load(f)
-                    logger.debug(f"Loaded routing decisions from legacy location: {legacy_file}")
-                    return data.get('routing_decisions', {})
-                except Exception as e:
-                    logger.debug(f"Failed to load from {legacy_file}: {e}")
-                    continue
+        # If not found, fail loudly (no legacy fallback to prevent stale decisions)
+        if validate_fingerprint and expected_targets:
+            raise FileNotFoundError(
+                f"Routing decisions not found for current run at {globals_file}. "
+                f"Expected targets: {expected_targets}. "
+                f"Re-run feature selection to generate fresh decisions."
+            )
+        else:
+            logger.warning(f"Routing decisions not found at {globals_file}. Returning empty dict.")
+            return {}
     
     # If routing_file was provided but doesn't exist, warn
     if routing_file:

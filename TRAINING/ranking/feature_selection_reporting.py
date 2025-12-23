@@ -36,39 +36,39 @@ def save_feature_selection_rankings(
     selected_features: List[str],
     target_column: str,
     output_dir: Path,
-    view: str = "CROSS_SECTIONAL",
+    view: str,  # REQUIRED (no default)
     symbol: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None
 ):
     """
-    Save feature selection rankings in the same format as target ranking.
+    Save feature selection rankings. view parameter is REQUIRED.
     
     Structure:
     RESULTS/{run_id}/
-      feature_selections/
-        {target_column}/
-          feature_selection_rankings.csv
-          feature_selection_rankings.yaml
-          selected_features.txt
-          feature_importance_multi_model.csv
-          ...
-      REPRODUCIBILITY/
-        FEATURE_SELECTION/
+      targets/{target}/
+        reproducibility/
           {view}/
-            {target_column}/
-              cohort={cohort_id}/
-                metrics.json
-                metadata.json
+            feature_selection_rankings.csv
+            selected_features.txt
+            feature_importances/
+            ...
     
     Args:
         summary_df: DataFrame with feature rankings and scores
         selected_features: List of selected feature names
         target_column: Target column name
         output_dir: Base output directory
-        view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
-        symbol: Symbol name (for SYMBOL_SPECIFIC view)
+        view: REQUIRED - "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
+        symbol: Required if view="SYMBOL_SPECIFIC"
         metadata: Optional metadata dict
+    
+    Raises:
+        ValueError: If view is None, invalid, or SYMBOL_SPECIFIC without symbol
     """
+    if view not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
+        raise ValueError(f"Invalid view: {view}. Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'")
+    if view == "SYMBOL_SPECIFIC" and symbol is None:
+        raise ValueError("symbol required when view='SYMBOL_SPECIFIC'")
     # Determine target-level directory (matching TARGET_RANKING structure)
     # output_dir is already at: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
     # Use it directly to avoid nested structures

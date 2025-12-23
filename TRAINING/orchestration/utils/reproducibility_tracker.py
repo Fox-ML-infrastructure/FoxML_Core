@@ -3714,10 +3714,21 @@ class ReproducibilityTracker:
             ensure_target_structure(base_output_dir, target_name)
             target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name)
             
-            # Determine view
+            # Determine view - use resolved_mode from run context (SST) if available
             view = route_type_for_cohort_dir.upper() if route_type_for_cohort_dir else "CROSS_SECTIONAL"
             if view == "INDIVIDUAL":
                 view = "SYMBOL_SPECIFIC"
+            
+            # Try to load resolved_mode from run context (SST) and use it if available
+            try:
+                from TRAINING.orchestration.utils.run_context import get_resolved_mode
+                resolved_mode = get_resolved_mode(self._repro_base_dir)
+                if resolved_mode:
+                    # Use resolved_mode instead of inferred view
+                    view = resolved_mode
+                    logger.debug(f"Using resolved_mode={resolved_mode} from run context (SST) for cohort directory")
+            except Exception as e:
+                logger.debug(f"Could not load resolved_mode from run context: {e}, using inferred view={view}")
             
             if view == "SYMBOL_SPECIFIC" and ctx.symbol:
                 target_cohort_dir = target_repro_dir / view / f"symbol={ctx.symbol}" / f"cohort={cohort_id}"
@@ -4018,6 +4029,9 @@ class ReproducibilityTracker:
             if not has_target_first and not has_legacy:
                 return {"status": "reproducibility_directory_not_found"}
             
+            # If repro_base is a comparison group directory, TrendAnalyzer will search within it
+            # If repro_base is a run directory, TrendAnalyzer will search for targets/globals/REPRODUCIBILITY
+            # Pass the appropriate directory (comparison group or run directory)
             trend_analyzer = TrendAnalyzer(
                 reproducibility_dir=repro_base,
                 half_life_days=7.0,

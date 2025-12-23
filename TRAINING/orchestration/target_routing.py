@@ -100,18 +100,19 @@ def classify_target_from_confidence(
     }
 
 
-def load_target_confidence(output_dir: Path, target_name: str) -> Optional[Dict[str, Any]]:
+def load_target_confidence(output_dir: Path, target_name: str, view: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Load target confidence JSON for a specific target.
     
     Args:
         output_dir: Target output directory or base run directory
         target_name: Target column name
+        view: Optional view name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"). If None, checks both views.
     
     Returns:
         Confidence dict or None if not found
     """
-    # Try target-first structure first
+    # Try target-first structure first (view-scoped)
     from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
     base_dir = output_dir
     # Walk up to find run root if needed
@@ -124,23 +125,55 @@ def load_target_confidence(output_dir: Path, target_name: str) -> Optional[Dict[
     
     target_name_clean = target_name.replace('/', '_').replace('\\', '_')
     target_repro_dir = get_target_reproducibility_dir(base_dir, target_name_clean)
-    conf_path = target_repro_dir / "target_confidence.json"
     
-    if conf_path.exists():
-        try:
-            with open(conf_path) as f:
-                return json.load(f)
-        except Exception as e:
-            logger.warning(f"Failed to load confidence from target-first structure: {e}")
+    # Check view-scoped locations (new structure)
+    views_to_check = []
+    if view:
+        views_to_check = [view]
+    else:
+        # Check both views if view not specified
+        views_to_check = ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]
     
-    # Fallback to legacy location
-    legacy_path = output_dir / "target_confidence.json"
+    for check_view in views_to_check:
+        view_dir = target_repro_dir / check_view
+        conf_path = view_dir / "target_confidence.json"
+        
+        if conf_path.exists():
+            try:
+                with open(conf_path) as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.debug(f"Failed to load confidence from {check_view}: {e}")
+        
+        # Also check symbol-specific subdirectories if SYMBOL_SPECIFIC
+        if check_view == "SYMBOL_SPECIFIC" and view_dir.exists():
+            for sym_dir in view_dir.iterdir():
+                if sym_dir.is_dir() and sym_dir.name.startswith("symbol="):
+                    sym_conf_path = sym_dir / "target_confidence.json"
+                    if sym_conf_path.exists():
+                        try:
+                            with open(sym_conf_path) as f:
+                                return json.load(f)
+                        except Exception as e:
+                            logger.debug(f"Failed to load confidence from {sym_dir.name}: {e}")
+    
+    # Fallback to legacy location (target root, no view folder)
+    legacy_path = target_repro_dir / "target_confidence.json"
     if legacy_path.exists():
         try:
             with open(legacy_path) as f:
                 return json.load(f)
         except Exception as e:
-            logger.warning(f"Failed to load confidence from legacy location: {e}")
+            logger.debug(f"Failed to load confidence from legacy location: {e}")
+    
+    # Final fallback to output_dir
+    legacy_path2 = output_dir / "target_confidence.json"
+    if legacy_path2.exists():
+        try:
+            with open(legacy_path2) as f:
+                return json.load(f)
+        except Exception as e:
+            logger.debug(f"Failed to load confidence from output_dir: {e}")
     
     return None
 
@@ -272,8 +305,8 @@ def save_target_routing_metadata(
             'confidence': conf,
             'routing': routing,
             # Reference to where selected features can be found
-            'selected_features_path': f"targets/{target_name_clean}/reproducibility/selected_features.txt",
-            'feature_selection_summary_path': f"targets/{target_name_clean}/reproducibility/feature_selection_summary.json"
+            'selected_features_path': f"targets/{target_name_clean}/reproducibility/{view_normalized}/selected_features.txt",
+            'feature_selection_summary_path': f"targets/{target_name_clean}/reproducibility/{view_normalized}/feature_selection_summary.json"
         }
     }
     

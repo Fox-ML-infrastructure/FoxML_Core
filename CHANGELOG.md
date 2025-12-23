@@ -16,6 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-23 (Mode Selection and Pipeline Safety Fixes)
+- **Critical Fixes**: Fixed 4 red flags from training logs: (1) Mode selection - small panels (<10 symbols) now select SYMBOL_SPECIFIC instead of CROSS_SECTIONAL, preventing missing symbol metrics → 0 jobs. (2) Unknown lookback invariant - hard assertion that no inf lookbacks remain after gatekeeper quarantine, prevents RuntimeError in compute_budget. (3) Purge inflation protection - estimates effective samples after purge increase, warns when <30% remaining, fails early when <minimum threshold (configurable via `training_config.routing.min_effective_samples_after_purge`). (4) Dev mode job guarantee - generates fallback jobs when router produces 0 jobs in dev_mode, ensuring E2E tests always have jobs.
+- **Impact**: Prevents "no symbol metrics", "0 jobs", and RuntimeError from unknown lookback features. Purge calculation remains per-target and depends on features selected for each target.
+- **Files Changed**: `cross_sectional_data.py`, `shared_ranking_harness.py`, `resolved_config.py`, `training_plan_generator.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-23-mode-selection-and-pipeline-safety-fixes.md)
+
+#### 2025-12-23 (Training Pipeline Integrity and Canonical Layout Migration)
+- **Critical Fixes**: Fixed 7 integrity issues: routing fingerprint mismatch (fail-fast), feature registry bypass (0-features = error), training families source bug (uses config), routing 0-jobs (metrics fallback + auto-dev thresholds), stale routing decisions (single path), output layout inconsistencies (removed training_results/), router pattern miss (*_oc_same_day)
+- **Structural Refactoring**: Removed competing `training_results/` hierarchy, standardized on target-first canonical layout: `run_root/targets/<target>/models/...` as SST
+- **New ArtifactPaths Builder**: Created single source of truth for all artifact paths - all model saves/loads use `ArtifactPaths.model_dir()`
+- **Optional Mirrors**: Added optional family-first browsing via symlinks or manifest (config-driven, disabled by default)
+- **Impact**: Eliminates structural ambiguity, ensures reproducibility, enforces config-centered control, prevents stale decision loads
+- **Files Changed**: `artifact_paths.py` (new), `artifact_mirror.py` (new), `training.py`, `intelligent_trainer.py`, `target_routing.py`, `leakage_filtering.py`, `metrics_aggregator.py`, `training_router.py`, `target_router.py`, `target_first_paths.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-23-training-pipeline-integrity-and-canonical-layout.md)
+
 #### 2025-12-23 (Training Pipeline Organization and Config Fixes)
 - **Refactoring**: Comprehensive refactoring to fix blocking correctness bugs, data integrity issues, and structural cleanup with centralized path SST
 - **Correctness**: Quarantined unknown lookback features before budget call, preventing RuntimeError from features with `inf` lookback

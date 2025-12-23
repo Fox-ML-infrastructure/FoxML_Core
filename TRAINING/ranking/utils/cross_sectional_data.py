@@ -247,8 +247,10 @@ def prepare_cross_sectional_data_for_ranking(
     feature_names: Optional[List[str]] = None,
     feature_time_meta_map: Optional[Dict[str, Any]] = None,  # NEW: Optional map of feature_name -> FeatureTimeMeta
     base_interval_minutes: Optional[float] = None,  # NEW: Base training grid interval (for alignment)
-    allow_single_symbol: bool = False  # NEW: Allow single symbol for SYMBOL_SPECIFIC view
-) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[List[str]], Optional[np.ndarray], Optional[np.ndarray]]:
+    allow_single_symbol: bool = False,  # NEW: Allow single symbol for SYMBOL_SPECIFIC view
+    requested_mode: Optional[str] = None,  # NEW: Mode requested by caller/config
+    output_dir: Optional[Path] = None  # NEW: Output directory for persisting resolved_mode (SST)
+) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[List[str]], Optional[np.ndarray], Optional[np.ndarray], Optional[Dict[str, Any]]]:
     """
     Prepare cross-sectional data for ranking (simplified version of training pipeline).
     
@@ -383,25 +385,107 @@ def prepare_cross_sectional_data_for_ranking(
     effective_min_cs = min(min_cs, n_symbols_available)
     min_cs_reason = "requested"  # Always requested now (we hard-stop if insufficient)
     
-    # Determine resolved mode (for telemetry and logging)
-    if n_symbols_available == 1:
-        resolved_mode = "SINGLE_SYMBOL_TS"  # Should not happen due to check above, but track for safety
-        mode_reason = "n_symbols=1"
-    elif n_symbols_available < 10:
-        resolved_mode = "CROSS_SECTIONAL"  # Small panel
-        mode_reason = f"n_symbols={n_symbols_available} (small panel)"
+    # Load existing resolved_mode from run context (SST) - it's immutable, don't try to change it
+    existing_resolved_mode = None
+    existing_context = None
+    if output_dir is not None:
+        try:
+            from TRAINING.orchestration.utils.run_context import load_run_context
+            existing_context = load_run_context(output_dir)
+            if existing_context:
+                existing_resolved_mode = existing_context.get("resolved_mode")
+                if existing_resolved_mode:
+                    logger.debug(f"Using existing resolved_mode={existing_resolved_mode} from run context (immutable)")
+        except Exception as e:
+            logger.debug(f"Could not load existing run context: {e}")
+    
+    # Load mode policy from config
+    mode_policy = "auto"  # Default
+    auto_flip_min_symbols = RECOMMENDED_SYMBOLS  # Default
+    try:
+        from CONFIG.config_loader import get_cfg
+        mode_policy = get_cfg("training_config.routing.mode_policy", default="auto")
+        auto_flip_min_symbols = get_cfg("training_config.routing.auto_flip_min_symbols", default=RECOMMENDED_SYMBOLS)
+        if requested_mode is None:
+            requested_mode = get_cfg("training_config.routing.requested_mode", default=None)
+    except Exception as e:
+        logger.debug(f"Could not load mode policy from config: {e}, using defaults")
+    
+    # Determine resolved mode based on policy (only if not already set)
+    if existing_resolved_mode:
+        # Use existing resolved_mode (immutable) - don't try to resolve again
+        # This prevents mode contract violations in per-symbol loops
+        resolved_mode = existing_resolved_mode
+        original_reason = existing_context.get('mode_reason', 'N/A') if existing_context else 'N/A'
+        mode_reason = f"using existing resolved_mode (immutable, originally: {original_reason})"
+    elif mode_policy == "force":
+        # Force mode: use requested_mode exactly (no auto-flip)
+        if requested_mode is None:
+            logger.warning("mode_policy=force but requested_mode not set, defaulting to CROSS_SECTIONAL")
+            requested_mode = "CROSS_SECTIONAL"
+        resolved_mode = requested_mode
+        mode_reason = f"mode_policy=force, requested_mode={requested_mode}"
     else:
-        resolved_mode = "CROSS_SECTIONAL"  # Full panel
-        mode_reason = f"n_symbols={n_symbols_available} (full panel)"
+        # Auto mode: allow resolver to flip based on panel size
+        if n_symbols_available == 1:
+            # CRITICAL: If we're in a per-symbol loop (n_symbols=1), we should NOT resolve to SINGLE_SYMBOL_TS
+            # Instead, we should use the resolved_mode from the outer context (which should be SYMBOL_SPECIFIC)
+            # If no existing resolved_mode, this is an error condition (shouldn't happen in per-symbol loop)
+            if requested_mode and requested_mode != "SINGLE_SYMBOL_TS":
+                resolved_mode = requested_mode  # Use requested mode (likely SYMBOL_SPECIFIC from outer context)
+                mode_reason = f"n_symbols=1, using requested_mode={requested_mode} (per-symbol loop)"
+            else:
+                resolved_mode = "SINGLE_SYMBOL_TS"  # Fallback (shouldn't happen)
+                mode_reason = "n_symbols=1"
+        elif n_symbols_available < auto_flip_min_symbols:
+            # Small panel: recommend SYMBOL_SPECIFIC or BOTH (not CROSS_SECTIONAL)
+            resolved_mode = "SYMBOL_SPECIFIC"  # Changed from CROSS_SECTIONAL
+            mode_reason = f"n_symbols={n_symbols_available} (small panel, < {auto_flip_min_symbols} recommended)"
+        else:
+            resolved_mode = "CROSS_SECTIONAL"  # Full panel
+            mode_reason = f"n_symbols={n_symbols_available} (full panel, >= {auto_flip_min_symbols})"
+    
+    # Validate mode contract (only if we resolved a new mode)
+    if not existing_resolved_mode:
+        try:
+            from TRAINING.orchestration.utils.run_context import validate_mode_contract
+            validate_mode_contract(resolved_mode, requested_mode, mode_policy)
+        except ValueError as e:
+            logger.error(f"Mode contract validation failed: {e}")
+            raise
+    
+    # Set data_scope based on current n_symbols_available (can vary per-symbol, non-immutable)
+    if n_symbols_available == 1:
+        data_scope = "SINGLE_SYMBOL"
+    else:
+        data_scope = "PANEL"
+    
+    # Persist resolved_mode and data_scope to run context (SST)
+    # resolved_mode is immutable (only set once), data_scope can be updated
+    if output_dir is not None:
+        try:
+            from TRAINING.orchestration.utils.run_context import save_run_context
+            save_run_context(
+                output_dir=output_dir,
+                requested_mode=requested_mode,
+                resolved_mode=resolved_mode,
+                mode_reason=mode_reason,
+                n_symbols=n_symbols_available,
+                data_scope=data_scope  # Can be updated (non-immutable)
+            )
+        except Exception as e:
+            logger.warning(f"Could not save run context: {e}")
     
     # Log requested vs effective (single authoritative line)
+    # Use mode-appropriate terminology: "Cross-sectional" for CROSS_SECTIONAL, "Panel data" for SYMBOL_SPECIFIC
+    data_type_label = "Cross-sectional sampling" if resolved_mode == "CROSS_SECTIONAL" else "Panel data sampling"
     logger.info(
-        f"📊 Cross-sectional sampling: "
+        f"📊 {data_type_label}: "
         f"requested_min_cs={min_cs} → effective_min_cs={effective_min_cs} "
         f"(reason={min_cs_reason}, n_symbols={n_symbols_available}), "
         f"max_cs_samples={max_cs_samples}"
     )
-    logger.info(f"📋 Resolved mode: {resolved_mode} (reason: {mode_reason})")
+    logger.info(f"📋 Mode resolution: requested_mode={requested_mode or 'N/A'}, resolved_mode={resolved_mode} (reason: {mode_reason})")
     
     # NEW: Multi-interval alignment support
     # If feature_time_meta_map and base_interval_minutes are provided, apply alignment
@@ -738,7 +822,11 @@ def prepare_cross_sectional_data_for_ranking(
     # This will be extracted by callers and passed to reproducibility tracker
     resolved_config = {
         'resolved_data_mode': resolved_mode,
+        'resolved_mode': resolved_mode,  # Alias for consistency (objective - immutable)
+        'requested_mode': requested_mode,
         'mode_reason': mode_reason,
+        'mode_policy': mode_policy,
+        'data_scope': data_scope,  # NEW: Data scope (PANEL or SINGLE_SYMBOL) - can vary per-symbol
         'n_symbols_loaded': n_symbols_available,
         'min_cs_required': min_cs,
         'effective_min_cs': effective_min_cs,

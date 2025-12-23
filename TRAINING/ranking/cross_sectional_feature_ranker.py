@@ -347,11 +347,14 @@ def compute_cross_sectional_importance(
         )
     
     # Build panel with candidate features only
+    # Note: output_dir is optional, so mode resolution may not persist (but that's OK for this use case)
     X, y, feature_names, symbols_array, time_vals, resolved_data_config = prepare_cross_sectional_data_for_ranking(
         mtf_data, target_column,
         min_cs=min_cs,
         max_cs_samples=max_cs_samples,
-        feature_names=candidate_features  # Only candidate features
+        feature_names=candidate_features,  # Only candidate features
+        requested_mode="CROSS_SECTIONAL",  # This function is always cross-sectional
+        output_dir=output_dir
     )
     
     if X is None or y is None:

@@ -423,7 +423,7 @@ class TrendAnalyzer:
                             continue
         
         if not rows:
-            logger.warning("No runs found in REPRODUCIBILITY directory")
+            logger.warning("No runs found in target-first structure (targets/, globals/) or legacy REPRODUCIBILITY directory")
             return pd.DataFrame()
         
         df = pd.DataFrame(rows)

@@ -423,20 +423,26 @@ class RankingHarness:
         
         # Prepare data based on view (with alignment args from resolved_config)
         # NOTE: view may have been changed to SYMBOL_SPECIFIC above if only 1 symbol loaded
+        # Pass requested_mode and output_dir for mode resolution and persistence
+        requested_mode_for_prep = self.view  # Use current view as requested_mode
         if self.view == "SYMBOL_SPECIFIC":
             # For symbol-specific, prepare single-symbol time series data
             X, y, feature_names_out, symbols_array, time_vals, resolved_data_config = prepare_cross_sectional_data_for_ranking(
                 mtf_data, target_column, min_cs=1, max_cs_samples=self.max_cs_samples, feature_names=feature_names,
                 feature_time_meta_map=resolved_config.feature_time_meta_map,  # NEW: Pass from resolved_config
                 base_interval_minutes=resolved_config.base_interval_minutes,  # NEW: Pass from resolved_config
-                allow_single_symbol=True  # SYMBOL_SPECIFIC always allows single symbol
+                allow_single_symbol=True,  # SYMBOL_SPECIFIC always allows single symbol
+                requested_mode=requested_mode_for_prep,
+                output_dir=self.output_dir
             )
         elif self.view == "LOSO":
             # LOSO: prepare training data (all symbols except validation symbol)
             X, y, feature_names_out, symbols_array, time_vals, resolved_data_config = prepare_cross_sectional_data_for_ranking(
                 mtf_data, target_column, min_cs=self.min_cs, max_cs_samples=self.max_cs_samples, feature_names=feature_names,
                 feature_time_meta_map=resolved_config.feature_time_meta_map,  # NEW: Pass from resolved_config
-                base_interval_minutes=resolved_config.base_interval_minutes  # NEW: Pass from resolved_config
+                base_interval_minutes=resolved_config.base_interval_minutes,  # NEW: Pass from resolved_config
+                requested_mode=requested_mode_for_prep,
+                output_dir=self.output_dir
             )
             # TODO: Handle validation symbol separately for LOSO
             logger.warning("LOSO view: Using combined data for now (LOSO-specific CV splitter not yet implemented)")
@@ -981,14 +987,40 @@ class RankingHarness:
                     logger.error("❌ All features were quarantined due to unknown lookback! Cannot proceed.")
                     return None, None, None, None, False
             
-            # Step 4: Only pass safe features to compute_feature_lookback_max (strict mode)
+            # Step 4: Filter canonical_map to only include safe features (quarantined features removed)
+            # CRITICAL: canonical_map from precheck contains ALL features including unknown ones
+            # We must filter it to only include features that survived quarantine
+            filtered_canonical_map = {}
+            for feat_name in feature_names:  # feature_names already filtered to safe features
+                feat_key = _feat_key(feat_name)
+                if feat_key in canonical_map:
+                    filtered_canonical_map[feat_key] = canonical_map[feat_key]
+            canonical_map = filtered_canonical_map  # Use filtered map (guaranteed clean)
+            
+            # CRITICAL INVARIANT: Verify no inf lookbacks remain after gatekeeper
+            n_inf_lookback_after = sum(1 for lookback in canonical_map.values() if lookback == float("inf"))
+            if n_inf_lookback_after > 0:
+                raise RuntimeError(
+                    f"🚨 POST_GATEKEEPER INVARIANT VIOLATION: {n_inf_lookback_after} features still have unknown lookback (inf) "
+                    f"after quarantine. This indicates a bug - gatekeeper should have removed all inf lookbacks. "
+                    f"Sample: {[k for k, v in canonical_map.items() if v == float('inf')][:5]}"
+                )
+            
+            max_lookback_value = max(canonical_map.values()) if canonical_map else None
+            max_lookback_str = f"{max_lookback_value:.1f}m" if max_lookback_value is not None else "N/A"
+            logger.info(
+                f"✅ POST_GATEKEEPER: {len(feature_names)} features, 0 inf lookbacks, "
+                f"max_lookback={max_lookback_str}"
+            )
+            
+            # Step 5: Only pass safe features to compute_feature_lookback_max (strict mode)
             if feature_names and len(feature_names) > 0:
                 result = compute_feature_lookback_max(
                     feature_names,
                     interval_minutes=detected_interval,
                     max_lookback_cap_minutes=None,
                     stage="shared_harness_post_gatekeeper",
-                    canonical_lookback_map=canonical_map  # Reuse canonical map (SST)
+                    canonical_lookback_map=canonical_map  # Use filtered canonical map (only safe features)
                 )
                 max_lookback_after_gatekeeper = result.max_minutes
                 fingerprint = result.fingerprint

@@ -1348,10 +1348,23 @@ def compute_feature_lookback_max(
     unknown_features = [f for f, l in feature_lookbacks if l == float("inf")]
     
     if unknown_features:
-        logger.warning(
-            f"⚠️ compute_feature_lookback_max({stage}): {len(unknown_features)} features have unknown lookback (inf). "
-            f"These should have been dropped/quarantined. Sample: {unknown_features[:5]}"
-        )
+        # Check if this is a post-gatekeeper stage (unknown features should not exist here)
+        is_post_gatekeeper = (
+            "post" in stage.lower() and "gatekeeper" in stage.lower()
+        ) or stage in ["POST_GATEKEEPER", "POST_GATEKEEPER_sanity_check", "shared_harness_post_gatekeeper"]
+        
+        if is_post_gatekeeper:
+            # Post-gatekeeper: unknown features indicate a bug - keep as WARNING
+            logger.warning(
+                f"⚠️ compute_feature_lookback_max({stage}): {len(unknown_features)} features have unknown lookback (inf). "
+                f"These should have been dropped/quarantined. Sample: {unknown_features[:5]}"
+            )
+        else:
+            # Pre-gatekeeper: unknown features are expected - downgrade to DEBUG
+            logger.debug(
+                f"compute_feature_lookback_max({stage}): {len(unknown_features)} features have unknown lookback (inf). "
+                f"Expected in pre-enforcement stages; will be quarantined by gatekeeper. Sample: {unknown_features[:5]}"
+            )
     
     actual_max_uncapped = finite_lookbacks[0][1] if finite_lookbacks else 0.0
     

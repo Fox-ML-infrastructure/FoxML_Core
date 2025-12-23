@@ -64,22 +64,32 @@ class MetricsAggregator:
         Returns:
             DataFrame with routing candidates (one row per target or (target, symbol))
         """
+        # Load resolved_mode from run context (SST)
+        resolved_mode = None
+        try:
+            from TRAINING.orchestration.utils.run_context import get_resolved_mode
+            resolved_mode = get_resolved_mode(self.output_dir)
+            if resolved_mode:
+                logger.info(f"📋 Using resolved_mode={resolved_mode} from run context (SST) for metrics aggregation")
+        except Exception as e:
+            logger.debug(f"Could not load resolved_mode from run context: {e}, will use inferred mode")
+        
         rows = []
         
         for target in targets:
-            # Cross-sectional metrics
-            cs_metrics = self._load_cross_sectional_metrics(target)
+            # Cross-sectional metrics (use resolved_mode for mode field and path construction)
+            cs_metrics = self._load_cross_sectional_metrics(target, resolved_mode=resolved_mode)
             if cs_metrics:
                 rows.append(cs_metrics)
                 logger.debug(f"✅ Loaded CS metrics for {target}")
             else:
                 logger.warning(f"⚠️  No CS metrics found for {target}")
             
-            # Symbol-specific metrics
+            # Symbol-specific metrics (use resolved_mode for mode field)
             symbols_found = 0
             symbols_missing = []
             for symbol in symbols:
-                sym_metrics = self._load_symbol_metrics(target, symbol)
+                sym_metrics = self._load_symbol_metrics(target, symbol, resolved_mode=resolved_mode)
                 if sym_metrics:
                     rows.append(sym_metrics)
                     symbols_found += 1
@@ -103,7 +113,7 @@ class MetricsAggregator:
         
         return df
     
-    def _load_cross_sectional_metrics(self, target: str) -> Optional[Dict[str, Any]]:
+    def _load_cross_sectional_metrics(self, target: str, resolved_mode: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Load cross-sectional metrics for a target.
         
@@ -128,7 +138,9 @@ class MetricsAggregator:
             get_target_reproducibility_dir, get_target_metrics_dir
         )
         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
-        target_fs_dir = target_repro_dir / "CROSS_SECTIONAL"
+        # Use resolved_mode for path construction (SST)
+        view_for_path = resolved_mode if resolved_mode else "CROSS_SECTIONAL"
+        target_fs_dir = target_repro_dir / view_for_path
         metadata_path = target_fs_dir / "multi_model_metadata.json"
         confidence_path = target_fs_dir / "target_confidence.json"
         
@@ -282,10 +294,12 @@ class MetricsAggregator:
         if score is None:
             return None
         
+        # Use resolved_mode for mode field (SST)
+        mode_for_row = resolved_mode if resolved_mode else "CROSS_SECTIONAL"
         return {
             "target": target,
             "symbol": None,  # CS has no symbol
-            "mode": "CROSS_SECTIONAL",
+            "mode": mode_for_row,
             "score": float(score),
             "score_ci_low": None,  # Would need to compute from CV
             "score_ci_high": None,
@@ -297,7 +311,7 @@ class MetricsAggregator:
             "stability_metrics": stability_metrics
         }
     
-    def _load_symbol_metrics(self, target: str, symbol: str) -> Optional[Dict[str, Any]]:
+    def _load_symbol_metrics(self, target: str, symbol: str, resolved_mode: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Load symbol-specific metrics for a (target, symbol) pair.
         
@@ -317,10 +331,12 @@ class MetricsAggregator:
         
         target_name_clean = target.replace('/', '_').replace('\\', '_')
         
-        # Try target-first structure first: targets/<target>/reproducibility/SYMBOL_SPECIFIC/symbol=<symbol>/
+        # Try target-first structure first: targets/<target>/reproducibility/{resolved_mode}/symbol=<symbol>/
+        # Use resolved_mode for path construction (SST)
         from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
-        target_fs_dir = target_repro_dir / "SYMBOL_SPECIFIC" / f"symbol={symbol}"
+        view_for_path = resolved_mode if resolved_mode else "SYMBOL_SPECIFIC"
+        target_fs_dir = target_repro_dir / view_for_path / f"symbol={symbol}"
         
         # Look for multi_model_metadata.json in target-first structure
         metadata_path = target_fs_dir / "multi_model_metadata.json"
@@ -338,6 +354,27 @@ class MetricsAggregator:
         failed_families = []
         model_status = "UNKNOWN"
         leakage_status = "UNKNOWN"
+        
+        # Fallback to CROSS_SECTIONAL cohort metadata for sample_size when symbol metrics missing
+        if not metadata_path or not metadata_path.exists():
+            # Try to get sample_size from CROSS_SECTIONAL cohort metadata
+            cs_target_fs_dir = target_repro_dir / "CROSS_SECTIONAL"
+            if cs_target_fs_dir.exists():
+                cohort_dirs = [d for d in cs_target_fs_dir.iterdir() 
+                               if d.is_dir() and d.name.startswith("cohort=")]
+                if cohort_dirs:
+                    latest_cohort = max(cohort_dirs, key=lambda d: d.stat().st_mtime)
+                    metadata_file = latest_cohort / "metadata.json"
+                    if metadata_file.exists():
+                        try:
+                            with open(metadata_file) as f:
+                                cohort_meta = json.load(f)
+                                # Extract sample_size from cohort metadata
+                                sample_size = cohort_meta.get('n_samples', cohort_meta.get('N', None))
+                                if sample_size:
+                                    logger.debug(f"Using CROSS_SECTIONAL cohort metadata for sample_size: {sample_size}")
+                        except Exception as e:
+                            logger.debug(f"Failed to load CROSS_SECTIONAL cohort metadata: {e}")
         
         if metadata_path and metadata_path.exists():
             try:
@@ -388,7 +425,7 @@ class MetricsAggregator:
         return {
             "target": target,
             "symbol": symbol,
-            "mode": "SYMBOL",
+            "mode": resolved_mode if resolved_mode else "SYMBOL",  # Use resolved_mode (SST)
             "score": float(score),
             "score_ci_low": None,
             "score_ci_high": None,
@@ -473,8 +510,28 @@ class MetricsAggregator:
             if len(snapshots) < 2:
                 return None
             
-            # Compute stability metrics
-            metrics = compute_stability_metrics(snapshots, top_k=20)
+            # Filter snapshots by universe_id (symbol) if in SYMBOL_SPECIFIC mode
+            # This prevents comparing stability across different symbols (which is expected to have low overlap)
+            if view == "SYMBOL_SPECIFIC" and symbol:
+                # Filter to snapshots with matching symbol in universe_id
+                symbol_prefix = f"{symbol}:"
+                filtered_snapshots = [
+                    s for s in snapshots
+                    if s.universe_id and (s.universe_id.startswith(symbol_prefix) or s.universe_id == symbol)
+                ]
+                if len(filtered_snapshots) >= 2:
+                    snapshots = filtered_snapshots
+                    logger.debug(f"Filtered stability snapshots to symbol={symbol}: {len(filtered_snapshots)} snapshots")
+                elif len(snapshots) >= 2:
+                    # Fallback: use all snapshots but warn
+                    logger.warning(
+                        f"⚠️  Stability computation: Could not filter snapshots by symbol={symbol}. "
+                        f"Using all {len(snapshots)} snapshots (may include cross-symbol comparisons). "
+                        f"Low overlap may be due to symbol heterogeneity, not instability."
+                    )
+            
+            # Compute stability metrics (with filtering enabled)
+            metrics = compute_stability_metrics(snapshots, top_k=20, filter_by_universe_id=True)
             return metrics
         except Exception as e:
             logger.debug(f"Failed to load stability metrics for {target}/{universe_id}: {e}")

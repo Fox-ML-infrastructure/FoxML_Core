@@ -3,6 +3,11 @@
 # for each (target, symbol) pair based on metrics from feature selection, stability, and leakage detection
 
 routing:
+  # --- Mode Policy (for E2E testing vs production) ---
+  mode_policy: "auto"            # "force" or "auto" - force uses requested_mode exactly, auto allows resolver to flip based on panel size
+  requested_mode: "CROSS_SECTIONAL"  # Only used if mode_policy=force - exact mode to use (no auto-flip)
+  auto_flip_min_symbols: 10      # Only used if mode_policy=auto - minimum symbols required for CROSS_SECTIONAL (below this, flips to SYMBOL_SPECIFIC)
+  
   # --- Dev Mode (for testing with smaller datasets) ---
   dev_mode: false                # If true, use adaptive thresholds for smaller datasets
   dev_mode_min_sample_size: 5_000  # Minimum sample size when dev_mode is enabled

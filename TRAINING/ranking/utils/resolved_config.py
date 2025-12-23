@@ -606,6 +606,45 @@ def create_resolved_config(
                     f"to satisfy audit rule. Embargo remains {embargo_minutes:.1f}m (horizon-based, not feature lookback)."
                 )
                 create_resolved_config._logged_warnings.add(cache_key)
+            
+            # Estimate effective samples after purge/embargo increase
+            # This is approximate - actual depends on CV splits
+            # Formula: n_samples - (purge_minutes / interval_minutes) - (embargo_minutes / interval_minutes)
+            try:
+                from CONFIG.config_loader import get_cfg
+                max_samples = get_cfg("experiment.data.max_samples_per_symbol", default=None)
+                if max_samples:
+                    interval_minutes_val = interval_minutes if interval_minutes is not None else 5.0
+                    if isinstance(interval_minutes_val, str):
+                        # Parse "5m" -> 5.0
+                        from TRAINING.common.utils.duration_parser import parse_duration
+                        interval_minutes_val = parse_duration(interval_minutes_val).to_minutes()
+                    
+                    purge_bars = purge_minutes / interval_minutes_val
+                    embargo_bars = embargo_minutes / interval_minutes_val
+                    effective_samples_estimate = max(0, max_samples - purge_bars - embargo_bars)
+                    
+                    # Warn if effective samples are very small
+                    if effective_samples_estimate < max_samples * 0.3:  # Less than 30% of original
+                        logger.warning(
+                            f"⚠️  Purge inflation ({purge_in:.1f}m → {purge_minutes:.1f}m) significantly reduces "
+                            f"effective samples: {effective_samples_estimate:.0f} / {max_samples} "
+                            f"({effective_samples_estimate/max_samples*100:.1f}% remaining). "
+                            f"This may cause routing to produce 0 jobs. Consider reducing lookback_budget_cap or "
+                            f"increasing max_samples_per_symbol."
+                        )
+                    
+                    # Fail early if effective samples too small (configurable threshold)
+                    min_effective_samples = get_cfg("training_config.routing.min_effective_samples_after_purge", default=100)
+                    if effective_samples_estimate < min_effective_samples:
+                        raise ValueError(
+                            f"Effective samples after purge/embargo ({effective_samples_estimate:.0f}) < "
+                            f"minimum required ({min_effective_samples}). "
+                            f"Purge inflation ({purge_in:.1f}m → {purge_minutes:.1f}m) is collapsing usable data. "
+                            f"Reduce lookback_budget_cap or increase max_samples_per_symbol."
+                        )
+            except Exception as e:
+                logger.debug(f"Could not estimate effective samples: {e}")
         # embargo_minutes stays at embargo_base (NOT increased)
     elif not purge_include_feature_lookback and feature_lookback_max_minutes is not None:
         # Format lookback for logging (handle both float and DurationLike)

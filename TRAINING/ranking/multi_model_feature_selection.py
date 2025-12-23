@@ -4559,9 +4559,21 @@ def save_multi_model_results(
             target_name_clean = target_name.replace('/', '_').replace('\\', '_')
             run_root_dir = run_root(base_output_dir)
             ensure_target_structure(run_root_dir, target_name_clean)
-            # Extract view and symbol from metadata
+            # Extract view and symbol from metadata (view is REQUIRED)
             view = metadata.get('view') if metadata else None
             symbol = metadata.get('symbol') if metadata else None
+            
+            # Validate view is provided
+            if view is None:
+                raise ValueError(
+                    f"view must be provided in metadata for save_multi_model_results. "
+                    f"Metadata keys: {list(metadata.keys()) if metadata else 'None'}"
+                )
+            if view not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
+                raise ValueError(f"Invalid view in metadata: {view}. Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'")
+            if view == "SYMBOL_SPECIFIC" and symbol is None:
+                raise ValueError("symbol required in metadata when view='SYMBOL_SPECIFIC'")
+            
             # Use view/symbol-scoped path helpers
             repro_dir = target_repro_dir(run_root_dir, target_name_clean, view=view, symbol=symbol)
             target_importances_dir = repro_dir / "feature_importances"
@@ -4688,9 +4700,21 @@ def save_multi_model_results(
             from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
             target_name_clean = target_name.replace('/', '_').replace('\\', '_')
             run_root_dir = run_root(base_output_dir)
-            # Extract view and symbol from metadata
+            # Extract view and symbol from metadata (view is REQUIRED)
             view = metadata.get('view') if metadata else None
             symbol = metadata.get('symbol') if metadata else None
+            
+            # Validate view is provided
+            if view is None:
+                raise ValueError(
+                    f"view must be provided in metadata for feature_selection_summary. "
+                    f"Metadata keys: {list(metadata.keys()) if metadata else 'None'}"
+                )
+            if view not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
+                raise ValueError(f"Invalid view in metadata: {view}. Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'")
+            if view == "SYMBOL_SPECIFIC" and symbol is None:
+                raise ValueError("symbol required in metadata when view='SYMBOL_SPECIFIC'")
+            
             # Use view/symbol-scoped path helper
             target_summary_path = target_repro_file_path(run_root_dir, target_name_clean, "feature_selection_summary.json", view=view, symbol=symbol)
             target_summary_path.parent.mkdir(parents=True, exist_ok=True)
@@ -4756,9 +4780,21 @@ def save_multi_model_results(
                 from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
                 target_name_clean = target_name.replace('/', '_').replace('\\', '_')
                 run_root_dir = run_root(base_output_dir)
-                # Extract view and symbol from metadata
+                # Extract view and symbol from metadata (view is REQUIRED)
                 view = metadata.get('view') if metadata else None
                 symbol = metadata.get('symbol') if metadata else None
+                
+                # Validate view is provided
+                if view is None:
+                    raise ValueError(
+                        f"view must be provided in metadata for model_family_status. "
+                        f"Metadata keys: {list(metadata.keys()) if metadata else 'None'}"
+                    )
+                if view not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
+                    raise ValueError(f"Invalid view in metadata: {view}. Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'")
+                if view == "SYMBOL_SPECIFIC" and symbol is None:
+                    raise ValueError("symbol required in metadata when view='SYMBOL_SPECIFIC'")
+                
                 # Use view/symbol-scoped path helper
                 status_path = target_repro_file_path(run_root_dir, target_name_clean, "model_family_status.json", view=view, symbol=symbol)
                 status_path.parent.mkdir(parents=True, exist_ok=True)
@@ -4812,9 +4848,21 @@ def save_multi_model_results(
                     from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
                     target_name_clean = target_name.replace('/', '_').replace('\\', '_')
                     run_root_dir = run_root(base_output_dir)
-                    # Extract view and symbol from metadata
+                    # Extract view and symbol from metadata (view is REQUIRED)
                     view = metadata.get('view') if metadata else None
                     symbol = metadata.get('symbol') if metadata else None
+                    
+                    # Validate view is provided
+                    if view is None:
+                        raise ValueError(
+                            f"view must be provided in metadata for target_confidence. "
+                            f"Metadata keys: {list(metadata.keys()) if metadata else 'None'}"
+                        )
+                    if view not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
+                        raise ValueError(f"Invalid view in metadata: {view}. Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'")
+                    if view == "SYMBOL_SPECIFIC" and symbol is None:
+                        raise ValueError("symbol required in metadata when view='SYMBOL_SPECIFIC'")
+                    
                     # Use view/symbol-scoped path helper
                     confidence_path = target_repro_file_path(run_root_dir, target_name_clean, "target_confidence.json", view=view, symbol=symbol)
                     confidence_path.parent.mkdir(parents=True, exist_ok=True)

@@ -107,6 +107,11 @@ TARGET_PATTERNS = [
     # CRITICAL: Route to binary classification, not regression
     (r'^y_will_swing_(high|low)_\d+[mhd]_[0-9.]+$',
      TaskSpec('binary', 'binary', ['roc_auc', 'log_loss'], label_type='int32')),
+    
+    # --- Binary classification: *_oc_same_day targets ---
+    # These are 0/1 labels indicating whether open-close same day condition is met
+    (r'^.*_oc_same_day.*$',
+     TaskSpec('binary', 'binary', ['roc_auc', 'log_loss'], label_type='int32')),
 ]
 
 

@@ -358,14 +358,24 @@ def run_root(output_dir: Path) -> Path:
 
 def training_results_root(run_root: Path) -> Path:
     """
-    Get training_results/ directory.
+    DEPRECATED: Get training_results/ directory.
+    
+    This function is deprecated. All models now go to targets/<target>/models/.
+    Use ArtifactPaths.model_dir() instead.
     
     Args:
         run_root: Run root directory
     
     Returns:
-        Path to training_results/ directory
+        Path to training_results/ directory (deprecated - for backward compatibility only)
     """
+    import warnings
+    warnings.warn(
+        "training_results_root() is deprecated. Use ArtifactPaths.model_dir() instead. "
+        "All models now go to targets/<target>/models/.",
+        DeprecationWarning,
+        stacklevel=2
+    )
     return Path(run_root) / "training_results"
 
 
@@ -386,53 +396,76 @@ def globals_dir(run_root: Path, kind: Optional[str] = None) -> Path:
     return base
 
 
-def target_repro_dir(run_root: Path, target: str, view: Optional[str] = None, symbol: Optional[str] = None) -> Path:
+def target_repro_dir(run_root: Path, target: str, view: str, symbol: Optional[str] = None) -> Path:
     """
-    Get reproducibility directory for target, optionally scoped by view/symbol.
+    Get reproducibility directory for target, scoped by view/symbol.
     
     Args:
         run_root: Run root directory
         target: Target name
-        view: Optional view name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
+        view: REQUIRED view name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
         symbol: Optional symbol name (required if view is "SYMBOL_SPECIFIC")
     
     Returns:
-        - If view=None: targets/{target}/reproducibility/
         - If view="CROSS_SECTIONAL": targets/{target}/reproducibility/CROSS_SECTIONAL/
         - If view="SYMBOL_SPECIFIC" and symbol: targets/{target}/reproducibility/SYMBOL_SPECIFIC/symbol={symbol}/
+    
+    Raises:
+        ValueError: If view is None or invalid, or if SYMBOL_SPECIFIC without symbol
+    
+    Note:
+        This function uses the passed view parameter. Callers should pass resolved_mode from run context (SST)
+        to ensure consistency. If view differs from resolved_mode, a warning is logged.
     """
+    if view is None:
+        raise ValueError("view parameter is required for feature selection artifacts")
+    if view not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
+        raise ValueError(f"Invalid view: {view}. Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'")
+    if view == "SYMBOL_SPECIFIC" and symbol is None:
+        raise ValueError("symbol parameter is required when view='SYMBOL_SPECIFIC'")
+    
+    # Try to load resolved_mode from run context (SST) and warn if mismatch
+    try:
+        from TRAINING.orchestration.utils.run_context import get_resolved_mode
+        import logging
+        logger = logging.getLogger(__name__)
+        resolved_mode = get_resolved_mode(run_root)
+        if resolved_mode and resolved_mode != view:
+            logger.warning(
+                f"⚠️  View mismatch: passed view={view} but resolved_mode={resolved_mode} from run context (SST). "
+                f"Using passed view={view} for path construction, but this may cause inconsistencies. "
+                f"Consider passing resolved_mode instead."
+            )
+    except Exception:
+        pass  # Silently ignore if run context not available
+    
     base_repro_dir = get_target_reproducibility_dir(Path(run_root), target)
     
     if view == "CROSS_SECTIONAL":
         return base_repro_dir / "CROSS_SECTIONAL"
-    elif view == "SYMBOL_SPECIFIC" and symbol:
+    else:  # SYMBOL_SPECIFIC
         return base_repro_dir / "SYMBOL_SPECIFIC" / f"symbol={symbol}"
-    elif view is None:
-        return base_repro_dir
-    else:
-        # Invalid combination - log warning and return base
-        if view == "SYMBOL_SPECIFIC" and not symbol:
-            logger.warning(f"SYMBOL_SPECIFIC view requires symbol parameter, returning base reproducibility directory")
-        return base_repro_dir
 
 
-def target_repro_file_path(run_root: Path, target: str, filename: str, view: Optional[str] = None, symbol: Optional[str] = None) -> Path:
+def target_repro_file_path(run_root: Path, target: str, filename: str, view: str, symbol: Optional[str] = None) -> Path:
     """
-    Get file path in reproducibility directory (for reading with fallback or writing).
+    Get file path in view-scoped reproducibility directory.
     
     This function constructs the path to a file in the reproducibility directory,
-    scoped by view/symbol if provided. For reading, callers should check both
-    new (view/symbol-scoped) and old (root) locations.
+    scoped by view/symbol. For feature selection artifacts, view is REQUIRED.
     
     Args:
         run_root: Run root directory
         target: Target name
         filename: Filename (e.g., "selected_features.txt")
-        view: Optional view name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
+        view: REQUIRED view name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
         symbol: Optional symbol name (required if view is "SYMBOL_SPECIFIC")
     
     Returns:
-        Path to file in reproducibility directory (view/symbol-scoped if provided)
+        Path to file in view-scoped reproducibility directory
+    
+    Raises:
+        ValueError: If view is None or invalid, or if SYMBOL_SPECIFIC without symbol
     """
     repro_dir = target_repro_dir(run_root, target, view, symbol)
     return repro_dir / filename

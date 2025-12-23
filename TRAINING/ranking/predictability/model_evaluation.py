@@ -2032,7 +2032,7 @@ def train_and_evaluate_models(
         # With 50 symbols, 1 bar = 50 rows. Using row counts causes catastrophic leakage.
         # We MUST fail loudly rather than silently producing invalid results.
         raise ValueError(
-            f"CRITICAL: time_vals is required for panel data (cross-sectional). "
+            f"CRITICAL: time_vals is required for panel data. "
             f"Row-count based purging is INVALID when multiple symbols share the same timestamp. "
             f"With {len(X)} samples, row-count purging would cause 100% data leakage. "
             f"Please ensure cross_sectional_data.py returns time_vals."
@@ -3658,7 +3658,7 @@ def train_and_evaluate_models(
                         logger.info(f"     ✅ Fold {fold_idx + 1}: train_n={train_n}, val_n={val_n}")
                     
                     # Ranking/group structure check (if groups are used)
-                    # Note: For cross-sectional ranking, groups are typically timestamps
+                    # Note: For panel data ranking, groups are typically timestamps
                     # If CatBoost is using ranking objective, we'd need group IDs here
                     # For now, just log if we detect ranking mode
                     if 'objective' in params and 'ranking' in str(params.get('objective', '')).lower():
@@ -5145,12 +5145,27 @@ def evaluate_target_predictability(
         logger.warning(f"symbol={symbol} provided but view=CROSS_SECTIONAL, ignoring symbol")
         symbol = None
     
-    view_display = f"{view}" + (f" (symbol={symbol})" if symbol else "")
-    logger.info(f"\n{'='*60}")
-    logger.info(f"Evaluating: {display_name} ({target_column}) - {view_display}")
-    logger.info(f"{'='*60}")
+    # Load resolved_mode from run context (SST) if available
+    # For per-symbol loops, use resolved_mode as requested_mode to prevent mode contract violations
+    resolved_mode_from_context = None
+    requested_mode_from_context = view  # Default to view parameter
+    try:
+        from TRAINING.orchestration.utils.run_context import get_resolved_mode, load_run_context
+        if output_dir:
+            context = load_run_context(output_dir)
+            if context:
+                resolved_mode_from_context = context.get("resolved_mode")
+                # For per-symbol loops (SYMBOL_SPECIFIC with single symbol), use resolved_mode as requested_mode
+                # This prevents the resolver from trying to change resolved_mode to SINGLE_SYMBOL_TS
+                if view == "SYMBOL_SPECIFIC" and resolved_mode_from_context:
+                    requested_mode_from_context = resolved_mode_from_context
+                else:
+                    requested_mode_from_context = context.get("requested_mode") or view
+    except Exception as e:
+        logger.debug(f"Could not load resolved_mode from run context: {e}")
     
     # Load data based on view
+    # Note: Header log moved to after data prep to show resolved mode
     from TRAINING.ranking.utils.cross_sectional_data import load_mtf_data_for_ranking, prepare_cross_sectional_data_for_ranking
     from TRAINING.ranking.utils.leakage_filtering import filter_features_for_target
     from TRAINING.ranking.utils.target_conditional_exclusions import (
@@ -5417,7 +5432,9 @@ def evaluate_target_predictability(
             mtf_data, target_column, min_cs=1, max_cs_samples=max_cs_samples, feature_names=safe_columns,
             feature_time_meta_map=resolved_config.feature_time_meta_map if resolved_config else None,
             base_interval_minutes=resolved_config.base_interval_minutes if resolved_config else None,
-            allow_single_symbol=True  # Allow single symbol for SYMBOL_SPECIFIC view
+            allow_single_symbol=True,  # Allow single symbol for SYMBOL_SPECIFIC view
+            requested_mode=requested_mode_from_context,
+            output_dir=output_dir
         )
         # Verify we only have one symbol
         unique_symbols = set(symbols_array) if symbols_array is not None else set()
@@ -5426,13 +5443,17 @@ def evaluate_target_predictability(
     elif view == "LOSO":
         # LOSO: prepare training data (all symbols except validation symbol)
         X_train, y_train, feature_names_train, symbols_array_train, time_vals_train, resolved_data_config_train = prepare_cross_sectional_data_for_ranking(
-            mtf_data, target_column, min_cs=min_cs, max_cs_samples=max_cs_samples, feature_names=safe_columns
+            mtf_data, target_column, min_cs=min_cs, max_cs_samples=max_cs_samples, feature_names=safe_columns,
+            requested_mode=requested_mode_from_context,
+            output_dir=output_dir
         )
         # Load validation symbol data separately
         validation_mtf_data = load_mtf_data_for_ranking(data_dir, [validation_symbol], max_rows_per_symbol=max_rows_per_symbol)
         X_val, y_val, feature_names_val, symbols_array_val, time_vals_val, resolved_data_config_val = prepare_cross_sectional_data_for_ranking(
             validation_mtf_data, target_column, min_cs=1, max_cs_samples=None, feature_names=safe_columns,
-            allow_single_symbol=True  # LOSO validation symbol is intentionally single-symbol
+            allow_single_symbol=True,  # LOSO validation symbol is intentionally single-symbol
+            requested_mode=requested_mode_from_context,
+            output_dir=output_dir
         )
         # For LOSO, we'll use a special CV that trains on X_train and validates on X_val
         # For now, combine them and use a custom splitter (will be implemented in train_and_evaluate_models)
@@ -5446,8 +5467,34 @@ def evaluate_target_predictability(
     else:
         # CROSS_SECTIONAL: standard pooled data
         X, y, feature_names, symbols_array, time_vals, resolved_data_config = prepare_cross_sectional_data_for_ranking(
-            mtf_data, target_column, min_cs=min_cs, max_cs_samples=max_cs_samples, feature_names=safe_columns
+            mtf_data, target_column, min_cs=min_cs, max_cs_samples=max_cs_samples, feature_names=safe_columns,
+            requested_mode=requested_mode_from_context,
+            output_dir=output_dir
         )
+    
+    # Update header log after data prep to show resolved_mode
+    resolved_mode_final = None
+    if resolved_data_config:
+        resolved_mode_final = resolved_data_config.get("resolved_mode") or resolved_data_config.get("resolved_data_mode")
+    if not resolved_mode_final:
+        resolved_mode_final = resolved_mode_from_context
+    
+    requested_mode_final = requested_mode_from_context
+    if resolved_data_config:
+        requested_mode_final = resolved_data_config.get("requested_mode") or requested_mode_final
+    
+    # Header log showing both requested and resolved modes (moved here after data prep)
+    symbol_display = f" (symbol={symbol})" if symbol else ""
+    if resolved_mode_final and resolved_mode_final != requested_mode_final:
+        view_display = f"requested={requested_mode_final}, resolved={resolved_mode_final}{symbol_display}"
+    else:
+        view_display = f"{requested_mode_final or 'N/A'}{symbol_display}"
+        if resolved_mode_final and resolved_mode_final != requested_mode_final:
+            view_display += f" (resolved={resolved_mode_final})"
+    
+    logger.info(f"\n{'='*60}")
+    logger.info(f"Evaluating: {display_name} ({target_column}) - {view_display}")
+    logger.info(f"{'='*60}")
     
     # Update feature counts after data preparation
     if feature_names is not None:
@@ -6638,8 +6685,12 @@ def evaluate_target_predictability(
     )
     
     # Detect potential leakage (use task-appropriate thresholds)
-    leakage_flag = detect_leakage(mean_score, composite, mean_importance, 
-                                  target_name=target_name, model_scores=model_means, task_type=final_task_type)
+    # Pass X, y, time_vals, symbols for triage checks if available
+    leakage_flag = detect_leakage(
+        mean_score, composite, mean_importance, 
+        target_name=target_name, model_scores=model_means, task_type=final_task_type,
+        X=X, y=y, time_vals=time_vals, symbols=symbols_array if 'symbols_array' in locals() else None
+    )
     
     # Build detailed leakage flags for auto-rerun logic
     leakage_flags = {

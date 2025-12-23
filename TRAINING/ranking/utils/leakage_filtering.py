@@ -669,6 +669,33 @@ def filter_features_for_target(
                 # In training mode, use registry strictly
                 registry_allowed = registry.get_allowed_features(safe_columns, registry_horizon, verbose=verbose)
                 registry_allowed_set = set(registry_allowed)
+                
+                # CRITICAL: If registry returns 0 features explicitly, check dev_mode
+                if len(registry_allowed) == 0:
+                    # Check dev_mode
+                    dev_mode = False
+                    try:
+                        from CONFIG.config_loader import get_cfg
+                        dev_mode = get_cfg("training_config.routing.dev_mode", default=False, config_name="training_config")
+                    except Exception:
+                        pass
+                    
+                    if not dev_mode:
+                        raise ValueError(
+                            f"Feature registry returned 0 allowed features for target '{target_column}' "
+                            f"at horizon={target_horizon_minutes:.1f}m (horizon_bars={target_horizon_bars}). "
+                            f"This indicates missing registry entries. "
+                            f"Add features to feature_registry.yaml or enable dev_mode for testing."
+                        )
+                    else:
+                        logger.warning(
+                            f"⚠️ DEV_MODE: Registry returned 0 features for {target_column}, "
+                            f"allowing permissive fallback (pattern-based filtering). "
+                            f"This run will be marked as DEV_MODE_PERMISSIVE_REGISTRY."
+                        )
+                        # Continue with pattern-based filtering, but mark in metadata
+                        # The metadata stamping will happen in the calling code
+                
                 if verbose:
                     if target_horizon_minutes is not None and target_horizon_bars is not None:
                         logger.info(f"  Feature registry: {len(registry_allowed)} features explicitly allowed for horizon_minutes={target_horizon_minutes:.1f}m, horizon_bars={target_horizon_bars} bars @ interval={data_interval_minutes:.1f}m")
