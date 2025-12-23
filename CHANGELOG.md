@@ -16,6 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-23 (Training Pipeline Organization and Config Fixes)
+- **Refactoring**: Comprehensive refactoring to fix blocking correctness bugs, data integrity issues, and structural cleanup with centralized path SST
+- **Correctness**: Quarantined unknown lookback features before budget call, preventing RuntimeError from features with `inf` lookback
+- **Data Integrity**: Fixed reproducibility files and feature importances to use view/symbol subdirectories, eliminating overwrites across views/symbols
+- **Config Correctness**: Split model families config - `training.model_families` for training, `feature_selection.model_families` for feature selection
+- **Structure**: Removed legacy METRICS/ creation, reorganized globals/ into subfolders (routing/, training/, summaries/)
+- **Impact**: Prevents data corruption, fixes config routing, improves organization, maintains backward compatibility
+- **Files Changed**: `target_first_paths.py`, `shared_ranking_harness.py`, `feature_selection_reporting.py`, `multi_model_feature_selection.py`, `feature_selector.py`, `intelligent_trainer.py`, `training_plan_consumer.py`, `routing_integration.py`, `metrics_aggregator.py`, `training_router.py`, `training_plan_generator.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-23-training-pipeline-organization-and-config-fixes.md)
+
 #### 2025-12-23 (Boruta Timeout and CatBoost Pickle Error Fixes)
 - **Bug Fix**: Improved Boruta timeout error handling to detect timeout errors even when wrapped as ValueError
 - **Bug Fix**: Fixed CatBoost pickle error by moving importance worker function to module level for multiprocessing

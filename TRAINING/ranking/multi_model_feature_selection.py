@@ -4548,20 +4548,25 @@ def save_multi_model_results(
             break
         base_output_dir = base_output_dir.parent
     
-    # Set up target-first structure if we found target and base directory
+    # Set up target-first structure if we found target and base directory (view/symbol-scoped)
     target_importances_dir = None
     target_selected_features_path = None
     if target_name and base_output_dir.exists():
         try:
             from TRAINING.orchestration.utils.target_first_paths import (
-                get_target_reproducibility_dir, ensure_target_structure
+                run_root, target_repro_dir, target_repro_file_path, ensure_target_structure
             )
             target_name_clean = target_name.replace('/', '_').replace('\\', '_')
-            ensure_target_structure(base_output_dir, target_name_clean)
-            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
-            target_importances_dir = target_repro_dir / "feature_importances"
+            run_root_dir = run_root(base_output_dir)
+            ensure_target_structure(run_root_dir, target_name_clean)
+            # Extract view and symbol from metadata
+            view = metadata.get('view') if metadata else None
+            symbol = metadata.get('symbol') if metadata else None
+            # Use view/symbol-scoped path helpers
+            repro_dir = target_repro_dir(run_root_dir, target_name_clean, view=view, symbol=symbol)
+            target_importances_dir = repro_dir / "feature_importances"
             target_importances_dir.mkdir(parents=True, exist_ok=True)
-            target_selected_features_path = target_repro_dir / "selected_features.txt"
+            target_selected_features_path = target_repro_file_path(run_root_dir, target_name_clean, "selected_features.txt", view=view, symbol=symbol)
         except Exception as e:
             logger.debug(f"Failed to set up target-first structure: {e}")
     
@@ -4677,13 +4682,18 @@ def save_multi_model_results(
 
     # Save summary metadata at target level (detailed metadata is in cohort/ from reproducibility tracker)
     # This matches TARGET_RANKING structure where summary files are at target level
-    # Write only to target-first structure (no legacy root-level writes)
+    # Write only to target-first structure (no legacy root-level writes) - view/symbol-scoped
     if target_name and base_output_dir.exists():
         try:
-            from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+            from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
             target_name_clean = target_name.replace('/', '_').replace('\\', '_')
-            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
-            target_summary_path = target_repro_dir / "feature_selection_summary.json"
+            run_root_dir = run_root(base_output_dir)
+            # Extract view and symbol from metadata
+            view = metadata.get('view') if metadata else None
+            symbol = metadata.get('symbol') if metadata else None
+            # Use view/symbol-scoped path helper
+            target_summary_path = target_repro_file_path(run_root_dir, target_name_clean, "feature_selection_summary.json", view=view, symbol=symbol)
+            target_summary_path.parent.mkdir(parents=True, exist_ok=True)
             with open(target_summary_path, "w") as f:
                 json.dump(metadata, f, indent=2)
             logger.info(f"✅ Saved feature selection summary to {target_summary_path}")
@@ -4740,13 +4750,18 @@ def save_multi_model_results(
         for family_summary in status_summary.values():
             family_summary['error_types'] = list(family_summary['error_types'])
         
-        # Save detailed status file → target-first structure only (matching TARGET_RANKING structure)
+        # Save detailed status file → target-first structure only (matching TARGET_RANKING structure) - view/symbol-scoped
         if target_name and base_output_dir.exists():
             try:
-                from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+                from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
                 target_name_clean = target_name.replace('/', '_').replace('\\', '_')
-                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
-                status_path = target_repro_dir / "model_family_status.json"
+                run_root_dir = run_root(base_output_dir)
+                # Extract view and symbol from metadata
+                view = metadata.get('view') if metadata else None
+                symbol = metadata.get('symbol') if metadata else None
+                # Use view/symbol-scoped path helper
+                status_path = target_repro_file_path(run_root_dir, target_name_clean, "model_family_status.json", view=view, symbol=symbol)
+                status_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(status_path, "w") as f:
                     json.dump({
                         'summary': status_summary,
@@ -4791,13 +4806,18 @@ def save_multi_model_results(
                 top_k=None  # Will use config or default
             )
             
-            # Save target confidence at target-first structure only (matching TARGET_RANKING structure)
+            # Save target confidence at target-first structure only (matching TARGET_RANKING structure) - view/symbol-scoped
             if target_name and base_output_dir.exists():
                 try:
-                    from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+                    from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
                     target_name_clean = target_name.replace('/', '_').replace('\\', '_')
-                    target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
-                    confidence_path = target_repro_dir / "target_confidence.json"
+                    run_root_dir = run_root(base_output_dir)
+                    # Extract view and symbol from metadata
+                    view = metadata.get('view') if metadata else None
+                    symbol = metadata.get('symbol') if metadata else None
+                    # Use view/symbol-scoped path helper
+                    confidence_path = target_repro_file_path(run_root_dir, target_name_clean, "target_confidence.json", view=view, symbol=symbol)
+                    confidence_path.parent.mkdir(parents=True, exist_ok=True)
                     with open(confidence_path, "w") as f:
                         json.dump(confidence_metrics, f, indent=2)
                     

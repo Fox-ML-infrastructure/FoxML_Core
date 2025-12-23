@@ -935,19 +935,66 @@ class RankingHarness:
             logger=logger
         )
         
-        # Recompute resolved_config.feature_lookback_max AFTER Final Gatekeeper
+        # CRITICAL: Quarantine unknown lookback features BEFORE calling compute_feature_lookback_max
+        # Invariant: "Budget computation assumes sanitized features"
+        # We must filter out features with inf lookback before any budget computation
         if feature_names and len(feature_names) > 0:
-            result = compute_feature_lookback_max(
+            from TRAINING.ranking.utils.leakage_budget import compute_feature_lookback_max, _feat_key
+            
+            # Step 1: Compute canonical map (non-throwing) to identify unknown features
+            # Use a non-strict stage name to avoid raising on unknown features
+            lookback_result_precheck = compute_feature_lookback_max(
                 feature_names,
                 interval_minutes=detected_interval,
                 max_lookback_cap_minutes=None,
-                stage="shared_harness_post_gatekeeper"
+                stage="shared_harness_pre_budget_check"  # Non-strict stage for pre-check
             )
-            max_lookback_after_gatekeeper = result.max_minutes
-            fingerprint = result.fingerprint
-            if max_lookback_after_gatekeeper is not None:
-                resolved_config.feature_lookback_max_minutes = max_lookback_after_gatekeeper
-                logger.debug(f"📊 Updated feature_lookback_max after Final Gatekeeper: {max_lookback_after_gatekeeper:.1f}m (from {len(feature_names)} remaining features)")
+            canonical_map = lookback_result_precheck.canonical_lookback_map if hasattr(lookback_result_precheck, 'canonical_lookback_map') else {}
+            
+            # Step 2: Identify and quarantine features with unknown lookback (inf)
+            unknown_features = []
+            safe_features = []
+            unknown_indices = []
+            
+            for i, feat_name in enumerate(feature_names):
+                feat_key = _feat_key(feat_name)
+                lookback = canonical_map.get(feat_key)
+                
+                if lookback is None or lookback == float("inf"):
+                    unknown_features.append(feat_name)
+                    unknown_indices.append(i)
+                else:
+                    safe_features.append(feat_name)
+            
+            # Step 3: Quarantine unknown features (remove from X and feature_names)
+            if unknown_features:
+                logger.warning(
+                    f"  ⚠️  Quarantining {len(unknown_features)} features with unknown lookback (inf) before budget computation: {unknown_features[:5]}{'...' if len(unknown_features) > 5 else ''}"
+                )
+                # Remove from X (numpy array)
+                if len(unknown_indices) > 0:
+                    X = np.delete(X, unknown_indices, axis=1)
+                # Update feature_names to only safe features
+                feature_names = safe_features
+                
+                if len(feature_names) == 0:
+                    logger.error("❌ All features were quarantined due to unknown lookback! Cannot proceed.")
+                    return None, None, None, None, False
+            
+            # Step 4: Only pass safe features to compute_feature_lookback_max (strict mode)
+            if feature_names and len(feature_names) > 0:
+                result = compute_feature_lookback_max(
+                    feature_names,
+                    interval_minutes=detected_interval,
+                    max_lookback_cap_minutes=None,
+                    stage="shared_harness_post_gatekeeper",
+                    canonical_lookback_map=canonical_map  # Reuse canonical map (SST)
+                )
+                max_lookback_after_gatekeeper = result.max_minutes
+                fingerprint = result.fingerprint
+                if max_lookback_after_gatekeeper is not None:
+                    resolved_config.feature_lookback_max_minutes = max_lookback_after_gatekeeper
+                    logger.debug(f"📊 Updated feature_lookback_max after Final Gatekeeper: {max_lookback_after_gatekeeper:.1f}m (from {len(feature_names)} remaining features)")
         
         if X.shape[1] == 0:
             logger.error("❌ FINAL GATEKEEPER: All features were dropped! Cannot proceed.")

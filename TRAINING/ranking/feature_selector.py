@@ -1626,15 +1626,29 @@ def select_features_for_target(
                     else:
                         symbol_importances[result.symbol][result.model_family] = dict(result.importance_scores)
                 
-                # Save per-symbol importances
-                for sym, importances_dict in symbol_importances.items():
+                # CRITICAL: If view is CROSS_SECTIONAL, aggregate importances across symbols and save once
+                # If view is SYMBOL_SPECIFIC, save per-symbol
+                if view == "CROSS_SECTIONAL":
+                    from TRAINING.ranking.feature_selection_reporting import aggregate_importances_cross_sectional
+                    aggregated_importances = aggregate_importances_cross_sectional(symbol_importances)
+                    # Save once to CROSS_SECTIONAL/feature_importances/
                     save_feature_importances_for_reproducibility(
-                        all_feature_importances=importances_dict,
+                        all_feature_importances=aggregated_importances,
                         target_column=target_column,
                         output_dir=output_dir,
-                        view="SYMBOL_SPECIFIC",  # Per-symbol processing is SYMBOL_SPECIFIC
-                        symbol=sym
+                        view="CROSS_SECTIONAL",
+                        symbol=None
                     )
+                else:
+                    # Save per-symbol importances for SYMBOL_SPECIFIC view
+                    for sym, importances_dict in symbol_importances.items():
+                        save_feature_importances_for_reproducibility(
+                            all_feature_importances=importances_dict,
+                            target_column=target_column,
+                            output_dir=output_dir,
+                            view="SYMBOL_SPECIFIC",
+                            symbol=sym
+                        )
             
             # Prepare dual-view results for saving (if we have both views)
             # Note: This function is called once per view, so we save what we have

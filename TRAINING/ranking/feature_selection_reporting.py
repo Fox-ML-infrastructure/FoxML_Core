@@ -194,16 +194,17 @@ def save_feature_selection_rankings(
         'recommendation': _get_recommendation(row)
     } for i, (_, row) in enumerate(summary_df_sorted.iterrows())])
     
-    # Save CSV to target-first structure only
+    # Save CSV to target-first structure only (view/symbol-scoped)
     # NOTE: File naming convention to distinguish from target ranking:
     #   - Feature selection uses: "feature_selection_rankings.csv" (feature rankings for a target)
     #   - Target ranking uses: "target_predictability_rankings.csv" (target rankings)
     #   - These are distinct files with different purposes, no conflicts
     try:
-        from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
-        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
-        target_repro_dir.mkdir(parents=True, exist_ok=True)
-        target_csv_path = target_repro_dir / "feature_selection_rankings.csv"
+        from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
+        run_root_dir = run_root(base_output_dir)
+        # Use view/symbol-scoped path helper
+        target_csv_path = target_repro_file_path(run_root_dir, target_name_clean, "feature_selection_rankings.csv", view=view, symbol=symbol)
+        target_csv_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(target_csv_path, index=False)
         logger.info(f"✅ Saved feature selection rankings CSV to {target_csv_path}")
     except Exception as e:
@@ -256,9 +257,9 @@ def save_feature_selection_rankings(
     else:
         logger.warning(f"Target decision directory not available, skipping target-first save")
     
-    # Save selected features list to target-first structure only
+    # Save selected features list to target-first structure only (view/symbol-scoped)
     try:
-        from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+        from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
         # Validate base_output_dir before using it
         if base_output_dir == Path('/') or not base_output_dir.is_absolute() or str(base_output_dir) == '/':
             logger.warning(f"Invalid base_output_dir for selected features: {base_output_dir}, using output_dir: {output_dir}")
@@ -266,9 +267,10 @@ def save_feature_selection_rankings(
         if not base_output_dir.exists():
             logger.warning(f"base_output_dir does not exist for selected features: {base_output_dir}, using output_dir: {output_dir}")
             base_output_dir = output_dir
-        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
-        target_repro_dir.mkdir(parents=True, exist_ok=True)
-        target_selected_path = target_repro_dir / "selected_features.txt"
+        run_root_dir = run_root(base_output_dir)
+        # Use view/symbol-scoped path helper
+        target_selected_path = target_repro_file_path(run_root_dir, target_name_clean, "selected_features.txt", view=view, symbol=symbol)
+        target_selected_path.parent.mkdir(parents=True, exist_ok=True)
         with open(target_selected_path, "w") as f:
             for feature in selected_features:
                 f.write(f"{feature}\n")
@@ -318,6 +320,52 @@ def save_dual_view_feature_selections(
     # No legacy writes needed - target-first structure is the only source of truth
     logger.debug(f"save_dual_view_feature_selections called for {target_column} (no-op, data already in target-first structure)")
     pass
+
+
+def aggregate_importances_cross_sectional(symbol_importances_by_symbol: Dict[str, Dict[str, Dict[str, float]]]) -> Dict[str, Dict[str, float]]:
+    """
+    Aggregate feature importances across symbols for CROSS_SECTIONAL view.
+    
+    Uses mean of normalized importances per model family (deterministic rule).
+    
+    Args:
+        symbol_importances_by_symbol: Dict of {symbol: {model_family: {feature: importance}}}
+    
+    Returns:
+        Aggregated dict of {model_family: {feature: mean_importance}}
+    """
+    if not symbol_importances_by_symbol:
+        return {}
+    
+    # Collect all model families across all symbols
+    all_model_families = set()
+    for symbol_importances in symbol_importances_by_symbol.values():
+        all_model_families.update(symbol_importances.keys())
+    
+    aggregated = {}
+    for model_family in all_model_families:
+        # Collect all features for this model family across all symbols
+        all_features = set()
+        for symbol_importances in symbol_importances_by_symbol.values():
+            if model_family in symbol_importances:
+                all_features.update(symbol_importances[model_family].keys())
+        
+        # Aggregate importances per feature (mean across symbols)
+        feature_importances = {}
+        for feature in all_features:
+            importances = []
+            for symbol_importances in symbol_importances_by_symbol.values():
+                if model_family in symbol_importances and feature in symbol_importances[model_family]:
+                    importances.append(symbol_importances[model_family][feature])
+            
+            if importances:
+                # Use mean (deterministic rule)
+                feature_importances[feature] = sum(importances) / len(importances)
+        
+        if feature_importances:
+            aggregated[model_family] = feature_importances
+    
+    return aggregated
 
 
 def save_feature_importances_for_reproducibility(
@@ -374,19 +422,19 @@ def save_feature_importances_for_reproducibility(
     
     target_name_clean = target_column.replace('/', '_').replace('\\', '_')
     
-    # Save to target-first structure only
+    # Save to target-first structure only (view/symbol-scoped)
     try:
-        from TRAINING.orchestration.utils.target_first_paths import (
-            get_target_reproducibility_dir, ensure_target_structure
-        )
+        from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_dir, ensure_target_structure
         # Validate base_output_dir before using it
         if not base_output_dir.exists():
             logger.warning(f"base_output_dir does not exist for feature importances: {base_output_dir}, using output_dir: {output_dir}")
             base_output_dir = output_dir
         
-        ensure_target_structure(base_output_dir, target_name_clean)
-        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
-        importances_dir = target_repro_dir / "feature_importances"
+        run_root_dir = run_root(base_output_dir)
+        ensure_target_structure(run_root_dir, target_name_clean)
+        # Use view/symbol-scoped path helper
+        repro_dir = target_repro_dir(run_root_dir, target_name_clean, view=view, symbol=symbol)
+        importances_dir = repro_dir / "feature_importances"
         importances_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
         logger.warning(f"Failed to set up target-first structure for feature importances: {e}")
@@ -394,7 +442,7 @@ def save_feature_importances_for_reproducibility(
         logger.warning(f"  output_dir: {output_dir} (exists: {output_dir.exists()})")
         import traceback
         logger.debug(f"Traceback: {traceback.format_exc()}")
-        # Fallback: use output_dir directly
+        # Fallback: use output_dir directly (legacy path)
         importances_dir = output_dir / "feature_importances"
         importances_dir.mkdir(parents=True, exist_ok=True)
     

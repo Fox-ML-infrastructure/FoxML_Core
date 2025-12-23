@@ -329,3 +329,138 @@ def get_cohort_dir_from_metrics_path(metrics_path: Path, base_output_dir: Option
     
     return repro_dir
 
+
+def run_root(output_dir: Path) -> Path:
+    """
+    Get run root directory (has targets/, globals/, cache/).
+    
+    Walks up from output_dir to find the run directory that contains
+    targets/, globals/, or cache/ directories.
+    
+    Args:
+        output_dir: Any path within the run directory
+    
+    Returns:
+        Path to run root directory
+    """
+    current = Path(output_dir).resolve()
+    for _ in range(20):  # Limit search depth
+        if (current / "targets").exists() or (current / "globals").exists() or (current / "cache").exists():
+            return current
+        if not current.parent.exists() or current.parent == current:
+            break
+        current = current.parent
+    
+    # Fallback: return original if we can't find run root
+    logger.warning(f"Could not find run root from {output_dir}, using as-is")
+    return Path(output_dir).resolve()
+
+
+def training_results_root(run_root: Path) -> Path:
+    """
+    Get training_results/ directory.
+    
+    Args:
+        run_root: Run root directory
+    
+    Returns:
+        Path to training_results/ directory
+    """
+    return Path(run_root) / "training_results"
+
+
+def globals_dir(run_root: Path, kind: Optional[str] = None) -> Path:
+    """
+    Get globals directory with optional subfolder.
+    
+    Args:
+        run_root: Run root directory
+        kind: Optional subfolder name ("routing", "training", "summaries", "rankings", or None for root)
+    
+    Returns:
+        Path to globals/ or globals/{kind}/ directory
+    """
+    base = get_globals_dir(Path(run_root))
+    if kind:
+        return base / kind
+    return base
+
+
+def target_repro_dir(run_root: Path, target: str, view: Optional[str] = None, symbol: Optional[str] = None) -> Path:
+    """
+    Get reproducibility directory for target, optionally scoped by view/symbol.
+    
+    Args:
+        run_root: Run root directory
+        target: Target name
+        view: Optional view name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
+        symbol: Optional symbol name (required if view is "SYMBOL_SPECIFIC")
+    
+    Returns:
+        - If view=None: targets/{target}/reproducibility/
+        - If view="CROSS_SECTIONAL": targets/{target}/reproducibility/CROSS_SECTIONAL/
+        - If view="SYMBOL_SPECIFIC" and symbol: targets/{target}/reproducibility/SYMBOL_SPECIFIC/symbol={symbol}/
+    """
+    base_repro_dir = get_target_reproducibility_dir(Path(run_root), target)
+    
+    if view == "CROSS_SECTIONAL":
+        return base_repro_dir / "CROSS_SECTIONAL"
+    elif view == "SYMBOL_SPECIFIC" and symbol:
+        return base_repro_dir / "SYMBOL_SPECIFIC" / f"symbol={symbol}"
+    elif view is None:
+        return base_repro_dir
+    else:
+        # Invalid combination - log warning and return base
+        if view == "SYMBOL_SPECIFIC" and not symbol:
+            logger.warning(f"SYMBOL_SPECIFIC view requires symbol parameter, returning base reproducibility directory")
+        return base_repro_dir
+
+
+def target_repro_file_path(run_root: Path, target: str, filename: str, view: Optional[str] = None, symbol: Optional[str] = None) -> Path:
+    """
+    Get file path in reproducibility directory (for reading with fallback or writing).
+    
+    This function constructs the path to a file in the reproducibility directory,
+    scoped by view/symbol if provided. For reading, callers should check both
+    new (view/symbol-scoped) and old (root) locations.
+    
+    Args:
+        run_root: Run root directory
+        target: Target name
+        filename: Filename (e.g., "selected_features.txt")
+        view: Optional view name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
+        symbol: Optional symbol name (required if view is "SYMBOL_SPECIFIC")
+    
+    Returns:
+        Path to file in reproducibility directory (view/symbol-scoped if provided)
+    """
+    repro_dir = target_repro_dir(run_root, target, view, symbol)
+    return repro_dir / filename
+
+
+def model_output_dir(training_results_root: Path, family: str, view: str, symbol: Optional[str] = None) -> Path:
+    """
+    Get model output directory.
+    
+    Args:
+        training_results_root: Training results root directory
+        family: Model family name (e.g., "lightgbm")
+        view: View name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
+        symbol: Optional symbol name (required if view is "SYMBOL_SPECIFIC")
+    
+    Returns:
+        Path to training_results/{family}/view={view}/[symbol={symbol}/]
+    """
+    family_dir = Path(training_results_root) / family
+    view_dir = family_dir / f"view={view}"
+    
+    if view == "SYMBOL_SPECIFIC" and symbol:
+        return view_dir / f"symbol={symbol}"
+    elif view == "CROSS_SECTIONAL":
+        return view_dir
+    else:
+        # Invalid combination - log warning and return view_dir
+        if view == "SYMBOL_SPECIFIC" and not symbol:
+            logger.warning(f"SYMBOL_SPECIFIC view requires symbol parameter, returning view directory without symbol")
+        return view_dir
+

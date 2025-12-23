@@ -172,7 +172,8 @@ class IntelligentTrainer:
         add_timestamp: bool = True,
         experiment_config: Optional['ExperimentConfig'] = None,  # New typed config (optional)
         max_rows_per_symbol: Optional[int] = None,  # For output directory binning
-        max_cs_samples: Optional[int] = None  # For output directory binning
+        max_cs_samples: Optional[int] = None,  # For output directory binning
+        fs_model_families: Optional[List[str]] = None  # Feature selection model families (separate from training)
     ):
         """
         Initialize the intelligent trainer.
@@ -256,6 +257,9 @@ class IntelligentTrainer:
         self.target_ranking_cache = self.cache_dir / "target_rankings.json"
         self.feature_selection_cache = self.cache_dir / "feature_selections"
         self.feature_selection_cache.mkdir(parents=True, exist_ok=True)
+        
+        # Store feature selection model families (separate from training families)
+        self.fs_model_families = fs_model_families
     
     def _estimate_n_effective_early(self) -> Optional[int]:
         """
@@ -1222,6 +1226,12 @@ class IntelligentTrainer:
             from copy import deepcopy
             temp_data = deepcopy(self.experiment_config.data) if hasattr(self.experiment_config, 'data') and self.experiment_config.data else None
             
+            # CRITICAL: If fs_model_families is set, use it for feature selection
+            # This ensures feature_selection.model_families is used, not training.model_families
+            feature_selection_overrides = {'top_n': top_m}
+            if self.fs_model_families is not None:
+                feature_selection_overrides['model_families'] = self.fs_model_families
+            
             temp_exp = ExperimentConfig(
                 name=self.experiment_config.name,
                 data_dir=self.experiment_config.data_dir,
@@ -1229,7 +1239,7 @@ class IntelligentTrainer:
                 target=target,
                 data=temp_data,
                 max_samples_per_symbol=self.experiment_config.max_samples_per_symbol,
-                feature_selection_overrides={'top_n': top_m}
+                feature_selection_overrides=feature_selection_overrides
             )
             feature_selection_config = build_feature_selection_config(temp_exp)
         
@@ -1433,7 +1443,11 @@ class IntelligentTrainer:
                 }
             }
             
-            summary_path = globals_dir / "feature_selection_summary.json"
+            from TRAINING.orchestration.utils.target_first_paths import run_root, globals_dir
+            run_root_dir = run_root(self.output_dir)
+            summaries_dir = globals_dir(run_root_dir, "summaries")
+            summaries_dir.mkdir(parents=True, exist_ok=True)
+            summary_path = summaries_dir / "feature_selection_summary.json"
             with open(summary_path, "w") as f:
                 json.dump(aggregated_summary, f, indent=2, default=str)
             logger.info(f"✅ Aggregated feature selection summaries to {summary_path}")
@@ -1470,7 +1484,11 @@ class IntelligentTrainer:
                     'total_fallback': total_fallback
                 }
             
-            status_path = globals_dir / "model_family_status_summary.json"
+            from TRAINING.orchestration.utils.target_first_paths import run_root, globals_dir
+            run_root_dir = run_root(self.output_dir)
+            summaries_dir = globals_dir(run_root_dir, "summaries")
+            summaries_dir.mkdir(parents=True, exist_ok=True)
+            status_path = summaries_dir / "model_family_status_summary.json"
             with open(status_path, "w") as f:
                 json.dump(aggregated_family_status, f, indent=2, default=str)
             logger.info(f"✅ Aggregated model family status summaries to {status_path}")
@@ -1494,7 +1512,9 @@ class IntelligentTrainer:
                 }
             }
             
-            summary_path = globals_dir / "selected_features_summary.json"
+            summaries_dir = globals_dir(run_root_dir, "summaries")
+            summaries_dir.mkdir(parents=True, exist_ok=True)
+            summary_path = summaries_dir / "selected_features_summary.json"
             with open(summary_path, "w") as f:
                 json.dump(selected_features_summary, f, indent=2, default=str)
             logger.info(f"✅ Aggregated selected features summary to {summary_path} ({len(feature_selections)} target/view combinations)")
@@ -3037,18 +3057,50 @@ Examples:
                             top_n_targets = exp_top_n
                             logger.info(f"📋 Using top_n_targets={top_n_targets} from experiment config")
                     
+                    # CRITICAL: Split model families config - training vs feature selection
+                    # This ensures training.model_families is used for training, not feature selection
                     # Extract training.model_families from experiment config (NEW - SST)
-                    # This is the Single Source of Truth for model families unless CLI overrides
                     exp_training = exp_yaml.get('training', {})
+                    training_families = None
                     if exp_training:
                         exp_model_families = exp_training.get('model_families', None)
                         if exp_model_families is not None:
                             # Explicitly set in config - use it (even if empty list)
                             if isinstance(exp_model_families, list):
-                                config_families = exp_model_families
-                                logger.info(f"📋 Using training.model_families from experiment config (SST): {config_families}")
+                                training_families = exp_model_families
+                                logger.info(f"📋 Using training.model_families from experiment config (SST): {training_families}")
                             else:
                                 logger.warning(f"⚠️ training.model_families in experiment config is not a list: {type(exp_model_families)}, ignoring")
+                    
+                    # Extract feature_selection.model_families from experiment config (NEW - SST)
+                    exp_feature_selection = exp_yaml.get('feature_selection', {})
+                    fs_families = None
+                    if exp_feature_selection:
+                        exp_fs_families = exp_feature_selection.get('model_families', None)
+                        if exp_fs_families is not None:
+                            if isinstance(exp_fs_families, list):
+                                fs_families = exp_fs_families
+                                logger.info(f"📋 Using feature_selection.model_families from experiment config (SST): {fs_families}")
+                            else:
+                                logger.warning(f"⚠️ feature_selection.model_families in experiment config is not a list: {type(exp_fs_families)}, ignoring")
+                    
+                    # Fallback: Use intelligent_training.model_families if neither training nor feature_selection specified
+                    if training_families is None and fs_families is None:
+                        intel_training = exp_yaml.get('intelligent_training', {})
+                        if intel_training:
+                            fallback_families = intel_training.get('model_families', None)
+                            if fallback_families is not None and isinstance(fallback_families, list):
+                                training_families = fallback_families
+                                fs_families = fallback_families
+                                logger.info(f"📋 Using intelligent_training.model_families as fallback for both training and feature selection: {fallback_families}")
+                    
+                    # Set config_families to training_families (for backward compatibility)
+                    # Feature selection will use fs_families separately
+                    config_families = training_families
+                else:
+                    # No experiment config - initialize to None
+                    training_families = None
+                    fs_families = None
             except Exception as e:
                 logger.debug(f"Could not load intelligent_training from experiment config: {e}")
             
@@ -3298,17 +3350,26 @@ Examples:
     if args.families:
         families = args.families
         logger.info(f"📋 Using model families from CLI (overrides config): {families}")
+        # CLI overrides both training and feature selection
+        fs_families = families
     elif config_families is not None:
         # Config explicitly set (even if empty list) - use it as SST
         families = config_families if config_families else []
         if families:
-            logger.info(f"📋 Using model families from config (SST): {families}")
+            logger.info(f"📋 Using training model families from config (SST): {families}")
         else:
             logger.warning(f"⚠️ Config specifies empty model_families list - no families will be trained")
+        # For feature selection, use fs_families if it was set, otherwise use training_families
+        if 'fs_families' not in locals() or fs_families is None:
+            fs_families = families
     else:
         # No config specified - use defaults (backward compatibility)
         families = ['lightgbm', 'xgboost', 'random_forest']
         logger.warning(f"⚠️ No model families in config, using defaults: {families}")
+        fs_families = families
+    
+    # Log both resolved sets once per run
+    logger.info(f"📋 Resolved model families - Training: {families}, Feature Selection: {fs_families}")
     
     # Create orchestrator
     # Pass config limits for output directory binning (use configured values, not full dataset size)
@@ -3319,7 +3380,8 @@ Examples:
         cache_dir=args.cache_dir,
         experiment_config=experiment_config,  # Pass experiment config if loaded
         max_rows_per_symbol=max_rows_per_symbol,  # For output directory binning
-        max_cs_samples=max_cs_samples  # For output directory binning
+        max_cs_samples=max_cs_samples,  # For output directory binning
+        fs_model_families=fs_families  # Pass feature selection families separately
     )
     
     # Load configs (legacy support)

@@ -131,26 +131,27 @@ def filter_targets_by_training_plan(
     
     jobs = training_plan.get("jobs", [])
     
+    # CRITICAL: Resolve dev_mode FIRST (before checking jobs)
+    # This ensures we can log the config source and make the decision early
+    dev_mode = False
+    config_source = "default"
+    try:
+        from CONFIG.config_loader import get_cfg
+        routing_config = get_cfg("training_config.routing", default={}, config_name="training_config")
+        dev_mode = routing_config.get("dev_mode", False)
+        config_source = "training_config.routing.dev_mode"
+    except Exception as e:
+        logger.debug(f"Failed to load dev_mode config: {e}")
+    
+    logger.info(f"Training plan dev_mode={dev_mode} (from {config_source})")
+    
     if not jobs:
-        # CRITICAL: 0 jobs indicates plan is disabled or routing produced no valid jobs
-        # Check if dev_mode is enabled (allows fallback)
-        dev_mode = False
-        try:
-            from CONFIG.config_loader import get_cfg
-            routing_config = get_cfg("training_config.routing", default={}, config_name="training_config")
-            dev_mode = routing_config.get("dev_mode", False)
-        except Exception:
-            pass
-        
         if dev_mode:
             # Dev mode: allow fallback but mark as non-production
             logger.warning(
-                f"⚠️ Training plan has 0 jobs - plan is disabled (dev_mode=true). "
-                f"Possible reasons: 1) Plan generation failed, 2) Routing produced no valid jobs, "
-                f"3) All targets were filtered out, or 4) Plan generation was skipped. "
-                f"Using fallback: returning all {len(targets)} targets without plan filtering (non_production=true)."
+                f"⚠️ Training plan has 0 jobs (dev_mode=true). Using fallback: all {len(targets)} targets."
             )
-            return targets
+            return targets  # Don't raise!
         else:
             # Production mode: hard fail
             raise ValueError(

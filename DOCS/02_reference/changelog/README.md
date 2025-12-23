@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-23 (Training Pipeline Organization and Config Fixes)** — Comprehensive refactoring to fix blocking correctness bugs, data integrity issues, and structural cleanup with centralized path SST. Key fixes: (1) Quarantined unknown lookback features before budget call, preventing RuntimeError. (2) Fixed reproducibility files and feature importances to use view/symbol subdirectories, eliminating overwrites. (3) Split model families config - training.model_families for training, feature_selection.model_families for feature selection. (4) Removed legacy METRICS/ creation, reorganized globals/ into subfolders (routing/, training/, summaries/). All changes maintain backward compatibility for reading.
+  → [View](2025-12-23-training-pipeline-organization-and-config-fixes.md)
+
 - **2025-12-23 (Boruta Timeout and CatBoost Pickle Error Fixes)** — Fixed two critical errors in feature selection: (1) Improved Boruta timeout error handling to detect timeout errors even when wrapped as ValueError, preventing confusing error messages and pipeline crashes. (2) Fixed CatBoost pickle error by moving importance worker function to module level, enabling multiprocessing for importance extraction. Both fixes improve pipeline stability and error clarity.
   → [View](2025-12-23-boruta-catboost-error-handling-fixes.md)
 

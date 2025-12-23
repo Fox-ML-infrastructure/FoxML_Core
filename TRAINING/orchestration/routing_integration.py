@@ -112,29 +112,17 @@ def generate_routing_plan_after_feature_selection(
         
         logger.info(f"✅ Found {len(candidates_df)} routing candidates")
         
-        # Save routing candidates to globals/ (with backward compatibility for METRICS/)
-        from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
-        globals_dir = get_globals_dir(output_dir)
-        globals_dir.mkdir(parents=True, exist_ok=True)
+        # Save routing candidates to globals/routing/ (new structure)
+        from TRAINING.orchestration.utils.target_first_paths import run_root, globals_dir
+        run_root_dir = run_root(output_dir)
+        routing_dir = globals_dir(run_root_dir, "routing")
+        routing_dir.mkdir(parents=True, exist_ok=True)
         
-        # Also create METRICS/ for backward compatibility (legacy)
-        metrics_dir_legacy = output_dir / "METRICS"
-        metrics_dir_legacy.mkdir(parents=True, exist_ok=True)
-        
-        # Save to globals/ (primary location)
+        # Save to globals/routing/ (primary location)
         metrics_path = aggregator.save_routing_candidates(
             candidates_df,
-            output_path=globals_dir / "routing_candidates.parquet"
+            output_path=routing_dir / "routing_candidates.parquet"
         )
-        
-        # Also save to METRICS/ for backward compatibility
-        legacy_path = metrics_dir_legacy / "routing_candidates.parquet"
-        try:
-            import shutil
-            shutil.copy2(metrics_path, legacy_path)
-            logger.debug(f"Also saved routing candidates to legacy location: {legacy_path}")
-        except Exception as e:
-            logger.debug(f"Could not copy to legacy METRICS location: {e}")
         
         # Step 2: Generate routing plan
         logger.info("Step 2: Generating routing decisions...")
@@ -186,18 +174,6 @@ def generate_routing_plan_after_feature_selection(
         logger.info("\nRoute distribution:")
         for route, count in sorted(route_counts.items(), key=lambda x: -x[1]):
             logger.info(f"  {route}: {count} symbols")
-        
-        # Also save routing plan to legacy METRICS location for backward compatibility
-        try:
-            import shutil
-            for file_name in ["routing_plan.json", "routing_plan.yaml", "routing_plan.md"]:
-                src_file = plan_output / file_name
-                if src_file.exists():
-                    dst_file = plan_output_legacy / file_name
-                    shutil.copy2(src_file, dst_file)
-            logger.debug(f"Also saved routing plan to legacy location: {plan_output_legacy}")
-        except Exception as e:
-            logger.debug(f"Could not copy routing plan to legacy METRICS location: {e}")
         
         logger.info(f"\n✅ Routing plan generated: {plan_output}")
         logger.info(f"   Total targets: {len(plan['targets'])}")
