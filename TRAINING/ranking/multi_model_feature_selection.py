@@ -81,6 +81,8 @@ BASE_SEED = set_global_determinism(
 
 from CONFIG.config_loader import load_model_config
 import yaml
+import time
+from contextlib import contextmanager
 
 # Import checkpoint utility (after path is set)
 from TRAINING.orchestration.utils.checkpoint import CheckpointManager
@@ -91,6 +93,19 @@ logger = setup_logging(
     level=logging.INFO,
     use_journald=True
 )
+
+# Timed context manager for performance diagnostics
+@contextmanager
+def timed(name: str, **kwargs):
+    """Context manager to time expensive operations with metadata."""
+    t0 = time.perf_counter()
+    metadata_str = " ".join(f"{k}={v}" for k, v in kwargs.items())
+    logger.info(f"⏱️ START {name} {metadata_str}")
+    try:
+        yield
+    finally:
+        dt = time.perf_counter() - t0
+        logger.info(f"⏱️ END   {name}: {dt:.2f}s ({dt/60:.2f} minutes) {metadata_str}")
 
 # Suppress warnings from SHAP/sklearn
 warnings.filterwarnings('ignore', category=FutureWarning)
@@ -1929,56 +1944,57 @@ def train_model_and_get_importance(
                 logger.info(f"    CatBoost: CV provides stability signal via scores (importance computed once after final fit to avoid 3× overhead)")
                 
                 from sklearn.base import clone
-                for fold_idx, (train_idx, val_idx) in enumerate(tscv.split(X_catboost, y)):
-                    try:
-                        X_train_fold, X_val_fold = X_catboost[train_idx], X_catboost[val_idx]
-                        y_train_fold, y_val_fold = y[train_idx], y[val_idx]
-                        
-                        # Clone model for this fold
-                        fold_model = clone(model)
-                        
-                        # Fit with early stopping using eval_set
-                        fold_model.fit(X_train_fold, y_train_fold, eval_set=[(X_val_fold, y_val_fold)])
-                        
-                        # Evaluate on validation set
-                        if scoring == 'r2':
-                            from sklearn.metrics import r2_score
-                            y_pred = fold_model.predict(X_val_fold)
-                            score = r2_score(y_val_fold, y_pred)
-                        elif scoring == 'roc_auc':
-                            from sklearn.metrics import roc_auc_score
-                            y_proba = fold_model.predict_proba(X_val_fold)[:, 1] if hasattr(fold_model, 'predict_proba') else fold_model.predict(X_val_fold)
-                            if len(np.unique(y_val_fold)) == 2:
-                                score = roc_auc_score(y_val_fold, y_proba)
+                with timed("catboost_cv", n_splits=n_splits, n_features=len(feature_names), n_samples=len(X_catboost)):
+                    for fold_idx, (train_idx, val_idx) in enumerate(tscv.split(X_catboost, y)):
+                        try:
+                            X_train_fold, X_val_fold = X_catboost[train_idx], X_catboost[val_idx]
+                            y_train_fold, y_val_fold = y[train_idx], y[val_idx]
+                            
+                            # Clone model for this fold
+                            fold_model = clone(model)
+                            
+                            # Fit with early stopping using eval_set
+                            fold_model.fit(X_train_fold, y_train_fold, eval_set=[(X_val_fold, y_val_fold)])
+                            
+                            # Evaluate on validation set
+                            if scoring == 'r2':
+                                from sklearn.metrics import r2_score
+                                y_pred = fold_model.predict(X_val_fold)
+                                score = r2_score(y_val_fold, y_pred)
+                            elif scoring == 'roc_auc':
+                                from sklearn.metrics import roc_auc_score
+                                y_proba = fold_model.predict_proba(X_val_fold)[:, 1] if hasattr(fold_model, 'predict_proba') else fold_model.predict(X_val_fold)
+                                if len(np.unique(y_val_fold)) == 2:
+                                    score = roc_auc_score(y_val_fold, y_proba)
+                                else:
+                                    score = np.nan
+                            elif scoring == 'accuracy':
+                                from sklearn.metrics import accuracy_score
+                                y_pred = fold_model.predict(X_val_fold)
+                                score = accuracy_score(y_val_fold, y_pred)
                             else:
                                 score = np.nan
-                        elif scoring == 'accuracy':
-                            from sklearn.metrics import accuracy_score
-                            y_pred = fold_model.predict(X_val_fold)
-                            score = accuracy_score(y_val_fold, y_pred)
-                        else:
-                            score = np.nan
-                        
-                        cv_scores.append(score)
-                        
-                        # PERFORMANCE FIX: Skip expensive PredictionValuesChange during CV folds
-                        # PredictionValuesChange is extremely slow (40-80 min per call with 531 features)
-                        # We compute it only once after final fit to avoid 3× overhead
-                        # CV scores provide stability signal without expensive importance computation
-                        
-                        # Log fold progress
-                        actual_iterations = None
-                        if hasattr(fold_model, 'base_model'):
-                            actual_iterations = getattr(fold_model.base_model, 'tree_count_', None) or getattr(fold_model.base_model, 'iteration_count_', None)
-                        elif hasattr(fold_model, 'tree_count_') or hasattr(fold_model, 'iteration_count_'):
-                            actual_iterations = getattr(fold_model, 'tree_count_', None) or getattr(fold_model, 'iteration_count_', None)
-                        
-                        max_iterations = cb_config.get('iterations', 300)
-                        logger.debug(f"    CatBoost: Fold {fold_idx + 1}/{n_splits} completed (iterations: {actual_iterations if actual_iterations else 'unknown'}/{max_iterations}, score: {score:.4f})")
-                        
-                    except Exception as e:
-                        logger.debug(f"    CatBoost: Fold {fold_idx + 1} failed: {e}")
-                        cv_scores.append(np.nan)
+                            
+                            cv_scores.append(score)
+                            
+                            # PERFORMANCE FIX: Skip expensive PredictionValuesChange during CV folds
+                            # PredictionValuesChange is extremely slow (40-80 min per call with 531 features)
+                            # We compute it only once after final fit to avoid 3× overhead
+                            # CV scores provide stability signal without expensive importance computation
+                            
+                            # Log fold progress
+                            actual_iterations = None
+                            if hasattr(fold_model, 'base_model'):
+                                actual_iterations = getattr(fold_model.base_model, 'tree_count_', None) or getattr(fold_model.base_model, 'iteration_count_', None)
+                            elif hasattr(fold_model, 'tree_count_') or hasattr(fold_model, 'iteration_count_'):
+                                actual_iterations = getattr(fold_model, 'tree_count_', None) or getattr(fold_model, 'iteration_count_', None)
+                            
+                            max_iterations = cb_config.get('iterations', 300)
+                            logger.debug(f"    CatBoost: Fold {fold_idx + 1}/{n_splits} completed (iterations: {actual_iterations if actual_iterations else 'unknown'}/{max_iterations}, score: {score:.4f})")
+                            
+                        except Exception as e:
+                            logger.debug(f"    CatBoost: Fold {fold_idx + 1} failed: {e}")
+                            cv_scores.append(np.nan)
                 
                 cv_elapsed = time.time() - cv_start_time
                 cv_scores = np.array(cv_scores)
@@ -2075,16 +2091,18 @@ def train_model_and_get_importance(
                         plan = plan_for_family('CatBoost', total_threads=default_threads())
                         # Use thread_guard context manager for safe thread control
                         with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                            with timed("catboost_fit", n_features=len(feature_names), n_samples=len(X_train_fit)):
+                                # Fit with early stopping using eval_set
+                                model.fit(X_train_fit, y_train_fit, eval_set=[(X_val_fit, y_val_fit)])
+                                train_score = model.score(X_train_fit, y_train_fit)
+                                val_score = model.score(X_val_fit, y_val_fit)
+                    else:
+                        # Fallback: manual thread management
+                        with timed("catboost_fit", n_features=len(feature_names), n_samples=len(X_train_fit)):
                             # Fit with early stopping using eval_set
                             model.fit(X_train_fit, y_train_fit, eval_set=[(X_val_fit, y_val_fit)])
                             train_score = model.score(X_train_fit, y_train_fit)
                             val_score = model.score(X_val_fit, y_val_fit)
-                    else:
-                        # Fallback: manual thread management
-                        # Fit with early stopping using eval_set
-                        model.fit(X_train_fit, y_train_fit, eval_set=[(X_val_fit, y_val_fit)])
-                        train_score = model.score(X_train_fit, y_train_fit)
-                        val_score = model.score(X_val_fit, y_val_fit)
                     
                     # Check soft timeout (for Windows or if SIGALRM didn't fire)
                     fit_elapsed = time.time() - fit_start_time
@@ -2140,18 +2158,76 @@ def train_model_and_get_importance(
                     except (AttributeError, OSError):
                         pass  # Windows doesn't support SIGALRM
                 
-                # OVERFITTING DETECTION: Check for suspiciously high training accuracy (overfitting/memorization)
+                # OVERFITTING DETECTION: Policy-based gating for expensive importance computation
                 # Tree-based models can easily overfit to 100% training accuracy
                 # This indicates the model is memorizing data and will take a long time to compute importance
                 
-                # Check 1: Early 100% accuracy detection
-                if train_score >= 0.999:  # 99.9% threshold (matches _check_for_perfect_correlation threshold)
-                    logger.warning(f"    CatBoost: ⚠️  OVERFITTING DETECTED - Training accuracy {train_score:.1%} >= 99.9% (model is memorizing data)")
-                    logger.warning(f"    CatBoost: This indicates severe overfitting. Model will not generalize. Skipping expensive operations to save time.")
-                    # Mark as failed and return early - skip expensive feature importance computation
-                    return None, pd.Series(0.0, index=feature_names), importance_method, train_score
+                # Load importance policy from config (SST)
+                try:
+                    from CONFIG.config_loader import get_cfg
+                    importance_config = get_cfg('safety.leakage_detection.feature_importance', default={}, config_name='safety_config')
+                    skip_on_overfit = importance_config.get('importance_skip_on_overfit', True)
+                    fallback_method = importance_config.get('importance_fallback', 'gain')
+                except Exception:
+                    importance_config = {}
+                    skip_on_overfit = True
+                    fallback_method = 'gain'
                 
-                # Check 2: Train/Val gap analysis (overfitting indicator)
+                # Unified overfitting detection
+                from TRAINING.ranking.utils.overfitting_detection import should_skip_expensive_importance
+                
+                cv_mean = np.nanmean(cv_scores) if cv_scores is not None and len(cv_scores) > 0 else None
+                should_skip, skip_reason, skip_metadata = should_skip_expensive_importance(
+                    train_score=train_score,
+                    cv_score=cv_mean,
+                    val_score=val_score if 'val_score' in locals() else None,
+                    n_features=len(feature_names),
+                    config=importance_config
+                )
+                
+                # Log decision with actual values
+                logger.info(f"    CatBoost: Overfitting check - train={train_score:.4f}, cv={cv_mean:.4f if cv_mean else 'N/A'}, "
+                          f"val={val_score:.4f if 'val_score' in locals() and val_score is not None else 'N/A'}, "
+                          f"decision={'SKIP' if should_skip else 'RUN'}, reason={skip_reason}")
+                
+                if should_skip and skip_on_overfit:
+                    logger.warning(f"    CatBoost: ⚠️  OVERFITTING DETECTED - {skip_reason}")
+                    logger.warning(f"    CatBoost: Skipping expensive PredictionValuesChange, using fallback: {fallback_method}")
+                    
+                    # Use deterministic fallback importance
+                    if fallback_method == 'gain':
+                        # Use CatBoost native FeatureImportance (cheap)
+                        try:
+                            if hasattr(model, 'base_model'):
+                                importance_raw = model.base_model.get_feature_importance(type='FeatureImportance')
+                            else:
+                                importance_raw = model.get_feature_importance(type='FeatureImportance')
+                            importance = pd.Series(importance_raw, index=feature_names)
+                            logger.info(f"    CatBoost: Using fallback FeatureImportance (gain-based)")
+                        except Exception as e:
+                            logger.warning(f"    CatBoost: Fallback FeatureImportance failed: {e}, using zeros")
+                            importance = pd.Series(0.0, index=feature_names)
+                    elif fallback_method == 'split':
+                        # Use split-based importance (if available)
+                        try:
+                            if hasattr(model, 'base_model'):
+                                importance_raw = model.base_model.get_feature_importance(type='Split')
+                            else:
+                                importance_raw = model.get_feature_importance(type='Split')
+                            importance = pd.Series(importance_raw, index=feature_names)
+                            logger.info(f"    CatBoost: Using fallback Split importance")
+                        except Exception as e:
+                            logger.warning(f"    CatBoost: Fallback Split importance failed: {e}, using zeros")
+                            importance = pd.Series(0.0, index=feature_names)
+                    else:  # 'none'
+                        importance = pd.Series(0.0, index=feature_names)
+                        logger.info(f"    CatBoost: Using zero importance (fallback=none)")
+                    
+                    # Track that we used fallback
+                    importance_elapsed = 0.0  # Fallback is fast
+                    return model, importance, importance_method, train_score
+                
+                # Log warnings for overfitting (but don't skip if policy doesn't require it)
                 if 'val_score' in locals() and val_score is not None:
                     train_val_gap = train_score - val_score
                     if train_val_gap > 0.3:
@@ -2160,9 +2236,7 @@ def train_model_and_get_importance(
                     elif train_val_gap > 0.1:
                         logger.info(f"    CatBoost: Moderate train/val gap: {train_val_gap:.4f} (train={train_score:.4f}, val={val_score:.4f}) - monitor for overfitting")
                 
-                # Check 3: CV vs Train gap (if CV was run)
-                if cv_elapsed and cv_scores is not None and len(cv_scores) > 0:
-                    cv_mean = np.nanmean(cv_scores)
+                if cv_mean is not None:
                     cv_train_gap = train_score - cv_mean
                     if cv_train_gap > 0.3:
                         logger.warning(f"    CatBoost: ⚠️  OVERFITTING WARNING - Large CV/Train gap: {cv_train_gap:.4f} (train={train_score:.4f}, CV={cv_mean:.4f})")
@@ -2175,8 +2249,26 @@ def train_model_and_get_importance(
                 # CV scores provide stability signal; importance is for explanation/reporting only
                 # WARNING: Using final-fit importance for feature selection would cause leakage-by-selection
                 # This importance is for explanation/reporting, not for selection decisions
+                
+                # CACHING: PVC results should be cached keyed by featureset fingerprint
+                # Cache key: (model_family, params_hash, featureset_fingerprint, dataset_fingerprint, importance_kind)
+                # TODO: Implement cache lookup here if caching infrastructure exists
+                # Example cache key computation:
+                #   from TRAINING.common.utils.config_hashing import compute_config_hash
+                #   cache_key_data = {
+                #       'model_family': 'catboost',
+                #       'params_hash': compute_config_hash(model_params),
+                #       'featureset_fingerprint': compute_config_hash({'features': sorted(feature_names)}),
+                #       'dataset_fingerprint': compute_config_hash({'shape': X_train_fit.shape, 'target': target_column}),
+                #       'importance_kind': 'PredictionValuesChange'
+                #   }
+                #   cache_key = compute_config_hash(cache_key_data)
+                
+                # Load timeout from config
+                max_importance_time_seconds = importance_config.get('importance_max_wall_minutes', 30) * 60
+                
                 importance_start_time = time.time()
-                importance_elapsed = 0.0  # Initialize for timing breakdown
+                importance_elapsed = 0.0
                 
                 # PERFORMANCE AUDIT: Track CatBoost importance computation
                 try:
@@ -2193,12 +2285,63 @@ def train_model_and_get_importance(
                     auditor = None
                     fingerprint = None
                 
+                # Get model params for logging
+                if hasattr(model, 'base_model'):
+                    model_params = model.base_model.get_params()
+                else:
+                    model_params = model.get_params()
+                trees = model_params.get('iterations', 'unknown')
+                depth = model_params.get('depth', 'unknown')
+                
                 try:
-                    if hasattr(model, 'base_model'):
-                        importance_raw = model.base_model.get_feature_importance(data=X_train_fit, type='PredictionValuesChange')
-                    else:
-                        importance_raw = model.get_feature_importance(data=X_train_fit, type='PredictionValuesChange')
-                    importance = pd.Series(importance_raw, index=feature_names)
+                    with timed("catboost_pvc", 
+                               n_features=len(feature_names), 
+                               n_samples=X_train_fit.shape[0],
+                               trees=trees,
+                               depth=depth):
+                        
+                        # Process-based timeout for PVC
+                        import multiprocessing
+                        
+                        def compute_importance_worker(model_data, X_data, feature_names_data, result_queue):
+                            """Worker process to compute importance."""
+                            try:
+                                if hasattr(model_data, 'base_model'):
+                                    importance_raw = model_data.base_model.get_feature_importance(data=X_data, type='PredictionValuesChange')
+                                else:
+                                    importance_raw = model_data.get_feature_importance(data=X_data, type='PredictionValuesChange')
+                                result_queue.put(('success', pd.Series(importance_raw, index=feature_names_data)))
+                            except Exception as e:
+                                result_queue.put(('error', str(e)))
+                        
+                        # Create process and queue
+                        result_queue = multiprocessing.Queue()
+                        p = multiprocessing.Process(
+                            target=compute_importance_worker,
+                            args=(model, X_train_fit, feature_names, result_queue)
+                        )
+                        p.start()
+                        p.join(timeout=max_importance_time_seconds)
+                        
+                        if p.is_alive():
+                            # Timeout - kill process
+                            p.terminate()
+                            p.join(timeout=5)
+                            if p.is_alive():
+                                p.kill()
+                            logger.warning(f"    CatBoost: PVC_TIMEOUT after {max_importance_time_seconds/60:.0f} minutes")
+                            raise TimeoutError(f"Importance computation exceeded {max_importance_time_seconds/60:.0f} minute timeout")
+                        
+                        # Get result
+                        if not result_queue.empty():
+                            status, result = result_queue.get()
+                            if status == 'success':
+                                importance = result
+                            else:
+                                raise Exception(f"Importance computation failed: {result}")
+                        else:
+                            raise Exception("Importance computation process returned no result")
+                    
                     importance_elapsed = time.time() - importance_start_time
                     logger.info(f"    CatBoost: Importance computation completed in {importance_elapsed/60:.2f} minutes (computed once after final fit)")
                     
@@ -2213,6 +2356,25 @@ def train_model_and_get_importance(
                             cache_hit=False,
                             input_fingerprint=fingerprint
                         )
+                        
+                except TimeoutError:
+                    logger.warning(f"    CatBoost: Importance computation timed out, using fallback: {fallback_method}")
+                    importance_elapsed = time.time() - importance_start_time
+                    
+                    # Use fallback importance
+                    if fallback_method == 'gain':
+                        try:
+                            if hasattr(model, 'base_model'):
+                                importance_raw = model.base_model.get_feature_importance(type='FeatureImportance')
+                            else:
+                                importance_raw = model.get_feature_importance(type='FeatureImportance')
+                            importance = pd.Series(importance_raw, index=feature_names)
+                        except Exception as e:
+                            logger.warning(f"    CatBoost: Fallback FeatureImportance failed: {e}, using zeros")
+                            importance = pd.Series(0.0, index=feature_names)
+                    else:
+                        importance = pd.Series(0.0, index=feature_names)
+                        
                 except Exception as e:
                     logger.warning(f"    CatBoost: Failed to extract importance from final model: {e}")
                     importance = pd.Series(0.0, index=feature_names)

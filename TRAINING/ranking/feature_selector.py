@@ -639,20 +639,19 @@ def select_features_for_target(
                             # Use it directly to avoid nested structures
                             target_name_clean = target_column.replace('/', '_').replace('\\', '_')
                             
-                            # For SYMBOL_SPECIFIC, snapshots go in symbol subfolder
-                            if view == "SYMBOL_SPECIFIC" and symbol_to_process:
-                                # Match TARGET_RANKING: REPRODUCIBILITY/FEATURE_SELECTION/SYMBOL_SPECIFIC/{target}/symbol={symbol}/
-                                # But output_dir is at CROSS_SECTIONAL level, need to go to SYMBOL_SPECIFIC
-                                base_output_dir = output_dir
-                                while base_output_dir.name != "FEATURE_SELECTION":
-                                    base_output_dir = base_output_dir.parent
-                                    if not base_output_dir.parent.exists():
-                                        break
-                                snapshot_base_dir = base_output_dir / "SYMBOL_SPECIFIC" / target_name_clean / f"symbol={symbol_to_process}"
-                            else:
-                                # CROSS_SECTIONAL: use output_dir directly (already at target level)
-                                snapshot_base_dir = output_dir
+                            # Find base run directory for target-first structure
+                            # REMOVED: Legacy REPRODUCIBILITY/FEATURE_SELECTION path construction
+                            base_output_dir = output_dir
+                            for _ in range(10):
+                                # Only stop if we find a run directory (has targets/, globals/, or cache/)
+                                # Don't stop at RESULTS/ - continue to find actual run directory
+                                if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
+                                    break
+                                if not base_output_dir.parent.exists():
+                                    break
+                                base_output_dir = base_output_dir.parent
                             
+                            # Use base run directory - save_snapshot_hook will use target-first structure
                             for model_family, importance_dict in all_feature_importances.items():
                                 if importance_dict:
                                     # FIX: Ensure method name is model_family (e.g., "lightgbm", "ridge")
@@ -662,7 +661,7 @@ def select_features_for_target(
                                         method=model_family,  # Use model_family as method identifier
                                         importance_dict=importance_dict,
                                         universe_id=view,  # Use view parameter
-                                        output_dir=snapshot_base_dir,  # Save in REPRODUCIBILITY structure
+                                        output_dir=base_output_dir,  # Pass run directory - will use target-first structure
                                         auto_analyze=None,  # Load from config
                                     )
                         except Exception as e:

@@ -113,6 +113,27 @@ safety:
       # Set to number (e.g., 240) to cap lookback at 4 hours (excludes 1D+ lookback features)
       ranking_mode_max_lookback_minutes: null  # null = no cap, or set to e.g., 240 for 4-hour cap
     
+    # Feature Importance Stability Tracking
+    feature_importance:
+      # Automatically analyze stability after saving snapshots
+      auto_analyze_stability: true  # Set to false to disable automatic analysis
+      
+      # Stability thresholds for warnings
+      stability_thresholds:
+        min_top_k_overlap: 0.7  # Warn if top-K overlap < 0.7 (Jaccard similarity)
+        min_kendall_tau: 0.6     # Warn if Kendall tau < 0.6 (rank correlation)
+        top_k: 20                # Number of top features to analyze (default: 20)
+        min_snapshots: 2         # Minimum snapshots required for analysis (default: 2)
+      
+      # Expensive Importance Computation Policy (SST)
+      # Controls when to skip expensive PredictionValuesChange and use fallback
+      importance_max_wall_minutes: 30  # Maximum wall time for expensive importance computation (timeout)
+      overfit_train_acc_threshold: 0.99  # Skip expensive importance if train_acc >= this (default: 0.99 = 99%)
+      overfit_train_val_gap_threshold: 0.20  # Skip expensive importance if (train_acc - cv_acc) >= this (default: 0.20)
+      importance_fallback: "gain"  # Fallback method when skipping: "gain" | "split" | "none"
+      importance_skip_on_overfit: true  # Enable skipping expensive importance on overfitting detection
+      pvc_feature_count_cap: 250  # Optional: skip PVC if n_features > this (null to disable)
+  
   # Purge/embargo configuration
   temporal:
     purge_include_feature_lookback: true  # If true, purge = max(horizon+buffer, feature_lookback_max * 1.01)
@@ -271,18 +292,6 @@ safety:
       max_backups_per_target: 20  # Maximum backups to keep per target
       symbol_holdout_test_size: 0.2  # Test size for symbol holdout split
     
-    # Feature Importance Stability Tracking
-    feature_importance:
-      # Automatically analyze stability after saving snapshots
-      auto_analyze_stability: true  # Set to false to disable automatic analysis
-      
-      # Stability thresholds for warnings
-      stability_thresholds:
-        min_top_k_overlap: 0.7  # Warn if top-K overlap < 0.7 (Jaccard similarity)
-        min_kendall_tau: 0.6     # Warn if Kendall tau < 0.6 (rank correlation)
-        top_k: 20                # Number of top features to analyze (default: 20)
-        min_snapshots: 2         # Minimum snapshots required for analysis (default: 2)
-  
   # Metrics System (Cube-based with explicit dimensions and rollups)
   metrics:
     enabled: true  # Enable metrics collection

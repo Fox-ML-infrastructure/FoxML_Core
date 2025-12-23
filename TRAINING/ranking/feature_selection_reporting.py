@@ -74,64 +74,12 @@ def save_feature_selection_rankings(
     # Use it directly to avoid nested structures
     target_name_clean = target_column.replace('/', '_').replace('\\', '_')
     
-    # SIMPLIFIED: If output_dir is already at target level or inside FEATURE_SELECTION, use it directly
-    # This prevents creating nested REPRODUCIBILITY structures
-    if output_dir.name == target_name_clean:
-        # Already at target level: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
-        repro_dir = output_dir
-    elif "FEATURE_SELECTION" in output_dir.parts:
-        # We're inside FEATURE_SELECTION structure - find target level
-        # Walk up to find CROSS_SECTIONAL or SYMBOL_SPECIFIC, then go to target
-        current = output_dir
-        while current.name not in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "FEATURE_SELECTION"]:
-            if current.name == target_name_clean:
-                # Found target level
-                repro_dir = current
-                break
-            current = current.parent
-            if not current.parent.exists() or current.name == "RESULTS":
-                # Fallback: construct from current position
-                if "FEATURE_SELECTION" in current.parts:
-                    # We're at FEATURE_SELECTION level, go to view/target
-                    view_dir = view if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
-                    if view_dir == "SYMBOL_SPECIFIC" and symbol:
-                        repro_dir = current / view_dir / target_name_clean / f"symbol={symbol}"
-                    else:
-                        repro_dir = current / view_dir / target_name_clean
-                else:
-                    # We're at run level, construct full path
-                    view_dir = view if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
-                    if view_dir == "SYMBOL_SPECIFIC" and symbol:
-                        repro_dir = current / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean / f"symbol={symbol}"
-                    else:
-                        repro_dir = current / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean
-                break
-        else:
-            # Found CROSS_SECTIONAL or SYMBOL_SPECIFIC level
-            if current.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
-                repro_dir = current / target_name_clean
-            else:
-                # Fallback: use output_dir if it contains target name
-                repro_dir = output_dir
-    else:
-        # Not in FEATURE_SELECTION structure - construct path from scratch
-        base_output_dir = output_dir
-        while base_output_dir.name not in ["FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "RESULTS"]:
-            base_output_dir = base_output_dir.parent
-            if not base_output_dir.parent.exists():
-                break
-        view_dir = view if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
-        if view_dir == "SYMBOL_SPECIFIC" and symbol:
-            repro_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean / f"symbol={symbol}"
-        else:
-            repro_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_dir / target_name_clean
-    
     # Find base run directory for target-first structure
-    # IMPROVED: Start from output_dir when available (more reliable than starting from repro_dir)
-    # Walk up to find the run directory (where "targets", "globals", or "cache" would be)
+    # Walk up from output_dir to find the run directory (where "targets", "globals", or "cache" would be)
+    # REMOVED: Legacy REPRODUCIBILITY/FEATURE_SELECTION path construction - only use target-first structure
     base_output_dir = None
     
-    # First, try to find run directory from output_dir (preferred method)
+    # Find run directory from output_dir
     if output_dir and output_dir.exists():
         temp_dir = Path(output_dir)
         for _ in range(10):  # Limit depth
@@ -144,29 +92,14 @@ def save_feature_selection_rankings(
                 break
             temp_dir = temp_dir.parent
     
-    # Fallback: If output_dir method didn't work, try from repro_dir
-    if base_output_dir is None or base_output_dir == Path('/') or str(base_output_dir) == '/':
-        base_output_dir = repro_dir
-        for _ in range(10):  # Limit depth
-            # Only stop if we find a run directory (has targets/, globals/, or cache/)
-            # Don't stop at RESULTS/ - continue to find actual run directory
-            if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
-                break
-            elif (base_output_dir.parent / "targets").exists() or (base_output_dir.parent / "globals").exists() or (base_output_dir.parent / "cache").exists():
-                base_output_dir = base_output_dir.parent
-                break
-            if not base_output_dir.parent.exists() or base_output_dir.parent == base_output_dir:
-                break
-            base_output_dir = base_output_dir.parent
-    
     # CRITICAL: Validate base_output_dir is not root and is absolute
-    # If we walked all the way to root, fall back to original output_dir
+    # If we walked all the way to root, fall back to original output_dir and try again
     if base_output_dir is None or base_output_dir == Path('/') or not base_output_dir.is_absolute() or str(base_output_dir) == '/':
         logger.warning(f"Path resolution failed - base_output_dir resolved to root or invalid: {base_output_dir}. Using original output_dir: {output_dir}")
-        base_output_dir = Path(output_dir) if output_dir else repro_dir
+        base_output_dir = Path(output_dir) if output_dir else None
         # Final attempt: Try to find run directory from output_dir
-        if output_dir:
-            temp_dir = Path(output_dir)
+        if base_output_dir and base_output_dir.exists():
+            temp_dir = base_output_dir
             for _ in range(10):
                 if (temp_dir / "targets").exists() or (temp_dir / "globals").exists() or (temp_dir / "cache").exists():
                     base_output_dir = temp_dir

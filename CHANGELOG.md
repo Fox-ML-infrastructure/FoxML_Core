@@ -34,6 +34,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Files Changed**: `performance_audit.py` (NEW), `intelligent_trainer.py`, `multi_model_feature_selection.py`, `shared_ranking_harness.py`, `model_evaluation.py`, `leakage_detection.py`
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-22-performance-audit-system.md)
 
+#### 2025-12-22 (CatBoost Overfitting Detection and Legacy Structure Removal)
+- **Performance Fix**: Fixed CatBoost feature selection taking 6+ hours by implementing config-driven overfitting detection and process-based timeout
+- **Feature**: Added shared overfitting detection helper with policy-based gating (train_acc threshold, train/CV gap, train/val gap, feature count cap)
+- **Feature**: Added process-based timeout (30 minutes) for expensive PredictionValuesChange importance computation
+- **Feature**: Added comprehensive timing diagnostics with `timed()` context manager (CV, fit, importance stages)
+- **Enhancement**: Deterministic fallback importance (gain/split/none) when skipping expensive PVC - preserves comparability
+- **Bug Fix**: Fixed YAML config structure - moved `feature_importance` to correct location under `leakage_detection`
+- **Code Cleanup**: Removed legacy `RESULTS/REPRODUCIBILITY/FEATURE_SELECTION/...` structure creation
+- **Bug Fix**: Fixed path resolution to not stop at `RESULTS/` directory - now finds actual run directory correctly
+- **Impact**: Prevents 6-hour hangs, ensures all writes go to target-first structure only, comprehensive timing visibility
+- **Files Changed**: `safety.yaml`, `overfitting_detection.py` (NEW), `multi_model_feature_selection.py`, `feature_selection_reporting.py`, `feature_selector.py`, `io.py`, `hooks.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-22-catboost-overfitting-detection-and-legacy-structure-removal.md)
+
 #### 2025-12-22 (Training Results Organization and Pipeline Integrity Fixes)
 - **Bug Fix**: Fixed nested `training_results/training_results/` folder structure - models now save to simple `training_results/<family>/` structure
 - **Bug Fix**: Filtered feature selectors (lasso, mutual_information, univariate_selection, etc.) before training execution to prevent training errors

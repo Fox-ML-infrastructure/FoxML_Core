@@ -226,13 +226,18 @@ def analyze_all_stability_hook(
     all_metrics = {}
     
     # Determine base output directory (RESULTS/{run}/)
-    # Walk up from REPRODUCIBILITY/FEATURE_SELECTION or REPRODUCIBILITY/TARGET_RANKING structure
+    # Walk up to find run directory (has targets/, globals/, or cache/)
+    # REMOVED: Legacy REPRODUCIBILITY path construction - only use target-first structure
     if output_dir:
         base_output_dir = output_dir
-        while base_output_dir.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "feature_selections", "target_rankings"]:
-            base_output_dir = base_output_dir.parent
-            if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
+        for _ in range(10):
+            # Only stop if we find a run directory (has targets/, globals/, or cache/)
+            # Don't stop at RESULTS/ - continue to find actual run directory
+            if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
                 break
+            if not base_output_dir.parent.exists():
+                break
+            base_output_dir = base_output_dir.parent
     else:
         # Default: use get_snapshot_base_dir with None (artifacts/feature_importance)
         base_dir = get_snapshot_base_dir(None)
