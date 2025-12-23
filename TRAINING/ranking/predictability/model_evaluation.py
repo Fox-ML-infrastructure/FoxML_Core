@@ -516,6 +516,21 @@ def train_and_evaluate_models(
     all_feature_importances = {}  # {model_name: {feature: importance}} for detailed export
     fold_timestamps = []  # List of fold timestamp info
     
+    # Timing instrumentation for all importance producers (SST: thresholds from config)
+    import time
+    timing_data = {}  # {model_family: elapsed_seconds}
+    overall_start_time = time.time()
+    
+    # Load timing config (SST)
+    timing_log_enabled = True
+    timing_log_threshold_seconds = 1.0  # Only log if > 1 second
+    try:
+        from CONFIG.config_loader import get_cfg
+        timing_log_enabled = get_cfg('preprocessing.multi_model_feature_selection.timing.enabled', default=True, config_name='preprocessing_config')
+        timing_log_threshold_seconds = get_cfg('preprocessing.multi_model_feature_selection.timing.log_threshold_seconds', default=1.0, config_name='preprocessing_config')
+    except Exception:
+        pass  # Use defaults if config not available
+    
     try:
         from sklearn.model_selection import cross_val_score
         from sklearn.preprocessing import StandardScaler
@@ -2342,6 +2357,8 @@ def train_and_evaluate_models(
     
     # LightGBM
     if 'lightgbm' in model_families:
+        lightgbm_start_time = time.time()
+        logger.info(f"  🚀 Starting LightGBM training...")
         try:
             # GPU settings (will fallback to CPU if GPU not available)
             gpu_params = {}
@@ -2587,11 +2604,22 @@ def train_and_evaluate_models(
                 importance_ratio = 0.0
             importance_magnitudes.append(importance_ratio)
             
+            # Log timing
+            lightgbm_elapsed = time.time() - lightgbm_start_time
+            timing_data['lightgbm'] = lightgbm_elapsed
+            if timing_log_enabled and lightgbm_elapsed >= timing_log_threshold_seconds:
+                logger.info(f"  ⏱️  LightGBM timing: {lightgbm_elapsed:.2f} seconds")
+            
         except Exception as e:
-            logger.warning(f"LightGBM failed: {e}")
+            lightgbm_elapsed = time.time() - lightgbm_start_time
+            timing_data['lightgbm'] = lightgbm_elapsed
+            if timing_log_enabled:
+                logger.warning(f"LightGBM failed after {lightgbm_elapsed:.2f} seconds: {e}")
     
     # Random Forest
     if 'random_forest' in model_families:
+        random_forest_start_time = time.time()
+        logger.info(f"  🚀 Starting Random Forest training...")
         try:
             from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
             
@@ -2691,11 +2719,22 @@ def train_and_evaluate_models(
                 importance_ratio = 0.0
             importance_magnitudes.append(importance_ratio)
             
+            # Log timing
+            random_forest_elapsed = time.time() - random_forest_start_time
+            timing_data['random_forest'] = random_forest_elapsed
+            if timing_log_enabled and random_forest_elapsed >= timing_log_threshold_seconds:
+                logger.info(f"  ⏱️  Random Forest timing: {random_forest_elapsed:.2f} seconds")
+            
         except Exception as e:
-            logger.warning(f"RandomForest failed: {e}")
+            random_forest_elapsed = time.time() - random_forest_start_time
+            timing_data['random_forest'] = random_forest_elapsed
+            if timing_log_enabled:
+                logger.warning(f"Random Forest failed after {random_forest_elapsed:.2f} seconds: {e}")
     
     # Neural Network
     if 'neural_network' in model_families:
+        neural_network_start_time = time.time()
+        logger.info(f"  🚀 Starting Neural Network training...")
         try:
             from sklearn.neural_network import MLPRegressor, MLPClassifier
             from sklearn.impute import SimpleImputer
@@ -2828,15 +2867,28 @@ def train_and_evaluate_models(
             
             importance_magnitudes.append(np.mean(perm_scores))
             
+            # Log timing
+            neural_network_elapsed = time.time() - neural_network_start_time
+            timing_data['neural_network'] = neural_network_elapsed
+            if timing_log_enabled and neural_network_elapsed >= timing_log_threshold_seconds:
+                logger.info(f"  ⏱️  Neural Network timing: {neural_network_elapsed:.2f} seconds")
+            
         except ImportError as e:
-            logger.error(f"❌ Neural Network not available: {e}")
+            neural_network_elapsed = time.time() - neural_network_start_time
+            timing_data['neural_network'] = neural_network_elapsed
+            logger.error(f"❌ Neural Network not available: {e} - timing: {neural_network_elapsed:.2f} seconds")
             all_feature_importances['neural_network'] = {}  # Record failure
         except Exception as e:
-            logger.error(f"❌ Neural Network failed: {e}", exc_info=True)
+            neural_network_elapsed = time.time() - neural_network_start_time
+            timing_data['neural_network'] = neural_network_elapsed
+            if timing_log_enabled:
+                logger.error(f"❌ Neural Network failed after {neural_network_elapsed:.2f} seconds: {e}", exc_info=True)
             all_feature_importances['neural_network'] = {}  # Record failure
     
     # XGBoost
     if 'xgboost' in model_families:
+        xgboost_start_time = time.time()
+        logger.info(f"  🚀 Starting XGBoost training...")
         try:
             import xgboost as xgb
             
@@ -3030,11 +3082,22 @@ def train_and_evaluate_models(
                 else:
                     importance_ratio = 0.0
                 importance_magnitudes.append(importance_ratio)
+            
+            # Log timing
+            xgboost_elapsed = time.time() - xgboost_start_time
+            timing_data['xgboost'] = xgboost_elapsed
+            if timing_log_enabled and xgboost_elapsed >= timing_log_threshold_seconds:
+                logger.info(f"  ⏱️  XGBoost timing: {xgboost_elapsed:.2f} seconds")
         except Exception as e:
-            logger.warning(f"XGBoost failed: {e}")
+            xgboost_elapsed = time.time() - xgboost_start_time
+            timing_data['xgboost'] = xgboost_elapsed
+            if timing_log_enabled:
+                logger.warning(f"XGBoost failed after {xgboost_elapsed:.2f} seconds: {e}")
     
     # CatBoost
     if 'catboost' in model_families:
+        catboost_start_time = time.time()
+        logger.info(f"  🚀 Starting CatBoost training...")
         try:
             import catboost as cb
             from catboost import Pool
@@ -3792,13 +3855,26 @@ def train_and_evaluate_models(
             else:
                 importance_ratio = 0.0
             importance_magnitudes.append(importance_ratio)
+            
+            # Log timing
+            catboost_elapsed = time.time() - catboost_start_time
+            timing_data['catboost'] = catboost_elapsed
+            if timing_log_enabled and catboost_elapsed >= timing_log_threshold_seconds:
+                logger.info(f"  ⏱️  CatBoost timing: {catboost_elapsed:.2f} seconds")
         except ImportError:
-            logger.warning("CatBoost not available (pip install catboost)")
+            catboost_elapsed = time.time() - catboost_start_time
+            timing_data['catboost'] = catboost_elapsed
+            logger.warning(f"CatBoost not available (pip install catboost) - timing: {catboost_elapsed:.2f} seconds")
         except Exception as e:
-            logger.warning(f"CatBoost failed: {e}")
+            catboost_elapsed = time.time() - catboost_start_time
+            timing_data['catboost'] = catboost_elapsed
+            if timing_log_enabled:
+                logger.warning(f"CatBoost failed after {catboost_elapsed:.2f} seconds: {e}")
     
     # Lasso
     if 'lasso' in model_families:
+        lasso_start_time = time.time()
+        logger.info(f"  🚀 Starting Lasso training...")
         try:
             from sklearn.linear_model import Lasso
             from sklearn.pipeline import Pipeline
@@ -3866,15 +3942,28 @@ def train_and_evaluate_models(
             else:
                 importance_ratio = 0.0
             importance_magnitudes.append(importance_ratio)
+            
+            # Log timing
+            lasso_elapsed = time.time() - lasso_start_time
+            timing_data['lasso'] = lasso_elapsed
+            if timing_log_enabled and lasso_elapsed >= timing_log_threshold_seconds:
+                logger.info(f"  ⏱️  Lasso timing: {lasso_elapsed:.2f} seconds")
         except ImportError as e:
-            logger.error(f"❌ Lasso not available: {e}")
+            lasso_elapsed = time.time() - lasso_start_time
+            timing_data['lasso'] = lasso_elapsed
+            logger.error(f"❌ Lasso not available: {e} - timing: {lasso_elapsed:.2f} seconds")
             all_feature_importances['lasso'] = {}  # Record failure
         except Exception as e:
-            logger.error(f"❌ Lasso failed: {e}", exc_info=True)
+            lasso_elapsed = time.time() - lasso_start_time
+            timing_data['lasso'] = lasso_elapsed
+            if timing_log_enabled:
+                logger.error(f"❌ Lasso failed after {lasso_elapsed:.2f} seconds: {e}", exc_info=True)
             all_feature_importances['lasso'] = {}  # Record failure
     
     # Ridge
     if 'ridge' in model_families:
+        ridge_start_time = time.time()
+        logger.info(f"  🚀 Starting Ridge training...")
         try:
             from sklearn.linear_model import Ridge, RidgeClassifier
             from sklearn.pipeline import Pipeline
@@ -3961,15 +4050,28 @@ def train_and_evaluate_models(
                 else:
                     importance_ratio = 0.0
             importance_magnitudes.append(importance_ratio)
+            
+            # Log timing
+            ridge_elapsed = time.time() - ridge_start_time
+            timing_data['ridge'] = ridge_elapsed
+            if timing_log_enabled and ridge_elapsed >= timing_log_threshold_seconds:
+                logger.info(f"  ⏱️  Ridge timing: {ridge_elapsed:.2f} seconds")
         except ImportError as e:
-            logger.error(f"❌ Ridge not available: {e}")
+            ridge_elapsed = time.time() - ridge_start_time
+            timing_data['ridge'] = ridge_elapsed
+            logger.error(f"❌ Ridge not available: {e} - timing: {ridge_elapsed:.2f} seconds")
             all_feature_importances['ridge'] = {}  # Record failure
         except Exception as e:
-            logger.error(f"❌ Ridge failed: {e}", exc_info=True)
+            ridge_elapsed = time.time() - ridge_start_time
+            timing_data['ridge'] = ridge_elapsed
+            if timing_log_enabled:
+                logger.error(f"❌ Ridge failed after {ridge_elapsed:.2f} seconds: {e}", exc_info=True)
             all_feature_importances['ridge'] = {}  # Record failure
     
     # Elastic Net
     if 'elastic_net' in model_families:
+        elastic_net_start_time = time.time()
+        logger.info(f"  🚀 Starting Elastic Net training...")
         try:
             from sklearn.linear_model import ElasticNet, LogisticRegression
             from sklearn.pipeline import Pipeline
@@ -4133,15 +4235,28 @@ def train_and_evaluate_models(
                     else:
                         importance_ratio = 0.0
                     importance_magnitudes.append(importance_ratio)
+            
+            # Log timing
+            elastic_net_elapsed = time.time() - elastic_net_start_time
+            timing_data['elastic_net'] = elastic_net_elapsed
+            if timing_log_enabled and elastic_net_elapsed >= timing_log_threshold_seconds:
+                logger.info(f"  ⏱️  Elastic Net timing: {elastic_net_elapsed:.2f} seconds")
         except ImportError as e:
-            logger.error(f"❌ Elastic Net not available: {e}")
+            elastic_net_elapsed = time.time() - elastic_net_start_time
+            timing_data['elastic_net'] = elastic_net_elapsed
+            logger.error(f"❌ Elastic Net not available: {e} - timing: {elastic_net_elapsed:.2f} seconds")
             all_feature_importances['elastic_net'] = {}  # Record failure
         except Exception as e:
-            logger.error(f"❌ Elastic Net failed: {e}", exc_info=True)
+            elastic_net_elapsed = time.time() - elastic_net_start_time
+            timing_data['elastic_net'] = elastic_net_elapsed
+            if timing_log_enabled:
+                logger.error(f"❌ Elastic Net failed after {elastic_net_elapsed:.2f} seconds: {e}", exc_info=True)
             all_feature_importances['elastic_net'] = {}  # Record failure
     
     # Mutual Information
     if 'mutual_information' in model_families:
+        mutual_information_start_time = time.time()
+        logger.info(f"  🚀 Starting Mutual Information training...")
         try:
             from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
             from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
@@ -4203,11 +4318,22 @@ def train_and_evaluate_models(
             # Scale to approximate R² range (0-0.3 for good targets)
             model_scores['mutual_information'] = min(0.3, importance_ratio * 0.3)
             importance_magnitudes.append(importance_ratio)
+            
+            # Log timing
+            mutual_information_elapsed = time.time() - mutual_information_start_time
+            timing_data['mutual_information'] = mutual_information_elapsed
+            if timing_log_enabled and mutual_information_elapsed >= timing_log_threshold_seconds:
+                logger.info(f"  ⏱️  Mutual Information timing: {mutual_information_elapsed:.2f} seconds")
         except ImportError as e:
-            logger.error(f"❌ Mutual Information not available: {e}")
+            mutual_information_elapsed = time.time() - mutual_information_start_time
+            timing_data['mutual_information'] = mutual_information_elapsed
+            logger.error(f"❌ Mutual Information not available: {e} - timing: {mutual_information_elapsed:.2f} seconds")
             all_feature_importances['mutual_information'] = {}  # Record failure
         except Exception as e:
-            logger.error(f"❌ Mutual Information failed: {e}", exc_info=True)
+            mutual_information_elapsed = time.time() - mutual_information_start_time
+            timing_data['mutual_information'] = mutual_information_elapsed
+            if timing_log_enabled:
+                logger.error(f"❌ Mutual Information failed after {mutual_information_elapsed:.2f} seconds: {e}", exc_info=True)
             all_feature_importances['mutual_information'] = {}  # Record failure
     
     # Univariate Selection
@@ -4361,97 +4487,234 @@ def train_and_evaluate_models(
     
     # Boruta
     if 'boruta' in model_families:
+        boruta_start_time = time.time()
+        logger.info(f"  🚀 Starting Boruta training...")
+        boruta_iteration_times = []  # Track time per iteration
+        
+        # Conditional execution gate (SST: all thresholds from config)
+        boruta_should_run = True
+        skip_reason = None
+        
         try:
-            from boruta import BorutaPy
-            from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-            from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
+            boruta_config_check = get_model_config('boruta', multi_model_config)
+            boruta_enabled = boruta_config_check.get('enabled', True)
+            if not boruta_enabled:
+                boruta_should_run = False
+                skip_reason = "disabled in config"
             
-            # Boruta doesn't support NaN - use sklearn-safe conversion
-            X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
-            
-            # Get config values
-            boruta_config = get_model_config('boruta', multi_model_config)
-            
-            # Use random_forest config for Boruta estimator
-            rf_config = get_model_config('random_forest', multi_model_config)
-            
-            # Get random_state from SST (determinism system) - no hardcoded defaults
-            boruta_random_state = boruta_config.get('random_state')
-            if boruta_random_state is None:
-                from TRAINING.common.determinism import stable_seed_from
-                boruta_random_state = stable_seed_from(['boruta', target_column if target_column else 'default'])
-            
-            # Remove random_state from rf_config to prevent double argument error
-            rf_config_clean = rf_config.copy()
-            rf_config_clean.pop('random_state', None)
-            
-            if is_binary or is_multiclass:
-                rf = RandomForestClassifier(**rf_config_clean, random_state=boruta_random_state)
-            else:
-                rf = RandomForestRegressor(**rf_config_clean, random_state=boruta_random_state)
-            
-            boruta = BorutaPy(rf, n_estimators='auto', verbose=0, 
-                            random_state=boruta_random_state,
-                            max_iter=boruta_config.get('max_iter', 100))
-            boruta.fit(X_dense, y)
-            
-            # Get R² using cross-validation on selected features (proper validation)
-            selected_features = boruta.support_
-            if np.any(selected_features):
-                X_selected = X_dense[:, selected_features]
-                # Quick RF for scoring (use smaller config)
-                quick_rf_config = get_model_config('random_forest', multi_model_config).copy()
-                # Use smaller model for quick scoring
-                quick_rf_config['n_estimators'] = 50
-                quick_rf_config['max_depth'] = 8
+            # Check dataset size thresholds (SST: from config)
+            if boruta_should_run:
+                # Load thresholds from config (SST)
+                try:
+                    from CONFIG.config_loader import get_cfg
+                    boruta_cfg = get_cfg("preprocessing.multi_model_feature_selection.boruta", default={}, config_name="preprocessing_config")
+                    max_features_threshold = boruta_cfg.get('max_features_threshold', 200)
+                    max_samples_threshold = boruta_cfg.get('max_samples_threshold', 20000)
+                except Exception:
+                    # Fallback if config not available
+                    max_features_threshold = 200
+                    max_samples_threshold = 20000
+                
+                n_features = len(feature_names) if feature_names else X.shape[1] if X is not None else 0
+                n_samples = len(y) if y is not None else X.shape[0] if X is not None else 0
+                
+                if n_features > max_features_threshold:
+                    boruta_should_run = False
+                    skip_reason = f"too many features ({n_features} > {max_features_threshold})"
+                elif n_samples > max_samples_threshold:
+                    # Check if subsampling is enabled (will be checked later)
+                    subsample_cfg = boruta_cfg.get('subsample_large_datasets', {}) if 'boruta_cfg' in locals() else {}
+                    subsample_enabled = subsample_cfg.get('enabled', True) if subsample_cfg else True
+                    if not subsample_enabled:
+                        boruta_should_run = False
+                        skip_reason = f"too many samples ({n_samples} > {max_samples_threshold}) and subsampling disabled"
+        except Exception as e:
+            logger.debug(f"Failed to load Boruta conditional execution config: {e}, proceeding with Boruta")
+            # If config load fails, proceed with Boruta (graceful degradation)
+        
+        if not boruta_should_run:
+            boruta_elapsed = time.time() - boruta_start_time
+            timing_data['boruta'] = boruta_elapsed
+            logger.info(f"  ⏱️  Boruta SKIPPED - {skip_reason} (timing: {boruta_elapsed:.2f}s)")
+            all_feature_importances['boruta'] = {}  # Record skip
+        else:
+            try:
+                from boruta import BorutaPy
+                from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+                from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
+                
+                # Boruta doesn't support NaN - use sklearn-safe conversion
+                X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
+                
+                # Get config values
+                boruta_config = get_model_config('boruta', multi_model_config)
+                
+                # Use random_forest config for Boruta estimator
+                rf_config = get_model_config('random_forest', multi_model_config)
+                
+                # Get random_state from SST (determinism system) - no hardcoded defaults
+                boruta_random_state = boruta_config.get('random_state')
+                if boruta_random_state is None:
+                    from TRAINING.common.determinism import stable_seed_from
+                    boruta_random_state = stable_seed_from(['boruta', target_column if target_column else 'default'])
+                
+                # Remove random_state from rf_config to prevent double argument error
+                rf_config_clean = rf_config.copy()
+                rf_config_clean.pop('random_state', None)
                 
                 if is_binary or is_multiclass:
-                    quick_rf = RandomForestClassifier(**quick_rf_config)
+                    rf = RandomForestClassifier(**rf_config_clean, random_state=boruta_random_state)
                 else:
-                    quick_rf = RandomForestRegressor(**quick_rf_config)
+                    rf = RandomForestRegressor(**rf_config_clean, random_state=boruta_random_state)
                 
-                # Use cross-validation for proper validation (not training score)
-                scores = cross_val_score(quick_rf, X_selected, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
-                valid_scores = scores[~np.isnan(scores)]
-                model_scores['boruta'] = valid_scores.mean() if len(valid_scores) > 0 else np.nan
-            else:
-                model_scores['boruta'] = np.nan
-            
-            # Update feature_names to match dense array
-            feature_names = feature_names_dense
-            
-            # Convert to importance
-            ranking = boruta.ranking_
-            selected = boruta.support_
-            importance = np.where(selected, 1.0, np.where(ranking == 2, 0.5, 0.1))
-            if len(importance) > 0:
-                total_importance = np.sum(importance)
-                if total_importance > 0:
-                    top_fraction = _get_importance_top_fraction()
-                    top_k = max(1, int(len(importance) * top_fraction))
-                    top_importance_sum = np.sum(np.sort(importance)[-top_k:])
-                    importance_ratio = top_importance_sum / total_importance
+                boruta = BorutaPy(rf, n_estimators='auto', verbose=0, 
+                                random_state=boruta_random_state,
+                                max_iter=boruta_config.get('max_iter', 100))
+                
+                # Track Boruta fit time and apply time-budget (SST: budget from config)
+                import signal
+                boruta_fit_start = time.time()
+                boruta_max_time_seconds = None
+                try:
+                    from CONFIG.config_loader import get_cfg
+                    boruta_cfg_time = get_cfg('preprocessing.multi_model_feature_selection.boruta', default={}, config_name='preprocessing_config')
+                    max_time_minutes = boruta_cfg_time.get('max_time_minutes', 10)  # Default 10 minutes
+                    boruta_max_time_seconds = max_time_minutes * 60
+                except Exception:
+                    pass  # Use defaults if config not available
+                
+                # Time-budget wrapper for Boruta fit (SST: budget from config)
+                boruta_timed_out = False
+                boruta_budget_hit = False
+                
+                def boruta_timeout_handler(signum, frame):
+                    nonlocal boruta_timed_out, boruta_budget_hit
+                    boruta_timed_out = True
+                    boruta_budget_hit = True
+                    raise TimeoutError(f"Boruta training exceeded {boruta_max_time_seconds/60:.0f} minute time budget")
+                
+                # Set up timeout if budget is configured (Unix only - Windows will use soft check)
+                timeout_set = False
+                if boruta_max_time_seconds is not None:
+                    try:
+                        signal.signal(signal.SIGALRM, boruta_timeout_handler)
+                        signal.alarm(int(boruta_max_time_seconds))
+                        timeout_set = True
+                    except (AttributeError, OSError):
+                        # Windows doesn't support SIGALRM - will use soft timeout check
+                        logger.debug(f"  Boruta: Timeout signal not available on this platform, using soft timeout check")
+                
+                try:
+                    boruta.fit(X_dense, y)
+                    
+                    # Cancel timeout if it was set
+                    if timeout_set:
+                        try:
+                            signal.alarm(0)
+                        except (AttributeError, OSError):
+                            pass
+                    
+                    # Soft timeout check (for Windows or if signal didn't fire)
+                    boruta_fit_elapsed = time.time() - boruta_fit_start
+                    if boruta_max_time_seconds is not None and boruta_fit_elapsed > boruta_max_time_seconds:
+                        boruta_budget_hit = True
+                        logger.warning(f"  ⚠️  Boruta BORUTA_BUDGET_HIT - Training took {boruta_fit_elapsed/60:.1f} minutes (exceeded {boruta_max_time_seconds/60:.0f} min budget)")
+                        # Continue with current results (quality-safe: use what we have)
+                        
+                except TimeoutError as te:
+                    boruta_fit_elapsed = time.time() - boruta_fit_start
+                    boruta_budget_hit = True
+                    logger.warning(f"  ⚠️  Boruta BORUTA_BUDGET_HIT - Training exceeded {boruta_max_time_seconds/60:.0f} minute budget after {boruta_fit_elapsed/60:.1f} minutes")
+                    # Cancel timeout
+                    if timeout_set:
+                        try:
+                            signal.alarm(0)
+                        except (AttributeError, OSError):
+                            pass
+                    # Check if Boruta has partial results we can use
+                    if hasattr(boruta, 'ranking_') and boruta.ranking_ is not None:
+                        logger.info(f"  Boruta: Using partial results from interrupted fit")
+                        # Continue with partial results (quality-safe: better than nothing)
+                    else:
+                        # No partial results - raise to be caught by outer exception handler
+                        raise
+                
+                boruta_fit_elapsed = time.time() - boruta_fit_start
+                boruta_iteration_times.append(boruta_fit_elapsed)  # Store overall fit time
+                
+                # Get R² using cross-validation on selected features (proper validation)
+                selected_features = boruta.support_
+                if np.any(selected_features):
+                    X_selected = X_dense[:, selected_features]
+                    # Quick RF for scoring (use smaller config)
+                    quick_rf_config = get_model_config('random_forest', multi_model_config).copy()
+                    # Use smaller model for quick scoring
+                    quick_rf_config['n_estimators'] = 50
+                    quick_rf_config['max_depth'] = 8
+                    
+                    if is_binary or is_multiclass:
+                        quick_rf = RandomForestClassifier(**quick_rf_config)
+                    else:
+                        quick_rf = RandomForestRegressor(**quick_rf_config)
+                    
+                    # Use cross-validation for proper validation (not training score)
+                    scores = cross_val_score(quick_rf, X_selected, y, cv=tscv, scoring=scoring, n_jobs=cv_n_jobs, error_score=np.nan)
+                    valid_scores = scores[~np.isnan(scores)]
+                    model_scores['boruta'] = valid_scores.mean() if len(valid_scores) > 0 else np.nan
+                else:
+                    model_scores['boruta'] = np.nan
+                
+                # Update feature_names to match dense array
+                feature_names = feature_names_dense
+                
+                # Convert to importance
+                ranking = boruta.ranking_
+                selected = boruta.support_
+                importance = np.where(selected, 1.0, np.where(ranking == 2, 0.5, 0.1))
+                if len(importance) > 0:
+                    total_importance = np.sum(importance)
+                    if total_importance > 0:
+                        top_fraction = _get_importance_top_fraction()
+                        top_k = max(1, int(len(importance) * top_fraction))
+                        top_importance_sum = np.sum(np.sort(importance)[-top_k:])
+                        importance_ratio = top_importance_sum / total_importance
+                    else:
+                        importance_ratio = 0.0
                 else:
                     importance_ratio = 0.0
-            else:
-                importance_ratio = 0.0
-            importance_magnitudes.append(importance_ratio)
-            
-            # Store all feature importances for detailed export (same pattern as other models)
-            # CRITICAL: Align importance to feature_names order to ensure fingerprint match
-            importance_series = pd.Series(importance, index=feature_names)
-            importance_series = importance_series.reindex(feature_names, fill_value=0.0)
-            importance_dict = importance_series.to_dict()
-            all_feature_importances['boruta'] = importance_dict
-        except ImportError as e:
-            logger.error(f"❌ Boruta not available (pip install Boruta): {e}")
-            all_feature_importances['boruta'] = {}  # Record failure
-        except Exception as e:
-            logger.error(f"❌ Boruta failed: {e}", exc_info=True)
-            all_feature_importances['boruta'] = {}  # Record failure
+                importance_magnitudes.append(importance_ratio)
+                
+                # Store all feature importances for detailed export (same pattern as other models)
+                # CRITICAL: Align importance to feature_names order to ensure fingerprint match
+                importance_series = pd.Series(importance, index=feature_names)
+                importance_series = importance_series.reindex(feature_names, fill_value=0.0)
+                importance_dict = importance_series.to_dict()
+                all_feature_importances['boruta'] = importance_dict
+                
+                # Log detailed Boruta timing
+                boruta_elapsed = time.time() - boruta_start_time
+                timing_data['boruta'] = boruta_elapsed
+                if timing_log_enabled and boruta_elapsed >= timing_log_threshold_seconds:
+                    fit_time_str = f"{boruta_fit_elapsed:.2f}" if boruta_fit_elapsed else "N/A"
+                    logger.info(f"  ⏱️  Boruta timing: {boruta_elapsed:.2f} seconds (fit: {fit_time_str}s)")
+                    if hasattr(boruta, 'n_iter_'):
+                        logger.info(f"     Boruta iterations: {boruta.n_iter_}/{boruta_config.get('max_iter', 100)}")
+            except ImportError as e:
+                boruta_elapsed = time.time() - boruta_start_time
+                timing_data['boruta'] = boruta_elapsed
+                logger.error(f"❌ Boruta not available (pip install Boruta): {e} - timing: {boruta_elapsed:.2f} seconds")
+                all_feature_importances['boruta'] = {}  # Record failure
+            except Exception as e:
+                boruta_elapsed = time.time() - boruta_start_time
+                timing_data['boruta'] = boruta_elapsed
+                if timing_log_enabled:
+                    logger.error(f"❌ Boruta failed after {boruta_elapsed:.2f} seconds: {e}", exc_info=True)
+                all_feature_importances['boruta'] = {}  # Record failure
     
     # Stability Selection
     if 'stability_selection' in model_families:
+        stability_selection_start_time = time.time()
+        logger.info(f"  🚀 Starting Stability Selection training...")
         try:
             from sklearn.linear_model import LassoCV, LogisticRegressionCV
             from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
@@ -4564,15 +4827,28 @@ def train_and_evaluate_models(
             else:
                 importance_ratio = 0.0
             importance_magnitudes.append(importance_ratio)
+            
+            # Log timing
+            stability_selection_elapsed = time.time() - stability_selection_start_time
+            timing_data['stability_selection'] = stability_selection_elapsed
+            if timing_log_enabled and stability_selection_elapsed >= timing_log_threshold_seconds:
+                logger.info(f"  ⏱️  Stability Selection timing: {stability_selection_elapsed:.2f} seconds")
         except ImportError as e:
-            logger.error(f"❌ Stability Selection not available: {e}")
+            stability_selection_elapsed = time.time() - stability_selection_start_time
+            timing_data['stability_selection'] = stability_selection_elapsed
+            logger.error(f"❌ Stability Selection not available: {e} - timing: {stability_selection_elapsed:.2f} seconds")
             all_feature_importances['stability_selection'] = {}  # Record failure
         except Exception as e:
-            logger.error(f"❌ Stability Selection failed: {e}", exc_info=True)
+            stability_selection_elapsed = time.time() - stability_selection_start_time
+            timing_data['stability_selection'] = stability_selection_elapsed
+            if timing_log_enabled:
+                logger.error(f"❌ Stability Selection failed after {stability_selection_elapsed:.2f} seconds: {e}", exc_info=True)
             all_feature_importances['stability_selection'] = {}  # Record failure
     
     # Histogram Gradient Boosting
     if 'histogram_gradient_boosting' in model_families:
+        histogram_gb_start_time = time.time()
+        logger.info(f"  🚀 Starting Histogram Gradient Boosting training...")
         try:
             from sklearn.ensemble import HistGradientBoostingRegressor, HistGradientBoostingClassifier
             
@@ -4623,8 +4899,17 @@ def train_and_evaluate_models(
                 else:
                     importance_ratio = 0.0
                 importance_magnitudes.append(importance_ratio)
+            
+            # Log timing
+            histogram_gb_elapsed = time.time() - histogram_gb_start_time
+            timing_data['histogram_gradient_boosting'] = histogram_gb_elapsed
+            if timing_log_enabled and histogram_gb_elapsed >= timing_log_threshold_seconds:
+                logger.info(f"  ⏱️  Histogram Gradient Boosting timing: {histogram_gb_elapsed:.2f} seconds")
         except Exception as e:
-            logger.warning(f"Histogram Gradient Boosting failed: {e}")
+            histogram_gb_elapsed = time.time() - histogram_gb_start_time
+            timing_data['histogram_gradient_boosting'] = histogram_gb_elapsed
+            if timing_log_enabled:
+                logger.warning(f"Histogram Gradient Boosting failed after {histogram_gb_elapsed:.2f} seconds: {e}")
     
     mean_importance = np.mean(importance_magnitudes) if importance_magnitudes else 0.0
     
@@ -4632,6 +4917,17 @@ def train_and_evaluate_models(
     # model_metrics contains full metrics dict
     # all_suspicious_features contains leak detection results (aggregated across all models)
     # all_feature_importances contains detailed per-feature importances for export
+    # Log summary timing for all importance producers
+    overall_elapsed = time.time() - overall_start_time
+    if timing_log_enabled and overall_elapsed >= timing_log_threshold_seconds:
+        logger.info(f"⏱️  Total importance producer timing: {overall_elapsed:.2f} seconds")
+        if timing_data:
+            sorted_timing = sorted(timing_data.items(), key=lambda x: x[1], reverse=True)
+            for model_family, elapsed in sorted_timing:
+                if elapsed >= timing_log_threshold_seconds:
+                    percentage = (elapsed / overall_elapsed) * 100 if overall_elapsed > 0 else 0
+                    logger.info(f"   {model_family}: {elapsed:.2f}s ({percentage:.1f}%)")
+    
     return model_metrics, model_scores, mean_importance, all_suspicious_features, all_feature_importances, fold_timestamps, _perfect_correlation_models
 
 

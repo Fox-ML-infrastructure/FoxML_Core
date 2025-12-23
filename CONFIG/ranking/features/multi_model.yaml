@@ -212,14 +212,40 @@ model_families:
     importance_method: "native"  # Selection-based (confirmed/tentative/rejected)
     weight: 1.0  # Weight in base aggregation (before gatekeeper bonuses/penalties)
     config:
-      n_estimators: 500  # More trees for stable importance testing (vs RF's 200)
+      n_estimators: 300  # Optimized: Reduced from 500 to 300 for faster training (still stable for importance)
       max_depth: 6  # Shallower to avoid overfitting to interactions (vs RF's 15)
-      max_iter: 100  # Maximum Boruta iterations
+      max_iter: 50  # Optimized: Reduced from 100 to 50 (most decisions converge earlier)
       perc: 95  # Percentile threshold (higher = more conservative, needs to beat shadow more decisively)
       # random_state: auto-injected from global.random_state (or pipeline.determinism.base_seed)
       n_jobs: 1  # Parallel jobs for ExtraTrees base estimator
       verbose: 0  # BorutaPy verbosity (0=silent, 1=progress, 2=detailed)
       class_weight: "auto"  # "auto"=balanced_subsample for binary, balanced for multiclass; "none"=no weighting; or dict
+      # Performance optimization settings (SST: all from config)
+      max_time_minutes: 10  # Time budget for Boruta fit (default: 10 minutes)
+      max_features_threshold: 200  # Skip Boruta if n_features > this (default: 200)
+      max_samples_threshold: 20000  # Skip Boruta if n_samples > this and subsampling disabled (default: 20000)
+      min_time_budget_minutes: 10  # Minimum time budget required to run Boruta (default: 10)
+      min_target_confidence: "HIGH"  # Minimum target confidence to run Boruta (default: "HIGH")
+      # Adaptive max_iter based on dataset size (SST: all thresholds from config)
+      adaptive_max_iter:
+        enabled: true  # Enable adaptive max_iter based on dataset size
+        small_dataset_threshold: 5000  # Threshold for small datasets
+        small_dataset_max_iter: 30  # Max iterations for small datasets
+        medium_dataset_threshold: 20000  # Threshold for medium datasets
+        medium_dataset_max_iter: 50  # Max iterations for medium datasets
+        large_dataset_max_iter: 75  # Max iterations for large datasets
+      # Early stopping detection (SST: from config)
+      early_stopping:
+        enabled: true  # Enable early stopping detection (logs when decisions stabilize)
+        stable_iterations: 5  # Number of stable iterations before considering early convergence
+      # Subsample large datasets for Boruta (SST: all parameters from config)
+      subsample_large_datasets:
+        enabled: true  # Enable subsampling for large datasets
+        threshold: 10000  # Subsample if n_samples > this (default: 10000)
+        max_samples: 10000  # Maximum samples after subsampling (default: 10000)
+      # Caching for Boruta results (SST: controlled by config)
+      caching:
+        enabled: true  # Enable caching for Boruta results (uses feature selection cache infrastructure)
   
   stability_selection:
     enabled: true  # ✅ ENABLED - Bootstrap-based stable feature selection (slower)

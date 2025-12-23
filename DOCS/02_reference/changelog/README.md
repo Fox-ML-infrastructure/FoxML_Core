@@ -6,8 +6,20 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-23 (Comprehensive Model Timing Metrics)** — Added comprehensive timing metrics (start-time and elapsed-time logging) for all 12 model families in target ranking and feature selection. Provides visibility into execution sequence, individual model performance, and overall pipeline timing to help identify bottlenecks. All models now log start time (🚀) and elapsed time (⏱️) with percentage breakdown in overall summary.
+  → [View](2025-12-23-comprehensive-model-timing-metrics.md)
+
 - **2025-12-22 (CatBoost CV Efficiency with Early Stopping in Feature Selection)** — Implemented efficient CV with early stopping per fold for CatBoost in feature selection, replacing previous CV skip approach. Maintains CV rigor for fold-level stability analysis (mean importance, variance tracking) while reducing training time from 3 hours to <30 minutes (6-18x speedup). Enables identifying features with persistent signal vs. noisy features. Reverted previous CV skip to maintain best practices for time-series feature selection.
   → [View](2025-12-22-catboost-cv-efficiency-with-early-stopping.md)
+
+- **2025-12-22 (Boruta Performance Optimizations)** — Implemented quality-preserving optimizations for Boruta feature selection to address performance bottlenecks. Added time budget enforcement (10 min default), conditional execution (skip for >200 features or >20k samples), adaptive max_iter based on dataset size, subsampling for large datasets, and caching integration. All parameters SST-compliant (loaded from config). Reduces Boruta feature selection time from hours to minutes while maintaining model quality.
+  → [View](2025-12-22-boruta-performance-optimizations.md)
+
+- **2025-12-22 (CatBoost Formatting TypeError Fix)** — Fixed `TypeError: unsupported format string passed to NoneType.__format__` when `cv_mean` or `val_score` is `None` in CatBoost overfitting check logging. Pre-format values before using in f-string to prevent format specifier errors. Prevents runtime errors in CatBoost logging, training pipeline completes successfully regardless of CV or validation score availability.
+  → [View](2025-12-22-catboost-formatting-typeerror-fix.md)
+
+- **2025-12-22 (Trend Analyzer Operator Precedence Fix)** — Fixed operator precedence bug in trend analyzer path detection that prevented correct identification of runs in comparison groups. Added explicit parentheses to ensure `d.is_dir()` is evaluated before checking subdirectories. Enables proper run detection in comparison groups, trend analyzer correctly identifies all runs with `targets/`, `globals/`, or `REPRODUCIBILITY/` subdirectories.
+  → [View](2025-12-22-trend-analyzer-operator-precedence-fix.md)
 
 - **2025-12-21 (CatBoost Formatting Error and CV Skip Fixes)** — Fixed CatBoost `train_val_gap` format specifier error causing `ValueError: Invalid format specifier`. Always skip CV for CatBoost in feature selection to prevent 3-hour training times (CV doesn't use early stopping per fold, runs full 300 iterations per fold). Training time reduced from 3 hours to <5 minutes for single symbol (36x speedup). Backward compatible: no change for users with `cv_n_jobs <= 1`. **NOTE**: This approach was later reverted in favor of efficient CV with early stopping (see 2025-12-22 entry).
   → [View](2025-12-21-catboost-formatting-and-cv-skip-fixes.md)

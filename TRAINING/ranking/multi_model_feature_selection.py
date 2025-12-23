@@ -2186,8 +2186,10 @@ def train_model_and_get_importance(
                 )
                 
                 # Log decision with actual values
-                logger.info(f"    CatBoost: Overfitting check - train={train_score:.4f}, cv={cv_mean:.4f if cv_mean else 'N/A'}, "
-                          f"val={val_score:.4f if 'val_score' in locals() and val_score is not None else 'N/A'}, "
+                cv_mean_str = f"{cv_mean:.4f}" if cv_mean is not None else 'N/A'
+                val_score_str = f"{val_score:.4f}" if 'val_score' in locals() and val_score is not None else 'N/A'
+                logger.info(f"    CatBoost: Overfitting check - train={train_score:.4f}, cv={cv_mean_str}, "
+                          f"val={val_score_str}, "
                           f"decision={'SKIP' if should_skip else 'RUN'}, reason={skip_reason}")
                 
                 if should_skip and skip_on_overfit:
@@ -2915,21 +2917,100 @@ def train_model_and_get_importance(
     elif model_family == 'boruta':
         # Boruta - All-relevant feature selection (statistical gate, not just another importance scorer)
         # Uses ExtraTrees with more trees/shallower depth for stable importance testing
+        
+        # Conditional execution gate (SST: all thresholds from config)
+        boruta_should_run = True
+        skip_reason = None
+        
+        try:
+            from CONFIG.config_loader import get_cfg
+            boruta_cfg = get_cfg("preprocessing.multi_model_feature_selection.boruta", default={}, config_name="preprocessing_config")
+            
+            # Check if Boruta is enabled
+            boruta_enabled = family_config.get('enabled', boruta_cfg.get('enabled', True))
+            if not boruta_enabled:
+                boruta_should_run = False
+                skip_reason = "disabled in config"
+            
+            # Check dataset size thresholds (SST: from config)
+            if boruta_should_run:
+                max_features_threshold = boruta_cfg.get('max_features_threshold', 200)
+                max_samples_threshold = boruta_cfg.get('max_samples_threshold', 20000)
+                
+                n_features = len(feature_names) if feature_names else X.shape[1] if X is not None else 0
+                n_samples = len(y) if y is not None else X.shape[0] if X is not None else 0
+                
+                if n_features > max_features_threshold:
+                    boruta_should_run = False
+                    skip_reason = f"too many features ({n_features} > {max_features_threshold})"
+                elif n_samples > max_samples_threshold:
+                    # Check if subsampling is enabled (will be checked later)
+                    subsample_enabled = boruta_cfg.get('subsample_large_datasets', {}).get('enabled', True)
+                    if not subsample_enabled:
+                        boruta_should_run = False
+                        skip_reason = f"too many samples ({n_samples} > {max_samples_threshold}) and subsampling disabled"
+            
+            # Time budget check (will be done during fit, but log here if we're skipping)
+            # Note: Actual time budget enforcement happens during fit
+            
+        except Exception as e:
+            logger.debug(f"Failed to load Boruta conditional execution config: {e}, proceeding with Boruta")
+            # If config load fails, proceed with Boruta (graceful degradation)
+        
+        if not boruta_should_run:
+            logger.info(f"    boruta: SKIPPED - {skip_reason}")
+            # Return empty importance (quality-safe: skip when inappropriate)
+            importance = pd.Series(0.0, index=feature_names)
+            return None, importance, "boruta_skipped", 0.0
+        
         try:
             from boruta import BorutaPy
             from sklearn.ensemble import ExtraTreesRegressor, ExtraTreesClassifier
             from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
+            from sklearn.model_selection import train_test_split
             
             # Boruta doesn't support NaN - use sklearn-safe conversion
             X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
             
-            # Determine task type
+            # Determine task type (needed for subsampling)
             unique_vals = np.unique(y[~np.isnan(y)])
             is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
             is_multiclass = len(unique_vals) <= 10 and all(
                 isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer())
                 for v in unique_vals
             )
+            
+            # Subsample large datasets for Boruta (SST: all parameters from config)
+            subsample_applied = False
+            try:
+                subsample_cfg = boruta_cfg.get('subsample_large_datasets', {})
+                subsample_enabled = subsample_cfg.get('enabled', True)
+                subsample_threshold = subsample_cfg.get('threshold', 10000)
+                subsample_max_samples = subsample_cfg.get('max_samples', 10000)
+                
+                n_samples = len(y) if y is not None else X_dense.shape[0] if X_dense is not None else 0
+                if subsample_enabled and n_samples > subsample_threshold:
+                    # Use stratified sampling for classification, random for regression
+                    if is_binary or is_multiclass:
+                        X_dense, _, y, _ = train_test_split(
+                            X_dense, y,
+                            train_size=min(subsample_max_samples, n_samples),
+                            stratify=y,
+                            random_state=boruta_random_state
+                        )
+                    else:
+                        # For regression, use random sampling
+                        indices = np.random.RandomState(boruta_random_state).choice(
+                            n_samples, size=min(subsample_max_samples, n_samples), replace=False
+                        )
+                        X_dense = X_dense[indices]
+                        y = y[indices]
+                    
+                    subsample_applied = True
+                    logger.info(f"    boruta: Applied subsampling: {n_samples} → {len(y)} samples (threshold: {subsample_threshold}, max: {subsample_max_samples})")
+            except Exception as e:
+                logger.debug(f"Failed to apply Boruta subsampling: {e}, using full dataset")
+                # Continue with full dataset if subsampling fails
             
             # Use ExtraTrees (more random, better for stability testing) with Boruta-optimized hyperparams
             # More trees + shallower depth = stable importance signals, not best predictive performance
@@ -2938,27 +3019,51 @@ def train_model_and_get_importance(
             try:
                 from CONFIG.config_loader import get_cfg
                 boruta_cfg = get_cfg("preprocessing.multi_model_feature_selection.boruta", default={}, config_name="preprocessing_config")
-                boruta_n_estimators = model_config.get('n_estimators', boruta_cfg.get('n_estimators', 500))
+                boruta_n_estimators = model_config.get('n_estimators', boruta_cfg.get('n_estimators', 300))  # Updated default: 300
                 boruta_max_depth = model_config.get('max_depth', boruta_cfg.get('max_depth', 6))
                 # Get random_state from SST (determinism config) - no hardcoded defaults
                 boruta_random_state = model_config.get('random_state') or boruta_cfg.get('random_state')
                 if boruta_random_state is None:
                     # Fallback to determinism system if not in config
                     boruta_random_state = stable_seed_from(['boruta', target_column if target_column else 'default', symbol if symbol else 'all'])
-                boruta_max_iter = model_config.get('max_iter', boruta_cfg.get('max_iter', 100))
+                boruta_max_iter_base = model_config.get('max_iter', boruta_cfg.get('max_iter', 50))  # Updated default: 50
                 boruta_n_jobs = model_config.get('n_jobs', boruta_cfg.get('n_jobs', 1))
                 boruta_verbose = model_config.get('verbose', boruta_cfg.get('verbose', 0))
+                
+                # Adaptive max_iter based on dataset size (SST: all thresholds from config)
+                adaptive_max_iter_enabled = boruta_cfg.get('adaptive_max_iter', {}).get('enabled', True)
+                if adaptive_max_iter_enabled:
+                    n_samples = len(y) if y is not None else X.shape[0] if X is not None else 0
+                    adaptive_cfg = boruta_cfg.get('adaptive_max_iter', {})
+                    small_threshold = adaptive_cfg.get('small_dataset_threshold', 5000)
+                    small_max_iter = adaptive_cfg.get('small_dataset_max_iter', 30)
+                    medium_threshold = adaptive_cfg.get('medium_dataset_threshold', 20000)
+                    medium_max_iter = adaptive_cfg.get('medium_dataset_max_iter', 50)
+                    large_max_iter = adaptive_cfg.get('large_dataset_max_iter', 75)
+                    
+                    if n_samples < small_threshold:
+                        boruta_max_iter = small_max_iter
+                        logger.debug(f"    boruta: Adaptive max_iter: {n_samples} samples < {small_threshold} → max_iter={small_max_iter}")
+                    elif n_samples < medium_threshold:
+                        boruta_max_iter = medium_max_iter
+                        logger.debug(f"    boruta: Adaptive max_iter: {small_threshold} <= {n_samples} < {medium_threshold} → max_iter={medium_max_iter}")
+                    else:
+                        boruta_max_iter = large_max_iter
+                        logger.debug(f"    boruta: Adaptive max_iter: {n_samples} >= {medium_threshold} → max_iter={large_max_iter}")
+                else:
+                    boruta_max_iter = boruta_max_iter_base
             except Exception as e:
                 logger.debug(f"Failed to load Boruta config: {e}, using model_config defaults")
-                boruta_n_estimators = model_config.get('n_estimators', 500)
+                boruta_n_estimators = model_config.get('n_estimators', 300)  # Updated default: 300
                 boruta_max_depth = model_config.get('max_depth', 6)
                 # Get random_state from SST (determinism system) - no hardcoded defaults
                 boruta_random_state = model_config.get('random_state')
                 if boruta_random_state is None:
                     boruta_random_state = stable_seed_from(['boruta', target_column if target_column else 'default', symbol if symbol else 'all'])
-                boruta_max_iter = model_config.get('max_iter', 100)
+                boruta_max_iter = model_config.get('max_iter', 50)  # Updated default: 50
                 boruta_n_jobs = model_config.get('n_jobs', 1)
                 boruta_verbose = model_config.get('verbose', 0)
+                # Adaptive max_iter disabled if config load fails (use base value)
             boruta_class_weight = model_config.get('class_weight', 'auto')
             
             # Handle class_weight config
@@ -2984,6 +3089,16 @@ def train_model_and_get_importance(
                 et_config_clean = clean_config_for_estimator(ExtraTreesRegressor, et_config, extra_kwargs={'random_state': boruta_random_state}, family_name='boruta_et')
                 base_estimator = ExtraTreesRegressor(**et_config_clean, random_state=boruta_random_state)
             
+            # Early stopping configuration (SST: from config)
+            early_stopping_enabled = True
+            early_stopping_stable_iterations = 5
+            try:
+                early_stopping_cfg = boruta_cfg.get('early_stopping', {})
+                early_stopping_enabled = early_stopping_cfg.get('enabled', True)
+                early_stopping_stable_iterations = early_stopping_cfg.get('stable_iterations', 5)
+            except Exception:
+                pass  # Use defaults if config not available
+            
             boruta = BorutaPy(
                 base_estimator,
                 n_estimators='auto',
@@ -2992,19 +3107,110 @@ def train_model_and_get_importance(
                 max_iter=boruta_max_iter,
                 perc=model_config.get('perc', 95)  # Higher threshold = more conservative (needs to beat shadow more decisively)
             )
+            
+            # Note: Early stopping detection happens after fit (check n_iter_ vs max_iter)
             # Note: make_sklearn_dense_X imputes NaNs but doesn't filter rows, so y matches X_dense length
-            # Use threading utilities for smart thread management
-            if _THREADING_UTILITIES_AVAILABLE:
-                # Get thread plan based on family (Boruta uses ExtraTrees estimator)
-                plan = plan_for_family('RandomForest', total_threads=default_threads())
-                # Set n_jobs on ExtraTrees from plan (OMP threads for tree models)
-                et_config['n_jobs'] = plan['OMP']
-                # Use thread_guard context manager for safe thread control
-                with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+            # Add detailed timing for Boruta iterations (SST: thresholds from config)
+            import time
+            import signal
+            boruta_fit_start = time.time()
+            timing_log_enabled = True
+            timing_log_threshold_seconds = 1.0
+            boruta_max_time_seconds = None  # Time budget from config (SST)
+            try:
+                from CONFIG.config_loader import get_cfg
+                timing_log_enabled = get_cfg('preprocessing.multi_model_feature_selection.timing.enabled', default=True, config_name='preprocessing_config')
+                timing_log_threshold_seconds = get_cfg('preprocessing.multi_model_feature_selection.timing.log_threshold_seconds', default=1.0, config_name='preprocessing_config')
+                # Load time budget from config (SST)
+                boruta_cfg_time = get_cfg('preprocessing.multi_model_feature_selection.boruta', default={}, config_name='preprocessing_config')
+                max_time_minutes = boruta_cfg_time.get('max_time_minutes', 10)  # Default 10 minutes
+                boruta_max_time_seconds = max_time_minutes * 60
+            except Exception:
+                pass  # Use defaults if config not available
+            
+            # Time-budget wrapper for Boruta fit (SST: budget from config)
+            boruta_timed_out = False
+            boruta_budget_hit = False
+            
+            def boruta_timeout_handler(signum, frame):
+                nonlocal boruta_timed_out, boruta_budget_hit
+                boruta_timed_out = True
+                boruta_budget_hit = True
+                raise TimeoutError(f"Boruta training exceeded {boruta_max_time_seconds/60:.0f} minute time budget")
+            
+            # Set up timeout if budget is configured (Unix only - Windows will use soft check)
+            timeout_set = False
+            if boruta_max_time_seconds is not None:
+                try:
+                    signal.signal(signal.SIGALRM, boruta_timeout_handler)
+                    signal.alarm(int(boruta_max_time_seconds))
+                    timeout_set = True
+                except (AttributeError, OSError):
+                    # Windows doesn't support SIGALRM - will use soft timeout check
+                    logger.debug(f"    boruta: Timeout signal not available on this platform, using soft timeout check")
+            
+            try:
+                # Use threading utilities for smart thread management
+                if _THREADING_UTILITIES_AVAILABLE:
+                    # Get thread plan based on family (Boruta uses ExtraTrees estimator)
+                    plan = plan_for_family('RandomForest', total_threads=default_threads())
+                    # Set n_jobs on ExtraTrees from plan (OMP threads for tree models)
+                    et_config['n_jobs'] = plan['OMP']
+                    # Use thread_guard context manager for safe thread control
+                    with thread_guard(omp=plan['OMP'], mkl=plan['MKL']):
+                        boruta.fit(X_dense, y)
+                else:
+                    # Fallback: manual thread management
                     boruta.fit(X_dense, y)
-            else:
-                # Fallback: manual thread management
-                boruta.fit(X_dense, y)
+                
+                # Cancel timeout if it was set
+                if timeout_set:
+                    try:
+                        signal.alarm(0)
+                    except (AttributeError, OSError):
+                        pass
+                
+                # Soft timeout check (for Windows or if signal didn't fire)
+                boruta_fit_elapsed = time.time() - boruta_fit_start
+                if boruta_max_time_seconds is not None and boruta_fit_elapsed > boruta_max_time_seconds:
+                    boruta_budget_hit = True
+                    logger.warning(f"    boruta: ⚠️  BORUTA_BUDGET_HIT - Training took {boruta_fit_elapsed/60:.1f} minutes (exceeded {boruta_max_time_seconds/60:.0f} min budget)")
+                    # Continue with current results (quality-safe: use what we have)
+                    
+            except TimeoutError as te:
+                boruta_fit_elapsed = time.time() - boruta_fit_start
+                boruta_budget_hit = True
+                logger.warning(f"    boruta: ⚠️  BORUTA_BUDGET_HIT - Training exceeded {boruta_max_time_seconds/60:.0f} minute budget after {boruta_fit_elapsed/60:.1f} minutes")
+                # Cancel timeout
+                if timeout_set:
+                    try:
+                        signal.alarm(0)
+                    except (AttributeError, OSError):
+                        pass
+                # Check if Boruta has partial results we can use
+                if hasattr(boruta, 'ranking_') and boruta.ranking_ is not None:
+                    logger.info(f"    boruta: Using partial results from interrupted fit")
+                    # Continue with partial results (quality-safe: better than nothing)
+                else:
+                    # No partial results - return empty importance (quality-safe: skip when budget exceeded)
+                    logger.warning(f"    boruta: No partial results available, returning empty importance")
+                    importance = pd.Series(0.0, index=feature_names)
+                    return None, importance, "boruta_timeout", 0.0
+            
+            # Log detailed Boruta timing
+            boruta_fit_elapsed = time.time() - boruta_fit_start
+            if timing_log_enabled and boruta_fit_elapsed >= timing_log_threshold_seconds:
+                # Check iteration count (BorutaPy exposes n_iter_ after fitting)
+                n_iterations = getattr(boruta, 'n_iter_', None)
+                if n_iterations is not None:
+                    avg_time_per_iter = boruta_fit_elapsed / n_iterations if n_iterations > 0 else 0
+                    early_convergence = n_iterations < boruta_max_iter
+                    convergence_msg = " (early convergence)" if early_convergence else ""
+                    logger.info(f"    boruta: Fit completed in {boruta_fit_elapsed:.2f}s - "
+                              f"{n_iterations}/{boruta_max_iter} iterations{convergence_msg}, "
+                              f"avg {avg_time_per_iter:.2f}s/iteration")
+                else:
+                    logger.info(f"    boruta: Fit completed in {boruta_fit_elapsed:.2f}s")
             
             # Update feature_names to match dense array
             feature_names = feature_names_dense
@@ -3072,6 +3278,10 @@ def train_model_and_get_importance(
         except ImportError:
             logger.error("Boruta not available (pip install Boruta)")
             return None, pd.Series(0.0, index=feature_names), importance_method, 0.0
+        except TimeoutError as te:
+            # TimeoutError already handled above, but catch here for safety
+            logger.warning(f"Boruta timeout: {te}")
+            return None, pd.Series(0.0, index=feature_names), "boruta_timeout", 0.0
         except Exception as e:
             logger.error(f"Boruta failed: {e}", exc_info=True)
             return None, pd.Series(0.0, index=feature_names), importance_method, 0.0

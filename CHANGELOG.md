@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-23 (Comprehensive Model Timing Metrics)
+- **Enhancement**: Added comprehensive timing metrics (start-time and elapsed-time logging) for all 12 model families in target ranking and feature selection
+- **New Models**: Added timing for XGBoost, Random Forest, Lasso, Elastic Net, Ridge, Neural Network, Mutual Information, Stability Selection, Histogram Gradient Boosting
+- **Existing Models**: Added start logging for LightGBM, CatBoost, and Boruta (already had elapsed timing)
+- **Impact**: Enables easy diagnosis of performance bottlenecks by showing execution sequence, individual model times, and overall percentage breakdown
+- **Files Changed**: `model_evaluation.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-23-comprehensive-model-timing-metrics.md)
+
 #### 2025-12-22 (License Banner Pricing Structure Update)
 - **Enhancement**: Restructured license banner with more realistic and approachable pricing ladder
 - **New Tiers**: Added Commercial Evaluation ($1k–$5k) and Commercial License tiers ($10k–$25k small team, $25k–$60k team)
@@ -33,6 +41,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Impact**: Proactively identifies performance bottlenecks where expensive operations are called multiple times unnecessarily
 - **Files Changed**: `performance_audit.py` (NEW), `intelligent_trainer.py`, `multi_model_feature_selection.py`, `shared_ranking_harness.py`, `model_evaluation.py`, `leakage_detection.py`
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-22-performance-audit-system.md)
+
+#### 2025-12-22 (Trend Analyzer Indentation Fix)
+- **Bug Fix**: Fixed critical indentation errors in `trend_analyzer.py` that prevented the module from loading
+- **Bug Fix**: Corrected `if targets_dir.exists():` indentation inside `for current_run_dir in runs_to_process:` loop (line 204)
+- **Bug Fix**: Fixed `try:` block indentation inside `for cohort_dir in view_dir.iterdir():` loop (line 301)
+- **Bug Fix**: Fixed cascading indentation issues in nested blocks (SYMBOL_SPECIFIC and CROSS_SECTIONAL views)
+- **Impact**: Trend analyzer now loads correctly and can analyze trends across runs, generate summaries, and process both view types
+- **Files Changed**: `trend_analyzer.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-22-trend-analyzer-indentation-fix.md)
 
 #### 2025-12-22 (CatBoost Overfitting Detection and Legacy Structure Removal)
 - **Performance Fix**: Fixed CatBoost feature selection taking 6+ hours by implementing config-driven overfitting detection and process-based timeout
@@ -70,6 +87,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Reverted**: Previous CV skip approach - CV is now kept for stability diagnostics and accuracy
 - **Files Changed**: `multi_model_feature_selection.py`
 → [Detailed Changelog](DOCS/02_reference/changelog/2025-12-22-catboost-cv-efficiency-with-early-stopping.md)
+
+#### 2025-12-22 (Boruta Performance Optimizations)
+- **Performance Enhancement**: Implemented quality-preserving optimizations for Boruta feature selection to address performance bottlenecks
+- **Optimizations**: Time budget enforcement (10 min default), conditional execution (skip for >200 features or >20k samples), adaptive max_iter based on dataset size, subsampling for large datasets, caching integration
+- **Impact**: Reduces Boruta feature selection time from hours to minutes while maintaining model quality
+- **SST Compliance**: All parameters loaded from config, no hardcoded defaults
+- **Files Changed**: `multi_model_feature_selection.py`, `model_evaluation.py`, `multi_model.yaml`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-22-boruta-performance-optimizations.md)
+
+#### 2025-12-22 (CatBoost Formatting TypeError Fix)
+- **Bug Fix**: Fixed `TypeError: unsupported format string passed to NoneType.__format__` when `cv_mean` or `val_score` is `None` in CatBoost overfitting check logging
+- **Solution**: Pre-format values before using in f-string to prevent format specifier errors
+- **Impact**: Prevents runtime errors in CatBoost logging, training pipeline completes successfully regardless of CV or validation score availability
+- **Files Changed**: `multi_model_feature_selection.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-22-catboost-formatting-typeerror-fix.md)
+
+#### 2025-12-22 (Trend Analyzer Operator Precedence Fix)
+- **Bug Fix**: Fixed operator precedence bug in trend analyzer path detection that prevented correct identification of runs in comparison groups
+- **Solution**: Added explicit parentheses to ensure `d.is_dir()` is evaluated before checking subdirectories
+- **Impact**: Enables proper run detection in comparison groups, trend analyzer correctly identifies all runs with `targets/`, `globals/`, or `REPRODUCIBILITY/` subdirectories
+- **Files Changed**: `trend_analyzer.py`
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-22-trend-analyzer-operator-precedence-fix.md)
 
 #### 2025-12-21 (CatBoost Formatting Error and CV Skip Fixes)
 - **Bug Fix**: Fixed CatBoost `train_val_gap` format specifier error causing `ValueError: Invalid format specifier` when logging scores
