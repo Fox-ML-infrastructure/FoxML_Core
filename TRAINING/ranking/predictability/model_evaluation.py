@@ -4977,7 +4977,8 @@ from TRAINING.ranking.predictability.model_evaluation.reporting import (
     save_feature_importances as _save_feature_importances,
     log_suspicious_features as _log_suspicious_features
 )
-from TRAINING.ranking.predictability.model_evaluation.leakage_helpers import detect_leakage
+# REMOVED: Conflicting import - detect_leakage is already imported from leakage_detection.py at line 127
+# from TRAINING.ranking.predictability.model_evaluation.leakage_helpers import detect_leakage
 
 
 # calculate_composite_score is imported from TRAINING.ranking.predictability.composite_score
@@ -6686,11 +6687,168 @@ def evaluate_target_predictability(
     
     # Detect potential leakage (use task-appropriate thresholds)
     # Pass X, y, time_vals, symbols for triage checks if available
-    leakage_flag = detect_leakage(
-        mean_score, composite, mean_importance, 
-        target_name=target_name, model_scores=model_means, task_type=final_task_type,
-        X=X, y=y, time_vals=time_vals, symbols=symbols_array if 'symbols_array' in locals() else None
-    )
+    try:
+        leakage_flag = detect_leakage(
+            mean_score, composite, mean_importance, 
+            target_name=target_name, model_scores=model_means, task_type=final_task_type,
+            X=X, y=y, time_vals=time_vals, symbols=symbols_array if 'symbols_array' in locals() else None
+        )
+    except Exception as e:
+        logger.exception(f"Leakage detection failed for {target_name}; marking as UNKNOWN")
+        leakage_flag = "UNKNOWN"  # Safe default - allows pipeline to continue
+    
+    # Dominance Quarantine: Detect suspects based on dominant importance
+    suspects = []
+    runtime_quarantine_features = set()
+    confirm_result = None
+    post_quarantine_mean_score = None
+    post_quarantine_leakage_flag = None
+    
+    try:
+        from TRAINING.ranking.utils.dominance_quarantine import (
+            DominanceConfig, detect_suspects, write_suspects_artifact_with_data,
+            confirm_quarantine, persist_confirmed_quarantine
+        )
+        
+        cfg = DominanceConfig.from_config()
+        if cfg.enabled and all_feature_importances:
+            # Convert importance dicts to percentages
+            per_model_importance_pct = {}
+            for model_name, imp_dict in all_feature_importances.items():
+                if not imp_dict:
+                    continue
+                total = sum(abs(v) for v in imp_dict.values())
+                if total > 0:
+                    # Convert to percentages (0-100 scale)
+                    imp_pct = {f: (abs(v) / total * 100.0) for f, v in imp_dict.items()}
+                    per_model_importance_pct[model_name] = imp_pct
+            
+            if per_model_importance_pct:
+                suspects = detect_suspects(per_model_importance_pct, cfg)
+                
+                if suspects and output_dir:
+                    # Write suspects artifact
+                    target_name_for_artifact = target_column if target_column else target_name
+                    resolved_view = view if 'view' in locals() else "CROSS_SECTIONAL"
+                    symbol_for_artifact = symbol if 'symbol' in locals() else None
+                    
+                    try:
+                        write_suspects_artifact_with_data(
+                            out_dir=output_dir,
+                            target=target_name_for_artifact,
+                            view=resolved_view,
+                            suspects=suspects,
+                            symbol=symbol_for_artifact
+                        )
+                        logger.info(f"🔍 Dominance quarantine: Detected {len(suspects)} suspect feature(s): {[s.feature for s in suspects]}")
+                    except Exception as e:
+                        logger.warning(f"Failed to write suspects artifact: {e}")
+                
+                # Confirm pass: rerun with suspects removed if enabled
+                if suspects and cfg.confirm_enabled and cfg.rerun_once:
+                    suspect_features = {s.feature for s in suspects}
+                    features_without_suspects = [f for f in feature_names if f not in suspect_features]
+                    
+                    if len(features_without_suspects) >= 2:  # Need at least 2 features
+                        # Get indices of features to keep
+                        feature_indices = [i for i, f in enumerate(feature_names) if f in features_without_suspects]
+                        # Filter X to only include non-suspect features
+                        if len(feature_indices) < len(feature_names):
+                            X_filtered = X[:, feature_indices]
+                        else:
+                            X_filtered = X  # No suspects to remove (shouldn't happen, but safe)
+                        
+                        # Rerun importance producers with filtered features (same CV splitter, seeds, folds)
+                        logger.info(f"🔄 Dominance confirm: Rerunning with {len(features_without_suspects)} features (removed {len(suspect_features)} suspects)")
+                        
+                        try:
+                            # Reuse same CV splitter configuration
+                            post_metrics, post_scores, post_mean_importance, _, _, _, _ = train_and_evaluate_models(
+                                X=X_filtered,
+                                y=y,
+                                feature_names=features_without_suspects,
+                                task_type=task_type,
+                                model_families=model_families,
+                                multi_model_config=multi_model_config,
+                                target_column=target_column,
+                                data_interval_minutes=data_interval_minutes,
+                                time_vals=time_vals,
+                                explicit_interval=explicit_interval,
+                                experiment_config=experiment_config,
+                                output_dir=output_dir,
+                                resolved_config=resolved_config,
+                                dropped_tracker=dropped_tracker,
+                                view=view,
+                                symbol=symbol
+                            )
+                            
+                            # Compute post-quarantine mean score
+                            if post_scores:
+                                post_quarantine_mean_score = float(np.mean([s for s in post_scores.values() if s is not None and not np.isnan(s)]))
+                            
+                            # Evaluate confirm result
+                            n_samples = len(y) if y is not None else 0
+                            n_symbols = len(set(symbols_array)) if 'symbols_array' in locals() and symbols_array is not None else 1
+                            
+                            confirm_result = confirm_quarantine(
+                                pre_mean_score=mean_score,
+                                post_mean_score=post_quarantine_mean_score if post_quarantine_mean_score is not None else mean_score,
+                                suspects=suspects,
+                                n_samples=n_samples,
+                                n_symbols=n_symbols,
+                                cfg=cfg
+                            )
+                            
+                            logger.info(
+                                f"📊 Dominance confirm: confirmed={confirm_result.confirmed} reason={confirm_result.reason} "
+                                f"drop_abs={confirm_result.drop_abs:.4f} drop_rel={confirm_result.drop_rel:.2%}"
+                            )
+                            
+                            if confirm_result.confirmed and output_dir:
+                                # Persist confirmed quarantine
+                                try:
+                                    persist_confirmed_quarantine(
+                                        out_dir=output_dir,
+                                        target=target_name_for_artifact,
+                                        suspects=suspects,
+                                        view=resolved_view,
+                                        symbol=symbol_for_artifact
+                                    )
+                                    runtime_quarantine_features = suspect_features
+                                    logger.info(f"✅ Dominance quarantine: Confirmed and quarantined {len(suspect_features)} feature(s)")
+                                except Exception as e:
+                                    logger.warning(f"Failed to persist confirmed quarantine: {e}")
+                            
+                            # Re-evaluate leakage on post-quarantine results
+                            if post_quarantine_mean_score is not None:
+                                post_composite, _, _ = calculate_composite_score(
+                                    post_quarantine_mean_score,
+                                    float(np.std([s for s in post_scores.values() if s is not None and not np.isnan(s)])) if post_scores else 0.0,
+                                    post_mean_importance,
+                                    len(post_scores),
+                                    final_task_type
+                                )
+                                
+                                try:
+                                    post_quarantine_leakage_flag = detect_leakage(
+                                        post_quarantine_mean_score,
+                                        post_composite,
+                                        post_mean_importance,
+                                        target_name=target_name,
+                                        model_scores=post_scores,
+                                        task_type=final_task_type,
+                                        X=X_filtered,
+                                        y=y,
+                                        time_vals=time_vals,
+                                        symbols=symbols_array if 'symbols_array' in locals() else None
+                                    )
+                                except Exception as e:
+                                    logger.exception(f"Post-quarantine leakage detection failed for {target_name}; marking as UNKNOWN")
+                                    post_quarantine_leakage_flag = "UNKNOWN"  # Safe default - allows pipeline to continue
+                        except Exception as e:
+                            logger.warning(f"Dominance confirm pass failed: {e}")
+    except Exception as e:
+        logger.debug(f"Dominance quarantine detection failed: {e}")
     
     # Build detailed leakage flags for auto-rerun logic
     leakage_flags = {

@@ -831,7 +831,11 @@ def prepare_cross_sectional_data_for_ranking(
         'n_symbols_loaded': n_symbols_available,
         'min_cs_required': min_cs,
         'effective_min_cs': effective_min_cs,
-        'loader_contract': loader_contract
+        'loader_contract': loader_contract,
+        # SST for scope partitioning - universe_sig is born here from loaded (not requested) symbols
+        'universe_sig': universe_sig,
+        'loaded_symbols': loaded_symbols_list,
+        'requested_symbols': loader_contract.get('requested_symbols') if loader_contract else None,
     }
     
     # Attach to mtf_data for callers to extract (non-intrusive)

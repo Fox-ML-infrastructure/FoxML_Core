@@ -19,6 +19,15 @@ File Naming Conventions (to distinguish from target ranking):
   * routing_decision.json (routing decisions for targets)
 - Shared files (no conflicts):
   * target_confidence.json (feature selection writes, target ranking may read)
+
+ROUTING NOTE: Feature selection artifacts are SCOPE-LEVEL SUMMARIES, not cohort artifacts.
+They use OutputLayout.repro_dir() / feature_importance_dir() directly.
+
+Do NOT use _save_to_cohort for these outputs. The cohort firewall is for
+per-cohort metrics/run data under cohort=cs_* or cohort=sy_* directories.
+
+If you later add per-model-family or per-fold outputs that need cohort scoping,
+those SHOULD go through _save_to_cohort.
 """
 
 import logging
@@ -38,7 +47,8 @@ def save_feature_selection_rankings(
     output_dir: Path,
     view: str,  # REQUIRED (no default)
     symbol: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None,
+    universe_sig: Optional[str] = None,  # Phase A: optional for backward compat
 ):
     """
     Save feature selection rankings. view parameter is REQUIRED.
@@ -69,10 +79,22 @@ def save_feature_selection_rankings(
         raise ValueError(f"Invalid view: {view}. Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'")
     if view == "SYMBOL_SPECIFIC" and symbol is None:
         raise ValueError("symbol required when view='SYMBOL_SPECIFIC'")
+    
+    # Clean target name for filesystem
+    target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+    
+    # Phase A: Use OutputLayout if universe_sig provided (new canonical path)
+    # Otherwise fall back to legacy path resolution with warning
+    use_output_layout = bool(universe_sig)
+    if not use_output_layout:
+        logger.warning(
+            f"universe_sig not provided for {target_column} feature selection rankings, "
+            f"falling back to legacy path resolution. Pass universe_sig for canonical paths."
+        )
+    
     # Determine target-level directory (matching TARGET_RANKING structure)
     # output_dir is already at: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
     # Use it directly to avoid nested structures
-    target_name_clean = target_column.replace('/', '_').replace('\\', '_')
     
     # Find base run directory for target-first structure
     # Walk up from output_dir to find the run directory (where "targets", "globals", or "cache" would be)
@@ -194,16 +216,30 @@ def save_feature_selection_rankings(
         'recommendation': _get_recommendation(row)
     } for i, (_, row) in enumerate(summary_df_sorted.iterrows())])
     
-    # Save CSV to target-first structure only (view/symbol-scoped)
+    # Save CSV to target-first structure (view/symbol-scoped)
     # NOTE: File naming convention to distinguish from target ranking:
     #   - Feature selection uses: "feature_selection_rankings.csv" (feature rankings for a target)
     #   - Target ranking uses: "target_predictability_rankings.csv" (target rankings)
     #   - These are distinct files with different purposes, no conflicts
     try:
-        from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
-        run_root_dir = run_root(base_output_dir)
-        # Use view/symbol-scoped path helper
-        target_csv_path = target_repro_file_path(run_root_dir, target_name_clean, "feature_selection_rankings.csv", view=view, symbol=symbol)
+        if use_output_layout and universe_sig:
+            # Canonical path via OutputLayout (non-cohort write)
+            from TRAINING.orchestration.utils.output_layout import OutputLayout
+            layout = OutputLayout(
+                output_root=base_output_dir,
+                target=target_name_clean,
+                view=view,
+                universe_sig=universe_sig,
+                symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
+            )
+            repro_dir = layout.repro_dir()
+            target_csv_path = repro_dir / "feature_selection_rankings.csv"
+        else:
+            # Legacy path resolution
+            from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
+            run_root_dir = run_root(base_output_dir)
+            target_csv_path = target_repro_file_path(run_root_dir, target_name_clean, "feature_selection_rankings.csv", view=view, symbol=symbol)
+        
         target_csv_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(target_csv_path, index=False)
         logger.info(f"✅ Saved feature selection rankings CSV to {target_csv_path}")
@@ -257,26 +293,39 @@ def save_feature_selection_rankings(
     else:
         logger.warning(f"Target decision directory not available, skipping target-first save")
     
-    # Save selected features list to target-first structure only (view/symbol-scoped)
+    # Save selected features list to target-first structure (view/symbol-scoped)
     try:
-        from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
-        # Validate base_output_dir before using it
-        if base_output_dir == Path('/') or not base_output_dir.is_absolute() or str(base_output_dir) == '/':
-            logger.warning(f"Invalid base_output_dir for selected features: {base_output_dir}, using output_dir: {output_dir}")
-            base_output_dir = output_dir
-        if not base_output_dir.exists():
-            logger.warning(f"base_output_dir does not exist for selected features: {base_output_dir}, using output_dir: {output_dir}")
-            base_output_dir = output_dir
-        run_root_dir = run_root(base_output_dir)
-        # Use view/symbol-scoped path helper
-        target_selected_path = target_repro_file_path(run_root_dir, target_name_clean, "selected_features.txt", view=view, symbol=symbol)
+        if use_output_layout and universe_sig:
+            # Canonical path via OutputLayout (non-cohort write)
+            from TRAINING.orchestration.utils.output_layout import OutputLayout
+            layout = OutputLayout(
+                output_root=base_output_dir,
+                target=target_name_clean,
+                view=view,
+                universe_sig=universe_sig,
+                symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
+            )
+            repro_dir = layout.repro_dir()
+            target_selected_path = repro_dir / "selected_features.txt"
+        else:
+            # Legacy path resolution with validation
+            from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
+            if base_output_dir == Path('/') or not base_output_dir.is_absolute() or str(base_output_dir) == '/':
+                logger.warning(f"Invalid base_output_dir for selected features: {base_output_dir}, using output_dir: {output_dir}")
+                base_output_dir = output_dir
+            if not base_output_dir.exists():
+                logger.warning(f"base_output_dir does not exist for selected features: {base_output_dir}, using output_dir: {output_dir}")
+                base_output_dir = output_dir
+            run_root_dir = run_root(base_output_dir)
+            target_selected_path = target_repro_file_path(run_root_dir, target_name_clean, "selected_features.txt", view=view, symbol=symbol)
+        
         target_selected_path.parent.mkdir(parents=True, exist_ok=True)
         with open(target_selected_path, "w") as f:
             for feature in selected_features:
                 f.write(f"{feature}\n")
-        logger.debug(f"Also saved selected features to target-first location: {target_selected_path}")
+        logger.debug(f"Saved selected features to {target_selected_path}")
     except Exception as e:
-        logger.debug(f"Failed to write selected features to target-first location: {e}")
+        logger.debug(f"Failed to write selected features: {e}")
 
 
 def _get_recommendation(row: pd.Series) -> str:
@@ -373,7 +422,8 @@ def save_feature_importances_for_reproducibility(
     target_column: str,
     output_dir: Path,
     view: str = "CROSS_SECTIONAL",
-    symbol: Optional[str] = None
+    symbol: Optional[str] = None,
+    universe_sig: Optional[str] = None,  # Phase A: optional for backward compat
 ):
     """
     Save feature importances in the same structure as target ranking.
@@ -393,6 +443,17 @@ def save_feature_importances_for_reproducibility(
         symbol: Symbol name (for SYMBOL_SPECIFIC view)
     """
     import pandas as pd
+    
+    target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+    
+    # Phase A: Use OutputLayout if universe_sig provided (new canonical path)
+    # Otherwise fall back to legacy path resolution with warning
+    use_output_layout = bool(universe_sig)
+    if not use_output_layout:
+        logger.warning(
+            f"universe_sig not provided for {target_column} feature importances, "
+            f"falling back to legacy path resolution. Pass universe_sig for canonical paths."
+        )
     
     # Find base run directory for target-first structure
     base_output_dir = output_dir
@@ -420,25 +481,35 @@ def save_feature_importances_for_reproducibility(
                 break
             temp_dir = temp_dir.parent
     
-    target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-    
-    # Save to target-first structure only (view/symbol-scoped)
+    # Set up importances directory
     try:
-        from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_dir, ensure_target_structure
-        # Validate base_output_dir before using it
-        if not base_output_dir.exists():
-            logger.warning(f"base_output_dir does not exist for feature importances: {base_output_dir}, using output_dir: {output_dir}")
-            base_output_dir = output_dir
+        if use_output_layout and universe_sig:
+            # Canonical path via OutputLayout.feature_importance_dir() (non-cohort write)
+            from TRAINING.orchestration.utils.output_layout import OutputLayout
+            layout = OutputLayout(
+                output_root=base_output_dir,
+                target=target_name_clean,
+                view=view,
+                universe_sig=universe_sig,
+                symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
+            )
+            importances_dir = layout.feature_importance_dir()
+        else:
+            # Legacy path resolution
+            from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_dir, ensure_target_structure
+            if not base_output_dir.exists():
+                logger.warning(f"base_output_dir does not exist for feature importances: {base_output_dir}, using output_dir: {output_dir}")
+                base_output_dir = output_dir
+            
+            run_root_dir = run_root(base_output_dir)
+            ensure_target_structure(run_root_dir, target_name_clean)
+            repro_dir = target_repro_dir(run_root_dir, target_name_clean, view=view, symbol=symbol)
+            importances_dir = repro_dir / "feature_importances"
         
-        run_root_dir = run_root(base_output_dir)
-        ensure_target_structure(run_root_dir, target_name_clean)
-        # Use view/symbol-scoped path helper
-        repro_dir = target_repro_dir(run_root_dir, target_name_clean, view=view, symbol=symbol)
-        importances_dir = repro_dir / "feature_importances"
         importances_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        logger.warning(f"Failed to set up target-first structure for feature importances: {e}")
-        logger.warning(f"  base_output_dir: {base_output_dir} (exists: {base_output_dir.exists()}, absolute: {base_output_dir.is_absolute()})")
+        logger.warning(f"Failed to set up feature importances directory: {e}")
+        logger.warning(f"  base_output_dir: {base_output_dir} (exists: {base_output_dir.exists() if hasattr(base_output_dir, 'exists') else 'N/A'})")
         logger.warning(f"  output_dir: {output_dir} (exists: {output_dir.exists()})")
         import traceback
         logger.debug(f"Traceback: {traceback.format_exc()}")

@@ -396,19 +396,30 @@ def globals_dir(run_root: Path, kind: Optional[str] = None) -> Path:
     return base
 
 
-def target_repro_dir(run_root: Path, target: str, view: str, symbol: Optional[str] = None) -> Path:
+def target_repro_dir(
+    run_root: Path, 
+    target: str, 
+    view: str, 
+    symbol: Optional[str] = None,
+    universe_sig: Optional[str] = None  # NEW: For cross-run reproducibility
+) -> Path:
     """
-    Get reproducibility directory for target, scoped by view/symbol.
+    Get reproducibility directory for target, scoped by view/universe/symbol.
     
     Args:
         run_root: Run root directory
         target: Target name
         view: REQUIRED view name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
         symbol: Optional symbol name (required if view is "SYMBOL_SPECIFIC")
+        universe_sig: Optional universe signature (hash of sorted symbols list).
+                      When provided, adds universe={universe_sig}/ to path for
+                      cross-run reproducibility and collision prevention.
     
     Returns:
-        - If view="CROSS_SECTIONAL": targets/{target}/reproducibility/CROSS_SECTIONAL/
-        - If view="SYMBOL_SPECIFIC" and symbol: targets/{target}/reproducibility/SYMBOL_SPECIFIC/symbol={symbol}/
+        - If view="CROSS_SECTIONAL" (no universe_sig): targets/{target}/reproducibility/CROSS_SECTIONAL/
+        - If view="CROSS_SECTIONAL" (with universe_sig): targets/{target}/reproducibility/CROSS_SECTIONAL/universe={universe_sig}/
+        - If view="SYMBOL_SPECIFIC" (no universe_sig): targets/{target}/reproducibility/SYMBOL_SPECIFIC/symbol={symbol}/
+        - If view="SYMBOL_SPECIFIC" (with universe_sig): targets/{target}/reproducibility/SYMBOL_SPECIFIC/universe={universe_sig}/symbol={symbol}/
     
     Raises:
         ValueError: If view is None or invalid, or if SYMBOL_SPECIFIC without symbol
@@ -416,6 +427,9 @@ def target_repro_dir(run_root: Path, target: str, view: str, symbol: Optional[st
     Note:
         This function uses the passed view parameter. Callers should pass resolved_mode from run context (SST)
         to ensure consistency. If view differs from resolved_mode, a warning is logged.
+        
+        universe_sig should be computed from compute_universe_signature(symbols) and passed in for
+        cross-run reproducibility. Different universes get different directories.
     """
     if view is None:
         raise ValueError("view parameter is required for feature selection artifacts")
@@ -441,18 +455,32 @@ def target_repro_dir(run_root: Path, target: str, view: str, symbol: Optional[st
     
     base_repro_dir = get_target_reproducibility_dir(Path(run_root), target)
     
+    # Build path with optional universe_sig
     if view == "CROSS_SECTIONAL":
-        return base_repro_dir / "CROSS_SECTIONAL"
+        path = base_repro_dir / "CROSS_SECTIONAL"
+        if universe_sig:
+            path = path / f"universe={universe_sig}"
+        return path
     else:  # SYMBOL_SPECIFIC
-        return base_repro_dir / "SYMBOL_SPECIFIC" / f"symbol={symbol}"
+        path = base_repro_dir / "SYMBOL_SPECIFIC"
+        if universe_sig:
+            path = path / f"universe={universe_sig}"
+        return path / f"symbol={symbol}"
 
 
-def target_repro_file_path(run_root: Path, target: str, filename: str, view: str, symbol: Optional[str] = None) -> Path:
+def target_repro_file_path(
+    run_root: Path, 
+    target: str, 
+    filename: str, 
+    view: str, 
+    symbol: Optional[str] = None,
+    universe_sig: Optional[str] = None
+) -> Path:
     """
     Get file path in view-scoped reproducibility directory.
     
     This function constructs the path to a file in the reproducibility directory,
-    scoped by view/symbol. For feature selection artifacts, view is REQUIRED.
+    scoped by view/universe/symbol. For feature selection artifacts, view is REQUIRED.
     
     Args:
         run_root: Run root directory
@@ -460,6 +488,7 @@ def target_repro_file_path(run_root: Path, target: str, filename: str, view: str
         filename: Filename (e.g., "selected_features.txt")
         view: REQUIRED view name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
         symbol: Optional symbol name (required if view is "SYMBOL_SPECIFIC")
+        universe_sig: Optional universe signature for cross-run reproducibility
     
     Returns:
         Path to file in view-scoped reproducibility directory
@@ -467,11 +496,17 @@ def target_repro_file_path(run_root: Path, target: str, filename: str, view: str
     Raises:
         ValueError: If view is None or invalid, or if SYMBOL_SPECIFIC without symbol
     """
-    repro_dir = target_repro_dir(run_root, target, view, symbol)
+    repro_dir = target_repro_dir(run_root, target, view, symbol, universe_sig)
     return repro_dir / filename
 
 
-def model_output_dir(training_results_root: Path, family: str, view: str, symbol: Optional[str] = None) -> Path:
+def model_output_dir(
+    training_results_root: Path, 
+    family: str, 
+    view: str, 
+    symbol: Optional[str] = None,
+    universe_sig: Optional[str] = None
+) -> Path:
     """
     Get model output directory.
     
@@ -480,12 +515,17 @@ def model_output_dir(training_results_root: Path, family: str, view: str, symbol
         family: Model family name (e.g., "lightgbm")
         view: View name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
         symbol: Optional symbol name (required if view is "SYMBOL_SPECIFIC")
+        universe_sig: Optional universe signature for cross-run reproducibility
     
     Returns:
-        Path to training_results/{family}/view={view}/[symbol={symbol}/]
+        Path to training_results/{family}/view={view}/[universe={universe_sig}/][symbol={symbol}/]
     """
     family_dir = Path(training_results_root) / family
     view_dir = family_dir / f"view={view}"
+    
+    # Add universe scoping if provided
+    if universe_sig:
+        view_dir = view_dir / f"universe={universe_sig}"
     
     if view == "SYMBOL_SPECIFIC" and symbol:
         return view_dir / f"symbol={symbol}"

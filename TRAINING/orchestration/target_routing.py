@@ -137,12 +137,12 @@ def load_target_confidence(output_dir: Path, target_name: str, view: Optional[st
     for check_view in views_to_check:
         view_dir = target_repro_dir / check_view
         conf_path = view_dir / "target_confidence.json"
-        
-        if conf_path.exists():
-            try:
-                with open(conf_path) as f:
-                    return json.load(f)
-            except Exception as e:
+    
+    if conf_path.exists():
+        try:
+            with open(conf_path) as f:
+                return json.load(f)
+        except Exception as e:
                 logger.debug(f"Failed to load confidence from {check_view}: {e}")
         
         # Also check symbol-specific subdirectories if SYMBOL_SPECIFIC

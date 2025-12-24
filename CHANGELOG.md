@@ -16,6 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-23 (Scope Violation Firewall and Output Layout)
+- **Critical Fix**: Implemented scope violation firewall to prevent symbol-specific cohorts (`cohort=sy_*`) from being incorrectly saved under `CROSS_SECTIONAL/` paths. This was causing feature importance and artifacts to be saved at the wrong scope, breaking reproducibility.
+- **New Feature**: Created `OutputLayout` dataclass as Single Source of Truth (SST) for all output paths with hard invariants:
+  - `view` must be `CROSS_SECTIONAL` or `SYMBOL_SPECIFIC`
+  - `SYMBOL_SPECIFIC` requires `symbol`, `CROSS_SECTIONAL` cannot have `symbol`
+  - `universe_sig` (hash of sorted symbols) required for all scopes
+- **Validation**: Added `validate_cohort_id()` method that catches `cs_` vs `sy_` prefix mismatches at write time with explicit `startswith()` checks
+- **Firewall**: Updated `_save_to_cohort()` to validate every write via OutputLayout. Falls back to legacy paths with warning if metadata incomplete. Telemetry trap logs `SCOPE VIOLATION RISK` for debugging bad callers.
+- **Migration**: All `_compute_cohort_id()` callers updated to pass required `view` parameter (6 call sites)
+- **Path Extensions**: Extended `target_first_paths.py` and `artifact_paths.py` functions to accept optional `universe_sig` parameter for cross-run reproducibility
+- **Config**: Added `safety.output_layout.strict_scope_partitioning` flag (default: false, set true after validation)
+- **Impact**: Prevents silent data corruption from scope violations, ensures correct view+universe partitioning, enables cross-run reproducibility
+- **Files Changed**: `output_layout.py` (NEW), `reproducibility_tracker.py`, `target_first_paths.py`, `artifact_paths.py`, `intelligent_trainer.py`, `safety.yaml`, `test_scope_violation_firewall.py` (NEW)
+→ [Audit Trail](docs/audit/2024-12-23/21-15-07_scope_violation_firewall_pr1/)
+
 #### 2025-12-23 (Feature Registry, Symbol Discovery, and Mode Resolution Fixes)
 - **Feature Registry Fix**: Fixed 114 features with incorrect `lag_bars: 0` and `AUTO-REJECTED` status. Correct lookback values now set using proper minute-to-bar (`ceil(min/5)`) and day-to-bar (`ceil(day*1440/5)`) conversions. Calendar features (`_hour`, `day_of_week`, etc.) correctly unrejected with `lag_bars=0`.
 - **New Feature**: Auto-discover symbols from `data_dir` when `symbols: []` (empty). Optional `symbol_batch_size` limits selection with deterministic seeded sampling. Symbols flow through entire pipeline (ranking → feature selection → routing → training).

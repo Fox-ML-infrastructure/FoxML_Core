@@ -302,6 +302,30 @@ def generate_target_exclusion_list(
             # directional_patterns = [r'rsi', r'macd', r'adx', r'momentum']
             pass
     
+        # Forward-return targets: exclude forward-looking profit/PnL features
+        if target_semantics.get('forward_return'):
+            forward_looking_patterns = [
+                r'time_in_profit',      # e.g., time_in_profit_15m
+                r'profit_.*forward',    # Any profit feature computed forward
+                r'pnl_.*forward',        # Any PnL feature computed forward
+                r'.*_profit_.*',         # Features with "profit" in name that extend beyond horizon
+            ]
+            
+            metadata['exclusion_rules_applied'].append({
+                'rule': 'semantic_forward_return',
+                'patterns': forward_looking_patterns,
+            })
+            
+            for feature_name in all_features:
+                for pattern in forward_looking_patterns:
+                    if re.search(pattern, feature_name, re.IGNORECASE):
+                        if feature_name not in exclusions:
+                            exclusions.append(feature_name)
+                            exclusion_reasons[feature_name] = (
+                                f"forward-looking profit/PnL feature (forward-return target)"
+                            )
+                        break
+    
     metadata['excluded_count'] = len(exclusions)
     metadata['exclusion_reasons'] = exclusion_reasons
     

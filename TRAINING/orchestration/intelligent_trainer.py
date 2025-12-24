@@ -1658,9 +1658,11 @@ class IntelligentTrainer:
                 segment_id = None
                 if cohort_metadata:
                     # Compute approximate cohort_id (will be refined later)
+                    # Use view from metadata if available, default to CROSS_SECTIONAL
                     from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
                     temp_tracker = ReproducibilityTracker(output_dir=self.output_dir)
-                    cohort_id = temp_tracker._compute_cohort_id(cohort_metadata, route_type=None)
+                    approx_view = cohort_metadata.get('view', 'CROSS_SECTIONAL')
+                    cohort_id = temp_tracker._compute_cohort_id(cohort_metadata, view=approx_view)
                     
                     # Try to get segment_id from index (target-first structure first)
                     from TRAINING.orchestration.utils.target_first_paths import get_globals_dir

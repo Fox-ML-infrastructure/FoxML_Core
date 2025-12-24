@@ -28,7 +28,14 @@ class ArtifactPaths:
     """Single Source of Truth for all artifact paths."""
     
     @staticmethod
-    def model_dir(run_root: Path, target: str, view: str, family: str, symbol: Optional[str] = None) -> Path:
+    def model_dir(
+        run_root: Path, 
+        target: str, 
+        view: str, 
+        family: str, 
+        symbol: Optional[str] = None,
+        universe_sig: Optional[str] = None
+    ) -> Path:
         """
         Get canonical model directory.
         
@@ -38,9 +45,10 @@ class ArtifactPaths:
             view: View name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
             family: Model family name
             symbol: Optional symbol name (required if view is "SYMBOL_SPECIFIC")
+            universe_sig: Optional universe signature for cross-run reproducibility
         
         Returns:
-            Path to targets/<target>/models/view=<view>/[symbol=<symbol>/]family=<family>/
+            Path to targets/<target>/models/view=<view>/[universe=<universe_sig>/][symbol=<symbol>/]family=<family>/
         
         Raises:
             ValueError: If view is "SYMBOL_SPECIFIC" but symbol is None
@@ -49,6 +57,8 @@ class ArtifactPaths:
             raise ValueError("symbol parameter is required when view='SYMBOL_SPECIFIC'")
         
         base = run_root / "targets" / target / "models" / f"view={view}"
+        if universe_sig:
+            base = base / f"universe={universe_sig}"
         if view == "SYMBOL_SPECIFIC" and symbol:
             base = base / f"symbol={symbol}"
         return base / f"family={family}"

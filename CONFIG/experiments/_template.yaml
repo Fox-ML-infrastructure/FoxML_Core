@@ -21,10 +21,27 @@ data:
   # Data directory (relative to repo root or absolute path)
   data_dir: data/data_labeled_v2/interval=5m
   
-  # List of symbols to use
+  # ========================================================================
+  # SYMBOLS CONFIGURATION
+  # ========================================================================
+  # Option 1: Explicit symbols list
   symbols: [AAPL, MSFT, GOOGL, TSLA, NVDA]
   
+  # Option 2: Auto-discover symbols from data_dir
+  # symbols: []  # Empty = auto-discover all symbols from data_dir
+  # symbol_batch_size: 15  # Optional: limit to N symbols (random sample, reproducible)
+  #
+  # Auto-discovery semantics:
+  # - symbols: [] or symbols: null or missing → auto-discover from data_dir
+  # - symbols: [AAPL, MSFT, ...] → use explicit list (no discovery)
+  #
+  # Path semantics:
+  # - If data_dir contains "interval=5m", discovery uses it directly
+  # - If data_dir is root, provide interval: 5m and discovery appends interval=5m
+  # - If data_dir has interval=X but you specify interval=Y, raises error (mismatch)
+  
   # Bar interval (5m, 15m, 1h, etc.)
+  # Not needed if data_dir already contains interval=5m
   interval: 5m  # or bar_interval: 5m (both work)
   
   # Maximum samples per symbol (caps data to prevent memory issues)

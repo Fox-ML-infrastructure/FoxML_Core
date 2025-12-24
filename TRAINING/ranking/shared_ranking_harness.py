@@ -369,6 +369,22 @@ class RankingHarness:
         features_safe = len(feature_names)
         logger.debug(f"Filtered out {excluded_count} potentially leaking features (kept {features_safe} safe features)")
         
+        # Apply runtime quarantine (dominance quarantine confirmed features)
+        if self.output_dir:
+            try:
+                from TRAINING.ranking.utils.dominance_quarantine import load_confirmed_quarantine
+                runtime_quarantine = load_confirmed_quarantine(
+                    out_dir=self.output_dir,
+                    target=target_column,
+                    view=self.view,
+                    symbol=self.symbol
+                )
+                if runtime_quarantine:
+                    feature_names = [f for f in feature_names if f not in runtime_quarantine]
+                    logger.info(f"🔒 Applied runtime quarantine: Removed {len(runtime_quarantine)} confirmed leaky features ({len(feature_names)} remaining)")
+            except Exception as e:
+                logger.debug(f"Could not load runtime quarantine: {e}")
+        
         # Check if we have enough features to train
         try:
             from CONFIG.config_loader import get_cfg

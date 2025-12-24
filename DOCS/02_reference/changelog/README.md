@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### December
 
+- **2025-12-23 (Dominance Quarantine and Leakage Safety Enhancements)** — Implemented comprehensive dominance quarantine system for feature-level leakage detection and recovery. Features with dominant importance are detected, confirmed via rerun with suspects removed, and quarantined if score drops significantly. Only blocks target/view if leakage persists after quarantine. Added hard-exclusion of forward-looking features (`time_in_profit_*`) for forward-return targets. Added config-driven small-panel leniency (downgrades BLOCKED to SUSPECT when n_symbols < 10). Fixed `detect_leakage()` import conflict causing TypeError crash. All changes maintain SST compliance and backward compatibility.
+  → [View](2025-12-23-dominance-quarantine-and-leakage-safety.md)
+
 - **2025-12-23 (Mode Selection and Pipeline Safety Fixes)** — Fixed 4 critical red flags identified in training logs that connect to "no symbol metrics / 0 jobs / stale routing" issues. Key fixes: (1) Mode selection logic fixed - small panels (<10 symbols) now select SYMBOL_SPECIFIC instead of CROSS_SECTIONAL, preventing missing symbol metrics. (2) Unknown lookback invariant enforced - hard assertion that no inf lookbacks remain after gatekeeper quarantine, prevents RuntimeError. (3) Purge inflation protection - estimates effective samples after purge increase, warns when <30% remaining, fails early when <minimum threshold (configurable). (4) Dev mode job guarantee - generates fallback jobs when router produces 0 jobs in dev_mode, ensuring E2E tests always have jobs. All fixes maintain per-target calculation (purge depends on features selected for each target).
   → [View](2025-12-23-mode-selection-and-pipeline-safety-fixes.md)
 

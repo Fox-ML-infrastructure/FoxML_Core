@@ -134,7 +134,7 @@ class TrainingPlanGenerator:
         else:
             self.model_families = ["lightgbm", "xgboost"]
             logger.debug(f"📋 TrainingPlanGenerator: Using hardcoded defaults={self.model_families}")
-        
+    
         # Invariant: model_families must not contain feature selectors
         selector_violations = set(self.model_families) & FEATURE_SELECTORS
         if selector_violations:

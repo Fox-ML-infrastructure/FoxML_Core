@@ -2,6 +2,14 @@
 # Settings for numerical guards, clipping, and safety thresholds
 
 safety:
+  # Output Layout Configuration (view+universe scoped paths)
+  # Controls strict validation of output paths to prevent scope violations
+  output_layout:
+    # If true, hard error when cohort metadata is missing required fields (view, universe_sig, target)
+    # If false (default), warn and fall back to legacy path construction
+    # Recommended: false for initial rollout, true after PR2 migration is complete
+    strict_scope_partitioning: false
+
   # Feature Clipping
   feature_clipping:
     enabled: true
@@ -113,6 +121,15 @@ safety:
       # Set to number (e.g., 240) to cap lookback at 4 hours (excludes 1D+ lookback features)
       ranking_mode_max_lookback_minutes: null  # null = no cap, or set to e.g., 240 for 4-hour cap
     
+    # Small-panel leniency (for runs with few symbols)
+    # When n_symbols < min_symbols_threshold, downgrade leakage BLOCKED to SUSPECT
+    # This allows dominance quarantine to attempt recovery before blocking target/view
+    small_panel:
+      enabled: true
+      min_symbols_threshold: 10  # Apply leniency when n_symbols < this
+      downgrade_block_to_suspect: true  # Downgrade BLOCKED to SUSPECT for small panels
+      log_warning: true  # Log when leniency is applied
+    
     # Feature Importance Stability Tracking
     feature_importance:
       # Automatically analyze stability after saving snapshots
@@ -133,6 +150,33 @@ safety:
       importance_fallback: "gain"  # Fallback method when skipping: "gain" | "split" | "none"
       importance_skip_on_overfit: true  # Enable skipping expensive importance on overfitting detection
       pvc_feature_count_cap: 250  # Optional: skip PVC if n_features > this (null to disable)
+    
+    # Dominance Quarantine: Auto-suspect → confirm → quarantine workflow
+    # Detects features with dominant importance (potential leakage), confirms via rerun,
+    # and only escalates to blocking target/view if leakage persists after quarantine
+    dominance_quarantine:
+      enabled: true
+      
+      # Suspect trigger (cheap heuristic)
+      soft:
+        top1_share: 0.30          # 30%+ of total importance
+        top1_over_top2: 3.0        # 3× the next feature
+        hard_top1_share: 0.40      # immediate suspect if 40%+
+        max_features: 3            # quarantine top-N suspects at once
+      
+      # Confirm logic (rerun once with suspects removed)
+      confirm:
+        enabled: true
+        rerun_once: true
+        min_samples: 500           # avoid "confirmed" on tiny sets
+        min_symbols: 3             # avoid "confirmed" on SINGLE_SYMBOL_TS
+        mean_score_drop_abs: 0.15  # confirmed if removing suspects drops mean_score by ≥ 0.15
+        mean_score_drop_rel: 0.25  # OR relative drop ≥ 25%
+      
+      # Escalation policy
+      escalation:
+        on_confirmed: "quarantine_feature"      # persist feature exclusion
+        on_persisting_leak: "block_target_view"  # only if still leaks after confirm
   
   # Purge/embargo configuration
   temporal:

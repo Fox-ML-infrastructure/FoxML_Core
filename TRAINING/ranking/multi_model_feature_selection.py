@@ -3582,6 +3582,22 @@ def process_single_symbol(
                 rejected = set(selected_features) - set(available_features)
                 logger.debug(f"  {symbol}: Registry strict mode rejected {len(rejected)} features from shared harness: {list(rejected)[:5]}")
             
+            # Apply runtime quarantine (dominance quarantine confirmed features)
+            if output_dir:
+                try:
+                    from TRAINING.ranking.utils.dominance_quarantine import load_confirmed_quarantine
+                    runtime_quarantine = load_confirmed_quarantine(
+                        out_dir=output_dir,
+                        target=target_column,
+                        view="SYMBOL_SPECIFIC",  # process_single_symbol is always SYMBOL_SPECIFIC
+                        symbol=symbol
+                    )
+                    if runtime_quarantine:
+                        available_features = [f for f in available_features if f not in runtime_quarantine]
+                        logger.info(f"  🔒 {symbol}: Applied runtime quarantine: Removed {len(runtime_quarantine)} confirmed leaky features ({len(available_features)} remaining)")
+                except Exception as e:
+                    logger.debug(f"Could not load runtime quarantine for {symbol}: {e}")
+            
             # Keep only validated features + target + required ID columns (ts, symbol, etc.)
             required_cols = ['ts', 'symbol'] if 'ts' in df.columns else []
             keep_cols = available_features + [target_column] + [c for c in required_cols if c in df.columns]
@@ -4503,19 +4519,25 @@ def save_multi_model_results(
     selected_features: List[str],
     all_results: List[ImportanceResult],
     output_dir: Path,
-    metadata: Dict[str, Any]
+    metadata: Dict[str, Any],
+    universe_sig: Optional[str] = None,  # Phase A: optional for backward compat
 ):
-    """Save multi-model feature selection results
+    """Save multi-model feature selection results.
     
-    Target-first structure:
-    targets/<target>/reproducibility/feature_importances/
+    Target-first structure (with OutputLayout when universe_sig provided):
+    targets/<target>/reproducibility/{view}/universe={universe_sig}/feature_importances/
       {model}_importances.csv
       feature_importance_multi_model.csv
       feature_importance_with_boruta_debug.csv
       model_agreement_matrix.csv
-    targets/<target>/reproducibility/selected_features.txt
+    targets/<target>/reproducibility/{view}/universe={universe_sig}/selected_features.txt
     
-    Also maintains legacy structure for backward compatibility.
+    Falls back to legacy structure without universe scoping when universe_sig not provided.
+    
+    ROUTING NOTE: These are SCOPE-LEVEL SUMMARY artifacts, not cohort artifacts.
+    They use OutputLayout.repro_dir() / feature_importance_dir() directly.
+    Do NOT use _save_to_cohort for these outputs - the cohort firewall is for
+    per-cohort metrics/run data under cohort=cs_* or cohort=sy_* directories.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     
@@ -4538,6 +4560,31 @@ def save_multi_model_results(
             if idx + 2 < len(parts):
                 target_name = parts[idx + 2]
     
+    # Also try to extract universe_sig from metadata if not passed explicitly
+    # Validate extracted sig before using - invalid values are ignored
+    if not universe_sig and metadata:
+        extracted_sig = metadata.get('universe_sig') or metadata.get('universe_id')
+        if extracted_sig:
+            try:
+                from TRAINING.orchestration.utils.cohort_metadata import validate_universe_sig
+                validate_universe_sig(extracted_sig)
+                universe_sig = extracted_sig
+            except ValueError as e:
+                logger.warning(
+                    "Invalid universe_sig from metadata; ignoring and falling back to legacy paths. "
+                    f"error={e} metadata_keys={list(metadata.keys())}"
+                )
+                universe_sig = None  # Don't use invalid value
+    
+    # Phase A: Use OutputLayout if universe_sig provided (new canonical path)
+    # Otherwise fall back to legacy path resolution with warning
+    use_output_layout = bool(universe_sig)
+    if not use_output_layout:
+        logger.warning(
+            f"universe_sig not provided for {target_name} multi-model results, "
+            f"falling back to legacy path resolution. Pass universe_sig for canonical paths."
+        )
+    
     # Walk up to find base run directory
     for _ in range(10):
         # Only stop if we find a run directory (has targets/, globals/, or cache/)
@@ -4551,14 +4598,12 @@ def save_multi_model_results(
     # Set up target-first structure if we found target and base directory (view/symbol-scoped)
     target_importances_dir = None
     target_selected_features_path = None
+    repro_dir = None  # Track for later use
+    
     if target_name and base_output_dir.exists():
         try:
-            from TRAINING.orchestration.utils.target_first_paths import (
-                run_root, target_repro_dir, target_repro_file_path, ensure_target_structure
-            )
             target_name_clean = target_name.replace('/', '_').replace('\\', '_')
-            run_root_dir = run_root(base_output_dir)
-            ensure_target_structure(run_root_dir, target_name_clean)
+            
             # Extract view and symbol from metadata (view is REQUIRED)
             view = metadata.get('view') if metadata else None
             symbol = metadata.get('symbol') if metadata else None
@@ -4574,11 +4619,31 @@ def save_multi_model_results(
             if view == "SYMBOL_SPECIFIC" and symbol is None:
                 raise ValueError("symbol required in metadata when view='SYMBOL_SPECIFIC'")
             
-            # Use view/symbol-scoped path helpers
-            repro_dir = target_repro_dir(run_root_dir, target_name_clean, view=view, symbol=symbol)
-            target_importances_dir = repro_dir / "feature_importances"
+            if use_output_layout and universe_sig:
+                # Canonical path via OutputLayout (non-cohort write)
+                from TRAINING.orchestration.utils.output_layout import OutputLayout
+                layout = OutputLayout(
+                    output_root=base_output_dir,
+                    target=target_name_clean,
+                    view=view,
+                    universe_sig=universe_sig,
+                    symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
+                )
+                repro_dir = layout.repro_dir()
+                target_importances_dir = layout.feature_importance_dir()
+                target_selected_features_path = repro_dir / "selected_features.txt"
+            else:
+                # Legacy path resolution
+                from TRAINING.orchestration.utils.target_first_paths import (
+                    run_root, target_repro_dir, target_repro_file_path, ensure_target_structure
+                )
+                run_root_dir = run_root(base_output_dir)
+                ensure_target_structure(run_root_dir, target_name_clean)
+                repro_dir = target_repro_dir(run_root_dir, target_name_clean, view=view, symbol=symbol)
+                target_importances_dir = repro_dir / "feature_importances"
+                target_selected_features_path = target_repro_file_path(run_root_dir, target_name_clean, "selected_features.txt", view=view, symbol=symbol)
+            
             target_importances_dir.mkdir(parents=True, exist_ok=True)
-            target_selected_features_path = target_repro_file_path(run_root_dir, target_name_clean, "selected_features.txt", view=view, symbol=symbol)
         except Exception as e:
             logger.debug(f"Failed to set up target-first structure: {e}")
     
@@ -4697,9 +4762,7 @@ def save_multi_model_results(
     # Write only to target-first structure (no legacy root-level writes) - view/symbol-scoped
     if target_name and base_output_dir.exists():
         try:
-            from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
             target_name_clean = target_name.replace('/', '_').replace('\\', '_')
-            run_root_dir = run_root(base_output_dir)
             # Extract view and symbol from metadata (view is REQUIRED)
             view = metadata.get('view') if metadata else None
             symbol = metadata.get('symbol') if metadata else None
@@ -4715,8 +4778,23 @@ def save_multi_model_results(
             if view == "SYMBOL_SPECIFIC" and symbol is None:
                 raise ValueError("symbol required in metadata when view='SYMBOL_SPECIFIC'")
             
-            # Use view/symbol-scoped path helper
-            target_summary_path = target_repro_file_path(run_root_dir, target_name_clean, "feature_selection_summary.json", view=view, symbol=symbol)
+            if use_output_layout and universe_sig:
+                # Canonical path via OutputLayout (non-cohort write)
+                from TRAINING.orchestration.utils.output_layout import OutputLayout
+                layout = OutputLayout(
+                    output_root=base_output_dir,
+                    target=target_name_clean,
+                    view=view,
+                    universe_sig=universe_sig,
+                    symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
+                )
+                target_summary_path = layout.repro_dir() / "feature_selection_summary.json"
+            else:
+                # Legacy path resolution
+                from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
+                run_root_dir = run_root(base_output_dir)
+                target_summary_path = target_repro_file_path(run_root_dir, target_name_clean, "feature_selection_summary.json", view=view, symbol=symbol)
+            
             target_summary_path.parent.mkdir(parents=True, exist_ok=True)
             with open(target_summary_path, "w") as f:
                 json.dump(metadata, f, indent=2)

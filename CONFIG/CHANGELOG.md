@@ -1,5 +1,24 @@
 # CONFIG Directory Changelog
 
+## 2025-12-23: Scope Violation Firewall Config
+
+### New Safety Config Option
+- **Added**: `safety.output_layout.strict_scope_partitioning` flag
+  - Location: `CONFIG/pipeline/training/safety.yaml`
+  - Default: `false` (warnings only, legacy fallback allowed)
+  - Set to `true` to enforce strict OutputLayout validation (hard errors on missing metadata)
+  
+### Purpose
+- Controls behavior of `_save_to_cohort()` when cohort metadata is missing required fields (`view`, `universe_sig`, `target`)
+- When `false`: Warns and falls back to legacy path construction (for gradual migration)
+- When `true`: Hard error if OutputLayout invariants cannot be validated (for production)
+
+### Related Changes
+- New `OutputLayout` dataclass in `TRAINING/orchestration/utils/output_layout.py`
+- Extended path helpers with optional `universe_sig` parameter
+
+---
+
 ## 2025-12-18: Config Cleanup and Path Migration
 
 ### Config Cleanup

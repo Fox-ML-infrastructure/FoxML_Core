@@ -11,19 +11,23 @@ experiment:
 # ============================================================================
 data:
   # Data directory (relative to repo root or absolute path)
-  data_dir: data/data_labeled_v2/interval=5m
+  # Note: data_dir already contains interval=5m, so interval is not needed
+  data_dir: data/data_labeled_v3/interval=5m
   
-  # List of symbols to use (5 symbols for comprehensive testing)
-  symbols: [AAPL, MSFT, GOOGL, TSLA, NVDA]
+  # Auto-discover symbols from data_dir
+  # Empty list or missing = auto-discover all symbols
+  # To limit: set symbol_batch_size to select a random subset
+  symbols: []  # Auto-discover all symbols
+  symbol_batch_size: 25  # Select 15 symbols from discovered set (for faster testing)
   
-  # Bar interval
-  interval: 5m
+  # Bar interval (not needed if data_dir already contains interval=5m)
+  # interval: 5m
   
   # Reduced limits for faster testing (increase for production)
-  max_samples_per_symbol: 1000   # Reduced for faster testing
-  max_rows_per_symbol: 1000      # Reduced for faster testing
-  max_rows_train: 20000          # Reduced from 100000 for faster testing
-  max_cs_samples: 1000            # Max cross-sectional samples per timestamp
+  max_samples_per_symbol: 4000   # Reduced for faster testing
+  max_rows_per_symbol: 4000      # Reduced for faster testing
+  max_rows_train: 100000          # Reduced from 100000 for faster testing
+  max_cs_samples: 4000           # Max cross-sectional samples per timestamp
   min_cs: 3                       # Reduced from 10 for faster testing
 
 # ============================================================================
@@ -34,16 +38,16 @@ intelligent_training:
   auto_targets: true
   
   # Evaluate top N targets (limited for faster testing)
-  top_n_targets: 5  # Limited for faster testing
+  top_n_targets: 10  # Limited for faster testing
   
   # Maximum targets to evaluate (limited for faster testing)
-  max_targets_to_evaluate: 10  # Limited for faster testing
+  max_targets_to_evaluate: 20 # Limited for faster testing
   
   # Auto-discover features
   auto_features: true
   
   # Number of top features to select (reduced for faster testing)
-  top_m_features: 30  # Reduced from 50 for faster testing
+  top_m_features: 50  # Reduced from 50 for faster testing
   
   # Training strategy
   strategy: single_task
@@ -54,8 +58,8 @@ intelligent_training:
   # Exclude target patterns (targets matching any pattern will be excluded)
   # Patterns are matched as substrings (e.g., "will_peak" matches "y_will_peak_60m_0.8")
   exclude_target_patterns:
-    - "will_peak"
-    - "will_valley"
+    # - "will_peak"
+    # - "will_valley"
     - "fwd_ret_20d"  # Exclude 20-day targets (require >20 days of data)
     - "fwd_ret_15d"  # Exclude 15-day targets (require >15 days of data)
 

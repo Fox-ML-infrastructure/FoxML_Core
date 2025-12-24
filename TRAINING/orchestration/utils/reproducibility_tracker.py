@@ -48,6 +48,22 @@ except ImportError:
     AuditEnforcer = None
     AuditMode = None
 
+# Import OutputLayout for view+universe scoped paths
+try:
+    from TRAINING.orchestration.utils.output_layout import (
+        OutputLayout, 
+        validate_cohort_metadata,
+        _normalize_universe_sig,
+        _normalize_view
+    )
+    _OUTPUT_LAYOUT_AVAILABLE = True
+except ImportError:
+    _OUTPUT_LAYOUT_AVAILABLE = False
+    OutputLayout = None
+    validate_cohort_metadata = None
+    _normalize_universe_sig = None
+    _normalize_view = None
+
 # Use root logger to ensure messages are visible regardless of calling script's logger setup
 logger = logging.getLogger(__name__)
 # Ensure this logger propagates to root so messages are visible
@@ -691,16 +707,51 @@ class ReproducibilityTracker:
         
         return cohort
     
-    def _compute_cohort_id(self, cohort: Dict[str, Any], mode: Optional[str] = None) -> str:
+    def _compute_cohort_id(
+        self, 
+        cohort: Dict[str, Any], 
+        view: str,  # REQUIRED: CROSS_SECTIONAL | SYMBOL_SPECIFIC
+        mode: Optional[str] = None  # DEPRECATED: use view instead
+    ) -> str:
         """
         Compute readable cohort ID from metadata.
         
-        Format: {mode}_{date_range}_{universe}_{config}_{version}
-        Example: cs_2023Q1_universeA_min_cs3_v1
+        Format: {mode_prefix}_{date_range}_{universe}_{config}_{version}_{hash}
+        Example: cs_2023Q1_universeA_min_cs3_v1_abc12345
+        
+        Args:
+            cohort: Cohort metadata dict
+            view: REQUIRED view name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
+            mode: DEPRECATED - use view instead. Kept for backward compatibility.
+        
+        Returns:
+            Cohort ID string with prefix matching view
+        
+        Raises:
+            ValueError: If view is invalid or mode doesn't match view
         """
-        # For TARGET_RANKING: mode is view (CROSS_SECTIONAL→"cr", SYMBOL_SPECIFIC→"sy", LOSO→"lo")
-        # For FEATURE_SELECTION/TRAINING: mode is route_type (CROSS_SECTIONAL→"cr", INDIVIDUAL→"in")
-        mode_prefix = (mode or "cs").lower()[:2]
+        # Map view to mode prefix
+        view_upper = (view or "").upper()
+        if view_upper == "CROSS_SECTIONAL":
+            mode_prefix = "cs"
+        elif view_upper == "SYMBOL_SPECIFIC":
+            mode_prefix = "sy"
+        else:
+            raise ValueError(f"Invalid view: {view}. Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'")
+        
+        # If legacy mode provided, validate it matches view (explicit startswith check)
+        if mode:
+            mode_check = mode.lower()
+            if view_upper == "CROSS_SECTIONAL" and not mode_check.startswith("cs") and mode_check not in ("cross_sectional",):
+                logger.warning(
+                    f"Mode/view mismatch: mode={mode} does not match view={view}. "
+                    f"Using view-derived prefix '{mode_prefix}'"
+                )
+            elif view_upper == "SYMBOL_SPECIFIC" and not mode_check.startswith("sy") and mode_check not in ("symbol_specific", "individual"):
+                logger.warning(
+                    f"Mode/view mismatch: mode={mode} does not match view={view}. "
+                    f"Using view-derived prefix '{mode_prefix}'"
+                )
         
         # Extract date range
         date_start = cohort.get('date_range', {}).get('start_ts', '')
@@ -973,6 +1024,98 @@ class ReproducibilityTracker:
             if not view_value:
                 view_value = "CROSS_SECTIONAL"
         
+        # ========================================================================
+        # PR1 FIREWALL: OutputLayout validation for view+universe scoping
+        # This is the choke point that catches all writes and validates scope
+        # ========================================================================
+        if _OUTPUT_LAYOUT_AVAILABLE and stage_normalized in ["TARGET_RANKING", "FEATURE_SELECTION", "TRAINING"]:
+            # Extract and normalize metadata fields
+            raw_view = cohort_metadata.get("view") or view_value
+            normalized_view = _normalize_view({"view": raw_view}) if _normalize_view else None
+            universe_sig = _normalize_universe_sig(cohort_metadata) if _normalize_universe_sig else None
+            symbol_from_meta = symbol or cohort_metadata.get("symbol")
+            target_name = cohort_metadata.get("target") or cohort_metadata.get("target_name") or item_name
+            
+            # Check strict mode config flag
+            strict_mode = False
+            try:
+                from CONFIG.config_loader import load_config
+                cfg = load_config()
+                strict_mode = getattr(getattr(getattr(cfg, 'safety', None), 'output_layout', None), 'strict_scope_partitioning', False)
+            except Exception as e:
+                logger.debug(f"Could not load strict mode config: {e}, defaulting to non-strict")
+            
+            # Determine if we have all required metadata for OutputLayout
+            has_required_metadata = bool(normalized_view and universe_sig and target_name)
+            if normalized_view == "SYMBOL_SPECIFIC" and not symbol_from_meta:
+                has_required_metadata = False
+            
+            # If metadata has required fields, validate using OutputLayout
+            if has_required_metadata:
+                try:
+                    layout = OutputLayout(
+                        output_root=self._repro_base_dir,
+                        target=target_name,
+                        view=normalized_view,
+                        universe_sig=universe_sig,
+                        symbol=symbol_from_meta,
+                        cohort_id=cohort_id
+                    )
+                    # HARD ERROR: Validate cohort_id matches view (catches all writes)
+                    layout.validate_cohort_id(cohort_id)
+                    logger.debug(f"OutputLayout validation passed: view={normalized_view}, cohort_id={cohort_id}")
+                except ValueError as e:
+                    # This is a scope violation - always error
+                    logger.error(f"SCOPE VIOLATION: {e}")
+                    raise
+            else:
+                # Legacy fallback behavior - build detailed missing list
+                missing = []
+                
+                if not raw_view:
+                    missing.append("view")
+                elif not normalized_view:
+                    missing.append(f"view (invalid: {raw_view})")
+                
+                if not universe_sig:
+                    missing.append("universe_sig (or universe_id)")
+                
+                if not target_name:
+                    missing.append("target (or target_name)")
+                
+                # If view is valid and symbol-specific, require symbol
+                if normalized_view == "SYMBOL_SPECIFIC" and not symbol_from_meta:
+                    missing.append("symbol")
+                
+                if strict_mode:
+                    # Hard error in strict mode
+                    raise ValueError(
+                        f"Missing required metadata for OutputLayout (strict mode enabled): {missing}. "
+                        f"Metadata keys: {list(cohort_metadata.keys())}. "
+                        f"Set safety.output_layout.strict_scope_partitioning=false to allow legacy fallback."
+                    )
+                else:
+                    # Warn and fall back to legacy path construction
+                    logger.warning(
+                        f"Missing {missing} in metadata for {stage}/{item_name}. "
+                        f"Falling back to legacy path construction. "
+                        f"Metadata keys: {list(cohort_metadata.keys())}. "
+                        f"Enable safety.output_layout.strict_scope_partitioning=true to enforce strict validation."
+                    )
+                    
+                    # SCOPE VIOLATION DETECTOR: Telemetry even when view is missing/invalid
+                    # Non-blocking, just visibility for finding remaining bad call paths
+                    if cohort_id:
+                        prefix = "sy" if cohort_id.startswith("sy_") else "cs" if cohort_id.startswith("cs_") else "unknown"
+                        logger.error(
+                            f"SCOPE VIOLATION RISK: view={normalized_view or 'UNKNOWN'} raw_view={raw_view or 'None'} "
+                            f"cohort_prefix={prefix} cohort_id={cohort_id} stage={stage} item={item_name} "
+                            f"route_type={route_type} symbol={symbol_from_meta}"
+                        )
+        # ========================================================================
+        # END PR1 FIREWALL
+        # ========================================================================
+        
         full_metadata = {
             "schema_version": REPRODUCIBILITY_SCHEMA_VERSION,
             "cohort_id": cohort_id,
@@ -987,6 +1130,8 @@ class ReproducibilityTracker:
             "date_range_start": cohort_metadata.get('date_range', {}).get('start_ts'),  # Changed from "date_start" to match finalize_run() expectations
             "date_range_end": cohort_metadata.get('date_range', {}).get('end_ts'),  # Changed from "date_end" to match finalize_run() expectations
             "universe_id": cohort_metadata.get('cs_config', {}).get('universe_id'),
+            # Normalized universe_sig - prefer universe_sig, fallback to universe_id
+            "universe_sig": (_normalize_universe_sig(cohort_metadata) if _normalize_universe_sig else None) or cohort_metadata.get('cs_config', {}).get('universe_id'),
             "min_cs": cohort_metadata.get('cs_config', {}).get('min_cs'),
             "max_cs_samples": cohort_metadata.get('cs_config', {}).get('max_cs_samples'),
             "leakage_filter_version": cohort_metadata.get('cs_config', {}).get('leakage_filter_version', 'v1'),
@@ -2387,7 +2532,13 @@ class ReproducibilityTracker:
                 return None
             
             # Try exact match first (same cohort_id)
-            target_id = self._compute_cohort_id(cohort_metadata, route_type)
+            # Derive view from route_type for cohort_id computation
+            view_for_cohort = "CROSS_SECTIONAL"
+            if route_type:
+                rt_upper = route_type.upper()
+                if rt_upper in ("SYMBOL_SPECIFIC", "INDIVIDUAL"):
+                    view_for_cohort = "SYMBOL_SPECIFIC"
+            target_id = self._compute_cohort_id(cohort_metadata, view=view_for_cohort)
             exact_match = candidates[candidates['cohort_id'] == target_id]
             if len(exact_match) > 0:
                 return target_id
@@ -2911,7 +3062,13 @@ class ReproducibilityTracker:
                 
                 if cohort_id is None:
                     # New cohort - save as baseline
-                    cohort_id = self._compute_cohort_id(cohort_metadata, route_type)
+                    # Derive view from route_type for cohort_id computation
+                    view_for_cohort = "CROSS_SECTIONAL"
+                    if route_type:
+                        rt_upper = route_type.upper()
+                        if rt_upper in ("SYMBOL_SPECIFIC", "INDIVIDUAL"):
+                            view_for_cohort = "SYMBOL_SPECIFIC"
+                    cohort_id = self._compute_cohort_id(cohort_metadata, view=view_for_cohort)
                     run_data = {
                         "timestamp": datetime.now().isoformat(),
                         "stage": stage,
@@ -3012,7 +3169,13 @@ class ReproducibilityTracker:
                     if index_file.exists():
                         df = pd.read_parquet(index_file)
                         # Get route history for this cohort/target
-                        cohort_id = self._compute_cohort_id(cohort_metadata, route_type)
+                        # Derive view from route_type for cohort_id computation
+                        view_for_cohort = "CROSS_SECTIONAL"
+                        if route_type:
+                            rt_upper = route_type.upper()
+                            if rt_upper in ("SYMBOL_SPECIFIC", "INDIVIDUAL"):
+                                view_for_cohort = "SYMBOL_SPECIFIC"
+                        cohort_id = self._compute_cohort_id(cohort_metadata, view=view_for_cohort)
                         mask = (df['cohort_id'] == cohort_id) & (df['target'] == item_name)
                         if route_type:
                             mask &= (df['mode'] == route_type.upper())
@@ -3229,7 +3392,13 @@ class ReproducibilityTracker:
                 if additional_data:
                     run_data["additional_data"] = additional_data
                 
-                cohort_id = self._compute_cohort_id(cohort_metadata, route_type)
+                # Derive view from route_type for cohort_id computation
+                view_for_cohort = "CROSS_SECTIONAL"
+                if route_type:
+                    rt_upper = route_type.upper()
+                    if rt_upper in ("SYMBOL_SPECIFIC", "INDIVIDUAL"):
+                        view_for_cohort = "SYMBOL_SPECIFIC"
+                cohort_id = self._compute_cohort_id(cohort_metadata, view=view_for_cohort)
                 self._save_to_cohort(stage, item_name, cohort_id, cohort_metadata, run_data, route_type, symbol, model_family, additional_data)
                 self._increment_mode_counter("COHORT_AWARE")
                 
@@ -3402,7 +3571,13 @@ class ReproducibilityTracker:
                 if minimal_cohort_metadata.get('N_effective_cs'):
                     try:
                         # Compute cohort_id from minimal metadata
-                        minimal_cohort_id = self._compute_cohort_id(minimal_cohort_metadata, route_type)
+                        # Derive view from route_type for cohort_id computation
+                        view_for_cohort = "CROSS_SECTIONAL"
+                        if route_type:
+                            rt_upper = route_type.upper()
+                            if rt_upper in ("SYMBOL_SPECIFIC", "INDIVIDUAL"):
+                                view_for_cohort = "SYMBOL_SPECIFIC"
+                        minimal_cohort_id = self._compute_cohort_id(minimal_cohort_metadata, view=view_for_cohort)
                         run_data = {
                             "timestamp": datetime.now().isoformat(),
                             "stage": stage,
@@ -3593,7 +3768,11 @@ class ReproducibilityTracker:
             elif ctx.view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
                 route_type_for_cohort = "SYMBOL_SPECIFIC"  # Use SYMBOL_SPECIFIC to match directory structure
         
-        cohort_id = self._compute_cohort_id(cohort_metadata, route_type_for_cohort)
+        # Use route_type_for_cohort as view (it's already normalized to CROSS_SECTIONAL or SYMBOL_SPECIFIC)
+        view_for_cohort = route_type_for_cohort.upper() if route_type_for_cohort else "CROSS_SECTIONAL"
+        if view_for_cohort not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
+            view_for_cohort = "CROSS_SECTIONAL"  # Default if unexpected value
+        cohort_id = self._compute_cohort_id(cohort_metadata, view=view_for_cohort)
         previous_metadata = None
         try:
             # Use target-first structure for reading previous metadata

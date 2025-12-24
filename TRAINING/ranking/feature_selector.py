@@ -172,7 +172,8 @@ def select_features_for_target(
     experiment_config: Optional[Any] = None,  # Optional ExperimentConfig (for data.bar_interval)
     view: str = "CROSS_SECTIONAL",  # "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC" - must match target ranking view
     symbol: Optional[str] = None,  # Required for SYMBOL_SPECIFIC view
-    force_refresh: bool = False  # If True, bypass cache and re-run Phase 2
+    force_refresh: bool = False,  # If True, bypass cache and re-run Phase 2
+    universe_sig: Optional[str] = None,  # Universe signature from SST (resolved_data_config)
 ) -> Tuple[List[str], pd.DataFrame]:
     """
     Select top features for a target using multi-model consensus.
@@ -460,7 +461,20 @@ def select_features_for_target(
                         X, y, feature_names, symbols_array, time_vals, mtf_data = build_result[:6]
                         detected_interval = build_result[6] if actual_len > 6 else 5.0
                         resolved_config = build_result[7] if actual_len > 7 else None
+                        resolved_data_config = None
                         logger.debug(f"build_panel returned {actual_len} values (legacy signature)")
+                    
+                    # Extract universe_sig from resolved_data_config (SST) if not passed by caller
+                    if not universe_sig and resolved_data_config:
+                        universe_sig = resolved_data_config.get('universe_sig')
+                        if universe_sig:
+                            logger.debug(f"Extracted universe_sig={universe_sig[:8]}... from resolved_data_config")
+                    
+                    # Also extract effective_view from resolved_data_config if available
+                    if resolved_data_config and resolved_data_config.get('resolved_mode'):
+                        effective_view = resolved_data_config.get('resolved_mode')
+                        if effective_view != view:
+                            logger.debug(f"Using effective_view={effective_view} from resolved_data_config (requested: {view})")
                     else:
                         raise ValueError(f"build_panel returned {actual_len} values, expected at least 6. Got: {[type(x).__name__ for x in build_result]}")
                     
@@ -657,11 +671,28 @@ def select_features_for_target(
                                 if importance_dict:
                                     # FIX: Ensure method name is model_family (e.g., "lightgbm", "ridge")
                                     # NOT importance_method (e.g., "native") - stability must be per-family
+                                    # FIX: Pass universe_sig (from SST), not view - prevents scope bugs
+                                    # NEVER fall back to view - that's the exact bug we're fixing
+                                    snapshot_universe_id = None
+                                    if universe_sig:
+                                        from TRAINING.orchestration.utils.cohort_metadata import validate_universe_sig
+                                        try:
+                                            validate_universe_sig(universe_sig)
+                                            snapshot_universe_id = universe_sig
+                                        except ValueError as ve:
+                                            logger.warning(f"Invalid universe_sig for snapshot: {ve}")
+                                            snapshot_universe_id = None
+                                    else:
+                                        logger.warning(
+                                            "universe_sig missing; snapshot will be unscoped (legacy). "
+                                            "NEVER falling back to view-as-universe. "
+                                            f"target={target_column} view={view} symbol={symbol_to_process}"
+                                        )
                                     save_snapshot_hook(
                                         target_name=target_column,
                                         method=model_family,  # Use model_family as method identifier
                                         importance_dict=importance_dict,
-                                        universe_id=view,  # Use view parameter
+                                        universe_id=snapshot_universe_id,  # SST or None, NEVER view
                                         output_dir=base_output_dir,  # Pass run directory - will use target-first structure
                                         auto_analyze=None,  # Load from config
                                     )
@@ -761,6 +792,18 @@ def select_features_for_target(
                     logger.debug(f"build_panel returned {actual_len} values (legacy signature)")
                 else:
                     raise ValueError(f"build_panel returned {actual_len} values, expected at least 6. Got: {[type(x).__name__ for x in build_result]}")
+                
+                # Extract universe_sig from resolved_data_config (SST) if not passed by caller
+                if not universe_sig and resolved_data_config:
+                    universe_sig = resolved_data_config.get('universe_sig')
+                    if universe_sig:
+                        logger.debug(f"Extracted universe_sig={universe_sig[:8]}... from resolved_data_config (shared harness)")
+                
+                # Also extract effective_view from resolved_data_config if available
+                if resolved_data_config and resolved_data_config.get('resolved_mode'):
+                    effective_view = resolved_data_config.get('resolved_mode')
+                    if effective_view != view:
+                        logger.debug(f"Using effective_view={effective_view} from resolved_data_config (requested: {view})")
                 
                 if X is None or y is None:
                     logger.warning("Failed to build panel data with shared harness, falling back to per-symbol processing")
@@ -1320,11 +1363,29 @@ def select_features_for_target(
                 ensure_target_structure(base_output_dir, target_name_clean)
                 target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
                 
+                # FIX: Pass universe_sig (from SST), not view - prevents scope bugs
+                # NEVER fall back to view - that's the exact bug we're fixing
+                snapshot_universe_id = None
+                if universe_sig:
+                    from TRAINING.orchestration.utils.cohort_metadata import validate_universe_sig
+                    try:
+                        validate_universe_sig(universe_sig)
+                        snapshot_universe_id = universe_sig
+                    except ValueError as ve:
+                        logger.warning(f"Invalid universe_sig for aggregated snapshot: {ve}")
+                        snapshot_universe_id = None
+                else:
+                    logger.warning(
+                        "universe_sig missing; aggregated snapshot will be unscoped (legacy). "
+                        "NEVER falling back to view-as-universe. "
+                        f"target={target_column} view={view}"
+                    )
+                
                 save_snapshot_hook(
                     target_name=target_column,
                     method="multi_model_aggregated",
                     importance_dict=importance_dict,
-                    universe_id=view,  # Use view parameter
+                    universe_id=snapshot_universe_id,  # SST or None, NEVER view
                     output_dir=target_repro_dir,  # Use target-first structure
                     auto_analyze=None,  # Load from config
                 )
@@ -1558,7 +1619,8 @@ def select_features_for_target(
             selected_features=selected_features,
             all_results=all_results,
             output_dir=output_dir,
-            metadata=metadata
+            metadata=metadata,
+            universe_sig=universe_sig,  # Pass universe_sig for canonical paths
         )
         
         # NEW: Also save in same format as target ranking (CSV, YAML, REPRODUCIBILITY structure)
@@ -1577,7 +1639,8 @@ def select_features_for_target(
                 output_dir=output_dir,
                 view=view,
                 symbol=symbol,
-                metadata=metadata
+                metadata=metadata,
+                universe_sig=universe_sig,  # Pass universe_sig for canonical paths
             )
             
             # Save feature importances (if available from shared harness)
@@ -1592,7 +1655,8 @@ def select_features_for_target(
                             target_column=target_column,
                             output_dir=output_dir,
                             view=view,
-                            symbol=None
+                            symbol=None,
+                            universe_sig=universe_sig,  # Pass universe_sig for canonical paths
                         )
                 elif view == "SYMBOL_SPECIFIC":
                     # Collect importances from all_results (per-symbol results from shared harness)
@@ -1613,7 +1677,8 @@ def select_features_for_target(
                             target_column=target_column,
                             output_dir=output_dir,
                             view=view,
-                            symbol=sym
+                            symbol=sym,
+                            universe_sig=universe_sig,  # Pass universe_sig for canonical paths
                         )
             else:
                 # Fallback: collect from all_results (per-symbol processing)
@@ -1637,7 +1702,8 @@ def select_features_for_target(
                         target_column=target_column,
                         output_dir=output_dir,
                         view="CROSS_SECTIONAL",
-                        symbol=None
+                        symbol=None,
+                        universe_sig=universe_sig,  # Pass universe_sig for canonical paths
                     )
                 else:
                     # Save per-symbol importances for SYMBOL_SPECIFIC view
@@ -1647,7 +1713,8 @@ def select_features_for_target(
                             target_column=target_column,
                             output_dir=output_dir,
                             view="SYMBOL_SPECIFIC",
-                            symbol=sym
+                            symbol=sym,
+                            universe_sig=universe_sig,  # Pass universe_sig for canonical paths
                         )
             
             # Prepare dual-view results for saving (if we have both views)

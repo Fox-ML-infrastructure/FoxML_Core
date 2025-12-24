@@ -249,7 +249,22 @@ class TrainingRouter:
         if cs_metrics.sample_size < min_sample_size:
             return SignalState.DISALLOWED
         
+        # Escalation policy: Only block if leakage persists after confirmed quarantine
         if block_on_leakage and cs_metrics.leakage_status == LeakageStatus.BLOCKED:
+            # Check if confirmed quarantine exists (dominance quarantine addressed the issue)
+            # If confirmed quarantine exists, allow with quarantine (don't block)
+            try:
+                from TRAINING.ranking.utils.dominance_quarantine import load_confirmed_quarantine
+                # Try to load confirmed quarantine (need output_dir, but we don't have it here)
+                # For now, we'll check in the metrics aggregator or store a flag
+                # This is a limitation - we need output_dir to check for quarantine
+                # For now, keep existing behavior but log that we're checking
+                logger.debug("Leakage BLOCKED detected, but escalation policy requires checking for confirmed quarantine")
+            except Exception as e:
+                logger.debug(f"Could not check for confirmed quarantine: {e}")
+            
+            # For now, keep existing behavior (block)
+            # TODO: Pass output_dir to router or store quarantine status in metrics
             return SignalState.DISALLOWED
         
         # Check feature safety (if required)
@@ -310,6 +325,9 @@ class TrainingRouter:
         if symbol_metrics.sample_size < min_sample_size:
             return SignalState.DISALLOWED
         
+        # Escalation policy: Only block if leakage persists after confirmed quarantine
+        # The check for confirmed quarantine is done in MetricsAggregator._load_leakage_status()
+        # which downgrades BLOCKED to SUSPECT if confirmed quarantine exists
         if block_on_leakage and symbol_metrics.leakage_status == LeakageStatus.BLOCKED:
             return SignalState.DISALLOWED
         

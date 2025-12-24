@@ -22,7 +22,10 @@ Modular components for model evaluation and target predictability ranking.
 """
 
 from .config_helpers import get_importance_top_fraction
-from .leakage_helpers import compute_suspicion_score, detect_leakage
+from .leakage_helpers import compute_suspicion_score
+# detect_leakage is imported from leakage_detection.py, not leakage_helpers.py
+# (leakage_helpers.detect_leakage has old signature without X, y, time_vals, symbols parameters)
+from TRAINING.ranking.predictability.leakage_detection import detect_leakage
 from .reporting import log_canonical_summary, save_feature_importances, log_suspicious_features
 
 # Import from parent file (functions that weren't extracted yet)

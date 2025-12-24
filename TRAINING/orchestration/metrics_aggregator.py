@@ -417,7 +417,7 @@ class MetricsAggregator:
         stability = self._classify_stability_from_metrics(stability_metrics)
         
         # Load leakage status
-        leakage_status = self._load_leakage_status(target, symbol=symbol)
+        leakage_status = self._load_leakage_status(target, symbol=symbol, resolved_mode=resolved_mode)
         
         if score is None:
             return None
@@ -579,17 +579,22 @@ class MetricsAggregator:
     def _load_leakage_status(
         self,
         target: str,
-        symbol: Optional[str] = None
+        symbol: Optional[str] = None,
+        resolved_mode: Optional[str] = None
     ) -> str:
         """
         Load leakage status for target (and optionally symbol).
         
+        Escalation policy: If leakage is BLOCKED but confirmed quarantine exists,
+        downgrade to SUSPECT (allow with quarantine) since the issue has been addressed.
+        
         Args:
             target: Target name
             symbol: Optional symbol name
+            resolved_mode: Resolved mode (CROSS_SECTIONAL, SYMBOL_SPECIFIC, etc.)
         
         Returns:
-            Leakage status string
+            Leakage status string (SAFE, SUSPECT, BLOCKED, UNKNOWN)
         """
         # Look for leakage detection outputs
         # This would depend on where leakage detection stores its results
@@ -600,7 +605,78 @@ class MetricsAggregator:
         # - feature_selections/{target}/leakage_status.json
         # etc.
         
-        return "UNKNOWN"  # Placeholder
+        leakage_status = "UNKNOWN"  # Placeholder
+        
+        # Small-panel leniency: Check if we're in a small panel scenario
+        # Load small-panel config and check n_symbols from run context
+        n_symbols = None
+        try:
+            from TRAINING.orchestration.utils.run_context import load_run_context
+            context = load_run_context(self.output_dir)
+            if context:
+                n_symbols = context.get("n_symbols")
+        except Exception as e:
+            logger.debug(f"Could not load n_symbols from run context: {e}")
+        
+        # Load small-panel config
+        small_panel_cfg = {}
+        try:
+            from CONFIG.config_loader import get_safety_config
+            safety_cfg = get_safety_config()
+            safety_section = safety_cfg.get('safety', {})
+            leakage_cfg = safety_section.get('leakage_detection', {})
+            small_panel_cfg = leakage_cfg.get('small_panel', {})
+        except Exception as e:
+            logger.debug(f"Could not load small-panel config: {e}")
+        
+        # Apply small-panel leniency if enabled and conditions are met
+        if (small_panel_cfg.get('enabled', False) and 
+            n_symbols is not None and 
+            leakage_status in ["BLOCKED", "HIGH_SCORE", "SUSPICIOUS"]):
+            min_symbols_threshold = small_panel_cfg.get('min_symbols_threshold', 10)
+            downgrade_enabled = small_panel_cfg.get('downgrade_block_to_suspect', True)
+            log_warning = small_panel_cfg.get('log_warning', True)
+            
+            if n_symbols < min_symbols_threshold and downgrade_enabled:
+                if log_warning:
+                    logger.warning(
+                        f"🔒 Small panel detected (n_symbols={n_symbols} < {min_symbols_threshold}), "
+                        f"downgrading leakage severity from {leakage_status} to SUSPECT. "
+                        f"This allows dominance quarantine to attempt recovery before blocking."
+                    )
+                # Downgrade to SUSPECT (allows training to proceed, but with warning)
+                leakage_status = "SUSPECT"
+        
+        # Escalation policy: Check for confirmed quarantine
+        # If confirmed quarantine exists, leakage has been addressed via feature-level quarantine
+        # Downgrade BLOCKED to SUSPECT (or allow) to prevent blocking target/view
+        if leakage_status == "BLOCKED" and self.output_dir:
+            try:
+                from TRAINING.ranking.utils.dominance_quarantine import load_confirmed_quarantine
+                
+                # Determine view from resolved_mode or default to CROSS_SECTIONAL
+                view = resolved_mode if resolved_mode in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
+                
+                confirmed_quarantine = load_confirmed_quarantine(
+                    out_dir=self.output_dir,
+                    target=target,
+                    view=view,
+                    symbol=symbol
+                )
+                
+                if confirmed_quarantine:
+                    # Confirmed quarantine exists - leakage has been addressed
+                    # Downgrade BLOCKED to SUSPECT (allow with quarantine)
+                    logger.info(
+                        f"🔒 Escalation policy: Leakage BLOCKED for {target}/{view}/{symbol or 'ALL'}, "
+                        f"but confirmed quarantine exists ({len(confirmed_quarantine)} features). "
+                        f"Downgrading to SUSPECT (allow with quarantine)."
+                    )
+                    return "SUSPECT"  # Allow with quarantine, don't block
+            except Exception as e:
+                logger.debug(f"Could not check for confirmed quarantine: {e}")
+        
+        return leakage_status
     
     def save_routing_candidates(
         self,
