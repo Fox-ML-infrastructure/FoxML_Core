@@ -1,19 +1,4 @@
-"""
-Copyright (c) 2025-2026 Fox ML Infrastructure LLC
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published
-by the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""
+# MIT License - see LICENSE file
 
 """
 Logging Setup with Journald Support
@@ -169,4 +154,92 @@ def setup_logging(
         logger.info(f"File logging enabled: {log_file}")
     
     return logger
+
+
+def enable_run_logging(
+    output_dir: Path,
+    log_filename: str = "run.log",
+    level: int = logging.INFO,
+    also_capture_stdout: bool = True
+) -> Optional[Path]:
+    """
+    Enable persistent file logging for a training run.
+    
+    Creates a log file in the output directory that captures all log messages.
+    Optionally also redirects stdout/stderr to the file.
+    
+    Args:
+        output_dir: Run output directory (e.g., RESULTS/runs/...)
+        log_filename: Name of the log file (default: run.log)
+        level: Logging level (default: INFO)
+        also_capture_stdout: If True, also redirect print() and stderr to log file
+    
+    Returns:
+        Path to the log file, or None if setup failed
+    
+    Example:
+        from TRAINING.orchestration.utils.logging_setup import enable_run_logging
+        
+        log_path = enable_run_logging(output_dir)
+        # Now all logging goes to both console and {output_dir}/logs/run.log
+    """
+    try:
+        # Create logs directory
+        logs_dir = output_dir / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        
+        log_file = logs_dir / log_filename
+        
+        # Create formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        
+        # Create file handler
+        file_handler = logging.FileHandler(log_file, mode='w')
+        file_handler.setLevel(level)
+        file_handler.setFormatter(formatter)
+        
+        # Add to root logger so ALL modules are captured
+        root_logger = logging.getLogger()
+        root_logger.addHandler(file_handler)
+        
+        # Ensure root logger level is at least as permissive
+        if root_logger.level == 0 or root_logger.level > level:
+            root_logger.setLevel(level)
+        
+        # Optionally redirect stdout/stderr to also go to file
+        if also_capture_stdout:
+            # Create a tee-like wrapper for stdout
+            class TeeOutput:
+                def __init__(self, original, log_file_handle):
+                    self.original = original
+                    self.log_file_handle = log_file_handle
+                
+                def write(self, message):
+                    self.original.write(message)
+                    if message.strip():  # Don't log empty lines
+                        self.log_file_handle.write(message)
+                        self.log_file_handle.flush()
+                
+                def flush(self):
+                    self.original.flush()
+                    self.log_file_handle.flush()
+                
+                def isatty(self):
+                    return self.original.isatty()
+            
+            # Open log file for stdout/stderr capture (append mode since handler uses 'w')
+            stdout_log = open(log_file, 'a')
+            sys.stdout = TeeOutput(sys.__stdout__, stdout_log)
+            sys.stderr = TeeOutput(sys.__stderr__, stdout_log)
+        
+        logging.getLogger(__name__).info(f"📋 Run logging enabled: {log_file}")
+        
+        return log_file
+        
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Failed to enable run logging: {e}")
+        return None
 

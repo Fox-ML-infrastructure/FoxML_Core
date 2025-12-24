@@ -1,19 +1,4 @@
-"""
-Copyright (c) 2025-2026 Fox ML Infrastructure LLC
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published
-by the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""
+# MIT License - see LICENSE file
 
 """
 OutputLayout: Canonical output path builder with view+universe scoping.
@@ -43,8 +28,23 @@ logger = logging.getLogger(__name__)
 
 
 def _normalize_universe_sig(meta: Dict[str, Any]) -> Optional[str]:
-    """Normalize universe signature: accept both legacy and canonical keys."""
-    return meta.get("universe_sig") or meta.get("universe_id")
+    """Normalize universe signature: check both top-level and nested cs_config.
+    
+    Single source of truth for universe_sig extraction. Checks:
+    1. meta["universe_sig"] (canonical)
+    2. meta["universe_id"] (legacy alias)
+    3. meta["cs_config"]["universe_sig"] (nested legacy)
+    4. meta["cs_config"]["universe_id"] (nested legacy alias)
+    """
+    # Top-level canonical
+    sig = meta.get("universe_sig") or meta.get("universe_id")
+    if sig:
+        return sig
+    # Nested fallback (legacy callers)
+    cs_config = meta.get("cs_config")
+    if isinstance(cs_config, dict):
+        return cs_config.get("universe_sig") or cs_config.get("universe_id")
+    return None
 
 
 def _normalize_view(meta: Dict[str, Any]) -> Optional[str]:

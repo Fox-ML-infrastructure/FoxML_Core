@@ -24,10 +24,10 @@ data:
   # interval: 5m
   
   # Reduced limits for faster testing (increase for production)
-  max_samples_per_symbol: 4000   # Reduced for faster testing
-  max_rows_per_symbol: 4000      # Reduced for faster testing
-  max_rows_train: 100000          # Reduced from 100000 for faster testing
-  max_cs_samples: 4000           # Max cross-sectional samples per timestamp
+  max_samples_per_symbol: 2000  # Reduced for faster testing
+  max_rows_per_symbol: 2000     # Reduced for faster testing
+  max_rows_train: 50000         # Reduced from 100000 for faster testing
+  max_cs_samples: 2000          # Max cross-sectional samples per timestamp
   min_cs: 3                       # Reduced from 10 for faster testing
 
 # ============================================================================

@@ -705,6 +705,23 @@ class ReproducibilityTracker:
                     cs_config[key] = additional_data[key]
         cohort['cs_config'] = cs_config
         
+        # Extract universe_sig at top level (canonical key for routing)
+        # Check top-level first, then nested cs_config as fallback
+        universe_sig = None
+        if additional_data:
+            universe_sig = additional_data.get('universe_sig') or additional_data.get('universe_id')
+            if not universe_sig:
+                cs_cfg = additional_data.get('cs_config')
+                if isinstance(cs_cfg, dict):
+                    universe_sig = cs_cfg.get('universe_sig') or cs_cfg.get('universe_id')
+        
+        if universe_sig:
+            cohort['universe_sig'] = universe_sig
+            # Mirror into cs_config for backward compat (defensive: ensure cs_config is dict)
+            if not isinstance(cohort.get('cs_config'), dict):
+                cohort['cs_config'] = {}
+            cohort['cs_config']['universe_sig'] = universe_sig
+        
         return cohort
     
     def _compute_cohort_id(
@@ -1063,6 +1080,59 @@ class ReproducibilityTracker:
                     )
                     # HARD ERROR: Validate cohort_id matches view (catches all writes)
                     layout.validate_cohort_id(cohort_id)
+                    
+                    # ========================================================================
+                    # PATCH 3: Hard scope invariants (catches corrupt writes immediately)
+                    # ========================================================================
+                    
+                    # Invariant 1: cohort_id prefix must match view
+                    if cohort_id:
+                        if normalized_view == "CROSS_SECTIONAL" and cohort_id.startswith("sy_"):
+                            raise ValueError(
+                                f"SCOPE VIOLATION: Cannot write sy_ cohort ({cohort_id}) to CROSS_SECTIONAL view. "
+                                f"This indicates a view/symbol mismatch upstream. Check that view_for_writes "
+                                f"comes from resolved_data_config['resolved_mode'], not caller."
+                            )
+                        if normalized_view == "SYMBOL_SPECIFIC" and cohort_id.startswith("cs_"):
+                            raise ValueError(
+                                f"SCOPE VIOLATION: Cannot write cs_ cohort ({cohort_id}) to SYMBOL_SPECIFIC view. "
+                                f"This indicates a missing symbol in cohort computation."
+                            )
+                    
+                    # Invariant 2: symbol presence must match view
+                    # For CS: key must be ABSENT (not even null) - null is still contamination
+                    # For SS: symbol must be a non-empty string
+                    symbol_key_present = "symbol" in cohort_metadata or symbol is not None
+                    if normalized_view == "CROSS_SECTIONAL" and symbol_key_present:
+                        raise ValueError(
+                            f"SCOPE VIOLATION: symbol key present for CROSS_SECTIONAL view (value={symbol_from_meta}). "
+                            f"CS metadata must not have symbol key at all (not even null). "
+                            f"Remove symbol from additional_data for CS writes."
+                        )
+                    if normalized_view == "SYMBOL_SPECIFIC" and not symbol_from_meta:
+                        raise ValueError(
+                            f"SCOPE VIOLATION: symbol required for SYMBOL_SPECIFIC view but was None/empty. "
+                            f"Either provide symbol or use CROSS_SECTIONAL view."
+                        )
+                    
+                    # Invariant 3: universe_sig required for both views (cross-run reproducibility)
+                    if not universe_sig:
+                        raise ValueError(
+                            f"SCOPE VIOLATION: universe_sig missing. Cannot write artifacts without universe scoping. "
+                            f"view={normalized_view}, symbol={symbol_from_meta}, stage={stage}, item={item_name}"
+                        )
+                    
+                    # Invariant 4: symbol param and metadata symbol must agree (if both present)
+                    if symbol and symbol_from_meta and symbol != symbol_from_meta:
+                        raise ValueError(
+                            f"SCOPE VIOLATION: symbol mismatch - param symbol={symbol}, metadata symbol={symbol_from_meta}. "
+                            f"This indicates dirty/mutated metadata dict."
+                        )
+                    
+                    # ========================================================================
+                    # END PATCH 3
+                    # ========================================================================
+                    
                     logger.debug(f"OutputLayout validation passed: view={normalized_view}, cohort_id={cohort_id}")
                 except ValueError as e:
                     # This is a scope violation - always error
@@ -1130,8 +1200,8 @@ class ReproducibilityTracker:
             "date_range_start": cohort_metadata.get('date_range', {}).get('start_ts'),  # Changed from "date_start" to match finalize_run() expectations
             "date_range_end": cohort_metadata.get('date_range', {}).get('end_ts'),  # Changed from "date_end" to match finalize_run() expectations
             "universe_id": cohort_metadata.get('cs_config', {}).get('universe_id'),
-            # Normalized universe_sig - prefer universe_sig, fallback to universe_id
-            "universe_sig": (_normalize_universe_sig(cohort_metadata) if _normalize_universe_sig else None) or cohort_metadata.get('cs_config', {}).get('universe_id'),
+            # Normalized universe_sig - _normalize_universe_sig checks both top-level and cs_config
+            "universe_sig": _normalize_universe_sig(cohort_metadata) if _normalize_universe_sig else cohort_metadata.get('cs_config', {}).get('universe_id'),
             "min_cs": cohort_metadata.get('cs_config', {}).get('min_cs'),
             "max_cs_samples": cohort_metadata.get('cs_config', {}).get('max_cs_samples'),
             "leakage_filter_version": cohort_metadata.get('cs_config', {}).get('leakage_filter_version', 'v1'),

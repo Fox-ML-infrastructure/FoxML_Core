@@ -1,19 +1,4 @@
-"""
-Copyright (c) 2025-2026 Fox ML Infrastructure LLC
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published
-by the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""
+# MIT License - see LICENSE file
 
 """
 Intelligent Training Orchestrator
@@ -126,17 +111,6 @@ def _load_experiment_config_safe(exp_name: str) -> Dict[str, Any]:
             with open(exp_file, 'r') as f:
                 return yaml.safe_load(f) or {}
         return {}
-
-# Print license banner on startup (compliance and commercial use notice)
-# CRITICAL: Only print in main process, not in child processes or when suppressed
-try:
-    import os
-    if not os.getenv("FOXML_SUPPRESS_BANNER") and not os.getenv("TRAINER_ISOLATION_CHILD"):
-        from TRAINING.common.license_banner import print_license_banner_once
-        print_license_banner_once()
-except Exception:
-    # Don't fail if banner can't be printed
-    pass
 
 # Import leakage sentinels
 try:
@@ -289,6 +263,18 @@ class IntelligentTrainer:
         
         # Create directory
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Enable persistent run logging (captures all output to {output_dir}/logs/run.log)
+        try:
+            from TRAINING.orchestration.utils.logging_setup import enable_run_logging
+            self._run_log_path = enable_run_logging(
+                output_dir=self.output_dir,
+                log_filename="run.log",
+                also_capture_stdout=True
+            )
+        except Exception as e:
+            logger.warning(f"Could not enable run logging: {e}")
+            self._run_log_path = None
         
         self.cache_dir = Path(cache_dir) if cache_dir else self.output_dir / "cache"
         self.cache_dir.mkdir(parents=True, exist_ok=True)

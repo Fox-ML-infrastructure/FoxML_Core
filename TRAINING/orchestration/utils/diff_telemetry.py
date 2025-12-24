@@ -1,19 +1,4 @@
-"""
-Copyright (c) 2025-2026 Fox ML Infrastructure LLC
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published
-by the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""
+# MIT License - see LICENSE file
 
 """
 Diff Telemetry System
@@ -3803,8 +3788,12 @@ class DiffTelemetry:
             logger.warning(f"⚠️ Skipping diff save to legacy REPRODUCIBILITY path: {cohort_dir}")
             return
         
-        # Extract identifiers from cohort_dir path for target-first structure
-        # Path structure: .../STAGE/VIEW/item_name/cohort=.../
+        # ========================================================================
+        # PATCH 2: Extract identifiers from cohort_dir path
+        # Priority 1: Use DiffResult fields (explicit, preferred)
+        # Priority 2: Parse target-first path: targets/<target>/reproducibility/<VIEW>/...
+        # Priority 3: Parse legacy path: STAGE/VIEW/item_name/cohort=.../
+        # ========================================================================
         stage = diff.prev_stage or "UNKNOWN"
         view = diff.prev_view or "UNKNOWN"
         item_name = "UNKNOWN"
@@ -3812,22 +3801,61 @@ class DiffTelemetry:
         base_output_dir = None
         target_cohort_dir = None
         
+        VALID_VIEWS = ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC', 'LOSO', 'INDIVIDUAL']
+        
         # Try to extract from cohort_dir path
         try:
             parts = Path(cohort_dir).parts
-            for i, part in enumerate(parts):
-                if part in ['TARGET_RANKING', 'FEATURE_SELECTION', 'TRAINING']:
-                    stage = part
-                    if i + 1 < len(parts) and parts[i+1] in ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC', 'LOSO', 'INDIVIDUAL']:
-                        view = parts[i+1]
-                        if i + 2 < len(parts) and not parts[i+2].startswith('cohort='):
-                            item_name = parts[i+2]
-                    # Find cohort_id
-                    for j in range(i, len(parts)):
-                        if parts[j].startswith('cohort='):
-                            cohort_id = parts[j].replace('cohort=', '')
-                            break
-                    break
+            parsed_from_path = False
+            
+            # Priority 1: If item_name is already in DiffResult, use it
+            if hasattr(diff, 'item_name') and diff.item_name and diff.item_name != "UNKNOWN":
+                item_name = diff.item_name
+                parsed_from_path = True
+            
+            # Priority 2: Try target-first path structure: targets/<target>/reproducibility/<VIEW>/...
+            if not parsed_from_path and "targets" in parts:
+                for i, part in enumerate(parts):
+                    if part == "targets" and i + 1 < len(parts):
+                        item_name = parts[i + 1]  # Target name is right after "targets"
+                        # Find view after "reproducibility"
+                        for j in range(i + 2, len(parts)):
+                            if parts[j] == "reproducibility" and j + 1 < len(parts):
+                                if parts[j + 1] in VALID_VIEWS:
+                                    view = parts[j + 1]
+                                break
+                        # Find cohort_id
+                        for j in range(i, len(parts)):
+                            if parts[j].startswith('cohort='):
+                                cohort_id = parts[j].replace('cohort=', '')
+                                break
+                        parsed_from_path = True
+                        break
+            
+            # Priority 3: Legacy path structure: STAGE/VIEW/item_name/cohort=.../
+            if not parsed_from_path:
+                for i, part in enumerate(parts):
+                    if part in ['TARGET_RANKING', 'FEATURE_SELECTION', 'TRAINING']:
+                        stage = part
+                        if i + 1 < len(parts) and parts[i+1] in VALID_VIEWS:
+                            view = parts[i+1]
+                            if i + 2 < len(parts) and not parts[i+2].startswith('cohort='):
+                                item_name = parts[i+2]
+                        # Find cohort_id
+                        for j in range(i, len(parts)):
+                            if parts[j].startswith('cohort='):
+                                cohort_id = parts[j].replace('cohort=', '')
+                                break
+                        # Warn that we're using legacy path parsing
+                        logger.debug(f"Using legacy path parsing for diff (stage={stage}, item={item_name})")
+                        break
+            
+            # If still UNKNOWN, log a warning
+            if item_name == "UNKNOWN":
+                logger.warning(
+                    f"PATCH 2: Could not extract item_name from cohort_dir path: {cohort_dir}. "
+                    f"Path parsing failed. Consider passing item_name explicitly."
+                )
             
             # Only create target-first structure for TARGET_RANKING and FEATURE_SELECTION
             if stage in ['TARGET_RANKING', 'FEATURE_SELECTION'] and item_name != "UNKNOWN" and cohort_id:

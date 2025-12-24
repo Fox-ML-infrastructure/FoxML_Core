@@ -1,43 +1,6 @@
 #!/usr/bin/env python3
 
-"""
-Copyright (c) 2025-2026 Fox ML Infrastructure LLC
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published
-by the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-SST (Single Source of Truth) Enforcement Test
-==============================================
-
-This test enforces that hyperparameters, thresholds, and behavioral knobs
-are loaded from configuration files, not hardcoded in source code.
-
-The goal: "Same config → same behavior → same results."
-
-Allowed hardcoded patterns:
-- Numerical epsilon constants (1e-9, np.finfo, etc.)
-- Mathematical constants (math.pi, etc.)
-- Design constants explicitly marked with "DESIGN CONSTANT" comment
-- Debug-only flags in dev-only scripts
-
-Must be config:
-- Model hyperparameters (n_estimators, max_depth, learning_rate, etc.)
-- Data splits (test_size, cv_folds, shuffle)
-- Randomness (random_state, seeds)
-- Safety thresholds (leakage thresholds, AUC cutoffs, correlation cutoffs)
-- Resource use (batch_size, max_rows, GPU flags)
-- Routing/confidence thresholds (HIGH/MED/LOW cutoffs)
-"""
+# MIT License - see LICENSE file
 
 import pathlib
 import re

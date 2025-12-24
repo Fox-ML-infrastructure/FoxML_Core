@@ -1,21 +1,6 @@
-"""
-Copyright (c) 2025-2026 Fox ML Infrastructure LLC
+# MIT License - see LICENSE file
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published
-by the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""
-
- # ---- PATH BOOTSTRAP: ensure project root on sys.path in parent AND children ----
+# ---- PATH BOOTSTRAP: ensure project root on sys.path in parent AND children ----
 import os, sys
 from pathlib import Path
 
@@ -1035,16 +1020,27 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 )
                                 cohort_metrics, cohort_additional_data = format_for_reproducibility_tracker(cohort_metadata)
                                 
+                                # Compute universe_sig for reproducibility tracking
+                                from TRAINING.orchestration.utils.run_context import compute_universe_signature
+                                from TRAINING.orchestration.utils.scope_resolution import populate_additional_data
+                                universe_sig = compute_universe_signature([symbol])
+                                
                                 metrics_with_cohort = {**metrics, **cohort_metrics}
                                 additional_data_with_cohort = {
                                     "strategy": strategy,
                                     "n_features": len(feature_names) if feature_names else 0,
                                     "model_family": family,
-                                    "symbol": symbol,
                                     "route": route,  # Add route information
-                                    "view": "SYMBOL_SPECIFIC",  # Add view information
                                     **cohort_additional_data
                                 }
+                                
+                                # Use canonical scope helper (adds view, symbol, universe_sig correctly)
+                                populate_additional_data(
+                                    additional_data_with_cohort,
+                                    view_for_writes="SYMBOL_SPECIFIC",
+                                    symbol_for_writes=symbol,
+                                    universe_sig_for_writes=universe_sig
+                                )
                                 
                                 tracker.log_comparison(
                                     stage="model_training",
@@ -1052,7 +1048,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     metrics=metrics_with_cohort,
                                     additional_data=additional_data_with_cohort,
                                     symbol=symbol,
-                                    route_type=route  # Pass route_type for proper view separation
+                                    route_type="SYMBOL_SPECIFIC"  # Use canonical view instead of route
                                 )
                         except Exception as e:
                             logger.warning(f"Reproducibility tracking failed for {family}:{target}:{symbol}: {e}")
@@ -1426,19 +1422,30 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     **cohort_metrics  # Adds N_effective_cs if available
                                 }
                                 
-                                # Determine view based on route
-                                # For CROSS_SECTIONAL route, view is CROSS_SECTIONAL
-                                # For BOTH route (CS training), view is also CROSS_SECTIONAL
-                                view_for_tracking = "CROSS_SECTIONAL" if route in ["CROSS_SECTIONAL", "BOTH"] else "CROSS_SECTIONAL"
+                                # Compute universe_sig for reproducibility tracking
+                                from TRAINING.orchestration.utils.run_context import compute_universe_signature
+                                from TRAINING.orchestration.utils.scope_resolution import populate_additional_data
+                                
+                                # Get symbols from mtf_data or cohort_metadata
+                                tracking_symbols = list(mtf_data.keys()) if mtf_data else []
+                                universe_sig = compute_universe_signature(tracking_symbols) if tracking_symbols else None
                                 
                                 additional_data_with_cohort = {
                                     "strategy": strategy,
                                     "n_features": len(feature_names) if feature_names else 0,
                                     "model_family": family,  # Add model family for routing
                                     "route": route,  # Add route information
-                                    "view": view_for_tracking,  # Add view information
                                     **cohort_additional_data  # Adds n_symbols, date_range, cs_config if available
                                 }
+                                
+                                # Use canonical scope helper (adds view, universe_sig correctly)
+                                # CS training doesn't have symbol
+                                populate_additional_data(
+                                    additional_data_with_cohort,
+                                    view_for_writes="CROSS_SECTIONAL",
+                                    symbol_for_writes=None,
+                                    universe_sig_for_writes=universe_sig
+                                )
                                 
                                 # CRITICAL: Adapt additional_data to ensure string/Enum safety
                                 # This prevents 'str' object has no attribute 'name' errors
@@ -1463,7 +1470,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     metrics=metrics_with_cohort,
                                     additional_data=additional_data_adapted,
                                     model_family=family_normalized,  # Use normalized family
-                                    route_type=route  # Pass route_type for proper view separation
+                                    route_type="CROSS_SECTIONAL"  # Use canonical view
                                 )
                         except Exception as e:
                             logger.warning(f"Reproducibility tracking failed for {family}:{target}: {e}")

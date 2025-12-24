@@ -1,7 +1,6 @@
 # FoxML Core — ML Cross-Sectional Infrastructure
 
-> **License:** AGPL v3 for open use. Commercial license required for proprietary or production deployments.  
-> See [`LICENSING.md`](LEGAL/LICENSING.md) for details.
+> **License:** MIT - see [LICENSE](LICENSE) for details.
 
 > **🔍 Reproducibility & Auditability:** This system focuses on reproducibility (consistent results within expected variance) and comprehensive auditability (full tracking of inputs, configs, and outputs). Note: True bitwise determinism (identical outputs at the binary level) requires lower-level language implementations and strict control over floating-point operations.
 
@@ -56,14 +55,13 @@ FoxML Core is **general-purpose ML cross-sectional infrastructure** for panel da
 ## Intended Use
 
 ### Appropriate Use Cases
-- Research and experimentation (AGPL or commercial license)
+- Research and experimentation
 - ML workflow and architecture study
-- Open-source projects (AGPL)
-- Internal engineering reference (commercial license)
-- Production deployments (commercial license)
+- Open-source projects
+- Internal engineering reference
+- Production deployments
 
 ### Not Appropriate For
-- Commercial use without a license
 - Unmodified production deployment without proper testing and validation
 
 **FoxML Core provides ML infrastructure and architecture, not domain-specific applications or pre-built solutions.**
@@ -107,7 +105,7 @@ For bug reports, feature requests, or technical issues:
 - **GitHub Issues**: [Open an issue](https://github.com/Fox-ML-infrastructure/FoxML_Core/issues) (preferred for bug reports and feature requests)
 - **Email**: jenn.lewis5789@gmail.com (for security issues, sensitive bugs, or private inquiries)
 
-For commercial licensing or organizational engagements:  
+For questions or organizational engagements:  
 **jenn.lewis5789@gmail.com**
 
 ---

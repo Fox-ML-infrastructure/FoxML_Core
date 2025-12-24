@@ -1,19 +1,4 @@
-"""
-Copyright (c) 2025-2026 Fox ML Infrastructure LLC
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published
-by the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""
+# MIT License - see LICENSE file
 
 """
 Target Predictability Ranking
@@ -5484,6 +5469,43 @@ def evaluate_target_predictability(
     if resolved_data_config:
         requested_mode_final = resolved_data_config.get("requested_mode") or requested_mode_final
     
+    # ========================================================================
+    # PATCH 0 (SST VIEW OVERRIDE): Use resolve_write_scope for ALL downstream writes
+    # ========================================================================
+    # Canonical SST-derived scope resolution with:
+    # - Asymmetric rule: blocks SS→CS promotion (min_cs=1 bug)
+    # - Symbol derivation: auto-derive from SST symbols[0] when unambiguous
+    # - Strict mode: raises on any scope ambiguity
+    from TRAINING.orchestration.utils.scope_resolution import resolve_write_scope
+    
+    # Check if strict mode is enabled
+    strict_scope = False
+    try:
+        from CONFIG.config_loader import load_config
+        cfg = load_config()
+        strict_scope = getattr(getattr(getattr(cfg, 'safety', None), 'output_layout', None), 'strict_scope_partitioning', False)
+    except Exception:
+        pass
+    
+    view_for_writes, symbol_for_writes, universe_sig_for_writes = resolve_write_scope(
+        resolved_data_config=resolved_data_config,
+        caller_view=view,
+        caller_symbol=symbol,
+        strict=strict_scope
+    )
+    
+    if view_for_writes != view:
+        logger.warning(
+            f"SST OVERRIDE: Using resolved_mode={view_for_writes} instead of "
+            f"caller view={view} for downstream writes"
+        )
+    if universe_sig_for_writes:
+        logger.debug(f"SST universe_sig={universe_sig_for_writes[:8]}... for writes")
+    
+    # ========================================================================
+    # END PATCH 0
+    # ========================================================================
+    
     # Header log showing both requested and resolved modes (moved here after data prep)
     symbol_display = f" (symbol={symbol})" if symbol else ""
     if resolved_mode_final and resolved_mode_final != requested_mode_final:
@@ -6246,11 +6268,20 @@ def evaluate_target_predictability(
             )
         
         # Save aggregated feature importances (respect view: CROSS_SECTIONAL vs SYMBOL_SPECIFIC)
+        # PATCH 4: Use SST-derived view/symbol/universe_sig for proper scoping
         if feature_importances and output_dir:
-            # Use view parameter if available, otherwise default to CROSS_SECTIONAL
-            view_for_importances = view if 'view' in locals() else "CROSS_SECTIONAL"
-            symbol_for_importances = symbol if ('symbol' in locals() and symbol) else view_for_importances
-            _save_feature_importances(target_column, symbol_for_importances, feature_importances, output_dir, view=view_for_importances)
+            # Use SST-derived values from Patch 0
+            view_for_importances = view_for_writes if 'view_for_writes' in locals() else (view if 'view' in locals() else "CROSS_SECTIONAL")
+            symbol_for_importances = symbol_for_writes if 'symbol_for_writes' in locals() else (symbol if ('symbol' in locals() and symbol) else None)
+            universe_sig_for_importances = universe_sig_for_writes if 'universe_sig_for_writes' in locals() else None
+            _save_feature_importances(
+                target_column, 
+                symbol_for_importances, 
+                feature_importances, 
+                output_dir, 
+                view=view_for_importances,
+                universe_sig=universe_sig_for_importances
+            )
         
         # Store suspicious features
         if suspicious_features:
@@ -7337,13 +7368,16 @@ def evaluate_target_predictability(
                     max_lookback_bars = 288
                     additional_data_with_cohort['feature_lookback_max_minutes'] = max_lookback_bars * data_interval_minutes
                 
-                # FIX: Ensure view and symbol are included in additional_data for proper telemetry scoping
-                # This aligns target ranking telemetry with feature selection telemetry
-                # Features are compared per-target, per-view, per-symbol (not across all targets/views/symbols)
-                if 'view' in locals() and view:
-                    additional_data_with_cohort['view'] = view
-                if 'symbol' in locals() and symbol:
-                    additional_data_with_cohort['symbol'] = symbol
+                # ========================================================================
+                # PATCH 0: Use SST-derived view/symbol/universe_sig for telemetry scoping
+                # ========================================================================
+                from TRAINING.orchestration.utils.scope_resolution import populate_additional_data
+                populate_additional_data(
+                    additional_data_with_cohort,
+                    view_for_writes=view_for_writes,
+                    symbol_for_writes=symbol_for_writes,
+                    universe_sig_for_writes=universe_sig_for_writes
+                )
                 
                 # Add seed for reproducibility tracking
                 try:
@@ -7354,17 +7388,13 @@ def evaluate_target_predictability(
                     # Fallback to default if config not available
                     additional_data_with_cohort['seed'] = 42
                 
-                # FIX: For TARGET_RANKING, view is used as route_type (CROSS_SECTIONAL, SYMBOL_SPECIFIC, LOSO)
-                # This ensures directory structure aligns: TARGET_RANKING/{view}/{target}/{symbol}/cohort={cohort_id}/
-                route_type_for_target_ranking = view if 'view' in locals() and view else None
-                
                 tracker.log_comparison(
                     stage="target_ranking",
-                    item_name=target_name,  # FIX: item_name is just target (view/symbol handled by route_type/symbol params)
+                    item_name=target_name,
                     metrics=metrics_with_cohort,
                     additional_data=additional_data_with_cohort,
-                    route_type=route_type_for_target_ranking,  # FIX: Use view as route_type for TARGET_RANKING (ensures alignment with feature selection)
-                    symbol=symbol if 'symbol' in locals() and symbol else None  # FIX: Properly scoped by symbol (for SYMBOL_SPECIFIC/LOSO views)
+                    route_type=view_for_writes,  # SST-derived view
+                    symbol=symbol_for_writes  # SST-derived symbol (None if CS)
                 )
         except Exception as e:
             logger.warning(f"Reproducibility tracking failed for {target_name}: {e}")

@@ -1,19 +1,4 @@
-"""
-Copyright (c) 2025-2026 Fox ML Infrastructure LLC
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published
-by the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""
+# MIT License - see LICENSE file
 
 """
 Reporting Functions
@@ -155,26 +140,34 @@ def save_feature_importances(
     symbol: str,
     feature_importances: Dict[str, Dict[str, float]],
     output_dir: Path = None,
-    view: str = "CROSS_SECTIONAL"
+    view: str = "CROSS_SECTIONAL",
+    universe_sig: Optional[str] = None  # PATCH 4: Required for proper scoping
 ) -> None:
     """
     Save detailed per-model, per-feature importance scores to CSV files.
     
-    Creates structure:
-    {output_dir}/feature_importances/
-      {target_name}/
-        {symbol}/
-          lightgbm_importances.csv
-          xgboost_importances.csv
-          random_forest_importances.csv
-          ...
+    Creates structure (with universe_sig):
+    targets/{target}/reproducibility/{view}/universe={sig}/(symbol={sym})/feature_importances/
+      lightgbm_importances.csv
+      xgboost_importances.csv
+      ...
     
     Args:
         target_column: Name of the target being evaluated
         symbol: Symbol being evaluated
         feature_importances: Dict of {model_name: {feature: importance}}
         output_dir: Base output directory (defaults to results/)
+        view: CROSS_SECTIONAL or SYMBOL_SPECIFIC
+        universe_sig: Universe signature from SST (required for proper scoping)
     """
+    # PATCH 4: Require universe_sig for proper scoping
+    if not universe_sig:
+        logger.error(
+            f"SCOPE BUG: universe_sig not provided for {target_column} feature importances. "
+            f"Cannot create view-scoped paths. Feature importances will not be written."
+        )
+        return  # Don't write to unscoped location
+    
     if output_dir is None:
         output_dir = _REPO_ROOT / "results"
     
@@ -189,15 +182,28 @@ def save_feature_importances(
     
     target_name_clean = target_column.replace('/', '_').replace('\\', '_')
     
-    # Save to target-first structure only
+    # PATCH 4: Use OutputLayout for properly scoped paths
     try:
-        from TRAINING.orchestration.utils.target_first_paths import (
-            get_target_reproducibility_dir, ensure_target_structure
-        )
+        from TRAINING.orchestration.utils.output_layout import OutputLayout
+        from TRAINING.orchestration.utils.target_first_paths import ensure_target_structure
+        
         ensure_target_structure(base_output_dir, target_name_clean)
-        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
-        target_importances_dir = target_repro_dir / "feature_importances"
+        
+        # Only pass symbol if view is SYMBOL_SPECIFIC
+        symbol_for_layout = symbol if view == "SYMBOL_SPECIFIC" else None
+        
+        layout = OutputLayout(
+            output_root=base_output_dir,
+            target=target_name_clean,
+            view=view,
+            universe_sig=universe_sig,
+            symbol=symbol_for_layout,
+        )
+        target_importances_dir = layout.feature_importance_dir()
         target_importances_dir.mkdir(parents=True, exist_ok=True)
+        
+        # For stability snapshots, use the importances dir as base
+        target_repro_dir = target_importances_dir.parent
         
         # Save per-model CSV files
         # Sort model names for deterministic order (ensures reproducible file output)
@@ -225,20 +231,20 @@ def save_feature_importances(
             # Reorder columns
             df = df[['feature', 'importance', 'importance_pct', 'cumulative_pct']]
             
-            # Save to target-first location
+            # Save to properly scoped location
             target_csv_file = target_importances_dir / f"{model_name}_importances.csv"
             df.to_csv(target_csv_file, index=False)
             
             # Save stability snapshot (non-invasive hook)
             try:
                 from TRAINING.stability.feature_importance import save_snapshot_hook
-                # Use target-first structure for snapshots
+                # Use properly scoped structure for snapshots
                 save_snapshot_hook(
                     target_name=target_column,
                     method=model_name,
                     importance_dict=importances,
-                    universe_id=view,  # Use view parameter (CROSS_SECTIONAL or SYMBOL_SPECIFIC)
-                    output_dir=target_repro_dir,  # Save snapshots in target-first structure
+                    universe_id=universe_sig,  # Use universe_sig, not view
+                    output_dir=target_repro_dir,  # Save snapshots in scoped structure
                     auto_analyze=None,  # Load from config
                 )
             except Exception as e:

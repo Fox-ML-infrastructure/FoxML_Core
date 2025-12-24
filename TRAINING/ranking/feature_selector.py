@@ -1,19 +1,4 @@
-"""
-Copyright (c) 2025-2026 Fox ML Infrastructure LLC
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published
-by the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""
+# MIT License - see LICENSE file
 
 """
 Feature Selection Module
@@ -793,17 +778,45 @@ def select_features_for_target(
                 else:
                     raise ValueError(f"build_panel returned {actual_len} values, expected at least 6. Got: {[type(x).__name__ for x in build_result]}")
                 
-                # Extract universe_sig from resolved_data_config (SST) if not passed by caller
-                if not universe_sig and resolved_data_config:
-                    universe_sig = resolved_data_config.get('universe_sig')
-                    if universe_sig:
-                        logger.debug(f"Extracted universe_sig={universe_sig[:8]}... from resolved_data_config (shared harness)")
+                # ========================================================================
+                # PATCH 0 (SST VIEW OVERRIDE): Use resolve_write_scope for ALL downstream writes
+                # ========================================================================
+                # Canonical SST-derived scope resolution with:
+                # - Asymmetric rule: blocks SS→CS promotion (min_cs=1 bug)
+                # - Symbol derivation: auto-derive from SST symbols[0] when unambiguous
+                # - Strict mode: raises on any scope ambiguity
+                from TRAINING.orchestration.utils.scope_resolution import resolve_write_scope
                 
-                # Also extract effective_view from resolved_data_config if available
-                if resolved_data_config and resolved_data_config.get('resolved_mode'):
-                    effective_view = resolved_data_config.get('resolved_mode')
-                    if effective_view != view:
-                        logger.debug(f"Using effective_view={effective_view} from resolved_data_config (requested: {view})")
+                # Check if strict mode is enabled
+                strict_scope = False
+                try:
+                    from CONFIG.config_loader import load_config
+                    cfg = load_config()
+                    strict_scope = getattr(getattr(getattr(cfg, 'safety', None), 'output_layout', None), 'strict_scope_partitioning', False)
+                except Exception:
+                    pass
+                
+                view_for_writes, symbol_for_writes, universe_sig_for_writes = resolve_write_scope(
+                    resolved_data_config=resolved_data_config,
+                    caller_view=view,
+                    caller_symbol=symbol,
+                    strict=strict_scope
+                )
+                
+                # Use SST-derived universe_sig if not already provided
+                if not universe_sig and universe_sig_for_writes:
+                    universe_sig = universe_sig_for_writes
+                
+                if view_for_writes != view:
+                    logger.warning(
+                        f"SST OVERRIDE: Using resolved_mode={view_for_writes} instead of "
+                        f"caller view={view} for downstream writes"
+                    )
+                if universe_sig:
+                    logger.debug(f"SST universe_sig={universe_sig[:8]}... for writes")
+                # ========================================================================
+                # END PATCH 0
+                # ========================================================================
                 
                 if X is None or y is None:
                     logger.warning("Failed to build panel data with shared harness, falling back to per-symbol processing")
@@ -2151,13 +2164,14 @@ def select_features_for_target(
                 if cohort_metrics:
                     metrics_with_cohort.update(cohort_metrics)
                 
-                # FIX: Map view to route_type for FEATURE_SELECTION (ensures proper telemetry scoping)
+                # PATCH 0: Map SST view_for_writes to route_type (not caller view)
                 # Use SYMBOL_SPECIFIC directly to match directory structure (not INDIVIDUAL)
                 route_type_for_legacy = None
-                if view:
-                    if view.upper() == "CROSS_SECTIONAL":
+                effective_view = view_for_writes if 'view_for_writes' in locals() else view
+                if effective_view:
+                    if effective_view.upper() == "CROSS_SECTIONAL":
                         route_type_for_legacy = "CROSS_SECTIONAL"
-                    elif view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
+                    elif effective_view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
                         route_type_for_legacy = "SYMBOL_SPECIFIC"  # Use SYMBOL_SPECIFIC to match directory structure
                 
                 # Track lookback cap enforcement results (pre and post selection) in telemetry
@@ -2259,6 +2273,15 @@ def select_features_for_target(
                     additional_data_with_cohort['mode_reason'] = resolved_data_config.get('mode_reason')
                     additional_data_with_cohort['loader_contract'] = resolved_data_config.get('loader_contract')
                 
+                # PATCH 0: Add SST-derived view and universe_sig using canonical helper
+                from TRAINING.orchestration.utils.scope_resolution import populate_additional_data
+                populate_additional_data(
+                    additional_data_with_cohort,
+                    view_for_writes=view_for_writes if 'view_for_writes' in locals() else view,
+                    symbol_for_writes=symbol_for_writes if 'symbol_for_writes' in locals() else None,
+                    universe_sig_for_writes=universe_sig if 'universe_sig' in locals() else None
+                )
+                
                 # Add fields needed for enhanced metadata (matching target ranking)
                 if selected_features:
                     additional_data_with_cohort['feature_names'] = selected_features
@@ -2290,13 +2313,14 @@ def select_features_for_target(
                 except Exception:
                     pass
                 
+                # PATCH 0: Use SST-derived values for tracker call
                 tracker.log_comparison(
                     stage="feature_selection",
-                    item_name=target_column,  # FIX: item_name is just target (view/symbol handled by route_type/symbol params)
+                    item_name=target_column,
                     metrics=metrics_with_cohort,
                     additional_data=additional_data_with_cohort,
-                    route_type=route_type_for_legacy,  # FIX: Properly scoped by view
-                    symbol=symbol  # FIX: Properly scoped by symbol (for SYMBOL_SPECIFIC view)
+                    route_type=view_for_writes if 'view_for_writes' in locals() else view,  # SST-derived view
+                    symbol=symbol_for_writes if 'symbol_for_writes' in locals() else None  # SST-derived symbol (None if CS)
                 )
         except Exception as e:
             # FIX: Ensure cohort variables exist before logging (may not be initialized if exception occurred early)

@@ -446,14 +446,15 @@ def save_feature_importances_for_reproducibility(
     
     target_name_clean = target_column.replace('/', '_').replace('\\', '_')
     
-    # Phase A: Use OutputLayout if universe_sig provided (new canonical path)
-    # Otherwise fall back to legacy path resolution with warning
-    use_output_layout = bool(universe_sig)
-    if not use_output_layout:
-        logger.warning(
-            f"universe_sig not provided for {target_column} feature importances, "
-            f"falling back to legacy path resolution. Pass universe_sig for canonical paths."
+    # PATCH 4: Require universe_sig for proper scoping - don't write unscoped artifacts
+    if not universe_sig:
+        logger.error(
+            f"SCOPE BUG: universe_sig not provided for {target_column} feature importances. "
+            f"Cannot create view-scoped paths. Feature importances will not be written."
         )
+        return  # Don't write to unscoped location
+    
+    use_output_layout = True  # Always use OutputLayout now that universe_sig is required
     
     # Find base run directory for target-first structure
     base_output_dir = output_dir

@@ -1,19 +1,4 @@
-"""
-Copyright (c) 2025-2026 Fox ML Infrastructure LLC
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published
-by the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""
+# MIT License - see LICENSE file
 
 """
 Target Predictability Ranking
@@ -2000,63 +1985,100 @@ def _save_feature_importances(
     target_column: str,
     symbol: str,
     feature_importances: Dict[str, Dict[str, float]],
-    output_dir: Path = None
+    output_dir: Path = None,
+    view: str = "CROSS_SECTIONAL",
+    universe_sig: Optional[str] = None  # PATCH 4: Required for proper scoping
 ) -> None:
     """
     Save detailed per-model, per-feature importance scores to CSV files.
     
-    Creates structure:
-    {output_dir}/feature_importances/
-      {target_name}/
-        {symbol}/
-          lightgbm_importances.csv
-          xgboost_importances.csv
-          random_forest_importances.csv
-          ...
+    Creates structure (with universe_sig):
+    targets/{target}/reproducibility/{view}/universe={sig}/(symbol={sym})/feature_importances/
+      lightgbm_importances.csv
+      xgboost_importances.csv
+      ...
     
     Args:
         target_column: Name of the target being evaluated
         symbol: Symbol being evaluated
         feature_importances: Dict of {model_name: {feature: importance}}
         output_dir: Base output directory (defaults to results/)
+        view: CROSS_SECTIONAL or SYMBOL_SPECIFIC
+        universe_sig: Universe signature from SST (required for proper scoping)
     """
+    # PATCH 4: Require universe_sig for proper scoping
+    if not universe_sig:
+        logger.error(
+            f"SCOPE BUG: universe_sig not provided for {target_column} feature importances. "
+            f"Cannot create view-scoped paths. Feature importances will not be written."
+        )
+        return  # Don't write to unscoped location
+    
     if output_dir is None:
         output_dir = _REPO_ROOT / "results"
     
-    # Create directory structure
+    # Find base run directory for target-first structure
+    base_output_dir = output_dir
+    for _ in range(10):
+        if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
+            break
+        if not base_output_dir.parent.exists():
+            break
+        base_output_dir = base_output_dir.parent
+    
     target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-    importances_dir = output_dir / "feature_importances" / target_name_clean / symbol
-    importances_dir.mkdir(parents=True, exist_ok=True)
     
-    # Save per-model CSV files
-    for model_name, importances in feature_importances.items():
-        if not importances:
-            continue
+    # PATCH 4: Use OutputLayout for properly scoped paths
+    try:
+        from TRAINING.orchestration.utils.output_layout import OutputLayout
+        from TRAINING.orchestration.utils.target_first_paths import ensure_target_structure
         
-        # Create DataFrame sorted by importance
-        df = pd.DataFrame([
-            {'feature': feat, 'importance': imp}
-            for feat, imp in importances.items()
-        ])
-        df = df.sort_values('importance', ascending=False)
+        ensure_target_structure(base_output_dir, target_name_clean)
         
-        # Normalize to percentages
-        total = df['importance'].sum()
-        if total > 0:
-            df['importance_pct'] = (df['importance'] / total * 100).round(2)
-            df['cumulative_pct'] = df['importance_pct'].cumsum().round(2)
-        else:
-            df['importance_pct'] = 0.0
-            df['cumulative_pct'] = 0.0
+        # Only pass symbol if view is SYMBOL_SPECIFIC
+        symbol_for_layout = symbol if view == "SYMBOL_SPECIFIC" else None
         
-        # Reorder columns
-        df = df[['feature', 'importance', 'importance_pct', 'cumulative_pct']]
+        layout = OutputLayout(
+            output_root=base_output_dir,
+            target=target_name_clean,
+            view=view,
+            universe_sig=universe_sig,
+            symbol=symbol_for_layout,
+        )
+        importances_dir = layout.feature_importance_dir()
+        importances_dir.mkdir(parents=True, exist_ok=True)
         
-        # Save to CSV
-        csv_file = importances_dir / f"{model_name}_importances.csv"
-        df.to_csv(csv_file, index=False)
-    
-    logger.info(f"  💾 Saved feature importances to: {importances_dir}")
+        # Save per-model CSV files
+        for model_name, importances in feature_importances.items():
+            if not importances:
+                continue
+            
+            # Create DataFrame sorted by importance
+            df = pd.DataFrame([
+                {'feature': feat, 'importance': imp}
+                for feat, imp in importances.items()
+            ])
+            df = df.sort_values('importance', ascending=False)
+            
+            # Normalize to percentages
+            total = df['importance'].sum()
+            if total > 0:
+                df['importance_pct'] = (df['importance'] / total * 100).round(2)
+                df['cumulative_pct'] = df['importance_pct'].cumsum().round(2)
+            else:
+                df['importance_pct'] = 0.0
+                df['cumulative_pct'] = 0.0
+            
+            # Reorder columns
+            df = df[['feature', 'importance', 'importance_pct', 'cumulative_pct']]
+            
+            # Save to properly scoped location
+            csv_file = importances_dir / f"{model_name}_importances.csv"
+            df.to_csv(csv_file, index=False)
+        
+        logger.info(f"  💾 Saved feature importances to: {importances_dir}")
+    except Exception as e:
+        logger.warning(f"Failed to save feature importances to target-first structure: {e}")
 
 
 def _log_suspicious_features(
