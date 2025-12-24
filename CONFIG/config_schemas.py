@@ -40,9 +40,16 @@ class DataConfig:
     max_samples_per_symbol: int = 50000
     validation_split: float = 0.2
     random_state: int = 42
+    symbol_batch_size: Optional[int] = None  # Limit auto-discovered symbols to N (random sample)
     
     def __post_init__(self):
-        """Validate and normalize bar_interval"""
+        """Validate and normalize bar_interval and symbol_batch_size"""
+        # Validate symbol_batch_size
+        if self.symbol_batch_size is not None and self.symbol_batch_size < 1:
+            raise ValueError(
+                f"DataConfig.symbol_batch_size must be >= 1 if provided, got {self.symbol_batch_size}"
+            )
+        
         if self.bar_interval is not None:
             # Validate format using regex (avoid circular import)
             import re
@@ -86,8 +93,7 @@ class ExperimentConfig:
         # Validation
         if not self.name:
             raise ValueError("ExperimentConfig.name cannot be empty")
-        if not self.symbols:
-            raise ValueError("ExperimentConfig.symbols cannot be empty")
+        # symbols can be empty - will be resolved via auto-discovery in IntelligentTrainer.__init__()
         # target is optional when auto_targets=true (will be discovered)
         # Only validate if target is explicitly set (non-empty string)
         # Empty string is allowed and will be overridden by auto_targets

@@ -191,8 +191,48 @@ class IntelligentTrainer:
         # NEW: Use experiment config if provided
         if experiment_config is not None and _NEW_CONFIG_AVAILABLE:
             self.data_dir = experiment_config.data_dir
-            self.symbols = experiment_config.symbols
             self.experiment_config = experiment_config
+            
+            # Auto-discover symbols if empty/missing (CRITICAL: do BEFORE fingerprint computation)
+            if not experiment_config.symbols:
+                from TRAINING.orchestration.utils.symbol_discovery import (
+                    discover_symbols_from_data_dir,
+                    select_symbol_batch
+                )
+                
+                # Get interval from config
+                interval = experiment_config.data.bar_interval if experiment_config.data else None
+                
+                # Discover symbols from data directory
+                discovered_symbols, search_paths = discover_symbols_from_data_dir(
+                    self.data_dir, interval
+                )
+                
+                if not discovered_symbols:
+                    raise ValueError(
+                        f"symbols is empty, so auto-discovery is enabled; "
+                        f"no symbols found under {self.data_dir} "
+                        f"(searched: {search_paths})"
+                    )
+                
+                # Apply batch selection if configured
+                symbol_batch_size = experiment_config.data.symbol_batch_size if experiment_config.data else None
+                random_seed = experiment_config.data.random_state if experiment_config.data else 42
+                
+                resolved_symbols = select_symbol_batch(
+                    discovered_symbols, symbol_batch_size, random_seed
+                )
+                
+                # SST: Write resolved symbols back to canonical location
+                experiment_config.symbols = resolved_symbols
+                
+                logger.info(
+                    f"Auto-discovered {len(discovered_symbols)} symbols, "
+                    f"selected {len(resolved_symbols)} (seed={random_seed})"
+                )
+            
+            # Always read from canonical location (SST)
+            self.symbols = experiment_config.symbols
         else:
             self.data_dir = Path(data_dir)
             self.symbols = symbols
@@ -1426,7 +1466,7 @@ class IntelligentTrainer:
                             all_summaries[target_name] = summary
                     except Exception as e:
                         logger.debug(f"Failed to load summary for {target_name} ({view}): {e}")
-                
+            
                 # Load model_family_status.json (view-scoped)
                 status_path = view_dir / "model_family_status.json"
                 if status_path.exists() and target_name not in all_family_statuses:
@@ -1436,7 +1476,7 @@ class IntelligentTrainer:
                             all_family_statuses[target_name] = status_data
                     except Exception as e:
                         logger.debug(f"Failed to load family status for {target_name} ({view}): {e}")
-                
+            
                 # Load actual feature list from selected_features.txt (view-scoped)
                 selected_features_path = view_dir / "selected_features.txt"
                 if selected_features_path.exists():

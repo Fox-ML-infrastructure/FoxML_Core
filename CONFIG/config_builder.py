@@ -168,8 +168,7 @@ def load_experiment_config(experiment_name: str) -> ExperimentConfig:
     # Validate required fields
     if not data_data.get('data_dir'):
         raise ValueError(f"Experiment config missing required field: data.data_dir")
-    if not data_data.get('symbols'):
-        raise ValueError(f"Experiment config missing required field: data.symbols")
+    # symbols can be empty/missing/null - will be resolved via auto-discovery in IntelligentTrainer.__init__()
     
     # targets.primary is only required if auto_targets is false
     if not auto_targets and not targets_data.get('primary'):
@@ -228,6 +227,9 @@ def load_experiment_config(experiment_name: str) -> ExperimentConfig:
             f"asof_strategy must be 'backward' (only supported strategy), got '{asof_strategy}'"
         )
     
+    # Load symbol_batch_size for auto-discovery
+    symbol_batch_size = data_data.get('symbol_batch_size')
+    
     data_config = DataConfig(
         timestamp_column=data_data.get('timestamp_column', 'ts'),
         bar_interval=bar_interval,
@@ -238,7 +240,8 @@ def load_experiment_config(experiment_name: str) -> ExperimentConfig:
         default_max_staleness_minutes=default_max_staleness_minutes,
         max_samples_per_symbol=max_samples,
         validation_split=data_data.get('validation_split', 0.2),
-        random_state=data_data.get('random_state', 42)
+        random_state=data_data.get('random_state', 42),
+        symbol_batch_size=symbol_batch_size
     )
     
     # Build ExperimentConfig (validation happens in __post_init__)
@@ -248,10 +251,13 @@ def load_experiment_config(experiment_name: str) -> ExperimentConfig:
     # Support both max_samples_per_symbol and max_rows_per_symbol for ExperimentConfig too
     exp_max_samples = data_data.get('max_samples_per_symbol') or data_data.get('max_rows_per_symbol', 5000)
     
+    # Get symbols - default to empty list if missing/null (will trigger auto-discovery)
+    symbols = data_data.get('symbols') or []
+    
     return ExperimentConfig(
         name=exp_data.get('name', experiment_name),
         data_dir=Path(data_data['data_dir']),
-        symbols=data_data['symbols'],
+        symbols=symbols,
         target=primary_target,
         data=data_config,
         max_samples_per_symbol=exp_max_samples,

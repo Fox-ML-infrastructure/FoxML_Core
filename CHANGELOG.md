@@ -16,6 +16,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-23 (Feature Registry, Symbol Discovery, and Mode Resolution Fixes)
+- **Feature Registry Fix**: Fixed 114 features with incorrect `lag_bars: 0` and `AUTO-REJECTED` status. Correct lookback values now set using proper minute-to-bar (`ceil(min/5)`) and day-to-bar (`ceil(day*1440/5)`) conversions. Calendar features (`_hour`, `day_of_week`, etc.) correctly unrejected with `lag_bars=0`.
+- **New Feature**: Auto-discover symbols from `data_dir` when `symbols: []` (empty). Optional `symbol_batch_size` limits selection with deterministic seeded sampling. Symbols flow through entire pipeline (ranking → feature selection → routing → training).
+- **Bug Fix**: Universe-scoped mode resolution - `resolved_mode` is now keyed by universe signature (blake2s hash of sorted symbols) instead of being globally immutable. Different symbol universes correctly resolve to different modes (e.g., 25 symbols → CROSS_SECTIONAL, 1 symbol → SINGLE_SYMBOL_TS).
+- **Bug Fix**: Fixed string accumulation in `mode_reason` logging - stores `original_reason` separately and references it directly on reuse (no recursive nesting).
+- **Bug Fix**: Fixed multiple `IndentationError` and `SyntaxError` issues across `intelligent_trainer.py`, `training.py`, `leakage_budget.py`, `leakage_detection.py`.
+- **Bug Fix**: Fixed `IntelligentTrainer` import issue - package `__init__.py` now re-exports class from sibling module file.
+- **Impact**: Training no longer logs `lag_bars=0 → fallback to inference` for known features. Symbol discovery enables flexible experiment configs. Mode resolution correctly handles per-symbol evaluation loops.
+- **Files Changed**: `feature_registry.yaml`, `config_schemas.py`, `config_builder.py`, `symbol_discovery.py` (NEW), `run_context.py`, `cross_sectional_data.py`, `intelligent_trainer.py`, `training.py`, `leakage_budget.py`, `leakage_detection.py`, `fix_feature_registry.py` (NEW)
+
+#### 2025-12-23 (Dominance Quarantine and Leakage Safety Enhancements)
+- **New Feature**: Implemented dominance quarantine system (auto-suspect → confirm → quarantine workflow) for feature-level leakage detection and recovery. Features with dominant importance (30%+ share, 3× next feature) are detected, confirmed via rerun with suspects removed, and quarantined if score drops significantly. Only blocks target/view if leakage persists after quarantine.
+- **Safety Enhancement**: Hard-exclude `time_in_profit_*` and similar forward-looking profit/PnL features for forward-return targets (prevents label-proxy leakage before dominance detection triggers).
+- **Safety Enhancement**: Config-driven small-panel leniency - downgrades leakage BLOCKED to SUSPECT when `n_symbols < 10`, allowing dominance quarantine to attempt recovery before blocking (critical for E2E tests).
+- **Bug Fix**: Fixed `detect_leakage()` import conflict causing `TypeError: unexpected keyword argument 'X'` crash. Removed conflicting import, added error handling so leakage detection failures don't crash target evaluation.
+- **Impact**: Prevents permanent feature drops on first trigger, allows recovery via rerun, makes pipeline resilient to leakage detection errors, better small-panel support.
+- **Files Changed**: `safety.yaml`, `dominance_quarantine.py` (NEW), `model_evaluation.py`, `target_conditional_exclusions.py`, `leakage_detection.py`, `metrics_aggregator.py`, `shared_ranking_harness.py`, `multi_model_feature_selection.py`, `training.py`, `model_evaluation/__init__.py`, test files
+→ [Detailed Changelog](DOCS/02_reference/changelog/2025-12-23-dominance-quarantine-and-leakage-safety.md)
+
 #### 2025-12-23 (Mode Selection and Pipeline Safety Fixes)
 - **Critical Fixes**: Fixed 4 red flags from training logs: (1) Mode selection - small panels (<10 symbols) now select SYMBOL_SPECIFIC instead of CROSS_SECTIONAL, preventing missing symbol metrics → 0 jobs. (2) Unknown lookback invariant - hard assertion that no inf lookbacks remain after gatekeeper quarantine, prevents RuntimeError in compute_budget. (3) Purge inflation protection - estimates effective samples after purge increase, warns when <30% remaining, fails early when <minimum threshold (configurable via `training_config.routing.min_effective_samples_after_purge`). (4) Dev mode job guarantee - generates fallback jobs when router produces 0 jobs in dev_mode, ensuring E2E tests always have jobs.
 - **Impact**: Prevents "no symbol metrics", "0 jobs", and RuntimeError from unknown lookback features. Purge calculation remains per-target and depends on features selected for each target.

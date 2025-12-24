@@ -385,17 +385,21 @@ def prepare_cross_sectional_data_for_ranking(
     effective_min_cs = min(min_cs, n_symbols_available)
     min_cs_reason = "requested"  # Always requested now (we hard-stop if insufficient)
     
-    # Load existing resolved_mode from run context (SST) - it's immutable, don't try to change it
-    existing_resolved_mode = None
-    existing_context = None
+    # Compute universe signature for this symbol set
+    from TRAINING.orchestration.utils.run_context import (
+        compute_universe_signature, get_resolved_mode_for_universe, save_run_context, validate_mode_contract
+    )
+    universe_sig = compute_universe_signature(loaded_symbols_list)
+    symbols_sample = loaded_symbols_list[:3] if len(loaded_symbols_list) > 3 else loaded_symbols_list
+    logger.info(f"🔑 Universe: sig={universe_sig} n_symbols={n_symbols_available} sample={symbols_sample}")
+    
+    # Load existing resolved_mode for THIS universe only (not global)
+    existing_entry = None
     if output_dir is not None:
         try:
-            from TRAINING.orchestration.utils.run_context import load_run_context
-            existing_context = load_run_context(output_dir)
-            if existing_context:
-                existing_resolved_mode = existing_context.get("resolved_mode")
-                if existing_resolved_mode:
-                    logger.debug(f"Using existing resolved_mode={existing_resolved_mode} from run context (immutable)")
+            existing_entry = get_resolved_mode_for_universe(output_dir, universe_sig)
+            if existing_entry:
+                logger.debug(f"Found cached mode for universe={universe_sig}: {existing_entry['resolved_mode']}")
         except Exception as e:
             logger.debug(f"Could not load existing run context: {e}")
     
@@ -411,13 +415,13 @@ def prepare_cross_sectional_data_for_ranking(
     except Exception as e:
         logger.debug(f"Could not load mode policy from config: {e}, using defaults")
     
-    # Determine resolved mode based on policy (only if not already set)
-    if existing_resolved_mode:
-        # Use existing resolved_mode (immutable) - don't try to resolve again
-        # This prevents mode contract violations in per-symbol loops
-        resolved_mode = existing_resolved_mode
-        original_reason = existing_context.get('mode_reason', 'N/A') if existing_context else 'N/A'
-        mode_reason = f"using existing resolved_mode (immutable, originally: {original_reason})"
+    # Determine resolved mode based on policy
+    # Only reuse if we have a cached entry for THIS universe
+    if existing_entry:
+        # Reuse cached mode for this universe - reference stored original_reason directly (no nesting)
+        resolved_mode = existing_entry["resolved_mode"]
+        original_reason = existing_entry.get("original_reason", "N/A")
+        mode_reason = f"reusing cached mode for universe={universe_sig} (originally: {original_reason})"
     elif mode_policy == "force":
         # Force mode: use requested_mode exactly (no auto-flip)
         if requested_mode is None:
@@ -426,29 +430,24 @@ def prepare_cross_sectional_data_for_ranking(
         resolved_mode = requested_mode
         mode_reason = f"mode_policy=force, requested_mode={requested_mode}"
     else:
-        # Auto mode: allow resolver to flip based on panel size
+        # Auto mode: resolve fresh based on panel size
         if n_symbols_available == 1:
-            # CRITICAL: If we're in a per-symbol loop (n_symbols=1), we should NOT resolve to SINGLE_SYMBOL_TS
-            # Instead, we should use the resolved_mode from the outer context (which should be SYMBOL_SPECIFIC)
-            # If no existing resolved_mode, this is an error condition (shouldn't happen in per-symbol loop)
             if requested_mode and requested_mode != "SINGLE_SYMBOL_TS":
-                resolved_mode = requested_mode  # Use requested mode (likely SYMBOL_SPECIFIC from outer context)
+                resolved_mode = requested_mode
                 mode_reason = f"n_symbols=1, using requested_mode={requested_mode} (per-symbol loop)"
             else:
-                resolved_mode = "SINGLE_SYMBOL_TS"  # Fallback (shouldn't happen)
+                resolved_mode = "SINGLE_SYMBOL_TS"
                 mode_reason = "n_symbols=1"
         elif n_symbols_available < auto_flip_min_symbols:
-            # Small panel: recommend SYMBOL_SPECIFIC or BOTH (not CROSS_SECTIONAL)
-            resolved_mode = "SYMBOL_SPECIFIC"  # Changed from CROSS_SECTIONAL
+            resolved_mode = "SYMBOL_SPECIFIC"
             mode_reason = f"n_symbols={n_symbols_available} (small panel, < {auto_flip_min_symbols} recommended)"
         else:
-            resolved_mode = "CROSS_SECTIONAL"  # Full panel
+            resolved_mode = "CROSS_SECTIONAL"
             mode_reason = f"n_symbols={n_symbols_available} (full panel, >= {auto_flip_min_symbols})"
     
-    # Validate mode contract (only if we resolved a new mode)
-    if not existing_resolved_mode:
+    # Validate mode contract (only if we resolved a new mode, not cached)
+    if not existing_entry:
         try:
-            from TRAINING.orchestration.utils.run_context import validate_mode_contract
             validate_mode_contract(resolved_mode, requested_mode, mode_policy)
         except ValueError as e:
             logger.error(f"Mode contract validation failed: {e}")
@@ -461,23 +460,25 @@ def prepare_cross_sectional_data_for_ranking(
         data_scope = "PANEL"
     
     # Persist resolved_mode and data_scope to run context (SST)
-    # resolved_mode is immutable (only set once), data_scope can be updated
+    # resolved_mode is immutable PER UNIVERSE, data_scope can be updated
     if output_dir is not None:
         try:
-            from TRAINING.orchestration.utils.run_context import save_run_context
+            # For cached entries, pass the original_reason (not the "reusing..." message)
+            save_mode_reason = existing_entry["original_reason"] if existing_entry else mode_reason
             save_run_context(
                 output_dir=output_dir,
                 requested_mode=requested_mode,
                 resolved_mode=resolved_mode,
-                mode_reason=mode_reason,
+                mode_reason=save_mode_reason,
                 n_symbols=n_symbols_available,
-                data_scope=data_scope  # Can be updated (non-immutable)
+                data_scope=data_scope,
+                universe_signature=universe_sig,
+                symbols=loaded_symbols_list
             )
         except Exception as e:
             logger.warning(f"Could not save run context: {e}")
     
     # Log requested vs effective (single authoritative line)
-    # Use mode-appropriate terminology: "Cross-sectional" for CROSS_SECTIONAL, "Panel data" for SYMBOL_SPECIFIC
     data_type_label = "Cross-sectional sampling" if resolved_mode == "CROSS_SECTIONAL" else "Panel data sampling"
     logger.info(
         f"📊 {data_type_label}: "

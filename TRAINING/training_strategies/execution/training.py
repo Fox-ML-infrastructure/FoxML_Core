@@ -648,6 +648,24 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                 
                 logger.info(f"  📊 Training {symbol} with {len(symbol_features)} features")
                 
+                # Apply runtime quarantine (dominance quarantine confirmed features) for symbol-specific
+                if symbol_features and output_dir:
+                    try:
+                        from TRAINING.ranking.utils.dominance_quarantine import load_confirmed_quarantine
+                        from pathlib import Path
+                        output_dir_path = Path(output_dir) if not isinstance(output_dir, Path) else output_dir
+                        runtime_quarantine = load_confirmed_quarantine(
+                            out_dir=output_dir_path,
+                            target=target,
+                            view="SYMBOL_SPECIFIC",
+                            symbol=symbol
+                        )
+                        if runtime_quarantine:
+                            symbol_features = [f for f in symbol_features if f not in runtime_quarantine]
+                            logger.info(f"  🔒 {symbol}: Applied runtime quarantine: Removed {len(runtime_quarantine)} confirmed leaky features ({len(symbol_features)} remaining)")
+                    except Exception as e:
+                        logger.debug(f"Could not load runtime quarantine for {target}:{symbol}: {e}")
+                
                 # Prepare data for this symbol only
                 symbol_mtf_data = {symbol: mtf_data[symbol]}
                 X, y, feature_names, symbols_arr, indices, feat_cols, time_vals, routing_meta = prepare_training_data_cross_sectional(
@@ -1078,6 +1096,29 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         
         # Cross-sectional training (for CROSS_SECTIONAL or BOTH routes)
         # Note: BLOCKED targets are skipped earlier in the loop
+        # Apply runtime quarantine (dominance quarantine confirmed features)
+        if selected_features and output_dir:
+            try:
+                from TRAINING.ranking.utils.dominance_quarantine import load_confirmed_quarantine
+                from pathlib import Path
+                # Determine view from route
+                route_info = routing_decisions.get(target, {}) if routing_decisions else {}
+                route = route_info.get('route', 'CROSS_SECTIONAL')
+                view_for_quarantine = "CROSS_SECTIONAL" if route in ['CROSS_SECTIONAL', 'BOTH'] else "SYMBOL_SPECIFIC"
+                
+                output_dir_path = Path(output_dir) if not isinstance(output_dir, Path) else output_dir
+                runtime_quarantine = load_confirmed_quarantine(
+                    out_dir=output_dir_path,
+                    target=target,
+                    view=view_for_quarantine,
+                    symbol=None  # For CROSS_SECTIONAL, symbol is None
+                )
+                if runtime_quarantine:
+                    selected_features = [f for f in selected_features if f not in runtime_quarantine]
+                    logger.info(f"🔒 Applied runtime quarantine for {target}: Removed {len(runtime_quarantine)} confirmed leaky features ({len(selected_features)} remaining)")
+            except Exception as e:
+                logger.debug(f"Could not load runtime quarantine for {target}: {e}")
+        
         X, y, feature_names, symbols, indices, feat_cols, time_vals, routing_meta = prepare_training_data_cross_sectional(
             mtf_data, target, feature_names=selected_features, min_cs=min_cs, max_cs_samples=max_cs_samples, routing_decisions=routing_decisions
         )

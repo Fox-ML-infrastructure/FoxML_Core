@@ -30,9 +30,29 @@ import numpy as np
 import pandas as pd
 import json
 import logging
+import hashlib
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+
+def compute_universe_signature(symbols: List[str]) -> str:
+    """
+    Compute a stable hash of the symbol universe.
+    
+    Properties:
+    - Order-independent (sorted)
+    - Duplicate-invariant (set)
+    - Uses blake2s (fast, no security debates)
+    
+    Args:
+        symbols: List of symbol strings
+    
+    Returns:
+        12-character hex string identifying the universe
+    """
+    sorted_symbols = sorted(set(symbols))
+    return hashlib.blake2s(",".join(sorted_symbols).encode(), digest_size=6).hexdigest()
 
 
 @dataclass
@@ -216,30 +236,34 @@ def save_run_context(
     resolved_mode: Optional[str] = None,
     mode_reason: Optional[str] = None,
     n_symbols: Optional[int] = None,
-    data_scope: Optional[str] = None,  # NEW: Data scope (PANEL or SINGLE_SYMBOL) - non-immutable
+    data_scope: Optional[str] = None,
+    universe_signature: Optional[str] = None,
+    symbols: Optional[List[str]] = None,
     **additional_data
 ) -> Path:
     """
     Save resolved mode to globals/run_context.json (SST - Single Source of Truth).
     
-    resolved_mode is immutable after first write to prevent mode drift during a run.
+    resolved_mode is immutable PER UNIVERSE (keyed by universe_signature).
+    Different universes can have different modes.
     data_scope can change per-symbol (non-immutable).
-    All downstream components should load resolved_mode from this file.
     
     Args:
         output_dir: Run output directory (e.g., RESULTS/runs/.../intelligent_output_...)
         requested_mode: Mode requested by caller/config
-        resolved_mode: Mode actually used (after auto-flip logic) - IMMUTABLE after first write
-        mode_reason: Reason for resolution
+        resolved_mode: Mode actually used (after auto-flip logic) - IMMUTABLE per universe
+        mode_reason: Reason for resolution (stored as original_reason for new universes)
         n_symbols: Number of symbols (for context)
         data_scope: Data scope (PANEL or SINGLE_SYMBOL) - can change per-symbol, non-immutable
+        universe_signature: Hash of symbol universe (from compute_universe_signature)
+        symbols: List of symbols (for logging/debugging)
         **additional_data: Additional metadata to store
     
     Returns:
         Path to run_context.json file
     
     Raises:
-        ValueError: If trying to overwrite existing resolved_mode with different value
+        ValueError: If trying to overwrite existing resolved_mode for same universe
     """
     run_context_path = output_dir / "globals" / "run_context.json"
     run_context_path.parent.mkdir(parents=True, exist_ok=True)
@@ -253,26 +277,51 @@ def save_run_context(
         except Exception as e:
             logger.warning(f"Could not load existing run_context.json: {e}, creating new one")
     
-    # If resolved_mode already exists and is different, raise error (immutable)
-    if existing_context.get("resolved_mode") is not None:
-        if resolved_mode is not None and existing_context["resolved_mode"] != resolved_mode:
+    # Get existing resolved_modes dict (keyed by universe signature)
+    resolved_modes = existing_context.get("resolved_modes", {})
+    
+    # If universe_signature provided, store per-universe (new behavior)
+    if universe_signature and resolved_mode:
+        if universe_signature in resolved_modes:
+            existing_entry = resolved_modes[universe_signature]
+            if existing_entry["resolved_mode"] != resolved_mode:
+                raise ValueError(
+                    f"Mode contract violation for universe {universe_signature}: "
+                    f"Cannot change from '{existing_entry['resolved_mode']}' to '{resolved_mode}'. "
+                    f"Original reason: {existing_entry.get('original_reason', 'N/A')}"
+                )
+            # Same mode, keep existing entry (don't update timestamp)
+        else:
+            # New universe - store the entry with original_reason (not nested)
+            symbols_sample = symbols[:3] if symbols and len(symbols) > 3 else (symbols or [])
+            resolved_modes[universe_signature] = {
+                "resolved_mode": resolved_mode,
+                "original_reason": mode_reason,  # Store the ORIGINAL reason, not nested
+                "n_symbols": n_symbols,
+                "symbols_sample": symbols_sample,
+                "resolved_at": datetime.utcnow().isoformat() + "Z"
+            }
+            logger.info(f"🔑 New universe {universe_signature}: resolved_mode={resolved_mode}, n_symbols={n_symbols}")
+    
+    # Legacy: check global resolved_mode if no universe_signature provided
+    elif resolved_mode and existing_context.get("resolved_mode") is not None:
+        if existing_context["resolved_mode"] != resolved_mode:
             raise ValueError(
                 f"Mode contract violation: Cannot change resolved_mode from '{existing_context['resolved_mode']}' "
                 f"to '{resolved_mode}'. Resolved mode is immutable after first write. "
                 f"Existing reason: {existing_context.get('mode_reason', 'N/A')}"
             )
-        # If same or None, keep existing
-        if resolved_mode is None:
-            resolved_mode = existing_context.get("resolved_mode")
     
     # Build context dict
-    # resolved_mode is immutable (only set once), data_scope can be updated
     context = {
         "requested_mode": requested_mode or existing_context.get("requested_mode"),
+        "resolved_modes": resolved_modes,  # Dict keyed by universe signature
+        "current_universe": universe_signature or existing_context.get("current_universe"),
+        "data_scope": data_scope or existing_context.get("data_scope"),
+        # Keep legacy fields for backward compat
         "resolved_mode": resolved_mode or existing_context.get("resolved_mode"),
         "mode_reason": mode_reason or existing_context.get("mode_reason"),
         "n_symbols": n_symbols or existing_context.get("n_symbols"),
-        "data_scope": data_scope or existing_context.get("data_scope"),  # Can be updated (non-immutable)
         "resolved_at": existing_context.get("resolved_at") or datetime.utcnow().isoformat() + "Z",
         **additional_data
     }
@@ -281,7 +330,7 @@ def save_run_context(
     with open(run_context_path, 'w') as f:
         json.dump(context, f, indent=2)
     
-    logger.info(f"✅ Saved run context (SST): resolved_mode={context['resolved_mode']}, requested_mode={context['requested_mode']}")
+    logger.debug(f"✅ Saved run context: universe={universe_signature}, resolved_mode={resolved_mode}")
     
     return run_context_path
 
@@ -323,6 +372,24 @@ def get_resolved_mode(output_dir: Path) -> Optional[str]:
     context = load_run_context(output_dir)
     if context:
         return context.get("resolved_mode")
+    return None
+
+
+def get_resolved_mode_for_universe(output_dir: Path, universe_signature: str) -> Optional[Dict[str, Any]]:
+    """
+    Get the resolved mode entry for a specific universe.
+    
+    Args:
+        output_dir: Run output directory
+        universe_signature: Hash of symbol universe (from compute_universe_signature)
+    
+    Returns:
+        Dict with resolved_mode, original_reason, n_symbols, etc., or None if not found
+    """
+    context = load_run_context(output_dir)
+    if context:
+        resolved_modes = context.get("resolved_modes", {})
+        return resolved_modes.get(universe_signature)
     return None
 
 

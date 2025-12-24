@@ -2214,6 +2214,7 @@ def detect_leakage(
     flags = []
     
     # Load thresholds from config
+    small_panel_cfg = {}
     if _CONFIG_AVAILABLE:
         try:
             safety_cfg = get_safety_config()
@@ -2221,10 +2222,18 @@ def detect_leakage(
             safety_section = safety_cfg.get('safety', {})
             leakage_cfg = safety_section.get('leakage_detection', {})
             warning_cfg = leakage_cfg.get('warning_thresholds', {})
+            small_panel_cfg = leakage_cfg.get('small_panel', {})
         except Exception:
             warning_cfg = {}
+            small_panel_cfg = {}
     else:
         warning_cfg = {}
+        small_panel_cfg = {}
+    
+    # Compute n_symbols from symbols array if available
+    n_symbols = None
+    if symbols is not None and len(symbols) > 0:
+        n_symbols = len(np.unique(symbols))
     
     # Determine threshold based on task type and target name
     if task_type == TaskType.REGRESSION:
@@ -2338,11 +2347,32 @@ def detect_leakage(
             f"(high importance with low {metric_name} - check for leaked features)"
         )
     
+    # Determine final leakage status
     if len(flags) > 1:
-        return "SUSPICIOUS"
+        leakage_status = "SUSPICIOUS"
     elif len(flags) == 1:
-        return flags[0]
+        leakage_status = flags[0]
     else:
-        return "OK"
+        leakage_status = "OK"
+    
+    # Small-panel leniency: downgrade BLOCKED to SUSPECT for small panels
+    if (small_panel_cfg.get('enabled', False) and 
+        leakage_status in ["HIGH_SCORE", "SUSPICIOUS"] and 
+        n_symbols is not None):
+        min_symbols_threshold = small_panel_cfg.get('min_symbols_threshold', 10)
+        downgrade_enabled = small_panel_cfg.get('downgrade_block_to_suspect', True)
+        log_warning = small_panel_cfg.get('log_warning', True)
+        
+        if n_symbols < min_symbols_threshold and downgrade_enabled:
+            if log_warning:
+                logger.warning(
+                    f"🔒 Small panel detected (n_symbols={n_symbols} < {min_symbols_threshold}), "
+                    f"downgrading leakage severity from {leakage_status} to SUSPECT. "
+                    f"This allows dominance quarantine to attempt recovery before blocking."
+                )
+            # Downgrade to SUSPECT (allows training to proceed, but with warning)
+            leakage_status = "SUSPECT"
+    
+    return leakage_status
 
 
