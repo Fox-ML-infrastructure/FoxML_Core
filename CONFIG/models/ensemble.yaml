@@ -1,0 +1,76 @@
+# Ensemble Model Configuration
+# Spec 3: Stacking Regressor with HistGradientBoosting + RandomForest + Ridge
+
+model_family: "Ensemble"
+description: "Stacking ensemble with HGB, RF, and Ridge"
+
+# Performance
+num_threads: 12  # Can be overridden by OMP_NUM_THREADS env var
+
+# HistGradientBoosting config (OpenMP-heavy)
+histogram_gradient_boosting:
+  max_iter: 300
+  max_depth: 8
+  learning_rate: 0.05
+  max_bins: 255
+  l2_regularization: 0.0001
+  early_stopping: true
+  validation_fraction: 0.1
+
+# RandomForest config (joblib-heavy)
+random_forest:
+  n_estimators: 300
+  max_depth: 15  # Spec 3: 15 (was 18)
+  max_samples: 0.7
+  max_features: "sqrt"  # Spec 3: sqrt (was auto)
+  bootstrap: true
+
+# Ridge config (final estimator)
+ridge:
+  alpha: 1.0  # Spec 3: 1.0-10.0, tune with CV
+
+# Stacking config
+stacking:
+  use_stacking: true  # Use StackingRegressor (Spec 3) vs weighted blend
+  cv_folds: 5  # K=5 or K=10 for cross-validation
+  final_estimator_alpha: 1.0  # Ridge alpha for final estimator
+  n_jobs: 1  # Parallelism handled by base estimators
+
+# Thread allocation strategy
+threading:
+  hgb_omp_threads: 12  # Use all threads for HGB (OpenMP parallelism)
+  rf_n_jobs: 12  # Use all threads for RF (joblib workers)
+  rf_omp_threads: 1  # No OpenMP in RF (avoid oversubscription)
+
+# Variants
+variants:
+  lightweight:
+    histogram_gradient_boosting:
+      max_iter: 100
+      max_depth: 5
+    random_forest:
+      n_estimators: 100
+      max_depth: 10
+    stacking:
+      cv_folds: 3
+      
+  balanced:
+    histogram_gradient_boosting:
+      max_iter: 300
+      max_depth: 8
+    random_forest:
+      n_estimators: 300
+      max_depth: 15
+    stacking:
+      cv_folds: 5
+      
+  heavy:
+    histogram_gradient_boosting:
+      max_iter: 500
+      max_depth: 10
+    random_forest:
+      n_estimators: 500
+      max_depth: 20
+    stacking:
+      cv_folds: 10
+

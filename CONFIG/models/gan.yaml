@@ -1,0 +1,53 @@
+# GAN Model Configuration
+# Generative Adversarial Network for synthetic data generation
+
+model_family: "GAN"
+description: "GAN for synthetic time-series generation"
+
+hyperparameters:
+  # Training
+  epochs: 100
+  batch_size: 256
+  patience: 20
+  
+  # Generator
+  generator:
+    latent_dim: 100
+    hidden_layers: [256, 512, 1024]
+    learning_rate: 0.0002
+    beta_1: 0.5  # Adam optimizer momentum
+    
+  # Discriminator
+  discriminator:
+    hidden_layers: [1024, 512, 256]
+    learning_rate: 0.0002
+    beta_1: 0.5
+    dropout: 0.3
+  
+  # Training strategy
+  discriminator_steps: 1  # Train discriminator N times per generator step
+  label_smoothing: 0.1  # One-sided label smoothing for discriminator
+
+# Variants
+variants:
+  lightweight:
+    epochs: 50
+    generator:
+      hidden_layers: [128, 256]
+    discriminator:
+      hidden_layers: [256, 128]
+      
+  balanced:
+    epochs: 100
+    generator:
+      hidden_layers: [256, 512, 1024]
+    discriminator:
+      hidden_layers: [1024, 512, 256]
+      
+  heavy:
+    epochs: 200
+    generator:
+      hidden_layers: [512, 1024, 2048]
+    discriminator:
+      hidden_layers: [2048, 1024, 512]
+

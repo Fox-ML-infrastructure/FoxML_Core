@@ -1,0 +1,395 @@
+# IBKR Enhanced Trading Configuration
+# Comprehensive configuration for cost-aware intraday trading
+# Updated with final safety, resiliency, and alpha-preserving components
+
+# Safety and Guard Configuration
+safety:
+  # Market integrity
+  max_quote_ms: 200
+  max_spread_bps: 12.0
+  min_1m_adv: 50000.0
+  min_5m_adv: 200000.0
+  
+  # Time windows
+  open_blackout_s: 180
+  close_blackout_s: 120
+  allow_lunch: false
+  
+  # Event blackouts
+  earnings_blackout_min: 15
+  news_blackout_min: 10
+  
+  # Risk limits
+  max_daily_loss_pct: 2.0
+  max_gross_exposure_pct: 50.0
+  max_net_exposure_pct: 25.0
+  max_sector_exposure_pct: 15.0
+  
+  # Volatility limits
+  max_volatility: 0.05
+  max_volume_spike: 5.0
+
+# Order Reconciliation
+reconcile:
+  run_every_s: 60
+  cancel_strays: true
+  max_order_age_hours: 24
+  wal_path: "state/wal_orders.jsonl"
+  snapshot_path: "state/broker_snapshot.json"
+
+# Universe Prefilter
+prefilter:
+  top_k: 20
+  min_score_bps: 2.0
+  min_confidence: 0.3
+  max_cost_ratio: 0.7
+  sector_diversification: true
+  max_sector_weight: 0.3
+  cache_size: 1000
+  cache_ttl_s: 300
+
+# Execution Policy
+execution:
+  # Order types
+  default: "marketable_limit"
+  step_up_ticks: [0, 1, 2]
+  
+  # Time-in-force by horizon
+  tif_s:
+    "5m": 15
+    "10m": 25
+    "15m": 30
+    "30m": 45
+    "60m": 60
+  
+  # Bracket orders
+  bracket:
+    enabled: true
+    tp_bps: 8
+    sl_bps: 10
+    max_quote_age_ms: 200
+  
+  # Microstructure
+  microstructure:
+    prefer_mid_peg: true
+    adaptive_aggression: true
+    max_spread_bps: 10
+    min_volume_1m: 10000
+
+# Inventory Management
+inventory:
+  sector_rho: 0.35
+  per_symbol_cap_pct: 0.25
+  gross_exposure_cap_pct: 50.0
+  net_exposure_cap_pct: 25.0
+  sector_exposure_cap_pct: 15.0
+  
+  # Time-of-day adjustments
+  tod_adjustments:
+    "09:30-10:00": 1.2  # Higher size near open
+    "10:00-11:00": 1.0  # Normal size
+    "11:00-14:00": 0.8  # Lower size mid-day
+    "14:00-15:00": 1.0  # Normal size
+    "15:00-16:00": 1.1  # Slightly higher near close
+    "16:00-16:00": 0.0  # No trading after close
+
+# Health Monitoring
+health:
+  # Drift detection
+  ic_min_ewma: 0.01
+  reliability_min: 0.6
+  net_edge_min_bps: 0.0
+  quarantine_threshold: 3
+  window_size: 600
+  alpha: 0.1
+  min_samples: 50
+  
+  # Mode controller
+  max_broker_latency_ms: 700
+  max_exception_count: 5
+  health_check_interval_s: 60
+  mode_transition_cooldown_s: 300
+  
+  # Emergency conditions
+  kill_file_path: "kill.flag"
+  max_daily_loss_pct: 2.0
+  max_gross_exposure_pct: 50.0
+
+# Cost Model
+costs:
+  slippage:
+    model: "linear"
+    base_rate: 0.0001
+    volume_impact: 0.00005
+    volatility_multiplier: 1.5
+    
+  fees:
+    commission_per_share: 0.005
+    commission_minimum: 1.0
+    data_fees: 0.0
+    regulatory_fees: 0.000119
+    
+  taxes:
+    short_term_rate: 0.37
+    long_term_rate: 0.20
+    short_term_threshold: 365
+    
+  microstructure:
+    market_impact_model: "square_root"
+    timing_costs: 0.0001
+    bid_ask_spread_multiplier: 0.5
+
+# Decision Optimization
+decision_optimization:
+  # Horizon weights
+  horizon_weights:
+    "5m": 0.4
+    "10m": 0.3
+    "15m": 0.2
+    "30m": 0.1
+    "60m": 0.0
+    
+  # Cost thresholds
+  cost_thresholds:
+    "5m": 0.002
+    "10m": 0.003
+    "15m": 0.004
+    "30m": 0.005
+    "60m": 0.006
+    
+  # Confidence thresholds
+  confidence_thresholds:
+    "5m": 0.8
+    "10m": 0.75
+    "15m": 0.7
+    "30m": 0.65
+    "60m": 0.6
+    
+  # Optimization
+  optimization:
+    method: "bayesian"
+    performance_metrics: ["sharpe", "sortino", "calmar"]
+    cost_penalty: 0.1
+    update_frequency: "daily"
+
+# Barrier Targets
+barrier:
+  # Entry/exit thresholds
+  block_peak: 0.60
+  block_y_peak: 0.60
+  prefer_valley: 0.55
+  exit_peak: 0.65
+  exit_valley: 0.65
+  min_alpha: 0.0
+  
+  # Position sizing
+  size_reduction_factor: 0.1
+  max_peak_risk: 0.9
+
+# Ensemble Configuration
+ensemble:
+  # Ridge regression
+  ridge_lambda: 0.15
+  
+  # Temperature compression
+  temp:
+    "5m": 0.75
+    "10m": 0.85
+    "15m": 0.90
+    "30m": 1.0
+    "60m": 1.0
+  
+  # Cost penalty
+  cost_lambda: 0.5
+  
+  # Bandit learning
+  bandit:
+    algorithm: "exp3ix"
+    gamma: 0.05
+    eta: 0.05
+    update_frequency: "per_trade"
+
+# Risk Management
+risk:
+  # Position limits
+  max_daily_loss: 0.02
+  max_drawdown: 0.15
+  max_weight_per_symbol: 0.25
+  max_gross_exposure: 0.5
+  order_rate_limit: 10
+  
+  # Kill switches
+  kill_switches:
+    enabled: true
+    max_daily_loss_dollars: 2000
+    max_daily_loss_pct: 2.0
+    max_gross_exposure_pct: 50.0
+    max_order_rate_per_minute: 10
+    max_unhandled_exceptions: 5
+
+# IBKR Connection
+ibkr:
+  host: 127.0.0.1
+  port: 7496  # Live trading port
+  client_id: 1
+  account: "your_account"
+  paper_trading: false
+  
+  # Connection settings
+  timeout: 30
+  retry_count: 3
+  retry_delay: 5
+  
+  # Data settings
+  market_data_type: 1  # Live data
+  historical_data_type: 1
+  real_time_bars: true
+  
+  # API Pacing
+  pacing:
+    msgs_per_s: 45
+    burst: 50
+    cancel_per_s: 10
+    data_requests_per_s: 20
+    
+  # Reconnection
+  reconnect:
+    backoff_s: [1, 2, 4, 8, 16, 32]
+    jitter_ms: 250
+    max_backoff_s: 60
+    heartbeat_interval_s: 5
+    reconnect_timeout_s: 30
+
+# Margin and What-If
+margin:
+  what_if: true
+  headroom_pct: 15
+  min_buying_power: 1000.0
+  max_margin_utilization: 0.85
+  what_if_timeout_s: 5
+
+# Short Sale Compliance
+short_sale:
+  require_borrow: true
+  enforce_ssr_price_test: true
+  min_shortable_shares: 100
+  max_borrow_rate: 0.20
+  ssr_price_test_buffer: 0.01
+  borrow_cache_ttl_s: 60
+  ssr_cache_ttl_s: 30
+
+# NBBO Sanity
+nbbo:
+  max_age_ms: 200
+  forbid_locked_crossed: true
+  min_spread_bps: 0.1
+  max_spread_bps: 50.0
+
+# Netting and Churn Suppression
+netting:
+  min_net_size: 0.1
+  max_churn_ratio: 0.3
+  hysteresis_pct: 0.05
+  netting_window_s: 30
+  max_intents_per_symbol: 10
+  alpha_threshold: 0.001
+
+# Trade Cost Analytics
+tca:
+  target_slippage_bps: 3
+  autotune_daily: true
+  adverse_selection_threshold: 0.5
+  impact_threshold: 0.002
+  update_frequency: "daily"
+  
+  # Autotuning parameters
+  autotune:
+    enter_bps_adjustment: 0.2
+    aggression_reduction: 0.1
+    cost_model_multipliers: true
+    performance_window_days: 5
+
+# Disaster Recovery
+disaster_recovery:
+  panic_file: "panic.flag"
+  on_panic: "flatten_all"
+  flatten_timeout_s: 60
+  emergency_contacts: ["admin@firm.com"]
+  
+  # Backup and recovery
+  backup:
+    enabled: true
+    frequency: "hourly"
+    retention_days: 7
+    backup_path: "backups/"
+    
+  # State recovery
+  state_recovery:
+    enabled: true
+    max_recovery_time_s: 300
+    checkpoint_interval_s: 60
+
+# Model Configuration
+models:
+  # Model families
+  families: [
+    "LightGBM", "XGBoost", "MLP", "TabCNN", "TabLSTM", "TabTransformer",
+    "RewardBased", "QuantileLightGBM", "NGBoost", "GMMRegime",
+    "ChangePoint", "FTRLProximal", "VAE", "GAN", "Ensemble", "MetaLearning"
+  ]
+  
+  # Horizons
+  horizons: ["5m", "10m", "15m", "30m", "60m"]
+  
+  # Model directory
+  model_dir: "models/tonight_16models_*"
+  
+  # Inference settings
+  batch_size: 1000
+  max_features: 500
+  feature_cache_size: 10000
+
+# Observability
+observability:
+  # Metrics
+  metrics:
+    enabled: true
+    backend: "prometheus"  # or "statsd"
+    port: 9090
+    path: "/metrics"
+    
+  # Logging
+  logging:
+    level: "INFO"
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    file: "logs/ibkr_trading.log"
+    max_size: "100MB"
+    backup_count: 5
+    
+  # Audit
+  audit:
+    enabled: true
+    decision_audit: true
+    order_audit: true
+    performance_audit: true
+    audit_path: "audit/"
+
+# Performance
+performance:
+  # Latency targets
+  max_inference_latency_ms: 350
+  max_decision_latency_ms: 500
+  max_order_latency_ms: 2000
+  
+  # Memory limits
+  max_memory_gb: 16
+  gc_threshold: 0.8
+  
+  # Threading
+  max_workers: 8
+  thread_pool_size: 16
+  
+  # Caching
+  feature_cache_size: 10000
+  model_cache_size: 100
+  cache_ttl_s: 300

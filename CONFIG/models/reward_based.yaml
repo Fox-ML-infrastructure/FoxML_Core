@@ -1,0 +1,40 @@
+# Reward-Based Learning Configuration
+# Reinforcement learning-inspired model for trading decisions
+
+model_family: "RewardBased"
+description: "Reward-based learning for sequential decision making"
+
+hyperparameters:
+  # Learning
+  learning_rate: 0.01
+  discount_factor: 0.95  # Gamma for future rewards
+  exploration_rate: 0.1  # Epsilon for epsilon-greedy
+  
+  # Network architecture
+  hidden_layers: [128, 64]
+  # activation: auto-injected from defaults (relu)
+  # dropout: auto-injected from defaults (0.2)
+  
+  # Training
+  epochs: 100
+  batch_size: 256
+  replay_buffer_size: 10000
+  update_frequency: 4  # Update target network every N steps
+
+# Variants
+variants:
+  conservative:
+    learning_rate: 0.005
+    exploration_rate: 0.05
+    discount_factor: 0.99
+    
+  balanced:
+    learning_rate: 0.01
+    exploration_rate: 0.1
+    discount_factor: 0.95
+    
+  aggressive:
+    learning_rate: 0.02
+    exploration_rate: 0.2
+    discount_factor: 0.9
+

@@ -1,0 +1,99 @@
+engine:
+  min_history_bars: 120
+  max_na_fraction: 0.05
+  rng_seed: 42
+
+walkforward:
+  fold_length: 252
+  step_size: 63
+  allow_truncated_final_fold: false
+
+data:
+  source: yfinance
+  auto_adjust: false
+  cache: true
+  returns:
+    type: percent
+
+risk:
+  pos_size_method: vol_target
+  vol_target: 0.15
+  max_drawdown: 0.20
+  daily_loss_limit: 0.03
+  max_leverage: 1.0
+  slippage_bps: 5
+  fee_bps: 1
+  max_gross_exposure: 1.0
+  max_position_pct: 1.0
+  rate_limit:
+    max_requests_per_minute: 120
+
+composer:
+  use_composer: true
+  regime_extractor: basic_kpis
+  blender: softmax_blender
+  min_history_bars: 120
+  hold_on_nan: true
+  params:
+    temperature: 1.0
+    trend_bias: 1.2
+    chop_bias: 1.1
+    min_confidence: 0.10
+
+tickers:
+  - SPY
+
+# Asset-class orchestration for composer (runtime)
+assets:
+  crypto:
+    eligible_strategies:
+      - mom_fast
+      - breakout_adx
+      - trend_follow_x
+    composer_params:
+      family: momentum-v3
+      temperature: 0.65
+      top_k: 2
+      min_conf: 0.62
+      tie_break: "vol_adj"
+  equity:
+    eligible_strategies:
+      - mean_rev_basic
+      - carry_blend
+      - momentum_balanced
+      - seasonal_edge
+    composer_params:
+      family: blend-v2
+      temperature: 0.85
+      top_k: 3
+      min_conf: 0.45
+      tie_break: "risk_first"
+  etf:
+    eligible_strategies:
+      - low_vol_carry
+      - mean_rev_basic
+    composer_params:
+      family: conservative-v1
+      temperature: 0.75
+      top_k: 2
+      min_conf: 0.50
+      tie_break: "sharpe_first"
+
+# Optional model runtime (feature-flagged)
+models:
+  enable: true
+  selected: "dummy_v1"
+  input_features: ["ret_1d", "ret_5d", "vol_10d"]
+  score_to_weight: "tanh"    # {linear|tanh|softmax}
+  max_abs_weight: 0.5
+  min_history_bars: 60
+
+observability:
+  thresholds:
+    sharpe_min: 0.5
+    drawdown_max: 0.3
+    winrate_min: 0.45
+    vol_max: 0.6
+  promotion:
+    require_schema: true
+    forbid_drift: true

@@ -1,0 +1,42 @@
+# Meta-Learning Configuration
+# Meta-learning for fast adaptation to new tasks/markets
+
+model_family: "MetaLearning"
+description: "Meta-learning for rapid adaptation across multiple tasks"
+
+hyperparameters:
+  # Meta-learning
+  inner_lr: 0.01  # Learning rate for task-specific adaptation
+  outer_lr: 0.001  # Meta-learning rate
+  n_inner_steps: 5  # Adaptation steps per task
+  
+  # Architecture
+  hidden_layers: [256, 128]
+  # activation: auto-injected from defaults (relu)
+  # dropout: auto-injected from defaults (0.2)
+  
+  # Training
+  meta_batch_size: 4  # Number of tasks per meta-update
+  epochs: 50
+  
+  # Task sampling
+  support_size: 32  # Support set size per task
+  query_size: 16  # Query set size per task
+
+# Variants
+variants:
+  few_shot:
+    support_size: 16
+    query_size: 8
+    n_inner_steps: 3
+    
+  balanced:
+    support_size: 32
+    query_size: 16
+    n_inner_steps: 5
+    
+  many_shot:
+    support_size: 64
+    query_size: 32
+    n_inner_steps: 10
+

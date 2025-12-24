@@ -1,0 +1,206 @@
+# IBKR Daily Model Test Configuration
+# Use this to test the IBKR stack with your current daily models
+# Later, swap to intraday models when they're trained
+
+# Model Configuration
+models:
+  # Daily model settings (current models)
+  daily:
+    enabled: true
+    horizons: [1]  # 1-day horizon for daily models
+    families: ["momentum", "mean_reversion", "volatility", "volume"]
+    model_path: "models/daily_models/"
+    inference_engine: "python"  # Use Python inference for daily models
+    
+  # Intraday model settings (future)
+  intraday:
+    enabled: false
+    horizons: [5, 10, 15, 30, 60]  # 5m, 10m, 15m, 30m, 60m horizons
+    families: ["momentum", "mean_reversion", "volatility", "volume", "microstructure"]
+    model_path: "models/intraday_models/"
+    inference_engine: "cpp"  # Use C++ inference for intraday models
+
+# Portfolio Configuration
+portfolio:
+  # Daily portfolio settings
+  max_positions: 20
+  position_size_method: "vol_target"
+  vol_target: 0.15  # 15% annual vol target
+  max_gross_exposure: 1.5
+  per_name_cap: 0.05  # 5% max per name for daily
+  
+  # Risk management
+  max_drawdown: 0.20
+  daily_loss_limit: 0.03
+  stop_loss_atr: 2.0
+
+# Rebalancing Configuration
+rebalancing:
+  # Daily rebalancing schedule
+  schedule: ["09:35", "15:45"]  # Open and close for daily models
+  no_trade_threshold: 0.01  # 1% NAV threshold
+  cost_threshold: 0.002  # 20 bps cost threshold
+  
+  # Rotation settings
+  rotation:
+    enabled: true
+    K: 20  # Top-K portfolio
+    K_buy: 18
+    K_sell: 24
+    z_keep: 0.8
+    z_cut: 0.2
+    delta_z_min: 0.25
+    
+    # Daily-specific settings
+    holding_period_min: 60  # Minimum 1 hour holding
+    max_holding_days: 5  # Maximum 5 days holding
+    rotation_cost_threshold: 0.001  # 10 bps rotation cost threshold
+
+# Execution Configuration
+execution:
+  # Daily execution settings
+  order_type: "LIMIT"
+  participation_cap: 0.10  # 10% of daily volume
+  max_slice_size: 0.05  # 5% of position per slice
+  
+  # Time-in-force
+  tif_seconds: 300  # 5 minutes for daily models
+  max_steps: 3
+  
+  # Execution algorithms
+  algorithms:
+    liquid: "VWAP"
+    illiquid: "TWAP"
+    small_cap: "ADAPTIVE"
+
+# Safety Guards
+safety:
+  # Daily-specific guards
+  pre_trade_checks:
+    enabled: true
+    spread_threshold: 0.005  # 50 bps max spread
+    volume_threshold: 100000  # Min daily volume
+    price_change_threshold: 0.20  # 20% max price change
+    
+  # Market hours
+  trading_hours:
+    start: "09:30"
+    end: "16:00"
+    pre_market: false
+    after_hours: false
+    
+  # Event filters
+  earnings_window: 2  # Days around earnings
+  news_window: 1  # Days around news
+  fomc_window: 1  # Days around FOMC
+
+# Data Configuration
+data:
+  # Daily data settings
+  source: "yfinance"
+  frequency: "1d"
+  lookback_days: 252  # 1 year of daily data
+  
+  # Features
+  features:
+    - "returns"
+    - "volatility"
+    - "volume"
+    - "momentum"
+    - "mean_reversion"
+    
+  # Data quality
+  min_data_points: 200
+  max_missing_pct: 0.05
+
+# IBKR Connection
+ibkr:
+  # Connection settings
+  host: "127.0.0.1"
+  port: 7497  # TWS port
+  client_id: 1
+  
+  # Account settings
+  account: "DU123456"  # Replace with your account
+  paper_trading: true  # Start with paper trading
+  
+  # API settings
+  timeout: 30
+  max_retries: 3
+  rate_limit: 50  # Requests per minute
+
+# Monitoring and Logging
+monitoring:
+  # Logging
+  log_level: "INFO"
+  log_file: "logs/ibkr_daily_test.log"
+  
+  # Metrics
+  metrics:
+    enabled: true
+    update_frequency: 60  # seconds
+    export_format: "json"
+    
+  # Alerts
+  alerts:
+    enabled: true
+    email: "your_email@example.com"
+    slack_webhook: "https://hooks.slack.com/your-webhook"
+    
+  # Health checks
+  health_check_interval: 300  # 5 minutes
+  max_latency_ms: 1000
+  max_memory_mb: 2048
+
+# Performance Settings
+performance:
+  # Daily model performance
+  batch_size: 10
+  max_workers: 2
+  cache_size: 1000
+  
+  # Memory management
+  max_memory_usage: 0.8  # 80% of available memory
+  gc_frequency: 300  # seconds
+  
+  # Caching
+  cache_models: true
+  cache_features: true
+  cache_ttl: 3600  # 1 hour
+
+# Testing Configuration
+testing:
+  # Backtesting
+  backtest_start: "2023-01-01"
+  backtest_end: "2024-01-01"
+  initial_capital: 100000
+  
+  # Paper trading
+  paper_trading:
+    enabled: true
+    initial_balance: 100000
+    commission: 0.001  # 10 bps commission
+    
+  # Simulation
+  simulation:
+    enabled: true
+    latency_ms: 100
+    slippage_bps: 5
+    market_impact_bps: 2
+
+# Model Switching Configuration
+model_switching:
+  # Easy switching between daily and intraday
+  current_mode: "daily"  # Change to "intraday" when ready
+  
+  # Model paths
+  daily_model_path: "models/daily_models/"
+  intraday_model_path: "models/intraday_models/"
+  
+  # Feature switching
+  daily_features: ["returns", "volatility", "volume", "momentum"]
+  intraday_features: ["returns", "volatility", "volume", "momentum", "microstructure", "barrier_targets"]
+  
+  # Horizon switching
+  daily_horizons: [1]
+  intraday_horizons: [5, 10, 15, 30, 60]

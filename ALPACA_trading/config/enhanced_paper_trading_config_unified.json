@@ -1,0 +1,190 @@
+{
+  "symbols": [
+    "SPY",
+    "AAPL",
+    "NVDA",
+    "GOOGL",
+    "MSFT",
+    "TSLA",
+    "AMZN",
+    "META",
+    "NFLX",
+    "GOOG",
+    "BTC-USD",
+    "ETH-USD",
+    "XRP-USD",
+    "DOGE-USD",
+    "SOL-USD",
+    "ADA-USD",
+    "DOT-USD",
+    "LINK-USD",
+    "BCH-USD",
+    "LTC-USD"
+  ],
+  "initial_capital": 100000,
+  "use_ibkr": true,
+  "shorting_enabled": true,
+  "close_positions_at_end": false,
+  "carry_positions_from_warmup": false,
+  "fast_mode": false,
+  "mode": "paper",
+  "strategy": "regime_aware_ensemble",
+  "risk_params": {
+    "max_gross_exposure_pct": 35.0,
+    "max_daily_loss_pct": 1.0,
+    "max_position_size_pct": 10.0,
+    "stop_loss_pct": 2.0,
+    "take_profit_pct": 4.0,
+    "max_leverage": 1.0,
+    "max_correlation": 0.7
+  },
+  "execution_params": {
+    "slippage_bps": 2,
+    "per_share_fee": 0.005,
+    "borrow_rate_annual": 0.06,
+    "commission_bps": 5,
+    "min_trade_size": 100
+  },
+  "ibkr_config": {
+    "paper_trading": true,
+    "host": "127.0.0.1",
+    "port": 7497,
+    "client_id": 12399,
+    "timeout": 20,
+    "max_retries": 3
+  },
+  "data_config": {
+    "use_cache": true,
+    "fallback_to_yfinance": true,
+    "cache_dir": "data/ibkr",
+    "default_duration": "1 Y",
+    "default_bar_size": "1 day",
+    "min_history_days": 252,
+    "warmup_days": 200
+  },
+  "strategy_params": {
+    "regime_aware_ensemble": {
+      "combination_method": "rolling_ic",
+      "confidence_threshold": 0.3,
+      "use_regime_switching": true,
+      "regime_lookback": 252,
+      "trend_lookback_multiplier": 1.2,
+      "chop_lookback_multiplier": 0.8,
+      "volatile_lookback_multiplier": 0.6,
+      "trend_following_weight": 0.6,
+      "mean_reversion_weight": 0.4,
+      "rolling_window": 60,
+      "min_periods": 30
+    }
+  },
+  "kill_switches": {
+    "enabled": true,
+    "max_daily_loss_pct": 2.0,
+    "max_daily_loss_dollars": 2000,
+    "max_drawdown_pct": 10.0,
+    "max_position_size_pct": 20.0,
+    "max_sector_exposure_pct": 30.0
+  },
+  "logging": {
+    "level": "INFO",
+    "file_rotation": true,
+    "max_file_size": "10MB",
+    "backup_count": 5,
+    "log_dir": "logs",
+    "trading_log_file": "logs/trading_bot.log",
+    "system_log_file": "logs/system/system.log",
+    "performance_log_file": "logs/performance/performance.log",
+    "trades_log_file": "logs/trades/trades.log",
+    "errors_log_file": "logs/errors/errors.log"
+  },
+  "notifications": {
+    "discord_enabled": false,
+    "webhook_url": "",
+    "bot_name": "Trading Bot",
+    "notification_level": "INFO",
+    "daily_summary": true,
+    "trade_alerts": true,
+    "error_alerts": true
+  },
+  "performance_tracking": {
+    "save_results": true,
+    "results_dir": "results",
+    "daily_summaries": true,
+    "trade_logging": true,
+    "metrics_calculation": {
+      "sharpe_ratio": true,
+      "max_drawdown": true,
+      "calmar_ratio": true,
+      "sortino_ratio": true,
+      "win_rate": true,
+      "profit_factor": true
+    },
+    "reporting": {
+      "daily_reports": true,
+      "weekly_reports": true,
+      "monthly_reports": true,
+      "performance_dashboard": true
+    }
+  },
+  "telemetry": {
+    "enabled": true,
+    "snapshot_interval_minutes": 15,
+    "metrics_collection": {
+      "portfolio_metrics": true,
+      "system_metrics": true,
+      "performance_metrics": true,
+      "risk_metrics": true
+    },
+    "alerting": {
+      "high_cpu_usage": 80,
+      "high_memory_usage": 80,
+      "disk_space_warning": 90,
+      "connection_timeout": 30
+    }
+  },
+  "feature_engineering": {
+    "enabled": true,
+    "feature_cache": true,
+    "cache_dir": "results/features",
+    "feature_groups": {
+      "trend_features": true,
+      "momentum_features": true,
+      "mean_reversion_features": true,
+      "volatility_features": true,
+      "volume_features": true,
+      "regime_features": true
+    },
+    "feature_selection": {
+      "method": "correlation",
+      "threshold": 0.8,
+      "max_features": 50
+    }
+  },
+  "walk_forward": {
+    "enabled": true,
+    "train_days": 252,
+    "test_days": 63,
+    "stride_days": 21,
+    "warmup_days": 50,
+    "min_test_days": 30,
+    "validation_method": "time_series_split",
+    "metric_optimization": "sharpe_ratio",
+    "ensemble_method": "weighted_average"
+  },
+  "backtesting": {
+    "enabled": true,
+    "start_date": "2020-01-01",
+    "end_date": "2024-12-31",
+    "initial_capital": 100000,
+    "commission_bps": 5,
+    "slippage_bps": 2,
+    "benchmark_symbol": "SPY",
+    "risk_free_rate": 0.02,
+    "rebalance_frequency": "daily",
+    "position_sizing": {
+      "method": "kelly_criterion",
+      "max_position_size": 0.1,
+      "min_position_size": 0.01
+    }
+  }
+}

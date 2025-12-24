@@ -1,0 +1,45 @@
+# NGBoost Configuration
+# Natural Gradient Boosting for probabilistic prediction
+
+model_family: "NGBoost"
+description: "NGBoost for probabilistic forecasting with natural gradients"
+
+hyperparameters:
+  # NGBoost specific
+  n_estimators: 500
+  learning_rate: 0.01
+  minibatch_frac: 1.0
+  
+  # Distribution
+  dist: "Normal"  # or "LogNormal", "Exponential"
+  
+  # Base learner (decision tree)
+  base_learner:
+    max_depth: 5
+    min_samples_split: 10
+    min_samples_leaf: 5
+  
+  # Performance
+  verbose: false
+  tol: 0.0001
+
+# Variants
+variants:
+  conservative:
+    n_estimators: 300
+    learning_rate: 0.005
+    base_learner:
+      max_depth: 3
+      
+  balanced:
+    n_estimators: 500
+    learning_rate: 0.01
+    base_learner:
+      max_depth: 5
+      
+  aggressive:
+    n_estimators: 1000
+    learning_rate: 0.02
+    base_learner:
+      max_depth: 7
+

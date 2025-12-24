@@ -1,0 +1,35 @@
+{
+  "initial_capital": 100000,
+  "max_position_size": 0.1,
+  "symbols": [
+    "SPY",
+    "QQQ",
+    "IWM",
+    "AAPL",
+    "MSFT",
+    "GOOGL",
+    "NVDA",
+    "TSLA"
+  ],
+  "strategies": [
+    "ensemble_basic",
+    "ensemble_regime",
+    "ensemble_conservative",
+    "sma_crossover",
+    "momentum",
+    "mean_reversion"
+  ],
+  "test_duration_weeks": 8,
+  "rebalance_frequency": "daily",
+  "risk_management": {
+    "max_drawdown": 0.15,
+    "stop_loss": 0.05,
+    "take_profit": 0.15
+  },
+  "logging": {
+    "level": "INFO",
+    "save_signals": true,
+    "save_trades": true,
+    "save_performance": true
+  }
+}

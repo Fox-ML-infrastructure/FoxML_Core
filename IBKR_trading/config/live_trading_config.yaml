@@ -1,0 +1,222 @@
+# Live Trading Configuration
+# ========================
+# Configuration for the complete live trading system
+
+live_trading:
+  # System settings
+  rebalance_frequency: 300  # seconds (5 minutes)
+  lookback_T: 60            # sequence length for sequential models
+  num_features: 50          # number of features
+  ttl_seconds: 300          # time-to-live for buffer data
+  
+  # Horizons to use
+  horizons: ['5m', '15m', '30m', '60m', '1d']
+  
+  # Model blending weights (OOF-trained)
+  blend_weights:
+    '5m':
+      LightGBM: 0.3
+      XGBoost: 0.25
+      CNN1D: 0.2
+      LSTM: 0.15
+      Transformer: 0.1
+    '15m':
+      LightGBM: 0.35
+      XGBoost: 0.3
+      CNN1D: 0.2
+      LSTM: 0.15
+    '30m':
+      LightGBM: 0.4
+      XGBoost: 0.3
+      CNN1D: 0.2
+      LSTM: 0.1
+    '60m':
+      LightGBM: 0.45
+      XGBoost: 0.35
+      CNN1D: 0.2
+    '1d':
+      LightGBM: 0.5
+      XGBoost: 0.3
+      MLP: 0.2
+  
+  # Barrier gating
+  barrier_gate:
+    g_min: 0.2              # minimum gate value
+    gamma: 1.0              # peak probability exponent
+    delta: 0.5               # valley probability exponent
+    use_horizon_specific: false  # use same barriers for all horizons
+  
+  # Cost model
+  cost_model:
+    k1: 0.5                 # spread cost coefficient
+    k2: 0.3                 # volatility cost coefficient
+    k3: 0.1                 # participation cost coefficient
+    use_adaptive_costs: true # use adaptive cost adjustment
+  
+  # Horizon arbitration
+  arbitration:
+    mode: 'winner'          # 'winner' or 'softmax'
+    softmax_beta: 2.0       # softmax temperature
+    timing_penalty_k: 0.1   # timing penalty coefficient
+  
+  # Position sizing
+  position_sizing:
+    z_max: 3.0              # maximum z-score
+    max_weight: 0.05        # maximum single position weight
+    gross_target: 0.5       # target gross exposure
+    no_trade_band: 0.008    # no-trade band (0.8% NAV)
+    use_risk_parity: false  # use risk parity
+    ridge_lambda: 0.01      # ridge regularization
+  
+  # Advanced features
+  advanced:
+    use_sector_neutral: false    # sector neutralization
+    use_momentum_tilt: false     # momentum tilt
+    use_market_impact: false     # market impact adjustment
+    use_liquidity_adjustment: false  # liquidity adjustment
+  
+  # Validation
+  validation:
+    max_gross: 1.0          # maximum gross exposure
+    max_net: 0.1            # maximum net exposure
+    max_single_weight: 0.1  # maximum single position weight
+
+# Model-specific settings
+models:
+  # Sequential models
+  CNN1D:
+    hidden_dims: [128, 64]
+    dropout: 0.3
+    kernel_size: 5
+  
+  LSTM:
+    hidden_dim: 128
+    num_layers: 2
+    dropout: 0.3
+    bidirectional: false
+  
+  Transformer:
+    d_model: 128
+    nhead: 8
+    num_layers: 3
+    dropout: 0.1
+  
+  TabLSTM:
+    tabular_dim: 32
+    lstm_hidden: 128
+    dropout: 0.3
+  
+  TabTransformer:
+    tabular_dim: 32
+    d_model: 128
+    nhead: 8
+    num_layers: 3
+    dropout: 0.1
+  
+  # Tabular models
+  LightGBM:
+    num_leaves: 31
+    learning_rate: 0.05
+    feature_fraction: 0.9
+  
+  XGBoost:
+    max_depth: 6
+    learning_rate: 0.05
+    subsample: 0.8
+  
+  MLP:
+    hidden_dims: [128, 64]
+    dropout: 0.3
+    activation: 'relu'
+
+# Risk management
+risk:
+  # Position limits
+  max_position_size: 0.05   # 5% max position
+  max_sector_exposure: 0.2  # 20% max sector exposure
+  
+  # Turnover limits
+  max_turnover: 0.3         # 30% max turnover per rebalance
+  max_daily_turnover: 1.0   # 100% max daily turnover
+  
+  # Volatility limits
+  max_portfolio_vol: 0.15   # 15% max portfolio volatility
+  vol_lookback: 20          # days for volatility calculation
+  
+  # Drawdown limits
+  max_drawdown: 0.1         # 10% max drawdown
+  drawdown_lookback: 30     # days for drawdown calculation
+
+# Execution settings
+execution:
+  # Order management
+  order_type: 'MKT'         # market orders
+  time_in_force: 'DAY'      # day orders
+  
+  # Slippage model
+  slippage_model: 'linear'  # linear slippage model
+  slippage_rate: 0.001      # 0.1% slippage rate
+  
+  # Execution delays
+  order_delay: 0.1          # 100ms order delay
+  confirmation_delay: 0.5    # 500ms confirmation delay
+
+# Data settings
+data:
+  # Data sources
+  price_source: 'IBKR'      # Interactive Brokers
+  fundamental_source: 'Yahoo'  # Yahoo Finance
+  
+  # Data frequency
+  price_frequency: '1min'    # 1-minute prices
+  fundamental_frequency: '1d'  # daily fundamentals
+  
+  # Data validation
+  max_price_change: 0.1     # 10% max price change
+  min_volume: 1000          # minimum volume
+  max_spread: 0.01          # 1% max spread
+
+# Logging settings
+logging:
+  level: 'INFO'             # logging level
+  log_predictions: true      # log model predictions
+  log_positions: true        # log position changes
+  log_trades: true          # log trade executions
+  log_performance: true      # log performance metrics
+  
+  # Log files
+  log_file: 'logs/live_trading.log'
+  performance_file: 'logs/performance.log'
+  trade_file: 'logs/trades.log'
+
+# Performance monitoring
+monitoring:
+  # Metrics to track
+  track_returns: true
+  track_volatility: true
+  track_sharpe: true
+  track_drawdown: true
+  track_turnover: true
+  
+  # Reporting
+  report_frequency: '1h'     # hourly reports
+  report_file: 'reports/performance_report.html'
+  
+  # Alerts
+  alert_on_drawdown: true
+  alert_threshold: 0.05     # 5% drawdown alert
+  alert_email: 'trader@example.com'
+
+# Backtesting settings
+backtesting:
+  # Test period
+  start_date: '2023-01-01'
+  end_date: '2023-12-31'
+  
+  # Test parameters
+  initial_capital: 1000000   # $1M initial capital
+  transaction_cost: 0.001    # 0.1% transaction cost
+  
+  # Performance metrics
+  benchmark: 'SPY'          # S&P 500 benchmark
+  risk_free_rate: 0.02     # 2% risk-free rate

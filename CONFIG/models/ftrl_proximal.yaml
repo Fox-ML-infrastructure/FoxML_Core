@@ -1,0 +1,38 @@
+# FTRL-Proximal Configuration
+# Follow-The-Regularized-Leader with proximal updates for online learning
+
+model_family: "FTRLProximal"
+description: "FTRL-Proximal for online learning with sparse solutions"
+
+hyperparameters:
+  # FTRL parameters
+  alpha: 0.01  # Learning rate
+  beta: 1.0  # Smoothing parameter
+  l1: 1.0  # L1 regularization
+  l2: 1.0  # L2 regularization
+  
+  # Online learning
+  n_iterations: 1  # Number of passes through data
+  batch_size: 1  # Online (1) or mini-batch (>1)
+  
+  # Feature hashing (optional)
+  use_hashing: false
+  n_features_hash: 2**20  # Hash space size if using hashing
+
+# Variants
+variants:
+  sparse:
+    l1: 2.0
+    l2: 0.5
+    alpha: 0.005
+    
+  balanced:
+    l1: 1.0
+    l2: 1.0
+    alpha: 0.01
+    
+  dense:
+    l1: 0.1
+    l2: 2.0
+    alpha: 0.02
+

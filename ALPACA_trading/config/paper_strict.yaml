@@ -1,0 +1,12 @@
+risk:
+  slippage_bps: 10
+  fee_bps: 1
+  max_leverage: 1.0
+  max_gross_exposure: 0.8
+  max_position_pct: 0.5
+paper:
+  weight_spike_cap: 0.2
+  turnover_cap: 0.8
+models:
+  enable: true
+

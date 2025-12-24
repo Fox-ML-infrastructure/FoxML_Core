@@ -1,0 +1,131 @@
+{
+  "symbols": [
+    "SPY",
+    "AAPL",
+    "NVDA",
+    "GOOGL",
+    "MSFT",
+    "TSLA",
+    "AMZN",
+    "META",
+    "NFLX",
+    "GOOG",
+    "BTC-USD",
+    "ETH-USD",
+    "XRP-USD",
+    "DOGE-USD",
+    "SOL-USD",
+    "ADA-USD",
+    "DOT-USD",
+    "LINK-USD",
+    "BCH-USD",
+    "LTC-USD"
+  ],
+  "initial_capital": 100000,
+  "use_ibkr": true,
+  "shorting_enabled": true,
+  "close_positions_at_end": false,
+  "carry_positions_from_warmup": false,
+  "fast_mode": false,
+  "mode": "paper",
+  "objective": {
+    "type": "log_utility",
+    "kelly_cap_fraction": 0.25,
+    "risk_aversion_lambda": 3.0,
+    "downside_lambda": 2.0,
+    "volatility_adjustment": true,
+    "performance_lookback_days": 30
+  },
+  "risk_params": {
+    "max_gross_exposure_pct": 50.0,
+    "max_daily_loss_pct": 2.0,
+    "max_position_size": 0.15,
+    "max_drawdown_pct": 15.0,
+    "stop_loss_pct": 3.0,
+    "take_profit_pct": 6.0,
+    "volatility_target": 0.20,
+    "max_correlation": 0.7,
+    "position_sizing_method": "kelly_optimal",
+    "kelly_fraction": 0.25,
+    "dynamic_position_sizing": true
+  },
+  "execution_params": {
+    "slippage_bps": 2,
+    "per_share_fee": 0.005,
+    "borrow_rate_annual": 0.06,
+    "min_notional": 100,
+    "max_spread_pct": 0.5
+  },
+  "ibkr_config": {
+    "paper_trading": true,
+    "host": "127.0.0.1",
+    "port": 7497,
+    "client_id": 12399,
+    "timeout": 20,
+    "max_retries": 3
+  },
+  "data_config": {
+    "use_cache": true,
+    "fallback_to_yfinance": true,
+    "cache_dir": "data/ibkr",
+    "default_duration": "1 Y",
+    "default_bar_size": "1 day"
+  },
+  "strategy_params": {
+    "regime_aware_ensemble": {
+      "combination_method": "rolling_ic",
+      "confidence_threshold": 0.3,
+      "use_regime_switching": true,
+      "regime_lookback": 252,
+      "trend_lookback_multiplier": 1.2,
+      "chop_lookback_multiplier": 0.8,
+      "volatile_lookback_multiplier": 0.6,
+      "trend_following_weight": 0.6,
+      "mean_reversion_weight": 0.4,
+      "rolling_window": 60,
+      "min_periods": 30
+    }
+  },
+  "logging": {
+    "level": "INFO",
+    "file_rotation": true,
+    "max_file_size": "10MB",
+    "backup_count": 5
+  },
+  "notifications": {
+    "discord_enabled": false,
+    "webhook_url": "",
+    "bot_name": "Trading Bot"
+  },
+  "ml_selector": {
+    "enabled": true,
+    "epsilon": 0.1
+  },
+  "alt_data": {
+    "enabled": false,
+    "providers": []
+  },
+  "realtime": {
+    "enabled": true,
+    "rebalance_threshold_vol_pct": 25,
+    "regime_hysteresis_steps": 3
+  },
+  "alerts": {
+    "enabled": true,
+    "sinks": ["console"],
+    "webhook_url": "",
+    "rules": [
+      {"name": "max_drawdown_breach", "when": "risk.max_drawdown_pct > config.risk_params.max_drawdown_pct"},
+      {"name": "daily_loss_limit", "when": "risk.daily_loss_pct > config.risk_params.max_daily_loss_pct"},
+      {"name": "selector_flip_flop", "when": "selector.switches_1h > 3"},
+      {"name": "fill_anomaly", "when": "exec.slippage_bps > 50"}
+    ]
+  },
+  "performance_tracking": {
+    "save_results": true,
+    "results_dir": "results",
+    "daily_summaries": true,
+    "trade_logging": true,
+    "growth_target_tracking": false
+  }
+}

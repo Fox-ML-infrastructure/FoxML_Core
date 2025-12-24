@@ -1,0 +1,56 @@
+{
+  "completed_items": {
+    "peak_60m": {
+      "target_name": "peak_60m",
+      "target_column": "y_will_peak_60m_0.8",
+      "task_type": "BINARY_CLASSIFICATION",
+      "mean_score": 0.7706979441213638,
+      "std_score": 0.31349159786685377,
+      "mean_r2": 0.7706979441213638,
+      "std_r2": 0.31349159786685377,
+      "mean_importance": 0.5964546256778269,
+      "consistency": 0.5932372812262638,
+      "n_models": 10,
+      "model_scores": {
+        "lightgbm": 0.9738917562793195,
+        "random_forest": 0.9711550477458399,
+        "neural_network": 0.9622691478513764,
+        "xgboost": 0.9734755566325318,
+        "catboost": 0.9737494981717778,
+        "mutual_information": 0.17777083454468265,
+        "univariate_selection": 0.2523437487453673,
+        "rfe": 0.9704416666056297,
+        "boruta": 0.9689362449743545,
+        "stability_selection": 0.4829459396627595
+      },
+      "composite_score": 0.9236882717466088,
+      "leakage_flag": "HIGH_SCORE",
+      "fold_timestamps": [
+        {
+          "fold_idx": 1,
+          "train_start": {},
+          "train_end": {},
+          "test_start": {},
+          "test_end": {},
+          "train_samples": 83145,
+          "test_samples": 83227
+        },
+        {
+          "fold_idx": 2,
+          "train_start": {},
+          "train_end": {},
+          "test_start": {},
+          "test_end": {},
+          "train_samples": 166370,
+          "test_samples": 83226
+        }
+      ]
+    }
+  },
+  "failed_items": [],
+  "metadata": {
+    "last_saved": 1764076001.8289404,
+    "n_completed": 1,
+    "n_failed": 0
+  }
+}

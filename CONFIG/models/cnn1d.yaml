@@ -1,0 +1,39 @@
+# CNN1D Model Configuration
+# 1D Convolutional Neural Network for sequential data
+
+model_family: "CNN1D"
+description: "1D CNN for time-series feature extraction"
+
+hyperparameters:
+  # Training
+  epochs: 50
+  batch_size: 512
+  # patience: auto-injected from defaults (10)
+  learning_rate: 0.001
+  
+  # Architecture
+  filters: 64
+  kernel_size: 3
+  pool_size: 2
+  # dropout: auto-injected from defaults (0.2)
+  
+  # Sequence
+  sequence_length: null  # Auto-detected from input
+
+# Variants
+variants:
+  small:
+    filters: 32
+    kernel_size: 3
+    dropout: 0.1
+    
+  medium:
+    filters: 64
+    kernel_size: 3
+    dropout: 0.2
+    
+  large:
+    filters: 128
+    kernel_size: 5
+    dropout: 0.3
+

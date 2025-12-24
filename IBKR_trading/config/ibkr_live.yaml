@@ -1,0 +1,146 @@
+# IBKR Live Trading Configuration
+# Production configuration for live intraday trading
+
+# IBKR Connection
+ibkr:
+  host: 127.0.0.1
+  port: 7496  # Live trading port (7497 for paper)
+  client_id: 1
+  account: "your_account"
+  paper_trading: false
+  
+  # Connection settings
+  timeout: 30
+  retry_count: 3
+  retry_delay: 5
+  
+  # API Pacing
+  pacing:
+    msgs_per_s: 45
+    burst: 50
+    cancel_per_s: 10
+    data_requests_per_s: 20
+    
+  # Reconnection
+  reconnect:
+    backoff_s: [1, 2, 4, 8, 16, 32]
+    jitter_ms: 250
+    max_backoff_s: 60
+    heartbeat_interval_s: 5
+    reconnect_timeout_s: 30
+
+# Trading Configuration
+symbols: ["AAPL", "MSFT", "TSLA", "GOOGL", "AMZN"]
+horizons: ["5m", "10m", "15m", "30m", "60m"]
+families: [
+  "LightGBM", "XGBoost", "MLP", "TabCNN", "TabLSTM", "TabTransformer",
+  "RewardBased", "QuantileLightGBM", "NGBoost", "GMMRegime",
+  "ChangePoint", "FTRLProximal", "VAE", "GAN", "Ensemble", "MetaLearning"
+]
+
+# Model Configuration
+model_dir: "models/tonight_16models_*"
+ensemble_weights: "ensemble_weights.json"
+decision_weights: "decision_weights.json"
+
+# Trading Loop
+cadence_seconds: 300  # 5 minutes
+reconcile:
+  run_every_s: 60
+
+# Safety Configuration
+safety:
+  max_quote_ms: 200
+  max_spread_bps: 12.0
+  min_1m_adv: 50000.0
+  open_blackout_s: 180
+  close_blackout_s: 120
+  max_daily_loss_pct: 2.0
+  max_gross_exposure_pct: 50.0
+
+# Risk Management
+risk:
+  max_weight_per_symbol: 0.25
+  max_gross_exposure: 0.5
+  max_daily_loss: 0.02
+  max_drawdown: 0.15
+  order_rate_limit: 10
+
+# Decision Optimization
+decision_optimization:
+  thresholds:
+    enter_bps: 2.0
+    confidence_min: 0.6
+    cost_threshold: 0.5
+  
+  ensemble:
+    ridge_lambda: 0.15
+    temp_5m: 0.75
+    temp_10m: 0.85
+    cost_lambda: 0.5
+  
+  barrier:
+    block_peak: 0.60
+    block_y_peak: 0.60
+    prefer_valley: 0.55
+    min_alpha: 0.0
+  
+  execution:
+    tif_5m: 15
+    tif_10m: 25
+    min_fill_rate: 0.4
+    max_steps: 2
+
+# Prefiltering
+prefilter:
+  top_k: 20
+  min_score_bps: 2.0
+  max_cost_ratio: 0.7
+
+# Cost Model
+costs:
+  slippage:
+    model: "linear"
+    base_rate: 0.0001
+    volume_impact: 0.00005
+    volatility_multiplier: 1.5
+    
+  fees:
+    commission_per_share: 0.005
+    commission_minimum: 1.0
+    data_fees: 0.0
+    regulatory_fees: 0.000119
+
+# Health Monitoring
+health:
+  window_size: 600
+  ic_min_ewma: 0.01
+  reliability_min: 0.6
+  net_edge_min_bps: 0.0
+  max_broker_latency_ms: 700
+  max_exception_count: 5
+  kill_file: "panic.flag"
+
+# Kill Switches
+kill_switches:
+  enabled: true
+  max_daily_loss_dollars: 2000
+  max_daily_loss_pct: 2.0
+  max_gross_exposure_pct: 50.0
+  max_order_rate_per_minute: 10
+  max_unhandled_exceptions: 5
+
+# Trade Cost Analytics
+tca:
+  target_slippage_bps: 3
+  autotune_daily: true
+  adverse_selection_threshold: 0.5
+  impact_threshold: 0.002
+  update_frequency: "daily"
+
+# Disaster Recovery
+dr:
+  panic_file: "panic.flag"
+  on_panic: "flatten_all"
+  flatten_timeout_s: 60
+  emergency_contacts: ["admin@firm.com"]
