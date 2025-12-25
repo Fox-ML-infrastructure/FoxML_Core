@@ -1,0 +1,524 @@
+# FOX ML INFRASTRUCTURE — COMMERCIAL LICENSE v1.0
+Copyright (c) 2025-2026 Fox ML Infrastructure LLC
+
+> **Note:** This Commercial License is provided for informational purposes and may be supplemented or modified by a separate signed agreement. Licensor is not providing legal advice; Licensee should consult its own counsel before entering into this License.
+
+---
+
+## ⚠️ **DUAL LICENSING: AGPL v3 + COMMERCIAL**
+
+**FoxML Core is dual-licensed:**
+- **AGPL v3** for open research, experimentation, and projects that can comply with AGPL copyleft requirements
+- **Commercial license** required for proprietary, internal, or production deployments where AGPL compliance is not possible
+
+**📋 Strategic Licensing Roadmap:** v1.x is the last fully open window. Core training infrastructure remains open; production orchestration layer will require commercial license in v2.0+. See `LEGAL/ROADMAP_BOUNDARIES.md` for complete details.
+
+**Commercial License Required For:**
+- Proprietary internal use
+- Production trading systems
+- Closed-source integrations
+- Hosted services where you cannot comply with AGPL source disclosure requirements
+- Any deployment where modifications must remain private
+
+**AGPL v3 Use:**
+- Open research and experimentation
+- Projects that can comply with AGPL copyleft (must publish modifications if deployed as a service)
+- Individual researchers and developers
+- Open-source contributors
+
+**Note:** If you deploy AGPL-licensed software as a service (including internal services), you must publish your modifications under AGPL v3 unless you have a commercial license. This is not legal advice; see `LICENSE` and this document for complete terms.
+
+📧 **jenn.lewis5789@gmail.com** | Subject: `FoxML Core Commercial Licensing`
+
+**Commercial licensing is per team/desk and starts at $120,000/year. Evaluation: 30-day $0 evaluation (strict limits), then paid Pilot ($35k) required for continued evaluation.** Fees are specified in Ordering Documents. See `LEGAL/QUICK_REFERENCE.md` for pricing summary and `LEGAL/SUBSCRIPTIONS.md` for details.
+
+---
+
+**Who This License Is For**
+
+This Commercial License is intended for organizations (including companies, universities, labs, and institutions) that wish to use FoxML Core for organizational purposes.
+
+## 1. DEFINITIONS
+
+"Software" refers to the FoxML Core codebase, modules, configurations, models, documentation, and all included assets, excluding third-party components governed by their own licenses.
+
+"Licensee" refers to the individual or organization obtaining rights under this License.
+
+"Authorized Users" means employees and individual contractors of Licensee who are permitted by Licensee to use the Software on Licensee's behalf, up to any seat limits specified in the Ordering Documents.
+
+"Ordering Documents" means one or more Order Forms or Statements of Work executed by the parties that specify fees, term length, payment schedule, seat limits, and other commercial terms.
+
+"Effective Date" means the earlier of (a) the date payment is received by Licensor, or (b) the date this License is executed by both parties.
+
+"Affiliate" means any entity that directly or indirectly Controls, is Controlled by, or is under common Control with a party, where "Control" means ownership of more than fifty percent (50%) of the voting interests of such entity or the contractual power to direct its management and policies.
+
+"Direct Competitor" means any third party whose primary business (meaning more than fifty percent (50%) of its revenue or business activities) includes developing, licensing, or providing machine learning or quantitative trading infrastructure products or services that are substantially similar to the Software (for example, commercial platforms primarily marketed as quantitative research, ML pipeline, or trading infrastructure solutions). For the avoidance of doubt, a company that uses the Software internally for its own trading or research activities is not a Direct Competitor solely by virtue of such internal use.
+
+"Major Version" means a release of the Software identified by a change in the first digit of the version number (e.g., 1.x to 2.0).
+
+"Minor Version" means a release identified by a change in the second digit (e.g., 1.1 to 1.2) or subsequent maintenance or patch releases.
+
+"Material Breach" means a breach that is significant, substantial, or has a material adverse effect on the other party's rights or interests under this License, including but not limited to: unauthorized distribution, reverse engineering, benchmarking without consent, or use in violation of export controls.
+
+"Competing Infrastructure Service" means any software, platform, hosted service, or product whose primary purpose is to allow third parties to design, run, or manage their own machine learning, quantitative research, or trading workflows, including experiment orchestration, feature/target management, model training, evaluation, and related infrastructure.
+
+"Commercial Use" means any use of the Software by or for the benefit of a business, organization, or other legal entity, including:
+
+(a) internal use in any environment (development, testing, staging, or production), including but not limited to: operational tools, dashboards, research pipelines, proofs of concept, evaluations, pilot projects, or experimental use;
+
+(b) use that directly or indirectly supports revenue-generating activities, products, or services, including but not limited to: trading, investment analysis, financial decision-making, client services, or any for-profit activity; or
+
+(c) use by employees, contractors, interns, or Affiliates in the scope of their work for such entity, regardless of whether such use directly generates revenue or is labeled as "non-revenue," "experimental," or "research-only."
+
+**Examples of Commercial Use include (but are not limited to):** internal tools, dashboards, research pipelines, trading systems, investment analysis, forecasting, modeling, optimization, client services, proofs of concept, evaluations, pilot projects, development environments, testing environments, staging environments, production environments, and any use within a business or organizational context.
+
+AGPL v3 use is available for open research, experimentation, and projects that can comply with AGPL copyleft requirements. Any use that requires proprietary deployment or cannot comply with AGPL source disclosure requirements requires this Commercial License, regardless of whether the environment is labeled "non-production," "evaluation," "pilot," "experimental," "non-revenue," or similar.
+
+**Note:** If you deploy AGPL-licensed software as a service (including internal services), you must publish your modifications under AGPL v3 unless you have a commercial license. This is not legal advice; see `LICENSE` and this document for complete terms.
+
+This Commercial License is required for any proprietary, internal, or production deployment where AGPL compliance is not possible. AGPL v3 use is available for open research and projects that can comply with AGPL copyleft requirements.
+
+**License Scope and Expansion.**
+This License covers the use case(s) and scope specified in the Ordering Documents. If Licensee expands its use of the Software beyond the scope originally licensed (for example: adding new use cases, expanding to additional business units, increasing seat count beyond purchased Seats, or changing deployment model), Licensee must notify Licensor and may be required to pay additional fees or obtain an amended license. Expansion of use without proper licensing constitutes a Material Breach.
+
+## 2. GRANT OF LICENSE
+
+**Evaluation License.**
+
+**Organizational evaluation options:**
+
+1. **30-Day Evaluation ($0):** Organizations may evaluate the Software for 30 days without a paid license, subject to strict limitations:
+   - Non-production use only (no client deliverables, no revenue-generating activities)
+   - No redistribution or sharing with third parties
+   - Evaluation purposes only
+   - Must request in writing (subject to approval)
+   - **Each organization (including Affiliates) is limited to one 30-day evaluation period. Repeated evaluation requests from the same organization, related entities, or entities under common control are not permitted.**
+
+2. **Paid Pilot:** Organizations may execute a Pilot Order Form and pay applicable Pilot fees ($35,000) for extended evaluation (4–6 weeks). Pilot fees are credited 100% toward the first-year Annual License if converted within 60 days.
+
+3. **AGPL Use:** Projects that can comply with AGPL v3 copyleft requirements may use FoxML Core under AGPL without a commercial license. If you deploy AGPL-licensed software as a service, you must publish your modifications under AGPL v3 unless you have a commercial license.
+
+**If you're a legal entity, you need a license for continued use beyond the 30-day evaluation period.**
+
+**Pilot License:**
+Upon execution of a Pilot Order Form and payment of Pilot fees, Licensor grants Licensee a temporary, non-exclusive license to use the Software for Internal Commercial Use solely for the purpose of evaluation and testing for the period specified in the Pilot Order Form (typically 4–6 weeks).
+
+During the Pilot Period, Licensee may:
+- Use the Software for internal evaluation, testing, and proof-of-concept purposes
+- Deploy the Software in development, testing, or staging environments
+- Evaluate the Software's functionality, performance, and suitability for Licensee's business needs
+- Receive Pilot deliverables as specified in the Pilot Order Form (e.g., installation support, integration plan, reproducibility baseline, leakage safety verification)
+
+**Pilot Period Limitations:**
+- The Pilot Period is limited to the duration specified in the Pilot Order Form
+- Use during the Pilot Period is limited to evaluation and testing purposes only
+- Production use, revenue-generating activities, or use beyond the Pilot Period requires a paid Commercial License
+- Pilot fees are non-refundable but credited 100% toward the first-year Annual License if converted within 60 days of Pilot completion
+- Licensee must comply with all other terms of this License (including restrictions in Section 4) during the Pilot Period
+
+**Transition to Paid License:**
+If Licensee continues to use the Software after the Pilot Period, Licensee must execute an Annual License and pay applicable fees. Continued use after the Pilot Period without a valid Commercial License constitutes unlicensed use and may result in copyright infringement claims and liability for retroactive licensing fees.
+
+**Commercial License (After Evaluation Period).**
+
+Subject to payment of applicable fees and execution of a commercial agreement, the Licensor grants the Licensee a non-exclusive, non-transferable, non-sublicensable, worldwide right to:
+
+- Use the Software for Commercial Use
+- Modify the Software for internal commercial use (subject to the restrictions in Section 4), provided that: (i) modifications must remain for Licensee's internal use only and may not be redistributed, (ii) Licensee may not publicly redistribute or publish modified versions of the Software's core functionality, algorithms, or architecture, and (iii) any modifications that Licensee wishes to redistribute publicly require Licensor's prior written consent
+- Deploy the Software internally
+- Integrate the Software into proprietary systems, stacks, or workflows
+- Use the Software solely for use by Authorized Users, up to the limits set forth in the applicable Ordering Documents
+
+**Source code access.**
+
+Source code is publicly available for inspection and study. This Commercial License does not obligate Licensor to provide additional source access, private repositories, or proprietary modules unless explicitly included in Ordering Documents or a separate SOW.
+
+**Authorized Users and Seat Limits.**
+
+Use of the Software is limited to the number and type of Authorized Users specified in the applicable Ordering Document ("Seats"). Licensee shall ensure that only Authorized Users use the Software and that such use does not exceed the purchased Seats.
+
+If Licensee exceeds the purchased Seats, Licensor may (without limiting its other rights and remedies) invoice Licensee for the excess usage at Licensor's standard rates in effect at the time of the excess usage, and Licensee shall pay such invoice within thirty (30) days. Repeated or material excess usage (exceeding purchased Seats by more than ten percent (10%) for more than thirty (30) consecutive days) constitutes a Material Breach and grounds for termination under Section 5.
+
+**External Contractors.**
+
+Authorized Users may include Licensee's employees and individual contractors (including individual consultants) who are engaged by Licensee and acting solely for Licensee's benefit ("Contractors"), provided that:
+
+(a) each Contractor is bound by written obligations of confidentiality and use restrictions no less protective of Licensor than those set forth in this License;
+
+(b) Licensee ensures that Contractors use the Software solely for Licensee's internal business purposes and not for the benefit of any other person or entity; and
+
+(c) Licensee remains fully responsible and liable for Contractors' compliance with this License.
+
+For the avoidance of doubt, a Contractor may not use a single instance of the Software, or the same credentials or license, to provide services to multiple clients unless each such client is itself a separately licensed customer of Licensor under its own agreement.
+
+**No License Sharing or Transfer.**
+No sublicensing rights are granted unless explicitly permitted in a separate SOW. Licensee may not share, loan, rent, lease, or otherwise make the Software available to any third party (including but not limited to: clients, partners, vendors, or other entities) unless such third party has its own valid commercial license. Each legal entity that uses the Software must have its own license. Sharing a single license across multiple entities, even if related, is prohibited and constitutes a Material Breach.
+
+**Free Use Unaffected.**
+
+Qualifying non-commercial academic research use remains free as defined in `LICENSE`. This Commercial License does not limit or restrict free use rights.
+
+**IMPORTANT — Open Source Contribution Does Not Exempt Organizational Use:**
+Contributing code, fixes, or improvements to the Software does not exempt Licensee from the requirement to obtain a commercial license for any organizational use. Contributing is separate from and does not affect commercial licensing requirements. Any organizational use requires a commercial license regardless of whether Licensee has contributed to the Software.
+
+## 3. OWNERSHIP
+
+The Software is licensed, not sold. As between Licensor and Licensee, Licensor retains all right, title, and interest in and to the Software and all related intellectual property rights, whether registered or unregistered.
+
+**Licensee Developments.**
+
+"Licensee Developments" means Licensee's own configurations, scripts, glue code, integrations, and modifications to the Software that interface with or extend the Software but do not include the Software's core source code as originally provided by Licensor.
+
+Licensee owns all right, title, and interest in and to Licensee Developments. However, Licensee grants Licensor a non-exclusive, perpetual, irrevocable, worldwide, royalty-free license to use, modify, and incorporate any Licensee Developments (including modifications to the Software) that Licensee makes publicly available or distributes to third parties, without any obligation to Licensee.
+
+For clarity, Licensee retains ownership of modifications made for internal use only. The Software itself and all intellectual property rights therein remain the exclusive property of Licensor.
+
+**Feedback License.** Licensee grants Licensor a non-exclusive, perpetual, irrevocable, worldwide, royalty-free license to use, modify, and incorporate any feedback, suggestions, error reports, or improvements provided by Licensee regarding the Software, without any obligation to Licensee and without giving Licensee ownership of any improvements or modifications made by Licensor.
+
+## 4. RESTRICTIONS
+
+Unless explicitly permitted in writing by the Licensor, the Licensee may NOT:
+
+- Distribute or sell the Software or derivatives as a standalone product
+- Provide the Software, or any Competing Infrastructure Service built using the Software, as a hosted or managed service to third parties (including SaaS, PaaS, or multi-tenant platforms) **without explicit written permission from Licensor**
+- Build, market, or operate a Competing Infrastructure Service that uses the Software or any derivative of the Software
+- Use the Software to offer a product or service whose primary purpose is to allow third parties to run their own experiments, models, or workflows on infrastructure powered by the Software
+- **Monetize, resell, or commercialize any derivative work, wrapper, API layer, or modification of the Software without Licensor's prior written consent**
+- **Package, repackage, or redistribute the Software (or any portion thereof) as part of any commercial product, service, or offering without a valid commercial license and explicit written permission**
+
+For clarity, Licensee may use the Software to build and operate its own internal trading, research, or analytics systems and to provide outputs (e.g., analytics, reports, trading decisions, predictions, recommendations) to its own clients, provided such clients do not receive direct or indirect access to the Software itself, including but not limited to: (i) access to the Software's APIs, (ii) ability to execute code or workflows within the Software, (iii) access to the Software's user interface, (iv) access through wrapper APIs, proxy services, or any other indirect means that allows third parties to use the Software's functionality, or (v) any other means of interacting with or controlling the Software. Licensee may provide data inputs to the Software and receive outputs from the Software for delivery to clients, but clients may not themselves interact with the Software, whether directly or indirectly through any intermediary layer, wrapper, or service.
+
+**Model Training and Resale.**
+
+Licensee may use the Software to train, develop, or create models, algorithms, or systems for Licensee's own internal Commercial Use and to provide outputs (including predictions, analytics, signals, or trading decisions) to Licensee's own clients.
+
+However, Licensee may not:
+
+(i) sell, license, or provide models, algorithms, or systems created using the Software as a standalone product or service (for example, "pretrained models" or "model APIs" sold to third parties);
+
+(ii) use the Software to build or operate a Competing Infrastructure Service;
+
+(iii) use outputs from the Software (including models, algorithms, predictions, analytics, signals, or trading decisions) to build, train, develop, or operate a Competing Infrastructure Service or any substantially similar platform, product, or service, or to train, develop, or create competing models, algorithms, or systems (whether infrastructure services or standalone products) that compete with the Software's purpose or functionality; or
+
+(iv) grant any third party direct or indirect access to the Software or to any models or systems in a way that allows such third party to run its own workflows using the Software.
+
+**Data Ownership and Processing.**
+Licensee retains all ownership rights to data that Licensee inputs into the Software and to outputs generated by the Software for Licensee's use. However, Licensee acknowledges that: (i) the Software itself and all intellectual property rights therein remain the exclusive property of Licensor, (ii) Licensee's use of the Software to process data does not grant Licensee any rights in the Software, and (iii) Licensee may not use processed data or outputs in any way that violates this License or infringes upon Licensor's intellectual property rights.
+
+- Publish or disclose source code derived from the commercial version
+- Publish or disclose performance benchmarks or comparative tests involving the Software to any third party without Licensor's prior written consent (see Section 4.1 below)
+- Remove or alter copyright notices
+- Claim authorship of the Software or its architectural design
+- Reverse engineer, decompile, disassemble, or otherwise attempt to derive or access the source code, underlying ideas, algorithms, file formats, or non-public APIs of the Software, or any trade secrets embodied therein, except to the extent expressly permitted by applicable law notwithstanding a contractual restriction
+- Use the Software in violation of US export controls or applicable law
+- Use the Software in high-risk environments including but not limited to: medical diagnosis, critical infrastructure, weapons systems, life support systems, nuclear systems, or any environment where failure could result in death, serious injury, or significant property damage
+
+**4.1 Benchmarking.**
+
+Licensee shall not publish or disclose to any third party any benchmark, performance, or comparison tests of the Software without Licensor's prior written consent.
+
+Any breach of this Section 4.1 shall be deemed a Material Breach (as defined in Section 1) of this License. Licensor may seek appropriate remedies for such breach, including but not limited to termination of this License in accordance with Section 5.
+
+## 5. TERM AND TERMINATION
+
+**Term.**
+
+This License is effective upon payment and execution of a commercial agreement. The initial term is one (1) year from the Effective Date, unless otherwise specified in the Ordering Documents.
+
+**Renewal.**
+
+This License renews automatically for successive one (1) year terms at Licensor's pricing in effect at the time of renewal (not to exceed a ten percent (10%) increase over the prior term's pricing, unless otherwise agreed in writing) unless either party provides written notice of non-renewal at least thirty (30) days prior to the end of the current term. Licensee may cancel renewal by providing written notice as set forth above.
+
+**Termination.**
+
+The Licensor may terminate this License if:
+- the Licensee commits a Material Breach (as defined in Section 1) of any term of this License and fails to cure such breach within thirty (30) days after written notice from Licensor specifying the breach (except as set forth below),
+- the Licensee fails to pay required fees when due and fails to cure such non-payment within fifteen (15) days after written notice from Licensor,
+- the Licensee attempts unauthorized distribution or sublicensing,
+- the Licensee commits a Material Breach of Section 4.1 (Benchmarking), which shall be grounds for immediate termination upon written notice without a cure period,
+- the Licensee becomes insolvent, files for bankruptcy, enters into receivership, or undergoes any similar insolvency proceeding.
+
+**Licensee Termination Rights.**
+Licensee may terminate this License at any time by providing written notice to Licensor. Upon termination by Licensee: (i) all fees paid are non-refundable, (ii) Licensee must immediately cease all use and destroy all copies as set forth in Section 5, and (iii) Licensee remains liable for all fees accrued through the date of termination.
+
+**Suspension for Non-Payment.**
+
+Licensor may suspend Licensee's access to the Software immediately upon any failure to pay fees when due, without limiting Licensor's right to terminate. Suspension will be lifted upon payment of all overdue amounts plus any applicable late fees.
+
+Upon termination of this Commercial License:
+- all rights granted under this Commercial License revert to Licensor,
+- Licensee must immediately cease all Commercial Use and destroy or permanently disable all copies of the Software used under this Commercial License (including all backups, archives, snapshots, disaster recovery copies, derivative works, and any copies stored in any location, including but not limited to: local storage, cloud storage, backup systems, or third-party hosting providers),
+- within thirty (30) days of termination, Licensee must provide Licensor with written certification signed by an authorized officer of Licensee confirming that all copies have been destroyed or disabled,
+- any continued Commercial Use without a valid license will constitute unlicensed use and violation of Licensor's copyright.
+
+**Copyright Infringement and Enforcement.**
+Commercial use of the Software without a valid commercial license constitutes copyright infringement under applicable law. Licensor reserves all rights and remedies available under copyright law, including but not limited to: injunctive relief, monetary damages, statutory damages (up to $150,000 per work infringed under U.S. Copyright Act), and recovery of attorneys' fees and costs. Licensee acknowledges that unauthorized commercial use may result in liability for copyright infringement in addition to breach of contract claims.
+
+**Enforcement Actions.**
+Licensor actively monitors for unauthorized use, including but not limited to: public code audits, GitHub fork analysis, compliance audits, and third-party reports. Violations will be pursued through appropriate legal channels. For suspected violations, contact: jenn.lewis5789@gmail.com | Subject: `License Compliance Inquiry`. Self-reporting within 30 days of discovery may result in reduced penalties (typically limited to retroactive licensing fees plus a compliance fee of up to 25% of retroactive fees, rather than full enforcement actions).
+
+Termination of this Commercial License does not terminate any rights Licensee may have for free use as defined in `LICENSE`.
+
+## 6. NO WARRANTY / LIMITATION OF LIABILITY
+
+THE SOFTWARE IS PROVIDED "AS IS," WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, UNINTERRUPTED USE, ERROR-FREE OPERATION, OR THAT THE SOFTWARE WILL MEET LICENSEE'S REQUIREMENTS.
+
+THE LICENSOR IS NOT LIABLE FOR ANY DAMAGES, INCLUDING BUT NOT LIMITED TO:
+LOSS OF PROFITS, MODELING ERRORS, DATA LOSS, BUSINESS INTERRUPTION,
+OR ANY CONSEQUENTIAL, INCIDENTAL, INDIRECT, SPECIAL, OR PUNITIVE DAMAGES ARISING FROM USE OF THE SOFTWARE.
+
+**Liability Cap:** IN NO EVENT WILL LICENSOR'S TOTAL AGGREGATE LIABILITY ARISING OUT OF OR RELATED TO THIS LICENSE EXCEED THE FEES PAID BY LICENSEE TO LICENSOR FOR THE SOFTWARE IN THE TWELVE (12) MONTHS PRECEDING THE EVENT GIVING RISE TO THE CLAIM. THE FOREGOING LIMITATION SHALL NOT APPLY TO: (i) LIABILITY ARISING FROM LICENSOR'S WILLFUL MISCONDUCT OR GROSS NEGLIGENCE, (ii) LICENSOR'S INDEMNIFICATION OBLIGATIONS (IF ANY), OR (iii) BREACH OF CONFIDENTIALITY OBLIGATIONS.
+
+## 7. INDEMNITY
+
+Licensee agrees to indemnify and hold harmless Licensor from and against any third-party claims, damages, or expenses (including reasonable attorneys' fees and costs) arising out of Licensee's misuse of the Software, violation of this License, or violation of applicable laws. Licensor will promptly notify Licensee of any such claim and Licensee will have the right to control the defense and settlement of such claim, provided that Licensee may not settle any claim that admits liability or imposes obligations on Licensor without Licensor's prior written consent.
+
+## 8. SUPPORT AND MAINTENANCE
+
+Support, integration, customization, improvements, or feature development require separate Statements of Work (SOWs) for enterprise licensees.
+
+Unless explicitly set out in a separate written agreement:
+- Support is NOT included in this License.
+- No uptime, response time, or defect resolution Service Level Agreements (SLAs) are provided.
+
+## 9. UPDATES AND UPGRADES
+
+**Version Definition.** "Version" refers to a release of the Software with a distinct version number (e.g., v1.0, v1.1, v2.0).
+
+**Updates and Upgrades.** Unless explicitly included in a separate agreement:
+- Minor updates, patches, and hotfixes are NOT automatically included
+- Major version upgrades are NOT automatically included
+- New modules, features, or components are NOT automatically included
+- Licensee must purchase separate licenses or upgrade agreements for new versions
+
+**No Obligation.** Licensor has no obligation to provide updates, upgrades, or new versions of the Software.
+
+**Right to Continue Using Licensed Version.** Licensee may continue using the version of the Software licensed under this License even if newer versions become available, provided that: (i) Licensee remains in compliance with this License, (ii) Licensor may discontinue support for older versions as set forth in the Support Policy, and (iii) older versions may not include security patches or bug fixes available in newer versions.
+
+**IMPORTANT — All Versions Subject to Same Restrictions:**
+All versions of the Software (including older versions, legacy versions, and any versions obtained from any source) are subject to the same licensing requirements and restrictions set forth in this License. Using an older version does not exempt Licensee from any obligations, restrictions, or payment requirements. Licensee may not use an older version to circumvent restrictions that apply to newer versions.
+
+## 10. FEES
+
+**Licensing Scope Policy:** Licensing is scoped to the business unit/desk and the authorized users/environments operating the software, not the parent company's total headcount.
+
+Commercial licensing fees are based on the using team/desk size (number of users and environments), usage tier, and selected add-ons.
+
+**Pilot Requirement:** All commercial licensing begins with a paid pilot. Pilot fees are non-refundable but credited 100% toward the first-year annual license if converted within 60 days of Pilot completion.
+
+**Fees are set forth in Ordering Documents and are based on team size, deployment scope, and selected services.**
+
+For commercial licensing inquiries, please contact:
+
+📧 **jenn.lewis5789@gmail.com**  
+🔗 [LinkedIn](https://www.linkedin.com/in/jennifer-l-3434b3315)
+
+Specific fees, term length, and payment schedule will be set forth in one or more **Order Forms** or **Statements of Work** executed by the parties (collectively, "Ordering Documents"). If there is any conflict between this License and an Ordering Document regarding fees, the Ordering Document will control.
+
+Actual fees are determined by the Ordering Documents based on your specific requirements.
+
+**Payment Terms.**
+
+Unless otherwise specified in the Ordering Documents:
+- Payment is due within thirty (30) days of invoice date
+- Late payments may incur interest at the rate of one and one-half percent (1.5%) per month, or the maximum rate permitted by law, whichever is lower
+- Failure to pay may result in suspension or termination of rights under this License as set forth in Section 5
+- **Payment disputes:** If Licensee disputes any invoice, Licensee must notify Licensor in writing within fifteen (15) days of the invoice date, specifying the nature of the dispute. Licensee must pay all undisputed amounts. Disputed amounts do not excuse payment of undisputed amounts. If the dispute is resolved in Licensor's favor, Licensee shall pay the disputed amount plus interest from the original due date
+- **Collection rights:** Licensor reserves the right to engage collection agencies, attorneys, or other third parties to collect overdue amounts. Licensee shall be responsible for all collection costs, including but not limited to: collection agency fees, attorneys' fees, court costs, and other expenses incurred in connection with collection efforts
+- **No refunds:** All fees paid are non-refundable except as required by law or as explicitly provided in a separate written agreement
+
+## 11. AUDIT RIGHTS
+
+Licensor reserves the right to audit Licensee's use of the Software to verify compliance with this License.
+
+**Audit Terms:**
+- Licensor may conduct no more than one audit per 12-month period
+- Audits shall be conducted during normal business hours
+- Licensor must provide at least 30 days' written notice
+- Audit scope limited to verification of Software usage and compliance with license restrictions
+- Remote audit methods are permitted (e.g., usage logs, deployment verification)
+- If an audit reveals that Licensee underpaid fees by more than five percent (5%) for the audited period or materially violated the license restrictions (meaning a violation that is significant, substantial, or has a material adverse effect on Licensor's rights or interests), Licensee shall reimburse Licensor's reasonable audit costs (not to exceed the amount of underpaid fees) in addition to paying any unpaid fees
+- Licensee must provide full cooperation (including making relevant personnel available during normal business hours) and access to all relevant records, logs, and documentation necessary to verify compliance. Licensee's failure to provide such cooperation and access constitutes a Material Breach.
+- If Licensee refuses to provide access, documentation, or cooperation reasonably required for an audit, such refusal constitutes a Material Breach. In that case, Licensor may terminate this License and invoice Licensee for an estimated usage amount based on available information, and Licensee shall pay such invoice within thirty (30) days unless the parties agree in writing to a different resolution
+
+**Confidentiality:** All audit information shall be treated as confidential and used solely for compliance verification.
+
+## 12. EXPORT CONTROL COMPLIANCE
+
+Licensee acknowledges that the Software may be subject to export control laws and regulations, including but not limited to:
+- United States Export Administration Regulations (EAR)
+- European Union export control regulations
+- United Kingdom export control regulations
+
+Licensee agrees to comply with all applicable export control laws and regulations. Licensee represents and warrants that:
+- Licensee is not located in, under the control of, or a national or resident of any country subject to comprehensive sanctions
+- Licensee will not export, re-export, or transfer the Software to any prohibited destination or end-user
+- Licensee will not use the Software for any purpose prohibited by applicable export control laws
+
+## 13. INDEPENDENT DEVELOPMENT
+
+Licensor may continue to develop, market, and provide software, products, or services that are similar to or competitive with the Software, regardless of any suggestions, feedback, or feature requests provided by Licensee. This License does not restrict Licensor's right to develop or provide such products or services independently.
+
+## 14. PUBLICITY
+
+Unless Licensee objects in writing, Licensor may use Licensee's name and logo in customer lists, case studies, press releases, and marketing materials (including websites, presentations, and sales materials) to identify Licensee as a customer of the Software. Any other publicity, including but not limited to quotes, testimonials, or detailed case studies, will require Licensee's prior written consent.
+
+## 15. USE BY AFFILIATES
+
+Subject to the terms of this License and the applicable Ordering Documents, Licensee may permit its Affiliates to use the Software solely for the benefit of Licensee, provided that:
+
+(a) each such Affiliate is expressly identified in an applicable Ordering Document or other written agreement with Licensor;
+
+(b) Licensee remains fully responsible and liable for such Affiliates' compliance with this License;
+
+(c) use by any Affiliate constitutes use by Licensee for purposes of any user, seat, environment, or usage limitations; and
+
+(d) "solely for the benefit of Licensee" means the Affiliate's use directly supports Licensee's operations, projects, or business activities as specified in the Ordering Documents. An Affiliate using the Software for its own independent operations, even if those operations indirectly benefit Licensee, must obtain its own separate license.
+
+For the avoidance of doubt, each separate legal entity (including each Affiliate, subsidiary, parent company, or holding company) that wishes to use the Software for its own benefit must obtain its own license (typically via a separate Ordering Document), unless expressly stated otherwise in writing by Licensor. A parent company's license does not cover its subsidiaries, and a subsidiary's license does not cover its parent company or sister subsidiaries. Each legal entity must pay for its own license regardless of corporate structure or ownership relationships.
+
+## 16. ASSIGNMENT
+
+**Licensee Assignment:**
+Licensee may not assign this License, by operation of law or otherwise, without Licensor's prior written consent, except that Licensee may assign this License without consent (i) to a successor in interest in connection with a merger, acquisition, corporate reorganization, or sale of all or substantially all of Licensee's assets, or (ii) to an Affiliate that assumes all of Licensee's obligations under this License, provided that in each case the assignee is not a Direct Competitor (as defined in Section 1) and Licensee provides Licensor with written notice of the assignment.
+
+**Licensor Assignment:**
+Licensor may freely assign this License, including in connection with a merger, acquisition, or sale of all or substantially all of Licensor's assets. Such assignment shall not affect Licensee's rights under this License.
+
+Any attempted assignment in violation of this section is void.
+
+## 17. DISPUTE RESOLUTION
+
+**Informal Resolution:**
+The parties agree to attempt to resolve disputes through good faith negotiation for at least 30 days before initiating formal proceedings.
+
+**Arbitration for Small Claims:**
+For claims under $250,000, either party may elect binding arbitration under the Commercial Arbitration Rules of the American Arbitration Association (AAA). Arbitration shall be conducted in Delaware by a single arbitrator with expertise in software licensing disputes.
+
+**Litigation for Large Claims:**
+For claims of $250,000 or more, disputes shall be resolved in the state or federal courts located in Delaware. Both parties consent to the exclusive jurisdiction and venue of such courts.
+
+**Class Action Waiver:**
+Both parties waive any right to participate in class actions, collective actions, or representative proceedings.
+
+## 18. GOVERNING LAW
+
+This License is governed by the laws of the State of Delaware, United States, without regard to conflicts of law principles. The United Nations Convention on Contracts for the International Sale of Goods does not apply.
+
+## 19. FORCE MAJEURE
+
+Neither party shall be liable for any failure or delay in performance under this License due to circumstances beyond its reasonable control, including but not limited to: acts of God, war, terrorism, riots, embargoes, acts of civil or military authorities, fire, floods, accidents, network or infrastructure failures, strikes, or shortages of transportation facilities, fuel, energy, labor, or materials.
+
+**Notice Requirement.** The party affected by a force majeure event must provide written notice to the other party within ten (10) days of becoming aware of such event, describing the nature of the event and its expected duration.
+
+**Duration Limits.** If a force majeure event continues for more than sixty (60) days, either party may terminate this License upon written notice to the other party, and Licensee will be entitled to a pro-rata refund of any prepaid fees for the period after termination.
+
+## 20. DATA HANDLING AND CONFIDENTIALITY
+
+**Licensee Confidentiality Obligations:**
+Licensee agrees to maintain the confidentiality of:
+- Source code and internal architecture of the Software
+- Proprietary algorithms and techniques
+- Documentation marked as confidential
+- Pricing and licensing terms (including but not limited to: fee amounts, payment schedules, discount rates, and any special pricing arrangements)
+- Any other information designated as confidential by Licensor
+
+**Pricing Confidentiality.**
+Licensee agrees not to disclose, share, or publish any pricing, fee, or licensing terms to any third party without Licensor's prior written consent. Licensee may share pricing information with its own employees, contractors, or advisors who have a legitimate need to know and who are bound by confidentiality obligations. Unauthorized disclosure of pricing information to competitors or potential customers may constitute a Material Breach.
+
+**Security Requirements:**
+Licensee must implement technical and administrative safeguards to protect the Software and prevent unauthorized access, use, or disclosure. Such safeguards must include, at minimum: (i) access controls limiting Software access to Authorized Users only, (ii) secure storage of Software and related credentials, and (iii) measures to prevent unauthorized copying or distribution. Licensee's failure to implement and maintain such safeguards constitutes a Material Breach.
+
+**Breach Notification:**
+Licensee must notify Licensor immediately (and in any event within twenty-four (24) hours) upon discovery of any unauthorized use, disclosure, or breach of security related to the Software.
+
+**Return or Destruction on Termination.**
+Upon termination or expiration of this License, Licensee must, at Licensor's option, either return or destroy all confidential information and materials provided by Licensor, including but not limited to: source code, documentation marked as confidential, proprietary algorithms, and any other materials containing Licensor's confidential information. Licensee must provide written certification of such return or destruction within thirty (30) days of termination.
+
+## 21. SEVERABILITY
+
+If any provision of this License is held to be invalid, illegal, or unenforceable by a court of competent jurisdiction, the remaining provisions shall remain in full force and effect. The invalid, illegal, or unenforceable provision shall be replaced with a valid, legal, and enforceable provision that comes closest to the intent of the original provision.
+
+## 22. ENTIRE AGREEMENT
+
+This License, together with any separate signed commercial agreement or Statement of Work, constitutes the entire agreement between the parties regarding the subject matter hereof and supersedes all prior or contemporaneous agreements, understandings, negotiations, and discussions, whether oral or written, relating to the Software. No modification, amendment, or waiver of any provision of this License shall be effective unless in writing and signed by both parties.
+
+**Document Hierarchy and Conflicts.**
+This Commercial License (`COMMERCIAL_LICENSE.md`) is the authoritative and controlling document for all commercial licensing terms, definitions, and obligations. In the event of any conflict, contradiction, or inconsistency between this Commercial License and any other document (including but not limited to: `LEGAL/CLA.md`, `DOCS/02_reference/licensing/DUAL_LICENSE.md`, `LEGAL/SUBSCRIPTIONS.md`, `LEGAL/COMMERCIAL_USE.md`, `LEGAL/LICENSE_ENFORCEMENT.md`, or any other documentation), the terms of this Commercial License shall control and prevail. All definitions, restrictions, and obligations set forth in this Commercial License are binding, and any conflicting statements in other documents are superseded by this License. For the avoidance of doubt, Ordering Documents (as defined in Section 1) may supplement but may not contradict the terms of this License, except as explicitly permitted herein (e.g., regarding fees as set forth in Section 10).
+
+## 23. SURVIVAL
+
+Sections 4 (Restrictions), 6 (No Warranty / Limitation of Liability), 7 (Indemnity), 10 (Fees), 11 (Audit Rights), 12 (Export Control Compliance), 17 (Dispute Resolution), 18 (Governing Law), 20 (Data Handling and Confidentiality), 21 (Severability), 22 (Entire Agreement), 24 (Notices), and this Section 23 (Survival) will survive termination or expiration of this License.
+
+## 24. NOTICES
+
+All notices, requests, consents, claims, demands, and other communications under this License ("Notices") must be in writing and addressed to the parties at the addresses set forth below (or to such other address that may be designated by the receiving party from time to time in accordance with this section).
+
+**To Licensor:**
+Jennifer Lewis  
+Fox ML Infrastructure LLC  
+Email: jenn.lewis5789@gmail.com
+Subject: Fox Infrastructure Licensing Inquiry
+
+**IMPORTANT — Physical Mail Requirements:**
+- **Email notification required first:** Before sending any physical mail (including certified mail, overnight courier, or any other physical delivery method) to Licensor, the sending party MUST first send an email to jenn.lewis5789@gmail.com with the subject line "Physical Mail Notification" describing the nature of the physical mail and the expected delivery date. Physical mail sent without prior email notification will not be deemed received and will not satisfy any notice requirements under this License.
+- **Registered Agent address prohibited:** Do NOT send mail to any registered agent address or corporate filing address. Mail sent to registered agent addresses will not be accepted and will not be deemed received.
+- **Physical mail address:** Physical mail (if required after email notification) should be sent only to an address that Licensor designates in writing after receiving the email notification. Contact jenn.lewis5789@gmail.com to obtain the appropriate physical mailing address.
+
+**To Licensee:**
+The address specified in the Ordering Documents or as otherwise provided by Licensee in writing.
+
+**Preferred Method:**
+Email is the preferred and most reliable method of communication. All Notices should be sent via email unless physical mail is specifically required by law or court order.
+
+**Deemed Receipt:**
+Notices sent:
+- By email will be deemed received on the date sent (if sent during business hours on a business day) or the next business day
+- By certified mail, return receipt requested, will be deemed received on the date of delivery shown on the return receipt, provided that prior email notification was sent as required above
+- By overnight courier will be deemed received on the next business day after deposit with the courier, provided that prior email notification was sent as required above
+
+A party's failure to send the optional physical mail notification does not invalidate a Notice that is properly delivered by email under this Section.
+
+## 25. MISCELLANEOUS
+
+**Relationship of Parties.**
+
+The parties are independent contractors. This License does not create a partnership, franchise, joint venture, agency, fiduciary, or employment relationship between the parties.
+
+**Headings.**
+
+The headings in this License are for convenience only and do not affect the interpretation of this License.
+
+**Language.**
+
+This License is executed in the English language. Any translation of this License is for convenience only and the English version shall control in the event of any conflict.
+
+**Third-Party Beneficiaries.**
+
+This License is for the sole benefit of the parties and their respective successors and permitted assigns. Nothing in this License, express or implied, is intended to or shall confer upon any other person or entity any legal or equitable right, benefit, or remedy of any nature whatsoever under or by reason of this License.
+
+**Counterparts.**
+
+This License may be executed in counterparts, each of which will be deemed an original, but all of which together will constitute one and the same instrument. Electronic signatures (including signatures delivered by email in PDF format) will be deemed original signatures for all purposes.
+
+**Waiver of Jury Trial.**
+
+TO THE EXTENT PERMITTED BY APPLICABLE LAW, EACH PARTY IRREVOCABLY WAIVES ANY AND ALL RIGHT TO TRIAL BY JURY IN ANY LEGAL PROCEEDING ARISING OUT OF OR RELATING TO THIS LICENSE OR THE TRANSACTIONS CONTEMPLATED HEREBY.
+
+**Taxes.**
+
+All fees and charges payable by Licensee are exclusive of applicable sales, use, value-added, withholding, or other taxes, duties, or governmental charges. Licensee is responsible for paying all such taxes, duties, and charges (excluding taxes based on Licensor's income), and Licensee will reimburse Licensor for any such taxes, duties, or charges that Licensor is required to collect or pay.
+
+**Third-Party Components.**
+
+The Software may include or be distributed with third-party open-source components that are subject to their own licenses (e.g., MIT, Apache, BSD). Such components are identified in documentation or attribution files. Licensee's rights and obligations with respect to such third-party components are governed by the applicable third-party licenses, not this License. Licensor makes no representations or warranties regarding such third-party components.
+
+## 26. CONTACT
+
+For commercial licensing, enterprise usage, or SOW negotiation, contact:
+
+**Jennifer Lewis**  
+Fox ML Infrastructure LLC  
+Email: **jenn.lewis5789@gmail.com**
+Subject: *Fox Infrastructure Licensing Inquiry*
+

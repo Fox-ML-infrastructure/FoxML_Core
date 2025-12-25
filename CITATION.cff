@@ -29,7 +29,7 @@ keywords:
   - config-driven pipelines
   - leakage detection
 
-license: "MIT"
+license: "AGPL-3.0"
 
 # Version and release date
 # Note: Project is under active development
@@ -52,4 +52,4 @@ preferred-citation:
   year: 2025
   url: "https://github.com/Fox-ML-infrastructure/FoxML_Core"
   version: "0.1.0"
-  license: "MIT"
+  license: "AGPL-3.0"
