@@ -1,6 +1,6 @@
 # FoxML Core — ML Cross-Sectional Infrastructure
 
-> **License:** MIT - see [LICENSE](LICENSE) for details.
+> **License:** AGPL-3.0 (open source) or [Commercial License](COMMERCIAL_LICENSE.md) — see [LICENSE](LICENSE) for details.
 
 > **🔍 Reproducibility & Auditability:** This system focuses on reproducibility (consistent results within expected variance) and comprehensive auditability (full tracking of inputs, configs, and outputs). Note: True bitwise determinism (identical outputs at the binary level) requires lower-level language implementations and strict control over floating-point operations.
 

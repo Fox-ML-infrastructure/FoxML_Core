@@ -1,4 +1,4 @@
-# MIT License - see LICENSE file
+# SPDX-License-Identifier: AGPL-3.0-or-later OR Commercial
 
 """
 Shared utilities for target validation and degenerate target detection

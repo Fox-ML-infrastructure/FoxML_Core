@@ -1,4 +1,4 @@
-# MIT License - see LICENSE file
+# SPDX-License-Identifier: AGPL-3.0-or-later OR Commercial
 
 """Target predictability ranking - split from original large file for maintainability."""
 

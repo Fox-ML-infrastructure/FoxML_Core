@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# MIT License - see LICENSE file
+# SPDX-License-Identifier: AGPL-3.0-or-later OR Commercial
 
 """Quick test to verify plan_for_family returns correct thread counts."""
 import sys

@@ -1,4 +1,4 @@
-# MIT License - see LICENSE file
+# SPDX-License-Identifier: AGPL-3.0-or-later OR Commercial
 
 import numpy as np, logging, lightgbm as lgb, os, sys
 from typing import Any, Dict, List, Optional

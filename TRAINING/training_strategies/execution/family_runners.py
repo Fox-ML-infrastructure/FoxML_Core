@@ -1,4 +1,4 @@
-# MIT License - see LICENSE file
+# SPDX-License-Identifier: AGPL-3.0-or-later OR Commercial
 
 # ---- PATH BOOTSTRAP: ensure project root on sys.path in parent AND children ----
 import os, sys

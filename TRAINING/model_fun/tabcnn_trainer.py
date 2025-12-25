@@ -1,4 +1,4 @@
-# MIT License - see LICENSE file
+# SPDX-License-Identifier: AGPL-3.0-or-later OR Commercial
 
 from .cnn1d_trainer import CNN1DTrainer as TabCNNTrainer
 
