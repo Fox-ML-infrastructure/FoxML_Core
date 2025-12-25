@@ -122,11 +122,6 @@ logger = logging.getLogger(__name__)
 def main():
     """Main training function with comprehensive approach (replicates original script functionality)"""
     
-    # Print license banner on startup (compliance and commercial use notice)
-    try:
-        # Don't fail if banner can't be printed
-        pass
-
     parser = argparse.ArgumentParser(description='Enhanced Training with Multiple Strategies - Full Original Functionality')
     # Core arguments
     parser.add_argument('--data-dir', required=True, help='Data directory')

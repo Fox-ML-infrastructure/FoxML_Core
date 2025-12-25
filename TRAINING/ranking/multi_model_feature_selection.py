@@ -5178,9 +5178,5 @@ def main():
 
 
 if __name__ == "__main__":
-    # Print license banner on startup (compliance and commercial use notice)
-    try:
-        # Don't fail if banner can't be printed
-        pass
     sys.exit(main())
 
