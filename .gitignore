@@ -1,6 +1,77 @@
-# Data files only
+# Enterprise .gitignore
+# Excludes datasets, internal files, and development artifacts
+# Only includes code, configuration, and enterprise documentation
+
+# Keep .gitignore local only (don't push to GitHub)
+.gitignore
+
+# ============================================
+# Internal/Development Directories
+# ============================================
+
+# Deprecated/development code
+dep/
+
+# Internal documentation and audit trails
+docs/internal/
+docs/audit/
+DOCS/internal/
+DOCS/INTERNAL/
+DOCS/03_technical/internal/
+DOCS/audit/
+INTERNAL_DOCS/
+INTERNAL_DOCS/**
+.internal/
+.internal/**
+
+# Scripts (users implement their own tooling)
+SCRIPTS/*
+SCRIPTS/
+# Lowercase scripts folder (use SCRIPTS/ instead)
+scripts/
+
+# Enterprise bundle - untracked (PDFs and index)
+ENTERPRISE_BUNDLE/
+
+# Personal notes
+NOTES/
+
+# Update logs (internal)
+UPDATE/
+
+# Small config folder (safe_features_list.txt)
+config/
+
+# Training artifacts
+catboost_info/
+
+# Output directory
+output/
+
+# Archive of original large files (deprecated, split into modules)
+TRAINING/archive/
+
+# Commit message template (not needed)
+COMMIT_MESSAGE.md
+
+# ============================================
+# Data and Datasets
+# ============================================
+
+# Data directories
 data/
+results/
+models/
+logs/
+cache/
+tmp/
+temp/
+
+# Data processing (users generate their own features)
+# Track code, ignore data directories
 DATA_PROCESSING/data/
+
+# Data files (large binary formats)
 *.parquet
 *.h5
 *.hdf5
@@ -10,57 +81,327 @@ DATA_PROCESSING/data/
 *.feather
 *.arrow
 
-# Results/outputs (run artifacts, not source)
-RESULTS/
+# CSV data files (exclude large datasets, keep small config CSVs)
+# Note: Keep small config CSVs, exclude large data CSVs
+data/**/*.csv
+results/**/*.csv
+DATA_PROCESSING/data/**/*.csv
 
-# Python bytecode
+# ============================================
+# Training Artifacts and Outputs
+# ============================================
+
+# Model training outputs
+TRAINING/modular_output/
+TRAINING/EXPERIMENTS/output/
+TRAINING/EXPERIMENTS/metadata/
+TRAINING/EXPERIMENTS/logs/
+TRAINING/test_output*/
+**/test_output*/
+test_config_output*/
+test_config_integration.sh
+test_training_output*/
+catboost_info/
+lightgbm_models/
+xgboost_models/
+
+# Checkpoints and saved models
+*.ckpt
+*.pt
+*.pth
+*.h5
+*.pb
+*.onnx
+*.tflite
+
+# ============================================
+# Python
+# ============================================
+
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Lowercase tests folder (use TESTS/ or TRAINING/tests/ instead)
+tests/
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
 # Virtual environments
 venv/
 env/
-.venv/
+ENV/
+.venv
+env.bak/
+venv.bak/
 
-# IDE
+# ============================================
+# IDE and Editor Files
+# ============================================
+
+# VSCode
 .vscode/
+*.code-workspace
+
+# PyCharm / IntelliJ
 .idea/
+*.iml
+*.iws
+*.ipr
 
-# OS files
+# Vim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# ============================================
+# OS Files
+# ============================================
+
+# macOS
 .DS_Store
-Thumbs.db
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
 
-# Logs and temp
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ============================================
+# Logs and Temporary Files
+# ============================================
+
+# Log files
 *.log
+*.log.*
+logs/
+*.out
+
+# Temporary files
 *.tmp
 *.temp
 *.bak
-*~
+*.backup
 *.swp
 *.swo
+*~
 
-# Secrets
+# ============================================
+# Build and Compilation
+# ============================================
+
+# C++ build artifacts
+*.o
+*.a
+*.lib
+*.dll
+*.dylib
+*.exe
+build/
+cmake-build-*/
+*.cmake
+!CMakeLists.txt
+Makefile
+*.make
+
+# ============================================
+# Jupyter Notebooks (checkpoints only)
+# ============================================
+
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ============================================
+# Environment and Secrets
+# ============================================
+
+# Environment variables
 .env
+.env.local
+.env.*.local
+*.env
+!*.env.example
+
+# Secrets and keys
+secrets/
 *.key
 *.pem
-secrets/
+*.p12
+*.pfx
+credentials.json
+config/secrets.yaml
 
-# Build artifacts
-build/
-dist/
-*.egg-info/
+# ============================================
+# Database Files
+# ============================================
 
-# Jupyter checkpoints
-.ipynb_checkpoints/
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
 
-# Model checkpoints (large binary)
-*.ckpt
-*.pt
-*.pth
-*.pb
-*.onnx
+# ============================================
+# Archive Files (large)
+# ============================================
 
-# catboost/lightgbm temp
-catboost_info/
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# ============================================
+# Keep These (Enterprise Required)
+# ============================================
+
+# Configuration files (needed)
+!CONFIG/**/*.yaml
+!CONFIG/**/*.yml
+!CONFIG/**/*.json
+!CONFIG/**/*.txt
+
+# Lowercase docs folder (use DOCS/ instead)
+docs/
+# Documentation (needed, except internal and meta files)
+# Note: DOCS/ is tracked, docs/ is not
+# Exclude meta/documentation management files (not needed for users)
+docs/STYLE_GUIDE.md
+docs/MIGRATION_PLAN.md
+docs/RESTRUCTURING_SUMMARY.md
+docs/DOCUMENTATION_CLEANUP_RECOMMENDATIONS.md
+docs/DOCUMENTATION_CLEANUP_SUMMARY.md
+docs/GITIGNORE_GUIDE.md
+docs/NEXT_STEPS_WORKFLOW.md
+docs/JOURNALD_LOGGING.md
+docs/RESTORE_FROM_LOGS.md
+docs/COMPREHENSIVE_FEATURE_RANKING.md
+# Keep INDEX.md and ARCHITECTURE.md (useful navigation)
+# !docs/INDEX.md
+# !docs/ARCHITECTURE.md
+
+# Code (needed)
+!**/*.py
+!**/*.sh
+!**/*.cpp
+!**/*.h
+!**/*.yaml
+!**/*.yml
+!**/*.json
+
+# Legal and licensing (needed)
+!legal/**/*.md
+
+# Small example/config CSVs (needed)
+!CONFIG/**/*.csv
+!docs/**/*.csv
+intelligent_output/
+test_*_output/
+
+# Test output directories
+test_e2e_fresh/
+test_*output*/
+test_e2e_ranking_unified_*/
+test_*_ranking_*/
+*_test_output*/
+*_e2e_*/
+
+# CONFIG backups (ignore contents, keep folder structure)
+CONFIG/backups/**
+
+# Development tools (untracked) - must come after !**/*.py to override
+TRAINING/tools/check_undefined_names.py
+TRAINING/tools/find_undefined.py
+INTERNAL/
+INTERNAL_EXPERIMENTAL/
+INTERNAL_EXPERIMENTAL/**
+RESULTS/
+
+# Trading modules (now tracked)
+# ALPACA_trading/
+# IBKR_trading/
+
+# Data processing (now tracked)
+# DATA_PROCESSING/
