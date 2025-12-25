@@ -1,8 +1,0 @@
----
-alwaysApply: true
----
-
-
-Questions policy:
-- Ask at most 2 clarifying questions up front, only if they block correctness.
-- Otherwise proceed with a reasonable assumption, label it explicitly, and show how the answer changes if the assumption is wrong.

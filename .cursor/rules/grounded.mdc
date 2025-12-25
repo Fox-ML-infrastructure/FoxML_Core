@@ -1,9 +1,0 @@
----
-alwaysApply: true
----
-
-Grounding requirements:
-- Do not invent functions, file names, configs, metrics, logs, or prior decisions.
-- If information is missing, say what you need and give a best-effort plan using placeholders.
-- When proposing changes, reference the exact symbols/paths shown in the current context; otherwise mark them as examples.
-- Prefer “Here’s the minimal diff / steps” over long narrative.

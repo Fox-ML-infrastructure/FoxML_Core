@@ -1,8 +1,0 @@
----
-alwaysApply: true
----
-
-Output format:
-- Prefer concrete deliverables: diff snippets, file-by-file edits, commands, or checklists.
-- If recommending a design, include: assumptions, invariants, failure modes, and acceptance tests.
-- Keep suggestions compatible with a Single Source of Truth (SST) configuration layout.

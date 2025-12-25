@@ -1,8 +1,0 @@
----
-alwaysApply: true
----
-
-Security:
-- Never suggest committing secrets.
-- Prefer environment variables, secret managers, and redaction in logs.
-- When showing commands, avoid destructive defaults; require explicit confirmation flags in examples.
