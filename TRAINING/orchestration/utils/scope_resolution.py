@@ -12,15 +12,74 @@ use resolve_write_scope() or WriteScope to ensure consistent scoping.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Tuple, Dict, Any, List
+from typing import Optional, Tuple, Dict, Any, List, Union
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# WriteScope: First-class scope object for reproducibility writes
+# Enums: Centralized constants to eliminate string literal drift
 # =============================================================================
+
+class View(str, Enum):
+    """
+    Canonical view types. Eliminates string literal drift.
+    
+    Use View.CROSS_SECTIONAL instead of "CROSS_SECTIONAL" everywhere.
+    """
+    CROSS_SECTIONAL = "CROSS_SECTIONAL"
+    SYMBOL_SPECIFIC = "SYMBOL_SPECIFIC"
+    
+    def __str__(self) -> str:
+        return self.value
+    
+    @classmethod
+    def from_string(cls, s: str) -> "View":
+        """
+        Normalize string to View enum.
+        
+        Handles common aliases like "INDIVIDUAL" and "LOSO" for SYMBOL_SPECIFIC.
+        """
+        if s is None:
+            raise ValueError("View cannot be None")
+        normalized = s.upper().replace("-", "_").replace(" ", "_")
+        if normalized == "CROSS_SECTIONAL":
+            return cls.CROSS_SECTIONAL
+        elif normalized in ("SYMBOL_SPECIFIC", "INDIVIDUAL", "LOSO"):
+            return cls.SYMBOL_SPECIFIC
+        else:
+            raise ValueError(f"Unknown view: {s}. Use 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'")
+
+
+class Stage(str, Enum):
+    """
+    Pipeline stages. Keeps logs and metadata clean.
+    
+    Use Stage.TARGET_RANKING instead of "TARGET_RANKING" everywhere.
+    """
+    TARGET_RANKING = "TARGET_RANKING"
+    FEATURE_SELECTION = "FEATURE_SELECTION"
+    TRAINING = "TRAINING"
+    
+    def __str__(self) -> str:
+        return self.value
+    
+    @classmethod
+    def from_string(cls, s: str) -> "Stage":
+        """
+        Normalize string to Stage enum.
+        
+        Handles common aliases like "MODEL_TRAINING" for TRAINING.
+        """
+        if s is None:
+            raise ValueError("Stage cannot be None")
+        normalized = s.upper().replace("MODEL_TRAINING", "TRAINING").replace(" ", "_").replace("-", "_")
+        try:
+            return cls(normalized)
+        except ValueError:
+            raise ValueError(f"Unknown stage: {s}. Use TARGET_RANKING, FEATURE_SELECTION, or TRAINING")
+
 
 class ScopePurpose(Enum):
     """Purpose of the write - determines output directory root."""
@@ -41,39 +100,39 @@ class WriteScope:
     (view, symbol, universe_sig) args to prevent scope contamination bugs.
     
     Attributes:
-        view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
+        view: View enum (CROSS_SECTIONAL or SYMBOL_SPECIFIC)
         universe_sig: Hash of symbol universe (required, never None)
         symbol: Symbol ticker (None for CS, required for SS)
         purpose: FINAL or ROUTING_EVAL
-        stage: Pipeline stage ("TARGET_RANKING", "FEATURE_SELECTION", "TRAINING")
+        stage: Stage enum (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
     
     Examples:
         # Create CS scope
         scope = WriteScope.for_cross_sectional(
             universe_sig="abc123def456",
-            stage="TARGET_RANKING"
+            stage=Stage.TARGET_RANKING
         )
         
         # Create SS scope
         scope = WriteScope.for_symbol_specific(
             universe_sig="abc123def456",
             symbol="AAPL",
-            stage="FEATURE_SELECTION"
+            stage=Stage.FEATURE_SELECTION
         )
         
         # Create routing evaluation scope
         scope = WriteScope.for_routing_eval(
-            view="SYMBOL_SPECIFIC",
+            view=View.SYMBOL_SPECIFIC,
             universe_sig="abc123def456",
             symbol="AAPL",
-            stage="TARGET_RANKING"
+            stage=Stage.TARGET_RANKING
         )
     """
-    view: str  # "CROSS_SECTIONAL" | "SYMBOL_SPECIFIC"
+    view: View  # Now enum, not str
     universe_sig: str  # Never None - required
     symbol: Optional[str]  # None for CS, required for SS
     purpose: ScopePurpose
-    stage: str  # "TARGET_RANKING" | "FEATURE_SELECTION" | "TRAINING"
+    stage: Stage  # Now enum, not str
     
     def __post_init__(self):
         """Validate scope invariants at construction."""
@@ -85,48 +144,47 @@ class WriteScope:
             )
         
         # Invariant 2: CS must have symbol=None
-        if self.view == "CROSS_SECTIONAL" and self.symbol is not None:
+        if self.view is View.CROSS_SECTIONAL and self.symbol is not None:
             raise ValueError(
                 f"WriteScope: CS scope must have symbol=None, got symbol={self.symbol}. "
                 f"stage={self.stage}, universe_sig={self.universe_sig}"
             )
         
         # Invariant 3: SS must have non-empty symbol
-        if self.view == "SYMBOL_SPECIFIC" and not self.symbol:
+        if self.view is View.SYMBOL_SPECIFIC and not self.symbol:
             raise ValueError(
                 f"WriteScope: SS scope requires non-empty symbol, got symbol={self.symbol}. "
                 f"stage={self.stage}, universe_sig={self.universe_sig}"
             )
         
-        # Invariant 4: view must be valid
-        if self.view not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
+        # Invariant 4: view must be View enum (not raw string)
+        if not isinstance(self.view, View):
             raise ValueError(
-                f"WriteScope: invalid view={self.view}. "
-                f"Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'."
+                f"WriteScope: view must be View enum, got {type(self.view).__name__}={self.view}. "
+                f"Use View.CROSS_SECTIONAL or View.SYMBOL_SPECIFIC."
             )
         
-        # Invariant 5: stage must be valid
-        valid_stages = ("TARGET_RANKING", "FEATURE_SELECTION", "TRAINING")
-        if self.stage not in valid_stages:
+        # Invariant 5: stage must be Stage enum (not raw string)
+        if not isinstance(self.stage, Stage):
             raise ValueError(
-                f"WriteScope: invalid stage={self.stage}. "
-                f"Must be one of {valid_stages}."
+                f"WriteScope: stage must be Stage enum, got {type(self.stage).__name__}={self.stage}. "
+                f"Use Stage.TARGET_RANKING, Stage.FEATURE_SELECTION, or Stage.TRAINING."
             )
     
     @property
     def cohort_prefix(self) -> str:
         """Return expected cohort ID prefix for this scope."""
-        return "cs_" if self.view == "CROSS_SECTIONAL" else "sy_"
+        return "cs_" if self.view is View.CROSS_SECTIONAL else "sy_"
     
     @property
     def is_final(self) -> bool:
         """Return True if this is a final (non-evaluation) scope."""
-        return self.purpose == ScopePurpose.FINAL
+        return self.purpose is ScopePurpose.FINAL
     
     @property
     def is_routing_eval(self) -> bool:
         """Return True if this is a routing evaluation scope."""
-        return self.purpose == ScopePurpose.ROUTING_EVAL
+        return self.purpose is ScopePurpose.ROUTING_EVAL
     
     def validate_cohort_id(self, cohort_id: str) -> None:
         """
@@ -138,12 +196,12 @@ class WriteScope:
         if not cohort_id:
             return
         
-        if self.view == "CROSS_SECTIONAL" and cohort_id.startswith("sy_"):
+        if self.view is View.CROSS_SECTIONAL and cohort_id.startswith("sy_"):
             raise ValueError(
                 f"WriteScope: Cannot use sy_ cohort with CROSS_SECTIONAL view. "
                 f"cohort_id={cohort_id}, scope={self}"
             )
-        if self.view == "SYMBOL_SPECIFIC" and cohort_id.startswith("cs_"):
+        if self.view is View.SYMBOL_SPECIFIC and cohort_id.startswith("cs_"):
             raise ValueError(
                 f"WriteScope: Cannot use cs_ cohort with SYMBOL_SPECIFIC view. "
                 f"cohort_id={cohort_id}, scope={self}"
@@ -154,6 +212,7 @@ class WriteScope:
         Populate additional_data dict with scope fields.
         
         Symbol key is ABSENT for CS (not null), present for SS.
+        Also includes purpose for path/metadata consistency checks.
         
         Args:
             additional_data: Dict to populate (creates new if None)
@@ -164,8 +223,10 @@ class WriteScope:
         if additional_data is None:
             additional_data = {}
         
-        additional_data['view'] = self.view
+        additional_data['view'] = self.view.value  # Store as string for JSON
         additional_data['universe_sig'] = self.universe_sig
+        additional_data['purpose'] = self.purpose.value  # Store purpose for consistency checks
+        additional_data['stage'] = self.stage.value  # Store stage for traceability
         
         # Mirror into cs_config for legacy readers
         if 'cs_config' not in additional_data:
@@ -173,7 +234,7 @@ class WriteScope:
         additional_data['cs_config']['universe_sig'] = self.universe_sig
         
         # Symbol key: present for SS, ABSENT for CS
-        if self.view == "SYMBOL_SPECIFIC":
+        if self.view is View.SYMBOL_SPECIFIC:
             additional_data['symbol'] = self.symbol
         elif 'symbol' in additional_data:
             del additional_data['symbol']
@@ -184,16 +245,17 @@ class WriteScope:
     def for_cross_sectional(
         cls,
         universe_sig: str,
-        stage: str,
+        stage: Union[str, Stage],
         purpose: ScopePurpose = ScopePurpose.FINAL
     ) -> "WriteScope":
-        """Factory for CROSS_SECTIONAL scope."""
+        """Factory for CROSS_SECTIONAL scope. Accepts string or Stage enum for stage."""
+        stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
         return cls(
-            view="CROSS_SECTIONAL",
+            view=View.CROSS_SECTIONAL,
             universe_sig=universe_sig,
             symbol=None,
             purpose=purpose,
-            stage=stage
+            stage=stage_enum
         )
     
     @classmethod
@@ -201,49 +263,59 @@ class WriteScope:
         cls,
         universe_sig: str,
         symbol: str,
-        stage: str,
+        stage: Union[str, Stage],
         purpose: ScopePurpose = ScopePurpose.FINAL
     ) -> "WriteScope":
-        """Factory for SYMBOL_SPECIFIC scope."""
+        """Factory for SYMBOL_SPECIFIC scope. Accepts string or Stage enum for stage."""
+        stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
         return cls(
-            view="SYMBOL_SPECIFIC",
+            view=View.SYMBOL_SPECIFIC,
             universe_sig=universe_sig,
             symbol=symbol,
             purpose=purpose,
-            stage=stage
+            stage=stage_enum
         )
     
     @classmethod
     def for_routing_eval(
         cls,
-        view: str,
+        view: Union[str, View],
         universe_sig: str,
-        stage: str,
+        stage: Union[str, Stage],
         symbol: Optional[str] = None
     ) -> "WriteScope":
-        """Factory for routing evaluation scope (artifacts go to routing_evaluation/ dir)."""
+        """
+        Factory for routing evaluation scope (artifacts go to routing_evaluation/ dir).
+        
+        Accepts string or enum for view and stage.
+        """
+        view_enum = View.from_string(view) if isinstance(view, str) else view
+        stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
         return cls(
-            view=view,
+            view=view_enum,
             universe_sig=universe_sig,
             symbol=symbol,
             purpose=ScopePurpose.ROUTING_EVAL,
-            stage=stage
+            stage=stage_enum
         )
     
     @classmethod
     def from_resolved_data_config(
         cls,
         resolved_data_config: Dict[str, Any],
-        stage: str,
+        stage: Union[str, Stage],
         symbol: Optional[str] = None,
         purpose: ScopePurpose = ScopePurpose.FINAL
     ) -> "WriteScope":
         """
         Create WriteScope from SST resolved_data_config.
         
+        CRITICAL: universe_sig MUST come from resolved_data_config, never computed locally.
+        This ensures single source of truth across CS and SS writes.
+        
         Args:
             resolved_data_config: SST config with resolved_mode, universe_sig, symbols
-            stage: Pipeline stage
+            stage: Pipeline stage (string or Stage enum)
             symbol: Symbol (optional, auto-derived for SS if SST has 1 symbol)
             purpose: FINAL or ROUTING_EVAL
         
@@ -253,11 +325,11 @@ class WriteScope:
         Raises:
             ValueError: If required fields missing or invariants violated
         """
-        view = resolved_data_config.get('resolved_mode')
+        view_str = resolved_data_config.get('resolved_mode')
         universe_sig = resolved_data_config.get('universe_sig')
         sst_symbols = resolved_data_config.get('symbols') or []
         
-        if not view:
+        if not view_str:
             raise ValueError(
                 f"WriteScope.from_resolved_data_config: resolved_mode missing from SST. "
                 f"keys={list(resolved_data_config.keys())}"
@@ -269,8 +341,12 @@ class WriteScope:
                 f"keys={list(resolved_data_config.keys())}"
             )
         
+        # Normalize to enums
+        view_enum = View.from_string(view_str)
+        stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
+        
         # For SS, derive symbol if not provided and SST has exactly 1 symbol
-        if view == "SYMBOL_SPECIFIC" and not symbol:
+        if view_enum is View.SYMBOL_SPECIFIC and not symbol:
             if len(sst_symbols) == 1:
                 symbol = sst_symbols[0]
                 logger.debug(f"WriteScope: auto-derived symbol={symbol} from SST symbols list")
@@ -281,11 +357,11 @@ class WriteScope:
                 )
         
         return cls(
-            view=view,
+            view=view_enum,
             universe_sig=universe_sig,
             symbol=symbol,
             purpose=purpose,
-            stage=stage
+            stage=stage_enum
         )
 
 
@@ -400,26 +476,30 @@ def resolve_write_scope(
 
 def populate_additional_data(
     additional_data: Dict[str, Any],
-    view_for_writes: str,
+    view_for_writes: Union[str, View],
     symbol_for_writes: Optional[str],
     universe_sig_for_writes: Optional[str]
 ) -> Dict[str, Any]:
     """
     Populate additional_data dict with scope fields for tracker/writer.
     
+    DEPRECATED: Prefer using WriteScope.to_additional_data() instead.
+    
     This is a convenience function that applies the scope tuple to
     additional_data in the correct way (symbol key absent for CS, not null).
     
     Args:
         additional_data: The dict to populate (mutated in place)
-        view_for_writes: From resolve_write_scope()
+        view_for_writes: From resolve_write_scope() (string or View enum)
         symbol_for_writes: From resolve_write_scope()
         universe_sig_for_writes: From resolve_write_scope()
     
     Returns:
         The mutated additional_data dict (for chaining)
     """
-    additional_data['view'] = view_for_writes
+    # Normalize view to string for storage
+    view_str = view_for_writes.value if isinstance(view_for_writes, View) else view_for_writes
+    additional_data['view'] = view_str
     
     if universe_sig_for_writes:
         additional_data['universe_sig'] = universe_sig_for_writes
@@ -428,8 +508,12 @@ def populate_additional_data(
             additional_data['cs_config'] = {}
         additional_data['cs_config']['universe_sig'] = universe_sig_for_writes
     
+    # Check if view is SS (handle both string and enum)
+    is_ss = (view_for_writes is View.SYMBOL_SPECIFIC if isinstance(view_for_writes, View) 
+             else view_for_writes == "SYMBOL_SPECIFIC")
+    
     # Only add symbol for SS (key must be ABSENT for CS, not null)
-    if view_for_writes == "SYMBOL_SPECIFIC" and symbol_for_writes:
+    if is_ss and symbol_for_writes:
         additional_data['symbol'] = symbol_for_writes
     elif 'symbol' in additional_data:
         # Remove stale symbol key if switching to CS
