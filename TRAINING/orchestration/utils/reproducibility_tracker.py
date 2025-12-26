@@ -237,6 +237,10 @@ class ReproducibilityTracker:
         globals_dir.mkdir(parents=True, exist_ok=True)
         self.stats_file = globals_dir / "stats.json"
         
+        # Routing evaluation root: all ROUTING_EVAL purpose writes go here
+        # This keeps evaluation artifacts separate from final artifacts
+        self._routing_eval_root = self._repro_base_dir / "routing_evaluation"
+        
         # Initialize metrics writer (if enabled)
         try:
             from TRAINING.common.utils.metrics import MetricsWriter, load_metrics_config
@@ -953,6 +957,126 @@ class ReproducibilityTracker:
         path_parts.append(f"cohort={cohort_id}")
         
         return repro_dir / Path(*path_parts)
+    
+    def _get_cohort_dir_v2(
+        self,
+        scope: "WriteScope",
+        cohort_id: str,
+        target: str,
+        model_family: Optional[str] = None
+    ) -> Path:
+        """
+        Get directory for a specific cohort using WriteScope (v2 API).
+        
+        This method replaces _get_cohort_dir and provides:
+        - Purpose-based routing (FINAL vs ROUTING_EVAL)
+        - Enum-based view handling (no string drift)
+        - Path-relative invariant validation
+        
+        Structure (FINAL):
+        targets/{target}/reproducibility/
+          {VIEW}/  (CROSS_SECTIONAL or SYMBOL_SPECIFIC)
+            universe={universe_sig}/
+              [symbol={symbol}/]  (only for SYMBOL_SPECIFIC)
+                [model_family={family}/]  (for TRAINING stage)
+                  cohort={cohort_id}/
+        
+        Structure (ROUTING_EVAL):
+        routing_evaluation/
+          {VIEW}/
+            universe={universe_sig}/
+              [symbol={symbol}/]
+                cohort={cohort_id}/
+        
+        Args:
+            scope: WriteScope with view, universe_sig, symbol, purpose, stage
+            cohort_id: Cohort identifier
+            target: Target name
+            model_family: Optional model family (for TRAINING stage)
+        
+        Returns:
+            Path to cohort directory
+        
+        Raises:
+            ValueError: If scope invariants violated or cohort_id prefix mismatch
+        """
+        if not _WRITE_SCOPE_AVAILABLE or scope is None:
+            raise ValueError("WriteScope not available or scope is None")
+        
+        # Validate cohort prefix matches scope view
+        scope.validate_cohort_id(cohort_id)
+        
+        # Determine root based on purpose
+        if scope.purpose is ScopePurpose.ROUTING_EVAL:
+            repro_root = self._routing_eval_root
+        else:
+            # FINAL: use target-first structure
+            repro_root = self._repro_base_dir / "targets" / target / "reproducibility"
+        
+        # Build path components
+        path_parts = [scope.view.value]  # Use enum value for path
+        
+        # Add universe scoping
+        path_parts.append(f"universe={scope.universe_sig}")
+        
+        # Add symbol for SYMBOL_SPECIFIC
+        if scope.view is ScopeView.SYMBOL_SPECIFIC and scope.symbol:
+            path_parts.append(f"symbol={scope.symbol}")
+        
+        # Add model_family for TRAINING stage
+        if scope.stage is ScopeStage.TRAINING and model_family:
+            path_parts.append(f"model_family={model_family}")
+        
+        # Add cohort directory
+        path_parts.append(f"cohort={cohort_id}")
+        
+        cohort_dir = repro_root / Path(*path_parts)
+        
+        # Validate purpose/path invariant
+        self._validate_purpose_path(scope, cohort_dir)
+        
+        return cohort_dir
+    
+    def _validate_purpose_path(self, scope: "WriteScope", cohort_dir: Path) -> None:
+        """
+        Validate that purpose matches path root using is_relative_to().
+        
+        This ensures:
+        - ROUTING_EVAL purpose only writes under routing_evaluation/
+        - FINAL purpose never writes under routing_evaluation/
+        
+        Args:
+            scope: WriteScope with purpose
+            cohort_dir: Target directory for write
+        
+        Raises:
+            ValueError: If purpose/path mismatch detected
+        """
+        if not _WRITE_SCOPE_AVAILABLE or scope is None:
+            return  # Skip validation if WriteScope not available
+        
+        # Check if cohort_dir is under routing_eval_root
+        def is_relative_to(path: Path, other: Path) -> bool:
+            try:
+                path.relative_to(other)
+                return True
+            except ValueError:
+                return False
+        
+        is_under_eval_root = is_relative_to(cohort_dir, self._routing_eval_root)
+        
+        if scope.purpose is ScopePurpose.ROUTING_EVAL:
+            if not is_under_eval_root:
+                raise ValueError(
+                    f"SCOPE VIOLATION: ROUTING_EVAL purpose but path not under routing_evaluation root. "
+                    f"path={cohort_dir}, eval_root={self._routing_eval_root}, scope={scope}"
+                )
+        else:  # FINAL
+            if is_under_eval_root:
+                raise ValueError(
+                    f"SCOPE VIOLATION: FINAL purpose but path under routing_evaluation root. "
+                    f"path={cohort_dir}, scope={scope}"
+                )
     
     def _save_to_cohort(
         self,
