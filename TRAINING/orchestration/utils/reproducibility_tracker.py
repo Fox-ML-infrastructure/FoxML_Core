@@ -64,6 +64,22 @@ except ImportError:
     _normalize_universe_sig = None
     _normalize_view = None
 
+# Import WriteScope for scope-safe writes
+try:
+    from TRAINING.orchestration.utils.scope_resolution import (
+        WriteScope,
+        ScopePurpose,
+        View as ScopeView,
+        Stage as ScopeStage
+    )
+    _WRITE_SCOPE_AVAILABLE = True
+except ImportError:
+    _WRITE_SCOPE_AVAILABLE = False
+    WriteScope = None
+    ScopePurpose = None
+    ScopeView = None
+    ScopeStage = None
+
 # Use root logger to ensure messages are visible regardless of calling script's logger setup
 logger = logging.getLogger(__name__)
 # Ensure this logger propagates to root so messages are visible

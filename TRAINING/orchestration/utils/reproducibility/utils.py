@@ -224,26 +224,52 @@ def compute_comparable_key(
     return hashlib.sha256(key_str.encode()).hexdigest()[:16]
 
 
-class Stage(str, Enum):
-    """Pipeline stage constants."""
-    TARGET_RANKING = "TARGET_RANKING"
-    FEATURE_SELECTION = "FEATURE_SELECTION"
-    TRAINING = "TRAINING"
-    MODEL_TRAINING = "MODEL_TRAINING"  # Alias for TRAINING
-    PLANNING = "PLANNING"
+# Import canonical enums from scope_resolution (single source of truth)
+try:
+    from TRAINING.orchestration.utils.scope_resolution import View, Stage as ScopeStage
+    
+    # Re-export Stage with additional values for backward compat
+    class Stage(str, Enum):
+        """Pipeline stage constants."""
+        TARGET_RANKING = "TARGET_RANKING"
+        FEATURE_SELECTION = "FEATURE_SELECTION"
+        TRAINING = "TRAINING"
+        MODEL_TRAINING = "MODEL_TRAINING"  # Alias for TRAINING (deprecated)
+        PLANNING = "PLANNING"
+        
+        @classmethod
+        def from_string(cls, s: str) -> "Stage":
+            """Normalize string to Stage enum."""
+            return ScopeStage.from_string(s) if s in ("TARGET_RANKING", "FEATURE_SELECTION", "TRAINING", "MODEL_TRAINING") else cls(s.upper())
+    
+    # Alias TargetRankingView to View for backward compat
+    class TargetRankingView(str, Enum):
+        """View constants for target ranking evaluation."""
+        CROSS_SECTIONAL = View.CROSS_SECTIONAL.value
+        SYMBOL_SPECIFIC = View.SYMBOL_SPECIFIC.value
+        LOSO = "LOSO"  # Leave-One-Symbol-Out (optional, not in scope_resolution)
+        
+except ImportError:
+    # Fallback if scope_resolution not available
+    class Stage(str, Enum):
+        """Pipeline stage constants."""
+        TARGET_RANKING = "TARGET_RANKING"
+        FEATURE_SELECTION = "FEATURE_SELECTION"
+        TRAINING = "TRAINING"
+        MODEL_TRAINING = "MODEL_TRAINING"
+        PLANNING = "PLANNING"
+    
+    class TargetRankingView(str, Enum):
+        """View constants for target ranking evaluation."""
+        CROSS_SECTIONAL = "CROSS_SECTIONAL"
+        SYMBOL_SPECIFIC = "SYMBOL_SPECIFIC"
+        LOSO = "LOSO"
 
 
 class RouteType(str, Enum):
     """Route type constants for feature selection and training."""
     CROSS_SECTIONAL = "CROSS_SECTIONAL"
     INDIVIDUAL = "INDIVIDUAL"
-
-
-class TargetRankingView(str, Enum):
-    """View constants for target ranking evaluation."""
-    CROSS_SECTIONAL = "CROSS_SECTIONAL"
-    SYMBOL_SPECIFIC = "SYMBOL_SPECIFIC"
-    LOSO = "LOSO"  # Leave-One-Symbol-Out (optional)
 
 
 def get_main_logger() -> logging.Logger:
