@@ -1952,6 +1952,59 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
     logger.info(f"📁 Models saved to: {output_dir}")
     logger.info("=" * 80)
     
+    # ========================================================================
+    # Write training_results_summary.json to globals/summaries/
+    # ========================================================================
+    try:
+        from pathlib import Path
+        from datetime import datetime
+        import json
+        from TRAINING.orchestration.utils.target_first_paths import run_root, globals_dir as get_globals_dir
+        
+        output_dir_path = Path(output_dir) if isinstance(output_dir, str) else output_dir
+        run_root_dir = run_root(output_dir_path)
+        summaries_dir = get_globals_dir(run_root_dir, "summaries")
+        summaries_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Build detailed summary by target
+        by_target = {}
+        for target_name, target_models in results.get('models', {}).items():
+            by_target[target_name] = {}
+            for family, model_result in target_models.items():
+                if model_result and isinstance(model_result, dict):
+                    status = "success" if model_result.get('success', False) else (
+                        "skipped" if model_result.get('skipped', False) else "failed"
+                    )
+                    by_target[target_name][family] = {
+                        "status": status,
+                        "auc": model_result.get('auc'),
+                        "path": str(model_result.get('model_path')) if model_result.get('model_path') else None,
+                        "error": model_result.get('error') if status == "failed" else None
+                    }
+        
+        training_results_summary = {
+            "generated_at": datetime.now().isoformat() + "Z",
+            "interval": interval,
+            "strategy": strategy,
+            "total_models_trained": total_saved,
+            "by_target": by_target,
+            "summary": {
+                "success": total_saved,
+                "failed": total_failed,
+                "skipped": total_skipped,
+                "attempted": total_attempted
+            },
+            "failed_targets": results.get('failed_targets', []),
+            "failed_reasons": results.get('failed_reasons', {})
+        }
+        
+        summary_path = summaries_dir / "training_results_summary.json"
+        with open(summary_path, "w") as f:
+            json.dump(training_results_summary, f, indent=2, default=str)
+        logger.info(f"💾 Training results summary saved to: {summary_path}")
+    except Exception as e:
+        logger.warning(f"Failed to write training_results_summary.json: {e}")
+    
     return results
 
 # Legacy code path - kept for backwards compatibility but shouldn't be reached
