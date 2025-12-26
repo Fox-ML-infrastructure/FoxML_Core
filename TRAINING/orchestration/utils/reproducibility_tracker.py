@@ -1062,7 +1062,66 @@ class ReproducibilityTracker:
             except Exception as e:
                 logger.debug(f"Could not load strict mode config: {e}, defaulting to non-strict")
             
-            # Determine if we have all required metadata for OutputLayout
+            # ========================================================================
+            # HARD INVARIANTS: These ALWAYS fire regardless of metadata completeness
+            # Cohort prefix mismatches indicate upstream bugs that corrupt the output
+            # ========================================================================
+            
+            # Invariant 1: cohort_id prefix must match view (ALWAYS enforced)
+            if cohort_id and normalized_view:
+                if normalized_view == "CROSS_SECTIONAL" and cohort_id.startswith("sy_"):
+                    raise ValueError(
+                        f"SCOPE VIOLATION: Cannot write sy_ cohort to CROSS_SECTIONAL view. "
+                        f"cohort_id={cohort_id}, view={normalized_view}, stage={stage_normalized}, "
+                        f"target={target_name}, symbol={symbol_from_meta}, universe_sig={universe_sig}. "
+                        f"Check that view_for_writes comes from resolved_data_config['resolved_mode']."
+                    )
+                if normalized_view == "SYMBOL_SPECIFIC" and cohort_id.startswith("cs_"):
+                    raise ValueError(
+                        f"SCOPE VIOLATION: Cannot write cs_ cohort to SYMBOL_SPECIFIC view. "
+                        f"cohort_id={cohort_id}, view={normalized_view}, stage={stage_normalized}, "
+                        f"target={target_name}, symbol={symbol_from_meta}, universe_sig={universe_sig}. "
+                        f"This indicates a missing symbol in cohort computation."
+                    )
+            
+            # Invariant 2: symbol presence must match view (ALWAYS enforced when view is known)
+            if normalized_view:
+                symbol_key_present = "symbol" in cohort_metadata or symbol is not None
+                if normalized_view == "CROSS_SECTIONAL" and symbol_key_present:
+                    raise ValueError(
+                        f"SCOPE VIOLATION: symbol key present for CROSS_SECTIONAL view. "
+                        f"symbol={symbol_from_meta}, view={normalized_view}, stage={stage_normalized}, "
+                        f"target={target_name}, cohort_id={cohort_id}. "
+                        f"CS metadata must not have symbol key at all (not even null)."
+                    )
+                if normalized_view == "SYMBOL_SPECIFIC" and not symbol_from_meta:
+                    raise ValueError(
+                        f"SCOPE VIOLATION: symbol required for SYMBOL_SPECIFIC view but was None/empty. "
+                        f"view={normalized_view}, stage={stage_normalized}, target={target_name}, "
+                        f"cohort_id={cohort_id}. Either provide symbol or use CROSS_SECTIONAL view."
+                    )
+            
+            # Invariant 3: universe_sig required (enforced based on strict mode)
+            if not universe_sig:
+                if strict_mode:
+                    raise ValueError(
+                        f"SCOPE VIOLATION: universe_sig missing (strict mode enabled). "
+                        f"view={normalized_view}, stage={stage_normalized}, target={target_name}, "
+                        f"symbol={symbol_from_meta}, cohort_id={cohort_id}. "
+                        f"Ensure resolved_data_config['universe_sig'] is propagated."
+                    )
+                else:
+                    logger.warning(
+                        f"Missing universe_sig for {stage_normalized}/{target_name}. "
+                        f"view={normalized_view}, symbol={symbol_from_meta}. "
+                        f"Enable strict_scope_partitioning=true to enforce."
+                    )
+            
+            # ========================================================================
+            # END HARD INVARIANTS
+            # ========================================================================
+            
+            # Determine if we have all required metadata for full OutputLayout validation
             has_required_metadata = bool(normalized_view and universe_sig and target_name)
             if normalized_view == "SYMBOL_SPECIFIC" and not symbol_from_meta:
                 has_required_metadata = False
@@ -1078,60 +1137,16 @@ class ReproducibilityTracker:
                         symbol=symbol_from_meta,
                         cohort_id=cohort_id
                     )
-                    # HARD ERROR: Validate cohort_id matches view (catches all writes)
+                    # Validate cohort_id matches view using OutputLayout
                     layout.validate_cohort_id(cohort_id)
-                    
-                    # ========================================================================
-                    # PATCH 3: Hard scope invariants (catches corrupt writes immediately)
-                    # ========================================================================
-                    
-                    # Invariant 1: cohort_id prefix must match view
-                    if cohort_id:
-                        if normalized_view == "CROSS_SECTIONAL" and cohort_id.startswith("sy_"):
-                            raise ValueError(
-                                f"SCOPE VIOLATION: Cannot write sy_ cohort ({cohort_id}) to CROSS_SECTIONAL view. "
-                                f"This indicates a view/symbol mismatch upstream. Check that view_for_writes "
-                                f"comes from resolved_data_config['resolved_mode'], not caller."
-                            )
-                        if normalized_view == "SYMBOL_SPECIFIC" and cohort_id.startswith("cs_"):
-                            raise ValueError(
-                                f"SCOPE VIOLATION: Cannot write cs_ cohort ({cohort_id}) to SYMBOL_SPECIFIC view. "
-                                f"This indicates a missing symbol in cohort computation."
-                            )
-                    
-                    # Invariant 2: symbol presence must match view
-                    # For CS: key must be ABSENT (not even null) - null is still contamination
-                    # For SS: symbol must be a non-empty string
-                    symbol_key_present = "symbol" in cohort_metadata or symbol is not None
-                    if normalized_view == "CROSS_SECTIONAL" and symbol_key_present:
-                        raise ValueError(
-                            f"SCOPE VIOLATION: symbol key present for CROSS_SECTIONAL view (value={symbol_from_meta}). "
-                            f"CS metadata must not have symbol key at all (not even null). "
-                            f"Remove symbol from additional_data for CS writes."
-                        )
-                    if normalized_view == "SYMBOL_SPECIFIC" and not symbol_from_meta:
-                        raise ValueError(
-                            f"SCOPE VIOLATION: symbol required for SYMBOL_SPECIFIC view but was None/empty. "
-                            f"Either provide symbol or use CROSS_SECTIONAL view."
-                        )
-                    
-                    # Invariant 3: universe_sig required for both views (cross-run reproducibility)
-                    if not universe_sig:
-                        raise ValueError(
-                            f"SCOPE VIOLATION: universe_sig missing. Cannot write artifacts without universe scoping. "
-                            f"view={normalized_view}, symbol={symbol_from_meta}, stage={stage}, item={item_name}"
-                        )
                     
                     # Invariant 4: symbol param and metadata symbol must agree (if both present)
                     if symbol and symbol_from_meta and symbol != symbol_from_meta:
                         raise ValueError(
                             f"SCOPE VIOLATION: symbol mismatch - param symbol={symbol}, metadata symbol={symbol_from_meta}. "
+                            f"stage={stage_normalized}, target={target_name}, cohort_id={cohort_id}. "
                             f"This indicates dirty/mutated metadata dict."
                         )
-                    
-                    # ========================================================================
-                    # END PATCH 3
-                    # ========================================================================
                     
                     logger.debug(f"OutputLayout validation passed: view={normalized_view}, cohort_id={cohort_id}")
                 except ValueError as e:

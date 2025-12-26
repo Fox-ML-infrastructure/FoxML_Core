@@ -6,9 +6,9 @@ safety:
   # Controls strict validation of output paths to prevent scope violations
   output_layout:
     # If true, hard error when cohort metadata is missing required fields (view, universe_sig, target)
-    # If false (default), warn and fall back to legacy path construction
-    # Recommended: false for initial rollout, true after PR2 migration is complete
-    strict_scope_partitioning: false
+    # If false, warn and fall back to legacy path construction
+    # Default: true (enforce scope invariants)
+    strict_scope_partitioning: true
 
   # Feature Clipping
   feature_clipping:

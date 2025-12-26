@@ -7,13 +7,286 @@ This module provides the single source of truth for resolving
 (view, symbol, universe_sig) tuples from SST resolved_data_config.
 
 All writers (tracker, feature importance, stability snapshots) MUST
-use resolve_write_scope() to ensure consistent scoping.
+use resolve_write_scope() or WriteScope to ensure consistent scoping.
 """
 
+from dataclasses import dataclass
+from enum import Enum
 from typing import Optional, Tuple, Dict, Any, List
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# WriteScope: First-class scope object for reproducibility writes
+# =============================================================================
+
+class ScopePurpose(Enum):
+    """Purpose of the write - determines output directory root."""
+    FINAL = "FINAL"              # Final artifacts (reproducibility/{view}/)
+    ROUTING_EVAL = "ROUTING_EVAL"  # Routing evaluation artifacts (reproducibility/routing_evaluation/{view}/)
+
+
+@dataclass(frozen=True)
+class WriteScope:
+    """
+    Canonical scope object for reproducibility writes.
+    
+    This is a first-class object that encapsulates all scope information
+    and validates invariants at construction time. Wrong scope combinations
+    are impossible to create.
+    
+    All tracker/writer methods should accept WriteScope instead of loose
+    (view, symbol, universe_sig) args to prevent scope contamination bugs.
+    
+    Attributes:
+        view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
+        universe_sig: Hash of symbol universe (required, never None)
+        symbol: Symbol ticker (None for CS, required for SS)
+        purpose: FINAL or ROUTING_EVAL
+        stage: Pipeline stage ("TARGET_RANKING", "FEATURE_SELECTION", "TRAINING")
+    
+    Examples:
+        # Create CS scope
+        scope = WriteScope.for_cross_sectional(
+            universe_sig="abc123def456",
+            stage="TARGET_RANKING"
+        )
+        
+        # Create SS scope
+        scope = WriteScope.for_symbol_specific(
+            universe_sig="abc123def456",
+            symbol="AAPL",
+            stage="FEATURE_SELECTION"
+        )
+        
+        # Create routing evaluation scope
+        scope = WriteScope.for_routing_eval(
+            view="SYMBOL_SPECIFIC",
+            universe_sig="abc123def456",
+            symbol="AAPL",
+            stage="TARGET_RANKING"
+        )
+    """
+    view: str  # "CROSS_SECTIONAL" | "SYMBOL_SPECIFIC"
+    universe_sig: str  # Never None - required
+    symbol: Optional[str]  # None for CS, required for SS
+    purpose: ScopePurpose
+    stage: str  # "TARGET_RANKING" | "FEATURE_SELECTION" | "TRAINING"
+    
+    def __post_init__(self):
+        """Validate scope invariants at construction."""
+        # Invariant 1: universe_sig is required
+        if not self.universe_sig:
+            raise ValueError(
+                f"WriteScope: universe_sig is required but was None/empty. "
+                f"view={self.view}, symbol={self.symbol}, stage={self.stage}"
+            )
+        
+        # Invariant 2: CS must have symbol=None
+        if self.view == "CROSS_SECTIONAL" and self.symbol is not None:
+            raise ValueError(
+                f"WriteScope: CS scope must have symbol=None, got symbol={self.symbol}. "
+                f"stage={self.stage}, universe_sig={self.universe_sig}"
+            )
+        
+        # Invariant 3: SS must have non-empty symbol
+        if self.view == "SYMBOL_SPECIFIC" and not self.symbol:
+            raise ValueError(
+                f"WriteScope: SS scope requires non-empty symbol, got symbol={self.symbol}. "
+                f"stage={self.stage}, universe_sig={self.universe_sig}"
+            )
+        
+        # Invariant 4: view must be valid
+        if self.view not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
+            raise ValueError(
+                f"WriteScope: invalid view={self.view}. "
+                f"Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'."
+            )
+        
+        # Invariant 5: stage must be valid
+        valid_stages = ("TARGET_RANKING", "FEATURE_SELECTION", "TRAINING")
+        if self.stage not in valid_stages:
+            raise ValueError(
+                f"WriteScope: invalid stage={self.stage}. "
+                f"Must be one of {valid_stages}."
+            )
+    
+    @property
+    def cohort_prefix(self) -> str:
+        """Return expected cohort ID prefix for this scope."""
+        return "cs_" if self.view == "CROSS_SECTIONAL" else "sy_"
+    
+    @property
+    def is_final(self) -> bool:
+        """Return True if this is a final (non-evaluation) scope."""
+        return self.purpose == ScopePurpose.FINAL
+    
+    @property
+    def is_routing_eval(self) -> bool:
+        """Return True if this is a routing evaluation scope."""
+        return self.purpose == ScopePurpose.ROUTING_EVAL
+    
+    def validate_cohort_id(self, cohort_id: str) -> None:
+        """
+        Validate that cohort_id prefix matches this scope's view.
+        
+        Raises:
+            ValueError: If cohort_id prefix doesn't match view
+        """
+        if not cohort_id:
+            return
+        
+        if self.view == "CROSS_SECTIONAL" and cohort_id.startswith("sy_"):
+            raise ValueError(
+                f"WriteScope: Cannot use sy_ cohort with CROSS_SECTIONAL view. "
+                f"cohort_id={cohort_id}, scope={self}"
+            )
+        if self.view == "SYMBOL_SPECIFIC" and cohort_id.startswith("cs_"):
+            raise ValueError(
+                f"WriteScope: Cannot use cs_ cohort with SYMBOL_SPECIFIC view. "
+                f"cohort_id={cohort_id}, scope={self}"
+            )
+    
+    def to_additional_data(self, additional_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Populate additional_data dict with scope fields.
+        
+        Symbol key is ABSENT for CS (not null), present for SS.
+        
+        Args:
+            additional_data: Dict to populate (creates new if None)
+        
+        Returns:
+            The populated dict
+        """
+        if additional_data is None:
+            additional_data = {}
+        
+        additional_data['view'] = self.view
+        additional_data['universe_sig'] = self.universe_sig
+        
+        # Mirror into cs_config for legacy readers
+        if 'cs_config' not in additional_data:
+            additional_data['cs_config'] = {}
+        additional_data['cs_config']['universe_sig'] = self.universe_sig
+        
+        # Symbol key: present for SS, ABSENT for CS
+        if self.view == "SYMBOL_SPECIFIC":
+            additional_data['symbol'] = self.symbol
+        elif 'symbol' in additional_data:
+            del additional_data['symbol']
+        
+        return additional_data
+    
+    @classmethod
+    def for_cross_sectional(
+        cls,
+        universe_sig: str,
+        stage: str,
+        purpose: ScopePurpose = ScopePurpose.FINAL
+    ) -> "WriteScope":
+        """Factory for CROSS_SECTIONAL scope."""
+        return cls(
+            view="CROSS_SECTIONAL",
+            universe_sig=universe_sig,
+            symbol=None,
+            purpose=purpose,
+            stage=stage
+        )
+    
+    @classmethod
+    def for_symbol_specific(
+        cls,
+        universe_sig: str,
+        symbol: str,
+        stage: str,
+        purpose: ScopePurpose = ScopePurpose.FINAL
+    ) -> "WriteScope":
+        """Factory for SYMBOL_SPECIFIC scope."""
+        return cls(
+            view="SYMBOL_SPECIFIC",
+            universe_sig=universe_sig,
+            symbol=symbol,
+            purpose=purpose,
+            stage=stage
+        )
+    
+    @classmethod
+    def for_routing_eval(
+        cls,
+        view: str,
+        universe_sig: str,
+        stage: str,
+        symbol: Optional[str] = None
+    ) -> "WriteScope":
+        """Factory for routing evaluation scope (artifacts go to routing_evaluation/ dir)."""
+        return cls(
+            view=view,
+            universe_sig=universe_sig,
+            symbol=symbol,
+            purpose=ScopePurpose.ROUTING_EVAL,
+            stage=stage
+        )
+    
+    @classmethod
+    def from_resolved_data_config(
+        cls,
+        resolved_data_config: Dict[str, Any],
+        stage: str,
+        symbol: Optional[str] = None,
+        purpose: ScopePurpose = ScopePurpose.FINAL
+    ) -> "WriteScope":
+        """
+        Create WriteScope from SST resolved_data_config.
+        
+        Args:
+            resolved_data_config: SST config with resolved_mode, universe_sig, symbols
+            stage: Pipeline stage
+            symbol: Symbol (optional, auto-derived for SS if SST has 1 symbol)
+            purpose: FINAL or ROUTING_EVAL
+        
+        Returns:
+            WriteScope instance
+        
+        Raises:
+            ValueError: If required fields missing or invariants violated
+        """
+        view = resolved_data_config.get('resolved_mode')
+        universe_sig = resolved_data_config.get('universe_sig')
+        sst_symbols = resolved_data_config.get('symbols') or []
+        
+        if not view:
+            raise ValueError(
+                f"WriteScope.from_resolved_data_config: resolved_mode missing from SST. "
+                f"keys={list(resolved_data_config.keys())}"
+            )
+        
+        if not universe_sig:
+            raise ValueError(
+                f"WriteScope.from_resolved_data_config: universe_sig missing from SST. "
+                f"keys={list(resolved_data_config.keys())}"
+            )
+        
+        # For SS, derive symbol if not provided and SST has exactly 1 symbol
+        if view == "SYMBOL_SPECIFIC" and not symbol:
+            if len(sst_symbols) == 1:
+                symbol = sst_symbols[0]
+                logger.debug(f"WriteScope: auto-derived symbol={symbol} from SST symbols list")
+            else:
+                raise ValueError(
+                    f"WriteScope.from_resolved_data_config: SS view requires symbol but "
+                    f"symbol not provided and SST has {len(sst_symbols)} symbols (need exactly 1 for auto-derive)."
+                )
+        
+        return cls(
+            view=view,
+            universe_sig=universe_sig,
+            symbol=symbol,
+            purpose=purpose,
+            stage=stage
+        )
 
 
 def resolve_write_scope(
