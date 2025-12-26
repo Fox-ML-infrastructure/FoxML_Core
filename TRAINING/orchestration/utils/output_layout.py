@@ -23,8 +23,25 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Dict, Any
 import logging
+import warnings
 
 logger = logging.getLogger(__name__)
+
+# Import WriteScope for scope-safe path building
+try:
+    from TRAINING.orchestration.utils.scope_resolution import (
+        WriteScope,
+        ScopePurpose,
+        View as ScopeView,
+        Stage as ScopeStage
+    )
+    _WRITE_SCOPE_AVAILABLE = True
+except ImportError:
+    _WRITE_SCOPE_AVAILABLE = False
+    WriteScope = None
+    ScopePurpose = None
+    ScopeView = None
+    ScopeStage = None
 
 
 def _normalize_universe_sig(meta: Dict[str, Any]) -> Optional[str]:
@@ -62,7 +79,6 @@ def _normalize_view(meta: Dict[str, Any]) -> Optional[str]:
     return normalized
 
 
-@dataclass
 class OutputLayout:
     """Canonical output path builder with view+universe scoping.
     
@@ -73,18 +89,69 @@ class OutputLayout:
     - SYMBOL_SPECIFIC requires symbol
     - CROSS_SECTIONAL cannot have symbol
     - universe_sig is required for all scopes
-    """
-    output_root: Path
-    target: str
-    view: str  # CROSS_SECTIONAL | SYMBOL_SPECIFIC
-    universe_sig: str  # hash(sorted(symbols)) - REQUIRED for all scopes
-    symbol: Optional[str] = None  # Only when view=SYMBOL_SPECIFIC
-    cohort_id: Optional[str] = None
     
-    def __post_init__(self):
-        # Convert output_root to Path if string
-        if isinstance(self.output_root, str):
-            self.output_root = Path(self.output_root)
+    Usage (preferred - with WriteScope):
+        scope = WriteScope.for_cross_sectional(universe_sig="abc123", stage=Stage.TRAINING)
+        layout = OutputLayout(output_root=run_dir, target="fwd_ret_5d", scope=scope)
+    
+    Usage (deprecated - loose args):
+        layout = OutputLayout(
+            output_root=run_dir,
+            target="fwd_ret_5d",
+            view="CROSS_SECTIONAL",
+            universe_sig="abc123"
+        )
+    """
+    
+    def __init__(
+        self,
+        output_root: Path,
+        target: str,
+        # NEW: Accept WriteScope directly (preferred)
+        scope: Optional["WriteScope"] = None,
+        # DEPRECATED: Loose args (for backward compat)
+        view: Optional[str] = None,
+        universe_sig: Optional[str] = None,
+        symbol: Optional[str] = None,
+        cohort_id: Optional[str] = None,
+    ):
+        """Initialize OutputLayout with either WriteScope (preferred) or loose args.
+        
+        Args:
+            output_root: Base output directory for the run
+            target: Target name
+            scope: WriteScope object (preferred - derives view, universe_sig, symbol, purpose)
+            view: View string (deprecated - use scope instead)
+            universe_sig: Universe signature (deprecated - use scope instead)
+            symbol: Symbol for SYMBOL_SPECIFIC (deprecated - use scope instead)
+            cohort_id: Optional cohort ID
+        """
+        self.output_root = Path(output_root) if isinstance(output_root, str) else output_root
+        self.target = target
+        self.cohort_id = cohort_id
+        
+        if scope is not None:
+            # Preferred path: derive everything from scope
+            if not _WRITE_SCOPE_AVAILABLE:
+                raise ValueError("WriteScope not available but scope was passed")
+            self.scope = scope
+            self.view = scope.view.value if hasattr(scope.view, 'value') else scope.view
+            self.universe_sig = scope.universe_sig
+            self.symbol = scope.symbol
+            self._purpose = scope.purpose
+        else:
+            # Deprecated path: loose args
+            warnings.warn(
+                "OutputLayout with loose args (view, universe_sig, symbol) is deprecated. "
+                "Pass scope=WriteScope(...) instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
+            self.scope = None
+            self.view = view
+            self.universe_sig = universe_sig
+            self.symbol = symbol
+            self._purpose = ScopePurpose.FINAL if _WRITE_SCOPE_AVAILABLE else None
         
         # Hard invariant: view must be valid canonical value
         if self.view not in {"CROSS_SECTIONAL", "SYMBOL_SPECIFIC"}:
@@ -99,6 +166,18 @@ class OutputLayout:
         if not self.universe_sig:
             raise ValueError("universe_sig is required for all scopes")
     
+    @property
+    def purpose(self) -> Optional["ScopePurpose"]:
+        """Get the purpose (FINAL or ROUTING_EVAL) from scope."""
+        return self._purpose
+    
+    @property
+    def is_routing_eval(self) -> bool:
+        """Check if this layout is for routing evaluation artifacts."""
+        if not _WRITE_SCOPE_AVAILABLE or self._purpose is None:
+            return False
+        return self._purpose is ScopePurpose.ROUTING_EVAL
+    
     def scope_key(self) -> str:
         """Get scope key string for consistent partitioning across metrics/trends/models.
         
@@ -112,9 +191,17 @@ class OutputLayout:
     def repro_dir(self) -> Path:
         """Get reproducibility directory for target, scoped by view/universe/symbol.
         
-        Returns: targets/{target}/reproducibility/{view}/universe={universe_sig}/[symbol={symbol}/]
+        Returns:
+            FINAL: targets/{target}/reproducibility/{view}/universe={universe_sig}/[symbol={symbol}/]
+            ROUTING_EVAL: routing_evaluation/{view}/universe={universe_sig}/[symbol={symbol}/]
         """
-        base = self.output_root / "targets" / self.target / "reproducibility" / self.view
+        if self.is_routing_eval:
+            # Routing evaluation artifacts go to separate root
+            base = self.output_root / "routing_evaluation" / self.view
+        else:
+            # Final artifacts go under target
+            base = self.output_root / "targets" / self.target / "reproducibility" / self.view
+        
         base = base / f"universe={self.universe_sig}"
         if self.view == "SYMBOL_SPECIFIC" and self.symbol:
             return base / f"symbol={self.symbol}"
