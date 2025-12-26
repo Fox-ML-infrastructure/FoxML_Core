@@ -3,6 +3,8 @@ View Aggregated Decisions
 
 Utility to view and aggregate all decision files from target-first structure.
 Provides a unified view of routing, target prioritization, and feature prioritization decisions.
+
+Includes RoutingDecisions class for schema v2 support with get_final_route() accessor.
 """
 
 import json
@@ -13,6 +15,190 @@ import pandas as pd
 import yaml
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# RoutingDecisions: Schema-aware wrapper with single authoritative accessor
+# =============================================================================
+
+class RoutingDecisions:
+    """
+    Wrapper for routing_decisions.json with single authoritative accessor.
+    
+    Supports both schema v1 (legacy) and v2 (with final_routes).
+    
+    Schema v1:
+        {
+            "routing_decisions": {
+                "fwd_ret_1d": {"route": "CROSS_SECTIONAL", ...},
+                ...
+            }
+        }
+    
+    Schema v2:
+        {
+            "schema_version": 2,
+            "metadata": {
+                "generated_at": "...",
+                "universe_sig": "...",
+                "evaluation_modes_considered": ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]
+            },
+            "final_routes": {
+                "fwd_ret_1d": "CROSS_SECTIONAL",
+                ...
+            },
+            "final_route_summary": {"CROSS_SECTIONAL": 5, "SYMBOL_SPECIFIC": 2},
+            "routing_decisions": {...}  # Kept for backward compat
+        }
+    
+    Usage:
+        decisions = RoutingDecisions.load(path, strict=True)
+        route = decisions.get_final_route("fwd_ret_1d")  # Always reads from final_routes
+    """
+    
+    def __init__(self, data: Dict[str, Any]):
+        """Initialize with raw data dict."""
+        self._data = data
+        self._schema_version = data.get("schema_version", 1)
+        
+        # Ensure final_routes exists (v1 shim)
+        if "final_routes" not in data:
+            data["final_routes"] = {}
+            for target, target_data in data.get("routing_decisions", {}).items():
+                if isinstance(target_data, dict):
+                    data["final_routes"][target] = target_data.get("route", "CROSS_SECTIONAL")
+                else:
+                    data["final_routes"][target] = "CROSS_SECTIONAL"
+        
+        self._final_routes = data["final_routes"]
+        self._routing_decisions = data.get("routing_decisions", {})
+        self._metadata = data.get("metadata", {})
+    
+    @property
+    def schema_version(self) -> int:
+        """Get schema version."""
+        return self._schema_version
+    
+    @property
+    def metadata(self) -> Dict[str, Any]:
+        """Get metadata dict."""
+        return self._metadata
+    
+    @property
+    def universe_sig(self) -> Optional[str]:
+        """Get universe signature from metadata."""
+        return self._metadata.get("universe_sig")
+    
+    @property
+    def evaluation_modes_considered(self) -> List[str]:
+        """Get list of evaluation modes that were considered."""
+        return self._metadata.get("evaluation_modes_considered", [])
+    
+    def get_final_route(self, target: str, default: Optional[str] = None) -> Optional[str]:
+        """
+        Get authoritative final route for target.
+        
+        ONLY reads from final_routes. Never reads routing_decisions[target].route directly.
+        This ensures single source of truth and prevents dual-source drift.
+        
+        Args:
+            target: Target name
+            default: Default value if target not found
+        
+        Returns:
+            Route string ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC") or default
+        """
+        return self._final_routes.get(target, default)
+    
+    def get_all_routes(self) -> Dict[str, str]:
+        """Get all final routes as a dict."""
+        return dict(self._final_routes)
+    
+    def get_target_details(self, target: str) -> Optional[Dict[str, Any]]:
+        """
+        Get detailed routing information for a target (for backward compat).
+        
+        Returns data from routing_decisions[target], not final_routes.
+        """
+        return self._routing_decisions.get(target)
+    
+    def __iter__(self):
+        """Iterate over target names."""
+        return iter(self._final_routes)
+    
+    def __len__(self):
+        """Get number of targets with routing decisions."""
+        return len(self._final_routes)
+    
+    def __contains__(self, target: str) -> bool:
+        """Check if target has a routing decision."""
+        return target in self._final_routes
+    
+    @classmethod
+    def load(cls, path: Path, strict: bool = False) -> "RoutingDecisions":
+        """
+        Load routing decisions from file.
+        
+        Args:
+            path: Path to routing_decisions.json
+            strict: If True, check for dual-source drift (v2 only)
+        
+        Returns:
+            RoutingDecisions instance
+        
+        Raises:
+            FileNotFoundError: If file doesn't exist
+            ValueError: If strict mode and dual-source drift detected
+        """
+        with open(path) as f:
+            data = json.load(f)
+        
+        schema_version = data.get("schema_version", 1)
+        
+        if schema_version == 2 and strict:
+            # Check for dual-source drift
+            final_routes = data.get("final_routes", {})
+            routing_decisions = data.get("routing_decisions", {})
+            
+            for target, target_data in routing_decisions.items():
+                if isinstance(target_data, dict):
+                    targets_route = target_data.get("route")
+                    final_route = final_routes.get(target)
+                    if targets_route is not None and final_route is not None and targets_route != final_route:
+                        raise ValueError(
+                            f"Dual-source drift: routing_decisions[{target}].route={targets_route} "
+                            f"disagrees with final_routes[{target}]={final_route}. "
+                            f"This indicates a bug in routing schema generation."
+                        )
+        
+        return cls(data)
+    
+    @classmethod
+    def from_output_dir(cls, output_dir: Path, strict: bool = False) -> Optional["RoutingDecisions"]:
+        """
+        Load routing decisions from output directory.
+        
+        Tries globals/routing_decisions.json first.
+        
+        Args:
+            output_dir: Base run output directory
+            strict: If True, check for dual-source drift
+        
+        Returns:
+            RoutingDecisions instance or None if not found
+        """
+        output_dir = Path(output_dir)
+        globals_file = output_dir / "globals" / "routing_decisions.json"
+        
+        if globals_file.exists():
+            try:
+                return cls.load(globals_file, strict=strict)
+            except Exception as e:
+                logger.warning(f"Failed to load routing decisions: {e}")
+                return None
+        
+        logger.debug(f"No routing decisions found at {globals_file}")
+        return None
 
 
 def load_all_routing_decisions(output_dir: Path) -> Dict[str, Dict[str, Any]]:
