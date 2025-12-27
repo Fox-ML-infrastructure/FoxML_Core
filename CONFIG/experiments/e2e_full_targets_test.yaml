@@ -38,10 +38,10 @@ intelligent_training:
   auto_targets: true
   
   # Evaluate top N targets (limited for faster testing)
-  top_n_targets: 5  # Limited for faster testing
+  top_n_targets: 10  # Limited for faster testing
   
   # Maximum targets to evaluate (limited for faster testing)
-  max_targets_to_evaluate: 10 # Limited for faster testing
+  max_targets_to_evaluate: 30 # Limited for faster testing
   
   # Auto-discover features
   auto_features: true
