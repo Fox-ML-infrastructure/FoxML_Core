@@ -114,5 +114,3 @@ For questions or organizational engagements:
 **jenn.lewis5789@gmail.com**
 
 ---
-
-In the event the maintainer dies, ownership shall transfer to Jessica Anne Lewis, or if she has changed her name, the sister of the maintainer.
