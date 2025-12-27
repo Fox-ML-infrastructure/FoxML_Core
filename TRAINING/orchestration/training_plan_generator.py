@@ -56,71 +56,32 @@ class TrainingPlanGenerator:
         """
         self.routing_plan = routing_plan
         
-        # Known feature selectors that should NOT be in training plan
-        # These are used for feature selection only, not for training
-        FEATURE_SELECTORS = {
-            'random_forest', 'catboost', 'lasso', 'mutual_information', 
-            'univariate_selection', 'elastic_net', 'ridge', 'lasso_cv'
-        }
+        # Use centralized filter_trainers for normalization and filtering (SST)
+        from TRAINING.common.utils.sst_contract import filter_trainers, FEATURE_SELECTORS
+        
+        # Store raw families for metadata (before filtering)
+        self._model_families_requested = model_families
         
         # Respect empty list from config (SST) - only use defaults if None
         if model_families is not None:
-            # Normalize family names first (mlp -> neural_network, etc.)
-            from TRAINING.training_strategies.utils import normalize_family_name
-            normalized_families = []
-            normalization_map = {}  # Track what was normalized
-            for f in model_families:
-                normalized = normalize_family_name(f)
-                if normalized != f:
-                    normalization_map[normalized] = f
-                normalized_families.append(normalized)
+            # Use centralized filter_trainers (handles normalization, deduplication, alias mapping)
+            filtered_families = filter_trainers(model_families)
             
-            if normalization_map:
-                logger.debug(f"📋 TrainingPlanGenerator: Normalized family names: {normalization_map}")
-            
-            # Map mlp -> neural_network explicitly (common config variant)
-            mlp_to_neural_network = {}
-            for i, f in enumerate(normalized_families):
-                if f == 'mlp':
-                    normalized_families[i] = 'neural_network'
-                    mlp_to_neural_network['neural_network'] = 'mlp'
-            
-            if mlp_to_neural_network:
-                logger.debug(f"📋 TrainingPlanGenerator: Mapped mlp -> neural_network: {mlp_to_neural_network}")
-            
-            # Filter out feature selectors from normalized families
-            filtered_families = [f for f in normalized_families if f not in FEATURE_SELECTORS]
-            removed = set(normalized_families) - set(filtered_families)
-            
-            if removed:
-                logger.warning(
-                    f"⚠️ TrainingPlanGenerator: Filtered out {len(removed)} feature selector(s) from model_families: {sorted(removed)}. "
-                    f"Feature selectors are not trainers and should not be in training plan."
-                )
-            
-            # Verify families exist in trainer module map
-            try:
-                from TRAINING.training_strategies.execution.family_runners import _run_family_isolated
-                # Import MODMAP from family_runners to check valid families
-                import TRAINING.training_strategies.execution.family_runners as fr_module
-                # MODMAP is defined in the module - check if we can access it
-                # For now, just log which families we're using
-                logger.debug(f"📋 TrainingPlanGenerator: Validated {len(filtered_families)} families after normalization and filtering")
-            except Exception as e:
-                logger.debug(f"Could not validate families against module map: {e}")
+            removed = len(model_families) - len(filtered_families)
+            if removed > 0:
+                logger.debug(f"📋 TrainingPlanGenerator: Filtered {removed} families (selectors/duplicates)")
             
             self.model_families = filtered_families
             logger.info(f"📋 TrainingPlanGenerator: Using provided model_families={self.model_families} (after normalization and filtering, original had {len(model_families)})")
         elif default_families is not None:
             # Filter defaults too
-            filtered_defaults = [f for f in default_families if f not in FEATURE_SELECTORS]
-            self.model_families = filtered_defaults
+            self.model_families = filter_trainers(default_families)
             logger.debug(f"📋 TrainingPlanGenerator: Using default_families={self.model_families} (after filtering)")
         else:
             self.model_families = ["lightgbm", "xgboost"]
             logger.debug(f"📋 TrainingPlanGenerator: Using hardcoded defaults={self.model_families}")
     
-        # Invariant: model_families must not contain feature selectors
+        # Invariant: model_families must not contain feature selectors (defensive check)
         selector_violations = set(self.model_families) & FEATURE_SELECTORS
         if selector_violations:
             raise RuntimeError(
@@ -398,7 +359,10 @@ class TrainingPlanGenerator:
                     "routing_plan_path": str(routing_plan_path),
                     "metrics_snapshot": str(metrics_snapshot) if metrics_snapshot else "globals/routing_candidates.parquet",
                     "total_jobs": len(jobs),
-                    "model_families": list(self.model_families)  # Ensure it's a list
+                    # Store both raw and normalized families for debugging and fallback
+                    "model_families_requested": list(self._model_families_requested) if self._model_families_requested else None,
+                    "model_families_normalized": list(self.model_families),  # Already filtered/normalized
+                    "model_families": list(self.model_families)  # Backward compatibility
                 },
                 "jobs": [],
                 "summary": {}

@@ -439,6 +439,9 @@ def get_model_families_for_job(
     """
     Get model families for a specific job from training plan.
     
+    Falls back to plan metadata if no matching job exists (covers 0-jobs case).
+    Selection is deterministic: matching jobs are sorted before picking.
+    
     Args:
         training_plan: Training plan dict (None = return None)
         target: Target name
@@ -446,34 +449,52 @@ def get_model_families_for_job(
         training_type: Optional training type filter
     
     Returns:
-        List of model families or None if job not found
+        List of model families or None if job not found and no metadata fallback
     """
     if not target:
         logger.warning("Empty target provided to get_model_families_for_job")
         return None
     
-    jobs = get_training_jobs_for_target_symbol(training_plan, target, symbol)
+    matching_jobs = get_training_jobs_for_target_symbol(training_plan, target, symbol)
     
-    if not jobs:
-        return None
+    # Filter by training_type if specified
+    if training_type and matching_jobs:
+        matching_jobs = [j for j in matching_jobs if j.get("training_type") == training_type]
     
-    # If training_type specified, filter by it
-    if training_type:
-        jobs = [j for j in jobs if j.get("training_type") == training_type]
+    # If matching jobs found, pick deterministically (sort with type preference)
+    if matching_jobs:
+        # Type preference order: cross_sectional first, then symbol_specific
+        TYPE_ORDER = {"cross_sectional": 0, "symbol_specific": 1}
+        
+        # Sort for deterministic selection (avoid "works but diffs randomly" bugs)
+        matching_jobs = sorted(
+            matching_jobs,
+            key=lambda j: (
+                TYPE_ORDER.get(j.get("training_type", ""), 99),  # Prefer CS
+                j.get("job_id", ""),
+                j.get("symbol") or "",
+            )
+        )
+        
+        families = matching_jobs[0].get("model_families")
+        
+        # Validate families is a list
+        if families is not None and not isinstance(families, list):
+            logger.warning(f"model_families for job {matching_jobs[0].get('job_id')} is not a list: {type(families)}")
+        elif families:
+            logger.debug(f"Found families for {target}/{symbol}/{training_type} from job {matching_jobs[0].get('job_id')}: {families}")
+            return families
     
-    if not jobs:
-        return None
+    # No matching job - fallback to plan metadata (covers 0-jobs case)
+    if training_plan and isinstance(training_plan, dict):
+        metadata = training_plan.get("metadata", {})
+        # Prefer normalized families, fall back to raw model_families
+        plan_families = metadata.get("model_families_normalized") or metadata.get("model_families")
+        if plan_families and isinstance(plan_families, list):
+            logger.debug(f"No matching job for {target}/{symbol}/{training_type}, using plan metadata: {plan_families}")
+            return plan_families
     
-    # Return model families from first matching job
-    # (In practice, there should be only one job per (target, symbol, type))
-    families = jobs[0].get("model_families")
-    
-    # Validate families is a list
-    if families is not None and not isinstance(families, list):
-        logger.warning(f"model_families for job {jobs[0].get('job_id')} is not a list: {type(families)}")
-        return None
-    
-    return families
+    return None
 
 
 def should_train_target_symbol(

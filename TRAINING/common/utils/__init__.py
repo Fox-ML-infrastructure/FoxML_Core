@@ -23,7 +23,11 @@ from .duration_parser import (
 from .sst_contract import (
     resolve_target_horizon_minutes,
     normalize_family,
-    tracker_input_adapter
+    tracker_input_adapter,
+    FEATURE_SELECTORS,
+    FAMILY_ALIASES,
+    is_trainer_family,
+    filter_trainers
 )
 from .validation import ValidationUtils
 from .data_preprocessor import DataPreprocessor
@@ -55,6 +59,10 @@ __all__ = [
     'resolve_target_horizon_minutes',
     'normalize_family',
     'tracker_input_adapter',
+    'FEATURE_SELECTORS',
+    'FAMILY_ALIASES',
+    'is_trainer_family',
+    'filter_trainers',
     # Validation
     'ValidationUtils',
     # Data processing

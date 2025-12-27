@@ -1625,6 +1625,34 @@ class IntelligentTrainer:
         """
         logger.info("🚀 Starting intelligent training pipeline")
         
+        # Cache SST YAML once for entire run (single load, reuse everywhere in this method)
+        # This prevents inconsistency from multiple loads and ensures we read the same config
+        self._exp_yaml_sst = {}
+        if self.experiment_config:
+            try:
+                exp_name = self.experiment_config.name
+                # Log the identifier being used (catch path vs name bugs)
+                try:
+                    exp_path = _get_experiment_config_path(exp_name)
+                    logger.debug(f"Loading SST YAML: name={exp_name}, resolved_path={exp_path}")
+                except Exception:
+                    logger.debug(f"Loading SST YAML: name={exp_name}")
+                
+                self._exp_yaml_sst = _load_experiment_config_safe(exp_name) or {}
+                if not isinstance(self._exp_yaml_sst, dict):
+                    logger.warning(f"SST YAML loaded but not a dict: {type(self._exp_yaml_sst)}")
+                    self._exp_yaml_sst = {}
+                else:
+                    logger.debug(f"Cached SST YAML: keys={list(self._exp_yaml_sst.keys())}")
+                    # Log critical sections for debugging
+                    if 'training' in self._exp_yaml_sst:
+                        logger.debug(f"  training.model_families={self._exp_yaml_sst['training'].get('model_families')}")
+                    if 'feature_selection' in self._exp_yaml_sst:
+                        logger.debug(f"  feature_selection.model_families={self._exp_yaml_sst['feature_selection'].get('model_families')}")
+            except Exception as e:
+                logger.warning(f"Failed to load SST YAML for {self.experiment_config.name}: {e}")
+                self._exp_yaml_sst = {}
+        
         # Pre-run decision hook: Load latest decision and optionally apply to config
         resolved_config_patch = {}
         decision_artifact_dir = None
@@ -2069,18 +2097,9 @@ class IntelligentTrainer:
             try:
                 from TRAINING.orchestration.routing_integration import generate_routing_plan_after_feature_selection
                 
-                # Extract training.model_families from experiment_config (SST)
-                # CRITICAL: Load raw YAML - dataclass doesn't contain training section
-                exp_yaml = {}
-                if self.experiment_config:
-                    exp_yaml = _load_experiment_config_safe(self.experiment_config.name) or {}
-                    if not isinstance(exp_yaml, dict) or not exp_yaml:
-                        logger.warning(
-                            f"⚠️ Could not load experiment YAML '{self.experiment_config.name}' for SST fields; "
-                            f"falling back to provided families"
-                        )
-                
-                exp_training = exp_yaml.get("training", {}) if isinstance(exp_yaml, dict) else {}
+                # Extract training.model_families from cached SST YAML
+                # Using self._exp_yaml_sst (cached at start of train_with_intelligence)
+                exp_training = self._exp_yaml_sst.get("training", {}) if isinstance(self._exp_yaml_sst, dict) else {}
                 cfg_families = exp_training.get("model_families")
                 
                 # SST precedence: config always wins when present
@@ -2162,6 +2181,28 @@ class IntelligentTrainer:
                         training_plan = None
                     
                     if training_plan:
+                        # Fail-fast check: abort if training plan has 0 jobs unless dev_mode
+                        jobs = training_plan.get("jobs", [])
+                        if len(jobs) == 0:
+                            # Check dev_mode
+                            dev_mode = False
+                            try:
+                                from CONFIG.config_loader import get_cfg
+                                dev_mode = get_cfg("training_config.routing.dev_mode", default=False)
+                            except Exception:
+                                pass
+                            
+                            if not dev_mode:
+                                metadata = training_plan.get('metadata', {})
+                                raise ValueError(
+                                    f"Training plan has 0 jobs and dev_mode is disabled. "
+                                    f"This indicates routing produced no valid jobs for targets: {targets}. "
+                                    f"Check routing thresholds, stability requirements, or enable dev_mode for testing. "
+                                    f"Plan metadata: {metadata}"
+                                )
+                            else:
+                                logger.warning(f"⚠️ Training plan has 0 jobs (dev_mode=true). Using fallback families from metadata/SST.")
+                        
                         try:
                             filtered_targets, filtered_symbols_by_target = apply_training_plan_filter(
                                 targets=targets,
@@ -2230,55 +2271,35 @@ class IntelligentTrainer:
         # Prepare training parameters
         interval = 'cross_sectional'  # Use cross-sectional training
         
-        # Extract model families from training plan if available, otherwise use provided/default
-        # Trace: families parameter comes from config (SST) or CLI
+        # =====================================================================
+        # Phase 3: Extract model families with correct precedence
+        # Precedence: job families → plan metadata → SST training → param → fail
+        # =====================================================================
+        from TRAINING.common.utils.sst_contract import filter_trainers, FEATURE_SELECTORS
+        
         logger.info(f"📋 Training phase: Starting with families parameter={families}")
         
-        # Known feature selectors that should NOT be trained (used for feature selection only)
-        FEATURE_SELECTORS = {
-            'random_forest', 'catboost', 'lasso', 'mutual_information', 
-            'univariate_selection', 'elastic_net', 'ridge', 'lasso_cv'
-        }
+        # Get SST training.model_families from cached YAML
+        sst_training_families = None
+        if self._exp_yaml_sst:
+            exp_training = self._exp_yaml_sst.get("training", {})
+            sst_training_families = exp_training.get("model_families")
+            if sst_training_families:
+                sst_training_families = filter_trainers(sst_training_families)
+                logger.info(f"📋 SST training.model_families={sst_training_families}")
         
-        if families:
-            # Normalize family names first (mlp -> neural_network, etc.)
-            from TRAINING.training_strategies.utils import normalize_family_name
-            normalized_families = []
-            normalization_map = {}  # Track what was normalized
-            for f in families:
-                normalized = normalize_family_name(f)
-                if normalized != f:
-                    normalization_map[normalized] = f
-                normalized_families.append(normalized)
-            
-            # Map mlp -> neural_network explicitly (common config variant)
-            for i, f in enumerate(normalized_families):
-                if f == 'mlp':
-                    normalized_families[i] = 'neural_network'
-                    normalization_map['neural_network'] = 'mlp'
-            
-            if normalization_map:
-                logger.debug(f"📋 Normalized family names: {normalization_map}")
-            
-            # Filter out feature selectors from normalized families list
-            families_list = [f for f in normalized_families if f not in FEATURE_SELECTORS]
-            removed = set(normalized_families) - set(families_list)
-            if removed:
-                logger.warning(f"📋 Filtered out {len(removed)} feature selector(s) from families: {sorted(removed)}. Feature selectors are not trainers and should not be in training.")
-            logger.info(f"📋 Training phase: Using families from parameter (config/CLI) after normalization and filtering: {families_list}")
-        else:
-            families_list = ALL_FAMILIES
-            logger.warning(f"📋 Training phase: No families provided, falling back to ALL_FAMILIES: {families_list}")
-        target_families_map = {}  # Per-target families from training plan
+        # Normalize parameter families if provided
+        param_families = filter_trainers(families) if families else None
         
+        # Build per-target families map via consumer (handles job → metadata fallback)
+        target_families_map = {}
         if training_plan and filtered_targets:
-            # Get model families per target from training plan - with error handling
             for target in filtered_targets:
                 if not isinstance(target, str) or not target:
-                    logger.warning(f"Skipping invalid target in family extraction: {target}")
                     continue
                 
                 try:
+                    # Consumer handles: job families → plan metadata fallback
                     plan_families = get_model_families_for_job(
                         training_plan,
                         target=target,
@@ -2286,63 +2307,49 @@ class IntelligentTrainer:
                         training_type="cross_sectional"
                     )
                     
-                    if plan_families:
-                        # Validate plan_families is a list
-                        if not isinstance(plan_families, list):
-                            logger.warning(f"plan_families for {target} is not a list: {type(plan_families)}")
-                            continue
-                        
-                        logger.debug(f"📋 Target {target}: Found {len(plan_families)} families in plan: {plan_families}")
-                        # Filter to only include families that are in the provided/default list
-                        try:
-                            filtered_plan_families = [f for f in plan_families if f in families_list]
-                            if filtered_plan_families:
-                                target_families_map[target] = filtered_plan_families
-                                logger.debug(f"📋 Target {target}: Using {len(filtered_plan_families)} families from plan (filtered from {len(plan_families)}): {filtered_plan_families}")
-                            else:
-                                logger.warning(f"📋 Target {target}: All {len(plan_families)} plan families filtered out (not in families_list={families_list})")
-                        except Exception as e:
-                            logger.warning(f"Failed to filter plan families for {target}: {e}")
+                    if plan_families and isinstance(plan_families, list):
+                        target_families_map[target] = plan_families
+                        logger.debug(f"📋 Target {target}: families from plan = {plan_families}")
                 except Exception as e:
                     logger.warning(f"Failed to get model families for {target}: {e}")
                     continue
-            
-            if target_families_map:
-                # If all targets have the same families, use that as the global list
-                all_target_families = set()
-                for target_fams in target_families_map.values():
-                    all_target_families.update(target_fams)
-                
-                # Use intersection of all target families (most restrictive)
-                # Only compute intersection if we have at least one target with families
-                if filtered_targets and filtered_targets[0] in target_families_map:
-                    common_families = set(target_families_map[filtered_targets[0]])
-                    for target in filtered_targets[1:]:
-                        if target in target_families_map:
-                            common_families &= set(target_families_map[target])
-                    
-                    if common_families:
-                        families_list = sorted(common_families)
-                        logger.info(f"📋 Using common model families from training plan (intersection): {families_list}")
-                    else:
-                        # Targets have different families - will need per-target filtering
-                        logger.info(f"📋 Targets have different model families in plan - using union: {sorted(all_target_families)}")
-                        families_list = sorted(all_target_families)
-                else:
-                    # No targets in map, use union of all families found
-                    if all_target_families:
-                        families_list = sorted(all_target_families)
-                        logger.info(f"📋 Using model families from training plan (union): {families_list}")
-            else:
-                logger.info(f"📋 No model families found in training plan, using provided/default families: {families_list}")
         
-        # Final filter to ensure no feature selectors made it through (defensive programming)
-        families_list = [f for f in families_list if f not in FEATURE_SELECTORS]
+        # Resolve families with correct precedence
+        # NOTE: Using union across targets. If per-target routing is supported,
+        # pass target_families_map to executor instead of global families_list.
+        # Union is the safe compromise when global list is required.
+        
+        if target_families_map:
+            # Use UNION of all target families (not intersection - don't drop families)
+            all_families = set()
+            for target_fams in target_families_map.values():
+                all_families.update(target_fams)
+            families_list = sorted(all_families)
+            logger.info(f"📋 Using model families from training plan (union of {len(target_families_map)} targets): {families_list}")
+        elif sst_training_families:
+            # Precedence 3: SST training.model_families
+            families_list = sst_training_families
+            logger.info(f"📋 No plan families, using SST training.model_families: {families_list}")
+        elif param_families:
+            # Precedence 4: Parameter families (fallback)
+            families_list = param_families
+            logger.info(f"📋 No plan/SST families, using parameter families: {families_list}")
+        else:
+            # Precedence 5: Fail (configuration error - no silent ALL_FAMILIES fallback)
+            raise ValueError(
+                "No model families available: training plan has no jobs/metadata, "
+                "no SST training.model_families, and no families parameter provided. "
+                "This is a configuration error. Check your experiment config."
+            )
+        
+        # Validate not empty
+        if not families_list:
+            raise ValueError("families_list is empty after resolution. Configuration error.")
         
         # Log final families list for debugging
-        logger.info(f"📋 Final families_list for training: {families_list} (length: {len(families_list)})")
+        logger.info(f"📋 Final families_list for training: {families_list} (count: {len(families_list)})")
         
-        # Invariant: families_list must not contain feature selectors
+        # Invariant: families_list must not contain feature selectors (defensive check)
         selector_violations = set(families_list) & FEATURE_SELECTORS
         if selector_violations:
             raise RuntimeError(
@@ -2625,17 +2632,8 @@ class IntelligentTrainer:
             
             # Update manifest with final targets list
             try:
-                # Load experiment config as dict if available
-                experiment_config_dict = None
-                if hasattr(self, 'experiment_config') and self.experiment_config:
-                    try:
-                        import yaml
-                        exp_name = self.experiment_config.name
-                        exp_file = _get_experiment_config_path(exp_name)
-                        if exp_file.exists():
-                            experiment_config_dict = _load_experiment_config_safe(exp_name)
-                    except Exception as e:
-                        logger.debug(f"Could not load experiment config for final manifest: {e}")
+                # Use cached SST YAML for manifest (consistency)
+                experiment_config_dict = self._exp_yaml_sst if hasattr(self, '_exp_yaml_sst') and self._exp_yaml_sst else None
                 
                 # Update manifest with final information
                 from TRAINING.orchestration.utils.manifest import create_manifest
@@ -3470,11 +3468,18 @@ Examples:
     features = args.features if args.features else (manual_features if manual_features else None)
     
     # Families: CLI overrides config, but config is SST if CLI not provided
+    # CRITICAL: CLI --families ONLY affects training families, NOT feature selection
+    # FS families are intentionally different (include selectors like mutual_information)
     if args.families:
         families = args.families
         logger.info(f"📋 Using model families from CLI (overrides config): {families}")
-        # CLI overrides both training and feature selection
-        fs_families = families
+        # CLI ONLY overrides training families - FS families come from config
+        # fs_families is already set from config above (around line 3203)
+        if 'fs_families' not in locals() or fs_families is None:
+            # Fallback: if fs_families wasn't set from config, keep it separate
+            # Use default FS families that include selectors
+            fs_families = ['lightgbm', 'xgboost', 'random_forest', 'mutual_information', 'univariate_selection']
+            logger.info(f"📋 CLI override: using default feature selection families: {fs_families}")
     elif config_families is not None:
         # Config explicitly set (even if empty list) - use it as SST
         families = config_families if config_families else []
@@ -3492,6 +3497,9 @@ Examples:
         fs_families = families
     
     # Log both resolved sets once per run
+    # IMPORTANT: These are SEPARATE and should NEVER be mixed:
+    # - families: Training families (trainers like lightgbm, xgboost, ensemble)
+    # - fs_families: Feature selection families (may include selectors like mutual_information)
     logger.info(f"📋 Resolved model families - Training: {families}, Feature Selection: {fs_families}")
     
     # Create orchestrator

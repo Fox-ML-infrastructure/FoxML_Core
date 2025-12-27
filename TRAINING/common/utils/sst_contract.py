@@ -87,6 +87,112 @@ def normalize_family(family: Union[str, None]) -> str:
 
 
 # ============================================================================
+# Family Aliases (Single Source of Truth)
+# ============================================================================
+
+# Known aliases for family names
+# These map common variants to canonical names
+FAMILY_ALIASES = {
+    'mlp': 'neural_network',
+    'nn': 'neural_network',
+    'gbm': 'lightgbm',
+    # xgb, lgb, lgbm handled in normalize_family special_cases
+}
+
+
+# ============================================================================
+# Feature Selectors (NOT Training Families)
+# ============================================================================
+
+# Families used ONLY for feature selection stage in this codebase.
+# These are NOT valid training families even though some (like catboost)
+# are trainers in general ML. In our pipeline, they're FS-only.
+FEATURE_SELECTORS = frozenset({
+    'random_forest',       # Used for FS importance, not trained
+    'catboost',            # Used for FS importance, not trained
+    'lasso',               # Used for FS coefficient selection
+    'mutual_information',  # Statistical FS method
+    'univariate_selection',  # Statistical FS method
+    'elastic_net',         # Used for FS coefficient selection
+    'ridge',               # Used for FS coefficient selection
+    'lasso_cv'             # Used for FS coefficient selection
+})
+
+
+def is_trainer_family(name: str) -> bool:
+    """
+    Check if family is a trainer (not a feature selector in this codebase).
+    
+    Args:
+        name: Family name (any case/variant)
+    
+    Returns:
+        True if this is a training family, False if it's a feature selector
+    
+    Examples:
+        is_trainer_family("lightgbm") -> True
+        is_trainer_family("mutual_information") -> False
+        is_trainer_family("random_forest") -> False (FS-only in our pipeline)
+    """
+    if not name:
+        return False
+    normalized = normalize_family(name)
+    # Apply alias
+    normalized = FAMILY_ALIASES.get(normalized, normalized)
+    return normalized not in FEATURE_SELECTORS
+
+
+def filter_trainers(families: List[str]) -> List[str]:
+    """
+    Filter and normalize to only trainer families.
+    
+    This is the SINGLE SOURCE OF TRUTH for filtering training families.
+    
+    - Preserves first-occurrence order
+    - Deduplicates (keeps first occurrence)
+    - Normalizes aliases (mlp -> neural_network)
+    - Filters out feature selectors
+    - Skips empty/whitespace-only strings
+    
+    Args:
+        families: List of family names (may contain duplicates, aliases, whitespace)
+    
+    Returns:
+        Deduplicated, normalized list of trainer families in stable order
+    
+    Examples:
+        filter_trainers(['a', 'A', ' b ', 'a']) -> ['a', 'b']
+        filter_trainers(['lightgbm', 'mutual_information', 'xgboost']) -> ['lightgbm', 'xgboost']
+        filter_trainers(['mlp', 'MLP']) -> ['neural_network']
+    """
+    if not families:
+        return []
+    
+    seen = set()
+    result = []
+    for f in families:
+        if not f or not isinstance(f, str):
+            continue
+        # Normalize
+        normalized = normalize_family(f)
+        if not normalized:
+            continue  # Whitespace-only input
+        # Apply alias
+        normalized = FAMILY_ALIASES.get(normalized, normalized)
+        if not normalized:
+            continue
+        # Filter feature selectors
+        if normalized in FEATURE_SELECTORS:
+            continue
+        # Dedupe
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        result.append(normalized)
+    return result
+
+
+# ============================================================================
 # Target Horizon Resolution
 # ============================================================================
 
