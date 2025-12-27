@@ -2273,14 +2273,48 @@ def select_features_for_target(
                     additional_data_with_cohort['mode_reason'] = resolved_data_config.get('mode_reason')
                     additional_data_with_cohort['loader_contract'] = resolved_data_config.get('loader_contract')
                 
-                # PATCH 0: Add SST-derived view and universe_sig using canonical helper
-                from TRAINING.orchestration.utils.scope_resolution import populate_additional_data
-                populate_additional_data(
-                    additional_data_with_cohort,
-                    view_for_writes=view_for_writes if 'view_for_writes' in locals() else view,
-                    symbol_for_writes=symbol_for_writes if 'symbol_for_writes' in locals() else None,
-                    universe_sig_for_writes=universe_sig if 'universe_sig' in locals() else None
+                # PATCH 0: Create WriteScope from available context for type-safe scope handling
+                from TRAINING.orchestration.utils.scope_resolution import (
+                    WriteScope, ScopePurpose, Stage, View
                 )
+                
+                # Determine scope from SST-derived values
+                scope_view = view_for_writes if 'view_for_writes' in locals() else view
+                scope_symbol = symbol_for_writes if 'symbol_for_writes' in locals() else None
+                scope_universe_sig = universe_sig if 'universe_sig' in locals() else None
+                
+                # Create WriteScope if we have required data
+                scope = None
+                if scope_universe_sig:
+                    try:
+                        if scope_view == "CROSS_SECTIONAL" or scope_symbol is None:
+                            scope = WriteScope.for_cross_sectional(
+                                universe_sig=scope_universe_sig,
+                                stage=Stage.FEATURE_SELECTION,
+                                purpose=ScopePurpose.FINAL
+                            )
+                        else:
+                            scope = WriteScope.for_symbol_specific(
+                                universe_sig=scope_universe_sig,
+                                symbol=scope_symbol,
+                                stage=Stage.FEATURE_SELECTION,
+                                purpose=ScopePurpose.FINAL
+                            )
+                    except ValueError as e:
+                        logger.warning(f"Failed to create WriteScope: {e}")
+                
+                # Use WriteScope to populate additional_data correctly
+                if scope:
+                    scope.to_additional_data(additional_data_with_cohort)
+                else:
+                    # Legacy fallback (deprecated)
+                    from TRAINING.orchestration.utils.scope_resolution import populate_additional_data
+                    populate_additional_data(
+                        additional_data_with_cohort,
+                        view_for_writes=scope_view,
+                        symbol_for_writes=scope_symbol,
+                        universe_sig_for_writes=scope_universe_sig
+                    )
                 
                 # Add fields needed for enhanced metadata (matching target ranking)
                 if selected_features:
@@ -2313,14 +2347,14 @@ def select_features_for_target(
                 except Exception:
                     pass
                 
-                # PATCH 0: Use SST-derived values for tracker call
+                # Use WriteScope-derived values for tracker call
                 tracker.log_comparison(
-                    stage="feature_selection",
+                    stage=scope.stage.value if scope else "feature_selection",
                     item_name=target_column,
                     metrics=metrics_with_cohort,
                     additional_data=additional_data_with_cohort,
-                    route_type=view_for_writes if 'view_for_writes' in locals() else view,  # SST-derived view
-                    symbol=symbol_for_writes if 'symbol_for_writes' in locals() else None  # SST-derived symbol (None if CS)
+                    route_type=scope.view.value if scope else scope_view,
+                    symbol=scope.symbol if scope else scope_symbol
                 )
         except Exception as e:
             # FIX: Ensure cohort variables exist before logging (may not be initialized if exception occurred early)

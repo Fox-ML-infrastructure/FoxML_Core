@@ -7369,15 +7369,44 @@ def evaluate_target_predictability(
                     additional_data_with_cohort['feature_lookback_max_minutes'] = max_lookback_bars * data_interval_minutes
                 
                 # ========================================================================
-                # PATCH 0: Use SST-derived view/symbol/universe_sig for telemetry scoping
+                # PATCH 0: Use WriteScope for type-safe scope handling
                 # ========================================================================
-                from TRAINING.orchestration.utils.scope_resolution import populate_additional_data
-                populate_additional_data(
-                    additional_data_with_cohort,
-                    view_for_writes=view_for_writes,
-                    symbol_for_writes=symbol_for_writes,
-                    universe_sig_for_writes=universe_sig_for_writes
+                from TRAINING.orchestration.utils.scope_resolution import (
+                    WriteScope, ScopePurpose, Stage
                 )
+                
+                # Create WriteScope from SST-derived values
+                scope = None
+                if universe_sig_for_writes:
+                    try:
+                        if view_for_writes == "CROSS_SECTIONAL" or symbol_for_writes is None:
+                            scope = WriteScope.for_cross_sectional(
+                                universe_sig=universe_sig_for_writes,
+                                stage=Stage.TARGET_RANKING,
+                                purpose=ScopePurpose.FINAL
+                            )
+                        else:
+                            scope = WriteScope.for_symbol_specific(
+                                universe_sig=universe_sig_for_writes,
+                                symbol=symbol_for_writes,
+                                stage=Stage.TARGET_RANKING,
+                                purpose=ScopePurpose.FINAL
+                            )
+                    except ValueError as e:
+                        logger.warning(f"Failed to create WriteScope: {e}")
+                
+                # Use WriteScope to populate additional_data correctly
+                if scope:
+                    scope.to_additional_data(additional_data_with_cohort)
+                else:
+                    # Legacy fallback (deprecated)
+                    from TRAINING.orchestration.utils.scope_resolution import populate_additional_data
+                    populate_additional_data(
+                        additional_data_with_cohort,
+                        view_for_writes=view_for_writes,
+                        symbol_for_writes=symbol_for_writes,
+                        universe_sig_for_writes=universe_sig_for_writes
+                    )
                 
                 # Add seed for reproducibility tracking
                 try:
@@ -7389,12 +7418,12 @@ def evaluate_target_predictability(
                     additional_data_with_cohort['seed'] = 42
                 
                 tracker.log_comparison(
-                    stage="target_ranking",
+                    stage=scope.stage.value if scope else "target_ranking",
                     item_name=target_name,
                     metrics=metrics_with_cohort,
                     additional_data=additional_data_with_cohort,
-                    route_type=view_for_writes,  # SST-derived view
-                    symbol=symbol_for_writes  # SST-derived symbol (None if CS)
+                    route_type=scope.view.value if scope else view_for_writes,
+                    symbol=scope.symbol if scope else symbol_for_writes
                 )
         except Exception as e:
             logger.warning(f"Reproducibility tracking failed for {target_name}: {e}")

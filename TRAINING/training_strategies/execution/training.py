@@ -1020,10 +1020,22 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 )
                                 cohort_metrics, cohort_additional_data = format_for_reproducibility_tracker(cohort_metadata)
                                 
-                                # Compute universe_sig for reproducibility tracking
+                                # Compute universe_sig from FULL universe (mtf_data.keys()), NOT [symbol]
+                                # This ensures consistent universe_sig across all writes in this run
                                 from TRAINING.orchestration.utils.run_context import compute_universe_signature
-                                from TRAINING.orchestration.utils.scope_resolution import populate_additional_data
-                                universe_sig = compute_universe_signature([symbol])
+                                from TRAINING.orchestration.utils.scope_resolution import (
+                                    WriteScope, ScopePurpose, Stage
+                                )
+                                full_universe = list(mtf_data.keys()) if mtf_data else [symbol]
+                                universe_sig = compute_universe_signature(full_universe)
+                                
+                                # Create WriteScope for type-safe scope handling
+                                scope = WriteScope.for_symbol_specific(
+                                    universe_sig=universe_sig,
+                                    symbol=symbol,
+                                    stage=Stage.TRAINING,
+                                    purpose=ScopePurpose.FINAL
+                                )
                                 
                                 metrics_with_cohort = {**metrics, **cohort_metrics}
                                 additional_data_with_cohort = {
@@ -1034,21 +1046,16 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     **cohort_additional_data
                                 }
                                 
-                                # Use canonical scope helper (adds view, symbol, universe_sig correctly)
-                                populate_additional_data(
-                                    additional_data_with_cohort,
-                                    view_for_writes="SYMBOL_SPECIFIC",
-                                    symbol_for_writes=symbol,
-                                    universe_sig_for_writes=universe_sig
-                                )
+                                # Use WriteScope to populate additional_data correctly
+                                scope.to_additional_data(additional_data_with_cohort)
                                 
                                 tracker.log_comparison(
-                                    stage="model_training",
+                                    stage=scope.stage.value,
                                     item_name=f"{target}:{symbol}:{family}",
                                     metrics=metrics_with_cohort,
                                     additional_data=additional_data_with_cohort,
-                                    symbol=symbol,
-                                    route_type="SYMBOL_SPECIFIC"  # Use canonical view instead of route
+                                    symbol=scope.symbol,
+                                    route_type=scope.view.value
                                 )
                         except Exception as e:
                             logger.warning(f"Reproducibility tracking failed for {family}:{target}:{symbol}: {e}")
@@ -1422,13 +1429,26 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     **cohort_metrics  # Adds N_effective_cs if available
                                 }
                                 
-                                # Compute universe_sig for reproducibility tracking
+                                # Compute universe_sig from FULL universe (mtf_data.keys())
                                 from TRAINING.orchestration.utils.run_context import compute_universe_signature
-                                from TRAINING.orchestration.utils.scope_resolution import populate_additional_data
+                                from TRAINING.orchestration.utils.scope_resolution import (
+                                    WriteScope, ScopePurpose, Stage
+                                )
                                 
-                                # Get symbols from mtf_data or cohort_metadata
+                                # Get symbols from mtf_data for universe_sig computation
                                 tracking_symbols = list(mtf_data.keys()) if mtf_data else []
                                 universe_sig = compute_universe_signature(tracking_symbols) if tracking_symbols else None
+                                
+                                # Create WriteScope for type-safe scope handling
+                                # This enforces CS has no symbol and validates invariants
+                                if universe_sig:
+                                    scope = WriteScope.for_cross_sectional(
+                                        universe_sig=universe_sig,
+                                        stage=Stage.TRAINING,
+                                        purpose=ScopePurpose.FINAL
+                                    )
+                                else:
+                                    scope = None  # Fallback if no universe_sig
                                 
                                 additional_data_with_cohort = {
                                     "strategy": strategy,
@@ -1438,14 +1458,9 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     **cohort_additional_data  # Adds n_symbols, date_range, cs_config if available
                                 }
                                 
-                                # Use canonical scope helper (adds view, universe_sig correctly)
-                                # CS training doesn't have symbol
-                                populate_additional_data(
-                                    additional_data_with_cohort,
-                                    view_for_writes="CROSS_SECTIONAL",
-                                    symbol_for_writes=None,
-                                    universe_sig_for_writes=universe_sig
-                                )
+                                # Use WriteScope to populate additional_data correctly
+                                if scope:
+                                    scope.to_additional_data(additional_data_with_cohort)
                                 
                                 # CRITICAL: Adapt additional_data to ensure string/Enum safety
                                 # This prevents 'str' object has no attribute 'name' errors
@@ -1465,12 +1480,12 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                         additional_data_adapted[key] = value
                                 
                                 tracker.log_comparison(
-                                    stage="model_training",
+                                    stage=scope.stage.value if scope else "model_training",
                                     item_name=f"{target}:{family_normalized}",
                                     metrics=metrics_with_cohort,
                                     additional_data=additional_data_adapted,
-                                    model_family=family_normalized,  # Use normalized family
-                                    route_type="CROSS_SECTIONAL"  # Use canonical view
+                                    model_family=family_normalized,
+                                    route_type=scope.view.value if scope else "CROSS_SECTIONAL"
                                 )
                         except Exception as e:
                             logger.warning(f"Reproducibility tracking failed for {family}:{target}: {e}")
