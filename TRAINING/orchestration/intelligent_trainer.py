@@ -2070,38 +2070,37 @@ class IntelligentTrainer:
                 from TRAINING.orchestration.routing_integration import generate_routing_plan_after_feature_selection
                 
                 # Extract training.model_families from experiment_config (SST)
-                train_families = None
+                # CRITICAL: Load raw YAML - dataclass doesn't contain training section
+                exp_yaml = {}
                 if self.experiment_config:
-                    exp_yaml = self.experiment_config.to_dict() if hasattr(self.experiment_config, 'to_dict') else {}
-                    if isinstance(self.experiment_config, dict):
-                        exp_yaml = self.experiment_config
-                    exp_training = exp_yaml.get('training', {})
-                    if exp_training:
-                        train_families = exp_training.get('model_families', None)
-                        if train_families is None:
-                            # Fallback to families parameter if training.model_families not set
-                            train_families = families
-                        else:
-                            logger.info(f"📋 Using training.model_families from config (SST): {train_families}")
-                    else:
-                        train_families = families
+                    exp_yaml = _load_experiment_config_safe(self.experiment_config.name) or {}
+                    if not isinstance(exp_yaml, dict) or not exp_yaml:
+                        logger.warning(
+                            f"⚠️ Could not load experiment YAML '{self.experiment_config.name}' for SST fields; "
+                            f"falling back to provided families"
+                        )
+                
+                exp_training = exp_yaml.get("training", {}) if isinstance(exp_yaml, dict) else {}
+                cfg_families = exp_training.get("model_families")
+                
+                # SST precedence: config always wins when present
+                if cfg_families:
+                    logger.info(f"📋 Using training.model_families from config (SST): {cfg_families}")
+                    train_families = cfg_families
                 else:
+                    logger.info(f"📋 training.model_families not set in config; using provided families: {families}")
                     train_families = families
                 
                 # Assert training families match config (if config provided)
-                if self.experiment_config:
-                    exp_yaml = self.experiment_config.to_dict() if hasattr(self.experiment_config, 'to_dict') else {}
-                    if isinstance(self.experiment_config, dict):
-                        exp_yaml = self.experiment_config
-                    exp_training = exp_yaml.get('training', {})
-                    if exp_training and 'model_families' in exp_training:
-                        expected = set(exp_training['model_families'])
-                        actual = set(train_families) if train_families else set()
-                        if expected != actual:
-                            raise RuntimeError(
-                                f"Training families mismatch: expected {sorted(expected)} from config, "
-                                f"got {sorted(actual)}. This indicates a bug in family resolution."
-                            )
+                # Uses same YAML already loaded above to ensure consistency
+                if exp_training and 'model_families' in exp_training:
+                    expected = set(exp_training['model_families'])
+                    actual = set(train_families) if train_families else set()
+                    if expected != actual:
+                        raise RuntimeError(
+                            f"Training families mismatch: expected {sorted(expected)} from config, "
+                            f"got {sorted(actual)}. This indicates a bug in family resolution."
+                        )
                 
                 # Log families source for debugging
                 logger.info(f"📋 Training plan generation: families parameter={train_families}")
