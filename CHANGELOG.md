@@ -16,6 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-27 (Humanitarian & Public Benefit License Exception)
+- **Licensing**: Added Humanitarian & Public Benefit License Exception as a third licensing option alongside AGPL-3.0 and Commercial License
+- **New Document**: Created `HUMANITARIAN_LICENSE.md` with explicit eligibility criteria, conditions, and FAQ
+- **Eligible Organizations**: Registered non-profits, accredited academic/research institutions, government/public-sector research bodies, NGOs/charities, companies conducting non-commercial humanitarian work (with organizational isolation requirement)
+- **Anti-Abuse Measures**: Includes indirect revenue clause blocking lead generation, investor signaling, efficiency gains for commercial operations, and similar loopholes
+- **Transition Clause**: Organizations transitioning to commercial use must obtain a commercial license
+- **Termination Clause**: Upon termination, continued use constitutes unlicensed commercial use
+- **Documentation Updates**: Updated README.md, COMMERCIAL_LICENSE.md, LEGAL/LICENSING.md, LEGAL/QUICK_REFERENCE.md, LEGAL/ACADEMIC.md to reference the new exception
+- **Impact**: Enables genuine humanitarian use (climate research, public health NGOs, disaster response analytics) while blocking VC-backed startups, hedge funds, and internal corporate research teams
+- **Files Changed**: `HUMANITARIAN_LICENSE.md` (NEW), `README.md`, `COMMERCIAL_LICENSE.md`, `LEGAL/LICENSING.md`, `LEGAL/QUICK_REFERENCE.md`, `LEGAL/ACADEMIC.md`
+
 #### 2025-12-23 (Scope Violation Firewall and Output Layout)
 - **Critical Fix**: Implemented scope violation firewall to prevent symbol-specific cohorts (`cohort=sy_*`) from being incorrectly saved under `CROSS_SECTIONAL/` paths. This was causing feature importance and artifacts to be saved at the wrong scope, breaking reproducibility.
 - **New Feature**: Created `OutputLayout` dataclass as Single Source of Truth (SST) for all output paths with hard invariants:

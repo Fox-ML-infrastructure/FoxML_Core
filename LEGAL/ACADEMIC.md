@@ -6,13 +6,20 @@
 
 ## Academic Use Licensing
 
-**FoxML Core is dual-licensed: AGPL v3 + Commercial**
+**FoxML Core licensing: AGPL v3 + Commercial + Humanitarian Exception**
 
 **AGPL v3 use is available for:**
 - Open research and experimentation
 - Academic projects that can comply with AGPL copyleft requirements
 - Individual researchers and developers
 - Open-source academic contributions
+
+**Humanitarian & Public Benefit Exception may apply for:**
+- Accredited academic and research institutions conducting non-commercial research
+- Non-profit research organizations
+- Public-sector research bodies
+- **Conditions:** No revenue (direct or indirect), no proprietary embedding, attribution required
+- See [`HUMANITARIAN_LICENSE.md`](../HUMANITARIAN_LICENSE.md) for full eligibility criteria and FAQ
 
 **Commercial license required for:**
 - Proprietary internal use
@@ -91,4 +98,4 @@ Subject: `FoxML Core Academic Licensing`
 
 ---
 
-**See [`LICENSE`](../LICENSE) for the complete AGPL v3 license terms.**
+**See [`LICENSE`](../LICENSE) for AGPL v3 terms and [`HUMANITARIAN_LICENSE.md`](../HUMANITARIAN_LICENSE.md) for the Humanitarian & Public Benefit Exception.**
