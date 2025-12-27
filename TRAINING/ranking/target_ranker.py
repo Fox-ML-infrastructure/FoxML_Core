@@ -93,7 +93,8 @@ def evaluate_target_predictability(
     explicit_interval: Optional[Union[int, str]] = None,  # Explicit interval from config
     experiment_config: Optional[Any] = None,  # Optional ExperimentConfig (for data.bar_interval)
     view: str = "CROSS_SECTIONAL",  # "CROSS_SECTIONAL", "SYMBOL_SPECIFIC", or "LOSO"
-    symbol: Optional[str] = None  # Required for SYMBOL_SPECIFIC and LOSO views
+    symbol: Optional[str] = None,  # Required for SYMBOL_SPECIFIC and LOSO views
+    scope_purpose: str = "ROUTING_EVAL"  # Default to ROUTING_EVAL for target ranking
 ) -> TargetPredictabilityScore:
     """
     Evaluate predictability of a single target across symbols.
@@ -181,7 +182,8 @@ def evaluate_target_predictability(
         explicit_interval=explicit_interval,
         experiment_config=experiment_config,
         view=view,
-        symbol=symbol
+        symbol=symbol,
+        scope_purpose=scope_purpose
     )
 
 

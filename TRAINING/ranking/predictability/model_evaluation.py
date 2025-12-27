@@ -4985,7 +4985,8 @@ def evaluate_target_predictability(
     explicit_interval: Optional[Union[int, str]] = None,  # Explicit interval from config (e.g., "5m")
     experiment_config: Optional[Any] = None,  # Optional ExperimentConfig (for data.bar_interval)
     view: str = "CROSS_SECTIONAL",  # "CROSS_SECTIONAL", "SYMBOL_SPECIFIC", or "LOSO"
-    symbol: Optional[str] = None  # Required for SYMBOL_SPECIFIC and LOSO views
+    symbol: Optional[str] = None,  # Required for SYMBOL_SPECIFIC and LOSO views
+    scope_purpose: str = "FINAL"  # "FINAL" or "ROUTING_EVAL" - controls where artifacts are written
 ) -> TargetPredictabilityScore:
     """Evaluate predictability of a single target across symbols"""
     
@@ -7375,6 +7376,11 @@ def evaluate_target_predictability(
                     WriteScope, ScopePurpose, Stage
                 )
                 
+                # Determine purpose from caller (scope_purpose parameter)
+                # ROUTING_EVAL: evaluating both modes to decide routing
+                # FINAL: training after routing decision is made
+                purpose = ScopePurpose.ROUTING_EVAL if scope_purpose == "ROUTING_EVAL" else ScopePurpose.FINAL
+                
                 # Create WriteScope from SST-derived values
                 scope = None
                 if universe_sig_for_writes:
@@ -7383,14 +7389,14 @@ def evaluate_target_predictability(
                             scope = WriteScope.for_cross_sectional(
                                 universe_sig=universe_sig_for_writes,
                                 stage=Stage.TARGET_RANKING,
-                                purpose=ScopePurpose.FINAL
+                                purpose=purpose
                             )
                         else:
                             scope = WriteScope.for_symbol_specific(
                                 universe_sig=universe_sig_for_writes,
                                 symbol=symbol_for_writes,
                                 stage=Stage.TARGET_RANKING,
-                                purpose=ScopePurpose.FINAL
+                                purpose=purpose
                             )
                     except ValueError as e:
                         logger.warning(f"Failed to create WriteScope: {e}")
