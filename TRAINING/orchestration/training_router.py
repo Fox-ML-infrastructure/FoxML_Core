@@ -490,10 +490,15 @@ class TrainingRouter:
             Routing plan dict
         """
         # Load resolved_mode from run context (SST)
+        # output_dir is typically globals/routing_plan/, but run_context.json is at globals/
+        # So we need to find the run root (parent of globals/)
         resolved_mode = None
         try:
             from TRAINING.orchestration.utils.run_context import get_resolved_mode
-            resolved_mode = get_resolved_mode(output_dir)
+            from TRAINING.orchestration.utils.target_first_paths import run_root
+            # Navigate to run root from output_dir (which is typically globals/routing_plan/)
+            run_root_dir = run_root(output_dir)
+            resolved_mode = get_resolved_mode(run_root_dir)
             if resolved_mode:
                 logger.info(f"📋 Using resolved_mode={resolved_mode} from run context (SST) for routing plan generation")
         except Exception as e:
@@ -538,13 +543,17 @@ class TrainingRouter:
                 if cs_metrics.stability == StabilityCategory.UNKNOWN and cs_metrics.stability_metrics:
                     cs_metrics.stability = self.classify_stability(cs_metrics.stability_metrics)
             
-            # Extract symbol metrics - use resolved_mode if available (could be SYMBOL_SPECIFIC), otherwise fallback to SYMBOL
-            symbol_mode_filter = resolved_mode if resolved_mode else "SYMBOL"
+            # Extract symbol metrics - use resolved_mode if available, otherwise fallback to SYMBOL_SPECIFIC
+            # NOTE: The fallback was incorrectly "SYMBOL" but routing_candidates uses "SYMBOL_SPECIFIC"
+            symbol_mode_filter = resolved_mode if resolved_mode else "SYMBOL_SPECIFIC"
             symbol_rows = target_rows[target_rows["mode"] == symbol_mode_filter]
+            # Filter out symbol=None rows (these are CS-equivalent aggregates, not per-symbol metrics)
+            if "symbol" in symbol_rows.columns:
+                symbol_rows = symbol_rows[symbol_rows["symbol"].notna()]
             symbols = symbol_rows["symbol"].unique() if "symbol" in symbol_rows.columns else []
             
             if len(symbols) == 0:
-                logger.warning(f"  [{target}]: No symbol metrics found in routing candidates (expected for SYMBOL mode rows)")
+                logger.warning(f"  [{target}]: No symbol metrics found in routing candidates (mode={symbol_mode_filter})")
             
             # Evaluate CS eligibility and get detailed reasons if disabled
             cs_state_eval = None

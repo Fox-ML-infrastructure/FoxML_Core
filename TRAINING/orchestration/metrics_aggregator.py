@@ -306,8 +306,10 @@ class MetricsAggregator:
         if score is None:
             return None
         
-        # Use resolved_mode for mode field (SST)
-        mode_for_row = resolved_mode if resolved_mode else "CROSS_SECTIONAL"
+        # CRITICAL: CS-equivalent rows always use mode=CROSS_SECTIONAL, never SYMBOL_SPECIFIC
+        # Using mode=SYMBOL_SPECIFIC with symbol=None is semantically invalid and breaks routing
+        # The resolved_mode indicates the run's mode, but this row is aggregate data
+        mode_for_row = "CROSS_SECTIONAL"  # Always CS for aggregate rows with symbol=None
         return {
             "target": target,
             "symbol": None,  # CS has no symbol
@@ -778,6 +780,45 @@ class MetricsAggregator:
         
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # SCOPE INVARIANT CHECK: Catch semantic violations before saving
+        # This prevents "0 jobs" failures from reaching the router
+        if "mode" in candidates_df.columns and "symbol" in candidates_df.columns:
+            # Invariant 1: No SYMBOL_SPECIFIC rows with symbol=None
+            ss_null = candidates_df[
+                (candidates_df["mode"] == "SYMBOL_SPECIFIC") & 
+                (candidates_df["symbol"].isna())
+            ]
+            if len(ss_null) > 0:
+                raise ValueError(
+                    f"SCOPE INVARIANT VIOLATION: {len(ss_null)} rows have mode=SYMBOL_SPECIFIC "
+                    f"but symbol=None. This is semantically invalid. "
+                    f"Targets affected: {ss_null['target'].unique().tolist()}"
+                )
+            
+            # Invariant 2: If resolved_mode=SYMBOL_SPECIFIC, must have real symbol rows
+            resolved_mode = None
+            try:
+                from TRAINING.orchestration.utils.run_context import get_resolved_mode
+                from TRAINING.orchestration.utils.target_first_paths import run_root
+                run_root_dir = run_root(self.output_dir)
+                resolved_mode = get_resolved_mode(run_root_dir)
+            except Exception:
+                pass
+            
+            if resolved_mode == "SYMBOL_SPECIFIC":
+                real_symbol_rows = candidates_df[
+                    (candidates_df["symbol"].notna()) & 
+                    (~candidates_df["symbol"].isin(["__AGG__"]))
+                ]
+                if len(real_symbol_rows) == 0:
+                    raise ValueError(
+                        f"SEMANTIC CONTRACT VIOLATION: resolved_mode=SYMBOL_SPECIFIC but no "
+                        f"per-symbol candidate rows exist (all symbols are None or __AGG__). "
+                        f"Upstream must produce per-symbol metrics when running in SYMBOL_SPECIFIC mode."
+                    )
+            
+            logger.info(f"✅ Scope invariant check passed: {len(candidates_df)} rows, resolved_mode={resolved_mode}")
         
         # Save as parquet (with fallback to CSV if parquet not available)
         try:
