@@ -41,8 +41,8 @@ def normalize_family(family: Union[str, None]) -> str:
         "x_g_boost" -> "xgboost"
         "RandomForest" -> "random_forest"
         "random_forest" -> "random_forest"
-        "mlp" -> "neural_network"  (alias)
-        "nn" -> "neural_network"   (alias)
+        "mlp" -> "mlp"  (canonical - distinct from neural_network)
+        "nn" -> "neural_network"  (alias)
     """
     if not family or not isinstance(family, str):
         return str(family).lower() if family else ""
@@ -51,20 +51,14 @@ def normalize_family(family: Union[str, None]) -> str:
     family_clean = family.strip().replace("-", "_").replace(" ", "_")
     
     # Special cases for common variants (CRITICAL: handle before other normalization)
-    special_cases = {
-        "x_g_boost": "xgboost",  # Fix: x_g_boost -> xgboost alias
-        "xgb": "xgboost",
-        "lgb": "lightgbm",
-        "lgbm": "lightgbm",
-        "xgboost": "xgboost",  # Ensure XGBoost -> xgboost (not x_g_boost)
-    }
+    # Uses module-scope SPECIAL_CASES for SST (validated by validate_sst_contract)
     family_lower = family_clean.lower()
-    if family_lower in special_cases:
-        result = special_cases[family_lower]
+    if family_lower in SPECIAL_CASES:
+        result = SPECIAL_CASES[family_lower]
         # Apply FAMILY_ALIASES as final step (single source of truth)
         return FAMILY_ALIASES.get(result, result)
     
-    # Also check if input is "XGBoost" (TitleCase) - normalize before special cases
+    # Handle TitleCase "XGBoost" -> "xgboost"
     if family_clean == "XGBoost":
         return "xgboost"
     
@@ -101,11 +95,22 @@ def normalize_family(family: Union[str, None]) -> str:
 
 # Known aliases for family names
 # These map common variants to canonical names
+# NOTE: Only include TRUE synonyms here. Do NOT include canonical keys that exist in TRAINER_MODULE_MAP.
+# e.g., 'mlp' is a distinct trainer, not an alias for 'neural_network'
 FAMILY_ALIASES = {
-    'mlp': 'neural_network',
     'nn': 'neural_network',
     'gbm': 'lightgbm',
-    # xgb, lgb, lgbm handled in normalize_family special_cases
+    # xgb, lgb, lgbm handled in SPECIAL_CASES below
+}
+
+# Special case mappings for normalize_family()
+# These handle common abbreviations and malformed variants
+# NOTE: Do NOT include canonical self-maps (e.g., 'xgboost': 'xgboost')
+SPECIAL_CASES = {
+    "x_g_boost": "xgboost",  # Fix malformed camelCase split
+    "xgb": "xgboost",
+    "lgb": "lightgbm",
+    "lgbm": "lightgbm",
 }
 
 
@@ -126,6 +131,115 @@ FEATURE_SELECTORS = frozenset({
     'ridge',               # Used for FS coefficient selection
     'lasso_cv'             # Used for FS coefficient selection
 })
+
+
+# ============================================================================
+# SST Contract Validation
+# ============================================================================
+
+def validate_sst_contract(canonical_keys: set) -> list:
+    """
+    Validate FAMILY_ALIASES and SPECIAL_CASES against canonical keys.
+    
+    This function ensures alias mappings are consistent with the canonical
+    registry (e.g., TRAINER_MODULE_MAP). Called at startup by registry_validation.py.
+    
+    Checks:
+    1. No alias key may be a canonical key (strict - no exceptions)
+    2. Alias target must exist in canonical_keys
+    3. Literal key conflicts across sources (same key, different targets)
+    4. Normalization collisions across alias keys
+    5. No alias chains (target must not be an alias key)
+    6. No cycles
+    7. Keys and targets must be already normalized
+    
+    Args:
+        canonical_keys: Set of canonical family/trainer keys to validate against
+    
+    Returns:
+        List of error strings (empty if valid)
+    """
+    errors = []
+
+    def _base_normalize(s: str) -> str:
+        return s.strip().lower().replace("-", "_").replace(" ", "_")
+
+    sources = [
+        ("SPECIAL_CASES", SPECIAL_CASES),
+        ("FAMILY_ALIASES", FAMILY_ALIASES),
+    ]
+
+    # Flatten entries so nothing gets overwritten by ** merge
+    entries = []
+    for source, amap in sources:
+        for k, v in amap.items():
+            entries.append((source, k, v))
+
+    literal_seen = {}  # key -> (source, target)
+    norm_seen = {}     # normalized_key -> (source, original_key)
+
+    for source, k, v in entries:
+        nk = _base_normalize(k)
+        nv = _base_normalize(v)
+
+        # 1) Keys and targets must be already normalized
+        if k != nk:
+            errors.append(f"{source}: alias key '{k}' is not normalized (expected '{nk}')")
+        if v != nv:
+            errors.append(f"{source}: alias target '{v}' is not normalized (expected '{nv}')")
+
+        # 2) Alias key must NOT be a canonical key (strict - no exceptions)
+        if k in canonical_keys:
+            errors.append(f"{source}: alias '{k}' shadows canonical key '{k}'")
+
+        # 3) Alias target must exist in canonical_keys
+        if v not in canonical_keys:
+            errors.append(f"{source}: alias '{k}' -> '{v}' targets missing canonical key '{v}'")
+
+        # 4) Literal conflicts across sources (same key, different targets)
+        if k in literal_seen and literal_seen[k][1] != v:
+            prev_source, prev_v = literal_seen[k]
+            errors.append(
+                f"Alias key '{k}' defined twice with different targets: "
+                f"{prev_source} -> '{prev_v}' vs {source} -> '{v}'"
+            )
+        else:
+            literal_seen.setdefault(k, (source, v))
+
+        # 5) Normalization collisions across alias keys
+        if nk in norm_seen and norm_seen[nk][1] != k:
+            prev_source, prev_k = norm_seen[nk]
+            errors.append(
+                f"Normalization collision: '{k}' ({source}) and '{prev_k}' ({prev_source}) "
+                f"both normalize to '{nk}'"
+            )
+        else:
+            norm_seen.setdefault(nk, (source, k))
+
+    # Build combined mapping for chain/cycle detection (safe now - conflicts already detected)
+    combined = {k: v for _, k, v in entries}
+
+    # 6) Chain detection: if target is also an alias key, that's a chain
+    for k, v in combined.items():
+        if v in combined:
+            errors.append(f"Alias chain: '{k}' -> '{v}' but '{v}' is also an alias key")
+
+    # 7) Cycle detection (defensive) with path tracking
+    def walk(start: str) -> None:
+        path = []
+        cur = start
+        while cur in combined:
+            if cur in path:
+                cycle_str = " -> ".join(path + [cur])
+                errors.append(f"Alias cycle detected: {cycle_str}")
+                return
+            path.append(cur)
+            cur = combined[cur]
+
+    for _, k, _ in entries:
+        walk(k)
+
+    return errors
 
 
 def is_trainer_family(name: str) -> bool:
@@ -159,7 +273,7 @@ def filter_trainers(families: List[str]) -> List[str]:
     
     - Preserves first-occurrence order
     - Deduplicates (keeps first occurrence)
-    - Normalizes aliases (mlp -> neural_network)
+    - Normalizes aliases (nn -> neural_network, xgb -> xgboost, etc.)
     - Filters out feature selectors
     - Skips empty/whitespace-only strings
     
@@ -172,7 +286,8 @@ def filter_trainers(families: List[str]) -> List[str]:
     Examples:
         filter_trainers(['a', 'A', ' b ', 'a']) -> ['a', 'b']
         filter_trainers(['lightgbm', 'mutual_information', 'xgboost']) -> ['lightgbm', 'xgboost']
-        filter_trainers(['mlp', 'MLP']) -> ['neural_network']
+        filter_trainers(['mlp', 'MLP']) -> ['mlp']  # mlp is canonical, not an alias
+        filter_trainers(['nn', 'NN']) -> ['neural_network']  # nn is an alias
     """
     if not families:
         return []

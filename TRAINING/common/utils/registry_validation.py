@@ -67,6 +67,24 @@ def validate_all_registries():
         from TRAINING.common.isolation_runner import TRAINER_MODULE_MAP
         _assert_canonical_keys(TRAINER_MODULE_MAP, "TRAINER_MODULE_MAP")
         logger.debug("✅ TRAINER_MODULE_MAP validation passed")
+        
+        # Validate SST alias mappings against canonical keys
+        try:
+            from TRAINING.common.utils.sst_contract import validate_sst_contract
+            
+            # Normalize canonical keys to ensure apples-to-apples comparison
+            def _base_normalize(s: str) -> str:
+                return s.strip().lower().replace("-", "_").replace(" ", "_")
+            
+            canonical_keys = {_base_normalize(k) for k in TRAINER_MODULE_MAP.keys()}
+            alias_errors = validate_sst_contract(canonical_keys)
+            if alias_errors:
+                error_msg = "SST alias validation failed:\n" + "\n".join(f"  • {e}" for e in alias_errors)
+                logger.error(f"❌ {error_msg}")
+                raise AssertionError(error_msg)
+            logger.debug("✅ SST alias validation passed")
+        except ImportError:
+            logger.warning("Could not import validate_sst_contract for validation")
     except ImportError:
         logger.warning("Could not import TRAINER_MODULE_MAP for validation")
     
