@@ -16,6 +16,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2025-12-29 (Routing Pipeline Metrics Lookup and Alias Validation)
+- **Critical Fix**: Fixed routing pipeline producing 0 jobs due to metrics path mismatch. `_load_symbol_metrics()` was looking for `multi_model_metadata.json` directly in `symbol=X/` but metrics were written inside `cohort=Y/metrics.json`. Now descends into cohort directories with deterministic selection (mtime, name tuple for tie-breaking).
+- **Critical Fix**: Removed incorrect `mlp` → `neural_network` alias from `FAMILY_ALIASES`. `mlp` and `neural_network` are distinct trainers with separate implementations (`MLPTrainer` vs `NeuralNetworkTrainer`). `normalize_family("mlp")` now correctly returns `"mlp"`.
+- **New Feature**: Added `validate_sst_contract()` for comprehensive alias validation at startup:
+  - No alias key may shadow a canonical key (strict policy)
+  - Alias target must exist in canonical registry
+  - Cross-source conflict detection (same key, different targets)
+  - Normalization collision detection across alias keys
+  - Chain and cycle detection with path tracking
+- **Safety Enhancement**: Family invariant check now validates against `training.model_families` (SST) instead of `feature_selection.model_families`. Uses `normalize_family()` on both sides for apples-to-apples comparison.
+- **Safety Enhancement**: Fail-fast on 0 jobs - `ValueError("FATAL: Training plan has 0 jobs...")` raised with routing diagnostics. Exception explicitly re-raised past outer `try/except` handlers.
+- **Bug Fix**: `target_repro_dir()` now uses `path_mode` variable derived from SST `resolved_mode` instead of mutating caller's `view` parameter. Warn-once pattern for view mismatches.
+- **Bug Fix**: Moved `SPECIAL_CASES` to module scope in `sst_contract.py` so both `normalize_family()` and `validate_sst_contract()` reference the same source of truth. Removed canonical self-map `"xgboost": "xgboost"`.
+- **Config**: Added optional `routing.allow_mode_fallback` flag (default: false) to allow CS metrics fallback when symbol metrics missing.
+- **Impact**: Training pipeline no longer fails with 0 jobs on valid data. Alias conflicts detected at startup. Future alias mistakes (shadow, chain, cycle, missing target) fail fast.
+- **Files Changed**: `metrics_aggregator.py`, `intelligent_trainer.py`, `routing_integration.py`, `target_first_paths.py`, `sst_contract.py`, `registry_validation.py`
+
 #### 2025-12-27 (Humanitarian & Public Benefit License Exception)
 - **Licensing**: Added Humanitarian & Public Benefit License Exception as a third licensing option alongside AGPL-3.0 and Commercial License
 - **New Document**: Created `HUMANITARIAN_LICENSE.md` with explicit eligibility criteria, conditions, and FAQ
