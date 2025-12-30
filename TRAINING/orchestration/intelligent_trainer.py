@@ -2182,8 +2182,10 @@ class IntelligentTrainer:
                     
                     if training_plan:
                         # Fail-fast check: abort if training plan has 0 jobs unless dev_mode
+                        # CRITICAL: This must not be caught by broad exception handlers
                         jobs = training_plan.get("jobs", [])
-                        if len(jobs) == 0:
+                        total_jobs = training_plan.get("metadata", {}).get("total_jobs", len(jobs))
+                        if total_jobs == 0:
                             # Check dev_mode
                             dev_mode = False
                             try:
@@ -2192,16 +2194,27 @@ class IntelligentTrainer:
                             except Exception:
                                 pass
                             
+                            # Load resolved_mode for diagnostics
+                            resolved_mode = "UNKNOWN"
+                            try:
+                                from TRAINING.orchestration.utils.run_context import get_resolved_mode
+                                resolved_mode = get_resolved_mode(self.output_dir) or "UNKNOWN"
+                            except Exception:
+                                pass
+                            
                             if not dev_mode:
-                                metadata = training_plan.get('metadata', {})
                                 raise ValueError(
-                                    f"Training plan has 0 jobs and dev_mode is disabled. "
-                                    f"This indicates routing produced no valid jobs for targets: {targets}. "
-                                    f"Check routing thresholds, stability requirements, or enable dev_mode for testing. "
-                                    f"Plan metadata: {metadata}"
+                                    f"FATAL: Training plan has 0 jobs. Routing diagnostics: "
+                                    f"resolved_mode={resolved_mode}, targets_checked={len(targets)}, "
+                                    f"symbols={len(self.symbols) if self.symbols else 'N/A'}. "
+                                    f"Check globals/routing/routing_candidates.json for details."
                                 )
                             else:
-                                logger.warning(f"⚠️ Training plan has 0 jobs (dev_mode=true). Using fallback families from metadata/SST.")
+                                logger.warning(
+                                    f"⚠️ Training plan has 0 jobs (dev_mode=true). "
+                                    f"resolved_mode={resolved_mode}, targets={len(targets)}. "
+                                    f"Using fallback families from metadata/SST."
+                                )
                         
                         try:
                             filtered_targets, filtered_symbols_by_target = apply_training_plan_filter(
@@ -2248,12 +2261,18 @@ class IntelligentTrainer:
                                     target_features = filtered_target_features
                                 except Exception as e:
                                     logger.warning(f"Failed to filter target_features: {e}, keeping original")
+                        except ValueError:
+                            # Re-raise ValueError (fail-fast for 0 jobs)
+                            raise
                         except Exception as e:
                             logger.warning(f"Failed to apply training plan filter: {e}, using all targets")
                             filtered_targets = targets
                             filtered_symbols_by_target = {t: self.symbols for t in targets}
+            except ValueError:
+                # Re-raise ValueError (fail-fast for 0 jobs, critical errors)
+                raise
             except Exception as e:
-                logger.warning(f"Failed to apply training plan filter (non-critical): {e}", exc_info=True)
+                logger.warning(f"Failed to apply training plan filter: {e}", exc_info=True)
         
         # Load MTF data for all symbols
         logger.info(f"Loading data for {len(self.symbols)} symbols...")
@@ -2357,17 +2376,22 @@ class IntelligentTrainer:
                 f"These should have been filtered. Full list: {families_list}"
             )
         
-        # Invariant: families_list must only contain config-enabled trainers (if config provided)
-        if families is not None:  # Config was provided
-            from TRAINING.training_strategies.utils import normalize_family_name
-            config_families_set = set(normalize_family_name(f) for f in families)
-            families_list_normalized = [normalize_family_name(f) for f in families_list]
-            extra_families = set(families_list_normalized) - config_families_set
+        # Invariant: families_list must only contain config-enabled trainers (if SST training families provided)
+        # NOTE: Validate against sst_training_families (training.model_families), NOT the families parameter
+        # (which comes from feature_selection.model_families - a different config section)
+        if sst_training_families is not None:
+            from TRAINING.common.utils.sst_contract import normalize_family
+            
+            # Normalize both sides using single-source-of-truth function (includes alias resolution)
+            sst_set = {normalize_family(f) for f in sst_training_families}
+            plan_set = {normalize_family(f) for f in families_list}
+            
+            extra_families = plan_set - sst_set
             if extra_families:
                 raise RuntimeError(
-                    f"🚨 INVARIANT VIOLATION: families_list contains families not in config: {extra_families}. "
-                    f"Config families: {sorted(config_families_set)}, "
-                    f"Produced families: {sorted(families_list_normalized)}"
+                    f"🚨 INVARIANT VIOLATION: families not in training.model_families: {extra_families}. "
+                    f"SST training families (normalized): {sorted(sst_set)}, "
+                    f"Plan families (normalized): {sorted(plan_set)}"
                 )
         
         # Validate families_list is not empty

@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 def normalize_family(family: Union[str, None]) -> str:
     """
-    Canonicalize model family name to snake_case lowercase.
+    Canonicalize model family name to snake_case lowercase, with alias resolution.
     
     This is the SINGLE SOURCE OF TRUTH for family name normalization.
     All registries (MODMAP, TRAINER_MODULE_MAP, runtime_policy, FAMILY_CAPS)
@@ -33,7 +33,7 @@ def normalize_family(family: Union[str, None]) -> str:
         family: Family name (can be any case/variant)
     
     Returns:
-        Normalized family name in snake_case lowercase
+        Normalized family name in snake_case lowercase with aliases resolved
     
     Examples:
         "LightGBM" -> "lightgbm"
@@ -41,6 +41,8 @@ def normalize_family(family: Union[str, None]) -> str:
         "x_g_boost" -> "xgboost"
         "RandomForest" -> "random_forest"
         "random_forest" -> "random_forest"
+        "mlp" -> "neural_network"  (alias)
+        "nn" -> "neural_network"   (alias)
     """
     if not family or not isinstance(family, str):
         return str(family).lower() if family else ""
@@ -58,7 +60,9 @@ def normalize_family(family: Union[str, None]) -> str:
     }
     family_lower = family_clean.lower()
     if family_lower in special_cases:
-        return special_cases[family_lower]
+        result = special_cases[family_lower]
+        # Apply FAMILY_ALIASES as final step (single source of truth)
+        return FAMILY_ALIASES.get(result, result)
     
     # Also check if input is "XGBoost" (TitleCase) - normalize before special cases
     if family_clean == "XGBoost":
@@ -66,7 +70,9 @@ def normalize_family(family: Union[str, None]) -> str:
     
     # If already snake_case (has underscores), just lowercase
     if "_" in family_clean:
-        return family_clean.lower().replace("__", "_")
+        result = family_clean.lower().replace("__", "_")
+        # Apply FAMILY_ALIASES as final step (single source of truth)
+        return FAMILY_ALIASES.get(result, result)
     
     # Convert TitleCase/CamelCase to snake_case
     # Split on capital letters: "LightGBM" -> ["", "Light", "GBM"]
@@ -75,7 +81,9 @@ def normalize_family(family: Union[str, None]) -> str:
     
     if len(parts) == 1:
         # Single word, just lowercase
-        return parts[0].lower()
+        result = parts[0].lower()
+        # Apply FAMILY_ALIASES as final step (single source of truth)
+        return FAMILY_ALIASES.get(result, result)
     
     # Join parts with underscores, all lowercase
     result = "_".join(p.lower() for p in parts)
@@ -83,7 +91,8 @@ def normalize_family(family: Union[str, None]) -> str:
     # Clean up: remove double underscores
     result = result.replace("__", "_")
     
-    return result
+    # Apply FAMILY_ALIASES as final step (single source of truth)
+    return FAMILY_ALIASES.get(result, result)
 
 
 # ============================================================================

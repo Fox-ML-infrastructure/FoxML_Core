@@ -6,10 +6,13 @@ Target is the stable join key - all per-target artifacts live together under tar
 """
 
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Set
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Module-level warn-once set for view/resolved_mode mismatches
+_view_mismatch_warned: Set[tuple] = set()
 
 
 def get_target_dir(base_output_dir: Path, target: str) -> Path:
@@ -438,25 +441,28 @@ def target_repro_dir(
     if view == "SYMBOL_SPECIFIC" and symbol is None:
         raise ValueError("symbol parameter is required when view='SYMBOL_SPECIFIC'")
     
-    # Try to load resolved_mode from run context (SST) and warn if mismatch
+    # Derive path_mode from SST resolved_mode (don't mutate view - callers may rely on it)
+    path_mode = view  # Default to caller's view
     try:
         from TRAINING.orchestration.utils.run_context import get_resolved_mode
-        import logging
-        logger = logging.getLogger(__name__)
         resolved_mode = get_resolved_mode(run_root)
         if resolved_mode and resolved_mode != view:
-            logger.warning(
-                f"⚠️  View mismatch: passed view={view} but resolved_mode={resolved_mode} from run context (SST). "
-                f"Using passed view={view} for path construction, but this may cause inconsistencies. "
-                f"Consider passing resolved_mode instead."
-            )
+            # Warn-once: don't spam logs for every file/target
+            warn_key = (view, resolved_mode)
+            if warn_key not in _view_mismatch_warned:
+                _view_mismatch_warned.add(warn_key)
+                logger.warning(
+                    f"View mismatch (once): passed view={view} but resolved_mode={resolved_mode}. "
+                    f"Using resolved_mode={resolved_mode} for path construction."
+                )
+            path_mode = resolved_mode  # Use SST for paths, but don't mutate view
     except Exception:
         pass  # Silently ignore if run context not available
     
     base_repro_dir = get_target_reproducibility_dir(Path(run_root), target)
     
-    # Build path with optional universe_sig
-    if view == "CROSS_SECTIONAL":
+    # Build path with optional universe_sig using path_mode (SST-derived)
+    if path_mode == "CROSS_SECTIONAL":
         path = base_repro_dir / "CROSS_SECTIONAL"
         if universe_sig:
             path = path / f"universe={universe_sig}"

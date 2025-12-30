@@ -214,6 +214,19 @@ def generate_routing_plan_after_feature_selection(
                             symbol_jobs = summary.get("total_symbol_jobs", 0)
                             logger.info(f"   CS jobs: {cs_jobs}")
                             logger.info(f"   Symbol jobs: {symbol_jobs}")
+                            
+                            # Fail-fast: 0 jobs is a critical routing failure
+                            if total_jobs == 0:
+                                logger.error(
+                                    f"FATAL: Training plan has 0 jobs. Routing produced no valid jobs. "
+                                    f"Check globals/routing/routing_candidates.json for details."
+                                )
+                                # Raise ValueError so intelligent_trainer can handle appropriately
+                                raise ValueError(
+                                    f"FATAL: Training plan has 0 jobs. "
+                                    f"targets={len(targets)}, symbols={len(symbols)}. "
+                                    f"Check globals/routing/routing_candidates.json for details."
+                                )
                         else:
                             logger.warning(f"Training plan is not a dict, got {type(training_plan)}")
                     except ValueError as e:
@@ -221,11 +234,14 @@ def generate_routing_plan_after_feature_selection(
                         logger.error(f"Failed to generate training plan (critical): {e}", exc_info=True)
                         raise
                     except Exception as e:
-                        logger.warning(f"Failed to generate training plan (non-critical): {e}", exc_info=True)
+                        logger.warning(f"Failed to generate training plan: {e}", exc_info=True)
             except ImportError as e:
                 logger.warning(f"Failed to import TrainingPlanGenerator: {e}, skipping training plan generation")
+            except ValueError:
+                # Critical error (e.g. 0 jobs) - re-raise
+                raise
             except Exception as e:
-                logger.warning(f"Failed to generate training plan (non-critical): {e}", exc_info=True)
+                logger.warning(f"Failed to generate training plan: {e}", exc_info=True)
         
         logger.info("="*80)
         

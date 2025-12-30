@@ -17,6 +17,21 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+# Module-level cache for allow_mode_fallback config (evaluated once, not per target)
+_allow_mode_fallback = None
+
+
+def _get_allow_mode_fallback():
+    """Get cached config value for routing.allow_mode_fallback."""
+    global _allow_mode_fallback
+    if _allow_mode_fallback is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            _allow_mode_fallback = get_cfg("training_config.routing.allow_mode_fallback", default=False)
+        except Exception:
+            _allow_mode_fallback = False
+    return _allow_mode_fallback
+
 
 class MetricsAggregator:
     """
@@ -85,6 +100,18 @@ class MetricsAggregator:
                 logger.debug(f"✅ Loaded symbol metrics for {target}: {symbols_found}/{len(symbols)} symbols")
             if symbols_missing:
                 logger.warning(f"⚠️  No symbol metrics found for {target}: {len(symbols_missing)}/{len(symbols)} symbols missing: {symbols_missing[:5]}{'...' if len(symbols_missing) > 5 else ''}")
+            
+            # Fallback: if SYMBOL_SPECIFIC mode but no symbol metrics, try CS metrics (config-gated)
+            if symbols_found == 0 and symbols_missing and resolved_mode == "SYMBOL_SPECIFIC" and _get_allow_mode_fallback():
+                # Check if CS metrics exist for this target (we may have already loaded them above)
+                if cs_metrics:
+                    # Already loaded, add a fallback-tagged version for symbol routing
+                    fallback_metrics = cs_metrics.copy()
+                    fallback_metrics["mode"] = "CROSS_SECTIONAL"  # Explicit mode for downstream
+                    fallback_metrics["mode_fallback"] = "SYMBOL_SPECIFIC->CROSS_SECTIONAL"
+                    fallback_metrics["fallback_reason"] = f"No symbol metrics found ({len(symbols_missing)} missing)"
+                    rows.append(fallback_metrics)
+                    logger.warning(f"Fallback: Using CS metrics for {target} (symbol metrics missing)")
         
         if not rows:
             logger.warning("No routing candidates found")
@@ -323,25 +350,81 @@ class MetricsAggregator:
         view_for_path = resolved_mode if resolved_mode else "SYMBOL_SPECIFIC"
         target_fs_dir = target_repro_dir / view_for_path / f"symbol={symbol}"
         
-        # Look for multi_model_metadata.json in target-first structure
-        metadata_path = target_fs_dir / "multi_model_metadata.json"
-        
-        # Fallback to legacy structure if not found
-        if not metadata_path.exists():
-            legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "SYMBOL_SPECIFIC" / target_name_clean / f"symbol={symbol}"
-            if legacy_fs_dir.exists():
-                metadata_path = legacy_fs_dir / "multi_model_metadata.json"
-            else:
-                metadata_path = None
-        
         score = None
         sample_size = None
         failed_families = []
         model_status = "UNKNOWN"
         leakage_status = "UNKNOWN"
+        metrics_data = None
+        cohort_used = None
+        
+        # NEW: Look for metrics in cohort subdirectories first (matches how metrics are actually written)
+        if target_fs_dir.exists():
+            cohort_dirs = [d for d in target_fs_dir.iterdir() 
+                          if d.is_dir() and d.name.startswith("cohort=")]
+            if cohort_dirs:
+                # DETERMINISTIC: Select by (metrics.json mtime, cohort dir name) for tie-breaking
+                def get_cohort_sort_key(cohort_dir):
+                    metrics_file = cohort_dir / "metrics.json"
+                    if metrics_file.exists():
+                        return (metrics_file.stat().st_mtime, cohort_dir.name)
+                    return (0, cohort_dir.name)  # Cohorts without metrics.json sort last
+                
+                # Log cohorts missing metrics.json (don't silently treat as mtime=0)
+                missing_metrics = [d.name for d in cohort_dirs if not (d / "metrics.json").exists()]
+                if missing_metrics:
+                    logger.debug(f"Cohorts missing metrics.json: {len(missing_metrics)} of {len(cohort_dirs)}")
+                
+                latest_cohort = max(cohort_dirs, key=get_cohort_sort_key)
+                cohort_metrics_path = latest_cohort / "metrics.json"
+                
+                if cohort_metrics_path.exists():
+                    try:
+                        with open(cohort_metrics_path) as f:
+                            metrics_data = json.load(f)
+                        
+                        # DEFENSIVE: Try multiple key names, log what we found
+                        score = metrics_data.get('mean_score') or metrics_data.get('score') or metrics_data.get('composite_score')
+                        sample_size = metrics_data.get('N_effective_cs') or metrics_data.get('n_samples') or metrics_data.get('sample_size')
+                        cohort_used = latest_cohort.name
+                        
+                        # Always log which cohort we selected (even if score missing - aids debugging)
+                        if score is None:
+                            logger.warning(
+                                f"Loaded cohort metrics.json but missing score key; "
+                                f"cohort={latest_cohort.name}, keys={list(metrics_data.keys())[:10]}, path={cohort_metrics_path}"
+                            )
+                        else:
+                            # INFO log (not debug) - core pipeline health, don't lose this
+                            # Guard formatting in case score isn't a float
+                            try:
+                                score_str = f"{float(score):.4f}"
+                            except (ValueError, TypeError):
+                                score_str = str(score)
+                            logger.info(
+                                f"Loaded symbol metrics: target={target}, symbol={symbol}, "
+                                f"cohort={latest_cohort.name}, score={score_str}, path={cohort_metrics_path}"
+                            )
+                            model_status = "OK"
+                    except Exception as e:
+                        logger.debug(f"Failed to load cohort metrics from {cohort_metrics_path}: {e}")
+        
+        # Fallback to multi_model_metadata.json (legacy structure)
+        metadata_path = None
+        if score is None:
+            # Look for multi_model_metadata.json in target-first structure
+            metadata_path = target_fs_dir / "multi_model_metadata.json"
+            
+            # Fallback to legacy structure if not found
+            if not metadata_path.exists():
+                legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "SYMBOL_SPECIFIC" / target_name_clean / f"symbol={symbol}"
+                if legacy_fs_dir.exists():
+                    metadata_path = legacy_fs_dir / "multi_model_metadata.json"
+                else:
+                    metadata_path = None
         
         # Fallback to CROSS_SECTIONAL cohort metadata for sample_size when symbol metrics missing
-        if not metadata_path or not metadata_path.exists():
+        if score is None and (not metadata_path or not metadata_path.exists()):
             # Try to get sample_size from CROSS_SECTIONAL cohort metadata
             cs_target_fs_dir = target_repro_dir / "CROSS_SECTIONAL"
             if cs_target_fs_dir.exists():
@@ -361,7 +444,7 @@ class MetricsAggregator:
                         except Exception as e:
                             logger.debug(f"Failed to load CROSS_SECTIONAL cohort metadata: {e}")
         
-        if metadata_path and metadata_path.exists():
+        if score is None and metadata_path and metadata_path.exists():
             try:
                 with open(metadata_path) as f:
                     metadata = json.load(f)
