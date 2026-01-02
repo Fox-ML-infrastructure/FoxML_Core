@@ -57,7 +57,7 @@ sampling:
   
 # Cross-validation
 cross_validation:
-  cv_folds: 3           # Reduced from 5 (faster)
+  folds: 3           # Reduced from 5 (faster)
   
 # Feature Filtering (CRITICAL - prevents leakage)
 feature_filtering:

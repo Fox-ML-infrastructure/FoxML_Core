@@ -11,7 +11,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Module-level warn-once set for view/resolved_mode mismatches
+# Module-level warn-once set for view/view mismatches
 _view_mismatch_warned: Set[tuple] = set()
 
 
@@ -428,8 +428,8 @@ def target_repro_dir(
         ValueError: If view is None or invalid, or if SYMBOL_SPECIFIC without symbol
     
     Note:
-        This function uses the passed view parameter. Callers should pass resolved_mode from run context (SST)
-        to ensure consistency. If view differs from resolved_mode, a warning is logged.
+        This function uses the passed view parameter. Callers should pass view from run context (SST)
+        to ensure consistency. If view differs from view, a warning is logged.
         
         universe_sig should be computed from compute_universe_signature(symbols) and passed in for
         cross-run reproducibility. Different universes get different directories.
@@ -441,21 +441,21 @@ def target_repro_dir(
     if view == "SYMBOL_SPECIFIC" and symbol is None:
         raise ValueError("symbol parameter is required when view='SYMBOL_SPECIFIC'")
     
-    # Derive path_mode from SST resolved_mode (don't mutate view - callers may rely on it)
+    # Derive path_mode from SST view (don't mutate view - callers may rely on it)
     path_mode = view  # Default to caller's view
     try:
-        from TRAINING.orchestration.utils.run_context import get_resolved_mode
-        resolved_mode = get_resolved_mode(run_root)
-        if resolved_mode and resolved_mode != view:
+        from TRAINING.orchestration.utils.run_context import get_view
+        view = get_view(run_root)
+        if view and view != view:
             # Warn-once: don't spam logs for every file/target
-            warn_key = (view, resolved_mode)
+            warn_key = (view, view)
             if warn_key not in _view_mismatch_warned:
                 _view_mismatch_warned.add(warn_key)
                 logger.warning(
-                    f"View mismatch (once): passed view={view} but resolved_mode={resolved_mode}. "
-                    f"Using resolved_mode={resolved_mode} for path construction."
+                    f"View mismatch (once): passed view={view} but view={view}. "
+                    f"Using view={view} for path construction."
                 )
-            path_mode = resolved_mode  # Use SST for paths, but don't mutate view
+            path_mode = view  # Use SST for paths, but don't mutate view
     except Exception:
         pass  # Silently ignore if run context not available
     

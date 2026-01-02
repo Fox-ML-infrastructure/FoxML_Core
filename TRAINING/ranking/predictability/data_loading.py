@@ -117,7 +117,7 @@ def discover_all_targets(symbol: str, data_dir: Path) -> Dict[str, TargetConfig]
     - y_* targets (barrier, swing, MFE/MDD targets)
     - fwd_ret_* targets (forward return targets)
     
-    Returns dict of {target_name: TargetConfig} for all valid targets found.
+    Returns dict of {target: TargetConfig} for all valid targets found.
     """
     import pandas as pd
     import numpy as np
@@ -145,8 +145,8 @@ def discover_all_targets(symbol: str, data_dir: Path) -> Dict[str, TargetConfig]
     first_touch_count = 0
     sparse_count = 0
     
-    for target_col in all_targets:
-        y = df[target_col].dropna()
+    for target_column in all_targets:
+        y = df[target_column].dropna()
         
         # FIX 2: Check for sparsity - need minimum samples for statistical validity
         # If target has < 100 non-NaN values, it's too sparse for reliable CV
@@ -177,49 +177,49 @@ def discover_all_targets(symbol: str, data_dir: Path) -> Dict[str, TargetConfig]
                 continue
         
         # For regression targets (fwd_ret_*), also check variance
-        if target_col.startswith('fwd_ret_'):
+        if target_column.startswith('fwd_ret_'):
             std = y.std()
             if std < 1e-6:  # Zero or near-zero variance
                 degenerate_count += 1
                 continue
         
         # Skip first_touch targets (they're leaked - correlated with hit_direction features)
-        if 'first_touch' in target_col:
+        if 'first_touch' in target_column:
             first_touch_count += 1
             continue
         
         # Infer task type from data
-        task_type = TaskType.from_target_column(target_col, y)
+        task_type = TaskType.from_target_column(target_column, y)
         
-        # FIX 1: Use full target_col as key to avoid collisions
+        # FIX 1: Use full target_column as key to avoid collisions
         # (e.g., y_squeeze and y_will_squeeze both become "squeeze" with old logic)
         # Store display_name for UI/logging purposes
-        if target_col.startswith('y_'):
-            display_name = target_col.replace('y_will_', '').replace('y_', '')
+        if target_column.startswith('y_'):
+            display_name = target_column.replace('y_will_', '').replace('y_', '')
         else:  # fwd_ret_*
-            display_name = target_col  # Keep full name for forward returns
+            display_name = target_column  # Keep full name for forward returns
         
         # Extract horizon if possible
         horizon = None
         import re
-        horizon_match = re.search(r'(\d+)[mhd]', target_col)
+        horizon_match = re.search(r'(\d+)[mhd]', target_column)
         if horizon_match:
             horizon_val = int(horizon_match.group(1))
-            if 'd' in target_col:
+            if 'd' in target_column:
                 horizon = horizon_val * 1440  # days to minutes
-            elif 'h' in target_col:
+            elif 'h' in target_column:
                 horizon = horizon_val * 60  # hours to minutes
             else:
                 horizon = horizon_val  # minutes
         
         # Create TargetConfig object
-        valid_targets[target_col] = TargetConfig(
-            name=target_col,
-            target_column=target_col,
+        valid_targets[target_column] = TargetConfig(
+            name=target_column,
+            target_column=target_column,
             task_type=task_type,
             horizon=horizon,
             display_name=display_name,
-            description=f"Auto-discovered target: {target_col}",
+            description=f"Auto-discovered target: {target_column}",
             use_case=f"{task_type.name} target",
             top_n=60,
             method='mean',

@@ -144,12 +144,12 @@ decisions:
 # Training configuration
 training:
   # Cross-validation settings
-  cv_folds: 3  # Number of CV folds (default: 3)
+  folds: 3  # Number of CV folds (default: 3)
   cv_n_jobs: 1  # Parallel jobs for CV (1 = sequential, -1 = all cores). Set to 1 for GPU training to avoid outer parallelism conflicts
   
   # Degenerate folds policy (for rare/imbalanced targets)
   cv_degenerate_fallback: "reduce_folds"  # Options: "reduce_folds" | "skip_cv" | "different_splitter"
-  cv_min_folds: 2  # Minimum folds before skipping CV (if reduce_folds policy)
+  cv_mifolds: 2  # Minimum folds before skipping CV (if reduce_folds policy)
   
   # CatBoost-specific settings
   catboost:

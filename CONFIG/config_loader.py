@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 import logging
 
+from CONFIG.config_migrator import migrate_config
+
 logger = logging.getLogger(__name__)
 
 # Resolve CONFIG directory (parent of this file)
@@ -86,6 +88,9 @@ def inject_defaults(config: Dict[str, Any], model_family: Optional[str] = None) 
     if not isinstance(config, dict):
         logger.warning(f"Config is not a dict (got {type(config)}), initializing empty dict")
         config = {}
+    
+    # SST: Migrate deprecated config keys to canonical names
+    config = migrate_config(config, warn=True, recursive=True)
     
     defaults = load_defaults_config()
     if not defaults or not isinstance(defaults, dict):

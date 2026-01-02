@@ -385,6 +385,12 @@ def select_features_for_target(
             return cached_features, summary_df
     
     # Phase 2: Process symbols (only if cache miss or force_refresh)
+    # Initialize SST scope variables for downstream use (may be overwritten by shared harness)
+    # These are needed by reproducibility tracking even if shared harness fails
+    universe_sig_for_writes = None
+    view_for_writes = view  # Default to caller's view
+    symbol_for_writes = symbol  # Default to caller's symbol
+    
     if use_shared_harness:
         logger.info("🔧 Using shared ranking harness (same evaluation contract as target ranking)")
         try:
@@ -424,7 +430,7 @@ def select_features_for_target(
                     # FIX: Make unpack tolerant to signature changes
                     build_result = harness.build_panel(
                         target_column=target_column,
-                        target_name=target_column,  # Use target_column as target_name for exclusions
+                        target=target_column,  # Use target_column as target for exclusions
                         feature_names=None,
                         use_strict_registry=True  # Use strict registry mode for feature selection (same as training)
                     )
@@ -442,12 +448,13 @@ def select_features_for_target(
                         resolved_data_config = None
                         logger.debug(f"build_panel returned {actual_len} values (legacy signature without resolved_data_config)")
                     elif actual_len >= 6:
-                        # Fallback for older signature (6 values)
-                        X, y, feature_names, symbols_array, time_vals, mtf_data = build_result[:6]
-                        detected_interval = build_result[6] if actual_len > 6 else 5.0
-                        resolved_config = build_result[7] if actual_len > 7 else None
-                        resolved_data_config = None
-                        logger.debug(f"build_panel returned {actual_len} values (legacy signature)")
+                        # Current signature (6 values): X, y, feature_names, symbols, time_vals, resolved_config
+                        # Note: resolved_config (position 5) contains universe_sig, view, etc.
+                        X, y, feature_names, symbols_array, time_vals, resolved_data_config = build_result[:6]
+                        detected_interval = 5.0  # Default if not provided
+                        resolved_config = resolved_data_config  # Alias for compatibility
+                        mtf_data = None  # Not returned in 6-value signature
+                        logger.debug(f"build_panel returned {actual_len} values (current signature with resolved_data_config)")
                     
                     # Extract universe_sig from resolved_data_config (SST) if not passed by caller
                     if not universe_sig and resolved_data_config:
@@ -456,12 +463,32 @@ def select_features_for_target(
                             logger.debug(f"Extracted universe_sig={universe_sig[:8]}... from resolved_data_config")
                     
                     # Also extract effective_view from resolved_data_config if available
-                    if resolved_data_config and resolved_data_config.get('resolved_mode'):
-                        effective_view = resolved_data_config.get('resolved_mode')
+                    if resolved_data_config and resolved_data_config.get('view'):
+                        effective_view = resolved_data_config.get('view')
                         if effective_view != view:
                             logger.debug(f"Using effective_view={effective_view} from resolved_data_config (requested: {view})")
-                    else:
-                        raise ValueError(f"build_panel returned {actual_len} values, expected at least 6. Got: {[type(x).__name__ for x in build_result]}")
+                    
+                    # FIX: Call resolve_write_scope for SYMBOL_SPECIFIC to set universe_sig_for_writes
+                    # This ensures proper scope tracking for reproducibility
+                    try:
+                        from TRAINING.orchestration.utils.scope_resolution import resolve_write_scope
+                        strict_scope = False
+                        try:
+                            from CONFIG.config_loader import load_config
+                            cfg = load_config()
+                            strict_scope = getattr(getattr(getattr(cfg, 'safety', None), 'output_layout', None), 'strict_scope_partitioning', False)
+                        except Exception:
+                            pass
+                        view_for_writes, symbol_for_writes, universe_sig_for_writes = resolve_write_scope(
+                            resolved_data_config=resolved_data_config,
+                            caller_view=view,
+                            caller_symbol=symbol_to_process,
+                            strict=strict_scope
+                        )
+                        if universe_sig_for_writes and not universe_sig:
+                            universe_sig = universe_sig_for_writes
+                    except Exception as e:
+                        logger.debug(f"resolve_write_scope failed for {symbol_to_process}: {e}")
                     
                     if X is None or y is None:
                         logger.warning(f"Failed to build panel data for {symbol_to_process}, skipping")
@@ -557,9 +584,9 @@ def select_features_for_target(
                             feature_names = [feature_names_cleaned[i] for i in feature_indices]
                         
                         # CRITICAL: Boundary assertion - validate feature_names matches FS_PRE EnforcedFeatureSet
-                        from TRAINING.ranking.utils.lookback_policy import assert_featureset_fingerprint
+                        from TRAINING.ranking.utils.lookback_policy import assert_featureset_hash
                         try:
-                            assert_featureset_fingerprint(
+                            assert_featureset_hash(
                                 label=f"FS_PRE_{view}_{symbol_to_process}" if view == "SYMBOL_SPECIFIC" else f"FS_PRE_{view}",
                                 expected=enforced_fs_pre,
                                 actual_features=feature_names,
@@ -637,7 +664,7 @@ def select_features_for_target(
                             # Build snapshot path (matching TARGET_RANKING structure)
                             # output_dir is already at: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
                             # Use it directly to avoid nested structures
-                            target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+                            target_clean = target_column.replace('/', '_').replace('\\', '_')
                             
                             # Find base run directory for target-first structure
                             # REMOVED: Legacy REPRODUCIBILITY/FEATURE_SELECTION path construction
@@ -658,15 +685,15 @@ def select_features_for_target(
                                     # NOT importance_method (e.g., "native") - stability must be per-family
                                     # FIX: Pass universe_sig (from SST), not view - prevents scope bugs
                                     # NEVER fall back to view - that's the exact bug we're fixing
-                                    snapshot_universe_id = None
+                                    snapshot_universe_sig = None
                                     if universe_sig:
                                         from TRAINING.orchestration.utils.cohort_metadata import validate_universe_sig
                                         try:
                                             validate_universe_sig(universe_sig)
-                                            snapshot_universe_id = universe_sig
+                                            snapshot_universe_sig = universe_sig
                                         except ValueError as ve:
                                             logger.warning(f"Invalid universe_sig for snapshot: {ve}")
-                                            snapshot_universe_id = None
+                                            snapshot_universe_sig = None
                                     else:
                                         logger.warning(
                                             "universe_sig missing; snapshot will be unscoped (legacy). "
@@ -674,10 +701,10 @@ def select_features_for_target(
                                             f"target={target_column} view={view} symbol={symbol_to_process}"
                                         )
                                     save_snapshot_hook(
-                                        target_name=target_column,
+                                        target=target_column,
                                         method=model_family,  # Use model_family as method identifier
                                         importance_dict=importance_dict,
-                                        universe_id=snapshot_universe_id,  # SST or None, NEVER view
+                                        universe_sig=snapshot_universe_sig,  # SST or None, NEVER view
                                         output_dir=base_output_dir,  # Pass run directory - will use target-first structure
                                         auto_analyze=None,  # Load from config
                                     )
@@ -752,7 +779,7 @@ def select_features_for_target(
                 # FIX: Make unpack tolerant to signature changes (use *rest to catch extra values)
                 build_result = harness.build_panel(
                     target_column=target_column,
-                    target_name=target_column,  # Use target_column as target_name for exclusions
+                    target=target_column,  # Use target_column as target for exclusions
                     feature_names=None,  # Will filter automatically
                     use_strict_registry=True  # Use strict registry mode for feature selection (same as training)
                 )
@@ -769,12 +796,13 @@ def select_features_for_target(
                     resolved_data_config = None
                     logger.debug(f"build_panel returned {actual_len} values (legacy signature without resolved_data_config)")
                 elif actual_len >= 6:
-                    # Older signature: 6 values
-                    X, y, feature_names, symbols_array, time_vals, mtf_data = build_result[:6]
-                    detected_interval = build_result[6] if actual_len > 6 else 5.0
-                    resolved_config = build_result[7] if actual_len > 7 else None
-                    resolved_data_config = None
-                    logger.debug(f"build_panel returned {actual_len} values (legacy signature)")
+                    # Current signature (6 values): X, y, feature_names, symbols, time_vals, resolved_config
+                    # Note: resolved_config (position 5) contains universe_sig, view, etc.
+                    X, y, feature_names, symbols_array, time_vals, resolved_data_config = build_result[:6]
+                    detected_interval = 5.0  # Default if not provided
+                    resolved_config = resolved_data_config  # Alias for compatibility
+                    mtf_data = None  # Not returned in 6-value signature
+                    logger.debug(f"build_panel returned {actual_len} values (current signature with resolved_data_config)")
                 else:
                     raise ValueError(f"build_panel returned {actual_len} values, expected at least 6. Got: {[type(x).__name__ for x in build_result]}")
                 
@@ -809,7 +837,7 @@ def select_features_for_target(
                 
                 if view_for_writes != view:
                     logger.warning(
-                        f"SST OVERRIDE: Using resolved_mode={view_for_writes} instead of "
+                        f"SST OVERRIDE: Using view={view_for_writes} instead of "
                         f"caller view={view} for downstream writes"
                     )
                 if universe_sig:
@@ -919,9 +947,9 @@ def select_features_for_target(
                                     feature_names = [feature_names_cleaned[i] for i in feature_indices]
                             
                             # CRITICAL: Boundary assertion - validate feature_names matches FS_PRE EnforcedFeatureSet
-                            from TRAINING.ranking.utils.lookback_policy import assert_featureset_fingerprint
+                            from TRAINING.ranking.utils.lookback_policy import assert_featureset_hash
                             try:
-                                assert_featureset_fingerprint(
+                                assert_featureset_hash(
                                     label=f"FS_PRE_{view}",
                                     expected=enforced_fs_pre,
                                     actual_features=feature_names,
@@ -1197,6 +1225,22 @@ def select_features_for_target(
                 except Exception as e:
                     logger.error(f"  ❌ {symbol} failed: {e}")
                     continue
+        
+        # FIX: Compute universe_sig in fallback path for proper scope tracking
+        # This ensures reproducibility tracking has universe_sig even when shared harness fails
+        if (universe_sig_for_writes is None or universe_sig is None) and symbols_to_process:
+            try:
+                from TRAINING.orchestration.utils.run_context import compute_universe_signature
+                computed_sig = compute_universe_signature(symbols_to_process)
+                if universe_sig is None:
+                    universe_sig = computed_sig
+                if universe_sig_for_writes is None:
+                    universe_sig_for_writes = computed_sig
+                    view_for_writes = view
+                    symbol_for_writes = symbol
+                logger.debug(f"Computed universe_sig={computed_sig[:8]}... in fallback path")
+            except Exception as e:
+                logger.debug(f"Failed to compute universe_sig in fallback path: {e}")
     else:
         # Shared harness was used - all_results and all_family_statuses already populated
         # Statuses were collected in the shared harness block (lines 684-693 for SYMBOL_SPECIFIC or 913-942 for CROSS_SECTIONAL)
@@ -1321,9 +1365,9 @@ def select_features_for_target(
             selected_features = enforced_fs_post.features.copy()
             
             # CRITICAL: Boundary assertion - validate selected_features matches FS_POST EnforcedFeatureSet
-            from TRAINING.ranking.utils.lookback_policy import assert_featureset_fingerprint
+            from TRAINING.ranking.utils.lookback_policy import assert_featureset_hash
             try:
-                assert_featureset_fingerprint(
+                assert_featureset_hash(
                     label=f"FS_POST_{view}",
                     expected=enforced_fs_post,
                     actual_features=selected_features,
@@ -1359,7 +1403,7 @@ def select_features_for_target(
             importance_dict = summary_df.set_index('feature')['consensus_score'].to_dict()
             
             # Use target-first structure for snapshots
-            target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+            target_clean = target_column.replace('/', '_').replace('\\', '_')
             # Find base run directory
             base_output_dir = output_dir
             for _ in range(10):
@@ -1373,20 +1417,20 @@ def select_features_for_target(
                 from TRAINING.orchestration.utils.target_first_paths import (
                     get_target_reproducibility_dir, ensure_target_structure
                 )
-                ensure_target_structure(base_output_dir, target_name_clean)
-                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+                ensure_target_structure(base_output_dir, target_clean)
+                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
                 
                 # FIX: Pass universe_sig (from SST), not view - prevents scope bugs
                 # NEVER fall back to view - that's the exact bug we're fixing
-                snapshot_universe_id = None
+                snapshot_universe_sig = None
                 if universe_sig:
                     from TRAINING.orchestration.utils.cohort_metadata import validate_universe_sig
                     try:
                         validate_universe_sig(universe_sig)
-                        snapshot_universe_id = universe_sig
+                        snapshot_universe_sig = universe_sig
                     except ValueError as ve:
                         logger.warning(f"Invalid universe_sig for aggregated snapshot: {ve}")
-                        snapshot_universe_id = None
+                        snapshot_universe_sig = None
                 else:
                     logger.warning(
                         "universe_sig missing; aggregated snapshot will be unscoped (legacy). "
@@ -1395,10 +1439,10 @@ def select_features_for_target(
                     )
                 
                 save_snapshot_hook(
-                    target_name=target_column,
+                    target=target_column,
                     method="multi_model_aggregated",
                     importance_dict=importance_dict,
-                    universe_id=snapshot_universe_id,  # SST or None, NEVER view
+                    universe_sig=snapshot_universe_sig,  # SST or None, NEVER view
                     output_dir=target_repro_dir,  # Use target-first structure
                     auto_analyze=None,  # Load from config
                 )
@@ -1503,7 +1547,7 @@ def select_features_for_target(
                     cs_importance=cs_importance,
                     output_dir=output_dir,
                     top_k=20,
-                    universe_id="ALL"  # Cross-sectional uses all symbols
+                    universe_sig="ALL"  # Cross-sectional uses all symbols
                 )
                 
                 # Compact logging (similar to per-model reproducibility)
@@ -1833,7 +1877,7 @@ def select_features_for_target(
                 cs_metadata_file = metadata_dir / "cross_sectional_stability_metadata.json"
                 cs_metadata = {
                     "target_column": target_column,
-                    "universe_id": "ALL",
+                    "universe_sig": "ALL",
                     "method": "cross_sectional_panel",
                     "stability": cs_stability_results,
                     "timestamp": pd.Timestamp.now().isoformat()
@@ -1890,12 +1934,15 @@ def select_features_for_target(
                 
                 # Extract cohort metadata from stored context (symbols, mtf_data, cs_config)
                 # cohort_context is defined earlier in the function
+                # FIX: Pass universe_sig from SST to cohort metadata for proper scope tracking
+                sst_universe_sig = universe_sig_for_writes if 'universe_sig_for_writes' in locals() else (universe_sig if 'universe_sig' in locals() else None)
                 if 'cohort_context' in locals() and cohort_context:
                     cohort_metadata = extract_cohort_metadata(
                         symbols=cohort_context.get('symbols'),
                         mtf_data=cohort_context.get('mtf_data'),
                         min_cs=cohort_context.get('min_cs'),
-                        max_cs_samples=cohort_context.get('max_cs_samples')
+                        max_cs_samples=cohort_context.get('max_cs_samples'),
+                        universe_sig=sst_universe_sig  # FIX: Pass universe_sig from SST
                     )
                 else:
                     # Fallback: try to extract from function variables (shouldn't happen if cohort_context is set)
@@ -1903,7 +1950,8 @@ def select_features_for_target(
                         symbols=symbols,
                         mtf_data=mtf_data if 'mtf_data' in locals() else None,
                         min_cs=None,
-                        max_cs_samples=None
+                        max_cs_samples=None,
+                        universe_sig=sst_universe_sig  # FIX: Pass universe_sig from SST
                     )
                 
                 # Format for reproducibility tracker
@@ -1971,7 +2019,7 @@ def select_features_for_target(
                     horizon_minutes_for_ctx = None
                     purge_minutes_for_ctx = None
                     embargo_minutes_for_ctx = None
-                    cv_folds_for_ctx = None
+                    folds_for_ctx = None
                     
                     # Try to get data from symbol_ctx_map (for SYMBOL_SPECIFIC view with per-symbol processing)
                     min_cs_for_ctx = None
@@ -1986,7 +2034,7 @@ def select_features_for_target(
                         horizon_minutes_for_ctx = first_ctx.horizon_minutes
                         purge_minutes_for_ctx = first_ctx.purge_minutes
                         embargo_minutes_for_ctx = first_ctx.embargo_minutes
-                        cv_folds_for_ctx = first_ctx.cv_folds
+                        folds_for_ctx = first_ctx.folds
                         min_cs_for_ctx = first_ctx.min_cs  # FIX: Get from ctx for diff telemetry
                         max_cs_samples_for_ctx = first_ctx.max_cs_samples  # FIX: Get from ctx for diff telemetry
                     
@@ -2038,7 +2086,11 @@ def select_features_for_target(
                     # FIX: Ensure view and symbol are set for proper telemetry scoping
                     # Telemetry must be scoped by: target, view (CROSS_SECTIONAL vs SYMBOL_SPECIFIC), and symbol
                     # CRITICAL: For CROSS_SECTIONAL, symbol must be None to prevent history forking
-                    symbol_for_ctx = symbol if view == "SYMBOL_SPECIFIC" else None
+                    # Use SST-resolved view_for_writes if available (handles auto-flip case)
+                    effective_view_for_ctx = view_for_writes if 'view_for_writes' in locals() else view
+                    symbol_for_ctx = symbol if effective_view_for_ctx == "SYMBOL_SPECIFIC" else None
+                    # FIX: Get universe_sig from SST-resolved value
+                    universe_sig_for_ctx = universe_sig_for_writes if 'universe_sig_for_writes' in locals() else (universe_sig if 'universe_sig' in locals() else None)
                     # Get seed from config for reproducibility
                     try:
                         from CONFIG.config_loader import get_cfg
@@ -2048,7 +2100,7 @@ def select_features_for_target(
                     
                     ctx_to_use = RunContext(
                         stage="FEATURE_SELECTION",
-                        target_name=target_column,
+                        target=target_column,
                         target_column=target_column,
                         X=X_for_ctx,  # FIX: Populated from available sources (symbol_ctx_map, shared harness, or cohort_context)
                         y=y_for_ctx,  # FIX: Populated from available sources
@@ -2058,20 +2110,21 @@ def select_features_for_target(
                         horizon_minutes=horizon_minutes_for_ctx,  # Extract from target if available
                         purge_minutes=purge_minutes_for_ctx,  # FIX: Use from symbol_ctx_map if available
                         embargo_minutes=embargo_minutes_for_ctx,  # FIX: Use from symbol_ctx_map if available
-                        cv_folds=cv_folds_for_ctx,  # FIX: Use from symbol_ctx_map if available
+                        folds=folds_for_ctx,  # FIX: Use from symbol_ctx_map if available
                         fold_timestamps=None,
                         data_interval_minutes=None,
                         seed=seed_value,
-                        view=view,  # FIX: Set view for proper telemetry scoping (CROSS_SECTIONAL vs SYMBOL_SPECIFIC)
+                        view=effective_view_for_ctx,  # FIX: Use SST-resolved view (handles auto-flip from CS to SS)
                         symbol=symbol_for_ctx,  # FIX: Set symbol for SYMBOL_SPECIFIC view only (None for CROSS_SECTIONAL to prevent history forking)
                         min_cs=min_cs_for_ctx,  # FIX: Populate for diff telemetry
-                        max_cs_samples=max_cs_samples_for_ctx  # FIX: Populate for diff telemetry
+                        max_cs_samples=max_cs_samples_for_ctx,  # FIX: Populate for diff telemetry
+                        universe_sig=universe_sig_for_ctx  # FIX: Pass universe_sig for proper scope tracking
                     )
                 
                 # Build metrics dict
                 metrics_dict = {
                     "metric_name": "Consensus Score",
-                    "mean_score": mean_consensus,
+                    "auc": mean_consensus,
                     "std_score": std_consensus,
                     "mean_importance": top_feature_score,
                     "composite_score": mean_consensus,
@@ -2092,7 +2145,11 @@ def select_features_for_target(
                         # Disable COHORT_AWARE and retry with minimal context
                         # FIX: Ensure view and symbol are set for proper telemetry scoping
                         # CRITICAL: For CROSS_SECTIONAL, symbol must be None to prevent history forking
-                        symbol_for_ctx = symbol if view == "SYMBOL_SPECIFIC" else None
+                        # Use SST-resolved view_for_writes if available (handles auto-flip case)
+                        effective_view_fallback = view_for_writes if 'view_for_writes' in locals() else view
+                        symbol_for_ctx = symbol if effective_view_fallback == "SYMBOL_SPECIFIC" else None
+                        # FIX: Get universe_sig from SST-resolved value (same as main path)
+                        universe_sig_fallback = universe_sig_for_writes if 'universe_sig_for_writes' in locals() else (universe_sig if 'universe_sig' in locals() else None)
                         # Get seed from config for reproducibility (same as above)
                         try:
                             from CONFIG.config_loader import get_cfg
@@ -2102,7 +2159,7 @@ def select_features_for_target(
                         
                         ctx_minimal = RunContext(
                             stage="FEATURE_SELECTION",
-                            target_name=target_column,
+                            target=target_column,
                             target_column=target_column,
                             X=None,  # Not available in fallback
                             y=None,
@@ -2115,8 +2172,9 @@ def select_features_for_target(
                             data_interval_minutes=None,
                             seed=seed_value,
                             cv_splitter=None,
-                            view=view,  # FIX: Set view for proper telemetry scoping
-                            symbol=symbol_for_ctx  # FIX: Set symbol for SYMBOL_SPECIFIC view only (None for CROSS_SECTIONAL)
+                            view=effective_view_fallback,  # FIX: Use SST-resolved view (handles auto-flip from CS to SS)
+                            symbol=symbol_for_ctx,  # FIX: Set symbol for SYMBOL_SPECIFIC view only (None for CROSS_SECTIONAL)
+                            universe_sig=universe_sig_fallback  # FIX: Pass universe_sig for proper scope tracking
                         )
                         audit_result = tracker.log_run(ctx_minimal, metrics_dict)
                     else:
@@ -2152,7 +2210,7 @@ def select_features_for_target(
                 # Use cohort_metrics if available (may be empty dict if extraction failed)
                 metrics_with_cohort = {
                     "metric_name": "Consensus Score",
-                    "mean_score": mean_consensus,
+                    "auc": mean_consensus,
                     "std_score": std_consensus,
                     "mean_importance": top_feature_score,  # Use top feature score as importance proxy
                     "composite_score": mean_consensus,  # Use mean consensus as composite
@@ -2164,15 +2222,15 @@ def select_features_for_target(
                 if cohort_metrics:
                     metrics_with_cohort.update(cohort_metrics)
                 
-                # PATCH 0: Map SST view_for_writes to route_type (not caller view)
+                # PATCH 0: Map SST view_for_writes to view (not caller view)
                 # Use SYMBOL_SPECIFIC directly to match directory structure (not INDIVIDUAL)
-                route_type_for_legacy = None
+                view_for_legacy = None
                 effective_view = view_for_writes if 'view_for_writes' in locals() else view
                 if effective_view:
                     if effective_view.upper() == "CROSS_SECTIONAL":
-                        route_type_for_legacy = "CROSS_SECTIONAL"
-                    elif effective_view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
-                        route_type_for_legacy = "SYMBOL_SPECIFIC"  # Use SYMBOL_SPECIFIC to match directory structure
+                        view_for_legacy = "CROSS_SECTIONAL"
+                    else:
+                        view_for_legacy = "SYMBOL_SPECIFIC"
                 
                 # Track lookback cap enforcement results (pre and post selection) in telemetry
                 lookback_cap_metadata = {}
@@ -2198,7 +2256,7 @@ def select_features_for_target(
                     "top_n": top_n or len(selected_features),
                     "view": view,  # FIX: Include view for proper telemetry scoping
                     "symbol": symbol,  # FIX: Include symbol for SYMBOL_SPECIFIC view
-                    "route_type": route_type_for_legacy,  # FIX: Map view to route_type
+                    "view": view_for_legacy,  # FIX: Map view to view
                     'lookback_cap_enforcement': lookback_cap_metadata if lookback_cap_metadata else None
                 }
                 # Add cohort_additional_data if available (safe to unpack empty dict)
@@ -2269,8 +2327,8 @@ def select_features_for_target(
                 
                 # Add resolved_data_config (mode, loader contract) to additional_data for telemetry
                 if 'resolved_data_config' in locals() and resolved_data_config:
-                    additional_data_with_cohort['resolved_data_mode'] = resolved_data_config.get('resolved_data_mode')
-                    additional_data_with_cohort['mode_reason'] = resolved_data_config.get('mode_reason')
+                    additional_data_with_cohort['view'] = resolved_data_config.get('view') or resolved_data_config.get('resolved_data_mode')
+                    additional_data_with_cohort['view_reason'] = resolved_data_config.get('view_reason')
                     additional_data_with_cohort['loader_contract'] = resolved_data_config.get('loader_contract')
                 
                 # PATCH 0: Create WriteScope from available context for type-safe scope handling
@@ -2350,10 +2408,10 @@ def select_features_for_target(
                 # Use WriteScope-derived values for tracker call
                 tracker.log_comparison(
                     stage=scope.stage.value if scope else "feature_selection",
-                    item_name=target_column,
+                    target=target_column,
                     metrics=metrics_with_cohort,
                     additional_data=additional_data_with_cohort,
-                    route_type=scope.view.value if scope else scope_view,
+                    view=scope.view.value if scope else scope_view,
                     symbol=scope.symbol if scope else scope_symbol
                 )
         except Exception as e:

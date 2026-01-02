@@ -47,7 +47,7 @@ lightgbm:
   verbose: -1                  # Suppress output
   
   # Determinism
-  # random_state: auto-injected from defaults.randomness.random_state (or pipeline.determinism.base_seed)
+  # seed: auto-injected from defaults.randomness.seed (or pipeline.determinism.base_seed)
   deterministic: true
   force_col_wise: false        # Must be false for GPU
   

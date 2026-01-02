@@ -517,7 +517,7 @@ class TrendAnalyzer:
         """Extract normalized index row from metadata and metrics."""
         try:
             # Extract item name from path
-            item_name = item_dir.name
+            target = item_dir.name
             
             # Parse cohort_id from directory name
             cohort_id = metadata.get('cohort_id', '')
@@ -539,8 +539,8 @@ class TrendAnalyzer:
                 
                 # Stage + item
                 'stage': stage,
-                'item_name': item_name,
-                'target': metadata.get('target', item_name),
+                'target': target,
+                'target': metadata.get('target', target),
                 'symbol': metadata.get('symbol'),
                 'model_family': metadata.get('model_family'),
                 
@@ -558,7 +558,7 @@ class TrendAnalyzer:
                 'horizon_minutes': cv_details.get('horizon_minutes') or metadata.get('horizon_minutes'),
                 'purge_minutes': cv_details.get('purge_minutes') or metadata.get('purge_minutes'),
                 'embargo_minutes': cv_details.get('embargo_minutes') or metadata.get('embargo_minutes'),
-                'cv_folds': cv_details.get('folds') or cv_details.get('cv_folds'),
+                'folds': cv_details.get('folds'),
                 
                 # Metrics (stage-specific, store as JSON blob)
                 'metrics': json.dumps(metrics)
@@ -585,16 +585,16 @@ class TrendAnalyzer:
             
             # Extract stage-specific metric fields
             if stage == "TARGET_RANKING":
-                row['auc_mean'] = metrics.get('mean_score')
+                row['auc_mean'] = metrics.get('auc')
                 row['auc_std'] = metrics.get('std_score')
                 row['composite_score'] = metrics.get('composite_score')
                 row['importance_mean'] = metrics.get('mean_importance')
-                row['N_effective'] = metrics.get('N_effective_cs') or metadata.get('N_effective')
+                row['n_effective'] = metrics.get('n_effective_cs') or metadata.get('n_effective')
             elif stage == "FEATURE_SELECTION":
                 # Feature selection metrics (to be defined based on actual structure)
                 row['n_selected'] = metrics.get('n_selected') or metrics.get('n_features')
             elif stage == "TRAINING" or stage == "MODEL_TRAINING":
-                row['primary_metric'] = metrics.get('mean_score') or metrics.get('auc')
+                row['primary_metric'] = metrics.get('auc')
                 row['train_time_sec'] = metrics.get('train_time_sec')
             
             return row
@@ -630,7 +630,7 @@ class TrendAnalyzer:
             key = SeriesKey(
                 cohort_id=str(row.get('cohort_id', '')),
                 stage=str(row.get('stage', '')),
-                target=str(row.get('target', row.get('item_name', ''))),
+                target=str(row.get('target', row.get('target', ''))),
                 data_fingerprint=str(row.get('data_fingerprint', '')) if pd.notna(row.get('data_fingerprint')) else '',
                 feature_registry_hash=str(row.get('feature_registry_hash', '')) if pd.notna(row.get('feature_registry_hash')) else None,
                 fold_boundaries_hash=str(row.get('fold_boundaries_hash', '')) if pd.notna(row.get('fold_boundaries_hash')) else None,
@@ -1237,7 +1237,7 @@ class TrendAnalyzer:
             
             # 1. Performance timeseries
             perf_columns = ['run_id', 'timestamp', 'auc_mean', 'composite_score', 'primary_metric', 
-                          'mean_score', 'std_score', 'importance_mean']
+                          'auc', 'std_score', 'importance_mean']
             perf_cols = [c for c in perf_columns if c in target_df.columns]
             if perf_cols:
                 perf_df = target_df[perf_cols].copy()

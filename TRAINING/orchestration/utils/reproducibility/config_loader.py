@@ -114,20 +114,20 @@ def load_cohort_config_keys() -> List[str]:
         safety_section = safety_cfg.get('safety', {})
         repro_cfg = safety_section.get('reproducibility', {})
         keys = repro_cfg.get('cohort_config_keys', [
-            'N_effective_cs',
+            'n_effective_cs',
             'n_symbols',
             'date_range',
             'cs_config'
         ])
         return keys if isinstance(keys, list) else [
-            'N_effective_cs',
+            'n_effective_cs',
             'n_symbols',
             'date_range',
             'cs_config'
         ]
     except Exception:
         return [
-            'N_effective_cs',
+            'n_effective_cs',
             'n_symbols',
             'date_range',
             'cs_config'

@@ -14,7 +14,7 @@ from typing import Dict, List, Any, Optional, Tuple
 import logging
 from .base import BaseTrainingStrategy
 
-# Import determinism system for consistent random_state
+# Import determinism system for consistent seed
 try:
     from TRAINING.common.determinism import BASE_SEED
     _DETERMINISM_AVAILABLE = True
@@ -45,37 +45,37 @@ class CascadeStrategy(BaseTrainingStrategy):
         barrier_targets = []
         fwd_ret_targets = []
         
-        for target_name, y in y_dict.items():
-            target_type = self._determine_target_type(target_name, y)
-            self.target_types[target_name] = target_type
+        for target, y in y_dict.items():
+            target_type = self._determine_target_type(target, y)
+            self.target_types[target] = target_type
             
             if target_type == 'classification':
-                barrier_targets.append(target_name)
+                barrier_targets.append(target)
             else:
-                fwd_ret_targets.append(target_name)
+                fwd_ret_targets.append(target)
         
         logger.info(f"Barrier targets: {barrier_targets}")
         logger.info(f"Forward return targets: {fwd_ret_targets}")
         
         # Train barrier models (classifiers)
-        for target_name in barrier_targets:
-            logger.info(f"Training barrier model: {target_name}")
-            model = self._create_classification_model(target_name)
-            model.fit(X, y_dict[target_name])
+        for target in barrier_targets:
+            logger.info(f"Training barrier model: {target}")
+            model = self._create_classification_model(target)
+            model.fit(X, y_dict[target])
             
             # Calibrate if needed
-            calibrator = self._create_calibrator(model, X, y_dict[target_name])
+            calibrator = self._create_calibrator(model, X, y_dict[target])
             
-            self.barrier_models[target_name] = model
+            self.barrier_models[target] = model
             if calibrator:
-                self.calibrators[target_name] = calibrator
+                self.calibrators[target] = calibrator
         
         # Train forward return models (regressors)
-        for target_name in fwd_ret_targets:
-            logger.info(f"Training fwd_ret model: {target_name}")
-            model = self._create_regression_model(target_name)
-            model.fit(X, y_dict[target_name])
-            self.fwd_ret_models[target_name] = model
+        for target in fwd_ret_targets:
+            logger.info(f"Training fwd_ret model: {target}")
+            model = self._create_regression_model(target)
+            model.fit(X, y_dict[target])
+            self.fwd_ret_models[target] = model
         
         # Store all models in main models dict for compatibility
         self.models.update(self.barrier_models)
@@ -100,7 +100,7 @@ class CascadeStrategy(BaseTrainingStrategy):
         
         # Get barrier predictions (gates)
         barrier_preds = {}
-        for target_name, model in self.barrier_models.items():
+        for target, model in self.barrier_models.items():
             try:
                 # Get raw predictions
                 if hasattr(model, 'predict_proba'):
@@ -109,35 +109,35 @@ class CascadeStrategy(BaseTrainingStrategy):
                     raw_pred = model.predict(X)
                 
                 # Apply calibration if available
-                if target_name in self.calibrators:
-                    calibrator = self.calibrators[target_name]
+                if target in self.calibrators:
+                    calibrator = self.calibrators[target]
                     calibrated_pred = calibrator.predict(raw_pred.reshape(-1, 1))
                 else:
                     calibrated_pred = raw_pred
                 
-                barrier_preds[target_name] = calibrated_pred
+                barrier_preds[target] = calibrated_pred
                 
             except Exception as e:
-                logger.error(f"Error predicting barrier {target_name}: {e}")
-                barrier_preds[target_name] = np.zeros(len(X))
+                logger.error(f"Error predicting barrier {target}: {e}")
+                barrier_preds[target] = np.zeros(len(X))
         
         # Get forward return predictions
         fwd_ret_preds = {}
-        for target_name, model in self.fwd_ret_models.items():
+        for target, model in self.fwd_ret_models.items():
             try:
                 pred = model.predict(X)
-                fwd_ret_preds[target_name] = pred
+                fwd_ret_preds[target] = pred
             except Exception as e:
-                logger.error(f"Error predicting fwd_ret {target_name}: {e}")
-                fwd_ret_preds[target_name] = np.zeros(len(X))
+                logger.error(f"Error predicting fwd_ret {target}: {e}")
+                fwd_ret_preds[target] = np.zeros(len(X))
         
         # Apply gating logic
         gate_config = self._get_gate_config()
         
-        for target_name, pred in fwd_ret_preds.items():
+        for target, pred in fwd_ret_preds.items():
             # Apply barrier gates
             gated_pred = self._apply_gating(pred, barrier_preds, gate_config)
-            predictions[target_name] = gated_pred
+            predictions[target] = gated_pred
         
         # Also return barrier predictions
         predictions.update(barrier_preds)
@@ -148,13 +148,13 @@ class CascadeStrategy(BaseTrainingStrategy):
         """Return target types for each target"""
         return self.target_types.copy()
     
-    def _determine_target_type(self, target_name: str, y: np.ndarray) -> str:
+    def _determine_target_type(self, target: str, y: np.ndarray) -> str:
         """Determine if target is regression or classification"""
         
         # Check target name patterns
-        if target_name.startswith('fwd_ret_'):
+        if target.startswith('fwd_ret_'):
             return 'regression'
-        elif any(target_name.startswith(prefix) for prefix in 
+        elif any(target.startswith(prefix) for prefix in 
                 ['will_peak', 'will_valley', 'mdd', 'mfe', 'y_will_']):
             return 'classification'
         
@@ -166,7 +166,7 @@ class CascadeStrategy(BaseTrainingStrategy):
         else:
             return 'regression'
     
-    def _create_classification_model(self, target_name: str):
+    def _create_classification_model(self, target: str):
         """Create classification model"""
         from sklearn.ensemble import RandomForestClassifier
         
@@ -174,12 +174,12 @@ class CascadeStrategy(BaseTrainingStrategy):
         model_type = model_config.get('type', 'random_forest')
         
         if model_type == 'random_forest':
-            # Get random_state from determinism system
-            random_state = BASE_SEED if BASE_SEED is not None else 42
+            # Get seed from determinism system
+            seed = BASE_SEED if BASE_SEED is not None else 42
             return RandomForestClassifier(
                 n_estimators=model_config.get('n_estimators', 100),
                 max_depth=model_config.get('max_depth', None),
-                random_state=random_state
+                random_state=seed
             )
         else:
             # Fallback: try to load default from config
@@ -188,9 +188,9 @@ class CascadeStrategy(BaseTrainingStrategy):
                 default_n_estimators = int(get_cfg("models.random_forest.n_estimators", default=100, config_name="training_config"))
             except Exception:
                 default_n_estimators = 100
-            return RandomForestClassifier(n_estimators=default_n_estimators, random_state=random_state)
+            return RandomForestClassifier(n_estimators=default_n_estimators, random_state=seed)
     
-    def _create_regression_model(self, target_name: str):
+    def _create_regression_model(self, target: str):
         """Create regression model"""
         from sklearn.ensemble import RandomForestRegressor
         
@@ -198,12 +198,12 @@ class CascadeStrategy(BaseTrainingStrategy):
         model_type = model_config.get('type', 'random_forest')
         
         if model_type == 'random_forest':
-            # Get random_state from determinism system
-            random_state = BASE_SEED if BASE_SEED is not None else 42
+            # Get seed from determinism system
+            seed = BASE_SEED if BASE_SEED is not None else 42
             return RandomForestRegressor(
                 n_estimators=model_config.get('n_estimators', 100),
                 max_depth=model_config.get('max_depth', None),
-                random_state=random_state
+                random_state=seed
             )
         else:
             # Fallback: try to load default from config
@@ -212,7 +212,7 @@ class CascadeStrategy(BaseTrainingStrategy):
                 default_n_estimators = int(get_cfg("models.random_forest.n_estimators", default=100, config_name="training_config"))
             except Exception:
                 default_n_estimators = 100
-            return RandomForestRegressor(n_estimators=default_n_estimators, random_state=random_state)
+            return RandomForestRegressor(n_estimators=default_n_estimators, random_state=seed)
     
     def _create_calibrator(self, model, X: np.ndarray, y: np.ndarray):
         """Create probability calibrator"""
@@ -319,18 +319,18 @@ class CascadeStrategy(BaseTrainingStrategy):
         }
         
         # Analyze barrier predictions
-        for target_name, pred in predictions.items():
-            if target_name in self.barrier_models:
-                summary['barrier_predictions'][target_name] = {
+        for target, pred in predictions.items():
+            if target in self.barrier_models:
+                summary['barrier_predictions'][target] = {
                     'mean_prob': float(np.mean(pred)),
                     'std_prob': float(np.std(pred)),
                     'high_prob_count': int(np.sum(pred > 0.7))
                 }
         
         # Analyze gating effects on forward returns
-        for target_name, pred in predictions.items():
-            if target_name in self.fwd_ret_models:
-                summary['gating_effects'][target_name] = {
+        for target, pred in predictions.items():
+            if target in self.fwd_ret_models:
+                summary['gating_effects'][target] = {
                     'mean_signal': float(np.mean(pred)),
                     'std_signal': float(np.std(pred)),
                     'blocked_count': int(np.sum(pred == 0))
@@ -338,7 +338,7 @@ class CascadeStrategy(BaseTrainingStrategy):
         
         return summary
     
-    def _create_classification_model(self, target_name: str):
+    def _create_classification_model(self, target: str):
         """Create classification model"""
         from sklearn.ensemble import RandomForestClassifier
         from sklearn.linear_model import LogisticRegression
@@ -347,22 +347,22 @@ class CascadeStrategy(BaseTrainingStrategy):
         model_type = model_config.get('type', 'RandomForest')
         
         if model_type == 'RandomForest':
-            # Get random_state from determinism system
-            random_state = BASE_SEED if BASE_SEED is not None else 42
+            # Get seed from determinism system
+            seed = BASE_SEED if BASE_SEED is not None else 42
             return RandomForestClassifier(
                 n_estimators=model_config.get('n_estimators', 100),
                 max_depth=model_config.get('max_depth', 10),
-                random_state=random_state
+                random_state=seed
             )
         elif model_type == 'LogisticRegression':
             return LogisticRegression(
                 C=model_config.get('C', 1.0),
-                random_state=random_state
+                random_state=seed
             )
         else:
-            return RandomForestClassifier(random_state=random_state)
+            return RandomForestClassifier(random_state=seed)
     
-    def _create_regression_model(self, target_name: str):
+    def _create_regression_model(self, target: str):
         """Create regression model"""
         from sklearn.ensemble import RandomForestRegressor
         from sklearn.linear_model import Ridge
@@ -371,19 +371,19 @@ class CascadeStrategy(BaseTrainingStrategy):
         model_type = model_config.get('type', 'RandomForest')
         
         if model_type == 'RandomForest':
-            # Get random_state from determinism system
-            random_state = BASE_SEED if BASE_SEED is not None else 42
+            # Get seed from determinism system
+            seed = BASE_SEED if BASE_SEED is not None else 42
             return RandomForestRegressor(
                 n_estimators=model_config.get('n_estimators', 100),
                 max_depth=model_config.get('max_depth', 10),
-                random_state=random_state
+                random_state=seed
             )
         elif model_type == 'Ridge':
             return Ridge(
                 alpha=model_config.get('alpha', 1.0)
             )
         else:
-            return RandomForestRegressor(random_state=random_state)
+            return RandomForestRegressor(random_state=seed)
     
     def _create_calibrator(self, model, X: np.ndarray, y: np.ndarray):
         """Create calibrator for classification model"""

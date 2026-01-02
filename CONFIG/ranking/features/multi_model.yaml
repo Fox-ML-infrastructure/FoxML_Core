@@ -8,7 +8,7 @@ global:
   # This ensures consistency across all models and aligns with the determinism system
   # Set to null to use pipeline.determinism.base_seed (default: 42)
   # Or set to a specific value (e.g., 42, 1337) to override globally
-  random_state: null
+  seed: null
 
 # Model families configuration
 # 
@@ -48,7 +48,7 @@ model_families:
       reg_alpha: 0.1
       reg_lambda: 0.1
       verbose: -1
-      # random_state: auto-injected from global.random_state (or pipeline.determinism.base_seed)
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
       device: "cpu"  # Set to "cuda" or "gpu" if available
   
   xgboost:
@@ -67,7 +67,7 @@ model_families:
       reg_alpha: 0.1
       reg_lambda: 0.1
       verbosity: 0
-      # random_state: auto-injected from global.random_state (or pipeline.determinism.base_seed)
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
       tree_method: "auto"  # Set to "gpu_hist" if CUDA available
   
   random_forest:
@@ -82,7 +82,7 @@ model_families:
       min_samples_leaf: 10
       bootstrap: true
       n_jobs: 4
-      # random_state: auto-injected from global.random_state (or pipeline.determinism.base_seed)
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
   
   histogram_gradient_boosting:
     enabled: false  # Disable by default (similar to LightGBM)
@@ -96,7 +96,7 @@ model_families:
       l2_regularization: 0.0001
       early_stopping: true
       validation_fraction: 0.1
-      # random_state: auto-injected from global.random_state (or pipeline.determinism.base_seed)
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
   
   # ============================================================================
   # NEURAL NETWORKS (slower, permutation/SHAP importance)
@@ -117,7 +117,7 @@ model_families:
       early_stopping: true
       validation_fraction: 0.1
       n_iter_no_change: 10
-      # random_state: auto-injected from global.random_state (or pipeline.determinism.base_seed)
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
   
   # ============================================================================
   # SPECIALIZED MODELS (optional, for specific use cases)
@@ -130,7 +130,7 @@ model_families:
     config:
       alpha: 1.0
       fit_intercept: true
-      # random_state: auto-injected from global.random_state (or pipeline.determinism.base_seed)
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
   
   elastic_net:
     enabled: true  # ✅ ENABLED - Sparse linear model (same as target ranking)
@@ -140,7 +140,7 @@ model_families:
       alpha: 1.0
       l1_ratio: 0.5
       max_iter: 1000
-      # random_state: auto-injected from global.random_state (or pipeline.determinism.base_seed)
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
   
   # ============================================================================
   # ADDITIONAL MODELS (Recommended for production)
@@ -159,7 +159,7 @@ model_families:
       metric_period: 50  # Calculate metrics every 50 trees (reduces evaluation overhead)
       od_type: "Iter"  # Early stopping type: Iter (stop if no improvement for od_wait iterations)
       od_wait: 20  # Early stopping patience: stop if no improvement for 20 iterations
-      # random_seed: auto-injected from global.random_state (or pipeline.determinism.base_seed)
+      # random_seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
       # Note: If training is slow (>20min for 50k samples), check for:
       #   - Text features (add text_features=['col_name'] if present)
       #   - High cardinality categoricals (drop ID columns like User_ID)
@@ -172,7 +172,7 @@ model_families:
     config:
       alpha: 0.1
       max_iter: 1000
-      # random_state: auto-injected from global.random_state (or pipeline.determinism.base_seed)
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
   
   mutual_information:
     enabled: true  # ✅ ENABLED - Information-theoretic baseline
@@ -180,7 +180,7 @@ model_families:
     weight: 0.8
     config:
       discrete_features: "auto"
-      # random_state: auto-injected from global.random_state (or pipeline.determinism.base_seed)
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
   
   # ============================================================================
   # STATISTICAL & WRAPPER METHODS
@@ -205,7 +205,7 @@ model_families:
       estimator_n_estimators: 100  # Number of trees in RFE's internal RF estimator
       estimator_max_depth: 10  # Max depth for RFE's internal RF estimator
       estimator_n_jobs: 1  # Parallel jobs for RFE's internal RF estimator
-      # random_state: auto-injected from global.random_state (or pipeline.determinism.base_seed)
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
   
   boruta:
     enabled: true  # ✅ ENABLED - All-relevant feature selection (statistical gate, not just another importance scorer)
@@ -216,7 +216,7 @@ model_families:
       max_depth: 6  # Shallower to avoid overfitting to interactions (vs RF's 15)
       max_iter: 50  # Optimized: Reduced from 100 to 50 (most decisions converge earlier)
       perc: 95  # Percentile threshold (higher = more conservative, needs to beat shadow more decisively)
-      # random_state: auto-injected from global.random_state (or pipeline.determinism.base_seed)
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
       n_jobs: 1  # Parallel jobs for ExtraTrees base estimator
       verbose: 0  # BorutaPy verbosity (0=silent, 1=progress, 2=detailed)
       class_weight: "auto"  # "auto"=balanced_subsample for binary, balanced for multiclass; "none"=no weighting; or dict
@@ -253,7 +253,7 @@ model_families:
     weight: 0.9
     config:
       n_bootstrap: 50  # Number of bootstrap iterations (reduced for speed)
-      # random_state: auto-injected from global.random_state (or pipeline.determinism.base_seed)
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
       Cs: 10  # Number of C values to try for LogisticRegressionCV
       cv: 3  # CV folds for LassoCV/LogisticRegressionCV
       n_jobs: 1  # Parallel jobs for CV
@@ -316,7 +316,7 @@ aggregation:
 sampling:
   max_samples_per_symbol: 50000  # Limit rows per symbol (for speed)
   # validation_split: auto-injected from defaults (0.2)
-  # random_state: auto-injected from global.random_state (or pipeline.determinism.base_seed)
+  # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
 
 # SHAP configuration (if using SHAP method)
 shap:
@@ -327,11 +327,11 @@ shap:
 # Permutation importance configuration
 permutation:
   n_repeats: 5  # Number of permutation repeats
-  # random_state: auto-injected from global.random_state (or pipeline.determinism.base_seed)
+  # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
 
 # Cross-validation configuration
 cross_validation:
-  # cv_folds: auto-injected from defaults (3)
+  # folds: auto-injected from defaults (3)
   # n_jobs: auto-injected from defaults (1)
 
 # Output configuration

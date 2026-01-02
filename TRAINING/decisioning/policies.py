@@ -127,10 +127,10 @@ class DecisionPolicy:
         def feature_explosion_decline(cohort_data: pd.DataFrame, latest: pd.Series) -> bool:
             if len(cohort_data) < fed_cfg['min_runs']:
                 return False
-            if 'cs_auc' not in cohort_data.columns or 'n_features_selected' not in cohort_data.columns:
+            if 'auc' not in cohort_data.columns or 'n_features_selected' not in cohort_data.columns:
                 return False
             recent = cohort_data.tail(fed_cfg['min_runs'])
-            auc_trend = recent['cs_auc'].diff().tail(2)
+            auc_trend = recent['auc'].diff().tail(2)
             feature_trend = recent['n_features_selected'].diff().tail(2)
             # AUC declining while features increasing
             return (auc_trend.iloc[-1] < fed_cfg['auc_decline_threshold'] and feature_trend.iloc[-1] > fed_cfg['feature_increase_threshold']) if len(auc_trend) > 0 and len(feature_trend) > 0 else False
@@ -209,7 +209,7 @@ def evaluate_policies(
 # Hard clamps on patch actions (prevent unbounded changes)
 PATCH_CLAMPS = {
     'n_features_selected': {'max_change_pct': 20},  # Max ±20%
-    'cs_auc_threshold': {'max_change_pct': 20},  # Max ±20%
+    'auc_threshold': {'max_change_pct': 20},  # Max ±20%
     'frac_symbols_good_threshold': {'max_change_pct': 20},  # Max ±20%
     'max_features': {'max_change_pct': 20},  # Max ±20%
 }
@@ -265,14 +265,14 @@ def apply_decision_patch(
             new_config['target_routing']['routing'] = {}
         routing = new_config['target_routing']['routing']
         
-        # Clamp cs_auc_threshold (max 20% increase)
-        old_cs_threshold = routing.get('cs_auc_threshold', 0.65)
+        # Clamp auc_threshold (max 20% increase)
+        old_cs_threshold = routing.get('auc_threshold', 0.65)
         new_cs_threshold = min(old_cs_threshold * 1.2, old_cs_threshold * 1.2)  # Max 20% increase
         if new_cs_threshold > old_cs_threshold * 1.2:
             new_cs_threshold = old_cs_threshold * 1.2
-            warnings.append(f"cs_auc_threshold clamped to max 20% increase: {old_cs_threshold} → {new_cs_threshold}")
-        routing['cs_auc_threshold'] = new_cs_threshold
-        patch['target_routing.routing.cs_auc_threshold'] = new_cs_threshold
+            warnings.append(f"auc_threshold clamped to max 20% increase: {old_cs_threshold} → {new_cs_threshold}")
+        routing['auc_threshold'] = new_cs_threshold
+        patch['target_routing.routing.auc_threshold'] = new_cs_threshold
         
         # Clamp frac_symbols_good_threshold (max 20% increase)
         old_frac_threshold = routing.get('frac_symbols_good_threshold', 0.5)

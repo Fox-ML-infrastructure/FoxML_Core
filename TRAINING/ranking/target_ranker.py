@@ -80,7 +80,7 @@ logger = logging.getLogger(__name__)
 
 
 def evaluate_target_predictability(
-    target_name: str,
+    target: str,
     target_config: Dict[str, Any] | TargetConfig,
     symbols: List[str],
     data_dir: Path,
@@ -103,7 +103,7 @@ def evaluate_target_predictability(
     leakage-free behavior (PurgedTimeSeriesSplit, leakage filtering, etc.).
     
     Args:
-        target_name: Display name of target
+        target: Display name of target
         target_config: TargetConfig object or dict with target config
         symbols: List of symbols to evaluate on
         data_dir: Directory containing symbol data
@@ -169,7 +169,7 @@ def evaluate_target_predictability(
                     max_rows_per_symbol = 50000
     
     return _evaluate_target_predictability(
-        target_name=target_name,
+        target=target,
         target_config=target_config,
         symbols=symbols,
         data_dir=data_dir,
@@ -201,7 +201,7 @@ def discover_targets(
         data_dir: Directory containing symbol data
     
     Returns:
-        Dict mapping target_name -> TargetConfig
+        Dict mapping target -> TargetConfig
     """
     return _discover_all_targets(symbol, data_dir)
 
@@ -211,7 +211,7 @@ def load_target_configs() -> Dict[str, Dict]:
     Load target configurations from CONFIG/target_configs.yaml.
     
     Returns:
-        Dict mapping target_name -> target config dict
+        Dict mapping target -> target config dict
     """
     return _load_target_configs()
 
@@ -239,7 +239,7 @@ def rank_targets(
     composite predictability score. All leakage-free behavior is preserved.
     
     Args:
-        targets: Dict mapping target_name -> TargetConfig or config dict
+        targets: Dict mapping target -> TargetConfig or config dict
         symbols: List of symbols to evaluate on
         data_dir: Directory containing symbol data
         model_families: List of model family names to use
@@ -344,8 +344,8 @@ def rank_targets(
     
     # Results storage: separate by view
     results_cs = []  # Cross-sectional results
-    results_sym = {}  # Symbol-specific results: {target_name: {symbol: result}}
-    symbol_skip_reasons = {}  # Skip reasons: {target_name: {symbol: {reason, status, ...}}}
+    results_sym = {}  # Symbol-specific results: {target: {symbol: result}}
+    symbol_skip_reasons = {}  # Skip reasons: {target: {symbol: {reason, status, ...}}}
     results_loso = {}  # LOSO results: {symbol: [results]} (optional)
     
     # Load dual-view config (experiment config takes precedence over global config)
@@ -391,7 +391,7 @@ def rank_targets(
     # Track all evaluated targets (for ensuring decision files are created)
     all_evaluated_targets = set()
     # Track all CS results (including failed ones) for decision computation
-    all_cs_results = {}  # {target_name: TargetPredictabilityScore}
+    all_cs_results = {}  # {target: TargetPredictabilityScore}
     
     # NEW: Use typed config if provided
     if target_ranking_config is not None and _NEW_CONFIG_AVAILABLE:
@@ -425,11 +425,11 @@ def rank_targets(
         target_items = sorted_target_items[:max_targets_to_evaluate]
         targets_to_evaluate = dict(target_items)
         logger.info(f"Limiting evaluation to {len(targets_to_evaluate)} targets (out of {all_targets_count} total) for faster testing")
-        selected_target_names = list(targets_to_evaluate.keys())
-        if len(selected_target_names) <= 10:
-            logger.debug(f"Selected targets: {selected_target_names}")
+        selected_targets = list(targets_to_evaluate.keys())
+        if len(selected_targets) <= 10:
+            logger.debug(f"Selected targets: {selected_targets}")
         else:
-            logger.debug(f"Selected targets: {selected_target_names[:10]}... (showing first 10 of {len(selected_target_names)})")
+            logger.debug(f"Selected targets: {selected_targets[:10]}... (showing first 10 of {len(selected_targets)})")
     
     total_to_evaluate = len(targets_to_evaluate)
     logger.info(f"Ranking {total_to_evaluate} targets across {len(symbols)} symbols")
@@ -478,9 +478,9 @@ def rank_targets(
     # Helper function for parallel target evaluation (must be picklable)
     def _evaluate_single_target(item):
         """Evaluate a single target - wrapper for parallel execution"""
-        target_name, target_config = item
+        target, target_config = item
         result_data = {
-            'target_name': target_name,
+            'target': target,
             'result_cs': None,
             'result_sym_dict': {},
             'result_loso_dict': {},
@@ -492,7 +492,7 @@ def rank_targets(
             if auto_rerun_enabled and _AUTOFIX_AVAILABLE:
                 try:
                     result_cs = evaluate_target_with_autofix(
-                        target_name=target_name,
+                        target=target,
                         target_config=target_config,
                         symbols=symbols,
                         data_dir=data_dir,
@@ -512,7 +512,7 @@ def rank_targets(
                     )
                 except TypeError:
                     result_cs = evaluate_target_with_autofix(
-                        target_name=target_name,
+                        target=target,
                         target_config=target_config,
                         symbols=symbols,
                         data_dir=data_dir,
@@ -530,7 +530,7 @@ def rank_targets(
                     )
             else:
                 result_cs = evaluate_target_predictability(
-                    target_name=target_name,
+                    target=target,
                     target_config=target_config,
                     symbols=symbols,
                     data_dir=data_dir,
@@ -550,7 +550,7 @@ def rank_targets(
             
             # View B: Symbol-specific evaluation (if enabled and cross-sectional succeeded)
             skip_statuses = ["LEAKAGE_UNRESOLVED", "LEAKAGE_UNRESOLVED_MAX_RETRIES", "SUSPICIOUS", "SUSPICIOUS_STRONG"]
-            cs_succeeded = result_cs.mean_score != -999.0 and result_cs.status not in skip_statuses
+            cs_succeeded = result_cs.auc != -999.0 and result_cs.status not in skip_statuses
             
             if enable_symbol_specific and cs_succeeded:
                 result_sym_dict = {}
@@ -559,7 +559,7 @@ def rank_targets(
                         if auto_rerun_enabled and _AUTOFIX_AVAILABLE:
                             try:
                                 result_sym = evaluate_target_with_autofix(
-                                    target_name=target_name,
+                                    target=target,
                                     target_config=target_config,
                                     symbols=[symbol],
                                     data_dir=data_dir,
@@ -579,7 +579,7 @@ def rank_targets(
                                 )
                             except TypeError:
                                 result_sym = evaluate_target_with_autofix(
-                                    target_name=target_name,
+                                    target=target,
                                     target_config=target_config,
                                     symbols=[symbol],
                                     data_dir=data_dir,
@@ -597,7 +597,7 @@ def rank_targets(
                                 )
                         else:
                             result_sym = evaluate_target_predictability(
-                                target_name=target_name,
+                                target=target,
                                 target_config=target_config,
                                 symbols=[symbol],
                                 data_dir=data_dir,
@@ -613,10 +613,10 @@ def rank_targets(
                                 symbol=symbol
                             )
                         
-                        if result_sym.mean_score != -999.0:
+                        if result_sym.auc != -999.0:
                             result_sym_dict[symbol] = result_sym
                     except Exception as e:
-                        logger.warning(f"    Failed to evaluate {target_name} for symbol {symbol}: {e}")
+                        logger.warning(f"    Failed to evaluate {target} for symbol {symbol}: {e}")
                         continue
                 
                 result_data['result_sym_dict'] = result_sym_dict
@@ -627,7 +627,7 @@ def rank_targets(
                 for symbol in symbols:
                     try:
                         result_loso_sym = evaluate_target_predictability(
-                            target_name=target_name,
+                            target=target,
                             target_config=target_config,
                             symbols=symbols,
                             data_dir=data_dir,
@@ -644,14 +644,14 @@ def rank_targets(
                         )
                         result_loso_dict[symbol] = result_loso_sym
                     except Exception as e:
-                        logger.warning(f"    Failed LOSO evaluation for {target_name} on symbol {symbol}: {e}")
+                        logger.warning(f"    Failed LOSO evaluation for {target} on symbol {symbol}: {e}")
                         continue
                 
                 result_data['result_loso_dict'] = result_loso_dict
                 
         except Exception as e:
             result_data['error'] = str(e)
-            logger.exception(f"  Failed to evaluate {target_name}: {e}")
+            logger.exception(f"  Failed to evaluate {target}: {e}")
         
         return result_data
     
@@ -669,10 +669,10 @@ def rank_targets(
         
         # Process parallel results
         for item, result_data in parallel_results:
-            target_name = result_data['target_name']
-            all_evaluated_targets.add(target_name)  # Track that this target was evaluated
+            target = result_data['target']
+            all_evaluated_targets.add(target)  # Track that this target was evaluated
             if result_data['error']:
-                logger.error(f"  ❌ {target_name}: {result_data['error']}")
+                logger.error(f"  ❌ {target}: {result_data['error']}")
                 continue
             
             result_cs = result_data['result_cs']
@@ -681,54 +681,54 @@ def rank_targets(
             
             # Track CS result (even if failed) for decision computation
             if result_cs:
-                all_cs_results[target_name] = result_cs
+                all_cs_results[target] = result_cs
             
             # Process cross-sectional result
             skip_statuses = ["LEAKAGE_UNRESOLVED", "LEAKAGE_UNRESOLVED_MAX_RETRIES", "SUSPICIOUS", "SUSPICIOUS_STRONG"]
-            cs_succeeded = result_cs.mean_score != -999.0 and result_cs.status not in skip_statuses
+            cs_succeeded = result_cs.auc != -999.0 and result_cs.status not in skip_statuses
             if cs_succeeded:
                 results_cs.append(result_cs)
                 results.append(result_cs)
             else:
                 reason = result_cs.status if result_cs.status in skip_statuses else (result_cs.leakage_flag if result_cs.leakage_flag != "OK" else "degenerate/failed")
                 if result_cs.status in ["SUSPICIOUS", "SUSPICIOUS_STRONG"]:
-                    logger.warning(f"  ⚠️  Excluded {target_name} CROSS_SECTIONAL ({reason}) - High score suggests structural leakage")
+                    logger.warning(f"  ⚠️  Excluded {target} CROSS_SECTIONAL ({reason}) - High score suggests structural leakage")
                 else:
-                    logger.info(f"  Skipped {target_name} CROSS_SECTIONAL ({reason})")
+                    logger.info(f"  Skipped {target} CROSS_SECTIONAL ({reason})")
             
             # Store symbol-specific results
             if enable_symbol_specific:
-                if target_name not in results_sym:
-                    results_sym[target_name] = {}
+                if target not in results_sym:
+                    results_sym[target] = {}
                 for symbol, result_sym in result_sym_dict.items():
-                    if result_sym.mean_score != -999.0 and result_sym.status not in skip_statuses:
-                        results_sym[target_name][symbol] = result_sym
+                    if result_sym.auc != -999.0 and result_sym.status not in skip_statuses:
+                        results_sym[target][symbol] = result_sym
                     else:
                         reason = result_sym.status if result_sym.status in skip_statuses else "degenerate/failed"
-                        logger.debug(f"    Skipped {target_name} SYMBOL_SPECIFIC ({symbol}): {reason}")
+                        logger.debug(f"    Skipped {target} SYMBOL_SPECIFIC ({symbol}): {reason}")
             
             # Store LOSO results
             if enable_loso:
-                if target_name not in results_loso:
-                    results_loso[target_name] = {}
+                if target not in results_loso:
+                    results_loso[target] = {}
                 for symbol, result_loso_sym in result_loso_dict.items():
-                    if result_loso_sym.mean_score != -999.0 and result_loso_sym.status not in skip_statuses:
-                        results_loso[target_name][symbol] = result_loso_sym
+                    if result_loso_sym.auc != -999.0 and result_loso_sym.status not in skip_statuses:
+                        results_loso[target][symbol] = result_loso_sym
             
             # Save routing decision immediately after target evaluation (incremental)
             if output_dir:
                 from TRAINING.ranking.target_routing import (
                     _compute_single_target_routing_decision, _save_single_target_decision
                 )
-                target_sym_results = results_sym.get(target_name, {})
-                target_skip_reasons = symbol_skip_reasons.get(target_name, {}) if symbol_skip_reasons else {}
+                target_sym_results = results_sym.get(target, {})
+                target_skip_reasons = symbol_skip_reasons.get(target, {}) if symbol_skip_reasons else {}
                 decision = _compute_single_target_routing_decision(
-                    target_name=target_name,
+                    target=target,
                     result_cs=result_cs if cs_succeeded else None,
                     sym_results=target_sym_results,
                     symbol_skip_reasons=target_skip_reasons
                 )
-                _save_single_target_decision(target_name, decision, output_dir)
+                _save_single_target_decision(target, decision, output_dir)
     else:
         # Sequential evaluation (original code path)
         if parallel_enabled and len(targets_to_evaluate) == 1:
@@ -737,9 +737,9 @@ def rank_targets(
             logger.info("Parallel execution disabled (parallel_targets=false or not available)")
         
         # Evaluate each target in dual views
-        for idx, (target_name, target_config) in enumerate(targets_to_evaluate.items(), 1):
-            all_evaluated_targets.add(target_name)  # Track that this target was evaluated
-            logger.info(f"[{idx}/{total_to_evaluate}] Evaluating {target_name}...")
+        for idx, (target, target_config) in enumerate(targets_to_evaluate.items(), 1):
+            all_evaluated_targets.add(target)  # Track that this target was evaluated
+            logger.info(f"[{idx}/{total_to_evaluate}] Evaluating {target}...")
             
             try:
                 # View A: Cross-sectional evaluation (always run)
@@ -748,7 +748,7 @@ def rank_targets(
                     # Try with view/symbol, fallback to without if not supported
                     try:
                         result_cs = evaluate_target_with_autofix(
-                            target_name=target_name,
+                            target=target,
                             target_config=target_config,
                             symbols=symbols,
                             data_dir=data_dir,
@@ -770,7 +770,7 @@ def rank_targets(
                         # Fallback: autofix doesn't support view/symbol yet
                         logger.debug("evaluate_target_with_autofix doesn't support view/symbol, using without")
                         result_cs = evaluate_target_with_autofix(
-                            target_name=target_name,
+                            target=target,
                             target_config=target_config,
                             symbols=symbols,
                             data_dir=data_dir,
@@ -788,7 +788,7 @@ def rank_targets(
                         )
                 else:
                     result_cs = evaluate_target_predictability(
-                        target_name=target_name,
+                        target=target,
                         target_config=target_config,
                         symbols=symbols,
                         data_dir=data_dir,
@@ -814,18 +814,18 @@ def rank_targets(
                 
                 # Track CS result (even if failed) for decision computation
                 if result_cs:
-                    all_cs_results[target_name] = result_cs
+                    all_cs_results[target] = result_cs
                 
-                cs_succeeded = result_cs.mean_score != -999.0 and result_cs.status not in skip_statuses
+                cs_succeeded = result_cs.auc != -999.0 and result_cs.status not in skip_statuses
                 if cs_succeeded:
                     results_cs.append(result_cs)
                     results.append(result_cs)  # Backward compatibility
                 else:
                     reason = result_cs.status if result_cs.status in skip_statuses else (result_cs.leakage_flag if result_cs.leakage_flag != "OK" else "degenerate/failed")
                     if result_cs.status in ["SUSPICIOUS", "SUSPICIOUS_STRONG"]:
-                        logger.warning(f"  ⚠️  Excluded {target_name} CROSS_SECTIONAL ({reason}) - High score suggests structural leakage")
+                        logger.warning(f"  ⚠️  Excluded {target} CROSS_SECTIONAL ({reason}) - High score suggests structural leakage")
                     else:
-                        logger.info(f"  Skipped {target_name} CROSS_SECTIONAL ({reason})")
+                        logger.info(f"  Skipped {target} CROSS_SECTIONAL ({reason})")
                 
                 # View B: Symbol-specific evaluation (if enabled)
                 result_sym_dict = {}
@@ -836,21 +836,21 @@ def rank_targets(
                     # Some targets may work symbol-specifically even if cross-sectional fails
                     # Routing logic needs symbol-specific results to make decisions (e.g., "SYMBOL_SPECIFIC only: weak CS but some symbols work")
                     if not cs_succeeded:
-                        logger.info(f"  ℹ️  Cross-sectional failed for {target_name} (mean_score={result_cs.mean_score}, status={result_cs.status}), but evaluating symbol-specific anyway (target may work per-symbol)")
+                        logger.info(f"  ℹ️  Cross-sectional failed for {target} (auc={result_cs.auc}, status={result_cs.status}), but evaluating symbol-specific anyway (target may work per-symbol)")
                     else:
-                        logger.info(f"  ✅ Cross-sectional succeeded for {target_name}, proceeding with symbol-specific evaluation")
+                        logger.info(f"  ✅ Cross-sectional succeeded for {target}, proceeding with symbol-specific evaluation")
                     
                     # Track per-symbol skip reasons and diagnostics (local to this target evaluation)
                     local_symbol_skip_reasons = {}  # {symbol: {reason, n_rows, n_train, n_val, n_pos_train, n_neg_train, n_pos_val, n_neg_val}}
                     
                     for symbol in symbols:
-                        logger.info(f"    Evaluating {target_name} for symbol {symbol}...")
+                        logger.info(f"    Evaluating {target} for symbol {symbol}...")
                         try:
                             if auto_rerun_enabled and _AUTOFIX_AVAILABLE:
                                 # Try with view/symbol, fallback to without if not supported
                                 try:
                                     result_sym = evaluate_target_with_autofix(
-                                        target_name=target_name,
+                                        target=target,
                                         target_config=target_config,
                                         symbols=[symbol],  # Single symbol
                                         data_dir=data_dir,
@@ -872,7 +872,7 @@ def rank_targets(
                                     # Fallback: autofix doesn't support view/symbol yet
                                     logger.debug(f"evaluate_target_with_autofix doesn't support view/symbol for {symbol}, using without")
                                     result_sym = evaluate_target_with_autofix(
-                                        target_name=target_name,
+                                        target=target,
                                         target_config=target_config,
                                         symbols=[symbol],
                                         data_dir=data_dir,
@@ -890,7 +890,7 @@ def rank_targets(
                                     )
                             else:
                                 result_sym = evaluate_target_predictability(
-                                    target_name=target_name,
+                                    target=target,
                                     target_config=target_config,
                                     symbols=[symbol],  # Single symbol
                                     data_dir=data_dir,
@@ -906,23 +906,23 @@ def rank_targets(
                                     symbol=symbol
                                 )
                             
-                            # Gate: Skip if result is degenerate (mean_score = -999)
-                            if result_sym.mean_score == -999.0:
+                            # Gate: Skip if result is degenerate (auc = -999)
+                            if result_sym.auc == -999.0:
                                 skip_reason = result_sym.status if result_sym.status != "OK" else "degenerate"
-                                logger.warning(f"    ⚠️  Skipped {target_name} for symbol {symbol}: {skip_reason} (mean_score=-999.0, status={result_sym.status})")
+                                logger.warning(f"    ⚠️  Skipped {target} for symbol {symbol}: {skip_reason} (auc=-999.0, status={result_sym.status})")
                                 local_symbol_skip_reasons[symbol] = {
                                     'reason': skip_reason,
                                     'status': result_sym.status,
                                     'leakage_flag': result_sym.leakage_flag,
-                                    'mean_score': result_sym.mean_score
+                                    'auc': result_sym.auc
                                 }
                                 continue
                             
-                            logger.info(f"    ✅ {target_name} for {symbol}: mean_score={result_sym.mean_score:.4f}, status={result_sym.status}")
+                            logger.info(f"    ✅ {target} for {symbol}: auc={result_sym.auc:.4f}, status={result_sym.status}")
                             result_sym_dict[symbol] = result_sym
                         except Exception as e:
                             skip_reason = f"exception: {type(e).__name__}"
-                            logger.error(f"    ❌ Failed to evaluate {target_name} for symbol {symbol}: {e}", exc_info=True)
+                            logger.error(f"    ❌ Failed to evaluate {target} for symbol {symbol}: {e}", exc_info=True)
                             local_symbol_skip_reasons[symbol] = {
                                 'reason': skip_reason,
                                 'error': str(e),
@@ -932,16 +932,16 @@ def rank_targets(
                     
                     # Log summary of skip reasons
                     if local_symbol_skip_reasons:
-                        logger.warning(f"  📋 Symbol-specific skip reasons for {target_name}: {len(local_symbol_skip_reasons)}/{len(symbols)} symbols skipped")
+                        logger.warning(f"  📋 Symbol-specific skip reasons for {target}: {len(local_symbol_skip_reasons)}/{len(symbols)} symbols skipped")
                         for sym, skip_info in local_symbol_skip_reasons.items():
                             reason = skip_info.get('reason', 'unknown')
                             logger.debug(f"    {sym}: {reason}")
                     
                     # Store skip reasons for routing decisions (use global symbol_skip_reasons dict)
                     if local_symbol_skip_reasons:
-                        symbol_skip_reasons[target_name] = local_symbol_skip_reasons
+                        symbol_skip_reasons[target] = local_symbol_skip_reasons
                     
-                    logger.info(f"  📊 Symbol-specific results for {target_name}: {len(result_sym_dict)}/{len(symbols)} symbols succeeded")
+                    logger.info(f"  📊 Symbol-specific results for {target}: {len(result_sym_dict)}/{len(symbols)} symbols succeeded")
                 
                 # View C: LOSO evaluation (optional, if enabled)
                 result_loso_dict = {}
@@ -950,7 +950,7 @@ def rank_targets(
                     for symbol in symbols:
                         try:
                             result_loso_sym = evaluate_target_predictability(
-                                target_name=target_name,
+                                target=target,
                                 target_config=target_config,
                                 symbols=symbols,  # All symbols for training
                                 data_dir=data_dir,
@@ -967,61 +967,61 @@ def rank_targets(
                             )
                             result_loso_dict[symbol] = result_loso_sym
                         except Exception as e:
-                            logger.warning(f"    Failed LOSO evaluation for {target_name} on symbol {symbol}: {e}")
+                            logger.warning(f"    Failed LOSO evaluation for {target} on symbol {symbol}: {e}")
                             continue
                 
                 # Store symbol-specific results
                 if enable_symbol_specific and result_sym_dict:
-                    if target_name not in results_sym:
-                        results_sym[target_name] = {}
+                    if target not in results_sym:
+                        results_sym[target] = {}
                     
                     stored_count = 0
                     for symbol, result_sym in result_sym_dict.items():
-                        if result_sym.mean_score != -999.0 and result_sym.status not in skip_statuses:
-                            results_sym[target_name][symbol] = result_sym
+                        if result_sym.auc != -999.0 and result_sym.status not in skip_statuses:
+                            results_sym[target][symbol] = result_sym
                             stored_count += 1
                         else:
                             reason = result_sym.status if result_sym.status in skip_statuses else "degenerate/failed"
-                            logger.warning(f"    ⚠️  Filtered out {target_name} SYMBOL_SPECIFIC ({symbol}): {reason} (mean_score={result_sym.mean_score})")
+                            logger.warning(f"    ⚠️  Filtered out {target} SYMBOL_SPECIFIC ({symbol}): {reason} (auc={result_sym.auc})")
                             # Add to skip reasons if not already there (use global symbol_skip_reasons dict)
-                            if target_name not in symbol_skip_reasons:
-                                symbol_skip_reasons[target_name] = {}
-                            if symbol not in symbol_skip_reasons[target_name]:
-                                symbol_skip_reasons[target_name][symbol] = {
+                            if target not in symbol_skip_reasons:
+                                symbol_skip_reasons[target] = {}
+                            if symbol not in symbol_skip_reasons[target]:
+                                symbol_skip_reasons[target][symbol] = {
                                     'reason': reason,
                                     'status': result_sym.status,
-                                    'mean_score': result_sym.mean_score
+                                    'auc': result_sym.auc
                                 }
                     if stored_count > 0:
-                        logger.info(f"  ✅ Stored {stored_count} symbol-specific results for {target_name}")
+                        logger.info(f"  ✅ Stored {stored_count} symbol-specific results for {target}")
                     elif len(result_sym_dict) > 0:
-                        logger.warning(f"  ⚠️  All {len(result_sym_dict)} symbol-specific results for {target_name} were filtered out")
+                        logger.warning(f"  ⚠️  All {len(result_sym_dict)} symbol-specific results for {target} were filtered out")
                     
                     # Save routing decision immediately after target evaluation (incremental)
                     if output_dir:
                         from TRAINING.ranking.target_routing import (
                             _compute_single_target_routing_decision, _save_single_target_decision
                         )
-                        target_sym_results = results_sym.get(target_name, {})
-                        target_skip_reasons = symbol_skip_reasons.get(target_name, {}) if symbol_skip_reasons else {}
+                        target_sym_results = results_sym.get(target, {})
+                        target_skip_reasons = symbol_skip_reasons.get(target, {}) if symbol_skip_reasons else {}
                         decision = _compute_single_target_routing_decision(
-                            target_name=target_name,
+                            target=target,
                             result_cs=result_cs if cs_succeeded else None,
                             sym_results=target_sym_results,
                             symbol_skip_reasons=target_skip_reasons
                         )
-                        _save_single_target_decision(target_name, decision, output_dir)
+                        _save_single_target_decision(target, decision, output_dir)
                 
                 # Store LOSO results
                 if enable_loso:
-                    if target_name not in results_loso:
-                        results_loso[target_name] = {}
+                    if target not in results_loso:
+                        results_loso[target] = {}
                     for symbol, result_loso_sym in result_loso_dict.items():
-                        if result_loso_sym.mean_score != -999.0 and result_loso_sym.status not in skip_statuses:
-                            results_loso[target_name][symbol] = result_loso_sym
+                        if result_loso_sym.auc != -999.0 and result_loso_sym.status not in skip_statuses:
+                            results_loso[target][symbol] = result_loso_sym
             
             except Exception as e:
-                logger.exception(f"  Failed to evaluate {target_name}: {e}")  # Better error logging with traceback
+                logger.exception(f"  Failed to evaluate {target}: {e}")  # Better error logging with traceback
                 # Continue with next target
     
     # Compute routing decisions and aggregate symbol-specific results
@@ -1049,24 +1049,24 @@ def rank_targets(
         from TRAINING.ranking.target_routing import (
             _compute_single_target_routing_decision, _save_single_target_decision
         )
-        for target_name in all_evaluated_targets:
-            if target_name not in routing_decisions:
+        for target in all_evaluated_targets:
+            if target not in routing_decisions:
                 # Target was evaluated but not in routing_decisions (CS failed + all symbols failed)
                 # Compute and save decision anyway
-                logger.debug(f"Computing routing decision for {target_name} (not in routing_decisions, likely all evaluations failed)")
-                target_sym_results = results_sym.get(target_name, {})
-                target_skip_reasons = symbol_skip_reasons.get(target_name, {}) if symbol_skip_reasons else {}
+                logger.debug(f"Computing routing decision for {target} (not in routing_decisions, likely all evaluations failed)")
+                target_sym_results = results_sym.get(target, {})
+                target_skip_reasons = symbol_skip_reasons.get(target, {}) if symbol_skip_reasons else {}
                 # Find CS result even if it failed (from all_cs_results which includes failed ones)
-                result_cs = all_cs_results.get(target_name)
+                result_cs = all_cs_results.get(target)
                 decision = _compute_single_target_routing_decision(
-                    target_name=target_name,
+                    target=target,
                     result_cs=result_cs,  # Will be None if CS was never evaluated or failed
                     sym_results=target_sym_results,
                     symbol_skip_reasons=target_skip_reasons
                 )
-                _save_single_target_decision(target_name, decision, output_dir)
+                _save_single_target_decision(target, decision, output_dir)
                 # Also add to routing_decisions so it's in the global file
-                routing_decisions[target_name] = decision
+                routing_decisions[target] = decision
     
     # Log routing summary
     cs_only = sum(1 for r in routing_decisions.values() if r.get('route') == 'CROSS_SECTIONAL')

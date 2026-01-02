@@ -24,28 +24,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def get_git_commit() -> Optional[str]:
-    """Get current git commit hash."""
-    try:
-        from TRAINING.common.subprocess_utils import safe_subprocess_run
-        result = safe_subprocess_run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            check=True
-        )
-        return result.stdout.strip()
-    except Exception:
-        return None
-
-
-def compute_config_hash(config_path: Path) -> str:
-    """Compute hash of config file."""
-    try:
-        with open(config_path, "rb") as f:
-            content = f.read()
-        import hashlib
-        return hashlib.sha256(content).hexdigest()[:8]
-    except Exception:
-        return "unknown"
+# Import git utilities from SST module
+from TRAINING.common.utils.git_utils import get_git_commit
+from TRAINING.common.utils.config_hashing import compute_config_hash_from_file as compute_config_hash
 
 
 def main():

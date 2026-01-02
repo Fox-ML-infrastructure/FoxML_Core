@@ -12,9 +12,10 @@ structural contradictions where audit and gatekeeper report different values.
 
 import re
 import logging
-import hashlib
 from dataclasses import dataclass, replace
 from typing import Iterable, Optional, Dict, List, Tuple, Any
+
+from TRAINING.common.utils.fingerprinting import _compute_feature_fingerprint
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +26,10 @@ _warning_cache: Dict[Tuple[str, str, str], bool] = {}
 # Aggregated warning tracking: collect features with registry_zero warnings per stage
 _registry_zero_aggregate: Dict[str, List[str]] = {}  # stage -> list of feature names
 
-# Canonical lookback map cache: keyed by (featureset_fingerprint, interval_minutes, policy_flags)
+# Canonical lookback map cache: keyed by (featureset_hash, interval_minutes, policy_flags)
 _canonical_lookback_cache: Dict[Tuple[str, float, str], Dict[str, float]] = {}
 
-# Budget cache: keyed by (featureset_fingerprint, interval_minutes, horizon_minutes, cap_minutes, stage)
+# Budget cache: keyed by (featureset_hash, interval_minutes, horizon_minutes, cap_minutes, stage)
 # Reduces log noise by caching budget computation results
 _budget_cache: Dict[Tuple[str, float, float, Optional[float], str], Tuple[Any, str, str]] = {}
 
@@ -184,32 +185,6 @@ def _is_indicator_period_feature(name: str) -> bool:
     
     return False
 
-
-def _compute_feature_fingerprint(feature_names: Iterable[str], set_invariant: bool = True) -> Tuple[str, str]:
-    """
-    Compute feature set fingerprints (set-invariant and order-sensitive).
-    
-    Args:
-        feature_names: Iterable of feature names
-        set_invariant: If True, compute set-invariant fingerprint (sorted). If False, preserve order.
-    
-    Returns:
-        (set_fingerprint, order_fingerprint) tuple:
-        - set_fingerprint: Set-invariant fingerprint (sorted, for set equality checks)
-        - order_fingerprint: Order-sensitive fingerprint (for order-change detection)
-    """
-    feature_list = list(feature_names)
-    
-    # Set-invariant fingerprint (sorted, for set equality)
-    sorted_features = sorted(feature_list)
-    set_str = "\n".join(sorted_features)
-    set_fingerprint = hashlib.sha1(set_str.encode()).hexdigest()[:8]
-    
-    # Order-sensitive fingerprint (for order-change detection)
-    order_str = "\n".join(feature_list)
-    order_fingerprint = hashlib.sha1(order_str.encode()).hexdigest()[:8]
-    
-    return set_fingerprint, order_fingerprint
 
 # OHLCV base columns - should have 1 bar lookback (current bar only)
 OHLCV_BASE_COLUMNS = {

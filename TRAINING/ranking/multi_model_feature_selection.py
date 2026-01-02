@@ -607,7 +607,7 @@ def load_multi_model_config(config_path: Path = None) -> Dict[str, Any]:
         config = yaml.safe_load(f)
     
     # Inject global defaults from defaults.yaml (SST)
-    # This centralizes common settings like random_state, n_jobs, etc.
+    # This centralizes common settings like seed, n_jobs, etc.
     try:
         from CONFIG.config_loader import inject_defaults
         
@@ -1192,7 +1192,7 @@ def train_model_and_get_importance(
             est_cls = xgb.XGBClassifier if (is_binary or is_multiclass) else xgb.XGBRegressor
             
             # Clean config using systematic helper (removes duplicates and unknown params)
-            extra = {"random_state": model_seed}
+            extra = {"random_state": model_seed}  # FIX: XGBoost uses random_state, not seed
             xgb_config = _clean_config_for_estimator(est_cls, xgb_config, extra, "xgboost")
             
             # Add GPU params if available (will override any tree_method/device in config)
@@ -1244,7 +1244,7 @@ def train_model_and_get_importance(
         
         # Clean config using systematic helper (removes duplicates and unknown params)
         # Note: RandomForest uses n_jobs, not num_threads/threads
-        extra = {"random_state": model_seed}
+        extra = {"random_state": model_seed}  # FIX: sklearn uses random_state, not seed
         rf_config = _clean_config_for_estimator(est_cls, model_config, extra, "random_forest")
         
         # Use threading utilities for smart thread management
@@ -1320,7 +1320,7 @@ def train_model_and_get_importance(
         
         # Clean config using systematic helper (removes duplicates and unknown params)
         # MLPRegressor doesn't accept n_jobs, num_threads, or threads
-        extra = {"random_state": model_seed}
+        extra = {"random_state": model_seed}  # FIX: sklearn uses random_state, not seed
         nn_config = _clean_config_for_estimator(MLPRegressor, model_config, extra, "neural_network")
         
         # Instantiate with cleaned config + explicit params
@@ -2254,14 +2254,14 @@ def train_model_and_get_importance(
                 # This importance is for explanation/reporting, not for selection decisions
                 
                 # CACHING: PVC results should be cached keyed by featureset fingerprint
-                # Cache key: (model_family, params_hash, featureset_fingerprint, dataset_fingerprint, importance_kind)
+                # Cache key: (model_family, params_hash, featureset_hash, dataset_fingerprint, importance_kind)
                 # TODO: Implement cache lookup here if caching infrastructure exists
                 # Example cache key computation:
                 #   from TRAINING.common.utils.config_hashing import compute_config_hash
                 #   cache_key_data = {
                 #       'model_family': 'catboost',
                 #       'params_hash': compute_config_hash(model_params),
-                #       'featureset_fingerprint': compute_config_hash({'features': sorted(feature_names)}),
+                #       'featureset_hash': compute_config_hash({'features': sorted(feature_names)}),
                 #       'dataset_fingerprint': compute_config_hash({'shape': X_train_fit.shape, 'target': target_column}),
                 #       'importance_kind': 'PredictionValuesChange'
                 #   }
@@ -2410,9 +2410,8 @@ def train_model_and_get_importance(
         X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
         
         # Clean config using systematic helper (removes duplicates and unknown params)
-        # Note: Lasso's random_state only applies to 'saga' solver, but sklearn ignores it for others
-        # We set it explicitly for determinism consistency (matches RandomForest/MLP pattern)
-        extra = {"random_state": model_seed}
+        # Note: Lasso is deterministic and doesn't accept random_state parameter
+        extra = {}  # FIX: Lasso has no random component, remove seed
         lasso_config = _clean_config_for_estimator(Lasso, model_config, extra, "lasso")
         
         # Instantiate with cleaned config + explicit params
@@ -2460,7 +2459,7 @@ def train_model_and_get_importance(
             est_cls = Ridge
         
         # Clean config using systematic helper
-        extra = {"random_state": model_seed}  # RidgeClassifier uses random_state for tie-breaking
+        extra = {}  # FIX: Ridge/RidgeClassifier is deterministic, no seed parameter
         ridge_config = _clean_config_for_estimator(est_cls, model_config, extra, "ridge")
         
         # CRITICAL: Ridge requires scaling for proper convergence
@@ -2558,8 +2557,8 @@ def train_model_and_get_importance(
             elastic_net_config = model_config.copy()
         
         # Clean config using systematic helper
-        extra = {"random_state": model_seed}
-        
+        extra = {"random_state": model_seed}  # FIX: ElasticNet uses random_state for coordinate descent
+
         # FAIL-FAST: Set reasonable max_iter limit to avoid long-running fits
         # Default max_iter is 1000, but saga solver can be very slow
         # Use a lower limit (500) to fail faster if it's not converging or going to zero
@@ -2820,32 +2819,32 @@ def train_model_and_get_importance(
             estimator_n_estimators = model_config.get('estimator_n_estimators', rfe_cfg.get('estimator_n_estimators', 100))
             estimator_max_depth = model_config.get('estimator_max_depth', rfe_cfg.get('estimator_max_depth', 10))
             estimator_n_jobs = model_config.get('estimator_n_jobs', rfe_cfg.get('estimator_n_jobs', 1))
-            # Get random_state from SST (determinism system) - no hardcoded defaults
-            estimator_random_state = model_config.get('random_state')
-            if estimator_random_state is None:
-                estimator_random_state = stable_seed_from(['rfe', target_column if target_column else 'default', symbol if symbol else 'all'])
+            # Get seed from SST (determinism system) - no hardcoded defaults
+            estimator_seed = model_config.get('seed')
+            if estimator_seed is None:
+                estimator_seed = stable_seed_from(['rfe', target_column if target_column else 'default', symbol if symbol else 'all'])
         except Exception as e:
             logger.debug(f"Failed to load RFE config: {e}, using model_config defaults")
             estimator_n_estimators = model_config.get('estimator_n_estimators', 100)
             estimator_max_depth = model_config.get('estimator_max_depth', 10)
             estimator_n_jobs = model_config.get('estimator_n_jobs', 1)
-            # Get random_state from SST (determinism system) - no hardcoded defaults
-            estimator_random_state = model_config.get('random_state')
-            if estimator_random_state is None:
-                estimator_random_state = stable_seed_from(['rfe', target_column if target_column else 'default', symbol if symbol else 'all'])
+            # Get seed from SST (determinism system) - no hardcoded defaults
+            estimator_seed = model_config.get('seed')
+            if estimator_seed is None:
+                estimator_seed = stable_seed_from(['rfe', target_column if target_column else 'default', symbol if symbol else 'all'])
         
         if is_binary or is_multiclass:
             estimator = RandomForestClassifier(
                 n_estimators=estimator_n_estimators,
                 max_depth=estimator_max_depth,
-                random_state=estimator_random_state,
+                random_state=estimator_seed,
                 n_jobs=estimator_n_jobs
             )
         else:
             estimator = RandomForestRegressor(
                 n_estimators=estimator_n_estimators,
                 max_depth=estimator_max_depth,
-                random_state=estimator_random_state,
+                random_state=estimator_seed,
                 n_jobs=estimator_n_jobs
             )
         
@@ -2987,11 +2986,11 @@ def train_model_and_get_importance(
                             X_dense, y,
                             train_size=min(subsample_max_samples, n_samples),
                             stratify=y,
-                            random_state=boruta_random_state
+                            random_state=boruta_seed
                         )
                     else:
                         # For regression, use random sampling
-                        indices = np.random.RandomState(boruta_random_state).choice(
+                        indices = np.random.RandomState(boruta_seed).choice(
                             n_samples, size=min(subsample_max_samples, n_samples), replace=False
                         )
                         X_dense = X_dense[indices]
@@ -3006,17 +3005,17 @@ def train_model_and_get_importance(
             # Use ExtraTrees (more random, better for stability testing) with Boruta-optimized hyperparams
             # More trees + shallower depth = stable importance signals, not best predictive performance
             # Load from preprocessing config if not in model_config
-            # CRITICAL: random_state comes from SST (determinism system), not hardcoded
+            # CRITICAL: seed comes from SST (determinism system), not hardcoded
             try:
                 from CONFIG.config_loader import get_cfg
                 boruta_cfg = get_cfg("preprocessing.multi_model_feature_selection.boruta", default={}, config_name="preprocessing_config")
                 boruta_n_estimators = model_config.get('n_estimators', boruta_cfg.get('n_estimators', 300))  # Updated default: 300
                 boruta_max_depth = model_config.get('max_depth', boruta_cfg.get('max_depth', 6))
-                # Get random_state from SST (determinism config) - no hardcoded defaults
-                boruta_random_state = model_config.get('random_state') or boruta_cfg.get('random_state')
-                if boruta_random_state is None:
+                # Get seed from SST (determinism config) - no hardcoded defaults
+                boruta_seed = model_config.get('seed') or boruta_cfg.get('seed')
+                if boruta_seed is None:
                     # Fallback to determinism system if not in config
-                    boruta_random_state = stable_seed_from(['boruta', target_column if target_column else 'default', symbol if symbol else 'all'])
+                    boruta_seed = stable_seed_from(['boruta', target_column if target_column else 'default', symbol if symbol else 'all'])
                 boruta_max_iter_base = model_config.get('max_iter', boruta_cfg.get('max_iter', 50))  # Updated default: 50
                 boruta_n_jobs = model_config.get('n_jobs', boruta_cfg.get('n_jobs', 1))
                 boruta_verbose = model_config.get('verbose', boruta_cfg.get('verbose', 0))
@@ -3047,10 +3046,10 @@ def train_model_and_get_importance(
                 logger.debug(f"Failed to load Boruta config: {e}, using model_config defaults")
                 boruta_n_estimators = model_config.get('n_estimators', 300)  # Updated default: 300
                 boruta_max_depth = model_config.get('max_depth', 6)
-                # Get random_state from SST (determinism system) - no hardcoded defaults
-                boruta_random_state = model_config.get('random_state')
-                if boruta_random_state is None:
-                    boruta_random_state = stable_seed_from(['boruta', target_column if target_column else 'default', symbol if symbol else 'all'])
+                # Get seed from SST (determinism system) - no hardcoded defaults
+                boruta_seed = model_config.get('seed')
+                if boruta_seed is None:
+                    boruta_seed = stable_seed_from(['boruta', target_column if target_column else 'default', symbol if symbol else 'all'])
                 boruta_max_iter = model_config.get('max_iter', 50)  # Updated default: 50
                 boruta_n_jobs = model_config.get('n_jobs', 1)
                 boruta_verbose = model_config.get('verbose', 0)
@@ -3068,17 +3067,17 @@ def train_model_and_get_importance(
                     # Use config value directly (could be dict, 'balanced', etc.)
                     class_weight_value = boruta_class_weight
                 
-                # Clean config to prevent double random_state argument
+                # Clean config to prevent double seed argument
                 from TRAINING.common.utils.config_cleaner import clean_config_for_estimator
                 et_config = {'n_estimators': boruta_n_estimators, 'max_depth': boruta_max_depth, 'n_jobs': boruta_n_jobs, 'class_weight': class_weight_value}
-                et_config_clean = clean_config_for_estimator(ExtraTreesClassifier, et_config, extra_kwargs={'random_state': boruta_random_state}, family_name='boruta_et')
-                base_estimator = ExtraTreesClassifier(**et_config_clean, random_state=boruta_random_state)
+                et_config_clean = clean_config_for_estimator(ExtraTreesClassifier, et_config, extra_kwargs={'random_state': boruta_seed}, family_name='boruta_et')
+                base_estimator = ExtraTreesClassifier(**et_config_clean, random_state=boruta_seed)
             else:
-                # Clean config to prevent double random_state argument
+                # Clean config to prevent double seed argument
                 from TRAINING.common.utils.config_cleaner import clean_config_for_estimator
                 et_config = {'n_estimators': boruta_n_estimators, 'max_depth': boruta_max_depth, 'n_jobs': boruta_n_jobs}
-                et_config_clean = clean_config_for_estimator(ExtraTreesRegressor, et_config, extra_kwargs={'random_state': boruta_random_state}, family_name='boruta_et')
-                base_estimator = ExtraTreesRegressor(**et_config_clean, random_state=boruta_random_state)
+                et_config_clean = clean_config_for_estimator(ExtraTreesRegressor, et_config, extra_kwargs={'random_state': boruta_seed}, family_name='boruta_et')
+                base_estimator = ExtraTreesRegressor(**et_config_clean, random_state=boruta_seed)
             
             # Early stopping configuration (SST: from config)
             early_stopping_enabled = True
@@ -3094,7 +3093,7 @@ def train_model_and_get_importance(
                 base_estimator,
                 n_estimators='auto',
                 verbose=boruta_verbose,
-                random_state=boruta_random_state,
+                random_state=boruta_seed,
                 max_iter=boruta_max_iter,
                 perc=model_config.get('perc', 95)  # Higher threshold = more conservative (needs to beat shadow more decisively)
             )
@@ -3316,10 +3315,10 @@ def train_model_and_get_importance(
         purged_cv = PurgedTimeSeriesSplit(n_splits=n_splits, purge_overlap=purge_overlap)
         
         n_bootstrap = model_config.get('n_bootstrap', 50)  # Reduced for speed
-        # Get random_state from SST (determinism system) - no hardcoded defaults
-        stability_random_state = model_config.get('random_state')
-        if stability_random_state is None:
-            stability_random_state = stable_seed_from(['stability_selection', target_column if target_column else 'default', symbol if symbol else 'all'])
+        # Get seed from SST (determinism system) - no hardcoded defaults
+        stability_seed = model_config.get('seed')
+        if stability_seed is None:
+            stability_seed = stable_seed_from(['stability_selection', target_column if target_column else 'default', symbol if symbol else 'all'])
         stability_cs = model_config.get('Cs', 10)  # Number of C values for LogisticRegressionCV
         stability_max_iter = model_config.get('max_iter', 1000)  # Max iterations for LassoCV/LogisticRegressionCV
         stability_n_jobs = model_config.get('n_jobs', 1)  # Parallel jobs
@@ -3331,16 +3330,16 @@ def train_model_and_get_importance(
             X_boot, y_boot = X[indices], y[indices]
             
             try:
-                # Clean config to prevent double random_state argument
+                # Clean config to prevent double seed argument
                 from TRAINING.common.utils.config_cleaner import clean_config_for_estimator
                 if is_binary or is_multiclass:
                     lr_config = {'Cs': stability_cs, 'cv': purged_cv, 'max_iter': stability_max_iter, 'n_jobs': stability_n_jobs}
-                    lr_config_clean = clean_config_for_estimator(LogisticRegressionCV, lr_config, extra_kwargs={'random_state': stability_random_state}, family_name='stability_selection')
-                    model = LogisticRegressionCV(**lr_config_clean, random_state=stability_random_state)
+                    lr_config_clean = clean_config_for_estimator(LogisticRegressionCV, lr_config, extra_kwargs={'random_state': stability_seed}, family_name='stability_selection')
+                    model = LogisticRegressionCV(**lr_config_clean, random_state=stability_seed)
                 else:
                     lasso_config = {'cv': purged_cv, 'max_iter': stability_max_iter, 'n_jobs': stability_n_jobs}
-                    lasso_config_clean = clean_config_for_estimator(LassoCV, lasso_config, extra_kwargs={'random_state': stability_random_state}, family_name='stability_selection')
-                    model = LassoCV(**lasso_config_clean, random_state=stability_random_state)
+                    lasso_config_clean = clean_config_for_estimator(LassoCV, lasso_config, extra_kwargs={'random_state': stability_seed}, family_name='stability_selection')
+                    model = LassoCV(**lasso_config_clean, random_state=stability_seed)
                 
                 # Use threading utilities for smart thread management
                 if _THREADING_UTILITIES_AVAILABLE:
@@ -3572,7 +3571,7 @@ def process_single_symbol(
                 try:
                     from TRAINING.ranking.utils.dominance_quarantine import load_confirmed_quarantine
                     runtime_quarantine = load_confirmed_quarantine(
-                        out_dir=output_dir,
+                        output_dir=output_dir,
                         target=target_column,
                         view="SYMBOL_SPECIFIC",  # process_single_symbol is always SYMBOL_SPECIFIC
                         symbol=symbol
@@ -3785,7 +3784,7 @@ def process_single_symbol(
                             from TRAINING.stability.feature_importance import save_snapshot_from_series_hook
                             import hashlib
                             
-                            # FIX: Use feature_universe_fingerprint instead of symbol for universe_id
+                            # FIX: Use feature_universe_fingerprint instead of symbol for universe_sig
                             # Symbol is useful for INDIVIDUAL, but universe fingerprint is the real guard
                             # against comparing different candidate sets (pruner/sanitizer differences)
                             # Compute fingerprint from sorted feature names (stable across runs)
@@ -3793,20 +3792,20 @@ def process_single_symbol(
                             feature_universe_str = "|".join(sorted_features)
                             feature_universe_fingerprint = hashlib.sha256(feature_universe_str.encode()).hexdigest()[:16]
                             
-                            # For INDIVIDUAL mode, include symbol in universe_id for clarity
+                            # For INDIVIDUAL mode, include symbol in universe_sig for clarity
                             # But use fingerprint as the primary identifier
                             if symbol:
-                                universe_id = f"{symbol}:{feature_universe_fingerprint}"
+                                universe_sig = f"{symbol}:{feature_universe_fingerprint}"
                             else:
-                                universe_id = f"ALL:{feature_universe_fingerprint}"
+                                universe_sig = f"ALL:{feature_universe_fingerprint}"
                             
                             # FIX: Use model_family (e.g., "lightgbm", "ridge", "elastic_net") as method name
                             # NOT importance_method (e.g., "native", "shap") - stability should be per-family
                             save_snapshot_from_series_hook(
-                                target_name=target_column if target_column else 'unknown',
+                                target=target_column if target_column else 'unknown',
                                 method=family_name,  # Use model_family, not importance_method
                                 importance_series=importance,
-                                universe_id=universe_id,  # FIX: Use feature_universe_fingerprint (not just symbol)
+                                universe_sig=universe_sig,  # FIX: Use feature_universe_fingerprint (not just symbol)
                                 output_dir=output_dir,
                                 auto_analyze=None,  # Load from config
                             )
@@ -4295,7 +4294,7 @@ def compute_target_confidence(
     summary_df: pd.DataFrame,
     all_results: List[ImportanceResult],
     model_families_config: Dict[str, Dict[str, Any]],
-    target_name: str,
+    target: str,
     confidence_config: Optional[Dict[str, Any]] = None,
     top_k: Optional[int] = None
 ) -> Dict[str, Any]:
@@ -4312,7 +4311,7 @@ def compute_target_confidence(
         summary_df: DataFrame with feature importance and Boruta status
         all_results: List of ImportanceResult from all model runs
         model_families_config: Config dict with enabled model families
-        target_name: Target column name
+        target: Target column name
         confidence_config: Optional config dict with confidence thresholds (from multi_model.yaml)
         top_k: Number of top features to consider for agreement (default: from config or 20)
     
@@ -4331,21 +4330,21 @@ def compute_target_confidence(
     # Default thresholds (matching current hardcoded values)
     high_boruta_min = high_cfg.get('boruta_confirmed_min', 5)
     high_agreement_min = high_cfg.get('agreement_ratio_min', 0.4)
-    high_score_min = high_cfg.get('mean_score_min', 0.05)
+    high_score_min = high_cfg.get('auc_min', 0.05)
     high_coverage_min = high_cfg.get('model_coverage_min', 0.7)
     
     medium_boruta_min = medium_cfg.get('boruta_confirmed_min', 1)
     medium_agreement_min = medium_cfg.get('agreement_ratio_min', 0.25)
-    medium_score_min = medium_cfg.get('mean_score_min', 0.02)
+    medium_score_min = medium_cfg.get('auc_min', 0.02)
     
     # Low reason thresholds
     boruta_zero_cfg = low_reasons_cfg.get('boruta_zero_confirmed', {})
     boruta_zero_confirmed_max = boruta_zero_cfg.get('boruta_confirmed_max', 0)
     boruta_zero_tentative_max = boruta_zero_cfg.get('boruta_tentative_max', 1)
-    boruta_zero_score_max = boruta_zero_cfg.get('mean_score_max', 0.03)
+    boruta_zero_score_max = boruta_zero_cfg.get('auc_max', 0.03)
     
     low_agreement_max = low_reasons_cfg.get('low_model_agreement', {}).get('agreement_ratio_max', 0.2)
-    low_score_max = low_reasons_cfg.get('low_model_scores', {}).get('mean_score_max', 0.01)
+    low_score_max = low_reasons_cfg.get('low_model_scores', {}).get('auc_max', 0.01)
     low_coverage_max = low_reasons_cfg.get('low_model_coverage', {}).get('model_coverage_max', 0.5)
     
     # Agreement top_k from config
@@ -4353,7 +4352,7 @@ def compute_target_confidence(
         top_k = agreement_cfg.get('top_k', 20)
     
     metrics = {
-        'target_name': target_name,
+        'target': target,
         'boruta_confirmed_count': 0,
         'boruta_tentative_count': 0,
         'boruta_rejected_count': 0,
@@ -4361,7 +4360,7 @@ def compute_target_confidence(
         'n_models_available': 0,
         'n_models_successful': 0,
         'model_coverage_ratio': 0.0,
-        'mean_score': 0.0,
+        'auc': 0.0,
         'max_score': 0.0,
         'mean_strong_score': 0.0,  # Tree ensembles + CatBoost + NN
         'agreement_ratio': 0.0,
@@ -4404,7 +4403,7 @@ def compute_target_confidence(
     ]
     
     if valid_scores:
-        metrics['mean_score'] = float(np.mean(valid_scores))
+        metrics['auc'] = float(np.mean(valid_scores))
         metrics['max_score'] = float(np.max(valid_scores))
         
         # Strong models: tree ensembles, CatBoost, neural networks
@@ -4467,14 +4466,14 @@ def compute_target_confidence(
     # HIGH confidence (all conditions must be met)
     if (metrics['boruta_confirmed_count'] >= high_boruta_min and
         metrics['agreement_ratio'] >= high_agreement_min and
-        metrics['mean_score'] >= high_score_min and
+        metrics['auc'] >= high_score_min and
         metrics['model_coverage_ratio'] >= high_coverage_min):
         metrics['confidence'] = 'HIGH'
     
     # MEDIUM confidence (any one condition is sufficient)
     elif (metrics['boruta_confirmed_count'] >= medium_boruta_min or
           metrics['agreement_ratio'] >= medium_agreement_min or
-          metrics['mean_score'] >= medium_score_min):
+          metrics['auc'] >= medium_score_min):
         metrics['confidence'] = 'MEDIUM'
     
     # LOW confidence (fallback)
@@ -4485,11 +4484,11 @@ def compute_target_confidence(
         if (metrics['boruta_used'] and
             metrics['boruta_confirmed_count'] <= boruta_zero_confirmed_max and
             metrics['boruta_tentative_count'] <= boruta_zero_tentative_max and
-            metrics['mean_score'] < boruta_zero_score_max):
+            metrics['auc'] < boruta_zero_score_max):
             metrics['low_confidence_reason'] = 'boruta_zero_confirmed'
         elif metrics['agreement_ratio'] < low_agreement_max:
             metrics['low_confidence_reason'] = 'low_model_agreement'
-        elif metrics['mean_score'] < low_score_max:
+        elif metrics['auc'] < low_score_max:
             metrics['low_confidence_reason'] = 'low_model_scores'
         elif metrics['model_coverage_ratio'] < low_coverage_max:
             metrics['low_confidence_reason'] = 'low_model_coverage'
@@ -4528,27 +4527,27 @@ def save_multi_model_results(
     
     # Find base run directory and target name
     base_output_dir = output_dir
-    target_name = None
+    target = None
     
     # Try to extract target from metadata
-    if metadata and 'target_name' in metadata:
-        target_name = metadata['target_name']
+    if metadata and 'target' in metadata:
+        target = metadata['target']
     elif metadata and 'target_column' in metadata:
-        target_name = metadata['target_column']
+        target = metadata['target_column']
     
     # If not in metadata, try to extract from output_dir path
-    if not target_name:
+    if not target:
         # output_dir is typically: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
         parts = output_dir.parts
         if 'FEATURE_SELECTION' in parts:
             idx = parts.index('FEATURE_SELECTION')
             if idx + 2 < len(parts):
-                target_name = parts[idx + 2]
+                target = parts[idx + 2]
     
     # Also try to extract universe_sig from metadata if not passed explicitly
     # Validate extracted sig before using - invalid values are ignored
     if not universe_sig and metadata:
-        extracted_sig = metadata.get('universe_sig') or metadata.get('universe_id')
+        extracted_sig = metadata.get('universe_sig')
         if extracted_sig:
             try:
                 from TRAINING.orchestration.utils.cohort_metadata import validate_universe_sig
@@ -4566,7 +4565,7 @@ def save_multi_model_results(
     use_output_layout = bool(universe_sig)
     if not use_output_layout:
         logger.warning(
-            f"universe_sig not provided for {target_name} multi-model results, "
+            f"universe_sig not provided for {target} multi-model results, "
             f"falling back to legacy path resolution. Pass universe_sig for canonical paths."
         )
     
@@ -4585,9 +4584,9 @@ def save_multi_model_results(
     target_selected_features_path = None
     repro_dir = None  # Track for later use
     
-    if target_name and base_output_dir.exists():
+    if target and base_output_dir.exists():
         try:
-            target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+            target_clean = target.replace('/', '_').replace('\\', '_')
             
             # Extract view and symbol from metadata (view is REQUIRED)
             view = metadata.get('view') if metadata else None
@@ -4609,7 +4608,7 @@ def save_multi_model_results(
                 from TRAINING.orchestration.utils.output_layout import OutputLayout
                 layout = OutputLayout(
                     output_root=base_output_dir,
-                    target=target_name_clean,
+                    target=target_clean,
                     view=view,
                     universe_sig=universe_sig,
                     symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
@@ -4623,10 +4622,10 @@ def save_multi_model_results(
                     run_root, target_repro_dir, target_repro_file_path, ensure_target_structure
                 )
                 run_root_dir = run_root(base_output_dir)
-                ensure_target_structure(run_root_dir, target_name_clean)
-                repro_dir = target_repro_dir(run_root_dir, target_name_clean, view=view, symbol=symbol)
+                ensure_target_structure(run_root_dir, target_clean)
+                repro_dir = target_repro_dir(run_root_dir, target_clean, view=view, symbol=symbol)
                 target_importances_dir = repro_dir / "feature_importances"
-                target_selected_features_path = target_repro_file_path(run_root_dir, target_name_clean, "selected_features.txt", view=view, symbol=symbol)
+                target_selected_features_path = target_repro_file_path(run_root_dir, target_clean, "selected_features.txt", view=view, symbol=symbol)
             
             target_importances_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
@@ -4745,9 +4744,9 @@ def save_multi_model_results(
     # Save summary metadata at target level (detailed metadata is in cohort/ from reproducibility tracker)
     # This matches TARGET_RANKING structure where summary files are at target level
     # Write only to target-first structure (no legacy root-level writes) - view/symbol-scoped
-    if target_name and base_output_dir.exists():
+    if target and base_output_dir.exists():
         try:
-            target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+            target_clean = target.replace('/', '_').replace('\\', '_')
             # Extract view and symbol from metadata (view is REQUIRED)
             view = metadata.get('view') if metadata else None
             symbol = metadata.get('symbol') if metadata else None
@@ -4768,7 +4767,7 @@ def save_multi_model_results(
                 from TRAINING.orchestration.utils.output_layout import OutputLayout
                 layout = OutputLayout(
                     output_root=base_output_dir,
-                    target=target_name_clean,
+                    target=target_clean,
                     view=view,
                     universe_sig=universe_sig,
                     symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
@@ -4778,7 +4777,7 @@ def save_multi_model_results(
                 # Legacy path resolution
                 from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
                 run_root_dir = run_root(base_output_dir)
-                target_summary_path = target_repro_file_path(run_root_dir, target_name_clean, "feature_selection_summary.json", view=view, symbol=symbol)
+                target_summary_path = target_repro_file_path(run_root_dir, target_clean, "feature_selection_summary.json", view=view, symbol=symbol)
             
             target_summary_path.parent.mkdir(parents=True, exist_ok=True)
             with open(target_summary_path, "w") as f:
@@ -4838,10 +4837,10 @@ def save_multi_model_results(
             family_summary['error_types'] = list(family_summary['error_types'])
         
         # Save detailed status file → target-first structure only (matching TARGET_RANKING structure) - view/symbol-scoped
-        if target_name and base_output_dir.exists():
+        if target and base_output_dir.exists():
             try:
                 from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
-                target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+                target_clean = target.replace('/', '_').replace('\\', '_')
                 run_root_dir = run_root(base_output_dir)
                 # Extract view and symbol from metadata (view is REQUIRED)
                 view = metadata.get('view') if metadata else None
@@ -4859,7 +4858,7 @@ def save_multi_model_results(
                     raise ValueError("symbol required in metadata when view='SYMBOL_SPECIFIC'")
                 
                 # Use view/symbol-scoped path helper
-                status_path = target_repro_file_path(run_root_dir, target_name_clean, "model_family_status.json", view=view, symbol=symbol)
+                status_path = target_repro_file_path(run_root_dir, target_clean, "model_family_status.json", view=view, symbol=symbol)
                 status_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(status_path, "w") as f:
                     json.dump({
@@ -4895,21 +4894,21 @@ def save_multi_model_results(
         confidence_config = config.get('confidence', {})
         
         if model_families_config:
-            target_name = metadata.get('target_column', 'unknown_target')
+            target = metadata.get('target_column', 'unknown_target')
             confidence_metrics = compute_target_confidence(
                 summary_df=summary_df,
                 all_results=all_results,
                 model_families_config=model_families_config,
-                target_name=target_name,
+                target=target,
                 confidence_config=confidence_config,
                 top_k=None  # Will use config or default
             )
             
             # Save target confidence at target-first structure only (matching TARGET_RANKING structure) - view/symbol-scoped
-            if target_name and base_output_dir.exists():
+            if target and base_output_dir.exists():
                 try:
                     from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
-                    target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+                    target_clean = target.replace('/', '_').replace('\\', '_')
                     run_root_dir = run_root(base_output_dir)
                     # Extract view and symbol from metadata (view is REQUIRED)
                     view = metadata.get('view') if metadata else None
@@ -4927,7 +4926,7 @@ def save_multi_model_results(
                         raise ValueError("symbol required in metadata when view='SYMBOL_SPECIFIC'")
                     
                     # Use view/symbol-scoped path helper
-                    confidence_path = target_repro_file_path(run_root_dir, target_name_clean, "target_confidence.json", view=view, symbol=symbol)
+                    confidence_path = target_repro_file_path(run_root_dir, target_clean, "target_confidence.json", view=view, symbol=symbol)
                     confidence_path.parent.mkdir(parents=True, exist_ok=True)
                     with open(confidence_path, "w") as f:
                         json.dump(confidence_metrics, f, indent=2)
@@ -4936,11 +4935,11 @@ def save_multi_model_results(
                     confidence = confidence_metrics['confidence']
                     reason = confidence_metrics.get('low_confidence_reason', '')
                     if confidence == 'LOW':
-                        logger.warning(f"⚠️  Target {target_name}: confidence={confidence} ({reason})")
+                        logger.warning(f"⚠️  Target {target}: confidence={confidence} ({reason})")
                     elif confidence == 'MEDIUM':
-                        logger.info(f"ℹ️  Target {target_name}: confidence={confidence}")
+                        logger.info(f"ℹ️  Target {target}: confidence={confidence}")
                     else:
-                        logger.info(f"✅ Target {target_name}: confidence={confidence}")
+                        logger.info(f"✅ Target {target}: confidence={confidence}")
                     
                     logger.info(f"✅ Saved target confidence metrics to {confidence_path}")
                 except Exception as e:

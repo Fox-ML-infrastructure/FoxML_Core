@@ -112,7 +112,7 @@ def extract_permutation_importance(
     feature_names: List[str],
     scoring: str = 'r2',
     n_repeats: int = 5,
-    random_state: Optional[int] = None
+    seed: Optional[int] = None
 ) -> pd.Series:
     """
     Extract permutation importance from model.
@@ -123,7 +123,7 @@ def extract_permutation_importance(
     # Limit samples for performance (permutation importance is expensive)
     max_samples = 1000
     if X.shape[0] > max_samples:
-        sample_idx = np.random.RandomState(random_state).choice(
+        sample_idx = np.random.RandomState(seed).choice(
             X.shape[0], max_samples, replace=False
         )
         X_sample = X[sample_idx]
@@ -137,7 +137,7 @@ def extract_permutation_importance(
         model, X_sample, y_sample,
         scoring=scoring,
         n_repeats=n_repeats,
-        random_state=random_state,
+        random_state=seed,  # FIX: sklearn uses random_state, not seed
         n_jobs=1  # Avoid nested parallelism
     )
     

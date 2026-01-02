@@ -22,7 +22,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 
 def log_canonical_summary(
-    target_name: str,
+    target: str,
     target_column: str,
     symbols: List[str],
     time_vals: Optional[np.ndarray],
@@ -180,21 +180,21 @@ def save_feature_importances(
             break
         base_output_dir = base_output_dir.parent
     
-    target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+    target_clean = target_column.replace('/', '_').replace('\\', '_')
     
     # PATCH 4: Use OutputLayout for properly scoped paths
     try:
         from TRAINING.orchestration.utils.output_layout import OutputLayout
         from TRAINING.orchestration.utils.target_first_paths import ensure_target_structure
         
-        ensure_target_structure(base_output_dir, target_name_clean)
+        ensure_target_structure(base_output_dir, target_clean)
         
         # Only pass symbol if view is SYMBOL_SPECIFIC
         symbol_for_layout = symbol if view == "SYMBOL_SPECIFIC" else None
         
         layout = OutputLayout(
             output_root=base_output_dir,
-            target=target_name_clean,
+            target=target_clean,
             view=view,
             universe_sig=universe_sig,
             symbol=symbol_for_layout,
@@ -240,10 +240,10 @@ def save_feature_importances(
                 from TRAINING.stability.feature_importance import save_snapshot_hook
                 # Use properly scoped structure for snapshots
                 save_snapshot_hook(
-                    target_name=target_column,
+                    target=target_column,
                     method=model_name,
                     importance_dict=importances,
-                    universe_id=universe_sig,  # Use universe_sig, not view
+                    universe_sig=universe_sig,  # Use universe_sig, not view
                     output_dir=target_repro_dir,  # Save snapshots in scoped structure
                     auto_analyze=None,  # Load from config
                 )

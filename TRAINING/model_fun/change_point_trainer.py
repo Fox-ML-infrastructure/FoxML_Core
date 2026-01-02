@@ -69,8 +69,8 @@ class ChangePointTrainer(BaseModelTrainer):
                 pass
             
             logger.info(f"[ChangePoint] Training with {blas_n} BLAS threads")
-            random_state = self._get_random_state()
-            z = KMeans(n_clusters=self.config["n_regimes"], n_init=10, random_state=random_state).fit_predict(np.c_[X.mean(1), y])
+            seed = self._get_seed()
+            z = KMeans(n_clusters=self.config["n_regimes"], n_init=10, random_state=seed).fit_predict(np.c_[X.mean(1), y])
             self.models = []
             for k in range(self.config["n_regimes"]):
                 # Use safe_ridge_fit to avoid scipy.linalg.solve segfaults

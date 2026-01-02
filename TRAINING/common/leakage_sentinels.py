@@ -309,8 +309,8 @@ class LeakageSentinel:
             try:
                 from TRAINING.common.determinism import BASE_SEED, stable_seed_from
                 # Generate seed based on target name if available
-                if hasattr(self, 'target_name') and self.target_name:
-                    shuffle_seed = stable_seed_from(['leakage_sentinel', self.target_name, 'shuffle'])
+                if hasattr(self, 'target') and self.target:
+                    shuffle_seed = stable_seed_from(['leakage_sentinel', self.target, 'shuffle'])
                 else:
                     shuffle_seed = BASE_SEED if BASE_SEED is not None else 42  # FALLBACK_DEFAULT_OK
             except:

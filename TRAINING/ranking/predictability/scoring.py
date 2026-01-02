@@ -107,10 +107,10 @@ logger = setup_logging(
 @dataclass
 class TargetPredictabilityScore:
     """Predictability assessment for a single target"""
-    target_name: str
+    target: str
     target_column: str
     task_type: TaskType  # REGRESSION, BINARY_CLASSIFICATION, or MULTICLASS_CLASSIFICATION
-    mean_score: float  # Mean score (R² for regression, ROC-AUC for binary, accuracy for multiclass)
+    auc: float  # Mean score (R² for regression, ROC-AUC for binary, accuracy for multiclass)
     std_score: float  # Std of scores
     mean_importance: float  # Mean absolute importance
     consistency: float  # 1 - CV(score) - lower is better
@@ -132,8 +132,8 @@ class TargetPredictabilityScore:
     # Backward compatibility: mean_r2 property
     @property
     def mean_r2(self) -> float:
-        """Backward compatibility: returns mean_score"""
-        return self.mean_score
+        """Backward compatibility: returns auc"""
+        return self.auc
     
     @property
     def std_r2(self) -> float:
@@ -143,12 +143,12 @@ class TargetPredictabilityScore:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         result = {
-            'target_name': self.target_name,
+            'target': self.target,
             'target_column': self.target_column,
             'task_type': self.task_type.name if hasattr(self, 'task_type') else 'REGRESSION',
-            'mean_score': float(self.mean_score),
+            'auc': float(self.auc),
             'std_score': float(self.std_score),
-            'mean_r2': float(self.mean_score),  # Backward compatibility
+            'mean_r2': float(self.auc),  # Backward compatibility
             'std_r2': float(self.std_score),  # Backward compatibility
             'mean_importance': float(self.mean_importance),
             'consistency': float(self.consistency),
@@ -222,8 +222,8 @@ class TargetPredictabilityScore:
         suspicious = d.pop('suspicious_features', None)
         
         # Backward compatibility: handle old format with mean_r2/std_r2
-        if 'mean_r2' in d and 'mean_score' not in d:
-            d['mean_score'] = d['mean_r2']
+        if 'mean_r2' in d and 'auc' not in d:
+            d['auc'] = d['mean_r2']
         if 'std_r2' in d and 'std_score' not in d:
             d['std_score'] = d['std_r2']
         

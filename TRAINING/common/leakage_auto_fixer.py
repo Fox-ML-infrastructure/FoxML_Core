@@ -340,8 +340,8 @@ class LeakageAutoFixer:
                     # Get deterministic seed
                     try:
                         from TRAINING.common.determinism import BASE_SEED, stable_seed_from
-                        target_name = getattr(self, 'target_name', target_column)
-                        leak_seed = stable_seed_from(['leakage_auto_fixer', target_name]) if BASE_SEED is not None else 42
+                        target = getattr(self, 'target', target_column)
+                        leak_seed = stable_seed_from(['leakage_auto_fixer', target]) if BASE_SEED is not None else 42
                     except:
                         leak_seed = 42
                     
@@ -432,8 +432,8 @@ class LeakageAutoFixer:
                 try:
                     from TRAINING.common.determinism import BASE_SEED, stable_seed_from
                     # Use target/feature-specific seed if available
-                    target_name = getattr(self, 'target_name', 'leakage_test')
-                    leak_seed = stable_seed_from(['leakage_auto_fixer', target_name]) if BASE_SEED is not None else 42  # FALLBACK_DEFAULT_OK
+                    target = getattr(self, 'target', 'leakage_test')
+                    leak_seed = stable_seed_from(['leakage_auto_fixer', target]) if BASE_SEED is not None else 42  # FALLBACK_DEFAULT_OK
                 except:
                     leak_seed = 42  # FALLBACK_DEFAULT_OK
                 
@@ -475,7 +475,7 @@ class LeakageAutoFixer:
                         from sklearn.model_selection import train_test_split as sk_train_test_split
                         unique_symbols = symbols.unique()
                         # Use symbol-specific seed for holdout test
-                        holdout_seed = stable_seed_from(['leakage_holdout', target_name]) if BASE_SEED is not None else leak_seed
+                        holdout_seed = stable_seed_from(['leakage_holdout', target]) if BASE_SEED is not None else leak_seed
                         # Load test_size from config
                         try:
                             from CONFIG.config_loader import get_safety_config
@@ -642,7 +642,7 @@ class LeakageAutoFixer:
         min_confidence: Optional[float] = None,  # Load from config if None
         max_features: Optional[int] = None,
         dry_run: bool = False,
-        target_name: Optional[str] = None,
+        target: Optional[str] = None,
         max_backups_per_target: Optional[int] = None  # Load from config if None
     ) -> Tuple[Dict[str, Any], AutoFixInfo]:
         """
@@ -699,7 +699,7 @@ class LeakageAutoFixer:
             # Use provided max_backups or fall back to instance config
             backup_max = max_backups_per_target if max_backups_per_target is not None else self.max_backups_per_target
             backup_files = self._backup_configs(
-                target_name=target_name,
+                target=target,
                 max_backups_per_target=backup_max
             )
             if not high_confidence:
@@ -823,21 +823,11 @@ class LeakageAutoFixer:
         return default_max_backups
     
     def _get_git_commit_hash(self) -> Optional[str]:
-        """Get current git commit hash if available."""
-        try:
-            from TRAINING.common.subprocess_utils import safe_subprocess_run
-            result = safe_subprocess_run(
-                ['git', 'rev-parse', '--short', 'HEAD'],
-                timeout=2,
-                cwd=_REPO_ROOT
-            )
-            if result.returncode == 0:
-                return result.stdout.strip()
-        except Exception:
-            pass
-        return None
+        """Get current git commit hash. Delegates to SST module."""
+        from TRAINING.common.utils.git_utils import get_git_commit
+        return get_git_commit(short=True)
     
-    def _backup_configs(self, target_name: Optional[str] = None, max_backups_per_target: Optional[int] = None):
+    def _backup_configs(self, target: Optional[str] = None, max_backups_per_target: Optional[int] = None):
         """
         Backup config files before modification.
         
@@ -846,8 +836,8 @@ class LeakageAutoFixer:
         - Without target: CONFIG/backups/{timestamp}/files (legacy flat mode)
         
         Args:
-            target_name: Optional target name to organize backups per-target.
-                        If provided, backups are stored in CONFIG/backups/{target_name}/{timestamp}/
+            target: Optional target name to organize backups per-target.
+                        If provided, backups are stored in CONFIG/backups/{target}/{timestamp}/
             max_backups_per_target: Maximum number of backups to keep per target 
                                    (None = use config/default, 0 = no limit)
         
@@ -879,9 +869,9 @@ class LeakageAutoFixer:
         # Otherwise, use CONFIG/backups/ structure
         if self._use_run_backups:
             # Backups are in run directory, so organize by target
-            if target_name:
+            if target:
                 # Sanitize target name for filesystem (remove invalid chars)
-                safe_target = "".join(c for c in target_name if c.isalnum() or c in ('_', '-', '.'))[:50]
+                safe_target = "".join(c for c in target if c.isalnum() or c in ('_', '-', '.'))[:50]
                 target_backup_dir = base_backup_dir / safe_target
                 snapshot_dir = target_backup_dir / timestamp
             else:
@@ -889,16 +879,16 @@ class LeakageAutoFixer:
                 snapshot_dir = base_backup_dir / timestamp
         else:
             # Legacy CONFIG/backups/ structure - organize by target if provided
-            if target_name:
+            if target:
                 # Sanitize target name for filesystem (remove invalid chars)
-                safe_target = "".join(c for c in target_name if c.isalnum() or c in ('_', '-', '.'))[:50]
+                safe_target = "".join(c for c in target if c.isalnum() or c in ('_', '-', '.'))[:50]
                 target_backup_dir = base_backup_dir / safe_target
                 snapshot_dir = target_backup_dir / timestamp
             else:
                 # Legacy flat mode (warn about this)
                 logger.warning(
-                    "Backup created with no target_name; using legacy flat layout. "
-                    "Consider passing target_name for better organization."
+                    "Backup created with no target; using legacy flat layout. "
+                    "Consider passing target for better organization."
                 )
                 snapshot_dir = base_backup_dir / timestamp
         
@@ -922,7 +912,7 @@ class LeakageAutoFixer:
         # Log backup creation with full context
         git_commit = self._get_git_commit_hash()
         logger.info(
-            f"📦 Backup created: target={target_name or 'N/A'}, "
+            f"📦 Backup created: target={target or 'N/A'}, "
             f"timestamp={timestamp}, git_commit={git_commit or 'N/A'}, "
             f"source=auto_fix_leakage"
         )
@@ -933,7 +923,7 @@ class LeakageAutoFixer:
             manifest = {
                 "backup_version": 1,
                 "source": "auto_fix_leakage",
-                "target_name": target_name,
+                "target": target,
                 "timestamp": timestamp,
                 "backup_files": backup_files,
                 "excluded_features_path": str(self.excluded_features_path),
@@ -947,11 +937,11 @@ class LeakageAutoFixer:
             logger.debug(f"Could not create manifest file: {e}")
         
         # Apply retention policy (prune old backups for this target)
-        if target_name and max_backups_per_target > 0:
+        if target and max_backups_per_target > 0:
             pruned_count = self._prune_old_backups(target_backup_dir, max_backups_per_target)
             if pruned_count > 0:
                 logger.info(
-                    f"🧹 Pruned {pruned_count} old backup(s) for target={target_name} "
+                    f"🧹 Pruned {pruned_count} old backup(s) for target={target} "
                     f"(kept {max_backups_per_target} most recent)"
                 )
         
@@ -1167,7 +1157,7 @@ class LeakageAutoFixer:
                 detections, 
                 min_confidence=min_confidence, 
                 dry_run=False,
-                target_name=target_column,  # Use target_column from training_kwargs if available
+                target=target_column,  # Use target_column from training_kwargs if available
                 max_backups_per_target=None  # Use instance config
             )
             
@@ -1188,16 +1178,16 @@ class LeakageAutoFixer:
         }
     
     @staticmethod
-    def list_backups(target_name: Optional[str] = None, backup_dir: Optional[Path] = None) -> List[Dict[str, Any]]:
+    def list_backups(target: Optional[str] = None, backup_dir: Optional[Path] = None) -> List[Dict[str, Any]]:
         """
         List available backups for a target (or all targets if None).
         
         Args:
-            target_name: Target name to list backups for (None = all targets)
+            target: Target name to list backups for (None = all targets)
             backup_dir: Backup directory (default: CONFIG/backups)
         
         Returns:
-            List of backup info dicts with: target_name, timestamp, manifest_path, snapshot_dir
+            List of backup info dicts with: target, timestamp, manifest_path, snapshot_dir
         """
         import json
         
@@ -1209,9 +1199,9 @@ class LeakageAutoFixer:
         
         backups = []
         
-        if target_name:
+        if target:
             # List backups for specific target
-            safe_target = "".join(c for c in target_name if c.isalnum() or c in ('_', '-', '.'))[:50]
+            safe_target = "".join(c for c in target if c.isalnum() or c in ('_', '-', '.'))[:50]
             target_dir = backup_dir / safe_target
             if target_dir.exists():
                 for snapshot_dir in target_dir.iterdir():
@@ -1222,7 +1212,7 @@ class LeakageAutoFixer:
                                 with open(manifest_path, 'r') as f:
                                     manifest = json.load(f)
                                 backups.append({
-                                    'target_name': manifest.get('target_name'),
+                                    'target': manifest.get('target'),
                                     'timestamp': manifest.get('timestamp'),
                                     'manifest_path': str(manifest_path),
                                     'snapshot_dir': str(snapshot_dir),
@@ -1243,7 +1233,7 @@ class LeakageAutoFixer:
                                     with open(manifest_path, 'r') as f:
                                         manifest = json.load(f)
                                     backups.append({
-                                        'target_name': manifest.get('target_name'),
+                                        'target': manifest.get('target'),
                                         'timestamp': manifest.get('timestamp'),
                                         'manifest_path': str(manifest_path),
                                         'snapshot_dir': str(snapshot_dir),
@@ -1259,7 +1249,7 @@ class LeakageAutoFixer:
     
     @staticmethod
     def restore_backup(
-        target_name: str,
+        target: str,
         timestamp: Optional[str] = None,
         backup_dir: Optional[Path] = None,
         dry_run: bool = False
@@ -1268,7 +1258,7 @@ class LeakageAutoFixer:
         Restore config files from a backup.
         
         Args:
-            target_name: Target name
+            target: Target name
             timestamp: Timestamp of backup to restore (None = most recent)
             backup_dir: Backup directory (default: CONFIG/backups)
             dry_run: If True, only show what would be restored without actually restoring
@@ -1282,11 +1272,11 @@ class LeakageAutoFixer:
         if backup_dir is None:
             backup_dir = _REPO_ROOT / "CONFIG" / "backups"
         
-        safe_target = "".join(c for c in target_name if c.isalnum() or c in ('_', '-', '.'))[:50]
+        safe_target = "".join(c for c in target if c.isalnum() or c in ('_', '-', '.'))[:50]
         target_backup_dir = backup_dir / safe_target
         
         if not target_backup_dir.exists():
-            logger.error(f"❌ No backups found for target: {target_name}")
+            logger.error(f"❌ No backups found for target: {target}")
             logger.error(f"   Backup directory does not exist: {target_backup_dir}")
             return False
         
@@ -1295,23 +1285,23 @@ class LeakageAutoFixer:
             snapshot_dir = target_backup_dir / timestamp
             if not snapshot_dir.exists():
                 # List available timestamps for better error message
-                available = LeakageAutoFixer.list_backups(target_name=target_name, backup_dir=backup_dir)
+                available = LeakageAutoFixer.list_backups(target=target, backup_dir=backup_dir)
                 available_timestamps = [b['timestamp'] for b in available]
-                logger.error(f"❌ Backup not found: {target_name}/{timestamp}")
+                logger.error(f"❌ Backup not found: {target}/{timestamp}")
                 if available_timestamps:
-                    logger.error(f"   Available timestamps for {target_name}:")
+                    logger.error(f"   Available timestamps for {target}:")
                     for ts in available_timestamps[:10]:  # Show first 10
                         logger.error(f"     - {ts}")
                     if len(available_timestamps) > 10:
                         logger.error(f"     ... and {len(available_timestamps) - 10} more")
                 else:
-                    logger.error(f"   No backups found for target: {target_name}")
+                    logger.error(f"   No backups found for target: {target}")
                 return False
         else:
             # Find most recent backup
-            backups = LeakageAutoFixer.list_backups(target_name=target_name, backup_dir=backup_dir)
+            backups = LeakageAutoFixer.list_backups(target=target, backup_dir=backup_dir)
             if not backups:
-                logger.error(f"❌ No backups found for target: {target_name}")
+                logger.error(f"❌ No backups found for target: {target}")
                 logger.error(f"   Backup directory exists but contains no valid backups: {target_backup_dir}")
                 return False
             snapshot_dir = Path(backups[0]['snapshot_dir'])
@@ -1404,7 +1394,7 @@ class LeakageAutoFixer:
         if restored:
             logger.info(
                 f"✅ Restored {len(restored)} config file(s) from backup "
-                f"(target={target_name}, timestamp={timestamp}, "
+                f"(target={target}, timestamp={timestamp}, "
                 f"git_commit={manifest.get('git_commit', 'N/A')})"
             )
             return True

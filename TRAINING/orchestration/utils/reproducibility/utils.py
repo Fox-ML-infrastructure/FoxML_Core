@@ -122,18 +122,17 @@ def collect_environment_info() -> Dict[str, Any]:
 
 def compute_comparable_key(
     stage: str,
-    target_name: str,
-    route_type: Optional[str],
+    target: str,
     view: Optional[str],
     symbol: Optional[str],
-    date_range_start: Optional[str],
-    date_range_end: Optional[str],
+    date_start: Optional[str],
+    date_end: Optional[str],
     cv_details: Optional[Dict[str, Any]],
     feature_registry_hash: Optional[str],
     label_definition_hash: Optional[str],
     min_cs: Optional[int],
     max_cs_samples: Optional[int],
-    universe_id: Optional[str]
+    universe_sig: Optional[str]
 ) -> str:
     """
     Compute a comparable key for run comparison.
@@ -143,18 +142,18 @@ def compute_comparable_key(
     
     Args:
         stage: Pipeline stage
-        target_name: Target name
-        route_type: Route type (CROSS_SECTIONAL, INDIVIDUAL, etc.)
+        target: Target name
+        view: Route type (CROSS_SECTIONAL, INDIVIDUAL, etc.)
         view: View type (for TARGET_RANKING)
         symbol: Symbol (for SYMBOL_SPECIFIC)
-        date_range_start: Start timestamp
-        date_range_end: End timestamp
+        date_start: Start timestamp
+        date_end: End timestamp
         cv_details: CV configuration details
         feature_registry_hash: Feature registry hash
         label_definition_hash: Label definition hash
         min_cs: Minimum cross-sectional samples
         max_cs_samples: Maximum cross-sectional samples
-        universe_id: Universe identifier
+        universe_sig: Universe identifier
     
     Returns:
         Hex hash of comparable key (16 chars)
@@ -163,25 +162,25 @@ def compute_comparable_key(
     
     # Core identity
     parts.append(f"stage={stage}")
-    parts.append(f"target={target_name}")
+    parts.append(f"target={target}")
     
     # Route/view
-    if route_type:
-        parts.append(f"route={route_type}")
+    if view:
+        parts.append(f"route={view}")
     if view:
         parts.append(f"view={view}")
     if symbol:
         parts.append(f"symbol={symbol}")
     
     # Data range
-    if date_range_start:
-        parts.append(f"start={date_range_start}")
-    if date_range_end:
-        parts.append(f"end={date_range_end}")
+    if date_start:
+        parts.append(f"start={date_start}")
+    if date_end:
+        parts.append(f"end={date_end}")
     
     # Universe/split config
-    if universe_id:
-        parts.append(f"universe={universe_id}")
+    if universe_sig:
+        parts.append(f"universe={universe_sig}")
     if min_cs is not None:
         parts.append(f"min_cs={min_cs}")
     if max_cs_samples is not None:
@@ -269,7 +268,9 @@ except ImportError:
 class RouteType(str, Enum):
     """Route type constants for feature selection and training."""
     CROSS_SECTIONAL = "CROSS_SECTIONAL"
-    INDIVIDUAL = "INDIVIDUAL"
+    SYMBOL_SPECIFIC = "SYMBOL_SPECIFIC"
+    # DEPRECATED: INDIVIDUAL is an alias for SYMBOL_SPECIFIC - do not use in new code
+    INDIVIDUAL = "SYMBOL_SPECIFIC"
 
 
 def get_main_logger() -> logging.Logger:
@@ -409,7 +410,7 @@ def extract_folds(
     if cv_details is None:
         cv_details = metadata.get("cv_details", {})
     
-    folds_raw = cv_details.get("folds") or cv_details.get("cv_folds") or metadata.get("cv_folds")
+    folds_raw = cv_details.get("folds") or metadata.get("folds")
     result = extract_scalar_from_tagged(folds_raw)
     
     # Convert to int if numeric
@@ -418,5 +419,643 @@ def extract_folds(
             return int(result)
         except (ValueError, TypeError):
             return None
+    return None
+
+
+# =============================================================================
+# SST Accessor Functions
+# =============================================================================
+# These functions extract values using the canonical SST field names,
+# with fallbacks for legacy field names during migration.
+
+
+def extract_n_effective(
+    data: Dict[str, Any],
+    additional_data: Optional[Dict[str, Any]] = None
+) -> Optional[int]:
+    """
+    Extract sample size using SST field name 'n_effective'.
+    
+    Accepts legacy names for backward compatibility:
+    - n_effective (SST canonical)
+    - n_effective_cs
+    - n_effective
+    - n_samples
+    - sample_size
+    
+    Args:
+        data: Primary dict to extract from (metrics, metadata, etc.)
+        additional_data: Optional secondary dict to check
+    
+    Returns:
+        Sample size as int, or None if not found
+    """
+    # SST canonical first, then legacy names
+    keys = ['n_effective', 'n_effective_cs', 'n_effective', 'n_samples', 'sample_size']
+    
+    for key in keys:
+        val = data.get(key)
+        if val is not None:
+            try:
+                return int(val)
+            except (ValueError, TypeError):
+                continue
+    
+    # Check additional_data if provided
+    if additional_data:
+        for key in keys:
+            val = additional_data.get(key)
+            if val is not None:
+                try:
+                    return int(val)
+                except (ValueError, TypeError):
+                    continue
+    
+    return None
+
+
+def extract_universe_sig(
+    data: Dict[str, Any],
+    cs_config: Optional[Dict[str, Any]] = None
+) -> Optional[str]:
+    """
+    Extract universe signature using SST field name 'universe_sig'.
+    
+    Accepts legacy names for backward compatibility:
+    - universe_sig (SST canonical)
+    - universe_sig
+    - universe_signature
+    
+    Args:
+        data: Primary dict to extract from
+        cs_config: Optional nested cs_config dict to check
+    
+    Returns:
+        Universe signature string, or None if not found
+    """
+    # Check top-level first
+    for key in ['universe_sig', 'universe_sig', 'universe_signature']:
+        val = data.get(key)
+        if val:
+            return str(val)
+    
+    # Check cs_config if provided or nested in data
+    config = cs_config or data.get('cs_config', {})
+    if isinstance(config, dict):
+        for key in ['universe_sig', 'universe_sig', 'universe_signature']:
+            val = config.get(key)
+            if val:
+                return str(val)
+    
+    return None
+
+
+def extract_date_range(
+    data: Dict[str, Any],
+    cohort_metadata: Optional[Dict[str, Any]] = None
+) -> tuple[Optional[str], Optional[str]]:
+    """
+    Extract date range using SST field names 'date_start' and 'date_end'.
+    
+    Accepts legacy names for backward compatibility:
+    - date_start / date_end (SST canonical)
+    - date_start / date_end
+    - start_ts / end_ts (from date_range dict)
+    
+    Args:
+        data: Primary dict to extract from
+        cohort_metadata: Optional cohort metadata dict to check
+    
+    Returns:
+        (date_start, date_end) tuple of ISO format strings, or (None, None)
+    """
+    date_start = None
+    date_end = None
+    
+    # Check primary data
+    date_start = (
+        data.get('date_start') or
+        data.get('date_start')
+    )
+    date_end = (
+        data.get('date_end') or
+        data.get('date_end')
+    )
+    
+    # Check date_range dict
+    if date_start is None or date_end is None:
+        date_range = data.get('date_range', {})
+        if isinstance(date_range, dict):
+            date_start = date_start or date_range.get('start_ts')
+            date_end = date_end or date_range.get('end_ts')
+    
+    # Check cohort_metadata if provided
+    if cohort_metadata and (date_start is None or date_end is None):
+        date_start = date_start or cohort_metadata.get('date_start')
+        date_end = date_end or cohort_metadata.get('date_end')
+        
+        # Check nested date_range in cohort_metadata
+        if date_start is None or date_end is None:
+            date_range = cohort_metadata.get('date_range', {})
+            if isinstance(date_range, dict):
+                date_start = date_start or date_range.get('start_ts')
+                date_end = date_end or date_range.get('end_ts')
+    
+    return date_start, date_end
+
+
+def extract_pos_rate(
+    data: Dict[str, Any],
+    additional_data: Optional[Dict[str, Any]] = None
+) -> Optional[float]:
+    """
+    Extract positive class rate using SST field name 'pos_rate'.
+    
+    Accepts legacy names for backward compatibility:
+    - pos_rate (SST canonical)
+    - positive_rate
+    - class_balance
+    
+    Args:
+        data: Primary dict to extract from (metrics, metadata, etc.)
+        additional_data: Optional secondary dict to check
+    
+    Returns:
+        Positive rate as float, or None if not found
+    """
+    keys = ['pos_rate', 'positive_rate', 'class_balance']
+    
+    for key in keys:
+        val = data.get(key)
+        if val is not None:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                continue
+    
+    if additional_data:
+        for key in keys:
+            val = additional_data.get(key)
+            if val is not None:
+                try:
+                    return float(val)
+                except (ValueError, TypeError):
+                    continue
+    
+    return None
+
+
+def extract_feature_counts(
+    data: Dict[str, Any],
+    additional_data: Optional[Dict[str, Any]] = None
+) -> tuple[Optional[int], Optional[int], Optional[int]]:
+    """
+    Extract feature counts using SST field names.
+    
+    SST fields:
+    - n_features_pre: features before pruning
+    - n_features_post: features after pruning  
+    - n_features_selected: features selected for training
+    
+    Accepts legacy names for backward compatibility:
+    - n_features_pre / features_safe
+    - n_features_post / n_features_post_prune / features_final
+    - n_features_selected / n_selected
+    
+    Args:
+        data: Primary dict to extract from
+        additional_data: Optional secondary dict to check
+    
+    Returns:
+        (n_features_pre, n_features_post, n_features_selected) tuple
+    """
+    def _extract_int(keys: List[str]) -> Optional[int]:
+        for key in keys:
+            val = data.get(key)
+            if val is not None:
+                try:
+                    return int(val)
+                except (ValueError, TypeError):
+                    continue
+            if additional_data:
+                val = additional_data.get(key)
+                if val is not None:
+                    try:
+                        return int(val)
+                    except (ValueError, TypeError):
+                        continue
+        return None
+    
+    n_pre = _extract_int(['n_features_pre', 'features_safe'])
+    n_post = _extract_int(['n_features_post', 'n_features_post_prune', 'features_final'])
+    n_selected = _extract_int(['n_features_selected', 'n_selected']) or n_post
+    
+    return n_pre, n_post, n_selected
+
+
+def extract_target(
+    data: Dict[str, Any],
+    additional_data: Optional[Dict[str, Any]] = None
+) -> Optional[str]:
+    """
+    Extract target identifier using SST field name 'target'.
+    
+    Accepts legacy names for backward compatibility:
+    - target (SST canonical)
+    - target
+    - target_column
+    - target
+    
+    Args:
+        data: Primary dict to extract from
+        additional_data: Optional secondary dict to check
+    
+    Returns:
+        Target identifier string, or None if not found
+    """
+    keys = ['target', 'target', 'target_column', 'target']
+    
+    for key in keys:
+        val = data.get(key)
+        if val:
+            return str(val)
+    
+    if additional_data:
+        for key in keys:
+            val = additional_data.get(key)
+            if val:
+                return str(val)
+    
+    return None
+
+
+def extract_model_family(
+    data: Dict[str, Any],
+    additional_data: Optional[Dict[str, Any]] = None
+) -> Optional[str]:
+    """
+    Extract model family using SST field name 'model_family'.
+    
+    Accepts legacy names for backward compatibility:
+    - model_family (SST canonical)
+    - family
+    
+    Args:
+        data: Primary dict to extract from
+        additional_data: Optional secondary dict to check
+    
+    Returns:
+        Model family string, or None if not found
+    """
+    keys = ['model_family', 'family']
+    
+    for key in keys:
+        val = data.get(key)
+        if val:
+            return str(val)
+    
+    if additional_data:
+        for key in keys:
+            val = additional_data.get(key)
+            if val:
+                return str(val)
+    
+    return None
+
+
+def extract_run_id(
+    data: Dict[str, Any],
+    additional_data: Optional[Dict[str, Any]] = None
+) -> Optional[str]:
+    """
+    Extract run ID using SST field name 'run_id'.
+    
+    Accepts legacy names for backward compatibility:
+    - run_id (SST canonical)
+    - timestamp
+    
+    Args:
+        data: Primary dict to extract from
+        additional_data: Optional secondary dict to check
+    
+    Returns:
+        Run ID string, or None if not found
+    """
+    keys = ['run_id', 'timestamp']
+    
+    for key in keys:
+        val = data.get(key)
+        if val:
+            return str(val)
+    
+    if additional_data:
+        for key in keys:
+            val = additional_data.get(key)
+            if val:
+                return str(val)
+    
+    return None
+
+
+def extract_cv_details(
+    data: Dict[str, Any],
+    additional_data: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Extract CV details using SST field name 'cv_details'.
+    
+    Normalizes nested CV configuration into a flat structure.
+    
+    Args:
+        data: Primary dict to extract from
+        additional_data: Optional secondary dict to check
+    
+    Returns:
+        Dict with cv_details (may be empty if not found)
+    """
+    # Check for cv_details dict
+    cv_details = data.get('cv_details', {})
+    if cv_details:
+        return cv_details
+    
+    if additional_data:
+        cv_details = additional_data.get('cv_details', {})
+        if cv_details:
+            return cv_details
+    
+    # Build from individual fields
+    result = {}
+    cv_fields = ['cv_method', 'folds', 'folds', 'purge_minutes', 'embargo_minutes', 
+                 'horizon_minutes', 'fold_boundaries_hash', 'label_definition_hash']
+    
+    for key in cv_fields:
+        val = data.get(key)
+        if val is not None:
+            result[key] = val
+    
+    if additional_data:
+        for key in cv_fields:
+            if key not in result:
+                val = additional_data.get(key)
+                if val is not None:
+                    result[key] = val
+    
+    return result
+
+
+def extract_purge_minutes(
+    data: Dict[str, Any],
+    cv_details: Optional[Dict[str, Any]] = None
+) -> Optional[float]:
+    """
+    Extract purge minutes using SST field name 'purge_minutes'.
+    
+    Args:
+        data: Primary dict to extract from (metadata)
+        cv_details: Optional cv_details dict
+    
+    Returns:
+        Purge minutes as float, or None if not found
+    """
+    # Check cv_details first
+    if cv_details is None:
+        cv_details = data.get('cv_details', {})
+    
+    val = cv_details.get('purge_minutes') or data.get('purge_minutes')
+    
+    if val is not None:
+        # Handle tagged union format
+        result = extract_scalar_from_tagged(val)
+        if result is not None:
+            try:
+                return float(result)
+            except (ValueError, TypeError):
+                pass
+    return None
+
+
+def extract_horizon_minutes(
+    data: Dict[str, Any],
+    cv_details: Optional[Dict[str, Any]] = None
+) -> Optional[float]:
+    """
+    Extract horizon minutes using SST field name 'horizon_minutes'.
+    
+    Args:
+        data: Primary dict to extract from (metadata)
+        cv_details: Optional cv_details dict
+    
+    Returns:
+        Horizon minutes as float, or None if not found
+    """
+    # Check cv_details first
+    if cv_details is None:
+        cv_details = data.get('cv_details', {})
+    
+    val = cv_details.get('horizon_minutes') or data.get('horizon_minutes')
+    
+    if val is not None:
+        # Handle tagged union format
+        result = extract_scalar_from_tagged(val)
+        if result is not None:
+            try:
+                return float(result)
+            except (ValueError, TypeError):
+                pass
+    return None
+
+
+def extract_view(
+    data: Dict[str, Any],
+    additional_data: Optional[Dict[str, Any]] = None
+) -> Optional[str]:
+    """
+    Extract view using SST field name 'view'.
+    
+    Accepts legacy names for backward compatibility:
+    - view (SST canonical)
+    - view
+    - view
+    
+    Normalizes INDIVIDUAL -> SYMBOL_SPECIFIC for consistency.
+    
+    Args:
+        data: Primary dict to extract from
+        additional_data: Optional secondary dict to check
+    
+    Returns:
+        View string (CROSS_SECTIONAL, SYMBOL_SPECIFIC, etc.) or None if not found
+    """
+    keys = ['view', 'view', 'view']
+    
+    for key in keys:
+        val = data.get(key)
+        if val:
+            # Normalize INDIVIDUAL -> SYMBOL_SPECIFIC
+            if val == "INDIVIDUAL":
+                return "SYMBOL_SPECIFIC"
+            return str(val)
+    
+    if additional_data:
+        for key in keys:
+            val = additional_data.get(key)
+            if val:
+                # Normalize INDIVIDUAL -> SYMBOL_SPECIFIC
+                if val == "INDIVIDUAL":
+                    return "SYMBOL_SPECIFIC"
+                return str(val)
+    
+    return None
+
+
+# =============================================================================
+# Metrics SST Accessor Functions
+# =============================================================================
+
+
+def extract_auc(data: Dict[str, Any]) -> Optional[float]:
+    """
+    Extract AUC using SST field name 'auc'.
+    
+    Accepts legacy names for backward compatibility:
+    - auc (SST canonical)
+    - auc
+    - auc
+    
+    Args:
+        data: Dict to extract from (metrics, etc.)
+    
+    Returns:
+        AUC as float, or None if not found
+    """
+    for key in ['auc', 'auc', 'auc']:
+        val = data.get(key)
+        if val is not None:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                continue
+    return None
+
+
+def extract_logloss(data: Dict[str, Any]) -> Optional[float]:
+    """
+    Extract logloss using SST field name 'logloss'.
+    
+    Accepts legacy names: logloss, logloss
+    """
+    for key in ['logloss', 'logloss']:
+        val = data.get(key)
+        if val is not None:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                continue
+    return None
+
+
+def extract_pr_auc(data: Dict[str, Any]) -> Optional[float]:
+    """
+    Extract PR-AUC using SST field name 'pr_auc'.
+    
+    Accepts legacy names: pr_auc, pr_auc
+    """
+    for key in ['pr_auc', 'pr_auc']:
+        val = data.get(key)
+        if val is not None:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                continue
+    return None
+
+
+def extract_runtime_sec(data: Dict[str, Any]) -> Optional[float]:
+    """
+    Extract runtime using SST field name 'runtime_sec'.
+    
+    Accepts legacy names: runtime_sec, train_time_sec, wall_clock_time
+    """
+    for key in ['runtime_sec', 'train_time_sec', 'wall_clock_time']:
+        val = data.get(key)
+        if val is not None:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                continue
+    return None
+
+
+def extract_peak_memory_mb(data: Dict[str, Any]) -> Optional[float]:
+    """
+    Extract peak memory using SST field name 'peak_memory_mb'.
+    
+    Accepts legacy names: peak_memory_mb, peak_ram_mb
+    """
+    for key in ['peak_memory_mb', 'peak_ram_mb']:
+        val = data.get(key)
+        if val is not None:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                continue
+    return None
+
+
+def extract_jaccard_top_k(data: Dict[str, Any]) -> Optional[float]:
+    """
+    Extract Jaccard top-k using SST field name 'jaccard_top_k'.
+    
+    Accepts legacy names: jaccard_top_k, jaccard_topK
+    """
+    for key in ['jaccard_top_k', 'jaccard_topK']:
+        val = data.get(key)
+        if val is not None:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                continue
+    return None
+
+
+def extract_rank_corr(data: Dict[str, Any]) -> Optional[float]:
+    """
+    Extract rank correlation using SST field name 'rank_corr'.
+    
+    Accepts legacy names: rank_corr, rank_correlation, spearman_corr
+    """
+    for key in ['rank_corr', 'rank_correlation', 'spearman_corr']:
+        val = data.get(key)
+        if val is not None:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                continue
+    return None
+
+
+def extract_config_hash(data: Dict[str, Any]) -> Optional[str]:
+    """
+    Extract config hash using SST field name 'config_hash'.
+    
+    Accepts legacy names: config_hash, config_hash
+    """
+    for key in ['config_hash', 'config_hash']:
+        val = data.get(key)
+        if val:
+            return str(val)
+    return None
+
+
+def extract_featureset_hash(data: Dict[str, Any]) -> Optional[str]:
+    """
+    Extract featureset hash using SST field name 'featureset_hash'.
+    
+    Accepts legacy names: featureset_hash, featureset_hash
+    """
+    for key in ['featureset_hash', 'featureset_hash']:
+        val = data.get(key)
+        if val:
+            return str(val)
     return None
 

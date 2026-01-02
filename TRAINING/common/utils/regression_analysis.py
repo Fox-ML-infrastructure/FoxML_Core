@@ -25,7 +25,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Identity columns that trigger segment breaks
-IDENTITY_COLS = ["data_fingerprint", "featureset_fingerprint", "config_hash", "git_commit"]
+IDENTITY_COLS = ["data_fingerprint", "featureset_hash", "config_hash", "git_commit"]
 
 
 def prepare_segments(
@@ -119,7 +119,7 @@ def exp_decay_weights(
 
 def make_regression_frame(
     df: pd.DataFrame,
-    target: str = "cs_auc",
+    target: str = "auc",
     feature_cols: Optional[List[str]] = None,
     time_col: str = "run_started_at",
     min_runs_per_segment: int = 8
@@ -153,7 +153,7 @@ def make_regression_frame(
             "importance_concentration",
             "runtime_sec",
             "peak_ram_mb",
-            "cv_folds_executed",
+            "folds_executed",
         ]
     
     # Keep only relevant columns
@@ -211,7 +211,7 @@ def make_regression_frame(
 
 def fit_weighted_ridge(
     frame: pd.DataFrame,
-    target: str = "cs_auc",
+    target: str = "auc",
     time_col: str = "run_started_at",
     half_life_days: float = 14.0,
     alpha: float = 1.0
@@ -245,7 +245,7 @@ def fit_weighted_ridge(
 
 def walk_forward_ridge(
     frame: pd.DataFrame,
-    target: str = "cs_auc",
+    target: str = "auc",
     time_col: str = "run_started_at",
     half_life_days: float = 14.0,
     alpha: float = 1.0,
@@ -306,7 +306,7 @@ def walk_forward_ridge(
 
 def analyze_cohort_trends(
     index_file: Path,
-    target: str = "cs_auc",
+    target: str = "auc",
     half_life_days: float = 14.0,
     min_runs_per_segment: int = 8
 ) -> pd.DataFrame:

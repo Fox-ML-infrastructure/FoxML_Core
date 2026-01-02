@@ -5,7 +5,7 @@ Utility module for extracting cohort metadata from various data sources
 for use with cohort-aware reproducibility tracking.
 
 This module provides a unified interface for extracting:
-- N_effective_cs (sample size)
+- n_effective_cs (sample size)
 - n_symbols (number of symbols)
 - date_range (start/end timestamps)
 - cs_config (cross-sectional configuration: min_cs, max_cs_samples, etc.)
@@ -29,8 +29,8 @@ Usage:
     # Then pass to reproducibility tracker
     tracker.log_comparison(
         stage="target_ranking",
-        item_name=target_name,
-        metrics={"mean_score": score, **cohort_metrics},
+        target=target,
+        metrics={"auc": score, **cohort_metrics},
         additional_data={**cohort_additional_data}
     )
     
@@ -70,7 +70,7 @@ def extract_cohort_metadata(
     min_cs: Optional[int] = None,
     max_cs_samples: Optional[int] = None,
     leakage_filter_version: Optional[str] = None,
-    universe_id: Optional[str] = None,
+    universe_sig: Optional[str] = None,
     n_samples: Optional[int] = None,  # Direct override for sample size
     n_symbols: Optional[int] = None,  # Direct override for symbol count
     date_start: Optional[Union[str, pd.Timestamp]] = None,  # Direct override for date range
@@ -96,7 +96,7 @@ def extract_cohort_metadata(
         min_cs: Minimum cross-sectional size (for cs_config)
         max_cs_samples: Maximum cross-sectional samples (for cs_config)
         leakage_filter_version: Leakage filter version (for cs_config)
-        universe_id: Universe identifier (for cs_config)
+        universe_sig: Universe identifier (for cs_config)
         n_samples: Direct override for sample size (highest priority)
         n_symbols: Direct override for symbol count (highest priority)
         date_start: Direct override for date range start (highest priority)
@@ -104,26 +104,30 @@ def extract_cohort_metadata(
     
     Returns:
         Dict with keys:
-            - N_effective_cs: int (sample size)
+            - n_effective_cs: int (sample size)
             - n_symbols: int (number of symbols)
             - date_range: dict with 'start_ts' and 'end_ts' (ISO format strings)
-            - cs_config: dict with min_cs, max_cs_samples, leakage_filter_version, universe_id
+            - cs_config: dict with min_cs, max_cs_samples, leakage_filter_version, universe_sig
     """
     metadata = {}
     
-    # 1. Extract N_effective_cs (sample size)
+    # 1. Extract n_effective (sample size) - SST canonical name
     if n_samples is not None:
-        metadata['N_effective_cs'] = int(n_samples)
+        sample_size = int(n_samples)
+        metadata['n_effective'] = sample_size  # SST canonical
+        metadata['n_effective_cs'] = sample_size  # DEPRECATED: backward compat
     elif X is not None:
         try:
             if isinstance(X, pd.DataFrame):
-                metadata['N_effective_cs'] = len(X)
+                sample_size = len(X)
             elif isinstance(X, np.ndarray):
-                metadata['N_effective_cs'] = X.shape[0] if len(X.shape) > 0 else 0
+                sample_size = X.shape[0] if len(X.shape) > 0 else 0
             else:
-                metadata['N_effective_cs'] = len(X)
+                sample_size = len(X)
+            metadata['n_effective'] = sample_size  # SST canonical
+            metadata['n_effective_cs'] = sample_size  # DEPRECATED: backward compat
         except (TypeError, AttributeError, IndexError) as e:
-            logger.debug(f"Could not extract N_effective_cs from X: {e}")
+            logger.debug(f"Could not extract n_effective from X: {e}")
             pass
     
     # 2. Extract n_symbols and symbols list
@@ -244,8 +248,8 @@ def extract_cohort_metadata(
         cs_config['max_cs_samples'] = int(max_cs_samples)
     if leakage_filter_version is not None:
         cs_config['leakage_filter_version'] = str(leakage_filter_version)
-    if universe_id is not None:
-        cs_config['universe_id'] = str(universe_id)
+    if universe_sig is not None:
+        cs_config['universe_sig'] = str(universe_sig)
     
     metadata['cs_config'] = cs_config
     
@@ -336,7 +340,7 @@ def format_for_reproducibility_tracker(
     Format cohort metadata for use with ReproducibilityTracker.log_comparison().
     
     Splits the metadata into:
-    - metrics: Contains N_effective_cs (for metrics dict)
+    - metrics: Contains n_effective_cs (for metrics dict)
     - additional_data: Contains n_symbols, date_range, cs_config (for additional_data dict)
     
     Args:
@@ -348,9 +352,11 @@ def format_for_reproducibility_tracker(
     metrics = {}
     additional_data = {}
     
-    # N_effective_cs goes in metrics
-    if 'N_effective_cs' in cohort_metadata:
-        metrics['N_effective_cs'] = cohort_metadata['N_effective_cs']
+    # n_effective goes in metrics (SST canonical)
+    if 'n_effective' in cohort_metadata:
+        metrics['n_effective'] = cohort_metadata['n_effective']
+    elif 'n_effective_cs' in cohort_metadata:
+        metrics['n_effective'] = cohort_metadata['n_effective_cs']  # Legacy fallback
     
     # Everything else goes in additional_data
     if 'n_symbols' in cohort_metadata:

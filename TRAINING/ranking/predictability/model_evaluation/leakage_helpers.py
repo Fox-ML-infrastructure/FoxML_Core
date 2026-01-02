@@ -83,10 +83,10 @@ def compute_suspicion_score(
 
 
 def detect_leakage(
-    mean_score: float,
+    auc: float,
     composite_score: float,
     mean_importance: float,
-    target_name: str = "",
+    target: str = "",
     model_scores: Dict[str, float] = None,
     task_type: TaskType = TaskType.REGRESSION
 ) -> str:
@@ -116,7 +116,7 @@ def detect_leakage(
     
     # Determine threshold based on task type and target name
     if task_type == TaskType.REGRESSION:
-        is_forward_return = target_name.startswith('fwd_ret_')
+        is_forward_return = target.startswith('fwd_ret_')
         if is_forward_return:
             # For forward returns: R² > 0.50 is suspicious
             reg_cfg = warning_cfg.get('regression', {}).get('forward_return', {})
@@ -143,16 +143,16 @@ def detect_leakage(
         metric_name = "Accuracy"
     
     # Check 1: Suspiciously high mean score
-    if mean_score > very_high_threshold:
+    if auc > very_high_threshold:
         flags.append("HIGH_SCORE")
         logger.warning(
-            f"LEAKAGE WARNING: {metric_name}={mean_score:.3f} > {very_high_threshold:.2f} "
+            f"LEAKAGE WARNING: {metric_name}={auc:.3f} > {very_high_threshold:.2f} "
             f"(extremely high - likely leakage)"
         )
-    elif mean_score > high_threshold:
+    elif auc > high_threshold:
         flags.append("HIGH_SCORE")
         logger.warning(
-            f"LEAKAGE WARNING: {metric_name}={mean_score:.3f} > {high_threshold:.2f} "
+            f"LEAKAGE WARNING: {metric_name}={auc:.3f} > {high_threshold:.2f} "
             f"(suspiciously high - investigate)"
         )
     
@@ -180,10 +180,10 @@ def detect_leakage(
         classification_score_low = 0.6
     
     score_low_threshold = regression_score_low if task_type == TaskType.REGRESSION else classification_score_low
-    if composite_score > composite_high_threshold and mean_score < score_low_threshold:
+    if composite_score > composite_high_threshold and auc < score_low_threshold:
         flags.append("INCONSISTENT")
         logger.warning(
-            f"LEAKAGE WARNING: Composite={composite_score:.3f} but {metric_name}={mean_score:.3f} "
+            f"LEAKAGE WARNING: Composite={composite_score:.3f} but {metric_name}={auc:.3f} "
             f"(inconsistent - possible leakage)"
         )
     
@@ -200,10 +200,10 @@ def detect_leakage(
         classification_score_very_low = 0.5
     
     score_very_low_threshold = regression_score_very_low if task_type == TaskType.REGRESSION else classification_score_very_low
-    if mean_importance > importance_high_threshold and mean_score < score_very_low_threshold:
+    if mean_importance > importance_high_threshold and auc < score_very_low_threshold:
         flags.append("INCONSISTENT")
         logger.warning(
-            f"LEAKAGE WARNING: Importance={mean_importance:.2f} but {metric_name}={mean_score:.3f} "
+            f"LEAKAGE WARNING: Importance={mean_importance:.2f} but {metric_name}={auc:.3f} "
             f"(high importance with low {metric_name} - check for leaked features)"
         )
     

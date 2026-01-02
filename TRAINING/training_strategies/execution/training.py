@@ -640,7 +640,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                         from pathlib import Path
                         output_dir_path = Path(output_dir) if not isinstance(output_dir, Path) else output_dir
                         runtime_quarantine = load_confirmed_quarantine(
-                            out_dir=output_dir_path,
+                            output_dir=output_dir_path,
                             target=target,
                             view="SYMBOL_SPECIFIC",
                             symbol=symbol
@@ -679,7 +679,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                     from TRAINING.orchestration.routing.target_router import route_target
                     route_info = route_target(target)
                     routing_meta = {
-                        'target_name': target,
+                        'target': target,
                         'spec': route_info['spec'],
                         'sample_weights': None,
                         'group_sizes': None
@@ -1004,7 +1004,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 if cv_scores and len(cv_scores) > 0:
                                     metrics = {
                                         "metric_name": "CV Score",
-                                        "mean_score": float(np.mean(cv_scores)),
+                                        "auc": float(np.mean(cv_scores)),
                                         "std_score": float(np.std(cv_scores)),
                                         "composite_score": float(np.mean(cv_scores))
                                     }
@@ -1051,11 +1051,11 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 
                                 tracker.log_comparison(
                                     stage=scope.stage.value,
-                                    item_name=f"{target}:{symbol}:{family}",
+                                    target=f"{target}:{symbol}:{family}",
                                     metrics=metrics_with_cohort,
                                     additional_data=additional_data_with_cohort,
                                     symbol=scope.symbol,
-                                    route_type=scope.view.value
+                                    view=scope.view.value
                                 )
                         except Exception as e:
                             logger.warning(f"Reproducibility tracking failed for {family}:{target}:{symbol}: {e}")
@@ -1111,7 +1111,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                 
                 output_dir_path = Path(output_dir) if not isinstance(output_dir, Path) else output_dir
                 runtime_quarantine = load_confirmed_quarantine(
-                    out_dir=output_dir_path,
+                    output_dir=output_dir_path,
                     target=target,
                     view=view_for_quarantine,
                     symbol=None  # For CROSS_SECTIONAL, symbol is None
@@ -1218,7 +1218,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         else:
             # Fallback: old code path without routing
             routing_meta = {
-                'target_name': target,
+                'target': target,
                 'spec': TaskSpec('regression', 'regression', ['rmse', 'mae']),
                 'sample_weights': None,
                 'group_sizes': None
@@ -1386,7 +1386,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 if cv_scores and len(cv_scores) > 0:
                                     metrics = {
                                         "metric_name": "CV Score",
-                                        "mean_score": float(np.mean(cv_scores)),
+                                        "auc": float(np.mean(cv_scores)),
                                         "std_score": float(np.std(cv_scores)),
                                         "composite_score": float(np.mean(cv_scores))
                                     }
@@ -1426,7 +1426,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 # Merge with existing metrics and additional_data
                                 metrics_with_cohort = {
                                     **metrics,
-                                    **cohort_metrics  # Adds N_effective_cs if available
+                                    **cohort_metrics  # Adds n_effective_cs if available
                                 }
                                 
                                 # Compute universe_sig from FULL universe (mtf_data.keys())
@@ -1473,7 +1473,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 # Adapt additional_data (convert Enum-like objects to strings)
                                 additional_data_adapted = {}
                                 for key, value in additional_data_with_cohort.items():
-                                    if key in ['task_type', 'objective', 'stage', 'route_type', 'family']:
+                                    if key in ['task_type', 'objective', 'stage', 'view', 'family']:
                                         # These fields might be Enum-like objects
                                         additional_data_adapted[key] = tracker_input_adapter(value, key)
                                     else:
@@ -1481,11 +1481,11 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 
                                 tracker.log_comparison(
                                     stage=scope.stage.value if scope else "model_training",
-                                    item_name=f"{target}:{family_normalized}",
+                                    target=f"{target}:{family_normalized}",
                                     metrics=metrics_with_cohort,
                                     additional_data=additional_data_adapted,
                                     model_family=family_normalized,
-                                    route_type=scope.view.value if scope else "CROSS_SECTIONAL"
+                                    view=scope.view.value if scope else "CROSS_SECTIONAL"
                                 )
                         except Exception as e:
                             logger.warning(f"Reproducibility tracking failed for {family}:{target}: {e}")
@@ -1983,14 +1983,14 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         
         # Build detailed summary by target
         by_target = {}
-        for target_name, target_models in results.get('models', {}).items():
-            by_target[target_name] = {}
+        for target, target_models in results.get('models', {}).items():
+            by_target[target] = {}
             for family, model_result in target_models.items():
                 if model_result and isinstance(model_result, dict):
                     status = "success" if model_result.get('success', False) else (
                         "skipped" if model_result.get('skipped', False) else "failed"
                     )
-                    by_target[target_name][family] = {
+                    by_target[target][family] = {
                         "status": status,
                         "auc": model_result.get('auc'),
                         "path": str(model_result.get('model_path')) if model_result.get('model_path') else None,

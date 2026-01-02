@@ -25,7 +25,7 @@ def save_importance_snapshot(
     Save feature importance snapshot to disk.
     
     Directory structure:
-        {base_dir}/{target_name}/{method}/{run_id}.json
+        {base_dir}/{target}/{method}/{run_id}.json
     
     Args:
         snapshot: FeatureImportanceSnapshot to save
@@ -35,7 +35,7 @@ def save_importance_snapshot(
         Path to saved snapshot file
     """
     # Create directory structure
-    target_dir = base_dir / snapshot.target_name / snapshot.method
+    target_dir = base_dir / snapshot.target / snapshot.method
     target_dir.mkdir(parents=True, exist_ok=True)
     
     # Save as JSON
@@ -54,7 +54,7 @@ def save_importance_snapshot(
 
 def load_snapshots(
     base_dir: Path,
-    target_name: str,
+    target: str,
     method: str,
     min_timestamp: Optional[datetime] = None,
     max_timestamp: Optional[datetime] = None,
@@ -64,7 +64,7 @@ def load_snapshots(
     
     Args:
         base_dir: Base directory for snapshots
-        target_name: Target name to load
+        target: Target name to load
         method: Method name to load
         min_timestamp: Optional minimum timestamp filter
         max_timestamp: Optional maximum timestamp filter
@@ -72,7 +72,7 @@ def load_snapshots(
     Returns:
         List of FeatureImportanceSnapshot instances, sorted by created_at (oldest first)
     """
-    target_dir = base_dir / target_name / method
+    target_dir = base_dir / target / method
     
     if not target_dir.exists():
         logger.debug(f"No snapshots directory found: {target_dir}")
@@ -103,26 +103,26 @@ def load_snapshots(
     return snapshots
 
 
-def get_snapshot_base_dir(output_dir: Optional[Path] = None, target_name: Optional[str] = None) -> Path:
+def get_snapshot_base_dir(output_dir: Optional[Path] = None, target: Optional[str] = None) -> Path:
     """
     Get base directory for snapshots.
     
-    Uses target-first structure if output_dir and target_name are provided.
+    Uses target-first structure if output_dir and target are provided.
     Never creates root-level feature_importance_snapshots directory.
     
     Args:
         output_dir: Optional output directory (snapshots go in target-first structure)
-        target_name: Optional target name for target-first structure
+        target: Optional target name for target-first structure
     
     Returns:
         Path to base snapshot directory
     """
     if output_dir is not None:
-        # REQUIRE target_name when output_dir is provided (saving case)
+        # REQUIRE target when output_dir is provided (saving case)
         # This ensures snapshots are written to the SST directory structure that aggregators scan
-        if not target_name:
+        if not target:
             raise ValueError(
-                "target_name is required for snapshot base directory when output_dir is provided. "
+                "target is required for snapshot base directory when output_dir is provided. "
                 "This ensures snapshots are written to the SST directory structure that aggregators scan. "
                 f"output_dir={output_dir}"
             )
@@ -144,14 +144,14 @@ def get_snapshot_base_dir(output_dir: Optional[Path] = None, target_name: Option
                 from TRAINING.orchestration.utils.target_first_paths import (
                     get_target_reproducibility_dir, ensure_target_structure
                 )
-                target_name_clean = target_name.replace('/', '_').replace('\\', '_')
-                ensure_target_structure(base_output_dir, target_name_clean)
-                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+                target_clean = target.replace('/', '_').replace('\\', '_')
+                ensure_target_structure(base_output_dir, target_clean)
+                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
                 return target_repro_dir / "feature_importance_snapshots"
             except Exception as e:
                 # If target-first structure fails, raise error (no fallback to artifacts)
                 raise RuntimeError(
-                    f"Failed to use target-first structure for snapshots with target_name={target_name}. "
+                    f"Failed to use target-first structure for snapshots with target={target}. "
                     f"output_dir={output_dir}, base_output_dir={base_output_dir}. "
                     f"Error: {e}. This is required for SST compliance."
                 ) from e
@@ -159,7 +159,7 @@ def get_snapshot_base_dir(output_dir: Optional[Path] = None, target_name: Option
         # If we can't find a valid run directory, raise error
         raise RuntimeError(
             f"Could not find valid run directory (with targets/ or globals/) from output_dir={output_dir}. "
-            f"target_name={target_name}. This is required for SST compliance."
+            f"target={target}. This is required for SST compliance."
         )
     else:
         # Default: artifacts/feature_importance

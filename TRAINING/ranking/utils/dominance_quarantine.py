@@ -29,8 +29,8 @@ class DominanceConfig:
     rerun_once: bool
     min_samples: int
     min_symbols: int
-    mean_score_drop_abs: float
-    mean_score_drop_rel: float
+    auc_drop_abs: float
+    auc_drop_rel: float
     
     @classmethod
     def from_config(cls) -> DominanceConfig:
@@ -51,8 +51,8 @@ class DominanceConfig:
                     rerun_once=False,
                     min_samples=500,
                     min_symbols=3,
-                    mean_score_drop_abs=0.15,
-                    mean_score_drop_rel=0.25
+                    auc_drop_abs=0.15,
+                    auc_drop_rel=0.25
                 )
             
             soft = cfg.get("soft", {})
@@ -68,8 +68,8 @@ class DominanceConfig:
                 rerun_once=bool(confirm.get("rerun_once", True)),
                 min_samples=int(confirm.get("min_samples", 500)),
                 min_symbols=int(confirm.get("min_symbols", 3)),
-                mean_score_drop_abs=float(confirm.get("mean_score_drop_abs", 0.15)),
-                mean_score_drop_rel=float(confirm.get("mean_score_drop_rel", 0.25))
+                auc_drop_abs=float(confirm.get("auc_drop_abs", 0.15)),
+                auc_drop_rel=float(confirm.get("auc_drop_rel", 0.25))
             )
         except Exception as e:
             logger.warning(f"Failed to load dominance_quarantine config: {e}, using defaults (disabled)")
@@ -83,8 +83,8 @@ class DominanceConfig:
                 rerun_once=False,
                 min_samples=500,
                 min_symbols=3,
-                mean_score_drop_abs=0.15,
-                mean_score_drop_rel=0.25
+                auc_drop_abs=0.15,
+                auc_drop_rel=0.25
             )
 
 
@@ -102,8 +102,8 @@ class ConfirmResult:
     """Result of confirm pass (rerun with suspects removed)."""
     confirmed: bool
     reason: str
-    pre_mean_score: float
-    post_mean_score: float
+    pre_auc: float
+    post_auc: float
     drop_abs: float
     drop_rel: float
     suspects: List[Suspect]
@@ -180,7 +180,7 @@ def detect_suspects(
 
 
 def write_suspects_artifact(
-    out_dir: Path,
+    output_dir: Path,
     target: str,
     view: str,
     symbol: Optional[str] = None
@@ -189,7 +189,7 @@ def write_suspects_artifact(
     Write suspects artifact to disk.
     
     Args:
-        out_dir: Base output directory (run root)
+        output_dir: Base output directory (run root)
         target: Target name
         view: View type (CROSS_SECTIONAL, SYMBOL_SPECIFIC, etc.)
         symbol: Symbol name (for SYMBOL_SPECIFIC) or None
@@ -200,7 +200,7 @@ def write_suspects_artifact(
     from TRAINING.orchestration.utils.target_first_paths import target_repro_dir
     
     symbol_str = symbol if symbol else "ALL"
-    repro_dir = target_repro_dir(out_dir, target, view, symbol=symbol)
+    repro_dir = target_repro_dir(output_dir, target, view, symbol=symbol)
     qdir = repro_dir / "feature_quarantine"
     qdir.mkdir(parents=True, exist_ok=True)
     
@@ -220,7 +220,7 @@ def write_suspects_artifact(
 
 
 def write_suspects_artifact_with_data(
-    out_dir: Path,
+    output_dir: Path,
     target: str,
     view: str,
     suspects: List[Suspect],
@@ -230,7 +230,7 @@ def write_suspects_artifact_with_data(
     Write suspects artifact with actual suspect data.
     
     Args:
-        out_dir: Base output directory (run root)
+        output_dir: Base output directory (run root)
         target: Target name
         view: View type
         suspects: List of Suspect objects
@@ -242,7 +242,7 @@ def write_suspects_artifact_with_data(
     from TRAINING.orchestration.utils.target_first_paths import target_repro_dir
     
     symbol_str = symbol if symbol else "ALL"
-    repro_dir = target_repro_dir(out_dir, target, view, symbol=symbol)
+    repro_dir = target_repro_dir(output_dir, target, view, symbol=symbol)
     qdir = repro_dir / "feature_quarantine"
     qdir.mkdir(parents=True, exist_ok=True)
     
@@ -261,8 +261,8 @@ def write_suspects_artifact_with_data(
 
 
 def confirm_quarantine(
-    pre_mean_score: float,
-    post_mean_score: float,
+    pre_auc: float,
+    post_auc: float,
     suspects: List[Suspect],
     n_samples: int,
     n_symbols: int,
@@ -272,8 +272,8 @@ def confirm_quarantine(
     Evaluate confirm result based on score drops.
     
     Args:
-        pre_mean_score: Mean score before removing suspects
-        post_mean_score: Mean score after removing suspects
+        pre_auc: Mean score before removing suspects
+        post_auc: Mean score after removing suspects
         suspects: List of suspects that were removed
         n_samples: Number of samples
         n_symbols: Number of symbols
@@ -286,8 +286,8 @@ def confirm_quarantine(
         return ConfirmResult(
             confirmed=False,
             reason="confirm_disabled",
-            pre_mean_score=pre_mean_score,
-            post_mean_score=post_mean_score,
+            pre_auc=pre_auc,
+            post_auc=post_auc,
             drop_abs=0.0,
             drop_rel=0.0,
             suspects=suspects
@@ -297,24 +297,24 @@ def confirm_quarantine(
         return ConfirmResult(
             confirmed=False,
             reason="insufficient_data_for_confirm",
-            pre_mean_score=pre_mean_score,
-            post_mean_score=post_mean_score,
+            pre_auc=pre_auc,
+            post_auc=post_auc,
             drop_abs=0.0,
             drop_rel=0.0,
             suspects=suspects
         )
     
-    drop_abs = pre_mean_score - post_mean_score
-    drop_rel = (drop_abs / abs(pre_mean_score)) if pre_mean_score != 0 else 0.0
+    drop_abs = pre_auc - post_auc
+    drop_rel = (drop_abs / abs(pre_auc)) if pre_auc != 0 else 0.0
     
-    confirmed = (drop_abs >= cfg.mean_score_drop_abs) or (drop_rel >= cfg.mean_score_drop_rel)
+    confirmed = (drop_abs >= cfg.auc_drop_abs) or (drop_rel >= cfg.auc_drop_rel)
     reason = "score_collapse" if confirmed else "no_collapse"
     
     return ConfirmResult(
         confirmed=confirmed,
         reason=reason,
-        pre_mean_score=pre_mean_score,
-        post_mean_score=post_mean_score,
+        pre_auc=pre_auc,
+        post_auc=post_auc,
         drop_abs=drop_abs,
         drop_rel=drop_rel,
         suspects=suspects
@@ -322,7 +322,7 @@ def confirm_quarantine(
 
 
 def persist_confirmed_quarantine(
-    out_dir: Path,
+    output_dir: Path,
     target: str,
     suspects: List[Suspect],
     view: str,
@@ -332,7 +332,7 @@ def persist_confirmed_quarantine(
     Persist confirmed quarantine to disk.
     
     Args:
-        out_dir: Base output directory (run root)
+        output_dir: Base output directory (run root)
         target: Target name
         suspects: List of confirmed suspects
         view: View type
@@ -344,7 +344,7 @@ def persist_confirmed_quarantine(
     from TRAINING.orchestration.utils.target_first_paths import target_repro_dir
     
     symbol_str = symbol if symbol else "ALL"
-    repro_dir = target_repro_dir(out_dir, target, view, symbol=symbol)
+    repro_dir = target_repro_dir(output_dir, target, view, symbol=symbol)
     qdir = repro_dir / "feature_quarantine"
     qdir.mkdir(parents=True, exist_ok=True)
     
@@ -364,7 +364,7 @@ def persist_confirmed_quarantine(
 
 
 def load_confirmed_quarantine(
-    out_dir: Path,
+    output_dir: Path,
     target: str,
     view: str,
     symbol: Optional[str] = None
@@ -373,7 +373,7 @@ def load_confirmed_quarantine(
     Load confirmed quarantine features from disk.
     
     Args:
-        out_dir: Base output directory (run root)
+        output_dir: Base output directory (run root)
         target: Target name
         view: View type
         symbol: Symbol name or None
@@ -384,7 +384,7 @@ def load_confirmed_quarantine(
     from TRAINING.orchestration.utils.target_first_paths import target_repro_dir
     
     try:
-        repro_dir = target_repro_dir(out_dir, target, view, symbol=symbol)
+        repro_dir = target_repro_dir(output_dir, target, view, symbol=symbol)
         qdir = repro_dir / "feature_quarantine"
         p = qdir / "confirmed_quarantine.json"
         

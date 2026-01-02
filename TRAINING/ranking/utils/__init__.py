@@ -26,7 +26,7 @@ from .leakage_budget import (
     infer_lookback_minutes
 )
 from .lookback_cap_enforcement import apply_lookback_cap
-from .lookback_policy import assert_featureset_fingerprint
+from .lookback_policy import assert_featureset_hash
 from .target_validation import validate_target, check_cv_compatibility
 from .target_utils import (
     is_classification_target,
@@ -57,7 +57,7 @@ __all__ = [
     'infer_lookback_minutes',
     # Lookback enforcement
     'apply_lookback_cap',
-    'assert_featureset_fingerprint',
+    'assert_featureset_hash',
     # Target utilities
     'validate_target',
     'check_cv_compatibility',

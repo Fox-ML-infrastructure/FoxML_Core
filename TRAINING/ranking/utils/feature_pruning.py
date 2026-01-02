@@ -31,7 +31,7 @@ def quick_importance_prune(
     min_features: Optional[int] = None,  # Load from config if None
     task_type: str = 'regression',
     n_estimators: Optional[int] = None,  # Load from config if None
-    random_state: Optional[int] = None  # Load from determinism system if None
+    seed: Optional[int] = None  # Load from determinism system if None
 ) -> Tuple[np.ndarray, List[str], Dict[str, Any]]:
     """
     Prune features with very low cumulative importance using a fast LightGBM model.
@@ -47,7 +47,7 @@ def quick_importance_prune(
         min_features: Always keep at least this many features (loads from config if None)
         task_type: 'regression' or 'classification'
         n_estimators: Number of trees for quick importance (loads from config if None)
-        random_state: Random seed (loads from determinism system if None)
+        seed: Random seed (loads from determinism system if None)
     
     Returns:
         X_pruned: Pruned feature matrix (N, F_pruned)
@@ -76,12 +76,12 @@ def quick_importance_prune(
         except Exception:
             n_estimators = 50
     
-    if random_state is None:
+    if seed is None:
         try:
             from TRAINING.common.determinism import BASE_SEED
-            random_state = BASE_SEED if BASE_SEED is not None else 42
+            seed = BASE_SEED if BASE_SEED is not None else 42
         except Exception:
-            random_state = 42
+            seed = 42
     
     if len(feature_names) != X.shape[1]:
         raise ValueError(f"Feature names length ({len(feature_names)}) doesn't match X columns ({X.shape[1]})")
@@ -127,7 +127,7 @@ def quick_importance_prune(
             max_depth=pruning_max_depth,  # Shallow for speed
             learning_rate=pruning_learning_rate,
             verbosity=-1,
-            random_state=random_state,
+            random_state=seed,  # FIX: LightGBM sklearn API uses random_state
             n_jobs=1  # Single thread for quick pruning
         )
     else:
@@ -153,7 +153,7 @@ def quick_importance_prune(
             learning_rate=pruning_learning_rate,
             objective=objective,
             verbosity=-1,
-            random_state=random_state,
+            random_state=seed,  # FIX: LightGBM sklearn API uses random_state
             n_jobs=1
         )
     

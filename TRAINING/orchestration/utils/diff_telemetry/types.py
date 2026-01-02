@@ -36,14 +36,14 @@ class ResolvedRunContext:
     # Data provenance (required for all stages)
     n_symbols: Optional[int] = None
     symbols: Optional[List[str]] = None
-    date_range_start: Optional[str] = None  # ISO format
-    date_range_end: Optional[str] = None  # ISO format
+    date_start: Optional[str] = None  # ISO format
+    date_end: Optional[str] = None  # ISO format
     n_rows_total: Optional[int] = None
     n_effective: Optional[int] = None
     data_fingerprint: Optional[str] = None
     
     # Task provenance (required for all stages)
-    target_name: Optional[str] = None
+    target: Optional[str] = None
     labeling_impl_hash: Optional[str] = None
     horizon_minutes: Optional[int] = None
     objective: Optional[str] = None
@@ -51,7 +51,7 @@ class ResolvedRunContext:
     
     # Split provenance (required for all stages)
     cv_method: Optional[str] = None
-    cv_folds: Optional[int] = None
+    folds: Optional[int] = None
     purge_minutes: Optional[float] = None
     embargo_minutes: Optional[Any] = None  # Can be dict with kind/reason
     leakage_filter_version: Optional[str] = None
@@ -95,7 +95,7 @@ class ComparisonGroup:
     
     CRITICAL: Only runs with EXACTLY the same outcome-influencing metadata are comparable.
     This includes:
-    - Exact N_effective (sample size) - 5k runs only compare against 5k runs
+    - Exact n_effective (sample size) - 5k runs only compare against 5k runs
     - Same dataset (universe, date range, min_cs, max_cs_samples)
     - Same task (target, horizon, objective)
     - Same routing/view configuration
@@ -135,7 +135,7 @@ class ComparisonGroup:
             parts.append(f"task={self.task_signature[:8]}")
         if self.routing_signature:
             parts.append(f"route={self.routing_signature[:8]}")
-        # CRITICAL: Include exact N_effective to ensure only identical sample sizes compare
+        # CRITICAL: Include exact n_effective to ensure only identical sample sizes compare
         if self.n_effective is not None:
             parts.append(f"n={self.n_effective}")
         # CRITICAL: Include model_family (different families = different outcomes)

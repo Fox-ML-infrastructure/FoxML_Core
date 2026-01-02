@@ -191,7 +191,7 @@ class IntelligentTrainer:
                 
                 # Apply batch selection if configured
                 symbol_batch_size = experiment_config.data.symbol_batch_size if experiment_config.data else None
-                random_seed = experiment_config.data.random_state if experiment_config.data else 42
+                random_seed = experiment_config.data.seed if experiment_config.data else 42
                 
                 resolved_symbols = select_symbol_batch(
                     discovered_symbols, symbol_batch_size, random_seed
@@ -236,7 +236,7 @@ class IntelligentTrainer:
         results_dir = repo_root / "RESULTS"
         runs_dir = results_dir / "runs"  # Organize all runs under runs/ subdirectory
         
-        # Try to estimate N_effective early (before first target is processed)
+        # Try to estimate n_effective early (before first target is processed)
         self._n_effective = self._estimate_n_effective_early()
         
         # Compute comparison group directory from configs available at startup
@@ -289,7 +289,7 @@ class IntelligentTrainer:
     
     def _estimate_n_effective_early(self) -> Optional[int]:
         """
-        Try to estimate N_effective early from config limits, existing metadata, or data files.
+        Try to estimate n_effective early from config limits, existing metadata, or data files.
         
         Priority:
         1. Use configured max_rows_per_symbol * num_symbols (if config limits are set)
@@ -297,13 +297,13 @@ class IntelligentTrainer:
         3. Estimate from data files
         
         Returns:
-            Estimated N_effective or None if cannot be determined
+            Estimated n_effective or None if cannot be determined
         """
-        logger.info("🔍 Attempting early N_effective estimation...")
+        logger.info("🔍 Attempting early n_effective estimation...")
         
         # Method 0: Use configured limits if available (PREFERRED - reflects actual data limits)
         if self._max_rows_per_symbol is not None and self._max_rows_per_symbol > 0:
-            # Calculate expected N_effective based on config: max_rows_per_symbol * num_symbols
+            # Calculate expected n_effective based on config: max_rows_per_symbol * num_symbols
             # This reflects the actual data that will be loaded, not the full dataset size
             expected_n = self._max_rows_per_symbol * len(self.symbols)
             logger.info(f"🔍 Using configured max_rows_per_symbol={self._max_rows_per_symbol} × {len(self.symbols)} symbols = {expected_n} for output directory binning")
@@ -358,15 +358,15 @@ class IntelligentTrainer:
                                         # Check if symbols match (rough check)
                                         existing_symbols = metadata.get('symbols', [])
                                         if existing_symbols and set(existing_symbols) == set(self.symbols):
-                                            n_effective = metadata.get('N_effective')
+                                            n_effective = metadata.get('n_effective')
                                             if n_effective and n_effective > 0:
-                                                logger.info(f"🔍 Found matching N_effective={n_effective} from previous run with same symbols")
+                                                logger.info(f"🔍 Found matching n_effective={n_effective} from previous run with same symbols")
                                                 return int(n_effective)
                                     except Exception as e:
                                         logger.debug(f"Failed to read {metadata_file}: {e}")
                                         continue
         except Exception as e:
-            logger.debug(f"Could not check existing metadata for N_effective: {e}")
+            logger.debug(f"Could not check existing metadata for n_effective: {e}")
         
         # Method 2: Quick sample from data files to estimate sample size
         try:
@@ -375,7 +375,7 @@ class IntelligentTrainer:
             
             # Sample first few symbols to estimate
             sample_symbols = self.symbols[:3] if len(self.symbols) > 3 else self.symbols
-            logger.info(f"🔍 Sampling {len(sample_symbols)} symbols from {self.data_dir} to estimate N_effective")
+            logger.info(f"🔍 Sampling {len(sample_symbols)} symbols from {self.data_dir} to estimate n_effective")
             
             for symbol in sample_symbols:
                 # Try multiple possible paths
@@ -425,16 +425,16 @@ class IntelligentTrainer:
             if total_rows > 0 and len(sample_symbols) > 0:
                 avg_per_symbol = total_rows / len(sample_symbols)
                 estimated_total = int(avg_per_symbol * len(self.symbols))
-                logger.info(f"🔍 Estimated N_effective={estimated_total} from data file sampling ({len(sample_symbols)} symbols sampled, {total_rows} total rows)")
+                logger.info(f"🔍 Estimated n_effective={estimated_total} from data file sampling ({len(sample_symbols)} symbols sampled, {total_rows} total rows)")
                 return estimated_total
             else:
-                logger.debug(f"Could not estimate N_effective: total_rows={total_rows}, sample_symbols={len(sample_symbols)}")
+                logger.debug(f"Could not estimate n_effective: total_rows={total_rows}, sample_symbols={len(sample_symbols)}")
         except Exception as e:
-            logger.warning(f"Could not estimate N_effective from data files: {e}")
+            logger.warning(f"Could not estimate n_effective from data files: {e}")
             import traceback
             logger.debug(f"Traceback: {traceback.format_exc()}")
         
-        logger.info("⚠️  Could not determine N_effective early, will use _pending/ and organize after first target")
+        logger.info("⚠️  Could not determine n_effective early, will use _pending/ and organize after first target")
         return None
     
     def _compute_comparison_group_dir_at_startup(self) -> Optional[str]:
@@ -530,11 +530,11 @@ class IntelligentTrainer:
     
     def _get_sample_size_bin(self, n_effective: int) -> Dict[str, Any]:
         """
-        Bin N_effective into readable ranges for grouping similar sample sizes.
+        Bin n_effective into readable ranges for grouping similar sample sizes.
         
         **Boundary Rules (CRITICAL - DO NOT CHANGE WITHOUT VERSIONING):**
-        - Boundaries are EXCLUSIVE upper bounds: `bin_min <= N_effective < bin_max`
-        - Example: `sample_25k-50k` means `25000 <= N_effective < 50000`
+        - Boundaries are EXCLUSIVE upper bounds: `bin_min <= n_effective < bin_max`
+        - Example: `sample_25k-50k` means `25000 <= n_effective < 50000`
         - This ensures unambiguous binning (50,000 always goes to `sample_50k-100k`, never `sample_25k-50k`)
         
         **Binning Scheme Version:** `sample_bin_v1`
@@ -596,18 +596,18 @@ class IntelligentTrainer:
     
     def _organize_by_cohort(self):
         """
-        Organize the run directory by sample size (N_effective) after first target is processed.
-        Moves from RESULTS/_pending/{run_name}/ to RESULTS/{N_effective}/{run_name}/
+        Organize the run directory by sample size (n_effective) after first target is processed.
+        Moves from RESULTS/_pending/{run_name}/ to RESULTS/{n_effective}/{run_name}/
         
         Example: RESULTS/25000/test_run_20251212_010000/
         
-        Note: If N_effective was already determined in __init__, this is a no-op.
+        Note: If n_effective was already determined in __init__, this is a no-op.
         """
-        # If N_effective was already set and we're not in _pending/, we're already organized
+        # If n_effective was already set and we're not in _pending/, we're already organized
         if self._n_effective is not None and "_pending" not in str(self.output_dir):
             return  # Already organized
         
-        # If N_effective was set early but we're still in _pending/, move now
+        # If n_effective was set early but we're still in _pending/, move now
         if self._n_effective is not None and "_pending" in str(self.output_dir):
             repo_root = Path(__file__).parent.parent.parent
             results_dir = repo_root / "RESULTS"
@@ -646,7 +646,7 @@ class IntelligentTrainer:
                 return
         
         try:
-            # Try to find N_effective from target-first structure first, then legacy REPRODUCIBILITY
+            # Try to find n_effective from target-first structure first, then legacy REPRODUCIBILITY
             # Target-first structure: targets/<target>/reproducibility/CROSS_SECTIONAL/cohort=<id>/metadata.json
             # Legacy structure: REPRODUCIBILITY/TARGET_RANKING/CROSS_SECTIONAL/<target>/cohort=<id>/metadata.json
             
@@ -695,20 +695,20 @@ class IntelligentTrainer:
                                 import json
                                 with open(candidate, 'r') as f:
                                     metadata = json.load(f)
-                                n_effective = metadata.get('N_effective')
+                                n_effective = metadata.get('n_effective')
                                 if n_effective is not None and n_effective > 0:
                                     self._n_effective = int(n_effective)
-                                    logger.info(f"🔍 Found N_effective via recursive search: {self._n_effective} at {candidate.parent}")
+                                    logger.info(f"🔍 Found n_effective via recursive search: {self._n_effective} at {candidate.parent}")
                                     metadata_file = candidate
                                     break
                             except Exception as e:
                                 logger.debug(f"Failed to read metadata from {candidate}: {e}")
                             continue
                 if self._n_effective is None:
-                    logger.warning(f"Could not find N_effective via recursive search in {self._initial_output_dir}")
+                    logger.warning(f"Could not find n_effective via recursive search in {self._initial_output_dir}")
                     return
             else:
-                # Find first target's metadata.json to extract N_effective
+                # Find first target's metadata.json to extract n_effective
                 for target_dir in target_ranking_dir.iterdir():
                     if not target_dir.is_dir():
                         continue
@@ -722,10 +722,10 @@ class IntelligentTrainer:
                                     import json
                                     with open(metadata_file, 'r') as f:
                                         metadata = json.load(f)
-                                    n_effective = metadata.get('N_effective')
+                                    n_effective = metadata.get('n_effective')
                                     if n_effective is not None and n_effective > 0:
                                         self._n_effective = int(n_effective)
-                                        logger.info(f"🔍 Found N_effective: {self._n_effective} from {metadata_file}")
+                                        logger.info(f"🔍 Found n_effective: {self._n_effective} from {metadata_file}")
                                         break
                                 except Exception as e:
                                     logger.debug(f"Failed to read metadata from {metadata_file}: {e}")
@@ -733,7 +733,7 @@ class IntelligentTrainer:
                     if self._n_effective is not None:
                         break
             
-            # If we found N_effective, move the directory
+            # If we found n_effective, move the directory
             if self._n_effective is not None:
                 # Move the entire run directory to sample-size-bin-organized location
                 repo_root = Path(__file__).parent.parent.parent
@@ -777,7 +777,7 @@ class IntelligentTrainer:
                     # Stay in _pending/ if move fails
                     return
             
-            logger.debug(f"No metadata.json found to extract N_effective, waiting for first target")
+            logger.debug(f"No metadata.json found to extract n_effective, waiting for first target")
         except Exception as e:
             logger.warning(f"Could not organize by sample size (will stay in _pending/): {e}")
             import traceback
@@ -805,10 +805,10 @@ class IntelligentTrainer:
                                                 import json
                                                 with open(metadata_file, 'r') as f:
                                                     metadata = json.load(f)
-                                                n_effective = metadata.get('N_effective') or metadata.get('n_effective')
+                                                n_effective = metadata.get('n_effective')
                                                 if n_effective is not None and n_effective > 0:
                                                     self._n_effective = int(n_effective)
-                                                    logger.info(f"🔍 Found N_effective from target-first structure: {self._n_effective} at {metadata_file.parent}")
+                                                    logger.info(f"🔍 Found n_effective from target-first structure: {self._n_effective} at {metadata_file.parent}")
                                                     break
                                             except Exception as e:
                                                 logger.debug(f"Failed to read metadata from {metadata_file}: {e}")
@@ -825,7 +825,7 @@ class IntelligentTrainer:
                                 import json
                                 with open(metadata_file, 'r') as f:
                                     metadata = json.load(f)
-                                n_effective = metadata.get('N_effective')
+                                n_effective = metadata.get('n_effective')
                                 if n_effective is not None and n_effective > 0:
                                     self._n_effective = int(n_effective)
                                 
@@ -1033,7 +1033,7 @@ class IntelligentTrainer:
                 else:
                     logger.info(f"✅ Using cached target rankings ({len(cached)} targets)")
                 # Return top N from cache
-                top_targets = [r['target_name'] for r in cached[:top_n]]
+                top_targets = [r['target'] for r in cached[:top_n]]
                 return top_targets
         
         # Discover or load targets
@@ -1080,15 +1080,15 @@ class IntelligentTrainer:
         if exclude_patterns:
             original_count = len(targets_dict)
             filtered_targets = {}
-            for target_name, target_config in targets_dict.items():
+            for target, target_config in targets_dict.items():
                 # Check if target matches any exclusion pattern
                 excluded = False
                 for pattern in exclude_patterns:
-                    if pattern in target_name:
+                    if pattern in target:
                         excluded = True
                         break
                 if not excluded:
-                    filtered_targets[target_name] = target_config
+                    filtered_targets[target] = target_config
             targets_dict = filtered_targets
             excluded_count = original_count - len(targets_dict)
             if excluded_count > 0:
@@ -1100,9 +1100,9 @@ class IntelligentTrainer:
             original_count = len(targets_dict)
             whitelisted_targets = {}
             targets_to_evaluate_set = set(targets_to_evaluate)
-            for target_name, target_config in targets_dict.items():
-                if target_name in targets_to_evaluate_set:
-                    whitelisted_targets[target_name] = target_config
+            for target, target_config in targets_dict.items():
+                if target in targets_to_evaluate_set:
+                    whitelisted_targets[target] = target_config
             targets_dict = whitelisted_targets
             filtered_count = original_count - len(targets_dict)
             if filtered_count > 0:
@@ -1160,10 +1160,10 @@ class IntelligentTrainer:
             max_rows_per_symbol=max_rows_per_symbol  # Pass max_rows_per_symbol from config
         )
         
-        # After target ranking completes, organize by sample size (N_effective)
-        # This moves the entire directory (including all REPRODUCIBILITY data) to RESULTS/{N_effective}/{run_name}/
+        # After target ranking completes, organize by sample size (n_effective)
+        # This moves the entire directory (including all REPRODUCIBILITY data) to RESULTS/{n_effective}/{run_name}/
         if self._n_effective is None and rankings:
-            logger.info("🔍 Attempting to organize run by sample size (N_effective)...")
+            logger.info("🔍 Attempting to organize run by sample size (n_effective)...")
             logger.info(f"   Current output_dir: {self.output_dir}")
             logger.info(f"   Initial output_dir: {self._initial_output_dir}")
             self._organize_by_cohort()
@@ -1176,7 +1176,7 @@ class IntelligentTrainer:
                 logger.info(f"   Moved from: {self._initial_output_dir}")
                 logger.info(f"   Moved to: {self.output_dir}")
             else:
-                logger.warning("⚠️  Could not determine N_effective, run will stay in _pending/")
+                logger.warning("⚠️  Could not determine n_effective, run will stay in _pending/")
                 logger.warning(f"   Run directory: {self._initial_output_dir}")
                 # Try to help debug - check if REPRODUCIBILITY exists (check both new and old structures)
                 repro_check_new = self._initial_output_dir / "REPRODUCIBILITY"
@@ -1204,7 +1204,7 @@ class IntelligentTrainer:
             self._save_cached_rankings(cache_key, cache_data)
         
         # Return top N
-        top_targets = [r.target_name for r in rankings[:top_n]]
+        top_targets = [r.target for r in rankings[:top_n]]
         logger.info(f"✅ Top {len(top_targets)} targets: {', '.join(top_targets)}")
         
         return top_targets
@@ -1399,14 +1399,14 @@ class IntelligentTrainer:
             if not target_dir.is_dir():
                 continue
             
-            target_name = target_dir.name
+            target = target_dir.name
             repro_dir = target_dir / "reproducibility"
             
             if not repro_dir.exists():
                 continue
             
             # Determine view from routing decisions or check both views
-            route_info = routing_decisions.get(target_name, {})
+            route_info = routing_decisions.get(target, {})
             route = route_info.get('route', 'CROSS_SECTIONAL')
             
             # Check both CROSS_SECTIONAL and SYMBOL_SPECIFIC views (files are now view-scoped)
@@ -1445,23 +1445,23 @@ class IntelligentTrainer:
                 
                 # Load feature_selection_summary.json (view-scoped)
                 summary_path = view_dir / "feature_selection_summary.json"
-                if summary_path.exists() and target_name not in all_summaries:
+                if summary_path.exists() and target not in all_summaries:
                     try:
                         with open(summary_path) as f:
                             summary = json.load(f)
-                            all_summaries[target_name] = summary
+                            all_summaries[target] = summary
                     except Exception as e:
-                        logger.debug(f"Failed to load summary for {target_name} ({view}): {e}")
+                        logger.debug(f"Failed to load summary for {target} ({view}): {e}")
             
                 # Load model_family_status.json (view-scoped)
                 status_path = view_dir / "model_family_status.json"
-                if status_path.exists() and target_name not in all_family_statuses:
+                if status_path.exists() and target not in all_family_statuses:
                     try:
                         with open(status_path) as f:
                             status_data = json.load(f)
-                            all_family_statuses[target_name] = status_data
+                            all_family_statuses[target] = status_data
                     except Exception as e:
-                        logger.debug(f"Failed to load family status for {target_name} ({view}): {e}")
+                        logger.debug(f"Failed to load family status for {target} ({view}): {e}")
             
                 # Load actual feature list from selected_features.txt (view-scoped)
                 selected_features_path = view_dir / "selected_features.txt"
@@ -1471,26 +1471,26 @@ class IntelligentTrainer:
                             features = [line.strip() for line in f if line.strip()]
                         
                         if features:
-                            # Create key: target_name:view[:symbol]
+                            # Create key: target:view[:symbol]
                             if symbol:
-                                key = f"{target_name}:{view}:{symbol}"
+                                key = f"{target}:{view}:{symbol}"
                                 view_display = f"{view}:{symbol}"
                             else:
-                                key = f"{target_name}:{view}"
+                                key = f"{target}:{view}"
                                 view_display = view
                             
                             feature_selections[key] = {
-                                'target_name': target_name,
+                                'target': target,
                                 'view': view,
                                 'symbol': symbol,
                                 'n_features': len(features),
                                 'features': features,
-                                'selected_features_path': f"targets/{target_name}/reproducibility/{view}/{'symbol=' + symbol + '/' if symbol else ''}selected_features.txt",
-                                'feature_selection_summary_path': f"targets/{target_name}/reproducibility/{view}/{'symbol=' + symbol + '/' if symbol else ''}feature_selection_summary.json"
+                                'selected_features_path': f"targets/{target}/reproducibility/{view}/{'symbol=' + symbol + '/' if symbol else ''}selected_features.txt",
+                                'feature_selection_summary_path': f"targets/{target}/reproducibility/{view}/{'symbol=' + symbol + '/' if symbol else ''}feature_selection_summary.json"
                             }
                             logger.debug(f"Loaded {len(features)} features for {key}")
                     except Exception as e:
-                        logger.debug(f"Failed to load selected features for {target_name} ({view_display}): {e}")
+                        logger.debug(f"Failed to load selected features for {target} ({view_display}): {e}")
         
         # Write aggregated feature_selection_summary.json
         if all_summaries:
@@ -1923,7 +1923,7 @@ class IntelligentTrainer:
         #    - Structure: {target: [features]} for CROSS_SECTIONAL
         #    - Structure: {target: {symbol: [features]}} for SYMBOL_SPECIFIC
         #    - Structure: {target: {'cross_sectional': [...], 'symbol_specific': {...}}} for BOTH
-        # 2. Disk: targets/{target_name}/reproducibility/selected_features.txt
+        # 2. Disk: targets/{target}/reproducibility/selected_features.txt
         #    - Saved by TRAINING/ranking/feature_selection_reporting.py (line 338-342)
         #    - One feature per line, plain text format
         # 3. Routing decisions: targets/{target}/decision/routing_decision.json
@@ -2194,25 +2194,27 @@ class IntelligentTrainer:
                             except Exception:
                                 pass
                             
-                            # Load resolved_mode for diagnostics
-                            resolved_mode = "UNKNOWN"
+                            # Load view for diagnostics
+                            run_view = "UNKNOWN"
                             try:
-                                from TRAINING.orchestration.utils.run_context import get_resolved_mode
-                                resolved_mode = get_resolved_mode(self.output_dir) or "UNKNOWN"
+                                from TRAINING.orchestration.utils.run_context import load_run_context
+                                context = load_run_context(self.output_dir)
+                                if context:
+                                    run_view = context.get("view", "UNKNOWN")
                             except Exception:
                                 pass
-                            
+
                             if not dev_mode:
                                 raise ValueError(
                                     f"FATAL: Training plan has 0 jobs. Routing diagnostics: "
-                                    f"resolved_mode={resolved_mode}, targets_checked={len(targets)}, "
+                                    f"view={run_view}, targets_checked={len(targets)}, "
                                     f"symbols={len(self.symbols) if self.symbols else 'N/A'}. "
                                     f"Check globals/routing/routing_candidates.json for details."
                                 )
                             else:
                                 logger.warning(
                                     f"⚠️ Training plan has 0 jobs (dev_mode=true). "
-                                    f"resolved_mode={resolved_mode}, targets={len(targets)}. "
+                                    f"view={run_view}, targets={len(targets)}. "
                                     f"Using fallback families from metadata/SST."
                                 )
                         

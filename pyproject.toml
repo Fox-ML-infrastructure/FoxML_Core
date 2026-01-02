@@ -1,0 +1,115 @@
+# pyproject.toml - Project configuration
+# This file configures ruff, mypy, and other tools for the modeling pipeline
+
+[project]
+name = "trader"
+version = "0.1.0"
+description = "Modeling pipeline for trading strategies"
+requires-python = ">=3.10"
+
+# =============================================================================
+# Ruff Configuration
+# =============================================================================
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "*.egg-info",
+    "RESULTS",
+    "data",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "SIM",    # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # function call in default argument
+    "B905",   # zip without explicit strict
+    "SIM108", # ternary operator (sometimes less readable)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["TRAINING", "CONFIG", "DATA_PROCESSING"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+# =============================================================================
+# MyPy Configuration
+# =============================================================================
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = false
+warn_unused_configs = true
+ignore_missing_imports = true
+
+# Strict mode for contract modules only
+[[tool.mypy.overrides]]
+module = [
+    "TRAINING.orchestration.utils.scope_resolution",
+    "TRAINING.orchestration.utils.run_context",
+    "TRAINING.orchestration.routing.target_router",
+    "TRAINING.orchestration.utils.view_decisions",
+]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+# Relaxed mode for the rest
+[[tool.mypy.overrides]]
+module = [
+    "TRAINING.*",
+    "CONFIG.*",
+    "DATA_PROCESSING.*",
+]
+disallow_untyped_defs = false
+check_untyped_defs = false
+
+# =============================================================================
+# Pytest Configuration
+# =============================================================================
+[tool.pytest.ini_options]
+testpaths = ["TRAINING/contract_tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+# =============================================================================
+# Coverage Configuration
+# =============================================================================
+[tool.coverage.run]
+source = ["TRAINING", "CONFIG"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/tools/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]

@@ -104,7 +104,7 @@ logger = setup_logging(
 from TRAINING.ranking.predictability.scoring import TargetPredictabilityScore
 
 def calculate_composite_score(
-    mean_score: float,
+    auc: float,
     std_score: float,
     mean_importance: float,
     n_models: int,
@@ -126,24 +126,24 @@ def calculate_composite_score(
     # Normalize components based on task type
     if task_type == TaskType.REGRESSION:
         # R² can be negative, so normalize to 0-1 range
-        score_component = max(0, mean_score)  # Clamp negative R² to 0
+        score_component = max(0, auc)  # Clamp negative R² to 0
         consistency_component = 1.0 / (1.0 + std_score)
         
         # R²-weighted importance
-        if mean_score > 0:
-            importance_component = mean_importance * (1.0 + mean_score)
+        if auc > 0:
+            importance_component = mean_importance * (1.0 + auc)
         else:
-            penalty = abs(mean_score) * 0.67
+            penalty = abs(auc) * 0.67
             importance_component = mean_importance * max(0.5, 1.0 - penalty)
         
         definition = "0.50 * score_component + 0.25 * consistency_component + 0.25 * importance_component * (1 + model_bonus)"
     else:
         # Classification: ROC-AUC and Accuracy are already 0-1
-        score_component = mean_score  # Already 0-1
+        score_component = auc  # Already 0-1
         consistency_component = 1.0 / (1.0 + std_score)
         
         # Score-weighted importance (similar logic but for 0-1 scores)
-        importance_component = mean_importance * (1.0 + mean_score)
+        importance_component = mean_importance * (1.0 + auc)
         
         definition = "0.50 * score_component + 0.25 * consistency_component + 0.25 * importance_component * (1 + model_bonus)"
     

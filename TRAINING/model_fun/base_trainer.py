@@ -60,12 +60,12 @@ def safe_ridge_fit(X, y, alpha=1.0):
     
     solver_pref = os.getenv("SKLEARN_RIDGE_SOLVER", "auto")
     try:
-        model = Ridge(alpha=alpha, solver=solver_pref, random_state=ridge_seed)
+        model = Ridge(alpha=alpha, solver=solver_pref)
         return model.fit(X, y)
     except Exception as e:
         # Fall back to lsqr solver (bypasses Cholesky/MKL path)
         logger.warning("⚠️  Ridge(solver='%s') failed: %s. Falling back to 'lsqr' solver.", solver_pref, e)
-        model = Ridge(alpha=alpha, solver="lsqr", random_state=ridge_seed)
+        model = Ridge(alpha=alpha, solver="lsqr")
         return model.fit(X, y)
 
 class BaseModelTrainer(ABC):
@@ -76,7 +76,7 @@ class BaseModelTrainer(ABC):
         self.model = None
         self.is_trained = False
         self.feature_names: List[str] = []
-        self.target_name: str = ""
+        self.target: str = ""
         self.imputer: Optional[SimpleImputer] = None
         self.colmask: Optional[np.ndarray] = None
         self.family_name: str = getattr(self, '__class__', type(self)).__name__.replace("Trainer", "")
@@ -163,7 +163,7 @@ class BaseModelTrainer(ABC):
         return 1.0  # Default fallback
     
     def _get_test_split_params(self) -> tuple[float, int]:
-        """Get test_size and random_state from config, with fallback to defaults.
+        """Get test_size and seed from config, with fallback to defaults.
         
         Uses determinism system to ensure consistent seeds across the pipeline.
         """
@@ -175,29 +175,29 @@ class BaseModelTrainer(ABC):
             except Exception as e:
                 logger.debug(f"Failed to load test_size from config: {e}")
         
-        # Load random_state from determinism system (preferred) or config
-        random_state = None
+        # Load seed from determinism system (preferred) or config
+        seed = None
         try:
             from TRAINING.common.determinism import BASE_SEED
             if BASE_SEED is not None:
-                random_state = BASE_SEED
+                seed = BASE_SEED
             elif _CONFIG_AVAILABLE:
                 try:
-                    random_state = int(get_cfg("preprocessing.validation.random_state", default=42, config_name="preprocessing_config"))
+                    seed = int(get_cfg("preprocessing.validation.seed", default=42, config_name="preprocessing_config"))
                 except Exception:
-                    random_state = 42  # FALLBACK_DEFAULT_OK
+                    seed = 42  # FALLBACK_DEFAULT_OK
         except Exception as e:
-            logger.debug(f"Failed to load random_state from determinism system: {e}")
-            random_state = 42  # FALLBACK_DEFAULT_OK
+            logger.debug(f"Failed to load seed from determinism system: {e}")
+            seed = 42  # FALLBACK_DEFAULT_OK
         
         # Final fallback if still None
-        if random_state is None:
-            random_state = 42  # FALLBACK_DEFAULT_OK
+        if seed is None:
+            seed = 42  # FALLBACK_DEFAULT_OK
         
-        return float(test_size), int(random_state)
+        return float(test_size), int(seed)
     
-    def _get_random_state(self) -> int:
-        """Get random_state from determinism system, with fallback to config or default."""
+    def _get_seed(self) -> int:
+        """Get seed from determinism system, with fallback to config or default."""
         try:
             from TRAINING.common.determinism import BASE_SEED
             if BASE_SEED is not None:
@@ -208,7 +208,7 @@ class BaseModelTrainer(ABC):
         # Fallback to config
         if _CONFIG_AVAILABLE:
             try:
-                return int(get_cfg("preprocessing.validation.random_state", default=42, config_name="preprocessing_config"))
+                return int(get_cfg("preprocessing.validation.seed", default=42, config_name="preprocessing_config"))
             except Exception:
                 pass
         
@@ -344,7 +344,7 @@ class BaseModelTrainer(ABC):
             'model': self.model,
             'config': self.config,
             'feature_names': self.feature_names,
-            'target_name': self.target_name,
+            'target': self.target,
             'imputer': self.imputer,
             'colmask': self.colmask,
             'trainer_class': self.__class__.__name__
@@ -360,7 +360,7 @@ class BaseModelTrainer(ABC):
         self.model = model_data['model']
         self.config = model_data['config']
         self.feature_names = model_data.get('feature_names', [])
-        self.target_name = model_data.get('target_name', '')
+        self.target = model_data.get('target', '')
         self.imputer = model_data.get('imputer', None)
         self.colmask = model_data.get('colmask', None)
         self.is_trained = True
@@ -373,7 +373,7 @@ class BaseModelTrainer(ABC):
             'trainer_class': self.__class__.__name__,
             'is_trained': self.is_trained,
             'feature_names': self.feature_names,
-            'target_name': self.target_name,
+            'target': self.target,
             'config': self.config
         }
     

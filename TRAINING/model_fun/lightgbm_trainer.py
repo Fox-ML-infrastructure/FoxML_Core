@@ -54,7 +54,7 @@ class LightGBMTrainer(BaseModelTrainer):
         self.num_threads = int(self.config.get("num_threads", os.getenv("OMP_NUM_THREADS", "4")))
         self.config.setdefault("threads", self.num_threads)
     
-    def _get_random_state(self) -> int:
+    def _get_seed(self) -> int:
         """Get deterministic random state from determinism system."""
         try:
             from TRAINING.common.determinism import BASE_SEED
@@ -76,9 +76,9 @@ class LightGBMTrainer(BaseModelTrainer):
                 split_seed = BASE_SEED if BASE_SEED is not None else 42  # FALLBACK_DEFAULT_OK
             except:
                 split_seed = 42  # FALLBACK_DEFAULT_OK
-            test_size, random_state = self._get_test_split_params()
+            test_size, seed = self._get_test_split_params()
             X_tr, X_va, y_tr, y_va = train_test_split(
-                X_tr, y_tr, test_size=test_size, random_state=random_state
+                X_tr, y_tr, test_size=test_size, random_state=seed
             )
         
         # 3) Build model with safe defaults
@@ -149,7 +149,7 @@ class LightGBMTrainer(BaseModelTrainer):
             n_estimators=self.config["n_estimators"],
             n_jobs=threads,          # sklearn alias
             num_threads=threads,     # LightGBM native (belt and suspenders)
-            random_state=self._get_random_state(),
+            seed=self._get_seed(),
             verbose=verbose_level,
             # Speed optimizations (don't change model quality)
             feature_pre_filter=True,

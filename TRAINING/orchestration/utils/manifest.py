@@ -14,20 +14,14 @@ import subprocess
 logger = logging.getLogger(__name__)
 
 
-def get_git_sha() -> Optional[str]:
-    """Get current git SHA."""
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()[:12]  # Short SHA
-    except Exception:
-        pass
-    return None
+# Import git utilities from SST module
+from TRAINING.common.utils.git_utils import get_git_commit as get_git_sha
+
+# Import SST accessor functions
+from TRAINING.orchestration.utils.reproducibility.utils import (
+    extract_n_effective,
+    extract_date_range,
+)
 
 
 def create_manifest(
@@ -98,7 +92,7 @@ def create_manifest(
         target_index = {}
         for target_dir in targets_dir.iterdir():
             if target_dir.is_dir():
-                target_name = target_dir.name
+                target = target_dir.name
                 target_info = {
                     "decision": _find_files(target_dir / "decision"),
                     "models": _find_model_families(target_dir / "models"),
@@ -106,7 +100,7 @@ def create_manifest(
                     "trends": _find_files(target_dir / "trends"),
                     "reproducibility": _find_files(target_dir / "reproducibility")
                 }
-                target_index[target_name] = target_info
+                target_index[target] = target_info
         manifest["target_index"] = target_index
     
     # Add trend reports references if they exist
@@ -128,7 +122,7 @@ def create_manifest(
             if by_target_dir.exists():
                 for target_dir in by_target_dir.iterdir():
                     if target_dir.is_dir():
-                        target_name = target_dir.name
+                        target = target_dir.name
                         trend_files = {}
                         for trend_file in ["performance_timeseries.parquet", "routing_score_timeseries.parquet", 
                                          "feature_importance_timeseries.parquet"]:
@@ -137,7 +131,7 @@ def create_manifest(
                                 # Store relative path from RESULTS directory
                                 trend_files[trend_file.replace(".parquet", "")] = str(trend_path.relative_to(results_dir))
                         if trend_files:
-                            trend_index[target_name] = trend_files
+                            trend_index[target] = trend_files
             
             # Also add by_run references
             by_run_dir = trend_reports_dir / "by_run"
@@ -196,13 +190,13 @@ def update_manifest(
     if "target_index" not in manifest:
         manifest["target_index"] = {}
     
-    target_name_clean = target.replace('/', '_').replace('\\', '_')
+    target_clean = target.replace('/', '_').replace('\\', '_')
     
     # Update or create target entry
-    if target_name_clean not in manifest["target_index"]:
-        manifest["target_index"][target_name_clean] = {}
+    if target_clean not in manifest["target_index"]:
+        manifest["target_index"][target_clean] = {}
     
-    target_entry = manifest["target_index"][target_name_clean]
+    target_entry = manifest["target_index"][target_clean]
     
     # Update target-specific fields
     if selected_feature_set_digest:
@@ -221,7 +215,7 @@ def update_manifest(
     with open(manifest_path, 'w') as f:
         json.dump(manifest, f, indent=2, default=str)
     
-    logger.debug(f"Updated manifest.json for target {target_name_clean}")
+    logger.debug(f"Updated manifest.json for target {target_clean}")
 
 
 def _find_files(directory: Path) -> List[str]:
@@ -256,7 +250,7 @@ def _find_model_families(models_dir: Path) -> Dict[str, List[str]]:
 
 def create_target_metadata(
     output_dir: Path,
-    target_name: str
+    target: str
 ) -> Path:
     """
     Create per-target metadata.json that aggregates information from all cohorts.
@@ -270,7 +264,7 @@ def create_target_metadata(
     
     Args:
         output_dir: Base run output directory
-        target_name: Target name (will be cleaned)
+        target: Target name (will be cleaned)
     
     Returns:
         Path to target metadata.json
@@ -280,16 +274,16 @@ def create_target_metadata(
         get_target_reproducibility_dir, get_target_decision_dir, get_target_metrics_dir
     )
     
-    target_name_clean = target_name.replace('/', '_').replace('\\', '_')
-    target_dir = output_dir / "targets" / target_name_clean
+    target_clean = target.replace('/', '_').replace('\\', '_')
+    target_dir = output_dir / "targets" / target_clean
     
     if not target_dir.exists():
         logger.warning(f"Target directory does not exist: {target_dir}")
         return None
     
     target_metadata = {
-        "target_name": target_name,
-        "target_name_clean": target_name_clean,
+        "target": target,
+        "target_clean": target_clean,
         "created_at": datetime.now().isoformat(),
         "cohorts": {},
         "views": {},
@@ -298,7 +292,7 @@ def create_target_metadata(
     }
     
     # Collect cohort metadata from reproducibility directory
-    repro_dir = get_target_reproducibility_dir(output_dir, target_name_clean)
+    repro_dir = get_target_reproducibility_dir(output_dir, target_clean)
     if repro_dir.exists():
         for view_dir in repro_dir.iterdir():
             if view_dir.is_dir() and view_dir.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
@@ -329,14 +323,16 @@ def create_target_metadata(
                                         try:
                                             with open(metadata_file) as f:
                                                 cohort_metadata = json.load(f)
+                                                date_start, date_end = extract_date_range(cohort_metadata)
+                                                from TRAINING.orchestration.utils.reproducibility.utils import extract_view, extract_universe_sig
                                                 cohort_info["metadata"] = {
                                                     "stage": cohort_metadata.get("stage"),
-                                                    "route_type": cohort_metadata.get("route_type"),
-                                                    "n_effective": cohort_metadata.get("N_effective") or cohort_metadata.get("n_effective"),
+                                                    "view": extract_view(cohort_metadata),  # SST: Use view instead of view
+                                                    "n_effective": extract_n_effective(cohort_metadata),
                                                     "n_symbols": cohort_metadata.get("n_symbols"),
-                                                    "date_start": cohort_metadata.get("date_start") or cohort_metadata.get("date_range_start"),
-                                                    "date_end": cohort_metadata.get("date_end") or cohort_metadata.get("date_range_end"),
-                                                    "universe_id": cohort_metadata.get("universe_id"),
+                                                    "date_start": date_start,
+                                                    "date_end": date_end,
+                                                    "universe_sig": extract_universe_sig(cohort_metadata),  # SST: Use universe_sig
                                                     "min_cs": cohort_metadata.get("min_cs"),
                                                     "max_cs_samples": cohort_metadata.get("max_cs_samples")
                                                 }
@@ -366,14 +362,16 @@ def create_target_metadata(
                                 try:
                                     with open(metadata_file) as f:
                                         cohort_metadata = json.load(f)
+                                        date_start, date_end = extract_date_range(cohort_metadata)
+                                        from TRAINING.orchestration.utils.reproducibility.utils import extract_view, extract_universe_sig
                                         cohort_info["metadata"] = {
                                             "stage": cohort_metadata.get("stage"),
-                                            "route_type": cohort_metadata.get("route_type"),
-                                            "n_effective": cohort_metadata.get("N_effective") or cohort_metadata.get("n_effective"),
+                                            "view": extract_view(cohort_metadata),  # SST: Use view instead of view
+                                            "n_effective": extract_n_effective(cohort_metadata),
                                             "n_symbols": cohort_metadata.get("n_symbols"),
-                                            "date_start": cohort_metadata.get("date_start") or cohort_metadata.get("date_range_start"),
-                                            "date_end": cohort_metadata.get("date_end") or cohort_metadata.get("date_range_end"),
-                                            "universe_id": cohort_metadata.get("universe_id"),
+                                            "date_start": date_start,
+                                            "date_end": date_end,
+                                            "universe_sig": extract_universe_sig(cohort_metadata),  # SST: Use universe_sig
                                             "min_cs": cohort_metadata.get("min_cs"),
                                             "max_cs_samples": cohort_metadata.get("max_cs_samples")
                                         }
@@ -387,7 +385,7 @@ def create_target_metadata(
                             }
     
     # Collect decision files
-    decision_dir = get_target_decision_dir(output_dir, target_name_clean)
+    decision_dir = get_target_decision_dir(output_dir, target_clean)
     if decision_dir.exists():
         for decision_file in decision_dir.iterdir():
             if decision_file.is_file() and decision_file.suffix in [".json", ".yaml"]:
@@ -398,7 +396,7 @@ def create_target_metadata(
                 }
     
     # Collect metrics summary
-    metrics_dir = get_target_metrics_dir(output_dir, target_name_clean)
+    metrics_dir = get_target_metrics_dir(output_dir, target_clean)
     if metrics_dir.exists():
         for view_dir in metrics_dir.iterdir():
             if view_dir.is_dir() and view_dir.name.startswith("view="):
@@ -410,7 +408,7 @@ def create_target_metadata(
                             metrics_data = json.load(f)
                             target_metadata["metrics_summary"][view_name] = {
                                 "path": str(metrics_file.relative_to(output_dir)),
-                                "mean_score": metrics_data.get("mean_score"),
+                                "auc": metrics_data.get("auc"),
                                 "std_score": metrics_data.get("std_score"),
                                 "composite_score": metrics_data.get("composite_score"),
                                 "metric_name": metrics_data.get("metric_name")

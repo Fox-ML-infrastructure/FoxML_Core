@@ -1,1 +1,473 @@
-/home/Jennifer/trader/CONFIG/ranking/features/multi_model.yaml
+# Multi-Model Feature Selection Configuration
+# Combines importance from multiple model families for robust feature ranking
+
+# Global settings (Single Source of Truth)
+global:
+  # Random state seed - loaded from pipeline.determinism.base_seed at runtime
+  # All model configs will automatically use this value unless explicitly overridden
+  # This ensures consistency across all models and aligns with the determinism system
+  # Set to null to use pipeline.determinism.base_seed (default: 42)
+  # Or set to a specific value (e.g., 42, 1337) to override globally
+  seed: null
+
+# Model families configuration
+# 
+# NOTE: Some families are used for FEATURE SELECTION only (not training):
+#   - random_forest: Feature selection only (not a trainer)
+#   - catboost: Feature selection only (not a trainer)  
+#   - lasso: Feature selection only (not a trainer)
+#   - mutual_information: Feature selection only (not a trainer)
+#   - univariate_selection: Feature selection only (not a trainer)
+#
+# These will be automatically filtered out before training execution.
+# For clarity, consider using separate lists:
+#   - feature_selection_families: [lightgbm, xgboost, random_forest, catboost, neural_network, lasso, ...]
+#   - training_families: [lightgbm, xgboost, neural_network, ...]
+#
+# If only model_families is provided, it will be used for both selection and training (with selectors filtered at runtime).
+model_families:
+  # ============================================================================
+  # TREE-BASED MODELS (fast, native importance)
+  # ============================================================================
+  
+  lightgbm:
+    enabled: true
+    importance_method: "native"  # Uses gain importance
+    weight: 1.0
+    config:
+      objective: "regression_l1"
+      metric: "mae"
+      boosting_type: "gbdt"
+      n_estimators: 300
+      learning_rate: 0.05
+      num_leaves: 31
+      max_depth: -1
+      min_child_samples: 20
+      subsample: 0.8
+      colsample_bytree: 0.8
+      reg_alpha: 0.1
+      reg_lambda: 0.1
+      verbose: -1
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
+      device: "cpu"  # Set to "cuda" or "gpu" if available
+  
+  xgboost:
+    enabled: true
+    importance_method: "native"  # Uses gain importance
+    weight: 1.0
+    config:
+      objective: "reg:squarederror"
+      eval_metric: "mae"
+      n_estimators: 300
+      learning_rate: 0.05
+      max_depth: 6
+      min_child_weight: 3
+      subsample: 0.8
+      colsample_bytree: 0.8
+      reg_alpha: 0.1
+      reg_lambda: 0.1
+      verbosity: 0
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
+      tree_method: "auto"  # Set to "gpu_hist" if CUDA available
+  
+  random_forest:
+    enabled: true
+    importance_method: "native"  # Uses gini/entropy importance
+    weight: 0.8  # Slightly lower weight (can be correlated with other trees)
+    config:
+      n_estimators: 200
+      max_depth: 15
+      max_features: "sqrt"
+      min_samples_split: 20
+      min_samples_leaf: 10
+      bootstrap: true
+      n_jobs: 4
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
+  
+  histogram_gradient_boosting:
+    enabled: false  # Disable by default (similar to LightGBM)
+    importance_method: "native"
+    weight: 0.9
+    config:
+      max_iter: 300
+      max_depth: 8
+      learning_rate: 0.05
+      max_bins: 255
+      l2_regularization: 0.0001
+      early_stopping: true
+      validation_fraction: 0.1
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
+  
+  # ============================================================================
+  # NEURAL NETWORKS (slower, permutation/SHAP importance)
+  # ============================================================================
+  
+  neural_network:
+    enabled: true
+    importance_method: "permutation"  # Permutation importance
+    weight: 1.2  # Higher weight (different architecture family)
+    config:
+      hidden_layer_sizes: [128, 64]
+      activation: "relu"
+      solver: "adam"
+      alpha: 0.0001
+      batch_size: "auto"
+      learning_rate_init: 0.001
+      max_iter: 300
+      early_stopping: true
+      validation_fraction: 0.1
+      n_iter_no_change: 10
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
+  
+  # ============================================================================
+  # SPECIALIZED MODELS (optional, for specific use cases)
+  # ============================================================================
+  
+  ridge:
+    enabled: true  # ✅ ENABLED - Linear baseline (same as target ranking)
+    importance_method: "native"  # Uses absolute coefficients
+    weight: 0.7
+    config:
+      alpha: 1.0
+      fit_intercept: true
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
+  
+  elastic_net:
+    enabled: true  # ✅ ENABLED - Sparse linear model (same as target ranking)
+    importance_method: "native"
+    weight: 0.8
+    config:
+      alpha: 1.0
+      l1_ratio: 0.5
+      max_iter: 1000
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
+  
+  # ============================================================================
+  # ADDITIONAL MODELS (Recommended for production)
+  # ============================================================================
+  
+  catboost:
+    enabled: true  # ✅ ENABLED - Diverse tree-based selection
+    importance_method: "native"  # Uses PredictionValuesChange
+    weight: 1.0
+    config:
+      iterations: 300
+      learning_rate: 0.05
+      depth: 6  # Keep ≤ 8 to avoid exponential complexity (2^d)
+      loss_function: "RMSE"
+      verbose: false
+      metric_period: 50  # Calculate metrics every 50 trees (reduces evaluation overhead)
+      od_type: "Iter"  # Early stopping type: Iter (stop if no improvement for od_wait iterations)
+      od_wait: 20  # Early stopping patience: stop if no improvement for 20 iterations
+      # random_seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
+      # Note: If training is slow (>20min for 50k samples), check for:
+      #   - Text features (add text_features=['col_name'] if present)
+      #   - High cardinality categoricals (drop ID columns like User_ID)
+      #   - Depth > 8 (reduce to 6-8)
+  
+  lasso:
+    enabled: true  # ✅ ENABLED - Explicit sparse feature selection
+    importance_method: "native"  # Uses abs(coef_)
+    weight: 0.9
+    config:
+      alpha: 0.1
+      max_iter: 1000
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
+  
+  mutual_information:
+    enabled: true  # ✅ ENABLED - Information-theoretic baseline
+    importance_method: "native"  # Direct calculation (no model)
+    weight: 0.8
+    config:
+      discrete_features: "auto"
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
+  
+  # ============================================================================
+  # STATISTICAL & WRAPPER METHODS
+  # ============================================================================
+  
+  univariate_selection:
+    enabled: true  # ✅ ENABLED - Statistical F-test baseline
+    importance_method: "native"  # F-statistics (f_regression/f_classif)
+    weight: 0.7
+    config:
+      # Uses f_regression for regression, f_classif for classification
+      # No additional config needed
+  
+  rfe:
+    enabled: true  # ✅ ENABLED - Recursive feature elimination
+    importance_method: "native"  # Ranking-based (1/rank)
+    weight: 0.8
+    config:
+      n_features_to_select: 50  # Number of features to select
+      step: 5  # Number of features to remove per iteration
+      # RFE estimator config (RandomForest used internally)
+      estimator_n_estimators: 100  # Number of trees in RFE's internal RF estimator
+      estimator_max_depth: 10  # Max depth for RFE's internal RF estimator
+      estimator_n_jobs: 1  # Parallel jobs for RFE's internal RF estimator
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
+  
+  boruta:
+    enabled: true  # ✅ ENABLED - All-relevant feature selection (statistical gate, not just another importance scorer)
+    importance_method: "native"  # Selection-based (confirmed/tentative/rejected)
+    weight: 1.0  # Weight in base aggregation (before gatekeeper bonuses/penalties)
+    config:
+      n_estimators: 300  # Optimized: Reduced from 500 to 300 for faster training (still stable for importance)
+      max_depth: 6  # Shallower to avoid overfitting to interactions (vs RF's 15)
+      max_iter: 50  # Optimized: Reduced from 100 to 50 (most decisions converge earlier)
+      perc: 95  # Percentile threshold (higher = more conservative, needs to beat shadow more decisively)
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
+      n_jobs: 1  # Parallel jobs for ExtraTrees base estimator
+      verbose: 0  # BorutaPy verbosity (0=silent, 1=progress, 2=detailed)
+      class_weight: "auto"  # "auto"=balanced_subsample for binary, balanced for multiclass; "none"=no weighting; or dict
+      # Performance optimization settings (SST: all from config)
+      max_time_minutes: 10  # Time budget for Boruta fit (default: 10 minutes)
+      max_features_threshold: 200  # Skip Boruta if n_features > this (default: 200)
+      max_samples_threshold: 20000  # Skip Boruta if n_samples > this and subsampling disabled (default: 20000)
+      min_time_budget_minutes: 10  # Minimum time budget required to run Boruta (default: 10)
+      min_target_confidence: "HIGH"  # Minimum target confidence to run Boruta (default: "HIGH")
+      # Adaptive max_iter based on dataset size (SST: all thresholds from config)
+      adaptive_max_iter:
+        enabled: true  # Enable adaptive max_iter based on dataset size
+        small_dataset_threshold: 5000  # Threshold for small datasets
+        small_dataset_max_iter: 30  # Max iterations for small datasets
+        medium_dataset_threshold: 20000  # Threshold for medium datasets
+        medium_dataset_max_iter: 50  # Max iterations for medium datasets
+        large_dataset_max_iter: 75  # Max iterations for large datasets
+      # Early stopping detection (SST: from config)
+      early_stopping:
+        enabled: true  # Enable early stopping detection (logs when decisions stabilize)
+        stable_iterations: 5  # Number of stable iterations before considering early convergence
+      # Subsample large datasets for Boruta (SST: all parameters from config)
+      subsample_large_datasets:
+        enabled: true  # Enable subsampling for large datasets
+        threshold: 10000  # Subsample if n_samples > this (default: 10000)
+        max_samples: 10000  # Maximum samples after subsampling (default: 10000)
+      # Caching for Boruta results (SST: controlled by config)
+      caching:
+        enabled: true  # Enable caching for Boruta results (uses feature selection cache infrastructure)
+  
+  stability_selection:
+    enabled: true  # ✅ ENABLED - Bootstrap-based stable feature selection (slower)
+    importance_method: "native"  # Fraction of times selected across bootstraps
+    weight: 0.9
+    config:
+      n_bootstrap: 50  # Number of bootstrap iterations (reduced for speed)
+      # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
+      Cs: 10  # Number of C values to try for LogisticRegressionCV
+      cv: 3  # CV folds for LassoCV/LogisticRegressionCV
+      n_jobs: 1  # Parallel jobs for CV
+      max_iter: 1000  # Maximum iterations for LassoCV/LogisticRegressionCV
+      purge_buffer_bars: 5  # Safety buffer bars for PurgedTimeSeriesSplit (added to target horizon)
+      n_splits: 3  # Number of CV splits for PurgedTimeSeriesSplit
+      # PERFORMANCE NOTE: PredictionValuesChange importance is computed only once after final fit (not during CV)
+      # This avoids 3× overhead (one per fold). CV scores provide stability signal; importance is for explanation only.
+
+# Aggregation strategies
+aggregation:
+  # Fallback importance handling (for no-signal cases)
+  fallback:
+    uniform_importance: 1e-6  # Uniform small importance when all features have zero importance (no signal)
+    normalize_after_fallback: true  # Whether to normalize fallback importance to sum to 1.0
+  
+  # How to aggregate importance across symbols (for single model family)
+  per_symbol_method: "mean"  # mean, median, sum
+  
+  # How to combine across model families
+  # cross_model_method: auto-injected from defaults (weighted_mean)
+  
+  # Top-K selection for importance analysis
+  importance_top_fraction: 0.10  # Top fraction of features by importance (default: 10%, can be 0.05, 0.20, etc.)
+  
+  # Require feature to be important in at least N models
+  # require_min_models: auto-injected from defaults (2)
+  
+  # Consensus threshold (0-1): fraction of models that must agree
+  # consensus_threshold: auto-injected from defaults (0.5)
+  
+  # Boruta gatekeeper settings (Boruta acts as statistical gate, not just another importance scorer)
+  boruta_confirm_bonus: 0.2  # Bonus added to consensus score for Boruta-confirmed features
+  boruta_reject_penalty: -0.3  # Penalty applied to consensus score for Boruta-rejected features
+  boruta_confirmed_threshold: 0.9  # Minimum score threshold for "confirmed" (scores >= this are confirmed)
+  boruta_tentative_threshold: 0.0  # Minimum score threshold for "tentative" (scores >= this but < confirmed are tentative)
+  boruta_magnitude_warning_threshold: 0.5  # Warn if max(|bonus|, |penalty|) / base_range > this ratio (0.5 = 50%)
+  # Note: Tentative features get no modifier (neutral), rejected features (scores < tentative_threshold) get penalty
+  # Note: Magnitude ratio > 0.5 means Boruta bonuses/penalties are >50% of base consensus range (may dominate decisions)
+
+  # Cross-sectional ranking (panel model for universe-level feature importance)
+  cross_sectional_ranking:
+    enabled: true  # Set to true to enable cross-sectional ranking
+    min_symbols: 2  # Only run if >= this many symbols (lowered to 2 for testing; increase to 5+ for production)
+    top_k_candidates: 50  # Use top K features from per-symbol selection as candidates
+    model_families: [lightgbm]  # Which model families to use for panel model
+    min_cs: 10  # Minimum cross-sectional size per timestamp
+    max_cs_samples: 1000  # Maximum samples per timestamp (matches training pipeline)
+    normalization: null  # Optional: 'zscore' or 'rank' for per-date normalization (null = no normalization)
+    symbol_threshold: 0.1  # Threshold for "strong" per-symbol importance (relative, 0-1)
+    cs_threshold: 0.1  # Threshold for "strong" CS importance (relative, 0-1)
+    model_configs: {}  # Optional: model_family -> config overrides (e.g., {'lightgbm': {'n_estimators': 200}})
+    # Note: Cross-sectional ranking provides complementary view to per-symbol selection:
+    # - CORE: Strong in both per-symbol AND cross-sectional
+    # - SYMBOL_SPECIFIC: Strong per-symbol, weak cross-sectional
+    # - CS_SPECIFIC: Strong cross-sectional, weak per-symbol
+    # - WEAK: Weak in both
+
+# Sampling and performance
+sampling:
+  max_samples_per_symbol: 50000  # Limit rows per symbol (for speed)
+  # validation_split: auto-injected from defaults (0.2)
+  # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
+
+# SHAP configuration (if using SHAP method)
+shap:
+  # max_samples: auto-injected from defaults (1000)
+  # use_tree_explainer: auto-injected from defaults (true)
+  # kernel_explainer_background: auto-injected from defaults (100)
+
+# Permutation importance configuration
+permutation:
+  n_repeats: 5  # Number of permutation repeats
+  # seed: auto-injected from global.seed (or pipeline.determinism.base_seed)
+
+# Cross-validation configuration
+cross_validation:
+  # folds: auto-injected from defaults (3)
+  # n_jobs: auto-injected from defaults (1)
+
+# Output configuration
+output:
+  # save_per_family_rankings: auto-injected from defaults (true)
+  # save_agreement_matrix: auto-injected from defaults (true)
+  # save_metadata: auto-injected from defaults (true)
+  # include_model_scores: auto-injected from defaults (true)
+
+# Target confidence thresholds (for automatic quality assessment)
+confidence:
+  # HIGH confidence requirements (all must be met)
+  high:
+    boruta_confirmed_min: 5  # Minimum Boruta-confirmed features
+    agreement_ratio_min: 0.4  # Minimum agreement ratio (fraction of top-K in >=2 models)
+    mean_score_min: 0.05  # Minimum mean model score
+    model_coverage_min: 0.7  # Minimum model coverage ratio (successful/available)
+  
+  # MEDIUM confidence requirements (any one is sufficient)
+  medium:
+    boruta_confirmed_min: 1  # OR: at least 1 Boruta-confirmed feature
+    agreement_ratio_min: 0.25  # OR: agreement ratio >= 0.25
+    mean_score_min: 0.02  # OR: mean score >= 0.02
+  
+  # LOW confidence reasons (for diagnostics)
+  low_reasons:
+    boruta_zero_confirmed:
+      boruta_used: true  # Boruta must have run
+      boruta_confirmed_max: 0  # Zero confirmed features
+      boruta_tentative_max: 1  # At most 1 tentative
+      mean_score_max: 0.03  # Low scores
+    low_model_agreement:
+      agreement_ratio_max: 0.2  # Agreement ratio < 0.2
+    low_model_scores:
+      mean_score_max: 0.01  # Mean score < 0.01
+    low_model_coverage:
+      model_coverage_max: 0.5  # Coverage < 0.5
+  
+  # Agreement computation
+  agreement:
+    top_k: 20  # Number of top features to consider for agreement ratio
+  
+  # Score tier thresholds (orthogonal to confidence: pure signal strength)
+  score_tier:
+    high:
+      mean_strong_score_min: 0.08  # OR: mean_strong_score >= this
+      max_score_min: 0.70  # OR: max_score >= this
+    medium:
+      mean_strong_score_min: 0.03  # OR: mean_strong_score >= this
+      max_score_min: 0.55  # OR: max_score >= this
+    # LOW is fallback (below medium thresholds)
+  
+  # Routing rules (how confidence + score_tier map to operational buckets)
+  routing:
+    # Hard experimental: Boruta explicitly rejects
+    experimental:
+      confidence: "LOW"
+      low_confidence_reason: "boruta_zero_confirmed"
+      note: "Boruta used and found zero robust features; fragile signal."
+    
+    # Production-ready: High confidence
+    core:
+      confidence: "HIGH"
+      note: "Strong, robust signal with good agreement and Boruta support."
+    
+    # Candidate: Medium confidence with decent scores
+    candidate:
+      confidence: "MEDIUM"
+      score_tier_min: "MEDIUM"  # Requires at least MEDIUM score_tier
+      note: "Some signal present but not fully robust yet."
+    
+    # Default fallback
+    default:
+      bucket: "candidate"  # If MEDIUM confidence
+      fallback_bucket: "experimental"  # If LOW confidence
+      note: "Signal strength and robustness need validation."
+
+# Computational budgets (for large-scale runs)
+compute:
+  max_symbols: null  # Limit symbols (null = all)
+  max_features: null  # Limit features per model (null = all)
+  parallel_symbols: false  # Process symbols in parallel (risky with GPU)
+  # use_gpu: auto-injected from defaults (false)
+
+# Presets for quick switching
+presets:
+  fast:
+    # Quick validation on 3-5 symbols
+    model_families:
+      lightgbm:
+        enabled: true
+        config:
+          n_estimators: 100
+      xgboost:
+        enabled: false
+      random_forest:
+        enabled: false
+      neural_network:
+        enabled: false
+    sampling:
+      max_samples_per_symbol: 10000
+  
+  balanced:
+    # Default balanced approach
+    model_families:
+      lightgbm:
+        enabled: true
+      xgboost:
+        enabled: true
+      random_forest:
+        enabled: true
+      neural_network:
+        enabled: true
+    sampling:
+      max_samples_per_symbol: 50000
+  
+  comprehensive:
+    # Maximum robustness (slow)
+    model_families:
+      lightgbm:
+        enabled: true
+      xgboost:
+        enabled: true
+      random_forest:
+        enabled: true
+      histogram_gradient_boosting:
+        enabled: true
+      neural_network:
+        enabled: true
+      ridge:
+        enabled: true
+    sampling:
+      max_samples_per_symbol: 100000
+    aggregation:
+      require_min_models: 3
+
+# Active preset (uncomment to use)
+# active_preset: "balanced"
+

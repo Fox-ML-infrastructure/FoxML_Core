@@ -50,7 +50,7 @@ class MultiTaskTrainer(BaseModelTrainer):
         # Multi-task specific
         self.config.setdefault("use_multi_head", None)  # Auto-detect from y shape
         self.config.setdefault("loss_weights", None)  # Dict mapping target names to weights
-        self.config.setdefault("target_names", None)  # List of target names for multi-head
+        self.config.setdefault("targets", None)  # List of target names for multi-head
 
     def train(self, X_tr: np.ndarray, y_tr: np.ndarray, 
               X_va=None, y_va=None, feature_names: List[str] = None, **kwargs) -> Any:
@@ -72,14 +72,14 @@ class MultiTaskTrainer(BaseModelTrainer):
         
         # 3) Get target names
         if use_multi_head:
-            target_names = self.config.get("target_names")
-            if target_names is None:
+            targets = self.config.get("targets")
+            if targets is None:
                 n_targets = y_tr.shape[1] if is_multi_target else 1
-                target_names = [f"task_{i+1}" for i in range(n_targets)]
-            self.target_names = target_names
-            logger.info(f"MultiTask: Using multi-head mode with {len(target_names)} targets: {target_names}")
+                targets = [f"task_{i+1}" for i in range(n_targets)]
+            self.targets = targets
+            logger.info(f"MultiTask: Using multi-head mode with {len(targets)} targets: {targets}")
         else:
-            self.target_names = ["y"]
+            self.targets = ["y"]
             logger.info("MultiTask: Using single-head mode (backward compatible)")
         
         # 4) Configure TensorFlow
@@ -88,16 +88,16 @@ class MultiTaskTrainer(BaseModelTrainer):
         # 5) Split only if no external validation provided
         if X_va is None or y_va is None:
             # Load test split params from config
-            test_size, random_state = self._get_test_split_params()
+            test_size, seed = self._get_test_split_params()
             X_tr, X_va, y_tr, y_va = train_test_split(
-                X_tr, y_tr, test_size=test_size, random_state=random_state
+                X_tr, y_tr, test_size=test_size, random_state=seed
             )
         
         # 6) Prepare targets for multi-head mode
         if use_multi_head and is_multi_target:
             # Convert 2D y to dict format for multi-head training
-            y_tr_dict = {name: y_tr[:, i] for i, name in enumerate(self.target_names)}
-            y_va_dict = {name: y_va[:, i] for i, name in enumerate(self.target_names)}
+            y_tr_dict = {name: y_tr[:, i] for i, name in enumerate(self.targets)}
+            y_va_dict = {name: y_va[:, i] for i, name in enumerate(self.targets)}
         else:
             # Single target mode
             y_tr_dict = y_tr
@@ -108,13 +108,13 @@ class MultiTaskTrainer(BaseModelTrainer):
         
         # 8) Prepare loss and loss_weights
         if use_multi_head:
-            loss_dict = {name: "mse" for name in self.target_names}
+            loss_dict = {name: "mse" for name in self.targets}
             loss_weights = self.config.get("loss_weights")
             if loss_weights is None:
                 # Default: equal weights for all targets
-                loss_weights = {name: 1.0 for name in self.target_names}
+                loss_weights = {name: 1.0 for name in self.targets}
             # Ensure all targets have weights
-            for name in self.target_names:
+            for name in self.targets:
                 if name not in loss_weights:
                     loss_weights[name] = 1.0
             logger.info(f"MultiTask loss weights: {loss_weights}")
@@ -194,8 +194,8 @@ class MultiTaskTrainer(BaseModelTrainer):
         if use_multi_head:
             # Multiple output heads (one per target)
             outputs = []
-            for target_name in self.target_names:
-                output = tf.keras.layers.Dense(1, activation="linear", name=target_name)(x)
+            for target in self.targets:
+                output = tf.keras.layers.Dense(1, activation="linear", name=target)(x)
                 outputs.append(output)
             # Model expects list of outputs for multi-head
             model = tf.keras.Model(inputs, outputs)
@@ -213,12 +213,12 @@ class MultiTaskTrainer(BaseModelTrainer):
         
         # Prepare loss and loss_weights
         if use_multi_head:
-            loss_dict = {name: "mse" for name in self.target_names}
+            loss_dict = {name: "mse" for name in self.targets}
             loss_weights = self.config.get("loss_weights")
             if loss_weights is None:
-                loss_weights = {name: 1.0 for name in self.target_names}
+                loss_weights = {name: 1.0 for name in self.targets}
             # Ensure all targets have weights
-            for name in self.target_names:
+            for name in self.targets:
                 if name not in loss_weights:
                     loss_weights[name] = 1.0
         else:
@@ -229,7 +229,7 @@ class MultiTaskTrainer(BaseModelTrainer):
             optimizer=optimizer,
             loss=loss_dict,
             loss_weights=loss_weights,
-            metrics=["mae"] if not use_multi_head else {name: "mae" for name in self.target_names}
+            metrics=["mae"] if not use_multi_head else {name: "mae" for name in self.targets}
         )
         
         return model

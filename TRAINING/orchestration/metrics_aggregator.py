@@ -64,32 +64,34 @@ class MetricsAggregator:
         Returns:
             DataFrame with routing candidates (one row per target or (target, symbol))
         """
-        # Load resolved_mode from run context (SST)
-        resolved_mode = None
+        # Load view from run context (SST)
+        view = None
         try:
-            from TRAINING.orchestration.utils.run_context import get_resolved_mode
-            resolved_mode = get_resolved_mode(self.output_dir)
-            if resolved_mode:
-                logger.info(f"📋 Using resolved_mode={resolved_mode} from run context (SST) for metrics aggregation")
+            from TRAINING.orchestration.utils.run_context import load_run_context
+            context = load_run_context(self.output_dir)
+            if context:
+                view = context.get("view")
+            if view:
+                logger.info(f"📋 Using view={view} from run context (SST) for metrics aggregation")
         except Exception as e:
-            logger.debug(f"Could not load resolved_mode from run context: {e}, will use inferred mode")
+            logger.debug(f"Could not load view from run context: {e}, will use inferred view")
         
         rows = []
         
         for target in targets:
-            # Cross-sectional metrics (use resolved_mode for mode field and path construction)
-            cs_metrics = self._load_cross_sectional_metrics(target, resolved_mode=resolved_mode)
+            # Cross-sectional metrics (use view for mode field and path construction)
+            cs_metrics = self._load_cross_sectional_metrics(target, view=view)
             if cs_metrics:
                 rows.append(cs_metrics)
                 logger.debug(f"✅ Loaded CS metrics for {target}")
             else:
                 logger.warning(f"⚠️  No CS metrics found for {target}")
             
-            # Symbol-specific metrics (use resolved_mode for mode field)
+            # Symbol-specific metrics (use view for mode field)
             symbols_found = 0
             symbols_missing = []
             for symbol in symbols:
-                sym_metrics = self._load_symbol_metrics(target, symbol, resolved_mode=resolved_mode)
+                sym_metrics = self._load_symbol_metrics(target, symbol, view=view)
                 if sym_metrics:
                     rows.append(sym_metrics)
                     symbols_found += 1
@@ -101,8 +103,8 @@ class MetricsAggregator:
             if symbols_missing:
                 logger.warning(f"⚠️  No symbol metrics found for {target}: {len(symbols_missing)}/{len(symbols)} symbols missing: {symbols_missing[:5]}{'...' if len(symbols_missing) > 5 else ''}")
             
-            # Fallback: if SYMBOL_SPECIFIC mode but no symbol metrics, try CS metrics (config-gated)
-            if symbols_found == 0 and symbols_missing and resolved_mode == "SYMBOL_SPECIFIC" and _get_allow_mode_fallback():
+            # Fallback: if SYMBOL_SPECIFIC view but no symbol metrics, try CS metrics (config-gated)
+            if symbols_found == 0 and symbols_missing and view == "SYMBOL_SPECIFIC" and _get_allow_mode_fallback():
                 # Check if CS metrics exist for this target (we may have already loaded them above)
                 if cs_metrics:
                     # Already loaded, add a fallback-tagged version for symbol routing
@@ -125,7 +127,7 @@ class MetricsAggregator:
         
         return df
     
-    def _load_cross_sectional_metrics(self, target: str, resolved_mode: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def _load_cross_sectional_metrics(self, target: str, view: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Load cross-sectional metrics for a target.
         
@@ -142,16 +144,16 @@ class MetricsAggregator:
             if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
                 break
         
-        target_name_clean = target.replace('/', '_').replace('\\', '_')
+        target_clean = target.replace('/', '_').replace('\\', '_')
         
         # SST Architecture: Read from canonical location (reproducibility/cohort) first
         # Then check reference pointer, then legacy locations
         from TRAINING.orchestration.utils.target_first_paths import (
             get_target_reproducibility_dir, get_target_metrics_dir
         )
-        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
-        # Use resolved_mode for path construction (SST)
-        view_for_path = resolved_mode if resolved_mode else "CROSS_SECTIONAL"
+        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
+        # Use view for path construction (SST)
+        view_for_path = view if view else "CROSS_SECTIONAL"
         target_fs_dir = target_repro_dir / view_for_path
         metadata_path = target_fs_dir / "multi_model_metadata.json"
         confidence_path = target_fs_dir / "target_confidence.json"
@@ -179,8 +181,9 @@ class MetricsAggregator:
                         df = pd.read_parquet(canonical_parquet)
                         if len(df) > 0:
                             metrics_data = df.iloc[0].to_dict()
-                            score = metrics_data.get('mean_score')
-                            sample_size = metrics_data.get('N_effective_cs')
+                            from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective
+                            score = metrics_data.get('auc')
+                            sample_size = extract_n_effective(metrics_data)  # SST accessor
                             logger.debug(f"✅ Loaded metrics from canonical location: {canonical_parquet}")
                     except Exception as e:
                         logger.debug(f"Failed to load metrics from canonical parquet: {e}")
@@ -190,15 +193,16 @@ class MetricsAggregator:
                     try:
                         with open(canonical_json, 'r') as f:
                             metrics_data = json.load(f)
-                            score = metrics_data.get('mean_score')
-                            sample_size = metrics_data.get('N_effective_cs')
+                            from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective
+                            score = metrics_data.get('auc')
+                            sample_size = extract_n_effective(metrics_data)  # SST accessor
                             logger.debug(f"✅ Loaded metrics from canonical JSON: {canonical_json}")
                     except Exception as e:
                         logger.debug(f"Failed to load metrics from canonical JSON: {e}")
         
         # 2. Fallback to reference pointer in metrics/ directory
         if metrics_data is None:
-            target_metrics_dir = get_target_metrics_dir(base_output_dir, target_name_clean)
+            target_metrics_dir = get_target_metrics_dir(base_output_dir, target_clean)
             view_metrics_dir = target_metrics_dir / "view=CROSS_SECTIONAL"
             ref_file = view_metrics_dir / "latest_ref.json"
             
@@ -210,8 +214,9 @@ class MetricsAggregator:
                     if canonical_path.exists():
                         from TRAINING.common.utils.metrics import MetricsWriter
                         metrics_data = MetricsWriter.export_metrics_json_from_parquet(canonical_path)
-                        score = metrics_data.get('mean_score')
-                        sample_size = metrics_data.get('N_effective_cs')
+                        from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective
+                        score = metrics_data.get('auc')
+                        sample_size = extract_n_effective(metrics_data)  # SST accessor
                         logger.debug(f"✅ Loaded metrics via reference pointer: {canonical_path}")
                 except Exception as e:
                     logger.debug(f"Failed to follow reference pointer: {e}")
@@ -227,34 +232,37 @@ class MetricsAggregator:
                         df = pd.read_parquet(metrics_parquet)
                         if len(df) > 0:
                             metrics_data = df.iloc[0].to_dict()
-                            score = metrics_data.get('mean_score')
-                            sample_size = metrics_data.get('N_effective_cs')
+                            from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective
+                            score = metrics_data.get('auc')
+                            sample_size = extract_n_effective(metrics_data)  # SST accessor
                     except Exception as e:
                         logger.debug(f"Failed to load metrics from parquet: {e}")
                 elif metrics_file.exists():
                     try:
                         with open(metrics_file, 'r') as f:
                             metrics_data = json.load(f)
-                            score = metrics_data.get('mean_score')
-                            sample_size = metrics_data.get('N_effective_cs')
+                            from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective
+                            score = metrics_data.get('auc')
+                            sample_size = extract_n_effective(metrics_data)  # SST accessor
                     except Exception as e:
                         logger.debug(f"Failed to load metrics from JSON: {e}")
         
         # 3. Last resort: legacy structure
         if metrics_data is None:
-            legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_name_clean
+            legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_clean
             legacy_metrics_file = legacy_fs_dir / "metrics.json"
             if legacy_metrics_file.exists():
                 try:
                     with open(legacy_metrics_file, 'r') as f:
                         metrics_data = json.load(f)
-                        score = metrics_data.get('mean_score')
-                        sample_size = metrics_data.get('N_effective_cs')
+                        from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective
+                        score = metrics_data.get('auc')
+                        sample_size = extract_n_effective(metrics_data)  # SST accessor
                 except Exception as e:
                     logger.debug(f"Failed to load metrics from legacy location: {e}")
         
         if not metadata_path.exists() and not confidence_path.exists():
-            legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_name_clean
+            legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_clean
             if not metadata_path.exists():
                 metadata_path = legacy_fs_dir / "multi_model_metadata.json"
             if not confidence_path.exists():
@@ -287,15 +295,34 @@ class MetricsAggregator:
                 
                 # Extract score
                 if score is None:
-                    score = conf.get("mean_score", None)
+                    score = conf.get("auc", None)
                 
                 # Extract sample size (if available)
                 sample_size = conf.get("sample_size", None)
             except Exception as e:
                 logger.debug(f"Failed to load CS metrics from {confidence_path}: {e}")
         
+        # FIX: If sample_size still None, try to load from cohort metadata.json
+        if sample_size is None or sample_size == 0:
+            try:
+                # Look for latest cohort directory under CROSS_SECTIONAL
+                cohort_dirs = list(target_fs_dir.glob("cohort=*"))
+                if cohort_dirs:
+                    # Sort by modification time, use latest
+                    latest_cohort = sorted(cohort_dirs, key=lambda x: x.stat().st_mtime, reverse=True)[0]
+                    cohort_metadata_file = latest_cohort / "metadata.json"
+                    if cohort_metadata_file.exists():
+                        with open(cohort_metadata_file) as f:
+                            cohort_meta = json.load(f)
+                            from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective
+                            sample_size = extract_n_effective(cohort_meta)
+                            if sample_size:
+                                logger.debug(f"Loaded sample_size={sample_size} from cohort metadata: {latest_cohort.name}")
+            except Exception as e:
+                logger.debug(f"Failed to load sample_size from cohort metadata: {e}")
+        
         # Load stability metrics
-        stability_metrics = self._load_stability_metrics(target, universe_id="ALL")
+        stability_metrics = self._load_stability_metrics(target, universe_sig="ALL")
         
         # Classify stability
         stability = self._classify_stability_from_metrics(stability_metrics)
@@ -308,8 +335,13 @@ class MetricsAggregator:
         
         # CRITICAL: CS-equivalent rows always use mode=CROSS_SECTIONAL, never SYMBOL_SPECIFIC
         # Using mode=SYMBOL_SPECIFIC with symbol=None is semantically invalid and breaks routing
-        # The resolved_mode indicates the run's mode, but this row is aggregate data
+        # The view indicates the run's view, but this row is aggregate data
         mode_for_row = "CROSS_SECTIONAL"  # Always CS for aggregate rows with symbol=None
+        
+        # Extract task_type and metric_name for task-aware routing thresholds
+        task_type = metrics_data.get("task_type") if metrics_data else None
+        metric_name = metrics_data.get("metric_name") if metrics_data else None
+        
         return {
             "target": target,
             "symbol": None,  # CS has no symbol
@@ -322,16 +354,19 @@ class MetricsAggregator:
             "leakage_status": leakage_status,
             "feature_set_id": None,  # Would need to hash feature set
             "failed_model_families": failed_families,
-            "stability_metrics": stability_metrics
+            "stability_metrics": stability_metrics,
+            "task_type": task_type,  # For task-aware routing thresholds
+            "metric_name": metric_name  # For task-aware routing thresholds
         }
     
-    def _load_symbol_metrics(self, target: str, symbol: str, resolved_mode: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def _load_symbol_metrics(self, target: str, symbol: str, view: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Load symbol-specific metrics for a (target, symbol) pair.
         
         Args:
             target: Target name
             symbol: Symbol name
+            view: View type (CROSS_SECTIONAL, SYMBOL_SPECIFIC)
         
         Returns:
             Dict with metrics or None if not found
@@ -343,13 +378,13 @@ class MetricsAggregator:
             if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
                 break
         
-        target_name_clean = target.replace('/', '_').replace('\\', '_')
+        target_clean = target.replace('/', '_').replace('\\', '_')
         
-        # Try target-first structure first: targets/<target>/reproducibility/{resolved_mode}/symbol=<symbol>/
-        # Use resolved_mode for path construction (SST)
+        # Try target-first structure first: targets/<target>/reproducibility/{view}/symbol=<symbol>/
+        # Use view for path construction (SST)
         from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
-        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
-        view_for_path = resolved_mode if resolved_mode else "SYMBOL_SPECIFIC"
+        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
+        view_for_path = view if view else "SYMBOL_SPECIFIC"
         target_fs_dir = target_repro_dir / view_for_path / f"symbol={symbol}"
         
         score = None
@@ -386,8 +421,9 @@ class MetricsAggregator:
                             metrics_data = json.load(f)
                         
                         # DEFENSIVE: Try multiple key names, log what we found
-                        score = metrics_data.get('mean_score') or metrics_data.get('score') or metrics_data.get('composite_score')
-                        sample_size = metrics_data.get('N_effective_cs') or metrics_data.get('n_samples') or metrics_data.get('sample_size')
+                        from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective
+                        score = metrics_data.get('auc') or metrics_data.get('score') or metrics_data.get('composite_score')
+                        sample_size = extract_n_effective(metrics_data)  # SST accessor
                         cohort_used = latest_cohort.name
                         
                         # Always log which cohort we selected (even if score missing - aids debugging)
@@ -419,7 +455,7 @@ class MetricsAggregator:
             
             # Fallback to legacy structure if not found
             if not metadata_path.exists():
-                legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "SYMBOL_SPECIFIC" / target_name_clean / f"symbol={symbol}"
+                legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "SYMBOL_SPECIFIC" / target_clean / f"symbol={symbol}"
                 if legacy_fs_dir.exists():
                     metadata_path = legacy_fs_dir / "multi_model_metadata.json"
                 else:
@@ -481,21 +517,25 @@ class MetricsAggregator:
                 logger.debug(f"Failed to load symbol metrics from {metadata_path}: {e}")
         
         # Load stability metrics
-        stability_metrics = self._load_stability_metrics(target, universe_id=symbol)
+        stability_metrics = self._load_stability_metrics(target, universe_sig=symbol)
         
         # Classify stability
         stability = self._classify_stability_from_metrics(stability_metrics)
         
         # Load leakage status
-        leakage_status = self._load_leakage_status(target, symbol=symbol, resolved_mode=resolved_mode)
+        leakage_status = self._load_leakage_status(target, symbol=symbol, view=view)
         
         if score is None:
             return None
         
+        # Extract task_type and metric_name for task-aware routing thresholds
+        task_type = metrics_data.get("task_type") if metrics_data else None
+        metric_name = metrics_data.get("metric_name") if metrics_data else None
+        
         return {
             "target": target,
             "symbol": symbol,
-            "mode": resolved_mode if resolved_mode else "SYMBOL",  # Use resolved_mode (SST)
+            "mode": view if view else "SYMBOL",  # Use view (SST)
             "score": float(score),
             "score_ci_low": None,
             "score_ci_high": None,
@@ -505,20 +545,22 @@ class MetricsAggregator:
             "feature_set_id": None,
             "failed_model_families": failed_families,
             "model_status": model_status,
-            "stability_metrics": stability_metrics
+            "stability_metrics": stability_metrics,
+            "task_type": task_type,  # For task-aware routing thresholds
+            "metric_name": metric_name  # For task-aware routing thresholds
         }
     
     def _load_stability_metrics(
         self,
         target: str,
-        universe_id: Optional[str] = None
+        universe_sig: Optional[str] = None
     ) -> Optional[Dict[str, float]]:
         """
         Load stability metrics from feature importance snapshots.
         
         Args:
             target: Target name
-            universe_id: Universe ID (symbol name or "ALL" for CS)
+            universe_sig: Universe ID (symbol name or "ALL" for CS)
         
         Returns:
             Dict with stability metrics or None
@@ -528,7 +570,7 @@ class MetricsAggregator:
             from TRAINING.stability.feature_importance.analysis import compute_stability_metrics
             
             # Determine method based on universe
-            if universe_id == "ALL" or universe_id is None:
+            if universe_sig == "ALL" or universe_sig is None:
                 method = "multi_model_aggregated"
             else:
                 method = "lightgbm"  # Default per-symbol method
@@ -544,25 +586,25 @@ class MetricsAggregator:
             
             # Determine view and symbol from context
             # For metrics aggregator, we need to search both CROSS_SECTIONAL and SYMBOL_SPECIFIC
-            # Try CROSS_SECTIONAL first (for universe_id == "ALL" or None)
-            view = "CROSS_SECTIONAL" if (universe_id == "ALL" or universe_id is None) else "SYMBOL_SPECIFIC"
-            symbol = None if view == "CROSS_SECTIONAL" else universe_id
+            # Try CROSS_SECTIONAL first (for universe_sig == "ALL" or None)
+            view = "CROSS_SECTIONAL" if (universe_sig == "ALL" or universe_sig is None) else "SYMBOL_SPECIFIC"
+            symbol = None if view == "CROSS_SECTIONAL" else universe_sig
             
             # Build REPRODUCIBILITY path for snapshots
-            target_name_clean = target.replace('/', '_').replace('\\', '_')
+            target_clean = target.replace('/', '_').replace('\\', '_')
             if view == "SYMBOL_SPECIFIC" and symbol:
                 # Try FEATURE_SELECTION first (for feature selection metrics)
-                repro_base_fs = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view / target_name_clean / f"symbol={symbol}"
+                repro_base_fs = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view / target_clean / f"symbol={symbol}"
                 snapshot_base_dir_fs = get_snapshot_base_dir(repro_base_fs)
                 # Also try TARGET_RANKING
-                repro_base_tr = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / view / target_name_clean / f"symbol={symbol}"
+                repro_base_tr = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / view / target_clean / f"symbol={symbol}"
                 snapshot_base_dir_tr = get_snapshot_base_dir(repro_base_tr)
             else:
                 # Try FEATURE_SELECTION first
-                repro_base_fs = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view / target_name_clean
+                repro_base_fs = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view / target_clean
                 snapshot_base_dir_fs = get_snapshot_base_dir(repro_base_fs)
                 # Also try TARGET_RANKING
-                repro_base_tr = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / view / target_name_clean
+                repro_base_tr = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / view / target_clean
                 snapshot_base_dir_tr = get_snapshot_base_dir(repro_base_tr)
             
             # Try loading from target-first first, then legacy locations (feature selection and target ranking)
@@ -580,14 +622,14 @@ class MetricsAggregator:
             if len(snapshots) < 2:
                 return None
             
-            # Filter snapshots by universe_id (symbol) if in SYMBOL_SPECIFIC mode
+            # Filter snapshots by universe_sig (symbol) if in SYMBOL_SPECIFIC mode
             # This prevents comparing stability across different symbols (which is expected to have low overlap)
             if view == "SYMBOL_SPECIFIC" and symbol:
-                # Filter to snapshots with matching symbol in universe_id
+                # Filter to snapshots with matching symbol in universe_sig
                 symbol_prefix = f"{symbol}:"
                 filtered_snapshots = [
                     s for s in snapshots
-                    if s.universe_id and (s.universe_id.startswith(symbol_prefix) or s.universe_id == symbol)
+                    if s.universe_sig and (s.universe_sig.startswith(symbol_prefix) or s.universe_sig == symbol)
                 ]
                 if len(filtered_snapshots) >= 2:
                     snapshots = filtered_snapshots
@@ -601,10 +643,10 @@ class MetricsAggregator:
                     )
             
             # Compute stability metrics (with filtering enabled)
-            metrics = compute_stability_metrics(snapshots, top_k=20, filter_by_universe_id=True)
+            metrics = compute_stability_metrics(snapshots, top_k=20, filter_by_universe_sig=True)
             return metrics
         except Exception as e:
-            logger.debug(f"Failed to load stability metrics for {target}/{universe_id}: {e}")
+            logger.debug(f"Failed to load stability metrics for {target}/{universe_sig}: {e}")
             return None
     
     def _classify_stability_from_metrics(
@@ -650,7 +692,7 @@ class MetricsAggregator:
         self,
         target: str,
         symbol: Optional[str] = None,
-        resolved_mode: Optional[str] = None
+        view: Optional[str] = None
     ) -> str:
         """
         Load leakage status for target (and optionally symbol).
@@ -661,7 +703,7 @@ class MetricsAggregator:
         Args:
             target: Target name
             symbol: Optional symbol name
-            resolved_mode: Resolved mode (CROSS_SECTIONAL, SYMBOL_SPECIFIC, etc.)
+            view: View type (CROSS_SECTIONAL, SYMBOL_SPECIFIC, etc.)
         
         Returns:
             Leakage status string (SAFE, SUSPECT, BLOCKED, UNKNOWN)
@@ -724,13 +766,13 @@ class MetricsAggregator:
             try:
                 from TRAINING.ranking.utils.dominance_quarantine import load_confirmed_quarantine
                 
-                # Determine view from resolved_mode or default to CROSS_SECTIONAL
-                view = resolved_mode if resolved_mode in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
+                # Determine view for quarantine lookup, default to CROSS_SECTIONAL
+                quarantine_view = view if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
                 
                 confirmed_quarantine = load_confirmed_quarantine(
-                    out_dir=self.output_dir,
+                    output_dir=self.output_dir,
                     target=target,
-                    view=view,
+                    view=quarantine_view,
                     symbol=symbol
                 )
                 
@@ -738,7 +780,7 @@ class MetricsAggregator:
                     # Confirmed quarantine exists - leakage has been addressed
                     # Downgrade BLOCKED to SUSPECT (allow with quarantine)
                     logger.info(
-                        f"🔒 Escalation policy: Leakage BLOCKED for {target}/{view}/{symbol or 'ALL'}, "
+                        f"🔒 Escalation policy: Leakage BLOCKED for {target}/{quarantine_view}/{symbol or 'ALL'}, "
                         f"but confirmed quarantine exists ({len(confirmed_quarantine)} features). "
                         f"Downgrading to SUSPECT (allow with quarantine)."
                     )
@@ -796,29 +838,31 @@ class MetricsAggregator:
                     f"Targets affected: {ss_null['target'].unique().tolist()}"
                 )
             
-            # Invariant 2: If resolved_mode=SYMBOL_SPECIFIC, must have real symbol rows
-            resolved_mode = None
+            # Invariant 2: If view=SYMBOL_SPECIFIC, must have real symbol rows
+            run_view = None
             try:
-                from TRAINING.orchestration.utils.run_context import get_resolved_mode
+                from TRAINING.orchestration.utils.run_context import load_run_context
                 from TRAINING.orchestration.utils.target_first_paths import run_root
                 run_root_dir = run_root(self.output_dir)
-                resolved_mode = get_resolved_mode(run_root_dir)
+                context = load_run_context(run_root_dir)
+                if context:
+                    run_view = context.get("view")
             except Exception:
                 pass
             
-            if resolved_mode == "SYMBOL_SPECIFIC":
+            if run_view == "SYMBOL_SPECIFIC":
                 real_symbol_rows = candidates_df[
                     (candidates_df["symbol"].notna()) & 
                     (~candidates_df["symbol"].isin(["__AGG__"]))
                 ]
                 if len(real_symbol_rows) == 0:
                     raise ValueError(
-                        f"SEMANTIC CONTRACT VIOLATION: resolved_mode=SYMBOL_SPECIFIC but no "
+                        f"SEMANTIC CONTRACT VIOLATION: view=SYMBOL_SPECIFIC but no "
                         f"per-symbol candidate rows exist (all symbols are None or __AGG__). "
                         f"Upstream must produce per-symbol metrics when running in SYMBOL_SPECIFIC mode."
                     )
             
-            logger.info(f"✅ Scope invariant check passed: {len(candidates_df)} rows, resolved_mode={resolved_mode}")
+            logger.info(f"✅ Scope invariant check passed: {len(candidates_df)} rows, view={run_view}")
         
         # Save as parquet (with fallback to CSV if parquet not available)
         try:

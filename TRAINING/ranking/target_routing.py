@@ -15,18 +15,18 @@ logger = logging.getLogger(__name__)
 
 def _compute_target_routing_decisions(
     results_cs: List[Any],  # List of TargetPredictabilityScore (cross-sectional)
-    results_sym: Dict[str, Dict[str, Any]],  # {target_name: {symbol: TargetPredictabilityScore}}
-    results_loso: Dict[str, Dict[str, Any]],  # {target_name: {symbol: TargetPredictabilityScore}} (optional)
-    symbol_skip_reasons: Dict[str, Dict[str, Dict[str, Any]]] = None  # {target_name: {symbol: {reason, status, ...}}}
+    results_sym: Dict[str, Dict[str, Any]],  # {target: {symbol: TargetPredictabilityScore}}
+    results_loso: Dict[str, Dict[str, Any]],  # {target: {symbol: TargetPredictabilityScore}} (optional)
+    symbol_skip_reasons: Dict[str, Dict[str, Dict[str, Any]]] = None  # {target: {symbol: {reason, status, ...}}}
 ) -> Dict[str, Dict[str, Any]]:
     """
     Compute routing decisions for each target based on dual-view scores.
     
     Routing rules:
-    - CROSS_SECTIONAL only: cs_auc >= T_cs AND frac_symbols_good >= T_frac
-    - SYMBOL_SPECIFIC only: cs_auc < T_cs AND exists symbol with auc >= T_sym
-    - BOTH: cs_auc >= T_cs BUT performance is concentrated (high IQR / low frac_symbols_good)
-    - BLOCKED: cs_auc >= 0.90 OR any symbol auc >= 0.95 → require label/split sanity tests
+    - CROSS_SECTIONAL only: auc >= T_cs AND frac_symbols_good >= T_frac
+    - SYMBOL_SPECIFIC only: auc < T_cs AND exists symbol with auc >= T_sym
+    - BOTH: auc >= T_cs BUT performance is concentrated (high IQR / low frac_symbols_good)
+    - BLOCKED: auc >= 0.90 OR any symbol auc >= 0.95 → require label/split sanity tests
     
     Args:
         results_cs: Cross-sectional results
@@ -35,16 +35,16 @@ def _compute_target_routing_decisions(
         symbol_skip_reasons: Skip reasons by target and symbol (optional)
     
     Returns:
-        Dict mapping target_name -> routing decision dict
+        Dict mapping target -> routing decision dict
     """
     # Load thresholds from config
     try:
         from CONFIG.config_loader import get_cfg
         routing_cfg = get_cfg("target_ranking.routing", default={}, config_name="target_ranking_config")
-        T_cs = float(routing_cfg.get('cs_auc_threshold', 0.65))
+        T_cs = float(routing_cfg.get('auc_threshold', 0.65))
         T_frac = float(routing_cfg.get('frac_symbols_good_threshold', 0.5))
         T_sym = float(routing_cfg.get('symbol_auc_threshold', 0.60))
-        T_suspicious_cs = float(routing_cfg.get('suspicious_cs_auc', 0.90))
+        T_suspicious_cs = float(routing_cfg.get('suspicious_auc', 0.90))
         T_suspicious_sym = float(routing_cfg.get('suspicious_symbol_auc', 0.95))
     except Exception:
         # Fallback defaults
@@ -58,32 +58,32 @@ def _compute_target_routing_decisions(
     
     # Collect all target names (from both CS results and symbol-specific results)
     # This ensures we process targets even if CS failed but symbol-specific succeeded
-    all_target_names = set()
+    all_targets = set()
     for result_cs in results_cs:
-        all_target_names.add(result_cs.target_name)
-    for target_name in results_sym.keys():
-        all_target_names.add(target_name)
+        all_targets.add(result_cs.target)
+    for target in results_sym.keys():
+        all_targets.add(target)
     
     # Process each target (whether it has CS results or not)
-    for target_name in all_target_names:
+    for target in all_targets:
         # Find cross-sectional result if it exists
         result_cs = None
-        cs_auc = -999.0  # Default to failed score
+        auc = -999.0  # Default to failed score
         for r in results_cs:
-            if r.target_name == target_name:
+            if r.target == target:
                 result_cs = r
-                cs_auc = r.mean_score
+                auc = r.auc
                 break
         
         # Get symbol-specific results for this target
-        sym_results = results_sym.get(target_name, {})
+        sym_results = results_sym.get(target, {})
         
         # Compute symbol distribution stats
         symbol_aucs = []
         if sym_results:
             for symbol, result_sym in sym_results.items():
-                if result_sym.mean_score != -999.0:  # Valid result
-                    symbol_aucs.append(result_sym.mean_score)
+                if result_sym.auc != -999.0:  # Valid result
+                    symbol_aucs.append(result_sym.auc)
         
         if symbol_aucs:
             symbol_auc_mean = np.mean(symbol_aucs)
@@ -93,7 +93,7 @@ def _compute_target_routing_decisions(
             symbol_auc_iqr = np.percentile(symbol_aucs, 75) - np.percentile(symbol_aucs, 25)
             frac_symbols_good = sum(1 for auc in symbol_aucs if auc >= T_sym) / len(symbol_aucs)
             winner_symbols = [sym for sym, result in sym_results.items() 
-                            if result.mean_score >= T_sym and result.mean_score != -999.0]
+                            if result.auc >= T_sym and result.auc != -999.0]
         else:
             symbol_auc_mean = None
             symbol_auc_median = None
@@ -103,12 +103,12 @@ def _compute_target_routing_decisions(
             frac_symbols_good = 0.0
             winner_symbols = []
         
-        # Handle case where CS failed (cs_auc = -999.0 or result_cs is None)
-        if result_cs is None or cs_auc == -999.0:
+        # Handle case where CS failed (auc = -999.0 or result_cs is None)
+        if result_cs is None or auc == -999.0:
             # CS failed - check if symbol-specific works
             if symbol_aucs and max(symbol_aucs) >= T_sym:
                 route = "SYMBOL_SPECIFIC"
-                reason = f"cs_failed (mean_score=-999.0) BUT exists symbol with auc >= {T_sym}"
+                reason = f"cs_failed (auc=-999.0) BUT exists symbol with auc >= {T_sym}"
                 winner_symbols_str = ', '.join(winner_symbols[:5])
                 if len(winner_symbols) > 5:
                     winner_symbols_str += f", ... ({len(winner_symbols)} total)"
@@ -122,47 +122,47 @@ def _compute_target_routing_decisions(
                     reason = f"cs_failed AND no symbol-specific results (no viable route)"
         
         # Check for suspicious scores (BLOCKED)
-        elif cs_auc >= T_suspicious_cs or (symbol_aucs and max(symbol_aucs) >= T_suspicious_sym):
+        elif auc >= T_suspicious_cs or (symbol_aucs and max(symbol_aucs) >= T_suspicious_sym):
             route = "BLOCKED"
-            reason = f"cs_auc={cs_auc:.3f} >= {T_suspicious_cs}" if cs_auc >= T_suspicious_cs else \
+            reason = f"auc={auc:.3f} >= {T_suspicious_cs}" if auc >= T_suspicious_cs else \
                     f"max_symbol_auc={max(symbol_aucs):.3f} >= {T_suspicious_sym}"
         
         # CROSS_SECTIONAL only: strong CS performance + good symbol coverage
-        elif cs_auc >= T_cs and frac_symbols_good >= T_frac:
+        elif auc >= T_cs and frac_symbols_good >= T_frac:
             route = "CROSS_SECTIONAL"
-            reason = f"cs_auc={cs_auc:.3f} >= {T_cs} AND frac_symbols_good={frac_symbols_good:.2f} >= {T_frac}"
+            reason = f"auc={auc:.3f} >= {T_cs} AND frac_symbols_good={frac_symbols_good:.2f} >= {T_frac}"
         
         # SYMBOL_SPECIFIC only: weak CS but some symbols work
-        elif cs_auc < T_cs and symbol_aucs and max(symbol_aucs) >= T_sym:
+        elif auc < T_cs and symbol_aucs and max(symbol_aucs) >= T_sym:
             route = "SYMBOL_SPECIFIC"
-            reason = f"cs_auc={cs_auc:.3f} < {T_cs} BUT exists symbol with auc >= {T_sym}"
+            reason = f"auc={auc:.3f} < {T_cs} BUT exists symbol with auc >= {T_sym}"
             winner_symbols_str = ', '.join(winner_symbols[:5])
             if len(winner_symbols) > 5:
                 winner_symbols_str += f", ... ({len(winner_symbols)} total)"
             reason += f" (winners: {winner_symbols_str})"
         
         # BOTH: strong CS but concentrated performance
-        elif cs_auc >= T_cs and symbol_aucs and (symbol_auc_iqr > 0.15 or frac_symbols_good < T_frac):
+        elif auc >= T_cs and symbol_aucs and (symbol_auc_iqr > 0.15 or frac_symbols_good < T_frac):
             route = "BOTH"
-            reason = f"cs_auc={cs_auc:.3f} >= {T_cs} BUT concentrated (IQR={symbol_auc_iqr:.3f}, frac_good={frac_symbols_good:.2f})"
+            reason = f"auc={auc:.3f} >= {T_cs} BUT concentrated (IQR={symbol_auc_iqr:.3f}, frac_good={frac_symbols_good:.2f})"
         
         # Default: CROSS_SECTIONAL (fallback)
         else:
             route = "CROSS_SECTIONAL"
             if len(symbol_aucs) == 0:
-                reason = f"default (cs_auc={cs_auc:.3f}, symbol_eval=0 symbols evaluable)"
+                reason = f"default (auc={auc:.3f}, symbol_eval=0 symbols evaluable)"
             else:
-                reason = f"default (cs_auc={cs_auc:.3f}, no strong symbol-specific signal)"
+                reason = f"default (auc={auc:.3f}, no strong symbol-specific signal)"
         
         # Get skip reasons for this target
         target_skip_reasons = {}
-        if symbol_skip_reasons and target_name in symbol_skip_reasons:
-            target_skip_reasons = symbol_skip_reasons[target_name]
+        if symbol_skip_reasons and target in symbol_skip_reasons:
+            target_skip_reasons = symbol_skip_reasons[target]
         
-        routing_decisions[target_name] = {
+        routing_decisions[target] = {
             'route': route,
             'reason': reason,
-            'cs_auc': cs_auc,
+            'auc': auc,
             'symbol_auc_mean': symbol_auc_mean,
             'symbol_auc_median': symbol_auc_median,
             'symbol_auc_min': symbol_auc_min,
@@ -178,7 +178,7 @@ def _compute_target_routing_decisions(
 
 
 def _compute_single_target_routing_decision(
-    target_name: str,
+    target: str,
     result_cs: Optional[Any],  # TargetPredictabilityScore or None
     sym_results: Dict[str, Any],  # {symbol: TargetPredictabilityScore}
     symbol_skip_reasons: Optional[Dict[str, Dict[str, Any]]] = None  # {symbol: {reason, status, ...}}
@@ -189,7 +189,7 @@ def _compute_single_target_routing_decision(
     This is a single-target version of _compute_target_routing_decisions for incremental saving.
     
     Args:
-        target_name: Target name
+        target: Target name
         result_cs: Cross-sectional result (or None if failed)
         sym_results: Symbol-specific results for this target
         symbol_skip_reasons: Skip reasons for symbols (optional)
@@ -201,10 +201,10 @@ def _compute_single_target_routing_decision(
     try:
         from CONFIG.config_loader import get_cfg
         routing_cfg = get_cfg("target_ranking.routing", default={}, config_name="target_ranking_config")
-        T_cs = float(routing_cfg.get('cs_auc_threshold', 0.65))
+        T_cs = float(routing_cfg.get('auc_threshold', 0.65))
         T_frac = float(routing_cfg.get('frac_symbols_good_threshold', 0.5))
         T_sym = float(routing_cfg.get('symbol_auc_threshold', 0.60))
-        T_suspicious_cs = float(routing_cfg.get('suspicious_cs_auc', 0.90))
+        T_suspicious_cs = float(routing_cfg.get('suspicious_auc', 0.90))
         T_suspicious_sym = float(routing_cfg.get('suspicious_symbol_auc', 0.95))
     except Exception:
         # Fallback defaults
@@ -215,14 +215,14 @@ def _compute_single_target_routing_decision(
         T_suspicious_sym = 0.95
     
     # Get CS AUC
-    cs_auc = result_cs.mean_score if result_cs and result_cs.mean_score != -999.0 else -999.0
+    auc = result_cs.auc if result_cs and result_cs.auc != -999.0 else -999.0
     
     # Compute symbol distribution stats
     symbol_aucs = []
     if sym_results:
         for symbol, result_sym in sym_results.items():
-            if result_sym.mean_score != -999.0:  # Valid result
-                symbol_aucs.append(result_sym.mean_score)
+            if result_sym.auc != -999.0:  # Valid result
+                symbol_aucs.append(result_sym.auc)
     
     if symbol_aucs:
         symbol_auc_mean = np.mean(symbol_aucs)
@@ -232,7 +232,7 @@ def _compute_single_target_routing_decision(
         symbol_auc_iqr = np.percentile(symbol_aucs, 75) - np.percentile(symbol_aucs, 25)
         frac_symbols_good = sum(1 for auc in symbol_aucs if auc >= T_sym) / len(symbol_aucs)
         winner_symbols = [sym for sym, result in sym_results.items() 
-                        if result.mean_score >= T_sym and result.mean_score != -999.0]
+                        if result.auc >= T_sym and result.auc != -999.0]
     else:
         symbol_auc_mean = None
         symbol_auc_median = None
@@ -242,12 +242,12 @@ def _compute_single_target_routing_decision(
         frac_symbols_good = 0.0
         winner_symbols = []
     
-    # Handle case where CS failed (cs_auc = -999.0 or result_cs is None)
-    if result_cs is None or cs_auc == -999.0:
+    # Handle case where CS failed (auc = -999.0 or result_cs is None)
+    if result_cs is None or auc == -999.0:
         # CS failed - check if symbol-specific works
         if symbol_aucs and max(symbol_aucs) >= T_sym:
             route = "SYMBOL_SPECIFIC"
-            reason = f"cs_failed (mean_score=-999.0) BUT exists symbol with auc >= {T_sym}"
+            reason = f"cs_failed (auc=-999.0) BUT exists symbol with auc >= {T_sym}"
             winner_symbols_str = ', '.join(winner_symbols[:5])
             if len(winner_symbols) > 5:
                 winner_symbols_str += f", ... ({len(winner_symbols)} total)"
@@ -261,37 +261,37 @@ def _compute_single_target_routing_decision(
                 reason = f"cs_failed AND no symbol-specific results (no viable route)"
     
     # Check for suspicious scores (BLOCKED)
-    elif cs_auc >= T_suspicious_cs or (symbol_aucs and max(symbol_aucs) >= T_suspicious_sym):
+    elif auc >= T_suspicious_cs or (symbol_aucs and max(symbol_aucs) >= T_suspicious_sym):
         route = "BLOCKED"
-        reason = f"cs_auc={cs_auc:.3f} >= {T_suspicious_cs}" if cs_auc >= T_suspicious_cs else \
+        reason = f"auc={auc:.3f} >= {T_suspicious_cs}" if auc >= T_suspicious_cs else \
                 f"max_symbol_auc={max(symbol_aucs):.3f} >= {T_suspicious_sym}"
     
     # CROSS_SECTIONAL only: strong CS performance + good symbol coverage
-    elif cs_auc >= T_cs and frac_symbols_good >= T_frac:
+    elif auc >= T_cs and frac_symbols_good >= T_frac:
         route = "CROSS_SECTIONAL"
-        reason = f"cs_auc={cs_auc:.3f} >= {T_cs} AND frac_symbols_good={frac_symbols_good:.2f} >= {T_frac}"
+        reason = f"auc={auc:.3f} >= {T_cs} AND frac_symbols_good={frac_symbols_good:.2f} >= {T_frac}"
     
     # SYMBOL_SPECIFIC only: weak CS but some symbols work
-    elif cs_auc < T_cs and symbol_aucs and max(symbol_aucs) >= T_sym:
+    elif auc < T_cs and symbol_aucs and max(symbol_aucs) >= T_sym:
         route = "SYMBOL_SPECIFIC"
-        reason = f"cs_auc={cs_auc:.3f} < {T_cs} BUT exists symbol with auc >= {T_sym}"
+        reason = f"auc={auc:.3f} < {T_cs} BUT exists symbol with auc >= {T_sym}"
         winner_symbols_str = ', '.join(winner_symbols[:5])
         if len(winner_symbols) > 5:
             winner_symbols_str += f", ... ({len(winner_symbols)} total)"
         reason += f" (winners: {winner_symbols_str})"
     
     # BOTH: strong CS but concentrated performance
-    elif cs_auc >= T_cs and symbol_aucs and (symbol_auc_iqr > 0.15 or frac_symbols_good < T_frac):
+    elif auc >= T_cs and symbol_aucs and (symbol_auc_iqr > 0.15 or frac_symbols_good < T_frac):
         route = "BOTH"
-        reason = f"cs_auc={cs_auc:.3f} >= {T_cs} BUT concentrated (IQR={symbol_auc_iqr:.3f}, frac_good={frac_symbols_good:.2f})"
+        reason = f"auc={auc:.3f} >= {T_cs} BUT concentrated (IQR={symbol_auc_iqr:.3f}, frac_good={frac_symbols_good:.2f})"
     
     # Default: CROSS_SECTIONAL (fallback)
     else:
         route = "CROSS_SECTIONAL"
         if len(symbol_aucs) == 0:
-            reason = f"default (cs_auc={cs_auc:.3f}, symbol_eval=0 symbols evaluable)"
+            reason = f"default (auc={auc:.3f}, symbol_eval=0 symbols evaluable)"
         else:
-            reason = f"default (cs_auc={cs_auc:.3f}, no strong symbol-specific signal)"
+            reason = f"default (auc={auc:.3f}, no strong symbol-specific signal)"
     
     # Get skip reasons for this target
     target_skip_reasons = symbol_skip_reasons if symbol_skip_reasons else {}
@@ -299,7 +299,7 @@ def _compute_single_target_routing_decision(
     return {
         'route': route,
         'reason': reason,
-        'cs_auc': cs_auc,
+        'auc': auc,
         'symbol_auc_mean': symbol_auc_mean,
         'symbol_auc_median': symbol_auc_median,
         'symbol_auc_min': symbol_auc_min,
@@ -313,7 +313,7 @@ def _compute_single_target_routing_decision(
 
 
 def _save_single_target_decision(
-    target_name: str,
+    target: str,
     decision: Dict[str, Any],
     output_dir: Optional[Path]
 ) -> None:
@@ -323,7 +323,7 @@ def _save_single_target_decision(
     This allows incremental saving so decisions are available as soon as each target completes.
     
     Args:
-        target_name: Target name
+        target: Target name
         decision: Routing decision dict for this target
         output_dir: Base output directory (RESULTS/{run}/) - can be None, will try to infer
     """
@@ -333,7 +333,7 @@ def _save_single_target_decision(
     )
     
     if output_dir is None:
-        logger.warning(f"⚠️  Cannot save routing decision for {target_name}: output_dir is None")
+        logger.warning(f"⚠️  Cannot save routing decision for {target}: output_dir is None")
         return
     
     # Determine base output directory
@@ -351,14 +351,14 @@ def _save_single_target_decision(
         base_output_dir = base_output_dir.parent
     
     try:
-        ensure_target_structure(base_output_dir, target_name)
-        target_decision_dir = get_target_decision_dir(base_output_dir, target_name)
+        ensure_target_structure(base_output_dir, target)
+        target_decision_dir = get_target_decision_dir(base_output_dir, target)
         target_decision_file = target_decision_dir / "routing_decision.json"
         with open(target_decision_file, 'w') as f:
-            json.dump({target_name: decision}, f, indent=2, default=str)
-        logger.debug(f"✅ Saved routing decision for {target_name} to {target_decision_file}")
+            json.dump({target: decision}, f, indent=2, default=str)
+        logger.debug(f"✅ Saved routing decision for {target} to {target_decision_file}")
     except Exception as e:
-        logger.warning(f"⚠️  Failed to save routing decision for {target_name}: {e}")
+        logger.warning(f"⚠️  Failed to save routing decision for {target}: {e}")
         import traceback
         logger.debug(f"Traceback: {traceback.format_exc()}")
 
@@ -416,21 +416,23 @@ def _save_dual_view_rankings(
             symbols_set.update(decision['symbols'].keys())
     symbols_list = sorted(symbols_set) if symbols_set else []
     
-    # Load resolved_mode from run context (SST) for fingerprint
-    resolved_mode = None
+    # Load view from run context (SST) for fingerprint
+    run_view = None
     try:
-        from TRAINING.orchestration.utils.run_context import get_resolved_mode
-        resolved_mode = get_resolved_mode(output_dir)
+        from TRAINING.orchestration.utils.run_context import load_run_context
+        context = load_run_context(output_dir)
+        if context:
+            run_view = context.get("view")
     except Exception:
         pass
     
-    # Create fingerprint from targets, symbols, and resolved_mode
+    # Create fingerprint from targets, symbols, and view
     fingerprint_data = {
         'targets': target_set,
         'symbols': symbols_list,
         'target_count': len(target_set),
         'symbol_count': len(symbols_list),
-        'resolved_mode': resolved_mode  # Include resolved_mode in fingerprint (SST)
+        'view': run_view  # Include view in fingerprint (SST)
     }
     fingerprint_str = json.dumps(fingerprint_data, sort_keys=True)
     fingerprint_hash = hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]
@@ -501,7 +503,7 @@ def load_routing_decisions(
         validate_fingerprint: If True, validate fingerprint matches expected targets (default: True)
     
     Returns:
-        Dict mapping target_name -> routing decision dict
+        Dict mapping target -> routing decision dict
     """
     import json
     import hashlib
@@ -517,20 +519,22 @@ def load_routing_decisions(
             if validate_fingerprint and expected_targets:
                 stored_fingerprint = data.get('fingerprint')
                 if stored_fingerprint:
-                    # Load resolved_mode from run context (SST) for fingerprint validation
-                    resolved_mode = None
+                    # Load view from run context (SST) for fingerprint validation
+                    run_view = None
                     try:
-                        from TRAINING.orchestration.utils.run_context import get_resolved_mode
-                        resolved_mode = get_resolved_mode(output_dir)
+                        from TRAINING.orchestration.utils.run_context import load_run_context
+                        context = load_run_context(output_dir)
+                        if context:
+                            run_view = context.get("view")
                     except Exception:
                         pass
                     
-                    # Compute expected fingerprint (include resolved_mode)
+                    # Compute expected fingerprint (include view)
                     target_set = sorted(set(expected_targets))
                     fingerprint_data = {
                         'targets': target_set,
                         'target_count': len(target_set),
-                        'resolved_mode': resolved_mode  # Include resolved_mode in fingerprint (SST)
+                        'view': run_view  # Include view in fingerprint (SST)
                     }
                     fingerprint_str = json.dumps(fingerprint_data, sort_keys=True)
                     expected_fingerprint = hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]
@@ -600,11 +604,13 @@ def load_routing_decisions(
                     stored_fingerprint = data.get('fingerprint')
                     if stored_fingerprint:
                         # Compute expected fingerprint
-                        # Load resolved_mode from run context (SST) for fingerprint validation
-                        resolved_mode = None
+                        # Load view from run context (SST) for fingerprint validation
+                        run_view = None
                         try:
-                            from TRAINING.orchestration.utils.run_context import get_resolved_mode
-                            resolved_mode = get_resolved_mode(output_dir)
+                            from TRAINING.orchestration.utils.run_context import load_run_context
+                            context = load_run_context(output_dir)
+                            if context:
+                                run_view = context.get("view")
                         except Exception:
                             pass
                         
@@ -612,7 +618,7 @@ def load_routing_decisions(
                         fingerprint_data = {
                             'targets': target_set,
                             'target_count': len(target_set),
-                            'resolved_mode': resolved_mode  # Include resolved_mode in fingerprint (SST)
+                            'view': run_view  # Include view in fingerprint (SST)
                         }
                         fingerprint_str = json.dumps(fingerprint_data, sort_keys=True)
                         expected_fingerprint = hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]

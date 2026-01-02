@@ -229,7 +229,7 @@ def main():
     checkpoint_file = args.output_dir / "checkpoint.json"
     checkpoint = CheckpointManager(
         checkpoint_file=checkpoint_file,
-        item_key_fn=lambda item: item if isinstance(item, str) else item[0]  # target_name
+        item_key_fn=lambda item: item if isinstance(item, str) else item[0]  # target
     )
     
     # Clear checkpoint if requested
@@ -247,12 +247,12 @@ def main():
     completed_count = 0
     skipped_count = 0
     
-    for idx, (target_name, target_config) in enumerate(targets_to_eval.items(), 1):
+    for idx, (target, target_config) in enumerate(targets_to_eval.items(), 1):
         # Check if already completed
-        if target_name in completed:
+        if target in completed:
             if args.resume:
-                logger.info(f"[{idx}/{total_targets}] Skipping {target_name} (already completed)")
-                result = TargetPredictabilityScore.from_dict(completed[target_name])
+                logger.info(f"[{idx}/{total_targets}] Skipping {target} (already completed)")
+                result = TargetPredictabilityScore.from_dict(completed[target])
                 if result.mean_r2 != -999.0:
                     results.append(result)
                 skipped_count += 1
@@ -263,27 +263,27 @@ def main():
                 continue
         
         # Evaluate target
-        logger.info(f"[{idx}/{total_targets}] Evaluating {target_name}...")
+        logger.info(f"[{idx}/{total_targets}] Evaluating {target}...")
         try:
             result = evaluate_target_predictability(
-                target_name, target_config, symbols, args.data_dir, model_families, multi_model_config,
+                target, target_config, symbols, args.data_dir, model_families, multi_model_config,
                 output_dir=args.output_dir, min_cs=args.min_cs, max_cs_samples=args.max_cs_samples,
                 max_rows_per_symbol=args.max_rows_per_symbol
             )
             
             # Save checkpoint after each target
-            checkpoint.save_item(target_name, result.to_dict())
+            checkpoint.save_item(target, result.to_dict())
             
-            # Skip degenerate targets (marked with mean_score = -999)
-            if result.mean_score != -999.0:
+            # Skip degenerate targets (marked with auc = -999)
+            if result.auc != -999.0:
                 results.append(result)
                 completed_count += 1
             else:
-                logger.info(f"  Skipped degenerate target: {target_name}")
+                logger.info(f"  Skipped degenerate target: {target}")
         
         except Exception as e:
-            logger.error(f"  Failed to evaluate {target_name}: {e}")
-            checkpoint.mark_failed(target_name, str(e))
+            logger.error(f"  Failed to evaluate {target}: {e}")
+            checkpoint.mark_failed(target, str(e))
             # Continue with next target
     
     logger.info(f"\nCompleted: {completed_count}, Skipped: {skipped_count}, Total: {total_targets}")
@@ -295,7 +295,7 @@ def main():
         checkpoint_results = [
             TargetPredictabilityScore.from_dict(v)
             for k, v in completed.items()
-            if k not in [r.target_name for r in results]  # Avoid duplicates
+            if k not in [r.target for r in results]  # Avoid duplicates
         ]
         all_results = results + checkpoint_results
     
@@ -321,7 +321,7 @@ def main():
     
     for i, result in enumerate(all_results, 1):
         leakage_indicator = f" [{result.leakage_flag}]" if result.leakage_flag != "OK" else ""
-        logger.info(f"\n{i:2d}. {result.target_name:25s} | Score: {result.composite_score:.3f}{leakage_indicator}")
+        logger.info(f"\n{i:2d}. {result.target:25s} | Score: {result.composite_score:.3f}{leakage_indicator}")
         # Use task-appropriate metric name
         if result.task_type == TaskType.REGRESSION:
             metric_name = "R²"
@@ -329,7 +329,7 @@ def main():
             metric_name = "ROC-AUC"
         else:
             metric_name = "Accuracy"
-        logger.info(f"    {metric_name}: {result.mean_score:.3f} ± {result.std_score:.3f}")
+        logger.info(f"    {metric_name}: {result.auc:.3f} ± {result.std_score:.3f}")
         logger.info(f"    Importance: {result.mean_importance:.2f}")
         logger.info(f"    Recommendation: {_get_recommendation(result)}")
         if result.leakage_flag != "OK":

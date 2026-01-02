@@ -71,7 +71,7 @@ pipeline:
     python_hash_seed: "42"
     tf_deterministic_ops: "1"
     base_seed: 42  # Base random seed
-    random_state: 42  # Default random_state for train_test_split
+    seed: 42  # Default seed for train_test_split
   
   # Model Family Lists
   families:

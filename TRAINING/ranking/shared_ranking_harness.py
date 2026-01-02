@@ -95,7 +95,7 @@ class RankingHarness:
     def build_panel(
         self,
         target_column: str,
-        target_name: Optional[str] = None,
+        target: Optional[str] = None,
         feature_names: Optional[List[str]] = None,
         use_strict_registry: bool = False  # If True, use strict registry mode (for feature selection), else permissive (for target ranking)
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[List[str]], 
@@ -111,7 +111,7 @@ class RankingHarness:
         
         Args:
             target_column: Target column name
-            target_name: Optional target name (for exclusion list generation)
+            target: Optional target name (for exclusion list generation)
             feature_names: Optional list of feature names to use (None = all safe features)
         
         Returns:
@@ -219,7 +219,7 @@ class RankingHarness:
         exclusion_metadata = {}
         target_exclusion_dir = None
         
-        if self.output_dir and target_name:
+        if self.output_dir and target:
             # Determine base output directory (handle both old and new call patterns)
             base_output_dir = Path(self.output_dir)
             if base_output_dir.name in ["target_rankings", "feature_selections"]:
@@ -228,12 +228,12 @@ class RankingHarness:
             # FIX: Check if we're already inside REPRODUCIBILITY structure at target level
             # If output_dir is already REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/,
             # use it directly instead of reconstructing the path
-            target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+            target_clean = target.replace('/', '_').replace('\\', '_')
             
             # Check if we're already at the target level inside REPRODUCIBILITY
             is_already_in_repro = "REPRODUCIBILITY" in str(base_output_dir)
             is_at_target_level = (
-                base_output_dir.name == target_name_clean or
+                base_output_dir.name == target_clean or
                 (base_output_dir.parent.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] and
                  base_output_dir.parent.parent.name in ["FEATURE_SELECTION", "TARGET_RANKING"])
             )
@@ -258,30 +258,30 @@ class RankingHarness:
                 from TRAINING.orchestration.utils.target_first_paths import (
                     get_target_reproducibility_dir, ensure_target_structure
                 )
-                ensure_target_structure(base_output_dir, target_name_clean)
-                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+                ensure_target_structure(base_output_dir, target_clean)
+                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
                 target_exclusion_dir = target_repro_dir / "feature_exclusions"
             
             target_exclusion_dir.mkdir(parents=True, exist_ok=True)
             
             # Try to load existing exclusion list first (check target-first structure)
-            existing_exclusions = load_target_exclusion_list(target_name, target_exclusion_dir)
+            existing_exclusions = load_target_exclusion_list(target, target_exclusion_dir)
             if existing_exclusions is None:
                 # Fallback to legacy location (for reading existing runs only)
                 if self.job_type == "rank_targets":
-                    legacy_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / self.view / target_name_clean / "feature_exclusions"
+                    legacy_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / self.view / target_clean / "feature_exclusions"
                 elif self.job_type == "rank_features":
                     view_subdir = self.view if self.view else "CROSS_SECTIONAL"
-                    legacy_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_subdir / target_name_clean / "feature_exclusions"
+                    legacy_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_subdir / target_clean / "feature_exclusions"
                     if view_subdir == "SYMBOL_SPECIFIC" and self.symbol:
                         legacy_exclusion_dir = legacy_exclusion_dir.parent.parent / f"symbol={self.symbol}" / "feature_exclusions"
                 else:
                     legacy_exclusion_dir = base_output_dir / "feature_exclusions"
-                existing_exclusions = load_target_exclusion_list(target_name, legacy_exclusion_dir)
+                existing_exclusions = load_target_exclusion_list(target, legacy_exclusion_dir)
             if existing_exclusions is not None:
                 target_conditional_exclusions = existing_exclusions
                 logger.info(
-                    f"📋 Loaded existing target-conditional exclusions for {target_name}: "
+                    f"📋 Loaded existing target-conditional exclusions for {target}: "
                     f"{len(target_conditional_exclusions)} features "
                     f"(from {target_exclusion_dir})"
                 )
@@ -301,7 +301,7 @@ class RankingHarness:
                 )
                 
                 target_conditional_exclusions, exclusion_metadata = generate_target_exclusion_list(
-                    target_name=target_name,
+                    target=target,
                     all_features=all_columns,
                     interval_minutes=temp_interval,
                     output_dir=target_exclusion_dir,
@@ -312,9 +312,9 @@ class RankingHarness:
                 if target_conditional_exclusions and 'legacy_exclusion_dir' in locals():
                     try:
                         import shutil
-                        safe_target_name = target_name.replace('/', '_').replace('\\', '_')
-                        exclusion_file = target_exclusion_dir / f"{safe_target_name}_exclusions.yaml"
-                        legacy_exclusion_file = legacy_exclusion_dir / f"{safe_target_name}_exclusions.yaml"
+                        safe_target = target.replace('/', '_').replace('\\', '_')
+                        exclusion_file = target_exclusion_dir / f"{safe_target}_exclusions.yaml"
+                        legacy_exclusion_file = legacy_exclusion_dir / f"{safe_target}_exclusions.yaml"
                         if exclusion_file.exists():
                             shutil.copy2(exclusion_file, legacy_exclusion_file)
                             logger.debug(f"Saved exclusion file to legacy location: {legacy_exclusion_file}")
@@ -323,13 +323,13 @@ class RankingHarness:
                 
                 if target_conditional_exclusions:
                     logger.info(
-                        f"📋 Generated target-conditional exclusions for {target_name}: "
+                        f"📋 Generated target-conditional exclusions for {target}: "
                         f"{len(target_conditional_exclusions)} features excluded "
                         f"(horizon={exclusion_metadata.get('target_horizon_minutes', 'unknown')}m, "
                         f"semantics={exclusion_metadata.get('target_semantics', {})})"
                     )
         else:
-            logger.debug("No output_dir or target_name provided - skipping target-conditional exclusions")
+            logger.debug("No output_dir or target provided - skipping target-conditional exclusions")
         
         # Detect data interval
         detected_interval = detect_interval_from_dataframe(
@@ -374,7 +374,7 @@ class RankingHarness:
             try:
                 from TRAINING.ranking.utils.dominance_quarantine import load_confirmed_quarantine
                 runtime_quarantine = load_confirmed_quarantine(
-                    out_dir=self.output_dir,
+                    output_dir=self.output_dir,
                     target=target_column,
                     view=self.view,
                     symbol=self.symbol
@@ -439,8 +439,8 @@ class RankingHarness:
         
         # Prepare data based on view (with alignment args from resolved_config)
         # NOTE: view may have been changed to SYMBOL_SPECIFIC above if only 1 symbol loaded
-        # Pass requested_mode and output_dir for mode resolution and persistence
-        requested_mode_for_prep = self.view  # Use current view as requested_mode
+        # Pass requested_view and output_dir for view resolution and persistence
+        requested_view_for_prep = self.view  # Use current view as requested_view
         if self.view == "SYMBOL_SPECIFIC":
             # For symbol-specific, prepare single-symbol time series data
             X, y, feature_names_out, symbols_array, time_vals, resolved_data_config = prepare_cross_sectional_data_for_ranking(
@@ -448,7 +448,7 @@ class RankingHarness:
                 feature_time_meta_map=resolved_config.feature_time_meta_map,  # NEW: Pass from resolved_config
                 base_interval_minutes=resolved_config.base_interval_minutes,  # NEW: Pass from resolved_config
                 allow_single_symbol=True,  # SYMBOL_SPECIFIC always allows single symbol
-                requested_mode=requested_mode_for_prep,
+                requested_view=requested_view_for_prep,
                 output_dir=self.output_dir
             )
         elif self.view == "LOSO":
@@ -457,7 +457,7 @@ class RankingHarness:
                 mtf_data, target_column, min_cs=self.min_cs, max_cs_samples=self.max_cs_samples, feature_names=feature_names,
                 feature_time_meta_map=resolved_config.feature_time_meta_map,  # NEW: Pass from resolved_config
                 base_interval_minutes=resolved_config.base_interval_minutes,  # NEW: Pass from resolved_config
-                requested_mode=requested_mode_for_prep,
+                requested_view=requested_view_for_prep,
                 output_dir=self.output_dir
             )
             # TODO: Handle validation symbol separately for LOSO
@@ -472,7 +472,9 @@ class RankingHarness:
                 mtf_data, target_column, min_cs=self.min_cs, max_cs_samples=self.max_cs_samples, feature_names=feature_names,
                 feature_time_meta_map=resolved_config.feature_time_meta_map,  # NEW: Pass from resolved_config
                 base_interval_minutes=resolved_config.base_interval_minutes,  # NEW: Pass from resolved_config
-                allow_single_symbol=allow_single_symbol  # FIX: Allow graceful degradation for < 3 symbols
+                allow_single_symbol=allow_single_symbol,  # FIX: Allow graceful degradation for < 3 symbols
+                requested_view=requested_view_for_prep,  # FIX: Pass for view caching/persistence
+                output_dir=self.output_dir  # FIX: Pass for view caching/persistence
             )
         
         # Update feature counts after data preparation
@@ -541,9 +543,9 @@ class RankingHarness:
         cv_config = self.multi_model_config.get('cross_validation', {}) if self.multi_model_config else {}
         try:
             from CONFIG.config_loader import get_cfg
-            cv_folds = int(get_cfg("training.cv_folds", default=cv_config.get('cv_folds', 3), config_name="intelligent_training_config"))
+            folds = int(get_cfg("training.folds", default=cv_config.get('folds', 3), config_name="intelligent_training_config"))
         except Exception:
-            cv_folds = cv_config.get('cv_folds', 3)
+            folds = cv_config.get('folds', 3)
         
         # Derive purge and embargo from horizon
         if horizon_minutes is not None:
@@ -557,18 +559,18 @@ class RankingHarness:
             purge_time = pd.Timedelta(minutes=purge_minutes)
             
             # CRITICAL: Validate that data span is sufficient for purge/embargo
-            # Rule of thumb: need at least (purge + embargo) * 2 * cv_folds worth of data
+            # Rule of thumb: need at least (purge + embargo) * 2 * folds worth of data
             # This ensures each fold has enough training data after purging
             if time_vals is not None and len(time_vals) > 1:
                 time_vals_sorted = np.sort(time_vals)
                 data_span_minutes = (time_vals_sorted[-1] - time_vals_sorted[0]) / (60 * 1e9)  # Convert ns to minutes
-                required_span_minutes = (purge_minutes + embargo_minutes) * 2 * cv_folds
+                required_span_minutes = (purge_minutes + embargo_minutes) * 2 * folds
                 
                 if data_span_minutes < required_span_minutes:
                     raise ValueError(
                         f"Insufficient data span for long-horizon target (horizon={horizon_minutes:.1f}m). "
                         f"Data span: {data_span_minutes:.1f}m, Required: {required_span_minutes:.1f}m "
-                        f"(purge={purge_minutes:.1f}m + embargo={embargo_minutes:.1f}m) * 2 * {cv_folds} folds. "
+                        f"(purge={purge_minutes:.1f}m + embargo={embargo_minutes:.1f}m) * 2 * {folds} folds. "
                         f"Falling back to per-symbol processing (expected for long-horizon targets with limited data). "
                         f"To use shared harness: 1) Increase max_rows_per_symbol, 2) Reduce horizon, or 3) Skip this target."
                     )
@@ -578,7 +580,7 @@ class RankingHarness:
         
         # Create time-based purged splitter (REQUIRED for panel data)
         cv_splitter = PurgedTimeSeriesSplit(
-            n_splits=cv_folds,
+            n_splits=folds,
             purge_overlap_time=purge_time,
             time_column_values=time_vals
         )
@@ -700,21 +702,21 @@ class RankingHarness:
         """
         from TRAINING.orchestration.utils.run_context import RunContext
         
-        # Extract cv_folds from splitter if available (required for COHORT_AWARE mode)
-        cv_folds = None
+        # Extract folds from splitter if available (required for COHORT_AWARE mode)
+        folds = None
         if cv_splitter is not None:
             # Try to get n_splits from splitter (PurgedTimeSeriesSplit has n_splits attribute)
             if hasattr(cv_splitter, 'n_splits'):
-                cv_folds = cv_splitter.n_splits
+                folds = cv_splitter.n_splits
             elif hasattr(cv_splitter, 'get_n_splits'):
                 try:
-                    cv_folds = cv_splitter.get_n_splits()
+                    folds = cv_splitter.get_n_splits()
                 except Exception:
                     pass
         
         ctx = RunContext(
             stage="FEATURE_SELECTION" if self.job_type == "rank_features" else "TARGET_RANKING",
-            target_name=self.target_column,
+            target=self.target_column,
             target_column=self.target_column,
             X=X,
             y=y,
@@ -726,7 +728,7 @@ class RankingHarness:
             embargo_minutes=embargo_minutes,
             data_interval_minutes=data_interval_minutes,
             cv_splitter=cv_splitter,
-            cv_folds=cv_folds,  # FIX: Extract and pass cv_folds for COHORT_AWARE mode
+            folds=folds,  # FIX: Extract and pass folds for COHORT_AWARE mode
             view=self.view,
             symbol=self.symbol,
             min_cs=min_cs if min_cs is not None else self.min_cs,  # FIX: Populate min_cs for diff telemetry

@@ -314,7 +314,7 @@ class WriteScope:
         This ensures single source of truth across CS and SS writes.
         
         Args:
-            resolved_data_config: SST config with resolved_mode, universe_sig, symbols
+            resolved_data_config: SST config with view, universe_sig, symbols
             stage: Pipeline stage (string or Stage enum)
             symbol: Symbol (optional, auto-derived for SS if SST has 1 symbol)
             purpose: FINAL or ROUTING_EVAL
@@ -325,13 +325,13 @@ class WriteScope:
         Raises:
             ValueError: If required fields missing or invariants violated
         """
-        view_str = resolved_data_config.get('resolved_mode')
+        view_str = resolved_data_config.get('view')
         universe_sig = resolved_data_config.get('universe_sig')
         sst_symbols = resolved_data_config.get('symbols') or []
         
         if not view_str:
             raise ValueError(
-                f"WriteScope.from_resolved_data_config: resolved_mode missing from SST. "
+                f"WriteScope.from_resolved_data_config: view missing from SST. "
                 f"keys={list(resolved_data_config.keys())}"
             )
         
@@ -380,7 +380,7 @@ def resolve_write_scope(
     - Strict mode: raise on any scope ambiguity or missing data
     
     Args:
-        resolved_data_config: SST config with resolved_mode, universe_sig, and symbols list
+        resolved_data_config: SST config with view, universe_sig, and symbols list
         caller_view: The view requested by caller
         caller_symbol: The symbol requested by caller (may be None)
         strict: If True, raise on any scope invariant violation
@@ -401,7 +401,7 @@ def resolve_write_scope(
         # Returns: ("SYMBOL_SPECIFIC", "AAPL", "abc123...")
         
         # CS→SS fallback with symbol derivation
-        # sst = {"resolved_mode": "SYMBOL_SPECIFIC", "symbols": ["AAPL"], "universe_sig": "..."}
+        # sst = {"view": "SYMBOL_SPECIFIC", "symbols": ["AAPL"], "universe_sig": "..."}
         view, symbol, sig = resolve_write_scope(sst, "CROSS_SECTIONAL", None, strict=True)
         # Returns: ("SYMBOL_SPECIFIC", "AAPL", "abc123...")
     """
@@ -413,7 +413,7 @@ def resolve_write_scope(
         )
     
     if resolved_data_config:
-        sst_view = resolved_data_config.get('resolved_mode')
+        sst_view = resolved_data_config.get('view')
         universe_sig = resolved_data_config.get('universe_sig')
         sst_symbols: List[str] = resolved_data_config.get('symbols') or []
     else:
@@ -428,7 +428,7 @@ def resolve_write_scope(
         # SS → CS promotion detected - this is a bug
         if strict:
             raise ValueError(
-                f"SCOPE BUG: caller_view=SYMBOL_SPECIFIC but SST resolved_mode=CROSS_SECTIONAL. "
+                f"SCOPE BUG: caller_view=SYMBOL_SPECIFIC but SST view=CROSS_SECTIONAL. "
                 f"This is invalid SS→CS promotion. Check min_cs config or caller logic."
             )
         else:

@@ -22,12 +22,12 @@ except ImportError:
     logger.debug("Config loader not available; using defaults")
 
 
-def extract_target_horizon_minutes(target_name: str, config: Optional[Dict[str, Any]] = None) -> Optional[int]:
+def extract_target_horizon_minutes(target: str, config: Optional[Dict[str, Any]] = None) -> Optional[int]:
     """
     Extract target horizon in minutes from target name.
     
     Args:
-        target_name: Target column name (e.g., 'y_will_peak_60m_0.8', 'fwd_ret_15m')
+        target: Target column name (e.g., 'y_will_peak_60m_0.8', 'fwd_ret_15m')
         config: Optional config dict with horizon_extraction patterns
     
     Returns:
@@ -55,7 +55,7 @@ def extract_target_horizon_minutes(target_name: str, config: Optional[Dict[str, 
         multiplier = pattern_config.get('multiplier', 1)
         
         if regex:
-            match = re.search(regex, target_name, re.IGNORECASE)
+            match = re.search(regex, target, re.IGNORECASE)
             if match:
                 value = int(match.group(1))
                 return value * multiplier
@@ -63,14 +63,14 @@ def extract_target_horizon_minutes(target_name: str, config: Optional[Dict[str, 
     return None
 
 
-def classify_target_semantics(target_name: str) -> Dict[str, bool]:
+def classify_target_semantics(target: str) -> Dict[str, bool]:
     """
     Classify target semantics to determine exclusion rules.
     
     Returns:
         Dict with semantic flags: peak, valley, volatility, direction, etc.
     """
-    target_lower = target_name.lower()
+    target_lower = target.lower()
     
     semantics = {
         'peak': bool(re.search(r'peak|high|swing.*high|zigzag.*high', target_lower)),
@@ -149,7 +149,7 @@ def compute_feature_lookback_minutes(
 
 
 def generate_target_exclusion_list(
-    target_name: str,
+    target: str,
     all_features: List[str],
     interval_minutes: float = 5.0,
     output_dir: Optional[Path] = None,
@@ -163,7 +163,7 @@ def generate_target_exclusion_list(
     feature set to the specific physics of each target.
     
     Args:
-        target_name: Target column name
+        target: Target column name
         all_features: List of all available feature names
         interval_minutes: Data interval in minutes
         output_dir: Directory to save exclusion list (optional)
@@ -176,7 +176,7 @@ def generate_target_exclusion_list(
     exclusions = []
     exclusion_reasons = {}
     metadata = {
-        'target_name': target_name,
+        'target': target,
         'target_horizon_minutes': None,
         'target_semantics': {},
         'exclusion_rules_applied': [],
@@ -185,8 +185,8 @@ def generate_target_exclusion_list(
     }
     
     # Extract target characteristics
-    target_horizon = extract_target_horizon_minutes(target_name, config)
-    target_semantics = classify_target_semantics(target_name)
+    target_horizon = extract_target_horizon_minutes(target, config)
+    target_semantics = classify_target_semantics(target)
     
     metadata['target_horizon_minutes'] = target_horizon
     metadata['target_semantics'] = target_semantics
@@ -310,11 +310,11 @@ def generate_target_exclusion_list(
         output_dir.mkdir(parents=True, exist_ok=True)
         
         # Sanitize target name for filename
-        safe_target_name = re.sub(r'[^\w\-_]', '_', target_name)
-        exclusion_file = output_dir / f"{safe_target_name}_exclusions.yaml"
+        safe_target = re.sub(r'[^\w\-_]', '_', target)
+        exclusion_file = output_dir / f"{safe_target}_exclusions.yaml"
         
         exclusion_data = {
-            'target_name': target_name,
+            'target': target,
             'target_horizon_minutes': target_horizon,
             'target_semantics': target_semantics,
             'excluded_features': exclusions,
@@ -326,7 +326,7 @@ def generate_target_exclusion_list(
             yaml.dump(exclusion_data, f, default_flow_style=False, sort_keys=False)
         
         logger.info(
-            f"📋 Generated target-conditional exclusions for {target_name}: "
+            f"📋 Generated target-conditional exclusions for {target}: "
             f"{len(exclusions)} features excluded (saved to {exclusion_file})"
         )
     
@@ -334,7 +334,7 @@ def generate_target_exclusion_list(
 
 
 def load_target_exclusion_list(
-    target_name: str,
+    target: str,
     exclusion_dir: Path
 ) -> Optional[List[str]]:
     """
@@ -347,15 +347,15 @@ def load_target_exclusion_list(
     across runs for the same target, improving consistency and performance.
     
     Args:
-        target_name: Target column name
+        target: Target column name
         exclusion_dir: Directory containing exclusion lists (typically RESULTS/{cohort}/{run}/feature_exclusions/)
     
     Returns:
         List of excluded feature names, or None if not found
     """
     exclusion_dir = Path(exclusion_dir)
-    safe_target_name = re.sub(r'[^\w\-_]', '_', target_name)
-    exclusion_file = exclusion_dir / f"{safe_target_name}_exclusions.yaml"
+    safe_target = re.sub(r'[^\w\-_]', '_', target)
+    exclusion_file = exclusion_dir / f"{safe_target}_exclusions.yaml"
     
     if not exclusion_file.exists():
         logger.debug(f"Exclusion list not found at {exclusion_file} - will generate new one")

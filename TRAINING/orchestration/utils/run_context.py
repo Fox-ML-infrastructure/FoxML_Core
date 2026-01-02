@@ -74,19 +74,19 @@ class RunContext:
     
     # Target specification
     target_column: Optional[str] = None
-    target_name: Optional[str] = None
+    target: Optional[str] = None
     target_config: Optional[Dict[str, Any]] = None
     
     # Cross-sectional config
     min_cs: Optional[int] = None
     max_cs_samples: Optional[int] = None
     leakage_filter_version: Optional[str] = None
-    universe_id: Optional[str] = None
+    universe_sig: Optional[str] = None  # SST: Universe signature
     
     # CV configuration
     cv_splitter: Optional[Any] = None  # PurgedTimeSeriesSplit or similar
     cv_method: str = "purged_kfold"
-    cv_folds: Optional[int] = None
+    folds: Optional[int] = None
     horizon_minutes: Optional[float] = None
     purge_minutes: Optional[float] = None
     embargo_minutes: Optional[float] = None
@@ -104,15 +104,14 @@ class RunContext:
     
     # Stage and routing
     stage: str = "target_ranking"
-    route_type: Optional[str] = None
     symbol: Optional[str] = None
-    view: Optional[str] = None  # "CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "LOSO" for target ranking
     model_family: Optional[str] = None
     
-    # Mode resolution (SST - Single Source of Truth)
-    requested_mode: Optional[str] = None  # Mode requested by caller/config
-    resolved_mode: Optional[str] = None  # Mode actually used (after auto-flip logic) - IMMUTABLE after first write
-    mode_reason: Optional[str] = None  # Reason for resolution (e.g., "n_symbols=5 (small panel)")
+    # View resolution (SST - Single Source of Truth)
+    # "view" is the canonical field for modeling granularity
+    view: Optional[str] = None  # SST: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
+    requested_view: Optional[str] = None  # View requested by caller/config
+    view_reason: Optional[str] = None  # Reason for resolution (e.g., "n_symbols=5 (small panel)")
     
     # Data scope (what's loaded right now - can vary per-symbol, non-immutable)
     data_scope: Optional[str] = None  # "PANEL" (multiple symbols) or "SINGLE_SYMBOL" (one symbol)
@@ -121,6 +120,25 @@ class RunContext:
     _data_fingerprint: Optional[str] = field(default=None, init=False, repr=False)
     _feature_registry_hash: Optional[str] = field(default=None, init=False, repr=False)
     _label_definition_hash: Optional[str] = field(default=None, init=False, repr=False)
+    
+    def __post_init__(self):
+        """
+        Validate and normalize SST fields.
+        
+        Invariants enforced:
+        - view must be None or one of: CROSS_SECTIONAL, SYMBOL_SPECIFIC
+        - universe_sig should be set when view is resolved
+        """
+        # Validate view values if set
+        valid_views = {"CROSS_SECTIONAL", "SYMBOL_SPECIFIC"}
+        if self.view is not None and self.view not in valid_views:
+            raise ValueError(
+                f"Invalid view '{self.view}'. Must be one of: {valid_views}"
+            )
+        if self.requested_view is not None and self.requested_view not in valid_views:
+            raise ValueError(
+                f"Invalid requested_view '{self.requested_view}'. Must be one of: {valid_views}"
+            )
     
     def derive_purge_embargo(self, buffer_bars: int = 1) -> Tuple[float, float]:
         """
@@ -176,8 +194,8 @@ class RunContext:
         ]
         
         # CV fields are required if CV is being used
-        if self.cv_splitter is not None or self.cv_folds is not None:
-            required.extend(["cv_folds", "purge_minutes"])
+        if self.cv_splitter is not None or self.folds is not None:
+            required.extend(["folds", "purge_minutes"])
         
         return required
     
@@ -205,14 +223,14 @@ class RunContext:
         """Convert context to dictionary for serialization."""
         return {
             "target_column": self.target_column,
-            "target_name": self.target_name,
+            "target": self.target,
             "target_config": self.target_config,
             "min_cs": self.min_cs,
             "max_cs_samples": self.max_cs_samples,
             "leakage_filter_version": self.leakage_filter_version,
-            "universe_id": self.universe_id,
+            "universe_sig": self.universe_sig,  # SST canonical
             "cv_method": self.cv_method,
-            "cv_folds": self.cv_folds,
+            "folds": self.folds,
             "horizon_minutes": self.horizon_minutes,
             "purge_minutes": self.purge_minutes,
             "embargo_minutes": self.embargo_minutes,
@@ -220,21 +238,50 @@ class RunContext:
             "data_interval_minutes": self.data_interval_minutes,
             "seed": self.seed,
             "stage": self.stage,
-            "route_type": self.route_type,
+            "view": self.view,
             "symbol": self.symbol,
             "model_family": self.model_family,
-            "requested_mode": self.requested_mode,
-            "resolved_mode": self.resolved_mode,
-            "mode_reason": self.mode_reason,
+            # Canonical fields (SST)
+            "view": self.view,
+            "requested_view": self.requested_view,
+            "view_reason": self.view_reason,
+            # Deprecated aliases (for backward compat)
+            "requested_view": self.requested_view,
+            "view": self.view,
+            "view_reason": self.view_reason,
             "data_scope": self.data_scope
         }
 
 
+def _validate_view(view_str: Optional[str]) -> Optional[str]:
+    """
+    Validate and normalize view string using View enum.
+    
+    Args:
+        view_str: View string to validate
+    
+    Returns:
+        Normalized view string (CROSS_SECTIONAL or SYMBOL_SPECIFIC) or None
+    
+    Raises:
+        ValueError: If view_str is not a valid view value
+    """
+    if view_str is None:
+        return None
+    
+    try:
+        from TRAINING.orchestration.utils.scope_resolution import View
+        return View.from_string(view_str).value
+    except ValueError:
+        logger.warning(f"Invalid view value '{view_str}', expected CROSS_SECTIONAL or SYMBOL_SPECIFIC")
+        raise
+
+
 def save_run_context(
     output_dir: Path,
-    requested_mode: Optional[str] = None,
-    resolved_mode: Optional[str] = None,
-    mode_reason: Optional[str] = None,
+    view: Optional[str] = None,
+    requested_view: Optional[str] = None,
+    view_reason: Optional[str] = None,
     n_symbols: Optional[int] = None,
     data_scope: Optional[str] = None,
     universe_signature: Optional[str] = None,
@@ -242,29 +289,36 @@ def save_run_context(
     **additional_data
 ) -> Path:
     """
-    Save resolved mode to globals/run_context.json (SST - Single Source of Truth).
+    Save resolved view to globals/run_context.json (SST - Single Source of Truth).
     
-    resolved_mode is immutable PER UNIVERSE (keyed by universe_signature).
-    Different universes can have different modes.
+    view is immutable PER UNIVERSE (keyed by universe_signature).
+    Different universes can have different views.
     data_scope can change per-symbol (non-immutable).
     
     Args:
         output_dir: Run output directory (e.g., RESULTS/runs/.../intelligent_output_...)
-        requested_mode: Mode requested by caller/config
-        resolved_mode: Mode actually used (after auto-flip logic) - IMMUTABLE per universe
-        mode_reason: Reason for resolution (stored as original_reason for new universes)
+        requested_view: DEPRECATED - use requested_view
+        view: DEPRECATED - use view
+        view_reason: DEPRECATED - use view_reason
         n_symbols: Number of symbols (for context)
         data_scope: Data scope (PANEL or SINGLE_SYMBOL) - can change per-symbol, non-immutable
         universe_signature: Hash of symbol universe (from compute_universe_signature)
         symbols: List of symbols (for logging/debugging)
+        view: SST - View actually used (CROSS_SECTIONAL or SYMBOL_SPECIFIC) - IMMUTABLE per universe
+        requested_view: SST - View requested by caller/config
+        view_reason: SST - Reason for resolution (stored as original_reason for new universes)
         **additional_data: Additional metadata to store
     
     Returns:
         Path to run_context.json file
     
     Raises:
-        ValueError: If trying to overwrite existing resolved_mode for same universe
+        ValueError: If trying to overwrite existing view for same universe
     """
+    # SST: Validate view if provided
+    if view is not None:
+        view = _validate_view(view)
+    
     run_context_path = output_dir / "globals" / "run_context.json"
     run_context_path.parent.mkdir(parents=True, exist_ok=True)
     
@@ -277,50 +331,50 @@ def save_run_context(
         except Exception as e:
             logger.warning(f"Could not load existing run_context.json: {e}, creating new one")
     
-    # Get existing resolved_modes dict (keyed by universe signature)
-    resolved_modes = existing_context.get("resolved_modes", {})
+    # Get existing views dict (keyed by universe signature)
+    views = existing_context.get("views", {})
     
     # If universe_signature provided, store per-universe (new behavior)
-    if universe_signature and resolved_mode:
-        if universe_signature in resolved_modes:
-            existing_entry = resolved_modes[universe_signature]
-            if existing_entry["resolved_mode"] != resolved_mode:
+    if universe_signature and view:
+        if universe_signature in views:
+            existing_entry = views[universe_signature]
+            if existing_entry["view"] != view:
                 raise ValueError(
                     f"Mode contract violation for universe {universe_signature}: "
-                    f"Cannot change from '{existing_entry['resolved_mode']}' to '{resolved_mode}'. "
+                    f"Cannot change from '{existing_entry['view']}' to '{view}'. "
                     f"Original reason: {existing_entry.get('original_reason', 'N/A')}"
                 )
             # Same mode, keep existing entry (don't update timestamp)
         else:
             # New universe - store the entry with original_reason (not nested)
             symbols_sample = symbols[:3] if symbols and len(symbols) > 3 else (symbols or [])
-            resolved_modes[universe_signature] = {
-                "resolved_mode": resolved_mode,
-                "original_reason": mode_reason,  # Store the ORIGINAL reason, not nested
+            views[universe_signature] = {
+                "view": view,
+                "original_reason": view_reason,  # Store the ORIGINAL reason, not nested
                 "n_symbols": n_symbols,
                 "symbols_sample": symbols_sample,
                 "resolved_at": datetime.utcnow().isoformat() + "Z"
             }
-            logger.info(f"🔑 New universe {universe_signature}: resolved_mode={resolved_mode}, n_symbols={n_symbols}")
+            logger.info(f"🔑 New universe {universe_signature}: view={view}, n_symbols={n_symbols}")
     
-    # Legacy: check global resolved_mode if no universe_signature provided
-    elif resolved_mode and existing_context.get("resolved_mode") is not None:
-        if existing_context["resolved_mode"] != resolved_mode:
+    # Legacy: check global view if no universe_signature provided
+    elif view and existing_context.get("view") is not None:
+        if existing_context["view"] != view:
             raise ValueError(
-                f"Mode contract violation: Cannot change resolved_mode from '{existing_context['resolved_mode']}' "
-                f"to '{resolved_mode}'. Resolved mode is immutable after first write. "
-                f"Existing reason: {existing_context.get('mode_reason', 'N/A')}"
+                f"Mode contract violation: Cannot change view from '{existing_context['view']}' "
+                f"to '{view}'. Resolved mode is immutable after first write. "
+                f"Existing reason: {existing_context.get('view_reason', 'N/A')}"
             )
     
     # Build context dict
     context = {
-        "requested_mode": requested_mode or existing_context.get("requested_mode"),
-        "resolved_modes": resolved_modes,  # Dict keyed by universe signature
+        "requested_view": requested_view or existing_context.get("requested_view"),
+        "views": views,  # Dict keyed by universe signature
         "current_universe": universe_signature or existing_context.get("current_universe"),
         "data_scope": data_scope or existing_context.get("data_scope"),
         # Keep legacy fields for backward compat
-        "resolved_mode": resolved_mode or existing_context.get("resolved_mode"),
-        "mode_reason": mode_reason or existing_context.get("mode_reason"),
+        "view": view or existing_context.get("view"),
+        "view_reason": view_reason or existing_context.get("view_reason"),
         "n_symbols": n_symbols or existing_context.get("n_symbols"),
         "resolved_at": existing_context.get("resolved_at") or datetime.utcnow().isoformat() + "Z",
         **additional_data
@@ -330,7 +384,7 @@ def save_run_context(
     with open(run_context_path, 'w') as f:
         json.dump(context, f, indent=2)
     
-    logger.debug(f"✅ Saved run context: universe={universe_signature}, resolved_mode={resolved_mode}")
+    logger.debug(f"✅ Saved run context: universe={universe_signature}, view={view}")
     
     return run_context_path
 
@@ -343,7 +397,7 @@ def load_run_context(output_dir: Path) -> Optional[Dict[str, Any]]:
         output_dir: Run output directory
     
     Returns:
-        Run context dict with resolved_mode, requested_mode, etc., or None if not found
+        Run context dict with view, requested_view, etc., or None if not found
     """
     run_context_path = output_dir / "globals" / "run_context.json"
     
@@ -359,9 +413,9 @@ def load_run_context(output_dir: Path) -> Optional[Dict[str, Any]]:
         return None
 
 
-def get_resolved_mode(output_dir: Path) -> Optional[str]:
+def get_view(output_dir: Path) -> Optional[str]:
     """
-    Get resolved_mode from run context (convenience function).
+    Get view from run context (convenience function).
     
     Args:
         output_dir: Run output directory
@@ -371,11 +425,11 @@ def get_resolved_mode(output_dir: Path) -> Optional[str]:
     """
     context = load_run_context(output_dir)
     if context:
-        return context.get("resolved_mode")
+        return context.get("view")
     return None
 
 
-def get_resolved_mode_for_universe(output_dir: Path, universe_signature: str) -> Optional[Dict[str, Any]]:
+def get_view_for_universe(output_dir: Path, universe_signature: str) -> Optional[Dict[str, Any]]:
     """
     Get the resolved mode entry for a specific universe.
     
@@ -384,45 +438,59 @@ def get_resolved_mode_for_universe(output_dir: Path, universe_signature: str) ->
         universe_signature: Hash of symbol universe (from compute_universe_signature)
     
     Returns:
-        Dict with resolved_mode, original_reason, n_symbols, etc., or None if not found
+        Dict with view, original_reason, n_symbols, etc., or None if not found
     """
     context = load_run_context(output_dir)
     if context:
-        resolved_modes = context.get("resolved_modes", {})
-        return resolved_modes.get(universe_signature)
+        views = context.get("views", {})
+        return views.get(universe_signature)
     return None
 
 
-def validate_mode_contract(
-    resolved_mode: str,
-    requested_mode: Optional[str],
-    mode_policy: str
+def validate_view_contract(
+    resolved_view: str,
+    requested_view: Optional[str],
+    view_policy: str
 ) -> bool:
     """
-    Validate that resolved_mode matches contract based on mode_policy.
+    Validate that resolved_view matches contract based on view_policy.
     
     Args:
-        resolved_mode: Mode actually used (after auto-flip logic)
-        requested_mode: Mode requested by caller/config
-        mode_policy: "force" or "auto"
+        resolved_view: View actually used (after auto-flip logic)
+        requested_view: View requested by caller/config
+        view_policy: "force" or "auto"
     
     Returns:
         True if contract is satisfied
     
     Raises:
-        ValueError: If mode_policy=force and resolved_mode != requested_mode
+        ValueError: If view_policy=force and resolved_view != requested_view
     """
-    if mode_policy == "force":
-        if requested_mode is None:
+    if view_policy == "force":
+        if requested_view is None:
             raise ValueError(
-                f"Mode contract violation: mode_policy=force requires requested_mode to be set, "
-                f"but got None. Resolved mode: {resolved_mode}"
+                f"View contract violation: view_policy=force requires requested_view to be set, "
+                f"but got None. Resolved view: {resolved_view}"
             )
-        if resolved_mode != requested_mode:
+        if resolved_view != requested_view:
             raise ValueError(
-                f"Mode contract violation: mode_policy=force requires resolved_mode={requested_mode}, "
-                f"but got resolved_mode={resolved_mode}. This indicates the resolver incorrectly "
-                f"flipped the mode when it should have been forced."
+                f"View contract violation: view_policy=force requires resolved_view={requested_view}, "
+                f"but got resolved_view={resolved_view}. This indicates the resolver incorrectly "
+                f"flipped the view when it should have been forced."
             )
-    # For "auto" policy, any resolved_mode is valid (resolver can flip)
+    # For "auto" policy, any resolved_view is valid (resolver can flip)
     return True
+
+
+# DEPRECATED: Alias for backward compatibility
+def validate_mode_contract(
+    view: str,
+    requested_view: Optional[str],
+    view_policy: str
+) -> bool:
+    """
+    DEPRECATED: Use validate_view_contract() instead.
+    
+    Alias kept for backward compatibility during migration.
+    """
+    return validate_view_contract(view, requested_view, view_policy)

@@ -646,8 +646,8 @@ def train_and_evaluate_models(
             # Generate deterministic seed for feature pruning based on target
             from TRAINING.common.determinism import stable_seed_from
             # Use target_column if available, otherwise use default
-            target_name_for_seed = target_column if target_column else 'pruning'
-            prune_seed = stable_seed_from([target_name_for_seed, 'feature_pruning'])
+            target_for_seed = target_column if target_column else 'pruning'
+            prune_seed = stable_seed_from([target_for_seed, 'feature_pruning'])
             
             # Load feature pruning config
             if _CONFIG_AVAILABLE:
@@ -670,7 +670,7 @@ def train_and_evaluate_models(
                 min_features=min_features,
                 task_type=task_str,
                 n_estimators=n_estimators,
-                random_state=prune_seed
+                seed=prune_seed
             )
             
             # NEW: Track pruning drops for telemetry with stage record
@@ -919,9 +919,9 @@ def train_and_evaluate_models(
                                 from TRAINING.orchestration.utils.target_first_paths import (
                                     get_target_reproducibility_dir, ensure_target_structure
                                 )
-                                target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-                                ensure_target_structure(base_output_dir, target_name_clean)
-                                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+                                target_clean = target_column.replace('/', '_').replace('\\', '_')
+                                ensure_target_structure(base_output_dir, target_clean)
+                                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
                                 target_artifact_dir = target_repro_dir / "featureset_artifacts"
                                 target_artifact_dir.mkdir(parents=True, exist_ok=True)
                                 post_prune_artifact.save(target_artifact_dir)
@@ -989,9 +989,9 @@ def train_and_evaluate_models(
                         )
                 
                 # CRITICAL: Boundary assertion - validate feature_names matches POST_PRUNE EnforcedFeatureSet
-                from TRAINING.ranking.utils.lookback_policy import assert_featureset_fingerprint
+                from TRAINING.ranking.utils.lookback_policy import assert_featureset_hash
                 try:
-                    assert_featureset_fingerprint(
+                    assert_featureset_hash(
                         label="POST_PRUNE",
                         expected=post_prune_enforced,
                         actual_features=feature_names,
@@ -1329,7 +1329,7 @@ def train_and_evaluate_models(
                 try:
                     from TRAINING.stability.feature_importance import save_snapshot_hook
                     # Use target-first structure for snapshots
-                    target_name_clean = (target_column if target_column else 'unknown').replace('/', '_').replace('\\', '_')
+                    target_clean = (target_column if target_column else 'unknown').replace('/', '_').replace('\\', '_')
                     
                     # Find base run directory
                     base_output_dir = output_dir
@@ -1347,14 +1347,14 @@ def train_and_evaluate_models(
                             from TRAINING.orchestration.utils.target_first_paths import (
                                 get_target_reproducibility_dir, ensure_target_structure
                             )
-                            ensure_target_structure(base_output_dir, target_name_clean)
-                            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+                            ensure_target_structure(base_output_dir, target_clean)
+                            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
                             
                             save_snapshot_hook(
-                                target_name=target_column if target_column else 'unknown',
+                                target=target_column if target_column else 'unknown',
                                 method="quick_pruner",
                                 importance_dict=pruning_stats['full_importance_dict'],
-                                universe_id=view,  # Use view parameter
+                                universe_sig=None,  # FIX: universe_sig not available in train_and_evaluate_models scope; use None instead of view
                                 output_dir=target_repro_dir,  # Use target-first structure
                                 auto_analyze=None,  # Load from config
                             )
@@ -1402,8 +1402,8 @@ def train_and_evaluate_models(
         if 'post_prune_fp' in locals() and post_prune_fp is not None:
             # Use reusable invariant check helper (if EnforcedFeatureSet available)
             if 'post_prune_enforced' in locals():
-                from TRAINING.ranking.utils.lookback_policy import assert_featureset_fingerprint
-                assert_featureset_fingerprint(
+                from TRAINING.ranking.utils.lookback_policy import assert_featureset_hash
+                assert_featureset_hash(
                     label="MODEL_TRAIN_INPUT",
                     expected=post_prune_enforced,
                     actual_features=feature_names,
@@ -1553,10 +1553,10 @@ def train_and_evaluate_models(
         # Try to load from config if multi_model_config not provided
         try:
             from CONFIG.config_loader import get_cfg
-            cv_folds = int(get_cfg("training.cv_folds", default=3, config_name="intelligent_training_config"))
+            folds = int(get_cfg("training.folds", default=3, config_name="intelligent_training_config"))
             cv_n_jobs = int(get_cfg("training.cv_n_jobs", default=1, config_name="intelligent_training_config"))
         except Exception:
-            cv_folds = 3
+            folds = 3
             cv_n_jobs = 1
     else:
         cv_config = multi_model_config.get('cross_validation', {})
@@ -1566,11 +1566,11 @@ def train_and_evaluate_models(
         # SST: Try to get from config first, then fallback to cv_config or defaults
         try:
             from CONFIG.config_loader import get_cfg
-            cv_folds = int(get_cfg("training.cv_folds", default=cv_config.get('cv_folds', 3), config_name="intelligent_training_config"))
+            folds = int(get_cfg("training.folds", default=cv_config.get('folds', 3), config_name="intelligent_training_config"))
             cv_n_jobs = int(get_cfg("training.cv_n_jobs", default=cv_config.get('n_jobs', 1), config_name="intelligent_training_config"))
         except Exception:
             # Fallback to cv_config or defaults if config loader fails
-            cv_folds = cv_config.get('cv_folds', 3)
+            folds = cv_config.get('folds', 3)
             cv_n_jobs = cv_config.get('n_jobs', 1)
     
     # CRITICAL: Use PurgedTimeSeriesSplit to prevent temporal leakage
@@ -1852,20 +1852,20 @@ def train_and_evaluate_models(
         # PHASE 1: Pre-CV compatibility check for degenerate folds (first-class handling)
         # Check if target is compatible with CV before creating splitter
         from TRAINING.ranking.utils.target_validation import check_cv_compatibility
-        is_cv_compatible, cv_compatibility_reason = check_cv_compatibility(y, task_type, cv_folds)
+        is_cv_compatible, cv_compatibility_reason = check_cv_compatibility(y, task_type, folds)
         
         # Get degenerate fold fallback policy from config
         cv_degenerate_fallback = "reduce_folds"  # Default
-        cv_min_folds = 2  # Default minimum folds
+        cv_mifolds = 2  # Default minimum folds
         try:
             from CONFIG.config_loader import get_cfg
             cv_degenerate_fallback = get_cfg("training.cv_degenerate_fallback", default="reduce_folds", config_name="intelligent_training_config")
-            cv_min_folds = int(get_cfg("training.cv_min_folds", default=2, config_name="intelligent_training_config"))
+            cv_mifolds = int(get_cfg("training.cv_mifolds", default=2, config_name="intelligent_training_config"))
         except Exception:
             pass
         
         # Apply fallback policy if target is not CV-compatible
-        original_cv_folds = cv_folds
+        original_folds = folds
         if not is_cv_compatible:
             logger.info(
                 f"  ℹ️  CV compatibility check: {cv_compatibility_reason}. "
@@ -1874,30 +1874,30 @@ def train_and_evaluate_models(
             
             if cv_degenerate_fallback == "reduce_folds":
                 # Reduce folds until compatible or reach minimum
-                while cv_folds > cv_min_folds:
-                    cv_folds -= 1
-                    is_compatible, reason = check_cv_compatibility(y, task_type, cv_folds)
+                while folds > cv_mifolds:
+                    folds -= 1
+                    is_compatible, reason = check_cv_compatibility(y, task_type, folds)
                     if is_compatible:
                         logger.info(
-                            f"  ℹ️  Reduced CV folds from {original_cv_folds} to {cv_folds} to handle degenerate target. "
+                            f"  ℹ️  Reduced CV folds from {original_folds} to {folds} to handle degenerate target. "
                             f"Reason: {cv_compatibility_reason}"
                         )
                         break
                     cv_compatibility_reason = reason
                 
                 # If still not compatible at minimum folds, skip CV
-                if cv_folds == cv_min_folds and not check_cv_compatibility(y, task_type, cv_folds)[0]:
+                if folds == cv_mifolds and not check_cv_compatibility(y, task_type, folds)[0]:
                     logger.info(
-                        f"  ℹ️  Target still degenerate at minimum folds ({cv_min_folds}). "
+                        f"  ℹ️  Target still degenerate at minimum folds ({cv_mifolds}). "
                         f"Will skip CV and train on full dataset for importance only."
                     )
-                    cv_folds = 0  # Signal to skip CV
+                    folds = 0  # Signal to skip CV
             elif cv_degenerate_fallback == "skip_cv":
                 logger.info(
                     f"  ℹ️  Skipping CV due to degenerate target. "
                     f"Will train on full dataset for importance only. Reason: {cv_compatibility_reason}"
                 )
-                cv_folds = 0  # Signal to skip CV
+                folds = 0  # Signal to skip CV
             elif cv_degenerate_fallback == "different_splitter":
                 # For classification, use StratifiedKFold if available
                 logger.info(
@@ -1906,19 +1906,19 @@ def train_and_evaluate_models(
                 )
                 # Note: This would require implementing alternative splitter logic
                 # For now, fall back to reduce_folds
-                cv_folds = max(cv_min_folds, cv_folds - 1)
-                logger.info(f"  ℹ️  Falling back to reduce_folds: {cv_folds} folds")
+                folds = max(cv_mifolds, folds - 1)
+                logger.info(f"  ℹ️  Falling back to reduce_folds: {folds} folds")
         
         # Create splitter only if we have valid folds
         skip_cv = False
-        if cv_folds > 0:
+        if folds > 0:
             tscv = PurgedTimeSeriesSplit(
-                n_splits=cv_folds, 
+                n_splits=folds, 
                 purge_overlap_time=purge_time,
                 time_column_values=time_vals
             )
             if log_cfg.cv_detail:
-                logger.info(f"  Using PurgedTimeSeriesSplit (TIME-BASED): {cv_folds} folds, purge_time={purge_time}")
+                logger.info(f"  Using PurgedTimeSeriesSplit (TIME-BASED): {folds} folds, purge_time={purge_time}")
         else:
             # Skip CV - will train on full dataset
             tscv = None
@@ -1930,14 +1930,14 @@ def train_and_evaluate_models(
         if skip_cv:
             # Skip fold validation if CV is skipped
             all_folds = []
-            n_folds_generated = 0
+            folds_generated = 0
             valid_folds = []
             n_valid_folds = 0
         else:
             all_folds = list(tscv.split(X, y))
-            n_folds_generated = len(all_folds)
+            folds_generated = len(all_folds)
         
-        if n_folds_generated == 0 and not skip_cv:
+        if folds_generated == 0 and not skip_cv:
             raise RuntimeError(
                 f"🚨 No CV folds generated. This usually means purge/embargo ({purge_time:.1f}m) is too large "
                 f"relative to data span. Either: 1) Reduce lookback_budget_minutes cap to drop long-lookback features, "
@@ -1981,7 +1981,7 @@ def train_and_evaluate_models(
         
         if n_valid_folds == 0 and not skip_cv:
             raise RuntimeError(
-                f"🚨 No valid CV folds after validation. Generated {n_folds_generated} folds, but all were invalid. "
+                f"🚨 No valid CV folds after validation. Generated {folds_generated} folds, but all were invalid. "
                 f"This usually means: 1) purge/embargo ({purge_time:.1f}m) is too large relative to data span, "
                 f"2) Target is degenerate (single class or extreme imbalance), or "
                 f"3) Data span is insufficient. "
@@ -1990,9 +1990,9 @@ def train_and_evaluate_models(
             )
         
         if not skip_cv:
-            if n_valid_folds < n_folds_generated:
+            if n_valid_folds < folds_generated:
                 logger.warning(
-                    f"  ⚠️  Only {n_valid_folds}/{n_folds_generated} folds are valid. "
+                    f"  ⚠️  Only {n_valid_folds}/{folds_generated} folds are valid. "
                     f"Proceeding with {n_valid_folds} folds."
                 )
             
@@ -2011,7 +2011,7 @@ def train_and_evaluate_models(
             
             tscv = ValidatedSplitter(valid_folds)
             if log_cfg.cv_detail:
-                logger.info(f"  ✅ CV fold validation: {n_valid_folds} valid folds (from {n_folds_generated} generated)")
+                logger.info(f"  ✅ CV fold validation: {n_valid_folds} valid folds (from {folds_generated} generated)")
     else:
         # CRITICAL: Row-count based purging is INVALID for panel data (multiple symbols per timestamp)
         # With 50 symbols, 1 bar = 50 rows. Using row counts causes catastrophic leakage.
@@ -4252,22 +4252,22 @@ def train_and_evaluate_models(
             # Get config values
             mi_config = get_model_config('mutual_information', multi_model_config)
             
-            # Get random_state from SST (determinism system) - no hardcoded defaults
-            mi_random_state = mi_config.get('random_state')
-            if mi_random_state is None:
+            # Get seed from SST (determinism system) - no hardcoded defaults
+            mi_seed = mi_config.get('seed')
+            if mi_seed is None:
                 from TRAINING.common.determinism import stable_seed_from
-                mi_random_state = stable_seed_from(['mutual_information', target_column if target_column else 'default'])
+                mi_seed = stable_seed_from(['mutual_information', target_column if target_column else 'default'])
             
             # Suppress warnings for zero-variance features
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
                 if is_binary or is_multiclass:
                     importance = mutual_info_classif(X_dense, y, 
-                                                    random_state=mi_random_state,
+                                                    random_state=mi_seed,
                                                     discrete_features=mi_config.get('discrete_features', 'auto'))
                 else:
                     importance = mutual_info_regression(X_dense, y, 
-                                                       random_state=mi_random_state,
+                                                       random_state=mi_seed,
                                                        discrete_features=mi_config.get('discrete_features', 'auto'))
             
             # Update feature_names to match dense array
@@ -4537,23 +4537,23 @@ def train_and_evaluate_models(
                 # Use random_forest config for Boruta estimator
                 rf_config = get_model_config('random_forest', multi_model_config)
                 
-                # Get random_state from SST (determinism system) - no hardcoded defaults
-                boruta_random_state = boruta_config.get('random_state')
-                if boruta_random_state is None:
+                # Get seed from SST (determinism system) - no hardcoded defaults
+                boruta_seed = boruta_config.get('seed')
+                if boruta_seed is None:
                     from TRAINING.common.determinism import stable_seed_from
-                    boruta_random_state = stable_seed_from(['boruta', target_column if target_column else 'default'])
+                    boruta_seed = stable_seed_from(['boruta', target_column if target_column else 'default'])
                 
-                # Remove random_state from rf_config to prevent double argument error
+                # Remove seed from rf_config to prevent double argument error
                 rf_config_clean = rf_config.copy()
-                rf_config_clean.pop('random_state', None)
+                rf_config_clean.pop('seed', None)
                 
                 if is_binary or is_multiclass:
-                    rf = RandomForestClassifier(**rf_config_clean, random_state=boruta_random_state)
+                    rf = RandomForestClassifier(**rf_config_clean, random_state=boruta_seed)
                 else:
-                    rf = RandomForestRegressor(**rf_config_clean, random_state=boruta_random_state)
+                    rf = RandomForestRegressor(**rf_config_clean, random_state=boruta_seed)
                 
                 boruta = BorutaPy(rf, n_estimators='auto', verbose=0, 
-                                random_state=boruta_random_state,
+                                random_state=boruta_seed,
                                 max_iter=boruta_config.get('max_iter', 100))
                 
                 # Track Boruta fit time and apply time-budget (SST: budget from config)
@@ -4751,11 +4751,11 @@ def train_and_evaluate_models(
             # Get config values
             stability_config = get_model_config('stability_selection', multi_model_config)
             n_bootstrap = stability_config.get('n_bootstrap', 50)
-            # Get random_state from SST (determinism system) - no hardcoded defaults
-            random_state = stability_config.get('random_state')
-            if random_state is None:
+            # Get seed from SST (determinism system) - no hardcoded defaults
+            seed = stability_config.get('seed')
+            if seed is None:
                 from TRAINING.common.determinism import stable_seed_from
-                random_state = stable_seed_from(['stability_selection', target_column if target_column else 'default'])
+                seed = stable_seed_from(['stability_selection', target_column if target_column else 'default'])
             stability_cv = stability_config.get('cv', 3)
             stability_n_jobs = stability_config.get('n_jobs', 1)
             stability_cs = stability_config.get('Cs', 10)
@@ -4776,16 +4776,16 @@ def train_and_evaluate_models(
                 try:
                     # Use TimeSeriesSplit for internal CV (even though bootstrap breaks temporal order,
                     # this maintains consistency with the rest of the codebase)
-                    # Clean config to prevent double random_state argument
+                    # Clean config to prevent double seed argument
                     from TRAINING.common.utils.config_cleaner import clean_config_for_estimator
                     if is_binary or is_multiclass:
                         lr_config = {'Cs': stability_cs, 'cv': tscv, 'max_iter': lasso_config.get('max_iter', 1000), 'n_jobs': stability_n_jobs}
-                        lr_config_clean = clean_config_for_estimator(LogisticRegressionCV, lr_config, extra_kwargs={'random_state': random_state}, family_name='stability_selection')
-                        model = LogisticRegressionCV(**lr_config_clean, random_state=random_state)
+                        lr_config_clean = clean_config_for_estimator(LogisticRegressionCV, lr_config, extra_kwargs={'random_state': seed}, family_name='stability_selection')
+                        model = LogisticRegressionCV(**lr_config_clean, random_state=seed)
                     else:
                         lasso_config_clean_dict = {'cv': tscv, 'max_iter': lasso_config.get('max_iter', 1000), 'n_jobs': stability_n_jobs}
-                        lasso_config_clean = clean_config_for_estimator(LassoCV, lasso_config_clean_dict, extra_kwargs={'random_state': random_state}, family_name='stability_selection')
-                        model = LassoCV(**lasso_config_clean, random_state=random_state)
+                        lasso_config_clean = clean_config_for_estimator(LassoCV, lasso_config_clean_dict, extra_kwargs={'random_state': seed}, family_name='stability_selection')
+                        model = LassoCV(**lasso_config_clean, random_state=seed)
                     
                     # Use threading utilities for smart thread management
                     if _THREADING_UTILITIES_AVAILABLE:
@@ -4809,12 +4809,12 @@ def train_and_evaluate_models(
                     # Use a quick model for CV scoring
                     if is_binary or is_multiclass:
                         lr_cv_config = {'Cs': [1.0], 'cv': tscv, 'max_iter': lasso_config.get('max_iter', 1000), 'n_jobs': 1}
-                        lr_cv_config_clean = clean_config_for_estimator(LogisticRegressionCV, lr_cv_config, extra_kwargs={'random_state': random_state}, family_name='stability_selection')
-                        cv_model = LogisticRegressionCV(**lr_cv_config_clean, random_state=random_state)
+                        lr_cv_config_clean = clean_config_for_estimator(LogisticRegressionCV, lr_cv_config, extra_kwargs={'random_state': seed}, family_name='stability_selection')
+                        cv_model = LogisticRegressionCV(**lr_cv_config_clean, random_state=seed)
                     else:
                         lasso_cv_config = {'cv': tscv, 'max_iter': lasso_config.get('max_iter', 1000), 'n_jobs': 1}
-                        lasso_cv_config_clean = clean_config_for_estimator(LassoCV, lasso_cv_config, extra_kwargs={'random_state': random_state}, family_name='stability_selection')
-                        cv_model = LassoCV(**lasso_cv_config_clean, random_state=random_state)
+                        lasso_cv_config_clean = clean_config_for_estimator(LassoCV, lasso_cv_config, extra_kwargs={'random_state': seed}, family_name='stability_selection')
+                        cv_model = LassoCV(**lasso_cv_config_clean, random_state=seed)
                     cv_scores = cross_val_score(cv_model, X_boot, y_boot, cv=tscv, scoring=scoring, n_jobs=1, error_score=np.nan)
                     valid_cv_scores = cv_scores[~np.isnan(cv_scores)]
                     if len(valid_cv_scores) > 0:
@@ -4972,7 +4972,7 @@ from TRAINING.ranking.predictability.model_evaluation.reporting import (
 
 
 def evaluate_target_predictability(
-    target_name: str,
+    target: str,
     target_config: Dict[str, Any] | TargetConfig,
     symbols: List[str],
     data_dir: Path,
@@ -5108,11 +5108,11 @@ def evaluate_target_predictability(
     # Convert dict config to TargetConfig if needed
     if isinstance(target_config, dict):
         target_column = target_config['target_column']
-        display_name = target_config.get('display_name', target_name)
+        display_name = target_config.get('display_name', target)
         # Infer task type from column name (will be refined with actual data)
         task_type = TaskType.from_target_column(target_column)
         target_config_obj = TargetConfig(
-            name=target_name,
+            name=target,
             target_column=target_column,
             task_type=task_type,
             display_name=display_name,
@@ -5122,7 +5122,7 @@ def evaluate_target_predictability(
     else:
         target_config_obj = target_config
         target_column = target_config_obj.target_column
-        display_name = target_config_obj.display_name or target_name
+        display_name = target_config_obj.display_name or target
     # Validate view and symbol parameters
     if view == "SYMBOL_SPECIFIC" and symbol is None:
         raise ValueError(f"symbol parameter required for SYMBOL_SPECIFIC view")
@@ -5132,24 +5132,24 @@ def evaluate_target_predictability(
         logger.warning(f"symbol={symbol} provided but view=CROSS_SECTIONAL, ignoring symbol")
         symbol = None
     
-    # Load resolved_mode from run context (SST) if available
-    # For per-symbol loops, use resolved_mode as requested_mode to prevent mode contract violations
-    resolved_mode_from_context = None
-    requested_mode_from_context = view  # Default to view parameter
+    # Load view from run context (SST) if available
+    # For per-symbol loops, use cached view as requested_view to prevent view contract violations
+    view_from_context = None
+    requested_view_from_context = view  # Default to view parameter
     try:
-        from TRAINING.orchestration.utils.run_context import get_resolved_mode, load_run_context
+        from TRAINING.orchestration.utils.run_context import load_run_context
         if output_dir:
             context = load_run_context(output_dir)
             if context:
-                resolved_mode_from_context = context.get("resolved_mode")
-                # For per-symbol loops (SYMBOL_SPECIFIC with single symbol), use resolved_mode as requested_mode
-                # This prevents the resolver from trying to change resolved_mode to SINGLE_SYMBOL_TS
-                if view == "SYMBOL_SPECIFIC" and resolved_mode_from_context:
-                    requested_mode_from_context = resolved_mode_from_context
+                view_from_context = context.get("view")
+                # For per-symbol loops (SYMBOL_SPECIFIC with single symbol), use cached view as requested_view
+                # This prevents the resolver from trying to change view to SINGLE_SYMBOL_TS
+                if view == "SYMBOL_SPECIFIC" and view_from_context:
+                    requested_view_from_context = view_from_context
                 else:
-                    requested_mode_from_context = context.get("requested_mode") or view
+                    requested_view_from_context = context.get("requested_view") or view
     except Exception as e:
-        logger.debug(f"Could not load resolved_mode from run context: {e}")
+        logger.debug(f"Could not load view from run context: {e}")
     
     # Load data based on view
     # Note: Header log moved to after data prep to show resolved mode
@@ -5179,10 +5179,10 @@ def evaluate_target_predictability(
     if not mtf_data:
         logger.error(f"No data loaded for any symbols")
         return TargetPredictabilityScore(
-            target_name=target_name,
+            target=target,
             target_column=target_column,
             task_type=TaskType.REGRESSION,
-            mean_score=-999.0,
+            auc=-999.0,
             std_score=1.0,
             mean_importance=0.0,
             consistency=0.0,
@@ -5211,27 +5211,27 @@ def evaluate_target_predictability(
         
         # Save feature exclusions to target-first structure (targets/<target>/reproducibility/feature_exclusions/)
         # Note: Exclusions are shared at target level (not per-symbol, not per-cohort)
-        target_name_clean = target_name.replace('/', '_').replace('\\', '_')
+        target_clean = target.replace('/', '_').replace('\\', '_')
         
         from TRAINING.orchestration.utils.target_first_paths import (
             get_target_reproducibility_dir, ensure_target_structure
         )
-        ensure_target_structure(base_output_dir, target_name_clean)
-        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+        ensure_target_structure(base_output_dir, target_clean)
+        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
         target_exclusion_dir = target_repro_dir / "feature_exclusions"
         target_exclusion_dir.mkdir(parents=True, exist_ok=True)
         
         # Try to load existing exclusion list first (check target-first structure)
-        existing_exclusions = load_target_exclusion_list(target_name, target_exclusion_dir)
+        existing_exclusions = load_target_exclusion_list(target, target_exclusion_dir)
         if existing_exclusions is None:
             # Fallback to legacy location (for reading existing runs only)
             legacy_repro_base = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
-            legacy_exclusion_dir = legacy_repro_base / view / target_name_clean / "feature_exclusions"
-            existing_exclusions = load_target_exclusion_list(target_name, legacy_exclusion_dir)
+            legacy_exclusion_dir = legacy_repro_base / view / target_clean / "feature_exclusions"
+            existing_exclusions = load_target_exclusion_list(target, legacy_exclusion_dir)
         if existing_exclusions is not None:
             target_conditional_exclusions = existing_exclusions
             logger.info(
-                f"📋 Loaded existing target-conditional exclusions for {target_name}: "
+                f"📋 Loaded existing target-conditional exclusions for {target}: "
                 f"{len(target_conditional_exclusions)} features "
                 f"(from {target_exclusion_dir})"
             )
@@ -5248,7 +5248,7 @@ def evaluate_target_predictability(
             temp_interval = detect_interval_from_dataframe(sample_df, explicit_interval=explicit_interval)
             
             target_conditional_exclusions, exclusion_metadata = generate_target_exclusion_list(
-                target_name=target_name,
+                target=target,
                 all_features=all_columns,
                 interval_minutes=temp_interval,
                 output_dir=target_exclusion_dir,
@@ -5259,9 +5259,9 @@ def evaluate_target_predictability(
             if target_conditional_exclusions:
                 try:
                     import shutil
-                    safe_target_name = target_name.replace('/', '_').replace('\\', '_')
-                    exclusion_file = target_exclusion_dir / f"{safe_target_name}_exclusions.yaml"
-                    legacy_exclusion_file = legacy_exclusion_dir / f"{safe_target_name}_exclusions.yaml"
+                    safe_target = target.replace('/', '_').replace('\\', '_')
+                    exclusion_file = target_exclusion_dir / f"{safe_target}_exclusions.yaml"
+                    legacy_exclusion_file = legacy_exclusion_dir / f"{safe_target}_exclusions.yaml"
                     if exclusion_file.exists():
                         shutil.copy2(exclusion_file, legacy_exclusion_file)
                         logger.debug(f"Saved exclusion file to legacy location: {legacy_exclusion_file}")
@@ -5270,7 +5270,7 @@ def evaluate_target_predictability(
             
             if target_conditional_exclusions:
                 logger.info(
-                    f"📋 Generated target-conditional exclusions for {target_name}: "
+                    f"📋 Generated target-conditional exclusions for {target}: "
                     f"{len(target_conditional_exclusions)} features excluded "
                     f"(horizon={exclusion_metadata.get('target_horizon_minutes', 'unknown')}m, "
                     f"semantics={exclusion_metadata.get('target_semantics', {})})"
@@ -5369,10 +5369,10 @@ def evaluate_target_predictability(
         )
         # Return -999.0 to indicate this target should be skipped (same as degenerate targets)
         return TargetPredictabilityScore(
-            target_name=target_name,
+            target=target,
             target_column=target_column,
             task_type=target_config_obj.task_type,
-            mean_score=-999.0,  # Flag for filtering (same as degenerate targets)
+            auc=-999.0,  # Flag for filtering (same as degenerate targets)
             std_score=0.0,
             mean_importance=0.0,
             consistency=0.0,
@@ -5420,7 +5420,7 @@ def evaluate_target_predictability(
             feature_time_meta_map=resolved_config.feature_time_meta_map if resolved_config else None,
             base_interval_minutes=resolved_config.base_interval_minutes if resolved_config else None,
             allow_single_symbol=True,  # Allow single symbol for SYMBOL_SPECIFIC view
-            requested_mode=requested_mode_from_context,
+            requested_view=requested_view_from_context,
             output_dir=output_dir
         )
         # Verify we only have one symbol
@@ -5431,7 +5431,7 @@ def evaluate_target_predictability(
         # LOSO: prepare training data (all symbols except validation symbol)
         X_train, y_train, feature_names_train, symbols_array_train, time_vals_train, resolved_data_config_train = prepare_cross_sectional_data_for_ranking(
             mtf_data, target_column, min_cs=min_cs, max_cs_samples=max_cs_samples, feature_names=safe_columns,
-            requested_mode=requested_mode_from_context,
+            requested_view=requested_view_from_context,
             output_dir=output_dir
         )
         # Load validation symbol data separately
@@ -5439,7 +5439,7 @@ def evaluate_target_predictability(
         X_val, y_val, feature_names_val, symbols_array_val, time_vals_val, resolved_data_config_val = prepare_cross_sectional_data_for_ranking(
             validation_mtf_data, target_column, min_cs=1, max_cs_samples=None, feature_names=safe_columns,
             allow_single_symbol=True,  # LOSO validation symbol is intentionally single-symbol
-            requested_mode=requested_mode_from_context,
+            requested_view=requested_view_from_context,
             output_dir=output_dir
         )
         # For LOSO, we'll use a special CV that trains on X_train and validates on X_val
@@ -5455,20 +5455,20 @@ def evaluate_target_predictability(
         # CROSS_SECTIONAL: standard pooled data
         X, y, feature_names, symbols_array, time_vals, resolved_data_config = prepare_cross_sectional_data_for_ranking(
             mtf_data, target_column, min_cs=min_cs, max_cs_samples=max_cs_samples, feature_names=safe_columns,
-            requested_mode=requested_mode_from_context,
+            requested_view=requested_view_from_context,
             output_dir=output_dir
         )
     
-    # Update header log after data prep to show resolved_mode
-    resolved_mode_final = None
+    # Update header log after data prep to show view
+    view_final = None
     if resolved_data_config:
-        resolved_mode_final = resolved_data_config.get("resolved_mode") or resolved_data_config.get("resolved_data_mode")
-    if not resolved_mode_final:
-        resolved_mode_final = resolved_mode_from_context
-    
-    requested_mode_final = requested_mode_from_context
+        view_final = resolved_data_config.get("view")
+    if not view_final:
+        view_final = view_from_context
+
+    requested_view_final = requested_view_from_context
     if resolved_data_config:
-        requested_mode_final = resolved_data_config.get("requested_mode") or requested_mode_final
+        requested_view_final = resolved_data_config.get("requested_view") or requested_view_final
     
     # ========================================================================
     # PATCH 0 (SST VIEW OVERRIDE): Use resolve_write_scope for ALL downstream writes
@@ -5497,7 +5497,7 @@ def evaluate_target_predictability(
     
     if view_for_writes != view:
         logger.warning(
-            f"SST OVERRIDE: Using resolved_mode={view_for_writes} instead of "
+            f"SST OVERRIDE: Using view={view_for_writes} instead of "
             f"caller view={view} for downstream writes"
         )
     if universe_sig_for_writes:
@@ -5507,14 +5507,16 @@ def evaluate_target_predictability(
     # END PATCH 0
     # ========================================================================
     
-    # Header log showing both requested and resolved modes (moved here after data prep)
+    # Header log showing ACTUAL write view (not just requested view)
+    # Use view_for_writes if set (from SST override), otherwise fall back to view_final
+    effective_view_for_log = view_for_writes if 'view_for_writes' in dir() and view_for_writes else view_final
     symbol_display = f" (symbol={symbol})" if symbol else ""
-    if resolved_mode_final and resolved_mode_final != requested_mode_final:
-        view_display = f"requested={requested_mode_final}, resolved={resolved_mode_final}{symbol_display}"
+    
+    # Show both requested and effective if they differ (e.g., SS->CS promotion blocked)
+    if effective_view_for_log and effective_view_for_log != requested_view_final:
+        view_display = f"{effective_view_for_log}{symbol_display} (requested={requested_view_final})"
     else:
-        view_display = f"{requested_mode_final or 'N/A'}{symbol_display}"
-        if resolved_mode_final and resolved_mode_final != requested_mode_final:
-            view_display += f" (resolved={resolved_mode_final})"
+        view_display = f"{effective_view_for_log or requested_view_final or 'N/A'}{symbol_display}"
     
     logger.info(f"\n{'='*60}")
     logger.info(f"Evaluating: {display_name} ({target_column}) - {view_display}")
@@ -5535,16 +5537,18 @@ def evaluate_target_predictability(
         'mtf_data': mtf_data,
         'symbols': symbols,
         'min_cs': min_cs,
-        'max_cs_samples': max_cs_samples
+        'max_cs_samples': max_cs_samples,
+        # FIX: Add universe_sig from resolved_data_config for proper scope tracking
+        'universe_sig': resolved_data_config.get('universe_sig') if resolved_data_config else None
     }
     
     if X is None or y is None:
         logger.error(f"Failed to prepare cross-sectional data for {target_column}")
         return TargetPredictabilityScore(
-            target_name=target_name,
+            target=target,
             target_column=target_column,
             task_type=TaskType.REGRESSION,
-            mean_score=-999.0,
+            auc=-999.0,
             std_score=1.0,
             mean_importance=0.0,
             consistency=0.0,
@@ -5577,8 +5581,8 @@ def evaluate_target_predictability(
         features_safe=features_safe,
         features_dropped_nan=features_dropped_nan,
         features_final=len(selected_features),
-        view=view,
-        symbol=symbol,
+        view=view_for_writes if 'view_for_writes' in locals() else view,  # Use SST-resolved view
+        symbol=symbol_for_writes if 'symbol_for_writes' in locals() else symbol,  # Use SST-resolved symbol
         feature_names=selected_features,  # Pass feature names for lookback computation
         recompute_lookback=True,  # CRITICAL: Compute feature lookback to auto-adjust purge
         experiment_config=experiment_config  # NEW: Pass experiment_config for base_interval_minutes
@@ -5657,10 +5661,10 @@ def evaluate_target_predictability(
                 f"Marking target as LEAKAGE_DETECTED."
             )
             return TargetPredictabilityScore(
-                target_name=target_name,
+                target=target,
                 target_column=target_column,
                 task_type=task_type,
-                mean_score=-999.0,
+                auc=-999.0,
                 std_score=0.0,
                 mean_importance=0.0,
                 consistency=0.0,
@@ -5695,10 +5699,10 @@ def evaluate_target_predictability(
             f"marking target as degenerate and skipping model training."
         )
         return TargetPredictabilityScore(
-            target_name=target_name,
+            target=target,
             target_column=target_column,
             task_type=TaskType.REGRESSION,  # Default, will be updated if we get further
-            mean_score=-999.0,  # Flag for filtering
+            auc=-999.0,  # Flag for filtering
             std_score=0.0,
             mean_importance=0.0,
             consistency=0.0,
@@ -5715,10 +5719,10 @@ def evaluate_target_predictability(
     if not is_valid:
         logger.warning(f"Skipping: {error_msg}")
         return TargetPredictabilityScore(
-            target_name=target_name,
+            target=target,
             target_column=target_column,
             task_type=task_type,
-            mean_score=-999.0,
+            auc=-999.0,
             std_score=1.0,
             mean_importance=0.0,
             consistency=0.0,
@@ -5731,10 +5735,10 @@ def evaluate_target_predictability(
     if len(unique_vals) < 2:
         logger.warning(f"Skipping: Target has only {len(unique_vals)} unique value(s)")
         return TargetPredictabilityScore(
-            target_name=target_name,
+            target=target,
             target_column=target_column,
             task_type=task_type,
-            mean_score=-999.0,
+            auc=-999.0,
             std_score=1.0,
             mean_importance=0.0,
             consistency=0.0,
@@ -5749,10 +5753,10 @@ def evaluate_target_predictability(
         if min_class_count < 2:
             logger.warning(f"Skipping: Smallest class has only {min_class_count} sample(s) (too few for CV)")
             return TargetPredictabilityScore(
-                target_name=target_name,
+                target=target,
                 target_column=target_column,
                 task_type=task_type,
-                mean_score=-999.0,
+                auc=-999.0,
                 std_score=1.0,
                 mean_importance=0.0,
                 consistency=0.0,
@@ -5833,9 +5837,9 @@ def evaluate_target_predictability(
                             from TRAINING.orchestration.utils.target_first_paths import (
                                 get_target_reproducibility_dir, ensure_target_structure
                             )
-                            target_name_clean = target_column.replace('/', '_').replace('\\', '_')
-                            ensure_target_structure(base_output_dir, target_name_clean)
-                            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+                            target_clean = target_column.replace('/', '_').replace('\\', '_')
+                            ensure_target_structure(base_output_dir, target_clean)
+                            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
                             target_artifact_dir = target_repro_dir / "featureset_artifacts"
                             target_artifact_dir.mkdir(parents=True, exist_ok=True)
                             artifact.save(target_artifact_dir)
@@ -5870,9 +5874,9 @@ def evaluate_target_predictability(
                 )
         
         # CRITICAL: Boundary assertion - validate feature_names matches gatekeeper EnforcedFeatureSet
-        from TRAINING.ranking.utils.lookback_policy import assert_featureset_fingerprint
+        from TRAINING.ranking.utils.lookback_policy import assert_featureset_hash
         try:
-            assert_featureset_fingerprint(
+            assert_featureset_hash(
                 label="POST_GATEKEEPER",
                 expected=enforced_gatekeeper,
                 actual_features=feature_names,
@@ -6172,10 +6176,10 @@ def evaluate_target_predictability(
     if X.shape[1] == 0:
         logger.error("❌ FINAL GATEKEEPER: All features were dropped! Cannot train models.")
         return TargetPredictabilityScore(
-            target_name=target_name,
+            target=target,
             target_column=target_column,
             task_type=task_type,
-            mean_score=-999.0,
+            auc=-999.0,
             std_score=1.0,
             mean_importance=0.0,
             consistency=0.0,
@@ -6224,17 +6228,17 @@ def evaluate_target_predictability(
             output_dir=output_dir,  # Pass output directory for stability snapshots
             resolved_config=resolved_config,  # Pass resolved config with correct purge/embargo (post-pruning)
             dropped_tracker=dropped_tracker,  # Pass tracker for telemetry
-            view=view,  # Pass view for REPRODUCIBILITY structure
-            symbol=symbol  # Pass symbol for SYMBOL_SPECIFIC view
+            view=view_for_writes if 'view_for_writes' in locals() else view,  # Use SST-resolved view
+            symbol=symbol_for_writes if 'symbol_for_writes' in locals() else symbol  # Use SST-resolved symbol
         )
         
         if result is None or len(result) != 7:
             logger.warning(f"train_and_evaluate_models returned unexpected value: {result}")
             return TargetPredictabilityScore(
-                target_name=target_name,
+                target=target,
                 target_column=target_column,
                 task_type=task_type,
-                mean_score=-999.0,
+                auc=-999.0,
                 std_score=1.0,
                 mean_importance=0.0,
                 consistency=0.0,
@@ -6564,7 +6568,7 @@ def evaluate_target_predictability(
                         min_confidence=auto_fix_min_confidence, 
                         max_features=auto_fix_max_features,
                         dry_run=False,
-                        target_name=target_name
+                        target=target
                     )
                     if autofix_info.modified_configs:
                         logger.info(f"✅ Auto-fixed leaks. Configs updated.")
@@ -6587,7 +6591,7 @@ def evaluate_target_predictability(
                     if fixer.backup_configs:
                         try:
                             backup_files = fixer._backup_configs(
-                                target_name=target_name,
+                                target=target,
                                 max_backups_per_target=None  # Use instance config
                             )
                             if backup_files:
@@ -6601,10 +6605,10 @@ def evaluate_target_predictability(
         if primary_scores is None:
             logger.warning(f"primary_scores is None, skipping")
             return TargetPredictabilityScore(
-                target_name=target_name,
+                target=target,
                 target_column=target_column,
                 task_type=task_type,
-                mean_score=-999.0,
+                auc=-999.0,
                 std_score=1.0,
                 mean_importance=0.0,
                 consistency=0.0,
@@ -6614,10 +6618,10 @@ def evaluate_target_predictability(
         if not isinstance(primary_scores, dict):
             logger.warning(f"primary_scores is not a dict (got {type(primary_scores)}), skipping")
             return TargetPredictabilityScore(
-                target_name=target_name,
+                target=target,
                 target_column=target_column,
                 task_type=task_type,
-                mean_score=-999.0,
+                auc=-999.0,
                 std_score=1.0,
                 mean_importance=0.0,
                 consistency=0.0,
@@ -6638,10 +6642,10 @@ def evaluate_target_predictability(
         logger.warning(f"Failed: {error_msg}")
         logger.error(f"Full traceback:\n{tb_str}")
         return TargetPredictabilityScore(
-            target_name=target_name,
+            target=target,
             target_column=target_column,
             task_type=task_type,
-            mean_score=-999.0,
+            auc=-999.0,
             std_score=1.0,
             mean_importance=0.0,
             consistency=0.0,
@@ -6650,12 +6654,12 @@ def evaluate_target_predictability(
         )
     
     if not all_model_scores:
-        logger.warning(f"No successful evaluations for {target_name} (skipping)")
+        logger.warning(f"No successful evaluations for {target} (skipping)")
         return TargetPredictabilityScore(
-            target_name=target_name,
+            target=target,
             target_column=target_column,
             task_type=TaskType.REGRESSION,  # Default, will be updated if target succeeds
-            mean_score=-999.0,  # Flag for degenerate/failed targets
+            auc=-999.0,  # Flag for degenerate/failed targets
             std_score=1.0,
             mean_importance=0.0,
             consistency=0.0,
@@ -6681,12 +6685,12 @@ def evaluate_target_predictability(
     # Calculate statistics (only from models that succeeded)
     model_means = {model: np.mean(scores) for model, scores in all_scores_by_model.items() if scores}
     if not model_means:
-        logger.warning(f"No successful model evaluations for {target_name}")
+        logger.warning(f"No successful model evaluations for {target}")
         return TargetPredictabilityScore(
-            target_name=target_name,
+            target=target,
             target_column=target_column,
             task_type=TaskType.REGRESSION,  # Default
-            mean_score=-999.0,
+            auc=-999.0,
             std_score=1.0,
             mean_importance=0.0,
             consistency=0.0,
@@ -6696,10 +6700,10 @@ def evaluate_target_predictability(
             suspicious_features=None
         )
     
-    mean_score = np.mean(list(model_means.values()))
+    auc = np.mean(list(model_means.values()))
     std_score = np.std(list(model_means.values())) if len(model_means) > 1 else 0.0
     mean_importance = np.mean(all_importances)
-    consistency = 1.0 - (std_score / (abs(mean_score) + 1e-6))
+    consistency = 1.0 - (std_score / (abs(auc) + 1e-6))
     
     # Determine task type (already inferred from data above)
     final_task_type = task_type
@@ -6714,26 +6718,26 @@ def evaluate_target_predictability(
     
     # Composite score (normalize scores appropriately)
     composite, composite_def, composite_ver = calculate_composite_score(
-        mean_score, std_score, mean_importance, len(all_scores_by_model), final_task_type
+        auc, std_score, mean_importance, len(all_scores_by_model), final_task_type
     )
     
     # Detect potential leakage (use task-appropriate thresholds)
     # Pass X, y, time_vals, symbols for triage checks if available
     try:
         leakage_flag = detect_leakage(
-            mean_score, composite, mean_importance, 
-            target_name=target_name, model_scores=model_means, task_type=final_task_type,
+            auc, composite, mean_importance, 
+            target=target, model_scores=model_means, task_type=final_task_type,
             X=X, y=y, time_vals=time_vals, symbols=symbols_array if 'symbols_array' in locals() else None
         )
     except Exception as e:
-        logger.exception(f"Leakage detection failed for {target_name}; marking as UNKNOWN")
+        logger.exception(f"Leakage detection failed for {target}; marking as UNKNOWN")
         leakage_flag = "UNKNOWN"  # Safe default - allows pipeline to continue
     
     # Dominance Quarantine: Detect suspects based on dominant importance
     suspects = []
     runtime_quarantine_features = set()
     confirm_result = None
-    post_quarantine_mean_score = None
+    post_quarantine_auc = None
     post_quarantine_leakage_flag = None
     
     try:
@@ -6760,14 +6764,14 @@ def evaluate_target_predictability(
                 
                 if suspects and output_dir:
                     # Write suspects artifact
-                    target_name_for_artifact = target_column if target_column else target_name
+                    target_for_artifact = target_column if target_column else target
                     resolved_view = view if 'view' in locals() else "CROSS_SECTIONAL"
                     symbol_for_artifact = symbol if 'symbol' in locals() else None
                     
                     try:
                         write_suspects_artifact_with_data(
-                            out_dir=output_dir,
-                            target=target_name_for_artifact,
+                            output_dir=output_dir,
+                            target=target_for_artifact,
                             view=resolved_view,
                             suspects=suspects,
                             symbol=symbol_for_artifact
@@ -6810,21 +6814,21 @@ def evaluate_target_predictability(
                                 output_dir=output_dir,
                                 resolved_config=resolved_config,
                                 dropped_tracker=dropped_tracker,
-                                view=view,
-                                symbol=symbol
+                                view=view_for_writes if 'view_for_writes' in locals() else view,  # Use SST-resolved view
+                                symbol=symbol_for_writes if 'symbol_for_writes' in locals() else symbol  # Use SST-resolved symbol
                             )
                             
                             # Compute post-quarantine mean score
                             if post_scores:
-                                post_quarantine_mean_score = float(np.mean([s for s in post_scores.values() if s is not None and not np.isnan(s)]))
+                                post_quarantine_auc = float(np.mean([s for s in post_scores.values() if s is not None and not np.isnan(s)]))
                             
                             # Evaluate confirm result
                             n_samples = len(y) if y is not None else 0
                             n_symbols = len(set(symbols_array)) if 'symbols_array' in locals() and symbols_array is not None else 1
                             
                             confirm_result = confirm_quarantine(
-                                pre_mean_score=mean_score,
-                                post_mean_score=post_quarantine_mean_score if post_quarantine_mean_score is not None else mean_score,
+                                pre_auc=auc,
+                                post_auc=post_quarantine_auc if post_quarantine_auc is not None else auc,
                                 suspects=suspects,
                                 n_samples=n_samples,
                                 n_symbols=n_symbols,
@@ -6840,8 +6844,8 @@ def evaluate_target_predictability(
                                 # Persist confirmed quarantine
                                 try:
                                     persist_confirmed_quarantine(
-                                        out_dir=output_dir,
-                                        target=target_name_for_artifact,
+                                        output_dir=output_dir,
+                                        target=target_for_artifact,
                                         suspects=suspects,
                                         view=resolved_view,
                                         symbol=symbol_for_artifact
@@ -6852,9 +6856,9 @@ def evaluate_target_predictability(
                                     logger.warning(f"Failed to persist confirmed quarantine: {e}")
                             
                             # Re-evaluate leakage on post-quarantine results
-                            if post_quarantine_mean_score is not None:
+                            if post_quarantine_auc is not None:
                                 post_composite, _, _ = calculate_composite_score(
-                                    post_quarantine_mean_score,
+                                    post_quarantine_auc,
                                     float(np.std([s for s in post_scores.values() if s is not None and not np.isnan(s)])) if post_scores else 0.0,
                                     post_mean_importance,
                                     len(post_scores),
@@ -6863,10 +6867,10 @@ def evaluate_target_predictability(
                                 
                                 try:
                                     post_quarantine_leakage_flag = detect_leakage(
-                                        post_quarantine_mean_score,
+                                        post_quarantine_auc,
                                         post_composite,
                                         post_mean_importance,
-                                        target_name=target_name,
+                                        target=target,
                                         model_scores=post_scores,
                                         task_type=final_task_type,
                                         X=X_filtered,
@@ -6875,7 +6879,7 @@ def evaluate_target_predictability(
                                         symbols=symbols_array if 'symbols_array' in locals() else None
                                     )
                                 except Exception as e:
-                                    logger.exception(f"Post-quarantine leakage detection failed for {target_name}; marking as UNKNOWN")
+                                    logger.exception(f"Post-quarantine leakage detection failed for {target}; marking as UNKNOWN")
                                     post_quarantine_leakage_flag = "UNKNOWN"  # Safe default - allows pipeline to continue
                         except Exception as e:
                             logger.warning(f"Dominance confirm pass failed: {e}")
@@ -6885,8 +6889,8 @@ def evaluate_target_predictability(
     # Build detailed leakage flags for auto-rerun logic
     leakage_flags = {
         "perfect_train_acc": len(_perfect_correlation_models) > 0,  # Any model hit 100% training accuracy
-        "high_auc": mean_score > 0.95 if final_task_type == TaskType.BINARY_CLASSIFICATION else False,
-        "high_r2": mean_score > 0.80 if final_task_type == TaskType.REGRESSION else False,
+        "high_auc": auc > 0.95 if final_task_type == TaskType.BINARY_CLASSIFICATION else False,
+        "high_r2": auc > 0.80 if final_task_type == TaskType.REGRESSION else False,
         "suspicious_flag": leakage_flag != "OK"
     }
     
@@ -6941,9 +6945,9 @@ def evaluate_target_predictability(
     # High AUC/R² after auto-fix suggests structural leakage (target construction issue)
     if leakage_flag in ["SUSPICIOUS", "HIGH_SCORE"]:
         # If we have very high scores, this is likely structural leakage, not just feature leakage
-        if final_task_type == TaskType.BINARY_CLASSIFICATION and mean_score > 0.95:
+        if final_task_type == TaskType.BINARY_CLASSIFICATION and auc > 0.95:
             final_status = "SUSPICIOUS_STRONG"
-        elif final_task_type == TaskType.REGRESSION and mean_score > 0.80:
+        elif final_task_type == TaskType.REGRESSION and auc > 0.80:
             final_status = "SUSPICIOUS_STRONG"
         else:
             final_status = "SUSPICIOUS"
@@ -6960,10 +6964,10 @@ def evaluate_target_predictability(
             aggregated_fold_scores = None
     
     result = TargetPredictabilityScore(
-        target_name=target_name,
+        target=target,
         target_column=target_column,
         task_type=final_task_type,
-        mean_score=mean_score,
+        auc=auc,
         std_score=std_score,
         mean_importance=mean_importance,
         consistency=consistency,
@@ -7003,7 +7007,7 @@ def evaluate_target_predictability(
         # If there's a mismatch, the invariant check should have caught it
         max_lookback_val = resolved_config.feature_lookback_max_minutes
         splitter_name = "PurgedTimeSeriesSplit"  # Default for time-series CV
-        n_splits_val = cv_folds if 'cv_folds' in locals() else None
+        n_splits_val = folds if 'folds' in locals() else None
         
         # SANITY CHECK: Verify resolved_config lookback matches what we computed at POST_PRUNE
         if 'computed_lookback' in locals() and computed_lookback is not None:
@@ -7027,7 +7031,7 @@ def evaluate_target_predictability(
             pass
     
     _log_canonical_summary(
-        target_name=target_name,
+        target=target,
         target_column=target_column,
         symbols=symbols,
         time_vals=time_vals,
@@ -7039,7 +7043,7 @@ def evaluate_target_predictability(
         leak_scan_verdict="PASS" if not summary_leaky_features else "FAIL",
         auto_fix_verdict="SKIPPED" if not should_auto_fix else ("RAN" if autofix_info and autofix_info.modified_configs else "NO_CHANGES"),
         auto_fix_reason=assessment.auto_fix_reason() if 'assessment' in locals() else None,
-        cv_metric=f"{metric_name}={mean_score:.3f}±{std_score:.3f}",
+        cv_metric=f"{metric_name}={auc:.3f}±{std_score:.3f}",
         composite=composite,
         leakage_flag=leakage_flag,
         cohort_path=None,  # Will be set by reproducibility tracker
@@ -7052,7 +7056,7 @@ def evaluate_target_predictability(
     
     # Legacy summary line (backward compatibility)
     leakage_indicator = f" [{leakage_flag}]" if leakage_flag != "OK" else ""
-    logger.debug(f"Legacy summary: {metric_name}={mean_score:.3f}±{std_score:.3f}, "
+    logger.debug(f"Legacy summary: {metric_name}={auc:.3f}±{std_score:.3f}, "
                f"importance={mean_importance:.2f}, composite={composite:.3f}{leakage_indicator}")
     
     # Store suspicious features in result for summary report
@@ -7076,7 +7080,7 @@ def evaluate_target_predictability(
     
     # Track reproducibility: compare to previous target ranking run
     # This runs regardless of which entry point calls this function
-    if output_dir and result.mean_score != -999.0:
+    if output_dir and result.auc != -999.0:
         try:
             from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
             
@@ -7156,8 +7160,13 @@ def evaluate_target_predictability(
                 
                 # Build RunContext
                 # FIX: Set view in constructor for consistency (already has min_cs and max_cs_samples)
-                view_for_ctx = view if 'view' in locals() else None
-                symbol_for_ctx = symbol if 'symbol' in locals() and symbol else None
+                # Use SST-resolved view_for_writes if available (handles auto-flip from CS to SS)
+                view_for_ctx = view_for_writes if 'view_for_writes' in locals() else (view if 'view' in locals() else None)
+                symbol_for_ctx = symbol_for_writes if 'symbol_for_writes' in locals() else (symbol if 'symbol' in locals() and symbol else None)
+                # FIX: Get universe_sig from SST-resolved value or cohort_context
+                universe_sig_for_ctx = universe_sig_for_writes if 'universe_sig_for_writes' in locals() else (
+                    cohort_context.get('universe_sig') if 'cohort_context' in locals() and cohort_context else None
+                )
                 ctx = RunContext(
                     X=cohort_context.get('X') if 'cohort_context' in locals() and cohort_context else None,
                     y=cohort_context.get('y') if 'cohort_context' in locals() and cohort_context else None,
@@ -7165,12 +7174,12 @@ def evaluate_target_predictability(
                     symbols=symbols_for_ctx,
                     time_vals=cohort_context.get('time_vals') if 'cohort_context' in locals() and cohort_context else None,
                     target_column=target_column,
-                    target_name=target_name,
+                    target=target,
                     min_cs=cohort_context.get('min_cs') if 'cohort_context' in locals() and cohort_context else (min_cs if 'min_cs' in locals() else None),
                     max_cs_samples=cohort_context.get('max_cs_samples') if 'cohort_context' in locals() and cohort_context else (max_cs_samples if 'max_cs_samples' in locals() else None),
                     mtf_data=cohort_context.get('mtf_data') if 'cohort_context' in locals() and cohort_context else None,
                     cv_method="purged_kfold",
-                    cv_folds=cv_folds if 'cv_folds' in locals() else None,
+                    folds=folds if 'folds' in locals() else None,
                     horizon_minutes=target_horizon_minutes if 'target_horizon_minutes' in locals() else None,
                     purge_minutes=purge_minutes_val,
                     fold_timestamps=fold_timestamps if 'fold_timestamps' in locals() else None,
@@ -7180,7 +7189,8 @@ def evaluate_target_predictability(
                     output_dir=output_dir,
                     seed=seed_value,
                     view=view_for_ctx,  # FIX: Set view in constructor for diff telemetry
-                    symbol=symbol_for_ctx  # FIX: Set symbol in constructor for consistency
+                    symbol=symbol_for_ctx,  # FIX: Set symbol in constructor for consistency
+                    universe_sig=universe_sig_for_ctx  # FIX: Pass universe_sig for proper scope tracking
                 )
                 
                 # Build metrics dict with regression features
@@ -7190,7 +7200,7 @@ def evaluate_target_predictability(
                 # Start with base metrics
                 metrics_dict = {
                     "metric_name": metric_name,
-                    "mean_score": result.mean_score,
+                    "auc": result.auc,
                     "std_score": result.std_score,
                     "mean_importance": result.mean_importance,
                     "composite_score": result.composite_score,
@@ -7269,6 +7279,11 @@ def evaluate_target_predictability(
                 logger.warning("RunContext not available, falling back to legacy reproducibility tracking")
                 from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata, format_for_reproducibility_tracker
                 
+                # FIX: Get universe_sig for fallback path
+                fallback_universe_sig = universe_sig_for_writes if 'universe_sig_for_writes' in locals() else (
+                    cohort_context.get('universe_sig') if 'cohort_context' in locals() and cohort_context else None
+                )
+                
                 if 'cohort_context' in locals() and cohort_context:
                     symbols_for_extraction = cohort_context.get('symbols_array') or cohort_context.get('symbols')
                     cohort_metadata = extract_cohort_metadata(
@@ -7280,20 +7295,22 @@ def evaluate_target_predictability(
                         min_cs=cohort_context.get('min_cs'),
                         max_cs_samples=cohort_context.get('max_cs_samples'),
                         compute_data_fingerprint=True,
-                        compute_per_symbol_stats=True
+                        compute_per_symbol_stats=True,
+                        universe_sig=fallback_universe_sig  # FIX: Pass universe_sig for proper scope tracking
                     )
                 else:
                     cohort_metadata = extract_cohort_metadata(
                         symbols=symbols if 'symbols' in locals() else None,
                         mtf_data=mtf_data if 'mtf_data' in locals() else None,
                         min_cs=min_cs if 'min_cs' in locals() else None,
-                        max_cs_samples=max_cs_samples if 'max_cs_samples' in locals() else None
+                        max_cs_samples=max_cs_samples if 'max_cs_samples' in locals() else None,
+                        universe_sig=fallback_universe_sig  # FIX: Pass universe_sig for proper scope tracking
                     )
                 
                 cohort_metrics, cohort_additional_data = format_for_reproducibility_tracker(cohort_metadata)
                 metrics_with_cohort = {
                     "metric_name": metric_name,
-                    "mean_score": result.mean_score,
+                    "auc": result.auc,
                     "std_score": result.std_score,
                     "mean_importance": result.mean_importance,
                     "composite_score": result.composite_score,
@@ -7325,8 +7342,8 @@ def evaluate_target_predictability(
                 
                 # Add resolved_data_config (mode, loader contract) to additional_data for telemetry
                 if 'resolved_data_config' in locals() and resolved_data_config:
-                    cohort_additional_data['resolved_data_mode'] = resolved_data_config.get('resolved_data_mode')
-                    cohort_additional_data['mode_reason'] = resolved_data_config.get('mode_reason')
+                    cohort_additional_data['view'] = resolved_data_config.get('view') or resolved_data_config.get('resolved_data_mode')
+                    cohort_additional_data['view_reason'] = resolved_data_config.get('view_reason')
                     cohort_additional_data['loader_contract'] = resolved_data_config.get('loader_contract')
                 
                 additional_data_with_cohort = {
@@ -7358,8 +7375,8 @@ def evaluate_target_predictability(
                                 additional_data_with_cohort['embargo_minutes'] = purge_minutes_val
                     except Exception:
                         pass
-                if 'cv_folds' in locals() and cv_folds is not None:
-                    additional_data_with_cohort['cv_folds'] = cv_folds
+                if 'folds' in locals() and folds is not None:
+                    additional_data_with_cohort['folds'] = folds
                 if 'fold_timestamps' in locals() and fold_timestamps:
                     additional_data_with_cohort['fold_timestamps'] = fold_timestamps
                 if 'feature_names' in locals() and feature_names:
@@ -7425,14 +7442,14 @@ def evaluate_target_predictability(
                 
                 tracker.log_comparison(
                     stage=scope.stage.value if scope else "target_ranking",
-                    item_name=target_name,
+                    target=target,
                     metrics=metrics_with_cohort,
                     additional_data=additional_data_with_cohort,
-                    route_type=scope.view.value if scope else view_for_writes,
+                    view=scope.view.value if scope else view_for_writes,
                     symbol=scope.symbol if scope else symbol_for_writes
                 )
         except Exception as e:
-            logger.warning(f"Reproducibility tracking failed for {target_name}: {e}")
+            logger.warning(f"Reproducibility tracking failed for {target}: {e}")
             import traceback
             logger.debug(f"Reproducibility tracking traceback: {traceback.format_exc()}")
     

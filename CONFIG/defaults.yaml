@@ -6,8 +6,8 @@
 randomness:
   # Base random seed - loaded from pipeline.determinism.base_seed at runtime
   # All models use this unless explicitly overridden
-  random_state: null  # null = use pipeline.determinism.base_seed (default: 42)
-  random_seed: null  # null = use random_state (for libraries that use 'random_seed' instead)
+  seed: null  # null = use pipeline.determinism.base_seed (default: 42)
+  random_seed: null  # null = use seed (for libraries that use 'random_seed' instead)
   
 # Performance & Parallelism
 performance:
@@ -71,8 +71,7 @@ linear_models:
 
 # Cross-Validation Defaults
 cross_validation:
-  cv_folds: 3  # Number of CV folds (80% of configs use this)
-  n_splits: 3  # Number of splits (alias for cv_folds)
+  folds: 3  # Number of CV folds (canonical name)
   purge_buffer_bars: 5  # Safety buffer for purged time series splits
   n_jobs: 1  # Parallel jobs for CV (100% of configs use this)
 
@@ -85,7 +84,7 @@ bootstrap:
 sampling:
   validation_split: 0.2  # Fraction for validation (100% of configs use this)
   shuffle: true  # Shuffle data before splitting (affects reproducibility)
-  # random_state: auto-injected from randomness.random_state
+  # seed: auto-injected from randomness.seed
 
 # Feature Selection Defaults
 feature_selection:

@@ -44,9 +44,9 @@ class BaseTrainingStrategy(ABC):
         if X.shape[0] != len(list(y_dict.values())[0]):
             raise ValueError("X and y dimensions don't match")
         
-        for target_name, y in y_dict.items():
+        for target, y in y_dict.items():
             if len(y) != X.shape[0]:
-                raise ValueError(f"Target {target_name} length doesn't match X")
+                raise ValueError(f"Target {target} length doesn't match X")
                 
         return True
     
@@ -69,26 +69,26 @@ class BaseTrainingStrategy(ABC):
         self.config = data['config']
         logger.info(f"Models loaded from {filepath}")
     
-    def get_feature_importance(self, target_name: str = None) -> Optional[Dict[str, np.ndarray]]:
+    def get_feature_importance(self, target: str = None) -> Optional[Dict[str, np.ndarray]]:
         """
         Get feature importance from trained models.
         
         Args:
-            target_name: Specific target to get importance for. If None, returns all.
+            target: Specific target to get importance for. If None, returns all.
             
         Returns:
             Dictionary mapping target names to feature importance arrays,
             or None if no models support feature importance.
         """
-        if target_name is not None:
+        if target is not None:
             # Get importance for specific target
-            if target_name not in self.models:
-                logger.warning(f"Target {target_name} not found in trained models")
+            if target not in self.models:
+                logger.warning(f"Target {target} not found in trained models")
                 return None
             
-            model = self.models[target_name]
+            model = self.models[target]
             importance = self._extract_feature_importance(model)
-            return {target_name: importance} if importance is not None else None
+            return {target: importance} if importance is not None else None
         else:
             # Get importance for all targets
             importances = {}

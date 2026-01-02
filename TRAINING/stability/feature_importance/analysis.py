@@ -126,7 +126,7 @@ def selection_frequency(
 def compute_stability_metrics(
     snapshots: List[FeatureImportanceSnapshot],
     top_k: int = 20,
-    filter_by_universe_id: bool = True  # NEW: Filter by universe_id to avoid cross-symbol comparisons
+    filter_by_universe_sig: bool = True  # NEW: Filter by universe_sig to avoid cross-symbol comparisons
 ) -> Dict[str, float]:
     """
     Compute stability metrics for a list of snapshots.
@@ -138,8 +138,8 @@ def compute_stability_metrics(
     
     **CRITICAL**: For SYMBOL_SPECIFIC mode, snapshots should be from the SAME symbol.
     Comparing snapshots across different symbols (AAPL vs MSFT) will show low overlap
-    due to symbol heterogeneity, not instability. Use filter_by_universe_id=True to
-    filter snapshots by the symbol part of universe_id.
+    due to symbol heterogeneity, not instability. Use filter_by_universe_sig=True to
+    filter snapshots by the symbol part of universe_sig.
     
     The snapshots should be sorted by importance (descending) already, so we
     compare top-K by feature name (not magnitude, since magnitudes are not comparable
@@ -148,8 +148,8 @@ def compute_stability_metrics(
     Args:
         snapshots: List of snapshots to analyze (must be same method/family)
         top_k: Number of top features to consider for overlap
-        filter_by_universe_id: If True, filter snapshots to only include those with
-            the same universe_id (or same symbol prefix if universe_id format is "SYMBOL:...")
+        filter_by_universe_sig: If True, filter snapshots to only include those with
+            the same universe_sig (or same symbol prefix if universe_sig format is "SYMBOL:...")
     
     Returns:
         Dictionary with stability metrics:
@@ -161,31 +161,31 @@ def compute_stability_metrics(
         - n_comparisons: Number of pairwise comparisons
         - status: "stable", "drifting", "diverged", or "insufficient"
     """
-    # Filter snapshots by universe_id if requested (for SYMBOL_SPECIFIC mode)
-    if filter_by_universe_id and len(snapshots) > 0:
-        # Extract symbol from universe_id if format is "SYMBOL:..."
+    # Filter snapshots by universe_sig if requested (for SYMBOL_SPECIFIC mode)
+    if filter_by_universe_sig and len(snapshots) > 0:
+        # Extract symbol from universe_sig if format is "SYMBOL:..."
         # Group snapshots by symbol (first part before ":")
-        universe_id_groups = {}
+        universe_sig_groups = {}
         for snapshot in snapshots:
-            if snapshot.universe_id:
+            if snapshot.universe_sig:
                 # Extract symbol part (before ":")
-                symbol_part = snapshot.universe_id.split(":")[0] if ":" in snapshot.universe_id else snapshot.universe_id
-                if symbol_part not in universe_id_groups:
-                    universe_id_groups[symbol_part] = []
-                universe_id_groups[symbol_part].append(snapshot)
+                symbol_part = snapshot.universe_sig.split(":")[0] if ":" in snapshot.universe_sig else snapshot.universe_sig
+                if symbol_part not in universe_sig_groups:
+                    universe_sig_groups[symbol_part] = []
+                universe_sig_groups[symbol_part].append(snapshot)
             else:
-                # No universe_id - treat as separate group
-                if "NO_UNIVERSE" not in universe_id_groups:
-                    universe_id_groups["NO_UNIVERSE"] = []
-                universe_id_groups["NO_UNIVERSE"].append(snapshot)
+                # No universe_sig - treat as separate group
+                if "NO_UNIVERSE" not in universe_sig_groups:
+                    universe_sig_groups["NO_UNIVERSE"] = []
+                universe_sig_groups["NO_UNIVERSE"].append(snapshot)
         
         # If we have multiple groups (different symbols), use the largest group
         # and log a warning that we're filtering to avoid cross-symbol comparisons
-        if len(universe_id_groups) > 1:
-            largest_group = max(universe_id_groups.values(), key=len)
-            symbol_for_group = [k for k, v in universe_id_groups.items() if v == largest_group][0]
+        if len(universe_sig_groups) > 1:
+            largest_group = max(universe_sig_groups.values(), key=len)
+            symbol_for_group = [k for k, v in universe_sig_groups.items() if v == largest_group][0]
             logger.warning(
-                f"⚠️  Stability computation: Found snapshots from {len(universe_id_groups)} different symbols/universes. "
+                f"⚠️  Stability computation: Found snapshots from {len(universe_sig_groups)} different symbols/universes. "
                 f"Filtering to largest group (symbol={symbol_for_group}, n={len(largest_group)} snapshots) to avoid "
                 f"cross-symbol comparisons. Low overlap across symbols is expected (symbol heterogeneity), not instability."
             )
@@ -231,7 +231,7 @@ def compute_stability_metrics(
 
 def analyze_stability_auto(
     base_dir: Path,
-    target_name: str,
+    target: str,
     method: str,
     min_snapshots: int = 2,
     top_k: int = 20,
@@ -248,7 +248,7 @@ def analyze_stability_auto(
     
     Args:
         base_dir: Base directory for snapshots
-        target_name: Target name
+        target: Target name
         method: Method name
         min_snapshots: Minimum snapshots required for analysis
         top_k: Number of top features to consider
@@ -261,11 +261,11 @@ def analyze_stability_auto(
     Returns:
         Dictionary with stability metrics, or None if insufficient snapshots
     """
-    snapshots = load_snapshots(base_dir, target_name, method)
+    snapshots = load_snapshots(base_dir, target, method)
     
     if len(snapshots) < min_snapshots:
         logger.debug(
-            f"Insufficient snapshots for {target_name}/{method}: "
+            f"Insufficient snapshots for {target}/{method}: "
             f"{len(snapshots)} < {min_snapshots}"
         )
         return None
@@ -273,7 +273,7 @@ def analyze_stability_auto(
     metrics = compute_stability_metrics(snapshots, top_k=top_k)
     
     if log_to_console:
-        logger.info(f"📊 Stability for {target_name}/{method}:")
+        logger.info(f"📊 Stability for {target}/{method}:")
         logger.info(f"   Snapshots: {metrics['n_snapshots']}")
         logger.info(f"   Top-{top_k} overlap: {metrics['mean_overlap']:.3f} ± {metrics['std_overlap']:.3f}")
         if not np.isnan(metrics['mean_tau']):
@@ -293,7 +293,7 @@ def analyze_stability_auto(
         if report_path is None:
             report_dir = base_dir / "stability_reports"
             report_dir.mkdir(parents=True, exist_ok=True)
-            report_path = report_dir / f"{target_name}_{method}.txt"
+            report_path = report_dir / f"{target}_{method}.txt"
         
         save_stability_report(metrics, snapshots, report_path, top_k=top_k)
     
@@ -321,9 +321,9 @@ def save_stability_report(
             f.write(f"{'='*60}\n\n")
             
             if len(snapshots) > 0:
-                f.write(f"Target: {snapshots[0].target_name}\n")
+                f.write(f"Target: {snapshots[0].target}\n")
                 f.write(f"Method: {snapshots[0].method}\n")
-                f.write(f"Universe: {snapshots[0].universe_id or 'N/A'}\n")
+                f.write(f"Universe: {snapshots[0].universe_sig or 'N/A'}\n")
             
             f.write(f"\nMetrics:\n")
             f.write(f"  Snapshots analyzed: {metrics['n_snapshots']}\n")

@@ -107,7 +107,7 @@ def resolve_lookback_policy(
     )
 
 
-def assert_featureset_fingerprint(
+def assert_featureset_hash(
     label: str,
     expected: 'EnforcedFeatureSet',
     actual_features: list[str],

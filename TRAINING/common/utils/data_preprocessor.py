@@ -20,14 +20,14 @@ class DataPreprocessor:
     def __init__(self, config: Dict[str, Any] = None):
         self.config = config or {}
         self.feature_names = []
-        self.target_names = []
+        self.targets = []
         
     def prepare_training_data(self, X: np.ndarray, y_dict: Dict[str, np.ndarray], 
                              feature_names: List[str], strategy: str = 'single_task') -> Dict[str, Any]:
         """Prepare data for training based on strategy"""
         
         self.feature_names = feature_names
-        self.target_names = list(y_dict.keys())
+        self.targets = list(y_dict.keys())
         
         # Validate inputs
         self._validate_inputs(X, y_dict, feature_names)
@@ -74,7 +74,7 @@ class DataPreprocessor:
         # Find valid samples (no NaN in X or any y)
         valid_mask = ~np.isnan(X).any(axis=1)
         
-        for target_name, y in y_dict.items():
+        for target, y in y_dict.items():
             target_valid = ~np.isnan(y)
             valid_mask = valid_mask & target_valid
         
@@ -124,7 +124,7 @@ class DataPreprocessor:
             'X': X,
             'y_dict': y_dict,
             'feature_names': self.feature_names,
-            'target_names': self.target_names,
+            'targets': self.targets,
             'strategy': 'single_task'
         }
     
@@ -140,7 +140,7 @@ class DataPreprocessor:
             'X': X,
             'y_dict': y_dict,
             'feature_names': self.feature_names,
-            'target_names': self.target_names,
+            'targets': self.targets,
             'strategy': 'multi_task',
             'n_targets': len(y_dict)
         }
@@ -152,21 +152,21 @@ class DataPreprocessor:
         barrier_targets = []
         fwd_ret_targets = []
         
-        for target_name, y in y_dict.items():
-            if target_name.startswith('fwd_ret_'):
-                fwd_ret_targets.append(target_name)
-            elif any(target_name.startswith(prefix) for prefix in 
+        for target, y in y_dict.items():
+            if target.startswith('fwd_ret_'):
+                fwd_ret_targets.append(target)
+            elif any(target.startswith(prefix) for prefix in 
                     ['will_peak', 'will_valley', 'mdd', 'mfe', 'y_will_']):
-                barrier_targets.append(target_name)
+                barrier_targets.append(target)
             else:
                 # Default to regression for unknown targets
-                fwd_ret_targets.append(target_name)
+                fwd_ret_targets.append(target)
         
         return {
             'X': X,
             'y_dict': y_dict,
             'feature_names': self.feature_names,
-            'target_names': self.target_names,
+            'targets': self.targets,
             'strategy': 'cascade',
             'barrier_targets': barrier_targets,
             'fwd_ret_targets': fwd_ret_targets
@@ -189,8 +189,8 @@ class DataPreprocessor:
         }
         
         # Target statistics
-        for target_name, y in y_dict.items():
-            summary['target_stats'][target_name] = {
+        for target, y in y_dict.items():
+            summary['target_stats'][target] = {
                 'mean': float(np.mean(y)),
                 'std': float(np.std(y)),
                 'min': float(np.min(y)),
@@ -203,7 +203,7 @@ class DataPreprocessor:
     
     def create_train_test_split(self, X: np.ndarray, y_dict: Dict[str, np.ndarray], 
                                test_size: Optional[float] = None,  # Load from config if None
-                               random_state: Optional[int] = None  # Load from determinism system if None
+                               seed: Optional[int] = None  # Load from determinism system if None
                                ) -> Dict[str, Any]:
         """Create train/test split"""
         # Load from config if not provided
@@ -214,27 +214,27 @@ class DataPreprocessor:
             except Exception:
                 test_size = 0.2  # FALLBACK_DEFAULT_OK
         
-        if random_state is None:
+        if seed is None:
             try:
                 from TRAINING.common.determinism import BASE_SEED
-                random_state = BASE_SEED if BASE_SEED is not None else 42  # FALLBACK_DEFAULT_OK
+                seed = BASE_SEED if BASE_SEED is not None else 42  # FALLBACK_DEFAULT_OK
             except Exception:
-                random_state = 42  # FALLBACK_DEFAULT_OK
+                seed = 42  # FALLBACK_DEFAULT_OK
         
         from sklearn.model_selection import train_test_split
         
         # Split X
         X_train, X_test, indices_train, indices_test = train_test_split(
-            X, np.arange(len(X)), test_size=test_size, random_state=random_state
+            X, np.arange(len(X)), test_size=test_size, random_state=seed
         )
         
         # Split y_dict
         y_train = {}
         y_test = {}
         
-        for target_name, y in y_dict.items():
-            y_train[target_name] = y[indices_train]
-            y_test[target_name] = y[indices_test]
+        for target, y in y_dict.items():
+            y_train[target] = y[indices_train]
+            y_test[target] = y[indices_test]
         
         return {
             'X_train': X_train,

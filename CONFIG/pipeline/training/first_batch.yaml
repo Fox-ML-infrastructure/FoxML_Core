@@ -18,7 +18,7 @@ multitask:
   
   # Multi-head configuration
   use_multi_head: true         # Enable multi-head mode for correlated targets
-  target_names:                # List of target names (auto-detected if not provided)
+  targets:                # List of target names (auto-detected if not provided)
     - "tth"                     # Time to horizon
     - "mdd"                     # Maximum drawdown
     - "mfe"                     # Maximum favorable excursion
@@ -131,7 +131,7 @@ gmm_regime:
   n_components: 3               # Start with 3-4 regimes (low-vol, bull, bear, high-vol)
   covariance_type: "full"
   max_iter: 100
-  # random_state: auto-injected from defaults.randomness.random_state (or pipeline.determinism.base_seed)
+  # seed: auto-injected from defaults.randomness.seed (or pipeline.determinism.base_seed)
 
 change_point:
   # Structural break detection

@@ -67,7 +67,7 @@ def select_top_features(
 
 def get_feature_importance_from_strategy(
     strategy,
-    target_name: str,
+    target: str,
     feature_names: List[str],
     aggregate: str = 'mean'
 ) -> Tuple[List[str], np.ndarray]:
@@ -76,7 +76,7 @@ def get_feature_importance_from_strategy(
     
     Args:
         strategy: Trained strategy (SingleTaskStrategy, etc.)
-        target_name: Target to get importance for
+        target: Target to get importance for
         feature_names: List of feature names
         aggregate: How to aggregate multiple targets ('mean', 'max', 'median')
         
@@ -84,17 +84,17 @@ def get_feature_importance_from_strategy(
         sorted_features: Feature names sorted by importance (descending)
         sorted_importances: Importance scores (descending)
     """
-    importances_dict = strategy.get_feature_importance(target_name)
+    importances_dict = strategy.get_feature_importance(target)
     
     if importances_dict is None:
-        logger.warning(f"No feature importance available for {target_name}")
+        logger.warning(f"No feature importance available for {target}")
         return [], np.array([])
     
     # Get importance array
-    if target_name in importances_dict:
-        importances = importances_dict[target_name]
+    if target in importances_dict:
+        importances = importances_dict[target]
     else:
-        logger.warning(f"Target {target_name} not found in importance dict")
+        logger.warning(f"Target {target} not found in importance dict")
         return [], np.array([])
     
     # Sort by importance
@@ -212,7 +212,7 @@ def auto_select_features(
     X: np.ndarray,
     y_dict: Dict[str, np.ndarray],
     feature_names: List[str],
-    target_name: str,
+    target: str,
     n_features: int = 50,
     method: str = 'importance'
 ) -> Tuple[np.ndarray, List[str]]:
@@ -224,7 +224,7 @@ def auto_select_features(
         X: Full feature matrix
         y_dict: Target dictionary
         feature_names: List of feature names
-        target_name: Target to use for feature selection
+        target: Target to use for feature selection
         n_features: Number of features to select
         method: Selection method ('importance' or 'correlation')
         
@@ -235,7 +235,7 @@ def auto_select_features(
     if method == 'importance':
         # Get feature importance from strategy
         sorted_features, sorted_importances = get_feature_importance_from_strategy(
-            strategy, target_name, feature_names
+            strategy, target, feature_names
         )
         
         if len(sorted_features) == 0:
@@ -252,7 +252,7 @@ def auto_select_features(
     elif method == 'correlation':
         # Use correlation-based selection
         X_selected, selected_names = select_features_by_correlation(
-            X, feature_names, y_dict[target_name], n_features
+            X, feature_names, y_dict[target], n_features
         )
     else:
         raise ValueError(f"Unknown method: {method}")

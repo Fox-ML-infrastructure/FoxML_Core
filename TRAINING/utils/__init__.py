@@ -38,7 +38,7 @@ from TRAINING.ranking.utils.leakage_budget import (
     infer_lookback_minutes
 )
 from TRAINING.ranking.utils.lookback_cap_enforcement import apply_lookback_cap
-from TRAINING.ranking.utils.lookback_policy import assert_featureset_fingerprint
+from TRAINING.ranking.utils.lookback_policy import assert_featureset_hash
 from TRAINING.ranking.utils.target_validation import validate_target, check_cv_compatibility
 from TRAINING.ranking.utils.target_utils import (
     is_classification_target,
@@ -102,7 +102,7 @@ __all__ = [
     'compute_feature_lookback_max',
     'infer_lookback_minutes',
     'apply_lookback_cap',
-    'assert_featureset_fingerprint',
+    'assert_featureset_hash',
     'validate_target',
     'check_cv_compatibility',
     'is_classification_target',

@@ -262,7 +262,7 @@ safety:
       - min_cs
       - max_cs_samples
       - leakage_filter_version
-      - universe_id
+      - universe_sig
     # Tolerance bands: STABLE (within noise) / DRIFTING (small changes) / DIVERGED (real issues)
     thresholds:
       # ROC-AUC / R² / primary score thresholds
@@ -364,7 +364,7 @@ safety:
     # Rollup configuration (which aggregations to generate)
     rollups:
       per_symbol: true           # Per-symbol rollups (groupby run_id, view, symbol)
-      per_cross_sectional: true   # Per-cross-sectional rollups (groupby run_id, view, universe_id)
+      per_cross_sectional: true   # Per-cross-sectional rollups (groupby run_id, view, universe_sig)
       per_target: true            # Per-target rollups (groupby run_id, target, view)
       per_run: true               # Per-run rollups (groupby run_id)
 

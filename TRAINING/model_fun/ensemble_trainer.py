@@ -260,7 +260,7 @@ class EnsembleTrainer(BaseModelTrainer):
         logger.info(f"🔧 [Ridge] Training...")
         t0 = time.perf_counter()
         from common.threads import blas_threads
-        ridge = Ridge(alpha=self.config["ridge_alpha"], random_state=s)
+        ridge = Ridge(alpha=self.config["ridge_alpha"])
         with blas_threads(min(8, self.num_threads)):
             ridge.fit(X_train, y_train)
         logger.info(f"✅ [Ridge] Trained in {time.perf_counter()-t0:.2f}s")
@@ -302,8 +302,8 @@ class EnsembleTrainer(BaseModelTrainer):
             
             # Final estimator: Ridge with L2 regularization (Spec 3)
             final_estimator = Ridge(
-                alpha=self.config.get("final_estimator_alpha", self.config["ridge_alpha"]),
-                random_state=s
+                alpha=self.config.get("final_estimator_alpha", self.config["ridge_alpha"])
+                # FIX: Ridge is deterministic, no seed parameter
             )
             
             # Create StackingRegressor with CV
@@ -364,7 +364,7 @@ class EnsembleTrainer(BaseModelTrainer):
                 alpha = float(get_cfg("models.ridge.alpha", default=1.0, config_name="model_config"))
             except Exception:
                 pass
-            meta = Ridge(alpha=alpha, fit_intercept=False, positive=True, random_state=self._get_random_state())
+            meta = Ridge(alpha=alpha, fit_intercept=False, positive=True)
             with blas_threads(1):  # Meta-learning is tiny, 1 thread is fine
                 meta.fit(P, y_val)
             weights = meta.coef_

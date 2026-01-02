@@ -137,9 +137,9 @@ class QuantileLightGBMTrainer(BaseModelTrainer):
                    f"feature filtering may be causing faster convergence)")
         
         # 2) Split for validation (crucial for quantile + early stopping)
-        test_size, random_state = self._get_test_split_params()
+        test_size, seed = self._get_test_split_params()
         X_tr, X_va, y_tr, y_va = train_test_split(
-            X, y, test_size=test_size, random_state=random_state, shuffle=False  # Chronological for time series
+            X, y, test_size=test_size, random_state=seed, shuffle=False  # Chronological for time series
         )
         
         # 3) Get thread count

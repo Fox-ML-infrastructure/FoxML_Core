@@ -212,7 +212,7 @@ def load_all_routing_decisions(output_dir: Path) -> Dict[str, Dict[str, Any]]:
         output_dir: Base run output directory
     
     Returns:
-        Dict mapping target_name -> routing decision dict
+        Dict mapping target -> routing decision dict
     """
     output_dir = Path(output_dir)
     routing_decisions = {}
@@ -300,7 +300,7 @@ def load_all_feature_prioritizations(output_dir: Path) -> Dict[str, Any]:
         output_dir: Base run output directory
     
     Returns:
-        Dict mapping target_name -> feature prioritization data
+        Dict mapping target -> feature prioritization data
     """
     output_dir = Path(output_dir)
     feature_prioritizations = {}
@@ -429,7 +429,7 @@ def export_decisions_to_csv(output_dir: Path, output_file: Optional[Path] = None
         if target in routing_decisions:
             route_info = routing_decisions[target]
             row['route'] = route_info.get('route', 'UNKNOWN')
-            row['cs_auc'] = route_info.get('cross_sectional', {}).get('auc_mean', None)
+            row['auc'] = route_info.get('cross_sectional', {}).get('auc_mean', None)
             row['symbol_auc_max'] = route_info.get('symbol_specific', {}).get('max_auc', None)
         
         # Target prioritization

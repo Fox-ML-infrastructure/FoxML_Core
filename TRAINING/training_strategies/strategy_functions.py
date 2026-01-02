@@ -298,7 +298,7 @@ def prepare_training_data(mtf_data: Dict[str, pd.DataFrame],
     
     # Clean data
     valid_mask = ~np.isnan(X).any(axis=1)
-    for target_name, y in y_dict.items():
+    for target, y in y_dict.items():
         valid_mask = valid_mask & ~np.isnan(y)
     
     X_clean = X[valid_mask]
@@ -310,7 +310,7 @@ def prepare_training_data(mtf_data: Dict[str, pd.DataFrame],
         'X': X_clean,
         'y_dict': y_clean,
         'feature_names': feature_names,
-        'target_names': list(y_clean.keys())
+        'targets': list(y_clean.keys())
     }
 
 def create_strategy_config(strategy: str, targets: List[str], 
@@ -393,7 +393,7 @@ def compare_strategies(training_data: Dict[str, Any],
         
         try:
             # Create configuration
-            config = create_strategy_config(strategy, training_data['target_names'])
+            config = create_strategy_config(strategy, training_data['targets'])
             
             # Train with strategy
             result = train_with_strategy(strategy, training_data, config)

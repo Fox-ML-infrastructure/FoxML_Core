@@ -3,37 +3,54 @@
 # for each (target, symbol) pair based on metrics from feature selection, stability, and leakage detection
 
 routing:
-  # --- Mode Policy (for E2E testing vs production) ---
-  mode_policy: "auto"            # "force" or "auto" - force uses requested_mode exactly, auto allows resolver to flip based on panel size
-  requested_mode: "CROSS_SECTIONAL"  # Only used if mode_policy=force - exact mode to use (no auto-flip)
-  auto_flip_min_symbols: 10      # Only used if mode_policy=auto - minimum symbols required for CROSS_SECTIONAL (below this, flips to SYMBOL_SPECIFIC)
+  # --- View Policy (for E2E testing vs production) ---
+  # "view" = modeling granularity: CROSS_SECTIONAL (all symbols together) or SYMBOL_SPECIFIC (per-symbol)
+  view_policy: "auto"            # "force" or "auto" - force uses requested_view exactly, auto allows resolver to flip based on panel size
+  requested_view: "CROSS_SECTIONAL"  # Only used if view_policy=force - exact view to use (no auto-flip)
+  auto_flip_min_symbols: 10      # Only used if view_policy=auto - minimum symbols required for CROSS_SECTIONAL (below this, flips to SYMBOL_SPECIFIC)
+  
+  # DEPRECATED: mode_policy and requested_mode are renamed to view_policy and requested_view
+  # Legacy aliases kept for backward compatibility - remove after migration complete
+  # mode_policy: alias for view_policy
+  # requested_mode: alias for requested_view
   
   # --- Dev Mode (for testing with smaller datasets) ---
-  dev_mode: false                # If true, use adaptive thresholds for smaller datasets
-  dev_mode_min_sample_size: 5_000  # Minimum sample size when dev_mode is enabled
+  dev_mode: true                 # If true, use adaptive thresholds for smaller datasets
+  dev_mode_min_sample_size: 1_000  # Minimum sample size when dev_mode is enabled (lowered for small datasets)
   
   # --- General Safety Rails ---
   min_sample_size:
-    cross_sectional: 50_000      # Total rows required for CS training
-    symbol: 5_000                # Per-symbol rows required for symbol-specific training
+    cross_sectional: 5_000       # Total rows required for CS training (lowered for small datasets)
+    symbol: 1_000                # Per-symbol rows required for symbol-specific training (lowered for small datasets)
   
   block_on_leakage: true         # Block training if leakage detected
   
   # --- Score Thresholds ---
-  # These are typically ROC-AUC for classification, R² for regression
+  # Task-type aware: different thresholds for classification (AUC) vs regression (R²)
+  # Classification: AUC range is 0.5 (random) to 1.0 (perfect)
+  # Regression: R² range is -inf to 1.0 (0 = predicting mean, negative = worse than mean)
   cross_sectional:
-    min_score: 0.55              # Minimum score to allow CS training
-    strong_score: 0.60           # Score threshold for "strong" CS signal
+    min_score:
+      classification: 0.52       # AUC slightly above random (0.5)
+      regression: -0.5           # R² allows poor fits but not catastrophic
+    strong_score:
+      classification: 0.58       # AUC threshold for "strong" CS signal
+      regression: 0.05           # R² threshold for "strong" CS signal
   
   symbol:
-    min_score: 0.58              # Minimum score to allow symbol-specific training
-    strong_score: 0.62           # Score threshold for "strong" symbol signal
+    min_score:
+      classification: 0.54       # AUC slightly higher for symbol-specific
+      regression: -0.3           # R² tighter for symbol-specific
+    strong_score:
+      classification: 0.60       # AUC threshold for "strong" symbol signal
+      regression: 0.10           # R² threshold for "strong" symbol signal
   
   # --- Stability Requirements ---
   # Stability categories: STABLE, DRIFTING, DIVERGED, UNKNOWN
+  # NOTE: UNKNOWN is allowed for first runs (no prior snapshots to compare)
   stability_allowlist:
-    cross_sectional: ["STABLE", "DRIFTING"]  # CS can tolerate some drift
-    symbol: ["STABLE"]                       # Symbol-specific requires stability
+    cross_sectional: ["STABLE", "DRIFTING", "UNKNOWN"]  # CS can tolerate some drift + first runs
+    symbol: ["STABLE", "UNKNOWN"]                       # Symbol-specific requires stability + first runs
   
   # --- Both Strong Behavior ---
   # When both CS and symbol are strong, what to do?

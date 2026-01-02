@@ -16,6 +16,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2026-01-02 (universe_sig Propagation Fixes and High-AUC Investigation)
+- **Fix**: Improved `universe_sig` propagation in feature selection pipeline to eliminate `Missing universe_sig` warnings.
+  - `feature_selector.py`: Added early initialization of `universe_sig_for_writes`, `view_for_writes`, `symbol_for_writes` before shared harness block
+  - `feature_selector.py`: Added `resolve_write_scope()` call in SYMBOL_SPECIFIC branch to set SST scope variables
+  - `feature_selector.py`: Added `universe_sig` computation in fallback path when shared harness fails
+  - `shared_ranking_harness.py`: Added missing `requested_view` and `output_dir` parameters to CROSS_SECTIONAL call
+  - `model_evaluation.py`: Fixed log message to show effective view (`view_for_writes`) instead of requested view, preventing confusing "CROSS_SECTIONAL (symbol=X)" messages when SS->CS promotion is blocked
+- **Investigation**: Analyzed high AUC warnings (>0.90 ROC-AUC across 5 model families) for MFE targets.
+  - Confirmed feature exclusion patterns are working correctly (232 columns excluded, 287 safe)
+  - Verified `fwd_ret_*`, `mfe_*`, `mdd_*`, `max_return_*` columns are properly rejected
+  - Root cause: Small sample overfitting (1997 rows/symbol with 210+ features) + likely class imbalance
+  - Existing safeguard "Small panel detected, downgrading severity" is appropriate behavior
+- **Impact**: Cleaner logs, correct view display, better scope tracking for reproducibility.
+- **Files Changed**: `feature_selector.py`, `shared_ranking_harness.py`, `model_evaluation.py`
+
+#### 2026-01-02 (Critical Bug Fixes: seed/random_state and Pipeline Stability)
+- **Critical Fix**: Fixed 25+ instances of `seed=` being passed to sklearn APIs that expect `random_state=`, causing `TypeError: got an unexpected keyword argument 'seed'` across trainers and feature selection.
+  - `train_test_split()` in 11 trainer files
+  - `HistGradientBoostingRegressor`, `RandomForestRegressor` in `ensemble_trainer.py`, `ngboost_trainer.py`
+  - `MLPRegressor`, `Lasso`, `ElasticNet`, `Ridge` in `multi_model_feature_selection.py`
+  - `permutation_importance()` in `importance_extractors.py`
+  - `LGBMRegressor/LGBMClassifier` in `feature_pruning.py`
+- **Critical Fix**: Removed invalid `seed=` parameter from `Ridge` calls (Ridge is deterministic, no random component).
+- **Critical Fix**: Fixed `UnboundLocalError: local variable 'cohort_metadata' referenced before assignment` in `reproducibility_tracker.py` when NON_COHORT mode triggered.
+- **Task-Type Aware Routing**: Implemented separate routing thresholds for classification (AUC-based) vs regression (R²-based) targets.
+  - `routing.yaml`: `min_score` and `strong_score` now accept `{classification: X, regression: Y}` format
+  - `training_router.py`: Added `_get_score_threshold()` helper, updated eligibility evaluation
+  - `metrics_aggregator.py`: Now propagates `task_type` and `metric_name` in routing candidates
+- **Routing Fix**: Added `UNKNOWN` to `stability_allowlist` to allow first runs (no stability history).
+- **Impact**: Training pipeline no longer crashes with TypeError on seed parameters. Regression targets with negative R² scores now route correctly. First-run targets no longer blocked by missing stability.
+- **Files Changed**: `ensemble_trainer.py`, `ngboost_trainer.py`, `lightgbm_trainer.py`, `xgboost_trainer.py`, `mlp_trainer.py`, `lstm_trainer.py`, `cnn1d_trainer.py`, `transformer_trainer.py`, `vae_trainer.py`, `meta_learning_trainer.py`, `ftrl_proximal_trainer.py`, `reward_based_trainer.py`, `gmm_regime_trainer.py`, `gan_trainer.py`, `multi_task_trainer.py`, `change_point_trainer.py`, `quantile_lightgbm_trainer.py`, `base_trainer.py`, `data_preprocessor.py`, `multi_model_feature_selection.py`, `importance_extractors.py`, `feature_pruning.py`, `reproducibility_tracker.py`, `training_router.py`, `metrics_aggregator.py`, `routing.yaml`
+
+#### 2025-12-31 (universe_sig Propagation and Scope Tracking Fixes)
+- **Critical Fix**: Fixed `Missing universe_sig` warnings across FEATURE_SELECTION and TARGET_RANKING stages.
+  - `feature_selector.py`: Added `universe_sig_for_ctx` extraction and propagation to `RunContext` constructors
+  - `model_evaluation.py`: Fixed `universe_sig=view` bug (was passing view string as universe_sig), added proper extraction
+  - `reproducibility_tracker.py`: NON_COHORT fallback now preserves `universe_sig`, `symbols`, `min_cs`, `max_cs_samples` in `cs_config`
+  - `cross_sectional_feature_ranker.py`: Added `horizon_minutes` extraction to prevent COHORT_AWARE downgrade
+- **Bug Fix**: Fixed `universe_sig=view` typo in `model_evaluation.py` line 1357 (was passing "CROSS_SECTIONAL" as universe_sig).
+- **Bug Fix**: Fixed `Missing required fields for COHORT_AWARE mode: ['horizon_minutes']` by extracting horizon from target column name.
+- **Impact**: Scope tracking now works correctly, no more legacy path fallbacks, diff telemetry receives complete metadata.
+- **Files Changed**: `feature_selector.py`, `model_evaluation.py`, `reproducibility_tracker.py`, `cross_sectional_feature_ranker.py`
+
+#### 2025-12-30 (SST Variable Naming Unification and Vocabulary Lock)
+- **Refactoring**: Implemented Single Source of Truth (SST) for variable naming across the modeling pipeline.
+  - Unified `view`/`mode`/`scope` → canonical `view` with `View` enum
+  - Unified `n_samples`/`N_effective`/`n_rows` → canonical `n_effective`
+  - Unified `date_start`/`start_date`/`date_range.start` → canonical accessors
+  - Unified `universe_id`/`universe_sig`/`symbol_hash` → canonical `universe_sig`
+  - Unified `target_name`/`target_col`/`target` → canonical `target_column`
+  - Unified `random_state`/`seed` → canonical `seed` (internal), `random_state` (sklearn APIs)
+- **Duplicate Function Consolidation**: Merged 6 duplicate fingerprint/hash functions into centralized implementations.
+  - `_compute_feature_fingerprint` → single implementation in `fingerprinting.py`
+  - `get_git_commit` → single implementation in `git_utils.py`
+  - `compute_config_hash`, `compute_data_fingerprint` → centralized in `fingerprinting.py`
+- **Fallback Chain Elimination**: Removed 50+ instances of redundant `.get()` fallback chains like `config.get('view') or config.get('mode') or config.get('scope')`.
+- **Data Contracts**: Updated `RunContext`, `WriteScope`, `View` enum with SST accessor methods.
+- **Impact**: Consistent naming across codebase, reduced cognitive load, eliminated vocabulary drift bugs.
+- **Files Changed**: `run_context.py`, `scope_resolution.py`, `reproducibility_tracker.py`, `intelligent_trainer.py`, `feature_selector.py`, `model_evaluation.py`, `cross_sectional_data.py`, `training_router.py`, `metrics_aggregator.py`, and 40+ other files
+
 #### 2025-12-29 (Routing Pipeline Metrics Lookup and Alias Validation)
 - **Critical Fix**: Fixed routing pipeline producing 0 jobs due to metrics path mismatch. `_load_symbol_metrics()` was looking for `multi_model_metadata.json` directly in `symbol=X/` but metrics were written inside `cohort=Y/metrics.json`. Now descends into cohort directories with deterministic selection (mtime, name tuple for tie-breaking).
 - **Critical Fix**: Removed incorrect `mlp` → `neural_network` alias from `FAMILY_ALIASES`. `mlp` and `neural_network` are distinct trainers with separate implementations (`MLPTrainer` vs `NeuralNetworkTrainer`). `normalize_family("mlp")` now correctly returns `"mlp"`.

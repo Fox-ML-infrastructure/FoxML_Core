@@ -34,7 +34,7 @@ model_families:
 # Sampling
 sampling:
   max_samples_per_symbol: 50000
-  # random_state: auto-injected from defaults.randomness.random_state (or pipeline.determinism.base_seed)
+  # seed: auto-injected from defaults.randomness.seed (or pipeline.determinism.base_seed)
 
 # Output configuration
 output:

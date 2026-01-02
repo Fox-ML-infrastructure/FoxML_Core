@@ -81,7 +81,7 @@ def save_feature_selection_rankings(
         raise ValueError("symbol required when view='SYMBOL_SPECIFIC'")
     
     # Clean target name for filesystem
-    target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+    target_clean = target_column.replace('/', '_').replace('\\', '_')
     
     # Phase A: Use OutputLayout if universe_sig provided (new canonical path)
     # Otherwise fall back to legacy path resolution with warning
@@ -140,8 +140,8 @@ def save_feature_selection_rankings(
             logger.warning(f"base_output_dir does not exist: {base_output_dir}, using output_dir: {output_dir}")
             base_output_dir = output_dir
         
-        ensure_target_structure(base_output_dir, target_name_clean)
-        target_decision_dir = get_target_decision_dir(base_output_dir, target_name_clean)
+        ensure_target_structure(base_output_dir, target_clean)
+        target_decision_dir = get_target_decision_dir(base_output_dir, target_clean)
         target_decision_dir.mkdir(parents=True, exist_ok=True)
         logger.debug(f"Target decision directory: {target_decision_dir}")
     except Exception as e:
@@ -156,7 +156,7 @@ def save_feature_selection_rankings(
     if target_decision_dir:
         target_decision_dir.mkdir(parents=True, exist_ok=True)
     else:
-        logger.warning(f"Target decision directory not available for {target_name_clean}")
+        logger.warning(f"Target decision directory not available for {target_clean}")
     
     # Handle empty results
     if summary_df is None or len(summary_df) == 0:
@@ -187,7 +187,7 @@ def save_feature_selection_rankings(
                 logger.warning(f"base_output_dir does not exist for CSV save: {base_output_dir}, using output_dir: {output_dir}")
                 base_output_dir = output_dir
             
-            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
+            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
             target_repro_dir.mkdir(parents=True, exist_ok=True)
             empty_csv_path = target_repro_dir / "feature_selection_rankings.csv"
             empty_df.to_csv(empty_csv_path, index=False)
@@ -227,7 +227,7 @@ def save_feature_selection_rankings(
             from TRAINING.orchestration.utils.output_layout import OutputLayout
             layout = OutputLayout(
                 output_root=base_output_dir,
-                target=target_name_clean,
+                target=target_clean,
                 view=view,
                 universe_sig=universe_sig,
                 symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
@@ -238,7 +238,7 @@ def save_feature_selection_rankings(
             # Legacy path resolution
             from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
             run_root_dir = run_root(base_output_dir)
-            target_csv_path = target_repro_file_path(run_root_dir, target_name_clean, "feature_selection_rankings.csv", view=view, symbol=symbol)
+            target_csv_path = target_repro_file_path(run_root_dir, target_clean, "feature_selection_rankings.csv", view=view, symbol=symbol)
         
         target_csv_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(target_csv_path, index=False)
@@ -300,7 +300,7 @@ def save_feature_selection_rankings(
             from TRAINING.orchestration.utils.output_layout import OutputLayout
             layout = OutputLayout(
                 output_root=base_output_dir,
-                target=target_name_clean,
+                target=target_clean,
                 view=view,
                 universe_sig=universe_sig,
                 symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
@@ -317,7 +317,7 @@ def save_feature_selection_rankings(
                 logger.warning(f"base_output_dir does not exist for selected features: {base_output_dir}, using output_dir: {output_dir}")
                 base_output_dir = output_dir
             run_root_dir = run_root(base_output_dir)
-            target_selected_path = target_repro_file_path(run_root_dir, target_name_clean, "selected_features.txt", view=view, symbol=symbol)
+            target_selected_path = target_repro_file_path(run_root_dir, target_clean, "selected_features.txt", view=view, symbol=symbol)
         
         target_selected_path.parent.mkdir(parents=True, exist_ok=True)
         with open(target_selected_path, "w") as f:
@@ -444,7 +444,7 @@ def save_feature_importances_for_reproducibility(
     """
     import pandas as pd
     
-    target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+    target_clean = target_column.replace('/', '_').replace('\\', '_')
     
     # PATCH 4: Require universe_sig for proper scoping - don't write unscoped artifacts
     if not universe_sig:
@@ -489,7 +489,7 @@ def save_feature_importances_for_reproducibility(
             from TRAINING.orchestration.utils.output_layout import OutputLayout
             layout = OutputLayout(
                 output_root=base_output_dir,
-                target=target_name_clean,
+                target=target_clean,
                 view=view,
                 universe_sig=universe_sig,
                 symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
@@ -503,8 +503,8 @@ def save_feature_importances_for_reproducibility(
                 base_output_dir = output_dir
             
             run_root_dir = run_root(base_output_dir)
-            ensure_target_structure(run_root_dir, target_name_clean)
-            repro_dir = target_repro_dir(run_root_dir, target_name_clean, view=view, symbol=symbol)
+            ensure_target_structure(run_root_dir, target_clean)
+            repro_dir = target_repro_dir(run_root_dir, target_clean, view=view, symbol=symbol)
             importances_dir = repro_dir / "feature_importances"
         
         importances_dir.mkdir(parents=True, exist_ok=True)

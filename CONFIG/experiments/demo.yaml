@@ -1,0 +1,99 @@
+# Demo Configuration - Minimal Reproducible Run
+# Purpose: Verify pipeline works end-to-end in <5 minutes
+# Usage: python tools/demo.py (or python -m TRAINING.orchestration.intelligent_trainer --experiment-config demo)
+
+experiment:
+  name: demo
+  description: "Minimal reproducible demo: 3 symbols, 2 targets, 1 model family"
+
+# ============================================================================
+# DATA CONFIGURATION - Minimal for speed
+# ============================================================================
+data:
+  # Data directory - uses existing test data
+  data_dir: data/data_labeled_v3/interval=5m
+  
+  # Minimal symbol set for fast demo
+  symbols:
+    - AAPL
+    - MSFT
+    - GOOGL
+  
+  # Aggressive limits for <5 minute runtime
+  max_samples_per_symbol: 1000
+  max_rows_per_symbol: 1000
+  max_rows_train: 3000
+  max_cs_samples: 500
+  min_cs: 2
+
+# ============================================================================
+# INTELLIGENT TRAINING - Minimal config
+# ============================================================================
+intelligent_training:
+  # Auto-discover targets but limit to 2
+  auto_targets: true
+  top_n_targets: 2
+  max_targets_to_evaluate: 5
+  
+  # Auto-discover features, limited set
+  auto_features: true
+  top_m_features: 20
+  
+  # Simplest strategy
+  strategy: single_task
+  
+  # Skip diagnostics for speed
+  run_leakage_diagnostics: false
+  
+  # Only use fast targets (exclude long horizons)
+  exclude_target_patterns:
+    - "fwd_ret_20d"
+    - "fwd_ret_15d"
+    - "fwd_ret_10d"
+    - "fwd_ret_5d"
+    - "fwd_ret_1d"
+
+# ============================================================================
+# FEATURE SELECTION - Single fast method
+# ============================================================================
+feature_selection:
+  model_families:
+    - lightgbm
+
+# ============================================================================
+# TRAINING - Single model family
+# ============================================================================
+training:
+  model_families:
+    - lightgbm
+
+# ============================================================================
+# DECISIONS - Disabled for demo
+# ============================================================================
+decisions:
+  apply_mode: "off"
+  use_bayesian: false
+
+# ============================================================================
+# PARALLEL EXECUTION - Disabled for reproducibility
+# ============================================================================
+multi_target:
+  parallel_targets: false
+  skip_on_error: false
+  save_summary: true
+
+multi_model_feature_selection:
+  parallel_symbols: false
+
+threading:
+  parallel:
+    max_workers_process: 1
+    max_workers_thread: 1
+    enabled: false
+
+# ============================================================================
+# OUTPUT - Demo-specific
+# ============================================================================
+output:
+  output_dir: RESULTS/demo_run
+  add_timestamp: false  # Fixed path for reproducibility checks

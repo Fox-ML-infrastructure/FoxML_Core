@@ -22,14 +22,14 @@ model_families:
 
 # Training-specific settings
 training:
-  cv_folds: 5
+  folds: 5
   validation_split: 0.2
   early_stopping: true
-  # random_state: auto-injected from defaults.randomness.random_state (or pipeline.determinism.base_seed)
+  # seed: auto-injected from defaults.randomness.seed (or pipeline.determinism.base_seed)
 
 # Cross-validation settings
 cross_validation:
-  cv_folds: 5
+  folds: 5
   shuffle: false  # Time series CV should NOT shuffle (preserves temporal order)
-  # random_state: auto-injected from defaults.randomness.random_state (or pipeline.determinism.base_seed)
+  # seed: auto-injected from defaults.randomness.seed (or pipeline.determinism.base_seed)
 

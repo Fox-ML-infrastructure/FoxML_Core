@@ -341,20 +341,20 @@ class AuditEnforcer:
     def _validate_suspicious_scores(self, metrics: Dict[str, Any]) -> None:
         """Warn on suspiciously high scores (potential leakage)."""
         metric_name = metrics.get("metric_name", "").upper()
-        mean_score = metrics.get("mean_score")
+        auc = metrics.get("auc")
         
-        if mean_score is None:
+        if auc is None:
             return
         
         # Check AUC specifically
         if "AUC" in metric_name or "ROC" in metric_name:
-            if mean_score >= self.suspicious_auc_threshold:
+            if auc >= self.suspicious_auc_threshold:
                 self.warnings.append({
                     "rule": "suspicious_score_threshold",
-                    "message": f"{metric_name} = {mean_score:.3f} >= {self.suspicious_auc_threshold} - VERIFY FOR LEAKAGE",
+                    "message": f"{metric_name} = {auc:.3f} >= {self.suspicious_auc_threshold} - VERIFY FOR LEAKAGE",
                     "severity": "warning",
                     "metric_name": metric_name,
-                    "score": mean_score,
+                    "score": auc,
                     "threshold": self.suspicious_auc_threshold
                 })
     

@@ -35,7 +35,7 @@ class DecisionResult:
     decision_reason_codes: List[str] = None  # List of reason codes (e.g., ["jaccard_collapse", "route_instability"])
     
     # Predictions and trends
-    predicted_cs_auc: Optional[float] = None
+    predicted_auc: Optional[float] = None
     predicted_sym_auc: Optional[float] = None
     trend_direction: Optional[str] = None  # "improving", "declining", "stable"
     
@@ -100,7 +100,7 @@ class DecisionEngine:
                         'min_runs_for_learning': get_cfg('training.decisions.bayesian.min_runs_for_learning', default=5, config_name='training_config'),
                         'p_improve_threshold': get_cfg('training.decisions.bayesian.p_improve_threshold', default=0.8, config_name='training_config'),
                         'min_expected_gain': get_cfg('training.decisions.bayesian.min_expected_gain', default=0.01, config_name='training_config'),
-                        'reward_metric': get_cfg('training.decisions.bayesian.reward_metric', default='cs_auc', config_name='training_config'),
+                        'reward_metric': get_cfg('training.decisions.bayesian.reward_metric', default='auc', config_name='training_config'),
                         'recency_decay': get_cfg('training.decisions.bayesian.recency_decay', default=0.95, config_name='training_config'),
                         'level_3_threshold': get_cfg('training.decisions.bayesian.level_3_threshold', default=0.8, config_name='training_config'),
                         'level_3_gain': get_cfg('training.decisions.bayesian.level_3_gain', default=0.01, config_name='training_config'),
@@ -234,13 +234,13 @@ class DecisionEngine:
                         reason_codes.append(result['reason'])
         
         # Get predictions if available (from regression analysis)
-        predicted_cs_auc = latest.get('next_pred') if 'next_pred' in latest else None
+        predicted_auc = latest.get('next_pred') if 'next_pred' in latest else None
         predicted_sym_auc = latest.get('next_pred_sym_auc') if 'next_pred_sym_auc' in latest else None
         
         # Determine trend
         if len(cohort_data) >= 2:
-            recent_auc = cohort_data['cs_auc'].iloc[-1] if 'cs_auc' in cohort_data.columns else None
-            prev_auc = cohort_data['cs_auc'].iloc[-2] if 'cs_auc' in cohort_data.columns else None
+            recent_auc = cohort_data['auc'].iloc[-1] if 'auc' in cohort_data.columns else None
+            prev_auc = cohort_data['auc'].iloc[-2] if 'auc' in cohort_data.columns else None
             if recent_auc is not None and prev_auc is not None:
                 if recent_auc > prev_auc * 1.01:  # 1% improvement
                     trend_direction = "improving"
@@ -272,7 +272,7 @@ class DecisionEngine:
             decision_level=decision_level,
             decision_action_mask=action_mask,
             decision_reason_codes=reason_codes,
-            predicted_cs_auc=float(predicted_cs_auc) if predicted_cs_auc is not None and not np.isnan(predicted_cs_auc) else None,
+            predicted_auc=float(predicted_auc) if predicted_auc is not None and not np.isnan(predicted_auc) else None,
             predicted_sym_auc=float(predicted_sym_auc) if predicted_sym_auc is not None and not np.isnan(predicted_sym_auc) else None,
             trend_direction=trend_direction,
             policy_results={**policy_results, 'bayesian_metadata': bayesian_metadata} if bayesian_metadata else policy_results,

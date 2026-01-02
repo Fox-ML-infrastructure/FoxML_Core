@@ -93,7 +93,7 @@ def execute_parallel(
         List of (item, result) tuples in completion order
     
     Example:
-        def evaluate_target(target_name, target_config):
+        def evaluate_target(target, target_config):
             return evaluate_target_predictability(...)
         
         results = execute_parallel(
@@ -184,9 +184,9 @@ def execute_parallel_with_context(
     
     Example:
         def evaluate_target_with_context(item, context):
-            target_name, target_config = item
+            target, target_config = item
             return evaluate_target_predictability(
-                target_name=target_name,
+                target=target,
                 target_config=target_config,
                 symbols=context['symbols'],
                 data_dir=context['data_dir'],

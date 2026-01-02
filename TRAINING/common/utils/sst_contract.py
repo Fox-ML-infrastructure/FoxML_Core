@@ -320,7 +320,7 @@ def filter_trainers(families: List[str]) -> List[str]:
 # Target Horizon Resolution
 # ============================================================================
 
-def resolve_target_horizon_minutes(target_name: str, config: Optional[Dict[str, Any]] = None) -> Optional[int]:
+def resolve_target_horizon_minutes(target: str, config: Optional[Dict[str, Any]] = None) -> Optional[int]:
     """
     Resolve target horizon in minutes from target name.
     
@@ -328,7 +328,7 @@ def resolve_target_horizon_minutes(target_name: str, config: Optional[Dict[str, 
     Handles special cases like *_same_day, *_5d, etc.
     
     Args:
-        target_name: Target column name (e.g., 'fwd_ret_oc_same_day', 'fwd_ret_5d', 'y_will_peak_60m_0.8')
+        target: Target column name (e.g., 'fwd_ret_oc_same_day', 'fwd_ret_5d', 'y_will_peak_60m_0.8')
         config: Optional config dict with horizon_extraction patterns
     
     Returns:
@@ -340,10 +340,10 @@ def resolve_target_horizon_minutes(target_name: str, config: Optional[Dict[str, 
         - fwd_ret_5d: Returns 5 * 1440 = 7200 minutes
         - fwd_ret_1d: Returns 1440 minutes
     """
-    if not target_name or not isinstance(target_name, str):
+    if not target or not isinstance(target, str):
         return None
     
-    target_lower = target_name.lower()
+    target_lower = target.lower()
     
     # Special cases for same-day targets
     if "same_day" in target_lower or "oc_same_day" in target_lower:
@@ -376,7 +376,7 @@ def resolve_target_horizon_minutes(target_name: str, config: Optional[Dict[str, 
         multiplier = pattern_config.get('multiplier', 1)
         
         if regex:
-            match = re.search(regex, target_name, re.IGNORECASE)
+            match = re.search(regex, target, re.IGNORECASE)
             if match:
                 value = int(match.group(1))
                 return value * multiplier
@@ -429,7 +429,7 @@ def tracker_input_adapter(value: Any, field_name: str = "value") -> str:
             pass
     
     # Try common attribute names (task, objective, etc.)
-    for attr in ['task', 'objective', 'stage', 'route_type', 'family']:
+    for attr in ['task', 'objective', 'stage', 'view', 'family']:
         if hasattr(value, attr):
             try:
                 attr_value = getattr(value, attr)

@@ -14,7 +14,7 @@ from typing import Dict, List, Any, Optional
 import logging
 from .base import BaseTrainingStrategy
 
-# Import determinism system for consistent random_state
+# Import determinism system for consistent seed
 try:
     from TRAINING.common.determinism import BASE_SEED
     _DETERMINISM_AVAILABLE = True
@@ -40,15 +40,15 @@ class SingleTaskStrategy(BaseTrainingStrategy):
         
         results = {}
         
-        for target_name, y in y_dict.items():
-            logger.info(f"Training model for target: {target_name}")
+        for target, y in y_dict.items():
+            logger.info(f"Training model for target: {target}")
             
             # Determine model type based on target
-            target_type = self._determine_target_type(target_name, y)
-            self.target_types[target_name] = target_type
+            target_type = self._determine_target_type(target, y)
+            self.target_types[target] = target_type
             
             # Create appropriate model
-            model = self._create_model(target_type, target_name)
+            model = self._create_model(target_type, target)
             
             # Train model with early stopping (if supported)
             try:
@@ -57,7 +57,7 @@ class SingleTaskStrategy(BaseTrainingStrategy):
                                               'X_valid' in model.fit.__code__.co_varnames):
                     # Split for validation
                     from sklearn.model_selection import train_test_split
-                    # Load test_size and random_state from config
+                    # Load test_size and seed from config
                     try:
                         from CONFIG.config_loader import get_cfg
                         from TRAINING.common.determinism import BASE_SEED
@@ -80,7 +80,7 @@ class SingleTaskStrategy(BaseTrainingStrategy):
                             eval_set=[(X_val, y_val)],
                             callbacks=[lgb.early_stopping(early_stopping_rounds, verbose=False)]
                         )
-                        logger.info(f"✅ {target_name}: Early stopping at iteration {getattr(model, 'best_iteration_', 'N/A')}")
+                        logger.info(f"✅ {target}: Early stopping at iteration {getattr(model, 'best_iteration_', 'N/A')}")
                     else:
                         # Fallback
                         model.fit(X, y)
@@ -88,12 +88,12 @@ class SingleTaskStrategy(BaseTrainingStrategy):
                     # Standard fit for models that don't support early stopping
                     model.fit(X, y)
             except Exception as e:
-                logger.warning(f"Early stopping failed for {target_name}, using standard fit: {e}")
+                logger.warning(f"Early stopping failed for {target}, using standard fit: {e}")
                 model.fit(X, y)
             
             # Store model and metadata
-            self.models[target_name] = model
-            results[target_name] = {
+            self.models[target] = model
+            results[target] = {
                 'model': model,
                 'target_type': target_type,
                 'feature_names': feature_names,
@@ -102,7 +102,7 @@ class SingleTaskStrategy(BaseTrainingStrategy):
                 'feature_importance': self._get_feature_importance(model)
             }
             
-            logger.info(f"✅ {target_name} ({target_type}) trained successfully")
+            logger.info(f"✅ {target} ({target_type}) trained successfully")
             
         return results
     
@@ -110,9 +110,9 @@ class SingleTaskStrategy(BaseTrainingStrategy):
         """Make predictions using trained models"""
         predictions = {}
         
-        for target_name, model in self.models.items():
+        for target, model in self.models.items():
             try:
-                if self.target_types[target_name] == 'classification':
+                if self.target_types[target] == 'classification':
                     # For classification, return probabilities
                     if hasattr(model, 'predict_proba'):
                         pred = model.predict_proba(X)[:, 1]  # Probability of positive class
@@ -122,11 +122,11 @@ class SingleTaskStrategy(BaseTrainingStrategy):
                     # For regression, return continuous values
                     pred = model.predict(X)
                 
-                predictions[target_name] = pred
+                predictions[target] = pred
                 
             except Exception as e:
-                logger.error(f"Error predicting {target_name}: {e}")
-                predictions[target_name] = np.zeros(len(X))
+                logger.error(f"Error predicting {target}: {e}")
+                predictions[target] = np.zeros(len(X))
         
         return predictions
     
@@ -134,13 +134,13 @@ class SingleTaskStrategy(BaseTrainingStrategy):
         """Return target types for each target"""
         return self.target_types.copy()
     
-    def _determine_target_type(self, target_name: str, y: np.ndarray) -> str:
+    def _determine_target_type(self, target: str, y: np.ndarray) -> str:
         """Determine if target is regression or classification"""
         
         # Check target name patterns
-        if target_name.startswith('fwd_ret_'):
+        if target.startswith('fwd_ret_'):
             return 'regression'
-        elif any(target_name.startswith(prefix) for prefix in 
+        elif any(target.startswith(prefix) for prefix in 
                 ['will_peak', 'will_valley', 'mdd', 'mfe', 'y_will_']):
             return 'classification'
         
@@ -152,7 +152,7 @@ class SingleTaskStrategy(BaseTrainingStrategy):
         else:
             return 'regression'
     
-    def _create_model(self, target_type: str, target_name: str):
+    def _create_model(self, target_type: str, target: str):
         """Create appropriate model for target type"""
         
         # Get model configuration
@@ -162,14 +162,14 @@ class SingleTaskStrategy(BaseTrainingStrategy):
         if model_type == 'auto':
             # Auto-select based on target type
             if target_type == 'classification':
-                return self._create_classification_model(target_name)
+                return self._create_classification_model(target)
             else:
-                return self._create_regression_model(target_name)
+                return self._create_regression_model(target)
         else:
             # Use specified model type
-            return self._create_model_by_type(model_type, target_type, target_name)
+            return self._create_model_by_type(model_type, target_type, target)
     
-    def _create_model_with_factory(self, model_type: str, target_type: str, target_name: str):
+    def _create_model_with_factory(self, model_type: str, target_type: str, target: str):
         """Create model using the factory system"""
         try:
             from models.factory import ModelFactory
@@ -187,9 +187,9 @@ class SingleTaskStrategy(BaseTrainingStrategy):
         except Exception as e:
             logger.warning(f"Could not create {model_type} with factory: {e}")
             # Fallback to direct creation
-            return self._create_model_by_type(model_type, target_type, target_name)
+            return self._create_model_by_type(model_type, target_type, target)
     
-    def _create_regression_model(self, target_name: str):
+    def _create_regression_model(self, target: str):
         """Create regression model"""
         from sklearn.ensemble import RandomForestRegressor
         from sklearn.linear_model import Ridge
@@ -197,14 +197,14 @@ class SingleTaskStrategy(BaseTrainingStrategy):
         model_config = self.config.get('models', {}).get('regression', {})
         model_type = model_config.get('type', 'random_forest')
         
-        # Get random_state from determinism system
-        random_state = BASE_SEED if BASE_SEED is not None else 42
+        # Get seed from determinism system
+        seed = BASE_SEED if BASE_SEED is not None else 42
         
         if model_type == 'random_forest':
             return RandomForestRegressor(
                 n_estimators=model_config.get('n_estimators', 100),
                 max_depth=model_config.get('max_depth', None),
-                random_state=random_state
+                random_state=seed
             )
         elif model_type == 'ridge':
             return Ridge(alpha=model_config.get('alpha', 1.0))
@@ -215,9 +215,9 @@ class SingleTaskStrategy(BaseTrainingStrategy):
                 default_n_estimators = int(get_cfg("models.random_forest.n_estimators", default=100, config_name="training_config"))
             except Exception:
                 default_n_estimators = 100
-            return RandomForestRegressor(n_estimators=default_n_estimators, random_state=random_state)
+            return RandomForestRegressor(n_estimators=default_n_estimators, random_state=seed)
     
-    def _create_classification_model(self, target_name: str):
+    def _create_classification_model(self, target: str):
         """Create classification model"""
         from sklearn.ensemble import RandomForestClassifier
         from sklearn.linear_model import LogisticRegression
@@ -225,19 +225,19 @@ class SingleTaskStrategy(BaseTrainingStrategy):
         model_config = self.config.get('models', {}).get('classification', {})
         model_type = model_config.get('type', 'random_forest')
         
-        # Get random_state from determinism system
-        random_state = BASE_SEED if BASE_SEED is not None else 42
+        # Get seed from determinism system
+        seed = BASE_SEED if BASE_SEED is not None else 42
         
         if model_type == 'random_forest':
             return RandomForestClassifier(
                 n_estimators=model_config.get('n_estimators', 100),
                 max_depth=model_config.get('max_depth', None),
-                random_state=random_state
+                random_state=seed
             )
         elif model_type == 'logistic':
             return LogisticRegression(
                 C=model_config.get('C', 1.0),
-                random_state=random_state
+                random_state=seed
             )
         else:
             # Fallback: try to load default from config
@@ -246,13 +246,13 @@ class SingleTaskStrategy(BaseTrainingStrategy):
                 default_n_estimators = int(get_cfg("models.random_forest.n_estimators", default=100, config_name="training_config"))
             except Exception:
                 default_n_estimators = 100
-            return RandomForestClassifier(n_estimators=default_n_estimators, random_state=random_state)
+            return RandomForestClassifier(n_estimators=default_n_estimators, random_state=seed)
     
-    def _create_model_by_type(self, model_type: str, target_type: str, target_name: str):
+    def _create_model_by_type(self, model_type: str, target_type: str, target: str):
         """Create model by specific type"""
         # Try factory first for MTF model families
         if model_type in ['LightGBM', 'XGBoost', 'MLP', 'CNN1D', 'LSTM', 'Transformer', 'Ensemble']:
-            return self._create_model_with_factory(model_type, target_type, target_name)
+            return self._create_model_with_factory(model_type, target_type, target)
         
         # Fallback to direct creation for other types
         if model_type == 'lightgbm':
@@ -264,9 +264,9 @@ class SingleTaskStrategy(BaseTrainingStrategy):
         else:
             # Fallback to default
             if target_type == 'classification':
-                return self._create_classification_model(target_name)
+                return self._create_classification_model(target)
             else:
-                return self._create_regression_model(target_name)
+                return self._create_regression_model(target)
     
     def _create_lightgbm_model(self, target_type: str):
         """Create LightGBM model with Spec 2 high regularization"""
@@ -288,7 +288,7 @@ class SingleTaskStrategy(BaseTrainingStrategy):
                 'subsample_freq': 1,
                 'reg_alpha': model_config.get('lambda_l1', 0.1),
                 'reg_lambda': model_config.get('lambda_l2', 0.1),
-                'random_state': BASE_SEED if BASE_SEED is not None else 42,
+                'seed': BASE_SEED if BASE_SEED is not None else 42,
                 'verbose': -1,
             }
             
@@ -329,7 +329,7 @@ class SingleTaskStrategy(BaseTrainingStrategy):
                 'colsample_bytree': model_config.get('colsample_bytree', 0.75),
                 'reg_alpha': model_config.get('reg_alpha', 0.1),
                 'reg_lambda': model_config.get('reg_lambda', 0.1),
-                'random_state': BASE_SEED if BASE_SEED is not None else 42,
+                'seed': BASE_SEED if BASE_SEED is not None else 42,
                 'verbosity': 0,
             }
             
@@ -350,19 +350,19 @@ class SingleTaskStrategy(BaseTrainingStrategy):
         try:
             from sklearn.neural_network import MLPRegressor, MLPClassifier
             
-            # Get random_state from determinism system
-            random_state = BASE_SEED if BASE_SEED is not None else 42
+            # Get seed from determinism system
+            seed = BASE_SEED if BASE_SEED is not None else 42
             
             if target_type == 'classification':
                 return MLPClassifier(
                     hidden_layer_sizes=(100, 50),
-                    random_state=random_state,
+                    random_state=seed,
                     max_iter=500
                 )
             else:
                 return MLPRegressor(
                     hidden_layer_sizes=(100, 50),
-                    random_state=random_state,
+                    random_state=seed,
                     max_iter=500
                 )
         except ImportError:

@@ -238,7 +238,7 @@ def get_default_patch_templates(config: Optional[Dict[str, Any]] = None) -> List
 def compute_reward(
     current_run: pd.Series,
     baseline_runs: pd.DataFrame,
-    metric: str = "cs_auc"
+    metric: str = "auc"
 ) -> float:
     """
     Compute reward for current run vs baseline.
@@ -246,7 +246,7 @@ def compute_reward(
     Args:
         current_run: Current run metrics
         baseline_runs: Historical runs (same cohort+segment, no patch applied)
-        metric: Metric to use (default: cs_auc)
+        metric: Metric to use (default: auc)
     
     Returns:
         Reward = current_metric - median(baseline_metrics)
@@ -302,7 +302,7 @@ class BayesianPatchPolicy:
         self.min_runs_for_learning = bayesian_cfg.get('min_runs_for_learning', 5)
         self.p_improve_threshold = bayesian_cfg.get('p_improve_threshold', 0.8)
         self.min_expected_gain = bayesian_cfg.get('min_expected_gain', 0.01)
-        self.reward_metric = bayesian_cfg.get('reward_metric', 'cs_auc')
+        self.reward_metric = bayesian_cfg.get('reward_metric', 'auc')
         self.recency_decay = bayesian_cfg.get('recency_decay', 0.95)
         
         # Decision level thresholds (configurable)

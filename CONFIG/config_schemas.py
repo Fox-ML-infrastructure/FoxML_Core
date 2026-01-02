@@ -24,7 +24,7 @@ class DataConfig:
     default_max_staleness_minutes: Optional[float] = None  # NEW: Optional staleness cap (e.g., 1440 for 1-day)
     max_samples_per_symbol: int = 50000
     validation_split: float = 0.2
-    random_state: int = 42
+    seed: int = 42
     symbol_batch_size: Optional[int] = None  # Limit auto-discovered symbols to N (random sample)
     
     def __post_init__(self):
@@ -149,7 +149,7 @@ class TargetRankingConfig:
 class TrainingConfig:
     """Training module configuration"""
     model_families: Dict[str, Dict[str, Any]]
-    cv_folds: int = 5
+    folds: int = 5
     pipeline: Dict[str, Any] = field(default_factory=dict)
     gpu: Dict[str, Any] = field(default_factory=dict)
     memory: Dict[str, Any] = field(default_factory=dict)
@@ -168,8 +168,8 @@ class TrainingConfig:
         """Validate training config"""
         if not isinstance(self.model_families, dict):
             raise ValueError(f"TrainingConfig.model_families must be a dict, got {type(self.model_families)}")
-        if self.cv_folds < 2:
-            raise ValueError(f"TrainingConfig.cv_folds must be >= 2, got {self.cv_folds}")
+        if self.folds < 2:
+            raise ValueError(f"TrainingConfig.folds must be >= 2, got {self.folds}")
 
 
 @dataclass

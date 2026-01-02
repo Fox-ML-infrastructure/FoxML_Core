@@ -40,9 +40,9 @@ class ValidationUtils:
             validation_results['errors'].extend(x_validation['errors'])
         
         # Check y_dict
-        for target_name, y in y_dict.items():
-            y_validation = self._validate_target(y, target_name)
-            validation_results['stats'][target_name] = y_validation
+        for target, y in y_dict.items():
+            y_validation = self._validate_target(y, target)
+            validation_results['stats'][target] = y_validation
             
             if not y_validation['valid']:
                 validation_results['valid'] = False
@@ -104,7 +104,7 @@ class ValidationUtils:
         
         return validation
     
-    def _validate_target(self, y: np.ndarray, target_name: str) -> Dict[str, Any]:
+    def _validate_target(self, y: np.ndarray, target: str) -> Dict[str, Any]:
         """Validate target data"""
         
         validation = {
@@ -117,7 +117,7 @@ class ValidationUtils:
         # Check for empty target
         if len(y) == 0:
             validation['valid'] = False
-            validation['errors'].append(f"Target {target_name} is empty")
+            validation['errors'].append(f"Target {target} is empty")
             return validation
         
         # Check for NaN values
@@ -131,9 +131,9 @@ class ValidationUtils:
         
         if nan_ratio > 0.5:  # More than 50% NaN
             validation['valid'] = False
-            validation['errors'].append(f"Target {target_name} has too many NaN values: {nan_ratio:.2%}")
+            validation['errors'].append(f"Target {target} has too many NaN values: {nan_ratio:.2%}")
         elif nan_ratio > 0.1:  # More than 10% NaN
-            validation['warnings'].append(f"Target {target_name} has high NaN ratio: {nan_ratio:.2%}")
+            validation['warnings'].append(f"Target {target} has high NaN ratio: {nan_ratio:.2%}")
         
         # Check for constant values
         valid_data = y[~np.isnan(y)]
@@ -143,9 +143,9 @@ class ValidationUtils:
             
             if n_unique <= 1:
                 validation['valid'] = False
-                validation['errors'].append(f"Target {target_name} is constant")
+                validation['errors'].append(f"Target {target} is constant")
             elif n_unique <= 2:
-                validation['warnings'].append(f"Target {target_name} has only {n_unique} unique values")
+                validation['warnings'].append(f"Target {target} has only {n_unique} unique values")
             
             # Check data range
             data_min = np.min(valid_data)
@@ -155,16 +155,16 @@ class ValidationUtils:
             # Check for infinite values
             n_inf = np.sum(np.isinf(valid_data))
             if n_inf > 0:
-                validation['warnings'].append(f"Target {target_name} has infinite values: {n_inf}")
+                validation['warnings'].append(f"Target {target} has infinite values: {n_inf}")
             
             # Check for extreme values
-            if target_name.startswith('fwd_ret_'):
+            if target.startswith('fwd_ret_'):
                 # Forward returns should be reasonable
                 if abs(data_max) > 1.0:  # More than 100% return
-                    validation['warnings'].append(f"Target {target_name} has extreme values: max={data_max:.3f}")
+                    validation['warnings'].append(f"Target {target} has extreme values: max={data_max:.3f}")
         else:
             validation['valid'] = False
-            validation['errors'].append(f"Target {target_name} has no valid data")
+            validation['errors'].append(f"Target {target} has no valid data")
         
         return validation
     
@@ -186,9 +186,9 @@ class ValidationUtils:
             validation['errors'].append(f"Missing predictions for targets: {missing_targets}")
         
         # Check each prediction
-        for target_name, pred in predictions.items():
-            pred_validation = self._validate_prediction(pred, target_name)
-            validation['stats'][target_name] = pred_validation
+        for target, pred in predictions.items():
+            pred_validation = self._validate_prediction(pred, target)
+            validation['stats'][target] = pred_validation
             
             if not pred_validation['valid']:
                 validation['valid'] = False
@@ -198,7 +198,7 @@ class ValidationUtils:
         
         return validation
     
-    def _validate_prediction(self, pred: np.ndarray, target_name: str) -> Dict[str, Any]:
+    def _validate_prediction(self, pred: np.ndarray, target: str) -> Dict[str, Any]:
         """Validate a single prediction"""
         
         validation = {
@@ -218,12 +218,12 @@ class ValidationUtils:
         validation['stats']['nan_ratio'] = nan_ratio
         
         if nan_ratio > 0.1:  # More than 10% NaN
-            validation['warnings'].append(f"Prediction {target_name} has high NaN ratio: {nan_ratio:.2%}")
+            validation['warnings'].append(f"Prediction {target} has high NaN ratio: {nan_ratio:.2%}")
         
         # Check for infinite values
         n_inf = np.sum(np.isinf(pred))
         if n_inf > 0:
-            validation['warnings'].append(f"Prediction {target_name} has infinite values: {n_inf}")
+            validation['warnings'].append(f"Prediction {target} has infinite values: {n_inf}")
         
         # Check data range
         valid_data = pred[~np.isnan(pred) & ~np.isinf(pred)]
@@ -233,15 +233,15 @@ class ValidationUtils:
             validation['stats']['range'] = (data_min, data_max)
             
             # Check for reasonable ranges based on target type
-            if target_name.startswith('fwd_ret_'):
+            if target.startswith('fwd_ret_'):
                 # Forward returns should be reasonable
                 if abs(data_max) > 2.0:  # More than 200% return
-                    validation['warnings'].append(f"Prediction {target_name} has extreme values: max={data_max:.3f}")
-            elif any(target_name.startswith(prefix) for prefix in 
+                    validation['warnings'].append(f"Prediction {target} has extreme values: max={data_max:.3f}")
+            elif any(target.startswith(prefix) for prefix in 
                     ['will_peak', 'will_valley', 'mdd', 'mfe']):
                 # Probability-like targets should be in [0, 1]
                 if data_min < 0 or data_max > 1:
-                    validation['warnings'].append(f"Prediction {target_name} outside [0,1] range: [{data_min:.3f}, {data_max:.3f}]")
+                    validation['warnings'].append(f"Prediction {target} outside [0,1] range: [{data_min:.3f}, {data_max:.3f}]")
         
         return validation
     

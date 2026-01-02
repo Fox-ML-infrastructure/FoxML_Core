@@ -115,7 +115,7 @@ def train_panel_model(
                 'n_estimators': lgb_hyperparams.get('n_estimators', 1000),  # Match Phase 3 default
                 'max_depth': lgb_hyperparams.get('max_depth', 8),  # Match Phase 3 default
                 'learning_rate': lgb_hyperparams.get('learning_rate', 0.03),  # Match Phase 3 default
-                'random_state': cs_seed,
+                'seed': cs_seed,
                 'verbosity': -1,
                 'n_jobs': 1
             }
@@ -124,7 +124,7 @@ def train_panel_model(
                 'n_estimators': 1000,  # Match Phase 3 default
                 'max_depth': 8,  # Match Phase 3 default
                 'learning_rate': 0.03,  # Match Phase 3 default
-                'random_state': cs_seed,
+                'seed': cs_seed,
                 'verbosity': -1,
                 'n_jobs': 1
             }
@@ -136,7 +136,7 @@ def train_panel_model(
                 'n_estimators': xgb_hyperparams.get('n_estimators', 1000),  # Match Phase 3 default
                 'max_depth': xgb_hyperparams.get('max_depth', 7),  # Match Phase 3 default
                 'learning_rate': xgb_hyperparams.get('eta', xgb_hyperparams.get('learning_rate', 0.03)),  # Match Phase 3 default (eta is XGBoost's learning_rate)
-                'random_state': cs_seed,
+                'seed': cs_seed,
                 'n_jobs': 1
             }
         except Exception:
@@ -144,7 +144,7 @@ def train_panel_model(
                 'n_estimators': 1000,  # Match Phase 3 default
                 'max_depth': 7,  # Match Phase 3 default
                 'learning_rate': 0.03,  # Match Phase 3 default
-                'random_state': cs_seed,
+                'seed': cs_seed,
                 'n_jobs': 1
             }
     except Exception:
@@ -154,7 +154,7 @@ def train_panel_model(
                 'n_estimators': 1000,  # Match Phase 3 default
                 'max_depth': 8,  # Match Phase 3 default
                 'learning_rate': 0.03,  # Match Phase 3 default
-                'random_state': cs_seed,
+                'seed': cs_seed,
                 'verbosity': -1,
                 'n_jobs': 1
             },
@@ -162,7 +162,7 @@ def train_panel_model(
                 'n_estimators': 1000,  # Match Phase 3 default
                 'max_depth': 7,  # Match Phase 3 default
                 'learning_rate': 0.03,  # Match Phase 3 default
-                'random_state': cs_seed,
+                'seed': cs_seed,
                 'n_jobs': 1
             }
         }
@@ -338,7 +338,7 @@ def compute_cross_sectional_importance(
         min_cs=min_cs,
         max_cs_samples=max_cs_samples,
         feature_names=candidate_features,  # Only candidate features
-        requested_mode="CROSS_SECTIONAL",  # This function is always cross-sectional
+        requested_view="CROSS_SECTIONAL",  # This function is always cross-sectional
         output_dir=output_dir
     )
     
@@ -396,6 +396,7 @@ def compute_cross_sectional_importance(
             from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
             from TRAINING.orchestration.utils.run_context import RunContext
             from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata
+            from TRAINING.ranking.utils.leakage_filtering import _extract_horizon, _load_leakage_config
             
             # Use module-specific directory
             module_output_dir = output_dir.parent / 'feature_selections' if (output_dir.parent / 'feature_selections').exists() else output_dir
@@ -413,20 +414,29 @@ def compute_cross_sectional_importance(
                 max_cs_samples=max_cs_samples
             )
             
+            # FIX: Extract horizon_minutes from target column for COHORT_AWARE mode
+            horizon_minutes_for_ctx = None
+            if target_column:
+                try:
+                    leakage_config = _load_leakage_config()
+                    horizon_minutes_for_ctx = _extract_horizon(target_column, leakage_config)
+                except Exception:
+                    pass
+            
             # Build RunContext
             ctx = RunContext(
                 stage="FEATURE_SELECTION",
-                target_name=target_column,
+                target=target_column,
                 target_column=target_column,
                 X=X,  # Panel data
                 y=y,  # Panel labels
                 feature_names=feature_names,
                 symbols=symbols_array if 'symbols_array' in locals() else symbols,
                 time_vals=time_vals if 'time_vals' in locals() else None,
-                horizon_minutes=None,  # Not applicable for CS ranking
+                horizon_minutes=horizon_minutes_for_ctx,  # FIX: Extract from target column
                 purge_minutes=None,
                 embargo_minutes=None,
-                cv_folds=None,
+                folds=None,
                 fold_timestamps=None,
                 data_interval_minutes=None,
                 seed=None
@@ -439,7 +449,7 @@ def compute_cross_sectional_importance(
             
             metrics_dict = {
                 "metric_name": "CS Importance Score",
-                "mean_score": mean_cs_score,
+                "auc": mean_cs_score,
                 "std_score": std_cs_score,
                 "mean_importance": top_cs_score,
                 "composite_score": mean_cs_score,
@@ -478,7 +488,7 @@ def compute_cross_sectional_stability(
     cs_importance: pd.Series,
     output_dir: Optional[Path] = None,
     top_k: int = 20,
-    universe_id: Optional[str] = None
+    universe_sig: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Compute stability metrics for cross-sectional feature importance.
@@ -491,7 +501,7 @@ def compute_cross_sectional_stability(
         cs_importance: Current cross-sectional importance Series
         output_dir: Optional output directory for snapshots
         top_k: Number of top features for overlap calculation
-        universe_id: Optional universe identifier (e.g., "ALL", "TOP100")
+        universe_sig: Optional universe identifier (e.g., "ALL", "TOP100")
     
     Returns:
         Dict with stability metrics:
@@ -527,8 +537,8 @@ def compute_cross_sectional_stability(
     try:
         # Save current snapshot
         method_name = "cross_sectional_panel"
-        if universe_id is None:
-            universe_id = "ALL"  # Default universe ID for cross-sectional
+        if universe_sig is None:
+            universe_sig = "ALL"  # Default universe ID for cross-sectional
         
         # Use target-first structure for snapshots
         snapshot_base_dir = None
@@ -543,22 +553,22 @@ def compute_cross_sectional_stability(
                 base_output_dir = base_output_dir.parent
             
             if base_output_dir.exists():
-                target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+                target_clean = target_column.replace('/', '_').replace('\\', '_')
                 from TRAINING.orchestration.utils.target_first_paths import (
                     get_target_reproducibility_dir, ensure_target_structure
                 )
-                ensure_target_structure(base_output_dir, target_name_clean)
-                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name_clean)
-                snapshot_base_dir = get_snapshot_base_dir(target_repro_dir, target_name=target_column)
+                ensure_target_structure(base_output_dir, target_clean)
+                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
+                snapshot_base_dir = get_snapshot_base_dir(target_repro_dir, target=target_column)
         else:
-            snapshot_base_dir = get_snapshot_base_dir(output_dir, target_name=target_column)
+            snapshot_base_dir = get_snapshot_base_dir(output_dir, target=target_column)
         
         if snapshot_base_dir:
             snapshot_path = save_snapshot_from_series_hook(
-                target_name=target_column,
+                target=target_column,
                 method=method_name,
                 importance_series=cs_importance,
-                universe_id=universe_id,
+                universe_sig=universe_sig,
                 output_dir=snapshot_base_dir,  # Use target-first structure
                 auto_analyze=False  # We'll analyze manually to get metrics
             )

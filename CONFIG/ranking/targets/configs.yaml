@@ -2,7 +2,7 @@
 # All 63 available targets from your schema
 #
 # Strategy: 7 core targets enabled, 56 ready to enable as needed
-# Each target creates: features/<target_name>/selected_features.txt
+# Each target creates: features/<target>/selected_features.txt
 #
 # Enable/disable by changing: enabled: true/false
 

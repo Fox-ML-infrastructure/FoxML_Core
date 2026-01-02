@@ -58,18 +58,18 @@ def placebo_label_test(
         
         scores.append(score)
     
-    mean_score = np.mean(scores)
+    auc = np.mean(scores)
     
     # Pass if score is close to random (~0.50 for classification, ~0.0 for regression)
     if task_type == 'classification':
-        passed = 0.45 <= mean_score <= 0.55
-        diagnosis = "PASS" if passed else f"FAIL: Shuffled labels gave AUC={mean_score:.3f} (expected ~0.50). Pipeline is leaking."
+        passed = 0.45 <= auc <= 0.55
+        diagnosis = "PASS" if passed else f"FAIL: Shuffled labels gave AUC={auc:.3f} (expected ~0.50). Pipeline is leaking."
     else:
-        passed = -0.1 <= mean_score <= 0.1
-        diagnosis = "PASS" if passed else f"FAIL: Shuffled labels gave R²={mean_score:.3f} (expected ~0.0). Pipeline is leaking."
+        passed = -0.1 <= auc <= 0.1
+        diagnosis = "PASS" if passed else f"FAIL: Shuffled labels gave R²={auc:.3f} (expected ~0.0). Pipeline is leaking."
     
     return {
-        'score': mean_score,
+        'score': auc,
         'passed': passed,
         'diagnosis': diagnosis,
         'scores': scores
@@ -403,7 +403,7 @@ def time_shift_label_test(
                 auc_orig = roc_auc_score(y[val_idx], y_pred_proba_orig)
                 scores_original.append(auc_orig)
         else:
-            model = Ridge(random_state=random_seed)
+            model = Ridge()
             model.fit(X[train_idx], y[train_idx])
             y_pred_orig = model.predict(X[val_idx])
             mse_orig = mean_squared_error(y[val_idx], y_pred_orig)
@@ -420,7 +420,7 @@ def time_shift_label_test(
                 auc_shift = roc_auc_score(y_shifted[val_idx], y_pred_proba_shift)
                 scores_shifted.append(auc_shift)
         else:
-            model_shift = Ridge(random_state=random_seed)
+            model_shift = Ridge()
             model_shift.fit(X[train_idx], y_shifted[train_idx])
             y_pred_shift = model_shift.predict(X[val_idx])
             mse_shift = mean_squared_error(y_shifted[val_idx], y_pred_shift)

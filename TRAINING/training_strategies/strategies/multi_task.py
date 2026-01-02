@@ -32,8 +32,8 @@ class MultiTaskStrategy(BaseTrainingStrategy):
         self.validate_data(X, y_dict)
         
         # Determine target types
-        for target_name, y in y_dict.items():
-            self.target_types[target_name] = self._determine_target_type(target_name, y)
+        for target, y in y_dict.items():
+            self.target_types[target] = self._determine_target_type(target, y)
         
         # Create multi-task model
         self.shared_model = self._create_multi_task_model(
@@ -69,26 +69,26 @@ class MultiTaskStrategy(BaseTrainingStrategy):
             model_predictions = self.shared_model.predict(X)
             
             # Organize predictions by target
-            target_names = list(self.target_types.keys())
-            for i, target_name in enumerate(target_names):
+            targets = list(self.target_types.keys())
+            for i, target in enumerate(targets):
                 if i < len(model_predictions):
                     pred = model_predictions[i]
                     
                     # Apply appropriate transformation based on target type
-                    if self.target_types[target_name] == 'classification':
+                    if self.target_types[target] == 'classification':
                         # For classification, apply sigmoid to get probabilities
                         pred = self._sigmoid(pred)
                     
-                    predictions[target_name] = pred
+                    predictions[target] = pred
                 else:
-                    logger.warning(f"No prediction for target {target_name}")
-                    predictions[target_name] = np.zeros(len(X))
+                    logger.warning(f"No prediction for target {target}")
+                    predictions[target] = np.zeros(len(X))
                     
         except Exception as e:
             logger.error(f"Error in multi-task prediction: {e}")
             # Return zero predictions for all targets
-            for target_name in self.target_types.keys():
-                predictions[target_name] = np.zeros(len(X))
+            for target in self.target_types.keys():
+                predictions[target] = np.zeros(len(X))
         
         return predictions
     
@@ -96,13 +96,13 @@ class MultiTaskStrategy(BaseTrainingStrategy):
         """Return target types for each target"""
         return self.target_types.copy()
     
-    def _determine_target_type(self, target_name: str, y: np.ndarray) -> str:
+    def _determine_target_type(self, target: str, y: np.ndarray) -> str:
         """Determine if target is regression or classification"""
         
         # Check target name patterns
-        if target_name.startswith('fwd_ret_'):
+        if target.startswith('fwd_ret_'):
             return 'regression'
-        elif any(target_name.startswith(prefix) for prefix in 
+        elif any(target.startswith(prefix) for prefix in 
                 ['will_peak', 'will_valley', 'mdd', 'mfe', 'y_will_']):
             return 'classification'
         
@@ -114,7 +114,7 @@ class MultiTaskStrategy(BaseTrainingStrategy):
         else:
             return 'regression'
     
-    def _create_multi_task_model(self, input_dim: int, target_names: List[str], 
+    def _create_multi_task_model(self, input_dim: int, targets: List[str], 
                                 feature_names: List[str]):
         """Create multi-task neural network model"""
         try:
@@ -132,7 +132,7 @@ class MultiTaskStrategy(BaseTrainingStrategy):
         return MultiTaskNeuralNetwork(
             input_dim=input_dim,
             shared_dim=shared_dim,
-            target_names=target_names,
+            targets=targets,
             target_types=self.target_types,
             head_dims=head_dims
         )
@@ -230,7 +230,7 @@ class MultiTaskStrategy(BaseTrainingStrategy):
 class MultiTaskNeuralNetwork:
     """Multi-task neural network with shared encoder and separate heads"""
     
-    def __init__(self, input_dim: int, shared_dim: int, target_names: List[str], 
+    def __init__(self, input_dim: int, shared_dim: int, targets: List[str], 
                  target_types: Dict[str, str], head_dims: Dict[str, int] = None):
         try:
             import torch
@@ -238,7 +238,7 @@ class MultiTaskNeuralNetwork:
         except ImportError:
             raise ImportError("PyTorch required")
         
-        self.target_names = target_names
+        self.targets = targets
         self.target_types = target_types
         self.head_dims = head_dims or {}
         
@@ -254,9 +254,9 @@ class MultiTaskNeuralNetwork:
         
         # Separate heads
         self.heads = nn.ModuleDict()
-        for target_name in target_names:
-            head_dim = self.head_dims.get(target_name, 64)
-            self.heads[target_name] = nn.Sequential(
+        for target in targets:
+            head_dim = self.head_dims.get(target, 64)
+            self.heads[target] = nn.Sequential(
                 nn.Linear(shared_dim, head_dim),
                 nn.ReLU(),
                 nn.Linear(head_dim, 1)
@@ -269,10 +269,10 @@ class MultiTaskNeuralNetwork:
         
         # Separate predictions
         predictions = {}
-        for target_name in self.target_names:
-            predictions[target_name] = self.heads[target_name](shared)
+        for target in self.targets:
+            predictions[target] = self.heads[target](shared)
         
-        return [predictions[target_name] for target_name in self.target_names]
+        return [predictions[target] for target in self.targets]
     
     def predict(self, X):
         """Make predictions (numpy interface)"""
@@ -323,13 +323,13 @@ class MultiTaskLoss:
             raise ImportError("PyTorch required")
         
         total_loss = 0
-        target_names = list(self.target_types.keys())
+        targets = list(self.target_types.keys())
         
         for i, (pred, target) in enumerate(zip(predictions, targets)):
-            target_name = target_names[i] if i < len(target_names) else f"target_{i}"
+            target = targets[i] if i < len(targets) else f"target_{i}"
             
             # Determine loss type based on target type
-            if self.target_types.get(target_name, 'regression') == 'classification':
+            if self.target_types.get(target, 'regression') == 'classification':
                 # Binary classification
                 loss = self.bce_loss(pred.squeeze(), target)
             else:
@@ -337,7 +337,7 @@ class MultiTaskLoss:
                 loss = self.mse_loss(pred.squeeze(), target)
             
             # Apply weighting
-            weight = self.loss_weights.get(target_name, 1.0)
+            weight = self.loss_weights.get(target, 1.0)
             total_loss += weight * loss
         
         return total_loss
@@ -349,12 +349,12 @@ class MultiTaskDataset:
         self.X = X
         self.y_dict = y_dict
         self.length = len(X)
-        self.target_names = list(y_dict.keys())
+        self.targets = list(y_dict.keys())
     
     def __len__(self):
         return self.length
     
     def __getitem__(self, idx):
         x = self.X[idx]
-        y = [self.y_dict[target][idx] for target in self.target_names]
+        y = [self.y_dict[target][idx] for target in self.targets]
         return x, y

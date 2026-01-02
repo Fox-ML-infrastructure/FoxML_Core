@@ -154,7 +154,7 @@ class UnifiedTrainingInterface:
                 except:
                     split_seed = 42
                 X_train, X_val, y_train, y_val = train_test_split(
-                    X_processed, y_processed, test_size=test_size, random_state=split_seed
+                    X_processed, y_processed, test_size=test_size, seed=split_seed
                 )
             
             # 3. Train model
@@ -219,7 +219,7 @@ class UnifiedTrainingInterface:
                 
                 cv_scores = cross_val_score(trainer, X_processed, y_processed, cv=purged_cv)
                 cv_results = {
-                    'mean_score': np.mean(cv_scores),
+                    'auc': np.mean(cv_scores),
                     'std_score': np.std(cv_scores),
                     'scores': cv_scores.tolist()
                 }

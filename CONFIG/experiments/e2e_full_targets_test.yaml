@@ -18,7 +18,7 @@ data:
   # Empty list or missing = auto-discover all symbols
   # To limit: set symbol_batch_size to select a random subset
   symbols: []  # Auto-discover all symbols
-  symbol_batch_size: 5  # Select 15 symbols from discovered set (for faster testing)
+  symbol_batch_size: 10  # Use 10 symbols to enable CROSS_SECTIONAL mode (>= auto_flip_min_symbols in routing.yaml)
   
   # Bar interval (not needed if data_dir already contains interval=5m)
   # interval: 5m
@@ -26,7 +26,7 @@ data:
   # Reduced limits for faster testing (increase for production)
   max_samples_per_symbol: 2000  # Reduced for faster testing
   max_rows_per_symbol: 2000     # Reduced for faster testing
-  max_rows_train: 10000         # Reduced from 100000 for faster testing
+  max_rows_train: 20000         # Reduced from 100000 for faster testing
   max_cs_samples: 2000          # Max cross-sectional samples per timestamp
   min_cs: 3                       # Reduced from 10 for faster testing
 
@@ -38,10 +38,10 @@ intelligent_training:
   auto_targets: true
   
   # Evaluate top N targets (limited for faster testing)
-  top_n_targets: 10  # Limited for faster testing
+  top_n_targets: 5  # Limited for faster testing
   
   # Maximum targets to evaluate (limited for faster testing)
-  max_targets_to_evaluate: 30 # Limited for faster testing
+  max_targets_to_evaluate: 15 # Limited for faster testing
   
   # Auto-discover features
   auto_features: true

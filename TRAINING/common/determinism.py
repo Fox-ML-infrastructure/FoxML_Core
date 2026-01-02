@@ -249,7 +249,7 @@ def get_deterministic_params(library: str, seed: int, **kwargs) -> Dict[str, Any
     elif library == "xgboost":
         return {
             "objective": kwargs.get("objective", "reg:squarederror"),
-            "random_state": seed,
+            "seed": seed,
             "seed": seed,
             "seed_per_iteration": True,
             "nthread": 1,
@@ -260,7 +260,7 @@ def get_deterministic_params(library: str, seed: int, **kwargs) -> Dict[str, Any
     
     elif library == "sklearn":
         return {
-            "random_state": seed,
+            "seed": seed,
             **kwargs
         }
     
@@ -416,13 +416,13 @@ def create_deterministic_test_data(n_samples: int = 100, n_features: int = 10, s
     
     return X, y
 
-def test_model_reproducibility(model_class, X, y, target_name: str = "test", fold: int = 0, **kwargs) -> bool:
+def test_model_reproducibility(model_class, X, y, target: str = "test", fold: int = 0, **kwargs) -> bool:
     """Test if a model class produces reproducible results."""
     logger.info(f"🧪 Testing reproducibility for {model_class.__name__}")
     
     try:
         # Get seed for this target/fold
-        seed = seed_for(target_name, fold)
+        seed = seed_for(target, fold)
         
         # First run
         model1 = model_class()

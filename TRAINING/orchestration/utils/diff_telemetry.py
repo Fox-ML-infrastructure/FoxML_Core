@@ -382,22 +382,12 @@ class DiffTelemetry:
             metadata.get('symbols') or
             cohort_metadata.get('symbols') if cohort_metadata else None
         )
-        # Date range (handle both formats: date_start/date_end and date_range.start_ts/end_ts)
-        ctx.date_range_start = (
-            metadata.get('date_start') or
-            metadata.get('date_range_start') or
-            (cohort_metadata.get('date_range', {}).get('start_ts') if cohort_metadata and isinstance(cohort_metadata.get('date_range'), dict) else None) or
-            (cohort_metadata.get('date_range_start') if cohort_metadata else None)
-        )
-        ctx.date_range_end = (
-            metadata.get('date_end') or
-            metadata.get('date_range_end') or
-            (cohort_metadata.get('date_range', {}).get('end_ts') if cohort_metadata and isinstance(cohort_metadata.get('date_range'), dict) else None) or
-            (cohort_metadata.get('date_range_end') if cohort_metadata else None)
-        )
+        # Date range - use SST accessor
+        from TRAINING.orchestration.utils.reproducibility.utils import extract_date_range
+        ctx.date_start, ctx.date_end = extract_date_range(metadata, cohort_metadata)
         ctx.n_effective = (
-            metadata.get('N_effective') or
-            cohort_metadata.get('N_effective_cs') if cohort_metadata else None
+            metadata.get('n_effective') or
+            cohort_metadata.get('n_effective_cs') if cohort_metadata else None
         )
         ctx.min_cs = (
             metadata.get('min_cs') or
@@ -408,28 +398,28 @@ class DiffTelemetry:
             cohort_metadata.get('max_cs_samples') if cohort_metadata else None
         )
         
-        # Task provenance - extract target_name from multiple sources
+        # Task provenance - extract target from multiple sources
         # CRITICAL: Check resolved_metadata first (SST consistency), then fallback to other sources
-        ctx.target_name = (
-            (resolved_metadata.get('target_name') if resolved_metadata else None) or
+        ctx.target = (
             (resolved_metadata.get('target') if resolved_metadata else None) or
-            metadata.get('target_name') or  # Primary: metadata.json uses 'target_name'
+            (resolved_metadata.get('target') if resolved_metadata else None) or
+            metadata.get('target') or  # Primary: metadata.json uses 'target'
             metadata.get('target') or  # Fallback: some sources use 'target'
-            (additional_data.get('target_name') if additional_data else None) or
             (additional_data.get('target') if additional_data else None) or
-            (run_data.get('target_name')) or
+            (additional_data.get('target') if additional_data else None) or
             (run_data.get('target')) or
-            (run_data.get('item_name'))  # Fallback: item_name often contains target
+            (run_data.get('target')) or
+            (run_data.get('target'))  # Fallback: target often contains target
         )
         
         # If still None, try to parse from cohort_dir path as last resort
-        if not ctx.target_name and cohort_dir:
+        if not ctx.target and cohort_dir:
             try:
-                # Path format: .../TARGET_RANKING/CROSS_SECTIONAL/{target_name}/cohort=...
+                # Path format: .../TARGET_RANKING/CROSS_SECTIONAL/{target}/cohort=...
                 parts = str(cohort_dir).split('/')
                 for i, part in enumerate(parts):
                     if part in ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC', 'LOSO'] and i + 1 < len(parts):
-                        ctx.target_name = parts[i + 1]
+                        ctx.target = parts[i + 1]
                         break
             except Exception:
                 pass
@@ -527,18 +517,18 @@ class DiffTelemetry:
         
         if stage == 'TARGET_RANKING':
             return base_required + [
-                'date_range_start', 'date_range_end', 'n_symbols', 'n_effective',
-                'target_name', 'view', 'min_cs', 'max_cs_samples'
+                'date_start', 'date_end', 'n_symbols', 'n_effective',
+                'target', 'view', 'min_cs', 'max_cs_samples'
             ]
         elif stage == 'FEATURE_SELECTION':
             return base_required + [
-                'date_range_start', 'date_range_end', 'n_symbols', 'n_effective',
-                'target_name', 'view', 'min_cs', 'max_cs_samples'
+                'date_start', 'date_end', 'n_symbols', 'n_effective',
+                'target', 'view', 'min_cs', 'max_cs_samples'
             ]
         elif stage == 'TRAINING':
             return base_required + [
-                'date_range_start', 'date_range_end', 'n_symbols', 'n_effective',
-                'target_name', 'view', 'model_family', 'min_cs', 'max_cs_samples'
+                'date_start', 'date_end', 'n_symbols', 'n_effective',
+                'target', 'view', 'model_family', 'min_cs', 'max_cs_samples'
             ]
         else:
             # Unknown stage - require base fields only
@@ -559,14 +549,14 @@ class DiffTelemetry:
         # All stages require:
         if ctx.n_effective is None:
             missing.append("n_effective")
-        if ctx.target_name is None:
-            missing.append("target_name")
+        if ctx.target is None:
+            missing.append("target")
         if ctx.view is None:
             missing.append("view")
-        if ctx.date_range_start is None:
-            missing.append("date_range_start")
-        if ctx.date_range_end is None:
-            missing.append("date_range_end")
+        if ctx.date_start is None:
+            missing.append("date_start")
+        if ctx.date_end is None:
+            missing.append("date_end")
         
         # Stage-specific requirements
         if stage == "TARGET_RANKING":
@@ -634,7 +624,7 @@ class DiffTelemetry:
         run_id = run_data.get('run_id') or run_data.get('timestamp', datetime.now().isoformat())
         timestamp = run_data.get('timestamp', datetime.now().isoformat())
         view = ctx.view
-        target = ctx.target_name
+        target = ctx.target
         symbol = additional_data.get('symbol') if additional_data else None
         
         # Build fingerprints (using resolved context)
@@ -791,8 +781,8 @@ class DiffTelemetry:
         split_parts = []
         if ctx.cv_method:
             split_parts.append(f"cv_method={ctx.cv_method}")
-        if ctx.cv_folds is not None:
-            split_parts.append(f"cv_folds={ctx.cv_folds}")
+        if ctx.folds is not None:
+            split_parts.append(f"folds={ctx.folds}")
         if ctx.purge_minutes is not None:
             split_parts.append(f"purge_minutes={ctx.purge_minutes}")
         if ctx.embargo_minutes is not None:
@@ -840,7 +830,7 @@ class DiffTelemetry:
             # CRITICAL: Include fold_assignment_hash (from actual fold IDs, not just seed)
             #           This ensures fold logic changes break comparability even if seed stays same
             split_parts = []
-            for key in ['cv_method', 'cv_folds', 'purge_minutes', 'embargo_minutes', 
+            for key in ['cv_method', 'folds', 'purge_minutes', 'embargo_minutes', 
                        'leakage_filter_version', 'horizon_minutes', 'split_seed', 'fold_assignment_hash']:
                 if key in additional_data:
                     val = additional_data[key]
@@ -915,10 +905,10 @@ class DiffTelemetry:
         # Data parameters (all required, so should be non-null)
         if ctx.n_symbols is not None:
             data_parts.append(f"n_symbols={ctx.n_symbols}")
-        if ctx.date_range_start:
-            data_parts.append(f"date_range_start={ctx.date_range_start}")
-        if ctx.date_range_end:
-            data_parts.append(f"date_range_end={ctx.date_range_end}")
+        if ctx.date_start:
+            data_parts.append(f"date_start={ctx.date_start}")
+        if ctx.date_end:
+            data_parts.append(f"date_end={ctx.date_end}")
         if ctx.min_cs is not None:
             data_parts.append(f"min_cs={ctx.min_cs}")
         if ctx.max_cs_samples is not None:
@@ -948,7 +938,7 @@ class DiffTelemetry:
         
         if cohort_metadata:
             # Extract data-relevant fields
-            for key in ['n_symbols', 'date_range_start', 'date_range_end', 'min_cs', 'max_cs_samples']:
+            for key in ['n_symbols', 'date_start', 'date_end', 'min_cs', 'max_cs_samples']:
                 if key in cohort_metadata:
                     val = cohort_metadata[key]
                     if val is not None:
@@ -1059,8 +1049,8 @@ class DiffTelemetry:
         target_parts = []
         
         # Target name (from resolved context)
-        if ctx.target_name:
-            target_parts.append(f"target={ctx.target_name}")
+        if ctx.target:
+            target_parts.append(f"target={ctx.target}")
         
         # Labeling implementation signature (from resolved context)
         if ctx.labeling_impl_hash:
@@ -1095,9 +1085,9 @@ class DiffTelemetry:
         target = None
         if additional_data and 'target' in additional_data:
             target = additional_data['target']
-        elif run_data.get('item_name'):
-            # Extract target from item_name (format: "target:family" or "target:symbol:family")
-            parts = run_data['item_name'].split(':')
+        elif run_data.get('target'):
+            # Extract target from target (format: "target:family" or "target:symbol:family")
+            parts = run_data['target'].split(':')
             target = parts[0] if parts else None
         
         if target:
@@ -1145,18 +1135,18 @@ class DiffTelemetry:
         
         This prevents storing null placeholders for fields that aren't stage-relevant.
         """
-        # Routing signature from resolved_mode (SST) - use resolved_mode if available, fallback to view
+        # Routing signature from view (SST) - use view if available, fallback to view
         routing_signature = None
-        resolved_mode_for_fingerprint = None
+        view_for_fingerprint = None
         try:
-            from TRAINING.orchestration.utils.run_context import get_resolved_mode
+            from TRAINING.orchestration.utils.run_context import get_view
             if hasattr(self, '_repro_base_dir'):
-                resolved_mode_for_fingerprint = get_resolved_mode(self._repro_base_dir)
+                view_for_fingerprint = get_view(self._repro_base_dir)
         except Exception:
             pass
         
-        # Use resolved_mode (SST) if available, otherwise fallback to view
-        mode_for_signature = resolved_mode_for_fingerprint if resolved_mode_for_fingerprint else ctx.view
+        # Use view (SST) if available, otherwise fallback to view
+        mode_for_signature = view_for_fingerprint if view_for_fingerprint else ctx.view
         if mode_for_signature:
             routing_signature = hashlib.sha256(mode_for_signature.encode()).hexdigest()[:16]
         
@@ -1217,7 +1207,7 @@ class DiffTelemetry:
         EXACTLY the same configuration are compared and stored together.
         
         Outcome-influencing metadata includes:
-        - Exact N_effective (sample size) - 5k vs 5k, not 5k vs 10k
+        - Exact n_effective (sample size) - 5k vs 5k, not 5k vs 10k
         - Dataset (universe, date range, min_cs, max_cs_samples)
         - Task (target, horizon, objective)
         - Routing/view configuration
@@ -1238,16 +1228,16 @@ class DiffTelemetry:
         if additional_data and 'view' in additional_data:
             routing_signature = hashlib.sha256(additional_data['view'].encode()).hexdigest()[:16]
         
-        # Extract exact N_effective (CRITICAL: must match exactly for comparison)
+        # Extract exact n_effective (CRITICAL: must match exactly for comparison)
         n_effective = None
-        if cohort_metadata and 'N_effective_cs' in cohort_metadata:
-            n_effective = int(cohort_metadata['N_effective_cs'])
-        elif additional_data and 'N_effective_cs' in additional_data:
-            n_effective = int(additional_data['N_effective_cs'])
-        elif run_data.get('metrics') and 'N_effective_cs' in run_data['metrics']:
-            n_effective = int(run_data['metrics']['N_effective_cs'])
-        elif run_data.get('additional_data') and 'N_effective_cs' in run_data['additional_data']:
-            n_effective = int(run_data['additional_data']['N_effective_cs'])
+        if cohort_metadata and 'n_effective_cs' in cohort_metadata:
+            n_effective = int(cohort_metadata['n_effective_cs'])
+        elif additional_data and 'n_effective_cs' in additional_data:
+            n_effective = int(additional_data['n_effective_cs'])
+        elif run_data.get('metrics') and 'n_effective_cs' in run_data['metrics']:
+            n_effective = int(run_data['metrics']['n_effective_cs'])
+        elif run_data.get('additional_data') and 'n_effective_cs' in run_data['additional_data']:
+            n_effective = int(run_data['additional_data']['n_effective_cs'])
         
         # Extract model_family (CRITICAL: different families = different outcomes)
         model_family = None
@@ -1255,9 +1245,9 @@ class DiffTelemetry:
             model_family = additional_data['model_family']
         elif run_data.get('additional_data') and 'model_family' in run_data['additional_data']:
             model_family = run_data['additional_data']['model_family']
-        elif run_data.get('item_name'):
-            # Extract from item_name (format: "target:family" or "target:symbol:family")
-            parts = run_data['item_name'].split(':')
+        elif run_data.get('target'):
+            # Extract from target (format: "target:family" or "target:symbol:family")
+            parts = run_data['target'].split(':')
             if len(parts) >= 2:
                 model_family = parts[-1]  # Last part is usually the family
         
@@ -1381,15 +1371,15 @@ class DiffTelemetry:
         # Data (all required fields, should be non-null)
         inputs['data'] = {
             'n_symbols': ctx.n_symbols,  # Required, validated
-            'date_range_start': ctx.date_range_start,  # Required, validated
-            'date_range_end': ctx.date_range_end,  # Required, validated
+            'date_start': ctx.date_start,  # Required, validated
+            'date_end': ctx.date_end,  # Required, validated
         }
         if ctx.n_rows_total is not None:
             inputs['data']['n_rows_total'] = ctx.n_rows_total
         
         # Target (required, should be non-null)
         inputs['target'] = {
-            'target_name': ctx.target_name,  # Required, validated
+            'target': ctx.target,  # Required, validated
             'view': ctx.view,  # Required, validated
         }
         if ctx.horizon_minutes is not None:
@@ -1434,8 +1424,8 @@ class DiffTelemetry:
         if cohort_metadata:
             inputs['data'] = {
                 'n_symbols': cohort_metadata.get('n_symbols'),
-                'date_range_start': cohort_metadata.get('date_range_start'),
-                'date_range_end': cohort_metadata.get('date_range_end'),
+                'date_start': cohort_metadata.get('date_start'),
+                'date_end': cohort_metadata.get('date_end'),
                 'n_samples': cohort_metadata.get('n_samples')
             }
         
@@ -1443,13 +1433,13 @@ class DiffTelemetry:
         target = None
         if additional_data and 'target' in additional_data:
             target = additional_data['target']
-        elif run_data.get('item_name'):
-            parts = run_data['item_name'].split(':')
+        elif run_data.get('target'):
+            parts = run_data['target'].split(':')
             target = parts[0] if parts else None
         
         if target:
             inputs['target'] = {
-                'target_name': target,
+                'target': target,
                 'view': additional_data.get('view') if additional_data else None
             }
         
@@ -1586,7 +1576,7 @@ class DiffTelemetry:
                         metrics_data = {
                             k: v for k, v in metrics_dict.items()
                             if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode', 
-                                       'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                       'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                        'composite_version', 'leakage', 'leakage_flag']
                             and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
                         }
@@ -1605,7 +1595,7 @@ class DiffTelemetry:
                         metrics_data = {
                             k: v for k, v in metrics_json.items()
                             if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
-                                       'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                       'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                        'composite_version', 'leakage', 'leakage_flag']
                             and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
                         }
@@ -1619,7 +1609,7 @@ class DiffTelemetry:
                     # Try to extract target from cohort_dir path or resolved_metadata
                     target = None
                     if resolved_metadata:
-                        target = resolved_metadata.get('target') or resolved_metadata.get('item_name')
+                        target = resolved_metadata.get('target')
                     
                     # If we can't get target from metadata, try to extract from path
                     if not target:
@@ -1659,7 +1649,7 @@ class DiffTelemetry:
                                             metrics_data = {
                                                 k: v for k, v in metrics_json.items()
                                                 if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
-                                                           'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                                           'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                                            'composite_version', 'leakage', 'leakage_flag']
                                                 and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
                                             }
@@ -1674,7 +1664,7 @@ class DiffTelemetry:
                                         metrics_data = {
                                             k: v for k, v in metrics_json.items()
                                             if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
-                                                       'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                                       'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                                        'composite_version', 'leakage', 'leakage_flag']
                                             and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
                                         }
@@ -1735,7 +1725,7 @@ class DiffTelemetry:
                         metrics_data = {
                             k: v for k, v in metrics_dict.items()
                             if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode', 
-                                       'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                       'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                        'composite_version', 'leakage', 'leakage_flag']
                         }
                         logger.debug(f"✅ Loaded metrics from canonical parquet: {metrics_parquet}")
@@ -1752,7 +1742,7 @@ class DiffTelemetry:
                         metrics_data = {
                             k: v for k, v in metrics_json.items()
                             if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
-                                       'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                       'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                        'composite_version', 'leakage', 'leakage_flag']
                         }
                         logger.debug(f"✅ Loaded metrics from JSON: {metrics_json_file}")
@@ -1790,8 +1780,8 @@ class DiffTelemetry:
                             base_output_dir = base_output_dir.parent
                         
                         if (base_output_dir / "targets").exists():
-                            target_name_clean = target.replace('/', '_').replace('\\', '_')
-                            target_metrics_dir = get_target_metrics_dir(base_output_dir, target_name_clean)
+                            target_clean = target.replace('/', '_').replace('\\', '_')
+                            target_metrics_dir = get_target_metrics_dir(base_output_dir, target_clean)
                             
                             # Try to find view from path
                             view = None
@@ -1814,7 +1804,7 @@ class DiffTelemetry:
                                             metrics_data = {
                                                 k: v for k, v in metrics_dict.items()
                                                 if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
-                                                           'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                                           'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                                            'composite_version', 'leakage', 'leakage_flag']
                                             }
                                             logger.debug(f"✅ Loaded metrics via reference pointer: {canonical_path}")
@@ -1838,7 +1828,7 @@ class DiffTelemetry:
                                 metrics_data = {
                                     k: v for k, v in metrics_dict.items()
                                     if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode', 
-                                               'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                               'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                                'composite_version', 'leakage', 'leakage_flag']
                                 }
                         elif (metrics_dir / "metrics.json").exists():
@@ -1847,7 +1837,7 @@ class DiffTelemetry:
                                 metrics_data = {
                                     k: v for k, v in metrics_json.items()
                                     if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
-                                               'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                               'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                                'composite_version', 'leakage', 'leakage_flag']
                                 }
                 except Exception as e:
@@ -2074,7 +2064,7 @@ class DiffTelemetry:
                 parts = Path(cohort_dir).parts
                 stage = None
                 view = None
-                item_name = None
+                target = None
                 cohort_id = None
                 symbol_for_target = None
                 
@@ -2084,7 +2074,7 @@ class DiffTelemetry:
                         if i + 1 < len(parts) and parts[i+1] in ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC', 'LOSO', 'INDIVIDUAL']:
                             view = parts[i+1]
                             if i + 2 < len(parts) and not parts[i+2].startswith('cohort='):
-                                item_name = parts[i+2]
+                                target = parts[i+2]
                         # Find cohort_id and symbol
                         for j in range(i, len(parts)):
                             if parts[j].startswith('cohort='):
@@ -2096,7 +2086,7 @@ class DiffTelemetry:
                                 continue
                 
                 # Only create target-first structure for TARGET_RANKING and FEATURE_SELECTION
-                if stage in ['TARGET_RANKING', 'FEATURE_SELECTION'] and item_name and cohort_id:
+                if stage in ['TARGET_RANKING', 'FEATURE_SELECTION'] and target and cohort_id:
                     # Find base output directory (run directory)
                     temp_dir = cohort_dir
                     for _ in range(10):  # Limit depth
@@ -2121,10 +2111,10 @@ class DiffTelemetry:
                             view_for_target = 'SYMBOL_SPECIFIC'
                         
                         # Ensure target structure exists
-                        ensure_target_structure(base_output_dir, item_name)
+                        ensure_target_structure(base_output_dir, target)
                         
                         # Build target-first reproducibility path
-                        target_repro_dir = get_target_reproducibility_dir(base_output_dir, item_name)
+                        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
                         if view_for_target == "SYMBOL_SPECIFIC" and symbol_for_target:
                             # Include symbol in path to prevent overwriting
                             target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol_for_target}" / f"cohort={cohort_id}"
@@ -2227,11 +2217,11 @@ class DiffTelemetry:
         # Also write to target-first structure (for TARGET_RANKING and FEATURE_SELECTION stages)
         try:
             # Extract identifiers from cohort_dir path
-            # Path structure: .../STAGE/VIEW/item_name/cohort=.../
+            # Path structure: .../STAGE/VIEW/target/cohort=.../
             parts = Path(cohort_dir).parts
             stage = None
             view = None
-            item_name = None
+            target = None
             cohort_id = None
             
             for i, part in enumerate(parts):
@@ -2240,7 +2230,7 @@ class DiffTelemetry:
                     if i + 1 < len(parts) and parts[i+1] in ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC', 'LOSO', 'INDIVIDUAL']:
                         view = parts[i+1]
                         if i + 2 < len(parts) and not parts[i+2].startswith('cohort='):
-                            item_name = parts[i+2]
+                            target = parts[i+2]
                     # Find cohort_id
                     for j in range(i, len(parts)):
                         if parts[j].startswith('cohort='):
@@ -2249,7 +2239,7 @@ class DiffTelemetry:
                     break
             
             # Only create target-first structure for TARGET_RANKING and FEATURE_SELECTION
-            if stage in ['TARGET_RANKING', 'FEATURE_SELECTION'] and item_name and cohort_id:
+            if stage in ['TARGET_RANKING', 'FEATURE_SELECTION'] and target and cohort_id:
                 # Find base output directory (run directory)
                 temp_dir = cohort_dir
                 for _ in range(10):  # Limit depth
@@ -2275,10 +2265,10 @@ class DiffTelemetry:
                         view_for_target = 'SYMBOL_SPECIFIC'
                     
                     # Ensure target structure exists
-                    ensure_target_structure(base_output_dir, item_name)
+                    ensure_target_structure(base_output_dir, target)
                     
                     # Build target-first reproducibility path
-                    target_repro_dir = get_target_reproducibility_dir(base_output_dir, item_name)
+                    target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
                     target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
                     target_cohort_dir.mkdir(parents=True, exist_ok=True)
                     
@@ -2774,7 +2764,7 @@ class DiffTelemetry:
                                             metrics_data = {
                                                 k: v for k, v in metrics_json.items()
                                                 if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
-                                                           'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                                           'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                                            'composite_version', 'leakage', 'leakage_flag']
                                                 and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
                                             }
@@ -2853,7 +2843,7 @@ class DiffTelemetry:
         
         # Define tolerances (metric-dependent defaults)
         # For score-like metrics, use tighter tolerances
-        score_metrics = {'mean_score', 'composite_score', 'std_score'}
+        score_metrics = {'auc', 'composite_score', 'std_score'}
         abs_tol_default = 1e-4  # Default absolute tolerance
         rel_tol_default = 1e-4  # Default relative tolerance (0.01%)
         
@@ -3168,7 +3158,7 @@ class DiffTelemetry:
         All entries in metric_deltas are significant by design (zero-delta entries are filtered out).
         
         Uses per-metric polarity to correctly identify improvements vs regressions:
-        - For metrics where higher is better (mean_score, composite_score, mean_importance): positive delta = improvement
+        - For metrics where higher is better (auc, composite_score, mean_importance): positive delta = improvement
         - For metrics where lower is better (std_score): positive delta = regression
         
         Returns:
@@ -3182,13 +3172,13 @@ class DiffTelemetry:
         
         # Per-metric polarity: True = higher is better, False = lower is better
         higher_is_better = {
-            'mean_score': True,
+            'auc': True,
             'composite_score': True,
             'mean_importance': True,
             'std_score': False,  # Lower variability is better
             'n_models': True,  # More models is better (if applicable)
             'pos_rate': True,  # Higher positive rate is better (if applicable)
-            'N_effective_cs': True,  # More effective samples is better
+            'n_effective_cs': True,  # More effective samples is better
         }
         
         # Impact hierarchy: none < noise < minor < major
@@ -3578,7 +3568,7 @@ class DiffTelemetry:
                                                             metrics_data = {
                                                                 k: v for k, v in metrics_json.items()
                                                                 if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
-                                                                           'stage', 'item_name', 'metric_name', 'task_type', 'composite_definition',
+                                                                           'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                                                            'composite_version', 'leakage', 'leakage_flag']
                                                                 and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
                                                             }
@@ -3747,8 +3737,8 @@ class DiffTelemetry:
         best_score = None
         
         for snap in comparable_runs:
-            if snap.outputs.get('metrics', {}).get('mean_score'):
-                score = snap.outputs['metrics']['mean_score']
+            if snap.outputs.get('metrics', {}).get('auc'):
+                score = snap.outputs['metrics']['auc']
                 if best_score is None or score > best_score:
                     best_score = score
                     best_run = snap
@@ -3792,11 +3782,11 @@ class DiffTelemetry:
         # PATCH 2: Extract identifiers from cohort_dir path
         # Priority 1: Use DiffResult fields (explicit, preferred)
         # Priority 2: Parse target-first path: targets/<target>/reproducibility/<VIEW>/...
-        # Priority 3: Parse legacy path: STAGE/VIEW/item_name/cohort=.../
+        # Priority 3: Parse legacy path: STAGE/VIEW/target/cohort=.../
         # ========================================================================
         stage = diff.prev_stage or "UNKNOWN"
         view = diff.prev_view or "UNKNOWN"
-        item_name = "UNKNOWN"
+        target = "UNKNOWN"
         cohort_id = None
         base_output_dir = None
         target_cohort_dir = None
@@ -3808,16 +3798,16 @@ class DiffTelemetry:
             parts = Path(cohort_dir).parts
             parsed_from_path = False
             
-            # Priority 1: If item_name is already in DiffResult, use it
-            if hasattr(diff, 'item_name') and diff.item_name and diff.item_name != "UNKNOWN":
-                item_name = diff.item_name
+            # Priority 1: If target is already in DiffResult, use it
+            if hasattr(diff, 'target') and diff.target and diff.target != "UNKNOWN":
+                target = diff.target
                 parsed_from_path = True
             
             # Priority 2: Try target-first path structure: targets/<target>/reproducibility/<VIEW>/...
             if not parsed_from_path and "targets" in parts:
                 for i, part in enumerate(parts):
                     if part == "targets" and i + 1 < len(parts):
-                        item_name = parts[i + 1]  # Target name is right after "targets"
+                        target = parts[i + 1]  # Target name is right after "targets"
                         # Find view after "reproducibility"
                         for j in range(i + 2, len(parts)):
                             if parts[j] == "reproducibility" and j + 1 < len(parts):
@@ -3832,7 +3822,7 @@ class DiffTelemetry:
                         parsed_from_path = True
                         break
             
-            # Priority 3: Legacy path structure: STAGE/VIEW/item_name/cohort=.../
+            # Priority 3: Legacy path structure: STAGE/VIEW/target/cohort=.../
             if not parsed_from_path:
                 for i, part in enumerate(parts):
                     if part in ['TARGET_RANKING', 'FEATURE_SELECTION', 'TRAINING']:
@@ -3840,25 +3830,25 @@ class DiffTelemetry:
                         if i + 1 < len(parts) and parts[i+1] in VALID_VIEWS:
                             view = parts[i+1]
                             if i + 2 < len(parts) and not parts[i+2].startswith('cohort='):
-                                item_name = parts[i+2]
+                                target = parts[i+2]
                         # Find cohort_id
                         for j in range(i, len(parts)):
                             if parts[j].startswith('cohort='):
                                 cohort_id = parts[j].replace('cohort=', '')
                                 break
                         # Warn that we're using legacy path parsing
-                        logger.debug(f"Using legacy path parsing for diff (stage={stage}, item={item_name})")
+                        logger.debug(f"Using legacy path parsing for diff (stage={stage}, item={target})")
                         break
             
             # If still UNKNOWN, log a warning
-            if item_name == "UNKNOWN":
+            if target == "UNKNOWN":
                 logger.warning(
-                    f"PATCH 2: Could not extract item_name from cohort_dir path: {cohort_dir}. "
-                    f"Path parsing failed. Consider passing item_name explicitly."
+                    f"PATCH 2: Could not extract target from cohort_dir path: {cohort_dir}. "
+                    f"Path parsing failed. Consider passing target explicitly."
                 )
             
             # Only create target-first structure for TARGET_RANKING and FEATURE_SELECTION
-            if stage in ['TARGET_RANKING', 'FEATURE_SELECTION'] and item_name != "UNKNOWN" and cohort_id:
+            if stage in ['TARGET_RANKING', 'FEATURE_SELECTION'] and target != "UNKNOWN" and cohort_id:
                 # Find base output directory (run directory)
                 temp_dir = cohort_dir
                 for _ in range(10):  # Limit depth
@@ -3885,12 +3875,12 @@ class DiffTelemetry:
                             view_for_target = 'SYMBOL_SPECIFIC'
                         
                         # Ensure target structure exists
-                        ensure_target_structure(base_output_dir, item_name)
+                        ensure_target_structure(base_output_dir, target)
                         
                         # Build target-first reproducibility path
                         # For CROSS_SECTIONAL: targets/<target>/reproducibility/CROSS_SECTIONAL/cohort=<cohort_id>/
                         # For SYMBOL_SPECIFIC: targets/<target>/reproducibility/SYMBOL_SPECIFIC/symbol=<symbol>/cohort=<cohort_id>/
-                        target_repro_dir = get_target_reproducibility_dir(base_output_dir, item_name)
+                        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
                         # Extract symbol from cohort_dir path if available
                         symbol_for_target = None
                         if view_for_target == "SYMBOL_SPECIFIC":
@@ -3949,7 +3939,7 @@ class DiffTelemetry:
                 # Identifiers for downstream joining
                 'stage': stage,
                 'view': view,
-                'item_name': item_name,
+                'target': target,
                 'metric_deltas': diff.metric_deltas,
                 'summary': {
                     'total_metrics': len(diff.metric_deltas),
@@ -4011,8 +4001,8 @@ class DiffTelemetry:
         Emit time series data for trend/drift analysis.
         
         Emits one row per metric key with:
-        - identifiers: run_id, timestamp, comparison_group, stage, view, item_name, metric_name
-        - values: mean_score, std_score, composite_score, mean_importance, pos_rate, N_effective_cs, n_models
+        - identifiers: run_id, timestamp, comparison_group, stage, view, target, metric_name
+        - values: auc, std_score, composite_score, mean_importance, pos_rate, n_effective_cs, n_models
         - derived: (rolling baseline, drift_z, ema, cusum computed later by trend analyzer)
         
         Stores in metrics_timeseries.parquet at target level (one level up from cohort_dir)
@@ -4026,14 +4016,14 @@ class DiffTelemetry:
         if snapshot.comparison_group:
             comparison_group_key = snapshot.comparison_group.to_key()
         
-        # Extract item_name from target (for TARGET_RANKING) or from other sources
-        item_name = snapshot.target or "unknown"
+        # Extract target from target (for TARGET_RANKING) or from other sources
+        target = snapshot.target or "unknown"
         
         # Build time series rows - one per metric
         # Key metrics to track
         metric_fields = [
-            'mean_score', 'std_score', 'composite_score', 'mean_importance',
-            'pos_rate', 'N_effective_cs', 'n_models'
+            'auc', 'std_score', 'composite_score', 'mean_importance',
+            'pos_rate', 'n_effective_cs', 'n_models'
         ]
         
         rows = []
@@ -4052,16 +4042,16 @@ class DiffTelemetry:
                 'comparison_group': comparison_group_key,
                 'stage': snapshot.stage,
                 'view': snapshot.view or 'UNKNOWN',
-                'item_name': item_name,
+                'target': target,
                 'metric_name': metric_name,
                 'value': float(value),
                 # Include key context metrics for trend analysis (same values across all rows for this run)
-                'mean_score': metrics.get('mean_score') if 'mean_score' in metrics else None,
+                'auc': metrics.get('auc') if 'auc' in metrics else None,
                 'std_score': metrics.get('std_score') if 'std_score' in metrics else None,
                 'composite_score': metrics.get('composite_score') if 'composite_score' in metrics else None,
                 'mean_importance': metrics.get('mean_importance') if 'mean_importance' in metrics else None,
                 'pos_rate': metrics.get('pos_rate') if 'pos_rate' in metrics else None,
-                'N_effective_cs': metrics.get('N_effective_cs') if 'N_effective_cs' in metrics else None,
+                'n_effective_cs': metrics.get('n_effective_cs') if 'n_effective_cs' in metrics else None,
                 'n_models': metrics.get('n_models') if 'n_models' in metrics else None
             }
             rows.append(row)
@@ -4222,31 +4212,31 @@ class DiffTelemetry:
                 if field not in resolved_metadata or resolved_metadata[field] is None:
                     # Try fallback sources
                     fallback_value = None
-                    if field == "target_name":
+                    if field == "target":
                         # For TARGET_RANKING, try multiple fallback sources
-                        # item_name is passed to log_comparison() but might not be in run_data
+                        # target is passed to log_comparison() but might not be in run_data
                         fallback_value = (
-                            run_data.get('item_name') or
                             run_data.get('target') or
-                            run_data.get('target_name') or
-                            (additional_data.get('target_name') if additional_data else None) or
+                            run_data.get('target') or
+                            run_data.get('target') or
                             (additional_data.get('target') if additional_data else None) or
-                            (additional_data.get('item_name') if additional_data else None)
+                            (additional_data.get('target') if additional_data else None) or
+                            (additional_data.get('target') if additional_data else None)
                         )
-                        # Last resort: try to extract from cohort_dir path (e.g., .../TARGET_RANKING/SYMBOL_SPECIFIC/{target_name}/...)
+                        # Last resort: try to extract from cohort_dir path (e.g., .../TARGET_RANKING/SYMBOL_SPECIFIC/{target}/...)
                         if not fallback_value and cohort_dir:
                             try:
                                 parts = Path(cohort_dir).parts
-                                # Look for target_name in path (usually after view name)
+                                # Look for target in path (usually after view name)
                                 for i, part in enumerate(parts):
                                     if part in ['TARGET_RANKING', 'FEATURE_SELECTION', 'TRAINING'] and i + 2 < len(parts):
-                                        # Next part might be view, then target_name
+                                        # Next part might be view, then target
                                         if parts[i+1] in ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC', 'LOSO', 'INDIVIDUAL']:
                                             if i + 2 < len(parts) and not parts[i+2].startswith('symbol=') and not parts[i+2].startswith('cohort='):
                                                 fallback_value = parts[i+2]
                                                 break
                                         elif not parts[i+1].startswith('symbol=') and not parts[i+1].startswith('cohort='):
-                                            # No view, target_name is next
+                                            # No view, target is next
                                             fallback_value = parts[i+1]
                                             break
                             except Exception:

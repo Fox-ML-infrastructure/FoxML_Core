@@ -93,15 +93,15 @@ def clean_config_for_estimator(
         if verbose_val is not None:
             logger.debug(f"[{family_name}] Removed verbose={verbose_val} from config (will use explicit value if provided)")
     
-    # Special case: Remove 'random_state' from config if it exists and will be passed explicitly
-    # random_state is often set explicitly in code (from determinism system), so remove from config to avoid conflicts
-    # This is a defensive measure - explicit random_state= in code takes precedence
-    if 'random_state' in config and 'random_state' not in extra_kwargs:
+    # Special case: Remove 'seed' from config if it exists and will be passed explicitly
+    # seed is often set explicitly in code (from determinism system), so remove from config to avoid conflicts
+    # This is a defensive measure - explicit seed= in code takes precedence
+    if 'seed' in config and 'seed' not in extra_kwargs:
         # Only remove if not in extra_kwargs (if in extra_kwargs, it was already removed above)
-        # But we still want to remove it to prevent conflicts with explicit random_state= in code
-        random_state_val = config.pop('random_state', None)
-        if random_state_val is not None:
-            logger.debug(f"[{family_name}] Removed random_state={random_state_val} from config (will use explicit value if provided)")
+        # But we still want to remove it to prevent conflicts with explicit seed= in code
+        seed_val = config.pop('seed', None)
+        if seed_val is not None:
+            logger.debug(f"[{family_name}] Removed seed={seed_val} from config (will use explicit value if provided)")
     
     # Remove keys the estimator doesn't know about (unknown params)
     if valid_params is not None:
@@ -146,24 +146,24 @@ def clean_config_for_estimator(
             dropped_unknown.append('learning_rate')
             logger.debug(f"[{family_name}] Removed invalid learning_rate={lr_val} (MLPRegressor expects string: 'constant', 'adaptive', or 'invscaling')")
     
-    # CatBoost: only one of random_state or random_seed should be set
+    # CatBoost: only one of seed or random_seed should be set
     if 'catboost' in (family_name or '').lower():
-        if 'random_state' in config and 'random_seed' in config:
-            # Prefer random_seed (CatBoost's native param), remove random_state
-            config.pop('random_state', None)
-            dropped_duplicates.append('random_state')
-            logger.debug(f"[{family_name}] Removed random_state (duplicate of random_seed for CatBoost)")
-        elif 'random_state' in config:
+        if 'seed' in config and 'random_seed' in config:
+            # Prefer random_seed (CatBoost's native param), remove seed
+            config.pop('seed', None)
+            dropped_duplicates.append('seed')
+            logger.debug(f"[{family_name}] Removed seed (duplicate of random_seed for CatBoost)")
+        elif 'seed' in config:
             # Check if random_seed will be passed explicitly (in extra_kwargs)
             if extra_kwargs and 'random_seed' in extra_kwargs:
-                # random_seed is already in extra_kwargs, just remove random_state to avoid conflict
-                config.pop('random_state', None)
-                dropped_duplicates.append('random_state')
-                logger.debug(f"[{family_name}] Removed random_state (random_seed already in extra_kwargs for CatBoost)")
+                # random_seed is already in extra_kwargs, just remove seed to avoid conflict
+                config.pop('seed', None)
+                dropped_duplicates.append('seed')
+                logger.debug(f"[{family_name}] Removed seed (random_seed already in extra_kwargs for CatBoost)")
             else:
-                # Convert random_state to random_seed (CatBoost's preferred name)
-                config['random_seed'] = config.pop('random_state')
-                logger.debug(f"[{family_name}] Converted random_state -> random_seed for CatBoost")
+                # Convert seed to random_seed (CatBoost's preferred name)
+                config['random_seed'] = config.pop('seed')
+                logger.debug(f"[{family_name}] Converted seed -> random_seed for CatBoost")
         
         # CatBoost: only one of iterations, n_estimators, num_boost_round, num_trees should be set
         # These are all synonyms - prefer 'iterations' (CatBoost's native param)

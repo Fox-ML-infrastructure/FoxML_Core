@@ -225,7 +225,7 @@ def load_experiment_config(experiment_name: str) -> ExperimentConfig:
         default_max_staleness_minutes=default_max_staleness_minutes,
         max_samples_per_symbol=max_samples,
         validation_split=data_data.get('validation_split', 0.2),
-        random_state=data_data.get('random_state', 42),
+        seed=data_data.get('seed', data_data.get('random_state', 42)),  # SST: seed, fallback to random_state
         symbol_batch_size=symbol_batch_size
     )
     
@@ -487,7 +487,7 @@ def build_training_config(
     try:
         return TrainingConfig(
             model_families=models_data.get('model_families', {}),
-            cv_folds=experiment_cfg.training_overrides.get('cv_folds', pipeline_data.get('pipeline', {}).get('cv_folds', 5)),
+            folds=experiment_cfg.training_overrides.get('folds', experiment_cfg.training_overrides.get('cv_folds', pipeline_data.get('pipeline', {}).get('folds', pipeline_data.get('pipeline', {}).get('cv_folds', 5)))),  # SST: folds, fallback to cv_folds
             pipeline=pipeline_data,
             gpu=_load_config_with_fallback("pipeline/gpu.yaml", "training_config/gpu_config.yaml"),
             memory=_load_config_with_fallback("pipeline/memory.yaml", "training_config/memory_config.yaml"),
@@ -574,7 +574,7 @@ def build_data_config(experiment_cfg: Optional[ExperimentConfig] = None) -> Data
             interval=experiment_cfg.interval,
             max_samples_per_symbol=experiment_cfg.max_samples_per_symbol,
             validation_split=0.2,
-            random_state=42
+            seed=42
         )
     else:
         return DataConfig()

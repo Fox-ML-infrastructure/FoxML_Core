@@ -113,7 +113,7 @@ def save_leak_report_summary(
     
     Args:
         output_dir: Directory to save the report
-        all_leaks: Dict of {target_name: {model_name: [(feature, importance), ...]}}
+        all_leaks: Dict of {target: {model_name: [(feature, importance), ...]}}
     """
     report_file = output_dir / "leak_detection_summary.txt"
     
@@ -128,9 +128,9 @@ def save_leak_report_summary(
         f.write(f"Total targets with suspicious features: {len(all_leaks)}\n")
         f.write(f"Total suspicious feature detections: {total_leaks}\n\n")
         
-        for target_name, model_leaks in sorted(all_leaks.items()):
+        for target, model_leaks in sorted(all_leaks.items()):
             f.write(f"\n{'='*80}\n")
-            f.write(f"Target: {target_name}\n")
+            f.write(f"Target: {target}\n")
             f.write(f"{'='*80}\n")
             
             for model_name, features in model_leaks.items():
@@ -190,8 +190,8 @@ def save_rankings(
         logger.warning("No valid targets to rank - all targets were skipped (insufficient features, degenerate, or failed)")
         # Create empty CSV file with headers
         empty_df = pd.DataFrame(columns=[
-            'rank', 'target_name', 'target_column', 'composite_score', 'task_type',
-            'mean_score', 'std_score', 'mean_r2', 'std_r2', 'mean_importance',
+            'rank', 'target', 'target_column', 'composite_score', 'task_type',
+            'auc', 'std_score', 'mean_r2', 'std_r2', 'mean_importance',
             'consistency', 'n_models', 'leakage_flag', 'recommendation'
         ])
         empty_csv_path = globals_dir / "target_predictability_rankings.csv"
@@ -205,13 +205,13 @@ def save_rankings(
     # Create DataFrame
     df = pd.DataFrame([{
         'rank': i + 1,
-        'target_name': r.target_name,
+        'target': r.target,
         'target_column': r.target_column,
         'composite_score': r.composite_score,
         'task_type': r.task_type.name,
-        'mean_score': r.mean_score,
+        'auc': r.auc,
         'std_score': r.std_score,
-        'mean_r2': r.mean_score,  # Backward compatibility
+        'mean_r2': r.auc,  # Backward compatibility
         'std_r2': r.std_score,  # Backward compatibility
         'mean_importance': r.mean_importance,
         'consistency': r.consistency,
@@ -227,7 +227,7 @@ def save_rankings(
         logger.warning(f"\nFOUND {len(suspicious)} SUSPICIOUS TARGETS (possible leakage):")
         for _, row in suspicious.iterrows():
             logger.warning(
-                f"  {row['target_name']:25s} | R²={row['mean_r2']:.3f} | "
+                f"  {row['target']:25s} | R²={row['mean_r2']:.3f} | "
                 f"Composite={row['composite_score']:.3f} | Flag: {row['leakage_flag']}"
             )
         logger.warning("Review these targets - they may have leaked features or be degenerate!")
@@ -247,11 +247,11 @@ def save_rankings(
         'target_rankings': [
             {
             'rank': i + 1,
-            'target': r.target_name,
+            'target': r.target,
             'composite_score': float(r.composite_score),
             'task_type': r.task_type.name,
-            'mean_score': float(r.mean_score),
-            'mean_r2': float(r.mean_score),  # Backward compatibility
+            'auc': float(r.auc),
+            'mean_r2': float(r.auc),  # Backward compatibility
             'leakage_flag': r.leakage_flag,
             'recommendation': _get_recommendation(r)
             }
@@ -267,18 +267,18 @@ def save_rankings(
     
     # Also save per-target slices for fast local inspection
     for i, r in enumerate(results):
-        target_name_clean = r.target_name.replace('/', '_').replace('\\', '_')
+        target_clean = r.target.replace('/', '_').replace('\\', '_')
         try:
-            ensure_target_structure(base_output_dir, target_name_clean)
-            target_decision_dir = get_target_decision_dir(base_output_dir, target_name_clean)
+            ensure_target_structure(base_output_dir, target_clean)
+            target_decision_dir = get_target_decision_dir(base_output_dir, target_clean)
             target_yaml_path = target_decision_dir / "target_prioritization.yaml"
             # Save per-target slice with rank and recommendation
             target_yaml_data = {
                 'rank': i + 1,
-                'target': r.target_name,
+                'target': r.target,
                 'composite_score': float(r.composite_score),
                 'task_type': r.task_type.name,
-                'mean_score': float(r.mean_score),
+                'auc': float(r.auc),
                 'leakage_flag': r.leakage_flag,
                 'recommendation': _get_recommendation(r)
             }
@@ -286,7 +286,7 @@ def save_rankings(
                 yaml.dump(target_yaml_data, f, default_flow_style=False)
             logger.debug(f"Saved per-target prioritization to {target_yaml_path}")
         except Exception as e:
-            logger.debug(f"Failed to save per-target prioritization for {target_name_clean}: {e}")
+            logger.debug(f"Failed to save per-target prioritization for {target_clean}: {e}")
     
     # Target-first structure only - no legacy writes
 

@@ -85,13 +85,13 @@ def classify_target_from_confidence(
     }
 
 
-def load_target_confidence(output_dir: Path, target_name: str, view: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def load_target_confidence(output_dir: Path, target: str, view: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Load target confidence JSON for a specific target.
     
     Args:
         output_dir: Target output directory or base run directory
-        target_name: Target column name
+        target: Target column name
         view: Optional view name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"). If None, checks both views.
     
     Returns:
@@ -108,8 +108,8 @@ def load_target_confidence(output_dir: Path, target_name: str, view: Optional[st
             break
         base_dir = base_dir.parent
     
-    target_name_clean = target_name.replace('/', '_').replace('\\', '_')
-    target_repro_dir = get_target_reproducibility_dir(base_dir, target_name_clean)
+    target_clean = target.replace('/', '_').replace('\\', '_')
+    target_repro_dir = get_target_reproducibility_dir(base_dir, target_clean)
     
     # Check view-scoped locations (new structure)
     views_to_check = []
@@ -211,11 +211,11 @@ def collect_run_level_confidence_summary(
     for conf in all_confidence:
         routing = classify_target_from_confidence(conf, routing_config=routing_config)
         summary_rows.append({
-            'target_name': conf.get('target_name', 'unknown'),
+            'target': conf.get('target', 'unknown'),
             'confidence': conf.get('confidence', 'LOW'),
             'score_tier': conf.get('score_tier', 'LOW'),
             'low_confidence_reason': conf.get('low_confidence_reason', ''),
-            'mean_score': conf.get('mean_score', 0.0),
+            'auc': conf.get('auc', 0.0),
             'max_score': conf.get('max_score', 0.0),
             'mean_strong_score': conf.get('mean_strong_score', 0.0),
             'agreement_ratio': conf.get('agreement_ratio', 0.0),
@@ -237,7 +237,7 @@ def collect_run_level_confidence_summary(
 
 def save_target_routing_metadata(
     output_dir: Path,
-    target_name: str,
+    target: str,
     conf: Dict[str, Any],
     routing: Dict[str, Any],
     view: Optional[str] = None
@@ -253,7 +253,7 @@ def save_target_routing_metadata(
     
     Args:
         output_dir: Base run output directory or target-specific directory
-        target_name: Target column name
+        target: Target column name
         conf: Confidence metrics
         routing: Routing decision from classify_target_from_confidence()
         view: View type (CROSS_SECTIONAL, SYMBOL_SPECIFIC) - if None, defaults to CROSS_SECTIONAL
@@ -271,9 +271,9 @@ def save_target_routing_metadata(
             break
         base_dir = base_dir.parent
     
-    target_name_clean = target_name.replace('/', '_').replace('\\', '_')
-    ensure_target_structure(base_dir, target_name_clean)
-    decision_dir = get_target_decision_dir(base_dir, target_name_clean)
+    target_clean = target.replace('/', '_').replace('\\', '_')
+    ensure_target_structure(base_dir, target_clean)
+    decision_dir = get_target_decision_dir(base_dir, target_clean)
     decision_dir.mkdir(parents=True, exist_ok=True)
     
     # Normalize view (default to CROSS_SECTIONAL if not provided)
@@ -284,21 +284,21 @@ def save_target_routing_metadata(
     # Save per-target decision (detailed record with full confidence and routing info)
     routing_path = decision_dir / "routing_decision.json"
     routing_data = {
-        target_name: {
-            'target_name': target_name,
+        target: {
+            'target': target,
             'view': view_normalized,  # Add view information for completeness
             'confidence': conf,
             'routing': routing,
             # Reference to where selected features can be found
-            'selected_features_path': f"targets/{target_name_clean}/reproducibility/{view_normalized}/selected_features.txt",
-            'feature_selection_summary_path': f"targets/{target_name_clean}/reproducibility/{view_normalized}/feature_selection_summary.json"
+            'selected_features_path': f"targets/{target_clean}/reproducibility/{view_normalized}/selected_features.txt",
+            'feature_selection_summary_path': f"targets/{target_clean}/reproducibility/{view_normalized}/feature_selection_summary.json"
         }
     }
     
     with open(routing_path, "w") as f:
         json.dump(routing_data, f, indent=2)
     
-    logger.debug(f"Saved per-target routing decision for {target_name} to {routing_path}")
+    logger.debug(f"Saved per-target routing decision for {target} to {routing_path}")
     
     # CRITICAL: Update lightweight summary in globals/feature_selection_routing.json
     # This is separate from globals/routing_decisions.json (which is for target ranking)
@@ -321,8 +321,8 @@ def save_target_routing_metadata(
     if view_normalized not in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
         view_normalized = "CROSS_SECTIONAL"
     
-    # Create key with view: target_name:view (e.g., "fwd_ret_5d:CROSS_SECTIONAL")
-    routing_key = f"{target_name}:{view_normalized}"
+    # Create key with view: target:view (e.g., "fwd_ret_5d:CROSS_SECTIONAL")
+    routing_key = f"{target}:{view_normalized}"
     
     # Update with this target's routing decision (lightweight - just key info)
     existing_routing[routing_key] = {
@@ -332,7 +332,7 @@ def save_target_routing_metadata(
         'allowed_in_production': routing.get('allowed_in_production', False),
         'view': view_normalized,  # Add view information
         # Reference to per-target file for full details
-        'details_path': f"targets/{target_name_clean}/decision/routing_decision.json"
+        'details_path': f"targets/{target_clean}/decision/routing_decision.json"
     }
     
     # Save updated feature selection routing summary

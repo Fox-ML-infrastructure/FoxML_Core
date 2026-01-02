@@ -659,7 +659,7 @@ def _process_combined_data_pandas(combined_df: pd.DataFrame, target: str, featur
     y_prepared, sample_weights, group_sizes, routing_meta = route_info['prepare_fn'](y_clean, time_vals)
     
     # Store routing metadata for trainer
-    routing_meta['target_name'] = target
+    routing_meta['target'] = target
     routing_meta['spec'] = spec
     routing_meta['sample_weights'] = sample_weights
     routing_meta['group_sizes'] = group_sizes
@@ -669,7 +669,7 @@ def _process_combined_data_pandas(combined_df: pd.DataFrame, target: str, featur
         routing_meta['route'] = route_decision_info.get('route', 'CROSS_SECTIONAL')
         routing_meta['route_reason'] = route_decision_info.get('reason')
         # Include other routing decision metadata
-        for key in ['cs_auc', 'symbol_auc_mean', 'symbol_auc_median', 'frac_symbols_good', 'winner_symbols']:
+        for key in ['auc', 'symbol_auc_mean', 'symbol_auc_median', 'frac_symbols_good', 'winner_symbols']:
             if key in route_decision_info:
                 routing_meta[key] = route_decision_info[key]
     

@@ -21,10 +21,10 @@ logger = logging.getLogger(__name__)
 
 
 def save_snapshot_hook(
-    target_name: str,
+    target: str,
     method: str,
     importance_dict: Dict[str, float],
-    universe_id: Optional[str] = None,
+    universe_sig: Optional[str] = None,
     output_dir: Optional[Path] = None,
     run_id: Optional[str] = None,
     auto_analyze: Optional[bool] = None,  # None = load from config
@@ -35,10 +35,10 @@ def save_snapshot_hook(
     This is the main entry point for saving snapshots from pipeline code.
     
     Args:
-        target_name: Target name (e.g., "peak_60m_0.8")
+        target: Target name (e.g., "peak_60m_0.8")
         method: Method name (e.g., "lightgbm", "quick_pruner", "rfe")
         importance_dict: Dictionary mapping feature names to importance values
-        universe_id: Optional universe identifier (symbol name, "ALL", etc.)
+        universe_sig: Optional universe identifier (symbol name, "ALL", etc.)
         output_dir: Optional output directory (defaults to artifacts/feature_importance)
         run_id: Optional run ID (generates UUID if not provided)
         auto_analyze: If True, automatically run stability analysis after saving.
@@ -62,17 +62,17 @@ def save_snapshot_hook(
         
         # Create snapshot
         snapshot = FeatureImportanceSnapshot.from_dict_series(
-            target_name=target_name,
+            target=target,
             method=method,
             importance_dict=importance_dict,
-            universe_id=universe_id,
+            universe_sig=universe_sig,
             run_id=run_id,
         )
         
         # Save snapshot
-        # Use target_name for target-first structure
+        # Use target for target-first structure
         # Snapshots should only be saved to target-specific directories, never at root level
-        base_dir = get_snapshot_base_dir(output_dir, target_name=target_name)
+        base_dir = get_snapshot_base_dir(output_dir, target=target)
         snapshot_path = save_importance_snapshot(snapshot, base_dir)
         
         logger.debug(f"Saved importance snapshot: {snapshot_path}")
@@ -100,7 +100,7 @@ def save_snapshot_hook(
                 
                 stability_metrics = analyze_stability_auto(
                     base_dir=base_dir,
-                    target_name=target_name,
+                    target=target,
                     method=method,
                     log_to_console=True,
                     save_report=True,
@@ -113,24 +113,24 @@ def save_snapshot_hook(
                     # Get snapshot count for informative message
                     from .io import load_snapshots
                     try:
-                        snapshots = load_snapshots(base_dir, target_name, method)
+                        snapshots = load_snapshots(base_dir, target, method)
                         snapshot_count = len(snapshots)
                         if snapshot_count == 1:
                             logger.info(
-                                f"📊 Stability analysis for {target_name}/{method}: "
+                                f"📊 Stability analysis for {target}/{method}: "
                                 f"Snapshot saved (1 snapshot available, need 2+ for analysis). "
                                 f"Stats will be available after the next symbol/run."
                             )
                         else:
                             logger.info(
-                                f"📊 Stability analysis for {target_name}/{method}: "
+                                f"📊 Stability analysis for {target}/{method}: "
                                 f"Snapshot saved ({snapshot_count} snapshots available, need 2+ for analysis). "
                                 f"Analysis will run automatically once more snapshots are available."
                             )
                     except Exception:
                         # Fallback if loading snapshots fails
                         logger.info(
-                            f"📊 Stability analysis for {target_name}/{method}: "
+                            f"📊 Stability analysis for {target}/{method}: "
                             f"Snapshot saved (analysis will run once more snapshots are available)"
                         )
             except Exception as e:
@@ -144,10 +144,10 @@ def save_snapshot_hook(
 
 
 def save_snapshot_from_series_hook(
-    target_name: str,
+    target: str,
     method: str,
     importance_series,  # pd.Series
-    universe_id: Optional[str] = None,
+    universe_sig: Optional[str] = None,
     output_dir: Optional[Path] = None,
     run_id: Optional[str] = None,
     auto_analyze: Optional[bool] = None,  # None = load from config
@@ -158,10 +158,10 @@ def save_snapshot_from_series_hook(
     Convenience wrapper for Series-based importance data.
     
     Args:
-        target_name: Target name
+        target: Target name
         method: Method name
         importance_series: pandas Series with feature names as index
-        universe_id: Optional universe identifier
+        universe_sig: Optional universe identifier
         output_dir: Optional output directory
         run_id: Optional run ID
         auto_analyze: If True, automatically run stability analysis.
@@ -173,10 +173,10 @@ def save_snapshot_from_series_hook(
     # Convert Series to dict
     importance_dict = importance_series.to_dict()
     return save_snapshot_hook(
-        target_name=target_name,
+        target=target,
         method=method,
         importance_dict=importance_dict,
-        universe_id=universe_id,
+        universe_sig=universe_sig,
         output_dir=output_dir,
         run_id=run_id,
         auto_analyze=auto_analyze,
@@ -185,7 +185,7 @@ def save_snapshot_from_series_hook(
 
 def analyze_all_stability_hook(
     output_dir: Optional[Path] = None,
-    target_name: Optional[str] = None,
+    target: Optional[str] = None,
     method: Optional[str] = None,
 ) -> Dict[str, Dict[str, float]]:
     """
@@ -202,11 +202,11 @@ def analyze_all_stability_hook(
         output_dir: Optional output directory (defaults to artifacts/feature_importance)
                     Can be RESULTS/{run}/target_rankings/ or RESULTS/{run}/feature_selections/
                     Function will search REPRODUCIBILITY structure automatically
-        target_name: Optional target name filter (None = all targets)
+        target: Optional target name filter (None = all targets)
         method: Optional method filter (None = all methods)
     
     Returns:
-        Dictionary mapping "{target_name}/{method}" to metrics dict
+        Dictionary mapping "{target}/{method}" to metrics dict
     """
     all_metrics = {}
     
@@ -233,7 +233,7 @@ def analyze_all_stability_hook(
                     continue
                 
                 target = target_path.name
-                if target_name and target != target_name:
+                if target and target != target:
                     continue
                 
                 for method_path in target_path.iterdir():
@@ -246,7 +246,7 @@ def analyze_all_stability_hook(
                     
                     metrics = analyze_stability_auto(
                         base_dir=base_dir,
-                        target_name=target,
+                        target=target,
                         method=method_name,
                         log_to_console=True,
                         save_report=True,
@@ -280,7 +280,7 @@ def analyze_all_stability_hook(
                     continue
                 
                 target = target_path.name
-                if target_name and target != target_name:
+                if target and target != target:
                     continue
                 
                 # For SYMBOL_SPECIFIC, iterate through symbol directories
@@ -309,9 +309,9 @@ def analyze_all_stability_hook(
                             if len(snapshots) < 2:
                                 continue
                             
-                            # Analyze stability (filter by universe_id to avoid cross-symbol comparisons)
+                            # Analyze stability (filter by universe_sig to avoid cross-symbol comparisons)
                             from .analysis import compute_stability_metrics
-                            metrics = compute_stability_metrics(snapshots, top_k=20, filter_by_universe_id=True)
+                            metrics = compute_stability_metrics(snapshots, top_k=20, filter_by_universe_sig=True)
                             if metrics:
                                 all_metrics[f"{target}/{method_name}"] = metrics
                                 # Log per-method stability with context
@@ -360,9 +360,9 @@ def analyze_all_stability_hook(
                         if len(snapshots) < 2:
                             continue
                         
-                        # Analyze stability (filter by universe_id to avoid cross-symbol comparisons)
+                        # Analyze stability (filter by universe_sig to avoid cross-symbol comparisons)
                         from .analysis import compute_stability_metrics
-                        metrics = compute_stability_metrics(snapshots, top_k=20, filter_by_universe_id=True)
+                        metrics = compute_stability_metrics(snapshots, top_k=20, filter_by_universe_sig=True)
                         if metrics:
                             all_metrics[f"{target}/{method_name}"] = metrics
                             # Log per-method stability with context

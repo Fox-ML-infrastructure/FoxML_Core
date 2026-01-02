@@ -10,9 +10,9 @@ Usage:
     tracker = ReproducibilityTracker(output_dir=Path("results"))
     tracker.log_comparison(
         stage="target_ranking",
-        item_name="y_will_swing_low_15m_0.05",
+        target="y_will_swing_low_15m_0.05",
         metrics={
-            "mean_score": 0.751,
+            "auc": 0.751,
             "std_score": 0.029,
             "mean_importance": 0.23,
             "composite_score": 0.764,
@@ -104,9 +104,24 @@ from TRAINING.orchestration.utils.reproducibility.utils import (
     extract_folds,
     Stage,
     RouteType,
-    TargetRankingView
+    TargetRankingView,
+    # SST accessor functions
+    extract_n_effective,
+    extract_universe_sig,
+    extract_date_range,
+    extract_pos_rate,
+    extract_feature_counts,
+    extract_target,
+    extract_model_family,
+    extract_run_id,
+    extract_purge_minutes,
+    extract_horizon_minutes,
 )
 from TRAINING.common.utils.file_utils import write_atomic_json as _write_atomic_json
+
+# Helper for inline usage
+def _extract_horizon_minutes_sst(metadata, cv_details):
+    return extract_horizon_minutes(metadata, cv_details)
 
 
 def _construct_comparison_group_key_from_dict(comparison_group: Dict[str, Any]) -> str:
@@ -133,7 +148,7 @@ def _construct_comparison_group_key_from_dict(comparison_group: Dict[str, Any]) 
         parts.append(f"task={comparison_group['task_signature'][:8]}")
     if comparison_group.get('routing_signature'):
         parts.append(f"route={comparison_group['routing_signature'][:8]}")
-    # CRITICAL: Include exact N_effective to ensure only identical sample sizes compare
+    # CRITICAL: Include exact n_effective to ensure only identical sample sizes compare
     if comparison_group.get('n_effective') is not None:
         parts.append(f"n={comparison_group['n_effective']}")
     # CRITICAL: Include model_family (different families = different outcomes)
@@ -337,8 +352,8 @@ class ReproducibilityTracker:
         Compute sample size bin info (same logic as IntelligentTrainer._get_sample_size_bin).
         
         **Boundary Rules (CRITICAL - DO NOT CHANGE WITHOUT VERSIONING):**
-        - Boundaries are EXCLUSIVE upper bounds: `bin_min <= N_effective < bin_max`
-        - Example: `sample_25k-50k` means `25000 <= N_effective < 50000`
+        - Boundaries are EXCLUSIVE upper bounds: `bin_min <= n_effective < bin_max`
+        - Example: `sample_25k-50k` means `25000 <= n_effective < 50000`
         
         **Binning Scheme Version:** `sample_bin_v1`
         
@@ -421,7 +436,7 @@ class ReproducibilityTracker:
     def load_previous_run(
         self,
         stage: str,
-        item_name: str
+        target: str
     ) -> Optional[Dict[str, Any]]:
         """
         Load the previous run's summary for a stage/item combination.
@@ -430,12 +445,12 @@ class ReproducibilityTracker:
         
         Args:
             stage: Pipeline stage name (e.g., "target_ranking", "feature_selection")
-            item_name: Name of the item (e.g., target name, symbol name)
+            target: Name of the item (e.g., target name, symbol name)
         
         Returns:
             Dictionary with previous run results, or None if no previous run exists
         """
-        key = f"{stage}:{item_name}"
+        key = f"{stage}:{target}"
         all_item_runs = []
         
         # First, try current log file
@@ -483,7 +498,7 @@ class ReproducibilityTracker:
     def save_run(
         self,
         stage: str,
-        item_name: str,
+        target: str,
         metrics: Dict[str, Any],
         additional_data: Optional[Dict[str, Any]] = None
     ) -> None:
@@ -492,8 +507,8 @@ class ReproducibilityTracker:
         
         Args:
             stage: Pipeline stage name (e.g., "target_ranking", "feature_selection")
-            item_name: Name of the item (e.g., target name, symbol name)
-            metrics: Dictionary of metrics to track (must include at least mean_score, std_score)
+            target: Name of the item (e.g., target name, symbol name)
+            metrics: Dictionary of metrics to track (must include at least auc, std_score)
             additional_data: Optional additional data to store with the run
         """
         # Load existing runs
@@ -506,7 +521,7 @@ class ReproducibilityTracker:
                 all_runs = {}
         
         # Create key for this stage/item combination
-        key = f"{stage}:{item_name}"
+        key = f"{stage}:{target}"
         
         # Initialize entry if needed
         if key not in all_runs:
@@ -516,7 +531,7 @@ class ReproducibilityTracker:
         summary = {
             "timestamp": datetime.now().isoformat(),
             "stage": stage,
-            "item_name": item_name,
+            "target": target,
             "reproducibility_mode": "LEGACY",  # Track which mode was used
             **{k: float(v) if isinstance(v, (int, float)) else v 
                for k, v in metrics.items()}
@@ -619,41 +634,41 @@ class ReproducibilityTracker:
         
         return classification, abs_diff, rel_diff, z_score
     
-    def _extract_route_type(self, additional_data: Optional[Dict[str, Any]] = None) -> Optional[str]:
+    def _extract_view(self, additional_data: Optional[Dict[str, Any]] = None) -> Optional[str]:
         """
         Extract route type from additional_data (for feature_selection stage).
         
-        **CRITICAL**: For FEATURE_SELECTION, map view to route_type:
-        - view="CROSS_SECTIONAL" → route_type="CROSS_SECTIONAL"
-        - view="SYMBOL_SPECIFIC" → route_type="INDIVIDUAL"
-        
+        **CRITICAL**: For FEATURE_SELECTION, map view to view:
+        - view="CROSS_SECTIONAL" → view="CROSS_SECTIONAL"
+        - view="SYMBOL_SPECIFIC" → view="SYMBOL_SPECIFIC"
+
         This ensures metrics is scoped correctly (features compared per-target, per-view, per-symbol).
-        
+
         Returns:
-            "CROSS_SECTIONAL", "INDIVIDUAL", or None
+            "CROSS_SECTIONAL", "SYMBOL_SPECIFIC", or None
         """
         if not additional_data:
             return None
         
-        # Check explicit route_type
-        route_type = additional_data.get('route_type')
-        if route_type:
-            return route_type.upper()
+        # Check explicit view
+        view = additional_data.get('view')
+        if view:
+            return view.upper()
         
-        # FIX: For FEATURE_SELECTION, map view to route_type (same as TARGET_RANKING)
+        # FIX: For FEATURE_SELECTION, map view to view (same as TARGET_RANKING)
         # This ensures proper scoping: features compared per-target, per-view, per-symbol
         view = additional_data.get('view')
         if view:
             if view.upper() == "CROSS_SECTIONAL":
                 return "CROSS_SECTIONAL"
             elif view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
-                return "INDIVIDUAL"  # SYMBOL_SPECIFIC maps to INDIVIDUAL for FEATURE_SELECTION
+                return "SYMBOL_SPECIFIC"
         
         # Infer from other fields (fallback)
         if additional_data.get('cross_sectional') or additional_data.get('is_cross_sectional'):
             return "CROSS_SECTIONAL"
         elif additional_data.get('symbol_specific') or additional_data.get('is_symbol_specific'):
-            return "INDIVIDUAL"
+            return "SYMBOL_SPECIFIC"
         
         # Default: assume CROSS_SECTIONAL if not specified
         return "CROSS_SECTIONAL"
@@ -668,7 +683,8 @@ class ReproducibilityTracker:
         """Extract model family from additional_data."""
         if not additional_data:
             return None
-        return additional_data.get('model_family') or additional_data.get('family')
+        # Use SST accessor for model_family
+        return extract_model_family(additional_data)
     
     def _extract_cohort_metadata(
         self,
@@ -686,15 +702,13 @@ class ReproducibilityTracker:
         
         cohort = {}
         
-        # Extract N_effective_cs (sample size)
-        n_effective = metrics.get('N_effective_cs') or metrics.get('n_samples') or metrics.get('sample_size')
-        if n_effective is None and additional_data:
-            n_effective = additional_data.get('N_effective_cs') or additional_data.get('n_samples') or additional_data.get('sample_size')
+        # Extract n_effective_cs (sample size) - use SST accessor
+        n_effective = extract_n_effective(metrics, additional_data)
         
         if n_effective is None:
             return None  # Can't form cohort without sample size
         
-        cohort['N_effective_cs'] = int(n_effective)
+        cohort['n_effective_cs'] = int(n_effective)
         
         # Extract n_symbols
         n_symbols = metrics.get('n_symbols')
@@ -729,11 +743,8 @@ class ReproducibilityTracker:
         # Check top-level first, then nested cs_config as fallback
         universe_sig = None
         if additional_data:
-            universe_sig = additional_data.get('universe_sig') or additional_data.get('universe_id')
-            if not universe_sig:
-                cs_cfg = additional_data.get('cs_config')
-                if isinstance(cs_cfg, dict):
-                    universe_sig = cs_cfg.get('universe_sig') or cs_cfg.get('universe_id')
+            # Use SST accessor for universe_sig
+            universe_sig = extract_universe_sig(additional_data)
         
         if universe_sig:
             cohort['universe_sig'] = universe_sig
@@ -806,7 +817,8 @@ class ReproducibilityTracker:
         
         # Extract universe/config
         cs_config = cohort.get('cs_config', {})
-        universe = cs_config.get('universe_id', 'default')
+        # Use SST accessor for universe_sig
+        universe = extract_universe_sig(cohort, cs_config) or 'default'
         min_cs = cs_config.get('min_cs', '')
         max_cs = cs_config.get('max_cs_samples', '')
         leak_ver = cs_config.get('leakage_filter_version', 'v1')
@@ -828,7 +840,7 @@ class ReproducibilityTracker:
         # Add short hash for uniqueness if needed
         # Create deterministic hash for final uniqueness check
         hash_str = "|".join([
-            str(cohort.get('N_effective_cs', '')),
+            str(cohort.get('n_effective_cs', '')),
             str(cohort.get('n_symbols', '')),
             date_start,
             date_end,
@@ -872,9 +884,9 @@ class ReproducibilityTracker:
     def _get_cohort_dir(
         self,
         stage: str,
-        item_name: str,
+        target: str,
         cohort_id: str,
-        route_type: Optional[str] = None,
+        view: Optional[str] = None,
         symbol: Optional[str] = None,
         model_family: Optional[str] = None
     ) -> Path:
@@ -885,17 +897,17 @@ class ReproducibilityTracker:
         REPRODUCIBILITY/
           {STAGE}/
             {MODE}/  (for FEATURE_SELECTION, TRAINING)
-              {item_name}/
+              {target}/
                 {symbol}/  (for INDIVIDUAL mode)
                   {model_family}/  (for TRAINING)
                     cohort={cohort_id}/
         
         Args:
             stage: Pipeline stage (e.g., "target_ranking", "feature_selection", "model_training")
-            item_name: Item name (e.g., target name)
+            target: Item name (e.g., target name)
             cohort_id: Cohort identifier
-            route_type: Optional route type ("CROSS_SECTIONAL" or "INDIVIDUAL")
-            symbol: Optional symbol name (for INDIVIDUAL mode)
+            view: Optional route type ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
+            symbol: Optional symbol name (for SYMBOL_SPECIFIC mode)
             model_family: Optional model family (for TRAINING stage)
         
         Returns:
@@ -911,11 +923,11 @@ class ReproducibilityTracker:
         
         # For TARGET_RANKING, add view subdirectory (CROSS_SECTIONAL, SYMBOL_SPECIFIC, LOSO)
         if stage_upper == "TARGET_RANKING":
-            # Check if view is provided in additional_data or route_type
+            # Check if view is provided in additional_data or view
             view = None
-            if route_type and route_type.upper() in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "LOSO"]:
-                view = route_type.upper()
-            # If view not in route_type, check if we can infer from symbol presence
+            if view and view.upper() in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "LOSO"]:
+                view = view.upper()
+            # If view not in view, check if we can infer from symbol presence
             if view is None and symbol:
                 view = "SYMBOL_SPECIFIC"  # Default for symbol-specific
             if view is None:
@@ -924,29 +936,25 @@ class ReproducibilityTracker:
         
         # Add mode subdirectory for FEATURE_SELECTION and TRAINING
         elif stage_upper in ["FEATURE_SELECTION", "TRAINING"]:
-            if route_type:
-                mode = route_type.upper()
-                # FIX: Accept SYMBOL_SPECIFIC as valid mode for FEATURE_SELECTION (maps from view)
-                if mode not in ["CROSS_SECTIONAL", "INDIVIDUAL", "SYMBOL_SPECIFIC"]:
-                    # If route_type is INDIVIDUAL and we have symbol, treat as SYMBOL_SPECIFIC
-                    if mode == "INDIVIDUAL" and symbol:
-                        mode = "SYMBOL_SPECIFIC"
-                    else:
-                        mode = "INDIVIDUAL"
+            if view:
+                mode = view.upper()
+                # FIX: Accept SYMBOL_SPECIFIC as valid mode for FEATURE_SELECTION
+                if mode not in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+                    mode = "SYMBOL_SPECIFIC"
             else:
                 mode = "CROSS_SECTIONAL"  # Default
             path_parts.append(mode)
         
-        # Add target/item_name
-        path_parts.append(item_name)
+        # Add target/target
+        path_parts.append(target)
         
         # Add symbol for SYMBOL_SPECIFIC/LOSO views (TARGET_RANKING) or SYMBOL_SPECIFIC/INDIVIDUAL mode (FEATURE_SELECTION/TRAINING)
         if stage_upper == "TARGET_RANKING":
             if view in ["SYMBOL_SPECIFIC", "LOSO"] and symbol:
                 path_parts.append(f"symbol={symbol}")
         elif stage_upper in ["FEATURE_SELECTION", "TRAINING"]:
-            # For FEATURE_SELECTION/TRAINING, add symbol if mode is SYMBOL_SPECIFIC or INDIVIDUAL
-            if symbol and (route_type and route_type.upper() in ["INDIVIDUAL", "SYMBOL_SPECIFIC"]):
+            # For FEATURE_SELECTION/TRAINING, add symbol if mode is SYMBOL_SPECIFIC
+            if symbol and (view and view.upper() == "SYMBOL_SPECIFIC"):
                 path_parts.append(f"symbol={symbol}")
         
         # Add model_family for TRAINING
@@ -1081,11 +1089,11 @@ class ReproducibilityTracker:
     def _save_to_cohort(
         self,
         stage: str,
-        item_name: str,
+        target: str,
         cohort_id: str,
         cohort_metadata: Dict[str, Any],
         run_data: Dict[str, Any],
-        route_type: Optional[str] = None,
+        view: Optional[str] = None,
         symbol: Optional[str] = None,
         model_family: Optional[str] = None,
         additional_data: Optional[Dict[str, Any]] = None,
@@ -1102,14 +1110,14 @@ class ReproducibilityTracker:
         # Get target-first cohort directory (no longer use legacy REPRODUCIBILITY structure)
         # We still call _get_cohort_dir for path calculation, but we'll use target_cohort_dir instead
         # This is just for logging/compatibility - actual writes go to target_cohort_dir
-        legacy_cohort_dir = self._get_cohort_dir(stage, item_name, cohort_id, route_type, symbol, model_family)
+        legacy_cohort_dir = self._get_cohort_dir(stage, target, cohort_id, view, symbol, model_family)
         # Don't create legacy directory - we only use target-first structure now
         
         # Logging will happen after target_cohort_dir is created (below)
         main_logger = _get_main_logger()
         
-        # Generate run_id
-        run_id = run_data.get('run_id') or run_data.get('timestamp', datetime.now().isoformat())
+        # Generate run_id - use SST accessor
+        run_id = extract_run_id(run_data) or datetime.now().isoformat()
         run_id_clean = run_id.replace(':', '-').replace('.', '-').replace('T', '_')
         
         # Normalize stage (accept both string and Stage enum)
@@ -1118,13 +1126,13 @@ class ReproducibilityTracker:
         else:
             stage_normalized = stage.upper().replace("MODEL_TRAINING", "TRAINING")
         
-        # Normalize route_type (accept both string and RouteType enum)
+        # Normalize view (accept both string and RouteType enum)
         # For TARGET_RANKING, use view from additional_data if available
-        if stage_normalized == "TARGET_RANKING" and not route_type:
+        if stage_normalized == "TARGET_RANKING" and not view:
             if additional_data and 'view' in additional_data:
-                route_type = additional_data['view']  # Use view as route_type for TARGET_RANKING
-        elif route_type and isinstance(route_type, RouteType):
-            route_type = route_type.value
+                view = additional_data['view']  # Use view as view for TARGET_RANKING
+        elif view and isinstance(view, RouteType):
+            view = view.value
         
         # Extract symbols list from cohort_metadata, additional_data
         # Try multiple sources to get the actual symbol list
@@ -1170,13 +1178,13 @@ class ReproducibilityTracker:
             # Try to get view from additional_data first
             if additional_data and 'view' in additional_data:
                 view_value = additional_data['view'].upper() if isinstance(additional_data['view'], str) else additional_data['view']
-            # Fallback: derive from route_type
-            elif route_type:
-                route_normalized = route_type.upper() if isinstance(route_type, str) else (route_type.value if hasattr(route_type, 'value') else str(route_type).upper() if route_type else None)
+            # Fallback: derive from view
+            elif view:
+                route_normalized = view.upper() if isinstance(view, str) else (view.value if hasattr(view, 'value') else str(view).upper() if view else None)
                 if route_normalized == "CROSS_SECTIONAL":
                     view_value = "CROSS_SECTIONAL"
-                elif route_normalized in ["INDIVIDUAL", "SYMBOL_SPECIFIC"]:
-                    view_value = "SYMBOL_SPECIFIC"  # Map INDIVIDUAL to SYMBOL_SPECIFIC for consistency
+                elif route_normalized == "SYMBOL_SPECIFIC":
+                    view_value = "SYMBOL_SPECIFIC"
             # Default to CROSS_SECTIONAL if not found
             if not view_value:
                 view_value = "CROSS_SECTIONAL"
@@ -1191,7 +1199,8 @@ class ReproducibilityTracker:
             normalized_view = _normalize_view({"view": raw_view}) if _normalize_view else None
             universe_sig = _normalize_universe_sig(cohort_metadata) if _normalize_universe_sig else None
             symbol_from_meta = symbol or cohort_metadata.get("symbol")
-            target_name = cohort_metadata.get("target") or cohort_metadata.get("target_name") or item_name
+            # Use SST accessor for target
+            target = extract_target(cohort_metadata) or target
             
             # Check strict mode config flag
             strict_mode = False
@@ -1213,14 +1222,14 @@ class ReproducibilityTracker:
                     raise ValueError(
                         f"SCOPE VIOLATION: Cannot write sy_ cohort to CROSS_SECTIONAL view. "
                         f"cohort_id={cohort_id}, view={normalized_view}, stage={stage_normalized}, "
-                        f"target={target_name}, symbol={symbol_from_meta}, universe_sig={universe_sig}. "
-                        f"Check that view_for_writes comes from resolved_data_config['resolved_mode']."
+                        f"target={target}, symbol={symbol_from_meta}, universe_sig={universe_sig}. "
+                        f"Check that view_for_writes comes from resolved_data_config['view']."
                     )
                 if normalized_view == "SYMBOL_SPECIFIC" and cohort_id.startswith("cs_"):
                     raise ValueError(
                         f"SCOPE VIOLATION: Cannot write cs_ cohort to SYMBOL_SPECIFIC view. "
                         f"cohort_id={cohort_id}, view={normalized_view}, stage={stage_normalized}, "
-                        f"target={target_name}, symbol={symbol_from_meta}, universe_sig={universe_sig}. "
+                        f"target={target}, symbol={symbol_from_meta}, universe_sig={universe_sig}. "
                         f"This indicates a missing symbol in cohort computation."
                     )
             
@@ -1231,13 +1240,13 @@ class ReproducibilityTracker:
                     raise ValueError(
                         f"SCOPE VIOLATION: symbol key present for CROSS_SECTIONAL view. "
                         f"symbol={symbol_from_meta}, view={normalized_view}, stage={stage_normalized}, "
-                        f"target={target_name}, cohort_id={cohort_id}. "
+                        f"target={target}, cohort_id={cohort_id}. "
                         f"CS metadata must not have symbol key at all (not even null)."
                     )
                 if normalized_view == "SYMBOL_SPECIFIC" and not symbol_from_meta:
                     raise ValueError(
                         f"SCOPE VIOLATION: symbol required for SYMBOL_SPECIFIC view but was None/empty. "
-                        f"view={normalized_view}, stage={stage_normalized}, target={target_name}, "
+                        f"view={normalized_view}, stage={stage_normalized}, target={target}, "
                         f"cohort_id={cohort_id}. Either provide symbol or use CROSS_SECTIONAL view."
                     )
             
@@ -1246,13 +1255,13 @@ class ReproducibilityTracker:
                 if strict_mode:
                     raise ValueError(
                         f"SCOPE VIOLATION: universe_sig missing (strict mode enabled). "
-                        f"view={normalized_view}, stage={stage_normalized}, target={target_name}, "
+                        f"view={normalized_view}, stage={stage_normalized}, target={target}, "
                         f"symbol={symbol_from_meta}, cohort_id={cohort_id}. "
                         f"Ensure resolved_data_config['universe_sig'] is propagated."
                     )
                 else:
                     logger.warning(
-                        f"Missing universe_sig for {stage_normalized}/{target_name}. "
+                        f"Missing universe_sig for {stage_normalized}/{target}. "
                         f"view={normalized_view}, symbol={symbol_from_meta}. "
                         f"Enable strict_scope_partitioning=true to enforce."
                     )
@@ -1262,7 +1271,7 @@ class ReproducibilityTracker:
             # ========================================================================
             
             # Determine if we have all required metadata for full OutputLayout validation
-            has_required_metadata = bool(normalized_view and universe_sig and target_name)
+            has_required_metadata = bool(normalized_view and universe_sig and target)
             if normalized_view == "SYMBOL_SPECIFIC" and not symbol_from_meta:
                 has_required_metadata = False
             
@@ -1271,7 +1280,7 @@ class ReproducibilityTracker:
                 try:
                     layout = OutputLayout(
                         output_root=self._repro_base_dir,
-                        target=target_name,
+                        target=target,
                         view=normalized_view,
                         universe_sig=universe_sig,
                         symbol=symbol_from_meta,
@@ -1284,7 +1293,7 @@ class ReproducibilityTracker:
                     if symbol and symbol_from_meta and symbol != symbol_from_meta:
                         raise ValueError(
                             f"SCOPE VIOLATION: symbol mismatch - param symbol={symbol}, metadata symbol={symbol_from_meta}. "
-                            f"stage={stage_normalized}, target={target_name}, cohort_id={cohort_id}. "
+                            f"stage={stage_normalized}, target={target}, cohort_id={cohort_id}. "
                             f"This indicates dirty/mutated metadata dict."
                         )
                     
@@ -1303,10 +1312,10 @@ class ReproducibilityTracker:
                     missing.append(f"view (invalid: {raw_view})")
                 
                 if not universe_sig:
-                    missing.append("universe_sig (or universe_id)")
+                    missing.append("universe_sig")
                 
-                if not target_name:
-                    missing.append("target (or target_name)")
+                if not target:
+                    missing.append("target")
                 
                 # If view is valid and symbol-specific, require symbol
                 if normalized_view == "SYMBOL_SPECIFIC" and not symbol_from_meta:
@@ -1322,21 +1331,34 @@ class ReproducibilityTracker:
                 else:
                     # Warn and fall back to legacy path construction
                     logger.warning(
-                        f"Missing {missing} in metadata for {stage}/{item_name}. "
+                        f"Missing {missing} in metadata for {stage}/{target}. "
                         f"Falling back to legacy path construction. "
                         f"Metadata keys: {list(cohort_metadata.keys())}. "
                         f"Enable safety.output_layout.strict_scope_partitioning=true to enforce strict validation."
                     )
                     
                     # SCOPE VIOLATION DETECTOR: Telemetry even when view is missing/invalid
-                    # Non-blocking, just visibility for finding remaining bad call paths
+                    # In strict mode, raise on cohort prefix/view mismatch
                     if cohort_id:
                         prefix = "sy" if cohort_id.startswith("sy_") else "cs" if cohort_id.startswith("cs_") else "unknown"
-                        logger.error(
-                            f"SCOPE VIOLATION RISK: view={normalized_view or 'UNKNOWN'} raw_view={raw_view or 'None'} "
-                            f"cohort_prefix={prefix} cohort_id={cohort_id} stage={stage} item={item_name} "
-                            f"route_type={route_type} symbol={symbol_from_meta}"
+                        # Check for prefix/view mismatch
+                        prefix_view_mismatch = (
+                            (normalized_view == "CROSS_SECTIONAL" and prefix == "sy") or
+                            (normalized_view == "SYMBOL_SPECIFIC" and prefix == "cs")
                         )
+                        if prefix_view_mismatch and strict_mode:
+                            raise ValueError(
+                                f"SCOPE VIOLATION: cohort_prefix={prefix}_ but view={normalized_view}. "
+                                f"cohort_id={cohort_id}, stage={stage}, target={target}. "
+                                f"This indicates the view was not properly propagated from SST. "
+                                f"Set safety.output_layout.strict_scope_partitioning=false to allow legacy fallback."
+                            )
+                        elif prefix_view_mismatch or normalized_view is None:
+                            logger.error(
+                                f"SCOPE VIOLATION RISK: view={normalized_view or 'UNKNOWN'} raw_view={raw_view or 'None'} "
+                                f"cohort_prefix={prefix} cohort_id={cohort_id} stage={stage} item={target} "
+                                f"view={view} symbol={symbol_from_meta}"
+                            )
         # ========================================================================
         # END PR1 FIREWALL
         # ========================================================================
@@ -1346,21 +1368,20 @@ class ReproducibilityTracker:
             "cohort_id": cohort_id,
             "run_id": run_id_clean,
             "stage": stage_normalized,  # Already normalized to uppercase
-            "route_type": route_type.upper() if (route_type and isinstance(route_type, str)) else (route_type.value if hasattr(route_type, 'value') else str(route_type).upper() if route_type else None),
             "view": view_value,  # Set for TARGET_RANKING, FEATURE_SELECTION, and TRAINING stages
-            "target_name": item_name,  # Changed from "target" to match finalize_run() expectations
-            "n_effective": cohort_metadata.get('N_effective_cs', 0),  # Changed from "N_effective" to match finalize_run() expectations
+            "target": target,  # Changed from "target" to match finalize_run() expectations
+            "n_effective": cohort_metadata.get('n_effective_cs', 0),  # Changed from "n_effective" to match finalize_run() expectations
             "n_symbols": cohort_metadata.get('n_symbols', 0),
             "symbols": symbols_list,  # Sorted, deduplicated list of symbols
-            "date_range_start": cohort_metadata.get('date_range', {}).get('start_ts'),  # Changed from "date_start" to match finalize_run() expectations
-            "date_range_end": cohort_metadata.get('date_range', {}).get('end_ts'),  # Changed from "date_end" to match finalize_run() expectations
-            "universe_id": cohort_metadata.get('cs_config', {}).get('universe_id'),
+            "date_start": cohort_metadata.get('date_range', {}).get('start_ts'),  # Changed from "date_start" to match finalize_run() expectations
+            "date_end": cohort_metadata.get('date_range', {}).get('end_ts'),  # Changed from "date_end" to match finalize_run() expectations
+            "universe_sig": cohort_metadata.get('cs_config', {}).get('universe_sig'),
             # Normalized universe_sig - _normalize_universe_sig checks both top-level and cs_config
-            "universe_sig": _normalize_universe_sig(cohort_metadata) if _normalize_universe_sig else cohort_metadata.get('cs_config', {}).get('universe_id'),
+            "universe_sig": _normalize_universe_sig(cohort_metadata) if _normalize_universe_sig else cohort_metadata.get('cs_config', {}).get('universe_sig'),
             "min_cs": cohort_metadata.get('cs_config', {}).get('min_cs'),
             "max_cs_samples": cohort_metadata.get('cs_config', {}).get('max_cs_samples'),
             "leakage_filter_version": cohort_metadata.get('cs_config', {}).get('leakage_filter_version', 'v1'),
-            "cs_config_hash": hashlib.sha256(
+            "config_hash": hashlib.sha256(
                 json.dumps(cohort_metadata.get('cs_config', {}), sort_keys=True).encode()
             ).hexdigest()[:8],
             "seed": run_data.get('seed') or (additional_data.get('seed') if additional_data else None),
@@ -1369,9 +1390,9 @@ class ReproducibilityTracker:
         }
         
         # Schema v2: Omit non-applicable fields instead of null
-        # Only include symbol if route_type is INDIVIDUAL or SYMBOL_SPECIFIC
-        route_normalized = route_type.upper() if route_type else None
-        if symbol and (route_normalized == "INDIVIDUAL" or 
+        # Only include symbol if view is SYMBOL_SPECIFIC
+        route_normalized = view.upper() if view else None
+        if symbol and (route_normalized == "SYMBOL_SPECIFIC" or 
                       (stage_normalized == "TARGET_RANKING" and additional_data and 
                        additional_data.get('view') in ['SYMBOL_SPECIFIC', 'LOSO'])):
             full_metadata["symbol"] = symbol
@@ -1497,8 +1518,8 @@ class ReproducibilityTracker:
                         cv_details['embargo_enabled'] = False
             
             # Schema v2: folds as tagged union
-            if 'cv_folds' in additional_data:
-                folds_val = additional_data['cv_folds']
+            if 'folds' in additional_data:
+                folds_val = additional_data['folds']
             elif 'n_splits' in additional_data:
                 folds_val = additional_data['n_splits']
             else:
@@ -1506,7 +1527,7 @@ class ReproducibilityTracker:
             
             if folds_val is not None:
                 # Check if it was auto-computed
-                if 'cv_folds_auto' in additional_data and additional_data.get('cv_folds_auto', False):
+                if 'folds_auto' in additional_data and additional_data.get('folds_auto', False):
                     cv_details['folds'] = make_tagged_auto(value=folds_val)
                 else:
                     cv_details['folds'] = make_tagged_scalar(folds_val)
@@ -1577,10 +1598,10 @@ class ReproducibilityTracker:
         # Add sample size bin metadata (for directory organization, NOT series identity)
         # Compute from n_effective if not provided, ensuring consistency
         # This allows backward compatibility and binning scheme versioning
-        # CRITICAL: Use 'n_effective' (new field name), not 'N_effective' (old field name)
-        n_effective = full_metadata.get('n_effective') or full_metadata.get('N_effective')  # Support both for backwards compat
+        # CRITICAL: Use SST accessor for n_effective
+        n_effective = extract_n_effective(full_metadata)
         if n_effective and n_effective > 0:
-            # Use provided bin info if available, otherwise compute from N_effective
+            # Use provided bin info if available, otherwise compute from n_effective
             if additional_data and 'sample_size_bin' in additional_data:
                 full_metadata['sample_size_bin'] = additional_data['sample_size_bin']
             else:
@@ -1708,18 +1729,17 @@ class ReproducibilityTracker:
         try:
             comparable_key = compute_comparable_key(
                 stage=stage_normalized,
-                target_name=item_name,
-                route_type=full_metadata.get('route_type'),
+                target=target,
                 view=full_metadata.get('view'),
                 symbol=full_metadata.get('symbol'),
-                date_range_start=full_metadata.get('date_range_start'),
-                date_range_end=full_metadata.get('date_range_end'),
+                date_start=full_metadata.get('date_start'),
+                date_end=full_metadata.get('date_end'),
                 cv_details=full_metadata.get('cv_details'),
                 feature_registry_hash=full_metadata.get('feature_registry_hash'),
                 label_definition_hash=full_metadata.get('cv_details', {}).get('label_definition_hash') if full_metadata.get('cv_details') else None,
                 min_cs=full_metadata.get('min_cs'),
                 max_cs_samples=full_metadata.get('max_cs_samples'),
-                universe_id=full_metadata.get('universe_id')
+                universe_sig=full_metadata.get('universe_sig')
             )
             if comparable_key:
                 full_metadata['comparable_key'] = comparable_key
@@ -1770,23 +1790,23 @@ class ReproducibilityTracker:
                     get_target_reproducibility_dir, ensure_target_structure
                 )
                 
-                # Determine view from route_type or additional_data
+                # Determine view from view or additional_data
                 view_for_target = None
                 if stage_normalized == "TARGET_RANKING":
-                    # For TARGET_RANKING, view comes from route_type or additional_data
-                    if route_type and route_type.upper() in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "LOSO"]:
-                        view_for_target = route_type.upper()
+                    # For TARGET_RANKING, view comes from view or additional_data
+                    if view and view.upper() in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "LOSO"]:
+                        view_for_target = view.upper()
                     elif additional_data and 'view' in additional_data:
                         view_for_target = additional_data['view'].upper()
                     if not view_for_target:
                         view_for_target = "CROSS_SECTIONAL"  # Default
                 elif stage_normalized == "FEATURE_SELECTION":
-                    # For FEATURE_SELECTION, map route_type to view
-                    if route_type:
-                        if route_type.upper() == "CROSS_SECTIONAL":
+                    # For FEATURE_SELECTION, map view to view
+                    if view:
+                        if view.upper() == "CROSS_SECTIONAL":
                             view_for_target = "CROSS_SECTIONAL"
-                        elif route_type.upper() in ["INDIVIDUAL", "SYMBOL_SPECIFIC"]:
-                            view_for_target = "SYMBOL_SPECIFIC"  # Map INDIVIDUAL to SYMBOL_SPECIFIC for consistency
+                        elif view.upper() == "SYMBOL_SPECIFIC":
+                            view_for_target = "SYMBOL_SPECIFIC"
                     elif additional_data and 'view' in additional_data:
                         view_for_target = additional_data['view'].upper()
                     if not view_for_target:
@@ -1796,12 +1816,12 @@ class ReproducibilityTracker:
                 base_output_dir = self._repro_base_dir
                 
                 # Ensure target structure exists
-                ensure_target_structure(base_output_dir, item_name)
+                ensure_target_structure(base_output_dir, target)
                 
                 # Build target-first reproducibility path: 
                 # For CROSS_SECTIONAL: targets/<target>/reproducibility/CROSS_SECTIONAL/cohort=<cohort_id>/
                 # For SYMBOL_SPECIFIC: targets/<target>/reproducibility/SYMBOL_SPECIFIC/symbol=<symbol>/cohort=<cohort_id>/
-                target_repro_dir = get_target_reproducibility_dir(base_output_dir, item_name)
+                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
                 if view_for_target == "SYMBOL_SPECIFIC" and symbol:
                     # Include symbol in path to prevent overwriting
                     target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol}" / f"cohort={cohort_id}"
@@ -1812,7 +1832,7 @@ class ReproducibilityTracker:
             except Exception as e:
                 # Don't fail if target-first structure creation fails - old structure is primary
                 # But log at INFO level so we can see if there are issues
-                logger.info(f"⚠️ Failed to create target-first structure for {item_name}/{view_for_target}/cohort={cohort_id} (non-critical): {e}")
+                logger.info(f"⚠️ Failed to create target-first structure for {target}/{view_for_target}/cohort={cohort_id} (non-critical): {e}")
                 import traceback
                 logger.debug(f"Target-first structure creation traceback: {traceback.format_exc()}")
                 target_cohort_dir = None
@@ -1822,7 +1842,7 @@ class ReproducibilityTracker:
         if cohort_dir is None:
             # Fall back to legacy cohort_dir if target-first structure wasn't created
             try:
-                legacy_cohort_dir = self._get_cohort_dir(stage, item_name, cohort_id, route_type, symbol, model_family)
+                legacy_cohort_dir = self._get_cohort_dir(stage, target, cohort_id, view, symbol, model_family)
                 cohort_dir = legacy_cohort_dir
             except Exception as e:
                 logger.debug(f"Could not determine legacy cohort_dir: {e}")
@@ -1850,7 +1870,7 @@ class ReproducibilityTracker:
                 # This ensures snapshot/diff computation uses the exact same data that will be written to metadata.json
                 # full_metadata is already built above (lines 1077-1292), we just haven't added diff_telemetry yet
                 if cohort_dir is None:
-                    logger.warning(f"⚠️  Cannot call finalize_run() for {item_name}: cohort_dir is None")
+                    logger.warning(f"⚠️  Cannot call finalize_run() for {target}: cohort_dir is None")
                 else:
                     diff_telemetry_data = telemetry.finalize_run(
                         stage=stage_normalized,
@@ -1989,36 +2009,34 @@ class ReproducibilityTracker:
                 self._increment_error_counter("write_failures", "IO_ERROR")
                 raise  # Re-raise to prevent silent failure
         else:
-            logger.warning(f"Target cohort directory not available for {item_name}/{stage_normalized}, cannot save metadata.json")
+            logger.warning(f"Target cohort directory not available for {target}/{stage_normalized}, cannot save metadata.json")
         
         # Write metrics sidecar files (if enabled)
         if self.metrics:
-            # Determine view from route_type
+            # Determine view from view
             view = None
-            if route_type:
-                if route_type in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
-                    view = route_type
-                elif route_type == "INDIVIDUAL":
-                    view = "SYMBOL_SPECIFIC"
+            if view:
+                if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+                    view = view
             
-            # Determine target (for TARGET_RANKING and FEATURE_SELECTION stages, item_name is the target)
-            target = item_name if stage_normalized in ["TARGET_RANKING", "FEATURE_SELECTION"] else None
+            # Determine target (for TARGET_RANKING and FEATURE_SELECTION stages, target is the target)
+            target = target if stage_normalized in ["TARGET_RANKING", "FEATURE_SELECTION"] else None
             
             # Generate baseline key for drift comparison: (stage, view, target[, symbol])
-            # For FEATURE_SELECTION, use route_type as view (CROSS_SECTIONAL or INDIVIDUAL)
+            # For FEATURE_SELECTION, use view as view (CROSS_SECTIONAL or INDIVIDUAL)
             baseline_key = None
             if target:
-                # For TARGET_RANKING, view comes from route_type (CROSS_SECTIONAL, SYMBOL_SPECIFIC)
-                # For FEATURE_SELECTION, route_type is CROSS_SECTIONAL or INDIVIDUAL (maps to view)
+                # For TARGET_RANKING, view comes from view (CROSS_SECTIONAL, SYMBOL_SPECIFIC)
+                # For FEATURE_SELECTION, view is CROSS_SECTIONAL or INDIVIDUAL (maps to view)
                 if stage_normalized == "TARGET_RANKING" and view:
                     baseline_key = f"{stage_normalized}:{view}:{target}"
                     if symbol and view == "SYMBOL_SPECIFIC":
                         baseline_key += f":{symbol}"
-                elif stage_normalized == "FEATURE_SELECTION" and route_type:
-                    # Map route_type to view for FEATURE_SELECTION
-                    fs_view = route_type if route_type in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
+                elif stage_normalized == "FEATURE_SELECTION" and view:
+                    # Map view to view for FEATURE_SELECTION
+                    fs_view = view if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
                     baseline_key = f"{stage_normalized}:{fs_view}:{target}"
-                    if symbol and route_type == "INDIVIDUAL":
+                    if symbol and view == "SYMBOL_SPECIFIC":
                         baseline_key += f":{symbol}"
             
             logger.debug(f"📊 Writing metrics for stage={stage_normalized}, target={target}, view={view}, target_cohort_dir={target_cohort_dir}")
@@ -2047,7 +2065,7 @@ class ReproducibilityTracker:
                     )
                     metrics_written = True
                 else:
-                    logger.warning(f"Target cohort directory not available for metrics write: {item_name}/{stage_normalized}")
+                    logger.warning(f"Target cohort directory not available for metrics write: {target}/{stage_normalized}")
             except Exception as e:
                 logger.warning(f"⚠️  Failed to write metrics metadata to cohort directory: {e}")
                 import traceback
@@ -2142,7 +2160,7 @@ class ReproducibilityTracker:
                     additional_data['diff_telemetry'] = diff_telemetry_data
             except Exception as e:
                 # CRITICAL: Log at WARNING level so it's visible - this indicates a real problem
-                logger.warning(f"⚠️  Diff telemetry failed for {stage_normalized}:{item_name}: {e}")
+                logger.warning(f"⚠️  Diff telemetry failed for {stage_normalized}:{target}: {e}")
                 import traceback
                 logger.debug(f"Diff telemetry traceback: {traceback.format_exc()}")
                 # Don't re-raise - metadata.json and metrics.json should still be written even if diff telemetry fails
@@ -2197,7 +2215,7 @@ class ReproducibilityTracker:
         # Update index.parquet (use target_cohort_dir if available, otherwise None)
         try:
             self._update_index(
-                stage, item_name, route_type, symbol, model_family,
+                stage, target, view, symbol, model_family,
                 cohort_id, run_id_clean, full_metadata, metrics_data, target_cohort_dir  # Use target-first structure
             )
         except Exception as e:
@@ -2275,19 +2293,9 @@ class ReproducibilityTracker:
             # Don't re-raise - decision evaluation is optional
     
     def _get_git_commit(self) -> Optional[str]:
-        """Get current git commit hash."""
-        try:
-            import subprocess
-            from TRAINING.common.subprocess_utils import safe_subprocess_run
-            result = safe_subprocess_run(
-                ['git', 'rev-parse', '--short', 'HEAD'],
-                timeout=5
-            )
-            if result.returncode == 0:
-                return result.stdout.strip()
-        except Exception as e:
-            logger.debug(f"Failed to get git commit: {e}")
-        return None
+        """Get current git commit hash. Delegates to SST module."""
+        from TRAINING.common.utils.git_utils import get_git_commit
+        return get_git_commit(short=True)
     
     def _parse_run_started_at(self, run_id: str, created_at: Optional[str] = None) -> str:
         """
@@ -2404,8 +2412,8 @@ class ReproducibilityTracker:
     def _update_index(
         self,
         stage: str,
-        item_name: str,
-        route_type: Optional[str],
+        target: str,
+        view: Optional[str],
         symbol: Optional[str],
         model_family: Optional[str],
         cohort_id: str,
@@ -2427,12 +2435,12 @@ class ReproducibilityTracker:
         else:
             phase = stage.upper().replace("MODEL_TRAINING", "TRAINING")
         
-        # Normalize route_type
-        # For TARGET_RANKING, route_type is actually the view (CROSS_SECTIONAL, SYMBOL_SPECIFIC, LOSO)
-        if route_type and isinstance(route_type, RouteType):
-            mode = route_type.value
+        # Normalize view
+        # For TARGET_RANKING, view is actually the view (CROSS_SECTIONAL, SYMBOL_SPECIFIC, LOSO)
+        if view and isinstance(view, RouteType):
+            mode = view.value
         else:
-            mode = route_type.upper() if route_type else None
+            mode = view.upper() if view else None
         
         # For TARGET_RANKING, mode is the view (already handled in _get_cohort_dir)
         
@@ -2456,7 +2464,7 @@ class ReproducibilityTracker:
                             last_segment = df_cohort['segment_id'].iloc[-1]
                             last_row = df_cohort.iloc[-1]
                             # Check if identity fields changed
-                            identity_cols = ["data_fingerprint", "featureset_fingerprint", "config_hash", "git_commit"]
+                            identity_cols = ["data_fingerprint", "featureset_hash", "config_hash", "git_commit"]
                             identity_changed = False
                             for col in identity_cols:
                                 new_val = metadata.get(col) or (metrics.get(col) if col in metrics else None)
@@ -2484,9 +2492,9 @@ class ReproducibilityTracker:
         
         # Extract regression features for cohort-based tracking
         # Target ranking metrics
-        cs_auc = metrics.get("mean_score") or metrics.get("auc") or metrics.get("cs_auc")
-        cs_logloss = metrics.get("logloss") or metrics.get("cs_logloss")
-        cs_pr_auc = metrics.get("pr_auc") or metrics.get("cs_pr_auc")
+        auc = metrics.get("auc")
+        logloss = metrics.get("logloss")
+        pr_auc = metrics.get("pr_auc")
         
         # Symbol-specific metrics (from per_symbol_stats or metrics)
         per_symbol_stats = metadata.get("per_symbol_stats", {})
@@ -2518,28 +2526,27 @@ class ReproducibilityTracker:
         if sym_aucs and len(sym_aucs) > 0:
             try:
                 from CONFIG.config_loader import get_cfg
-                threshold = float(get_cfg("training.target_routing.cs_auc_threshold", default=0.65, config_name="training_config"))
+                threshold = float(get_cfg("training.target_routing.auc_threshold", default=0.65, config_name="training_config"))
             except Exception:
                 threshold = 0.65
             good_count = sum(1 for a in sym_aucs if a is not None and a >= threshold)
             frac_symbols_good = good_count / len(sym_aucs) if len(sym_aucs) > 0 else None
         
         # Route information (for stability tracking)
-        route = metadata.get("route_type") or metadata.get("view") or mode
+        # SST: 'view' is the canonical key
+        route = metadata.get("view") or mode
         route_changed = None  # Will be computed when comparing runs
         route_entropy = None  # Will be computed from route history
         
-        # Class balance (pos_rate)
-        pos_rate = metrics.get("pos_rate") or metrics.get("positive_rate") or metrics.get("class_balance")
+        # Class balance (pos_rate) - use SST accessor
+        pos_rate = extract_pos_rate(metrics)
         
-        # Feature counts
-        n_features_pre = metrics.get("n_features_pre") or metrics.get("features_safe") or metadata.get("features_safe")
-        n_features_post_prune = metrics.get("n_features_post_prune") or metrics.get("features_final") or metadata.get("features_final")
-        n_features_selected = metrics.get("n_features_selected") or metrics.get("n_selected") or n_features_post_prune
+        # Feature counts - use SST accessor
+        n_features_pre, n_features_post_prune, n_features_selected = extract_feature_counts(metrics, metadata)
         
         # Temporal safety (purge/embargo)
-        # Schema v2: Extract scalar from tagged unions (backward compatible with v1)
-        purge_minutes_used = cv_details.get("purge_minutes") or metadata.get("purge_minutes")
+        # Schema v2: Use SST accessor for purge_minutes
+        purge_minutes_used = extract_purge_minutes(metadata, cv_details)
         embargo_minutes_used = extract_embargo_minutes(metadata, cv_details)
         
         # Feature stability metrics (if available)
@@ -2551,12 +2558,12 @@ class ReproducibilityTracker:
         runtime_sec = metrics.get("runtime_sec") or metrics.get("train_time_sec") or metrics.get("wall_clock_time")
         peak_ram_mb = metrics.get("peak_ram_mb") or metrics.get("peak_memory_mb")
         # Schema v2: Extract scalar from tagged unions (backward compatible with v1)
-        cv_folds_executed = extract_folds(metadata, cv_details)
+        folds_executed = extract_folds(metadata, cv_details)
         
         # Identity fields (categorical, not regressed)
         data_fingerprint = metadata.get("data_fingerprint")
-        featureset_fingerprint = metadata.get("featureset_fingerprint") or metrics.get("featureset_fingerprint")
-        config_hash = metadata.get("cs_config_hash") or metadata.get("config_hash")
+        featureset_hash = metadata.get("featureset_hash") or metrics.get("featureset_hash")
+        config_hash = metadata.get("config_hash")
         git_commit = metadata.get("git_commit")
         
         # Create new row with all regression features
@@ -2564,26 +2571,26 @@ class ReproducibilityTracker:
             # Identity (categorical)
             "phase": phase,
             "mode": mode,
-            "target": item_name,
+            "target": target,
             "symbol": symbol,
             "model_family": model_family,
             "cohort_id": cohort_id,
             "run_id": run_id,
             "segment_id": segment_id,  # For decision-making (segments reset on identity breaks)
             "data_fingerprint": data_fingerprint,
-            "featureset_fingerprint": featureset_fingerprint,
+            "featureset_hash": featureset_hash,
             "config_hash": config_hash,
             "git_commit": git_commit,
             
             # Sample size
-            "N_effective": metadata.get("N_effective", 0),
+            "n_effective": metadata.get("n_effective", 0),
             "n_symbols": metadata.get("n_symbols", 0),
             
             # Target ranking metrics (Y variables for regression)
-            "auc": cs_auc,
-            "cs_auc": cs_auc,
-            "cs_logloss": cs_logloss,
-            "cs_pr_auc": cs_pr_auc,
+            "auc": auc,
+            "auc": auc,
+            "logloss": logloss,
+            "pr_auc": pr_auc,
             "sym_auc_mean": sym_auc_mean,
             "sym_auc_median": sym_auc_median,
             "sym_auc_iqr": sym_auc_iqr,
@@ -2609,7 +2616,7 @@ class ReproducibilityTracker:
             # Temporal safety (X variables)
             "purge_minutes_used": purge_minutes_used,
             "embargo_minutes_used": embargo_minutes_used,
-            "horizon_minutes": cv_details.get("horizon_minutes") or metadata.get("horizon_minutes"),
+            "horizon_minutes": _extract_horizon_minutes_sst(metadata, cv_details),
             
             # Feature stability (X variables)
             "jaccard_topK": jaccard_topK,
@@ -2619,7 +2626,7 @@ class ReproducibilityTracker:
             # Operational metrics (Y variables)
             "runtime_sec": runtime_sec,
             "peak_ram_mb": peak_ram_mb,
-            "cv_folds_executed": cv_folds_executed,
+            "folds_executed": folds_executed,
             
             # Timestamps
             "date": metadata.get("date_start"),
@@ -2717,9 +2724,9 @@ class ReproducibilityTracker:
     def _find_matching_cohort(
         self,
         stage: str,
-        item_name: str,
+        target: str,
         cohort_metadata: Dict[str, Any],
-        route_type: Optional[str] = None,
+        view: Optional[str] = None,
         symbol: Optional[str] = None,
         model_family: Optional[str] = None
     ) -> Optional[str]:
@@ -2742,10 +2749,10 @@ class ReproducibilityTracker:
             phase = stage.upper().replace("MODEL_TRAINING", "TRAINING")
             
             # Filter for same phase, target, mode, symbol, model_family
-            mask = (df['phase'] == phase) & (df['target'] == item_name)
+            mask = (df['phase'] == phase) & (df['target'] == target)
             
-            if route_type:
-                mask &= (df['mode'] == route_type.upper())
+            if view:
+                mask &= (df['mode'] == view.upper())
             if symbol:
                 mask &= (df['symbol'] == symbol)
             if model_family:
@@ -2757,11 +2764,11 @@ class ReproducibilityTracker:
                 return None
             
             # Try exact match first (same cohort_id)
-            # Derive view from route_type for cohort_id computation
+            # Derive view from view for cohort_id computation
             view_for_cohort = "CROSS_SECTIONAL"
-            if route_type:
-                rt_upper = route_type.upper()
-                if rt_upper in ("SYMBOL_SPECIFIC", "INDIVIDUAL"):
+            if view:
+                rt_upper = view.upper()
+                if rt_upper == "SYMBOL_SPECIFIC":
                     view_for_cohort = "SYMBOL_SPECIFIC"
             target_id = self._compute_cohort_id(cohort_metadata, view=view_for_cohort)
             exact_match = candidates[candidates['cohort_id'] == target_id]
@@ -2769,11 +2776,11 @@ class ReproducibilityTracker:
                 return target_id
             
             # Try close match (similar N, same config)
-            n_target = cohort_metadata.get('N_effective_cs', 0)
+            n_target = cohort_metadata.get('n_effective_cs', 0)
             n_ratio_threshold = self.n_ratio_threshold
             
             for _, row in candidates.iterrows():
-                n_existing = row.get('N_effective', 0)
+                n_existing = row.get('n_effective', 0)
                 if n_existing == 0:
                     continue
                 
@@ -2789,7 +2796,7 @@ class ReproducibilityTracker:
                             
                             # Check config match
                             config_match = (
-                                prev_meta.get('universe_id') == cohort_metadata.get('cs_config', {}).get('universe_id') and
+                                prev_meta.get('universe_sig') == cohort_metadata.get('cs_config', {}).get('universe_sig') and
                                 prev_meta.get('min_cs') == cohort_metadata.get('cs_config', {}).get('min_cs') and
                                 prev_meta.get('leakage_filter_version') == cohort_metadata.get('cs_config', {}).get('leakage_filter_version', 'v1')
                             )
@@ -2816,15 +2823,15 @@ class ReproducibilityTracker:
         Returns:
             (classification, abs_diff, rel_diff, z_score, stats_dict)
         """
-        prev_value = float(prev_run.get('mean_score', 0.0))
-        curr_value = float(curr_run.get('mean_score', 0.0))
+        prev_value = float(prev_run.get('auc', 0.0))
+        curr_value = float(curr_run.get('auc', 0.0))
         
         prev_std = float(prev_run.get('std_score', 0.0)) if prev_run.get('std_score') else None
         curr_std = float(curr_run.get('std_score', 0.0)) if curr_run.get('std_score') else None
         
-        # Get sample sizes
-        prev_n = prev_run.get('N_effective_cs') or prev_run.get('n_samples') or prev_run.get('sample_size')
-        curr_n = curr_run.get('N_effective_cs') or curr_run.get('n_samples') or curr_run.get('sample_size')
+        # Get sample sizes - use SST accessor
+        prev_n = extract_n_effective(prev_run)
+        curr_n = extract_n_effective(curr_run)
         
         if prev_n is None or curr_n is None:
             # Fallback to non-sample-adjusted comparison
@@ -2886,8 +2893,8 @@ class ReproducibilityTracker:
     def get_last_comparable_run(
         self,
         stage: str,
-        item_name: str,
-        route_type: Optional[str] = None,
+        target: str,
+        view: Optional[str] = None,
         symbol: Optional[str] = None,
         model_family: Optional[str] = None,
         cohort_id: Optional[str] = None,
@@ -2899,12 +2906,12 @@ class ReproducibilityTracker:
         
         Args:
             stage: Pipeline stage
-            item_name: Target/item name
-            route_type: Route type (CROSS_SECTIONAL/INDIVIDUAL)
+            target: Target/item name
+            view: Route type (CROSS_SECTIONAL/INDIVIDUAL)
             symbol: Symbol name (for INDIVIDUAL mode)
             model_family: Model family (for TRAINING)
             cohort_id: Cohort ID (if already computed)
-            current_N: Current N_effective (for N ratio check)
+            current_N: Current n_effective (for N ratio check)
             n_ratio_threshold: Override default N ratio threshold
         
         Returns:
@@ -2928,13 +2935,13 @@ class ReproducibilityTracker:
             phase = stage.upper().replace("MODEL_TRAINING", "TRAINING")
             
             # Filter for matching stage, target, mode, symbol, model_family
-            mask = (df['phase'] == phase) & (df['target'] == item_name)
+            mask = (df['phase'] == phase) & (df['target'] == target)
             
             # FIX: Handle null mode/symbol for backward compatibility
             # For FEATURE_SELECTION, require mode non-null (new runs must have mode)
             # For other stages, allow nulls (backward compatibility)
-            if route_type:
-                route_upper = route_type.upper()
+            if view:
+                route_upper = view.upper()
                 if stage.upper() == "FEATURE_SELECTION":
                     # For FEATURE_SELECTION, require mode non-null (new runs must have mode)
                     mask &= (df['mode'].notna()) & (df['mode'] == route_upper)
@@ -2946,13 +2953,13 @@ class ReproducibilityTracker:
             # For INDIVIDUAL mode, require symbol non-null
             # For CROSS_SECTIONAL, allow nulls (backward compatibility)
             if symbol:
-                if route_type and route_type.upper() == "INDIVIDUAL":
-                    # For INDIVIDUAL mode, require symbol non-null
+                if view and view.upper() == "SYMBOL_SPECIFIC":
+                    # For SYMBOL_SPECIFIC mode, require symbol non-null
                     mask &= (df['symbol'].notna()) & (df['symbol'] == symbol)
                 else:
                     # For CROSS_SECTIONAL, allow nulls (backward compatibility)
                     mask &= ((df['symbol'].isna()) | (df['symbol'] == symbol))
-            elif route_type and route_type.upper() == "CROSS_SECTIONAL":
+            elif view and view.upper() == "CROSS_SECTIONAL":
                 # For CROSS_SECTIONAL, require symbol is null (prevent history forking)
                 mask &= (df['symbol'].isna())
             
@@ -2978,7 +2985,7 @@ class ReproducibilityTracker:
             threshold = n_ratio_threshold or self.n_ratio_threshold
             if current_N is not None:
                 for _, row in candidates.iterrows():
-                    prev_n = row.get('N_effective', 0)
+                    prev_n = row.get('n_effective', 0)
                     if prev_n == 0:
                         continue
                     
@@ -2997,7 +3004,7 @@ class ReproducibilityTracker:
                                     with open(metadata_file, 'r') as f:
                                         metadata = json.load(f)
                                     metrics['cohort_id'] = metadata.get('cohort_id')
-                                    metrics['N_effective'] = metadata.get('N_effective')
+                                    metrics['n_effective'] = metadata.get('n_effective')
                                 return metrics
                         except Exception as e:
                             logger.debug(f"Failed to load previous run from {row['path']}: {e}")
@@ -3019,7 +3026,7 @@ class ReproducibilityTracker:
                             with open(metadata_file, 'r') as f:
                                 metadata = json.load(f)
                             metrics['cohort_id'] = metadata.get('cohort_id')
-                            metrics['N_effective'] = metadata.get('N_effective')
+                            metrics['n_effective'] = metadata.get('n_effective')
                         return metrics
                 except Exception as e:
                     logger.debug(f"Failed to load previous run from {latest['path']}: {e}")
@@ -3034,8 +3041,8 @@ class ReproducibilityTracker:
         curr_run: Dict[str, Any],
         cohort_metadata: Dict[str, Any],
         stage: str,
-        item_name: str,
-        route_type: Optional[str],
+        target: str,
+        view: Optional[str],
         symbol: Optional[str],
         model_family: Optional[str],
         cohort_id: str,
@@ -3046,29 +3053,30 @@ class ReproducibilityTracker:
         
         Explicitly links both runs (current + previous) for self-contained drift.json.
         """
-        prev_n = prev_run.get('N_effective_cs') or prev_run.get('N_effective') or prev_run.get('n_samples', 0)
-        curr_n = cohort_metadata.get('N_effective_cs', 0)
+        # Use SST accessor for sample size
+        prev_n = extract_n_effective(prev_run) or 0
+        curr_n = cohort_metadata.get('n_effective_cs', 0)
         
         n_ratio = min(prev_n, curr_n) / max(prev_n, curr_n) if max(prev_n, curr_n) > 0 else 0.0
         
         # Extract previous run metadata
         prev_run_id = prev_run.get('run_id') or prev_run.get('timestamp', 'unknown')
         prev_cohort_id = prev_run.get('cohort_id') or prev_run.get('cohort_metadata', {}).get('cohort_id', 'unknown')
-        prev_auc = float(prev_run.get('mean_score', 0.0))
+        prev_auc = float(prev_run.get('auc', 0.0))
         
         # Current run metadata
-        curr_auc = float(curr_run.get('mean_score', 0.0))
+        curr_auc = float(curr_run.get('auc', 0.0))
         
         if n_ratio < self.n_ratio_threshold:
-            # Defensive: handle both string and Enum for route_type/stage
-            route_type_str = None
-            if route_type:
-                if isinstance(route_type, str):
-                    route_type_str = route_type.upper()
-                elif hasattr(route_type, 'value'):
-                    route_type_str = route_type.value.upper() if isinstance(route_type.value, str) else str(route_type.value).upper()
+            # Defensive: handle both string and Enum for view/stage
+            view_str = None
+            if view:
+                if isinstance(view, str):
+                    view_str = view.upper()
+                elif hasattr(view, 'value'):
+                    view_str = view.value.upper() if isinstance(view.value, str) else str(view.value).upper()
                 else:
-                    route_type_str = str(route_type).upper()
+                    view_str = str(view).upper()
             
             stage_str = stage
             if isinstance(stage, str):
@@ -3081,24 +3089,24 @@ class ReproducibilityTracker:
             return {
                 "schema_version": REPRODUCIBILITY_SCHEMA_VERSION,
                 "stage": stage_str,
-                "route_type": route_type_str,
-                "target": item_name,
+                "view": view_str,
+                "target": target,
                 "symbol": symbol,
                 "model_family": model_family,
                 "current": {
                     "run_id": run_id,
                     "cohort_id": cohort_id,
-                    "N_effective": curr_n,
+                    "n_effective": curr_n,
                     "auc": curr_auc
                 },
                 "previous": {
                     "run_id": prev_run_id,
                     "cohort_id": prev_cohort_id,
-                    "N_effective": prev_n,
+                    "n_effective": prev_n,
                     "auc": prev_auc
                 },
                 "status": "INCOMPARABLE",
-                "reason": f"N_effective ratio={n_ratio:.3f} ({prev_n} vs {curr_n}) < {self.n_ratio_threshold}",
+                "reason": f"n_effective ratio={n_ratio:.3f} ({prev_n} vs {curr_n}) < {self.n_ratio_threshold}",
                 "n_ratio": n_ratio,
                 "threshold": self.n_ratio_threshold,
                 "created_at": datetime.now().isoformat()
@@ -3129,15 +3137,15 @@ class ReproducibilityTracker:
         else:
             reason = f"n_ratio={n_ratio:.3f}, abs_diff={abs_diff:.4f}"
         
-        # Defensive: handle both string and Enum for route_type
-        route_type_str = None
-        if route_type:
-            if isinstance(route_type, str):
-                route_type_str = route_type.upper()
-            elif hasattr(route_type, 'value'):
-                route_type_str = route_type.value.upper() if isinstance(route_type.value, str) else str(route_type.value).upper()
+        # Defensive: handle both string and Enum for view
+        view_str = None
+        if view:
+            if isinstance(view, str):
+                view_str = view.upper()
+            elif hasattr(view, 'value'):
+                view_str = view.value.upper() if isinstance(view.value, str) else str(view.value).upper()
             else:
-                route_type_str = str(route_type).upper()
+                view_str = str(view).upper()
         
         # Defensive: handle both string and Enum for stage
         stage_str = stage
@@ -3151,20 +3159,20 @@ class ReproducibilityTracker:
         return {
             "schema_version": REPRODUCIBILITY_SCHEMA_VERSION,
             "stage": stage_str,
-            "route_type": route_type_str,
-            "target": item_name,
+            "view": view_str,
+            "target": target,
             "symbol": symbol,
             "model_family": model_family,
             "current": {
                 "run_id": run_id,
                 "cohort_id": cohort_id,
-                "N_effective": curr_n,
+                "n_effective": curr_n,
                 "auc": curr_auc
             },
             "previous": {
                 "run_id": prev_run_id,
                 "cohort_id": prev_cohort_id,
-                "N_effective": prev_n,
+                "n_effective": prev_n,
                 "auc": prev_auc
             },
             "delta_auc": curr_auc - prev_auc,
@@ -3181,10 +3189,10 @@ class ReproducibilityTracker:
     def log_comparison(
         self,
         stage: str,
-        item_name: str,
+        target: str,
         metrics: Dict[str, Any],
         additional_data: Optional[Dict[str, Any]] = None,
-        route_type: Optional[str] = None,
+        view: Optional[str] = None,
         symbol: Optional[str] = None,
         model_family: Optional[str] = None,
         cohort_metadata: Optional[Dict[str, Any]] = None  # NEW: Allow passing pre-extracted cohort_metadata
@@ -3202,13 +3210,17 @@ class ReproducibilityTracker:
         
         Args:
             stage: Pipeline stage name (e.g., "target_ranking", "feature_selection")
-            item_name: Name of the item (e.g., target name, symbol name)
+            target: Name of the item (e.g., target name, symbol name)
             metrics: Dictionary of metrics to track and compare
             additional_data: Optional additional data to store with the run
-            route_type: Optional route type (e.g., "CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "INDIVIDUAL")
+            view: DEPRECATED - use `view` instead
             symbol: Optional symbol name (for symbol-specific views)
             model_family: Optional model family (for training stage)
+            view: Modeling granularity ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
         """
+        # SST: view takes precedence over view
+        if view is not None:
+            view = view
         try:
             # Extract cohort metadata if available
             # CRITICAL: If cohort_metadata is already provided (e.g., from log_run()), use it directly
@@ -3217,7 +3229,7 @@ class ReproducibilityTracker:
                 try:
                     cohort_metadata = self._extract_cohort_metadata(metrics, additional_data)
                 except Exception as e:
-                    logger.warning(f"Failed to extract cohort metadata for {stage}:{item_name}: {e}. Falling back to legacy mode.")
+                    logger.warning(f"Failed to extract cohort metadata for {stage}:{target}: {e}. Falling back to legacy mode.")
                     logger.debug(f"Cohort metadata extraction traceback: {traceback.format_exc()}")
                     cohort_metadata = None
             
@@ -3226,11 +3238,11 @@ class ReproducibilityTracker:
             if self.cohort_aware and not use_cohort_aware:
                 # Use INFO level so it's visible - this is important for debugging
                 main_logger = _get_main_logger()
-                msg = (f"⚠️  Reproducibility: Cohort-aware mode enabled (default) but insufficient metadata for {stage}:{item_name}. "
+                msg = (f"⚠️  Reproducibility: Cohort-aware mode enabled (default) but insufficient metadata for {stage}:{target}. "
                        f"Falling back to legacy mode. "
                        f"Metrics keys: {list(metrics.keys())}, "
                        f"Additional data keys: {list(additional_data.keys()) if additional_data else 'None'}. "
-                       f"To enable cohort-aware mode, pass N_effective_cs, n_symbols, date_range, and cs_config in metrics/additional_data.")
+                       f"To enable cohort-aware mode, pass n_effective_cs, n_symbols, date_range, and cs_config in metrics/additional_data.")
                 if main_logger != logger:
                     main_logger.info(msg)
                 else:
@@ -3238,35 +3250,35 @@ class ReproducibilityTracker:
             elif use_cohort_aware:
                 # Log when cohort-aware mode is successfully used
                 main_logger = _get_main_logger()
-                n_info = f"N={cohort_metadata.get('N_effective_cs', '?')}, symbols={cohort_metadata.get('n_symbols', '?')}"
-                msg = f"✅ Reproducibility: Using cohort-aware mode for {stage}:{item_name} ({n_info})"
+                n_info = f"N={cohort_metadata.get('n_effective_cs', '?')}, symbols={cohort_metadata.get('n_symbols', '?')}"
+                msg = f"✅ Reproducibility: Using cohort-aware mode for {stage}:{target} ({n_info})"
                 if main_logger != logger:
                     main_logger.debug(msg)
                 else:
                     logger.debug(msg)
             
-            # Extract route_type, symbol, model_family
+            # Extract view, symbol, model_family
             # Use provided parameters if available, otherwise extract from additional_data
-            # For TARGET_RANKING, route_type comes from "view" field in additional_data
-            # For FEATURE_SELECTION, map view to route_type (CROSS_SECTIONAL → CROSS_SECTIONAL, SYMBOL_SPECIFIC → INDIVIDUAL)
-            if route_type is None:
+            # For TARGET_RANKING, view comes from "view" field in additional_data
+            # For FEATURE_SELECTION, map view to view (CROSS_SECTIONAL → CROSS_SECTIONAL, SYMBOL_SPECIFIC → INDIVIDUAL)
+            if view is None:
                 if stage.upper() == "TARGET_RANKING":
-                    route_type = additional_data.get("view") if additional_data else None
-                    if route_type:
-                        route_type = route_type.upper()  # Normalize to uppercase
+                    view = additional_data.get("view") if additional_data else None
+                    if view:
+                        view = view.upper()  # Normalize to uppercase
                 elif stage.upper() == "FEATURE_SELECTION":
-                    # FIX: Map view to route_type for FEATURE_SELECTION (ensures proper metrics scoping)
+                    # FIX: Map view to view for FEATURE_SELECTION (ensures proper metrics scoping)
                     view = additional_data.get("view") if additional_data else None
                     if view:
                         if view.upper() == "CROSS_SECTIONAL":
-                            route_type = "CROSS_SECTIONAL"
+                            view = "CROSS_SECTIONAL"
                         elif view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
-                            route_type = "INDIVIDUAL"  # SYMBOL_SPECIFIC maps to INDIVIDUAL for FEATURE_SELECTION
-                    if not route_type:
+                            view = "SYMBOL_SPECIFIC"
+                    if not view:
                         # Fallback to extraction method
-                        route_type = self._extract_route_type(additional_data)
+                        view = self._extract_view(additional_data)
                 else:
-                    route_type = self._extract_route_type(additional_data) if stage.lower() in ["feature_selection", "model_training", "training"] else None
+                    view = self._extract_view(additional_data) if stage.lower() in ["feature_selection", "model_training", "training"] else None
             
             if symbol is None:
                 symbol = self._extract_symbol(additional_data)
@@ -3277,27 +3289,27 @@ class ReproducibilityTracker:
             if use_cohort_aware:
                 # Cohort-aware path: find matching cohort
                 main_logger = _get_main_logger()
-                n_info = f"N={cohort_metadata.get('N_effective_cs', '?')}, symbols={cohort_metadata.get('n_symbols', '?')}"
+                n_info = f"N={cohort_metadata.get('n_effective_cs', '?')}, symbols={cohort_metadata.get('n_symbols', '?')}"
                 if main_logger != logger:
-                    main_logger.debug(f"🔍 Reproducibility: Searching for matching cohort for {stage}:{item_name} ({n_info})")
+                    main_logger.debug(f"🔍 Reproducibility: Searching for matching cohort for {stage}:{target} ({n_info})")
                 else:
-                    logger.debug(f"🔍 Reproducibility: Searching for matching cohort for {stage}:{item_name} ({n_info})")
+                    logger.debug(f"🔍 Reproducibility: Searching for matching cohort for {stage}:{target} ({n_info})")
                 
-                cohort_id = self._find_matching_cohort(stage, item_name, cohort_metadata, route_type, symbol, model_family)
+                cohort_id = self._find_matching_cohort(stage, target, cohort_metadata, view, symbol, model_family)
                 
                 if cohort_id is None:
                     # New cohort - save as baseline
-                    # Derive view from route_type for cohort_id computation
+                    # Derive view from view for cohort_id computation
                     view_for_cohort = "CROSS_SECTIONAL"
-                    if route_type:
-                        rt_upper = route_type.upper()
-                        if rt_upper in ("SYMBOL_SPECIFIC", "INDIVIDUAL"):
+                    if view:
+                        rt_upper = view.upper()
+                        if rt_upper == "SYMBOL_SPECIFIC":
                             view_for_cohort = "SYMBOL_SPECIFIC"
                     cohort_id = self._compute_cohort_id(cohort_metadata, view=view_for_cohort)
                     run_data = {
                         "timestamp": datetime.now().isoformat(),
                         "stage": stage,
-                        "item_name": item_name,
+                        "target": target,
                         **{k: float(v) if isinstance(v, (int, float)) else v 
                            for k, v in metrics.items()},
                         "cohort_metadata": cohort_metadata
@@ -3306,17 +3318,17 @@ class ReproducibilityTracker:
                         run_data["additional_data"] = additional_data
                     
                     # FIX: Pass symbol and model_family to _save_to_cohort so symbol subdirectory is created
-                    self._save_to_cohort(stage, item_name, cohort_id, cohort_metadata, run_data, route_type, symbol, model_family, additional_data)
+                    self._save_to_cohort(stage, target, cohort_id, cohort_metadata, run_data, view, symbol, model_family, additional_data)
                     self._increment_mode_counter("COHORT_AWARE")
                     
                     main_logger = _get_main_logger()
-                    n_info = f"N={cohort_metadata['N_effective_cs']}, symbols={cohort_metadata['n_symbols']}"
+                    n_info = f"N={cohort_metadata['n_effective_cs']}, symbols={cohort_metadata['n_symbols']}"
                     if cohort_metadata.get('date_range', {}).get('start_ts'):
                         date_info = f", date_range={cohort_metadata['date_range']['start_ts']}→{cohort_metadata['date_range'].get('end_ts', '')}"
                     else:
                         date_info = ""
                     
-                    msg = f"📊 Reproducibility: First run for {stage}:{item_name} (new cohort: {n_info}{date_info})"
+                    msg = f"📊 Reproducibility: First run for {stage}:{target} (new cohort: {n_info}{date_info})"
                     if main_logger != logger:
                         main_logger.info(msg)
                     else:
@@ -3326,12 +3338,12 @@ class ReproducibilityTracker:
                 # Load previous run from index (only same cohort)
                 previous = self.get_last_comparable_run(
                     stage=stage,
-                    item_name=item_name,
-                    route_type=route_type,
+                    target=target,
+                    view=view,
                     symbol=symbol,
                     model_family=model_family,
                     cohort_id=cohort_id,  # Key: only same cohort
-                    current_N=cohort_metadata.get('N_effective_cs', 0),
+                    current_N=cohort_metadata.get('n_effective_cs', 0),
                     n_ratio_threshold=self.n_ratio_threshold
                 )
                 
@@ -3340,7 +3352,7 @@ class ReproducibilityTracker:
                     run_data = {
                         "timestamp": datetime.now().isoformat(),
                         "stage": stage,
-                        "item_name": item_name,
+                        "target": target,
                         **{k: float(v) if isinstance(v, (int, float)) else v 
                            for k, v in metrics.items()},
                         "cohort_metadata": cohort_metadata
@@ -3348,15 +3360,15 @@ class ReproducibilityTracker:
                     if additional_data:
                         run_data["additional_data"] = additional_data
                     
-                    self._save_to_cohort(stage, item_name, cohort_id, cohort_metadata, run_data, route_type, symbol, model_family, additional_data)
+                    self._save_to_cohort(stage, target, cohort_id, cohort_metadata, run_data, view, symbol, model_family, additional_data)
                     self._increment_mode_counter("COHORT_AWARE")
                     
                     main_logger = _get_main_logger()
-                    n_info = f"N={cohort_metadata['N_effective_cs']}, symbols={cohort_metadata['n_symbols']}"
-                    route_info = f" [{route_type}]" if route_type else ""
+                    n_info = f"N={cohort_metadata['n_effective_cs']}, symbols={cohort_metadata['n_symbols']}"
+                    route_info = f" [{view}]" if view else ""
                     symbol_info = f" symbol={symbol}" if symbol else ""
                     model_info = f" model={model_family}" if model_family else ""
-                    msg = f"📊 Reproducibility: First run in cohort for {stage}:{item_name}{route_info}{symbol_info}{model_info} ({n_info})"
+                    msg = f"📊 Reproducibility: First run in cohort for {stage}:{target}{route_info}{symbol_info}{model_info} ({n_info})"
                     if main_logger != logger:
                         main_logger.info(msg)
                     else:
@@ -3365,8 +3377,8 @@ class ReproducibilityTracker:
                 
                 # Extract metrics for comparison (only reached if previous exists)
                 metric_name = metrics.get("metric_name", "Score")
-                current_mean = float(metrics.get("mean_score", 0.0))
-                previous_mean = float(previous.get("mean_score", 0.0))
+                current_mean = float(metrics.get("auc", 0.0))
+                previous_mean = float(previous.get("auc", 0.0))
                 
                 current_std = float(metrics.get("std_score", 0.0))
                 previous_std = float(previous.get("std_score", 0.0))
@@ -3380,10 +3392,11 @@ class ReproducibilityTracker:
                 previous_composite = float(previous.get("composite_score", previous_mean))
                 
                 # Compute route_changed and route_entropy for regression tracking
-                prev_route = previous.get('route') or previous.get('route_type') or previous.get('view') or previous.get('mode')
-                curr_route = additional_data.get('route') if additional_data else None
+                # SST: 'view' is the canonical key
+                prev_route = previous.get('view')
+                curr_route = additional_data.get('view') if additional_data else None
                 if curr_route is None:
-                    curr_route = route_type or additional_data.get('view') if additional_data else None
+                    curr_route = view
                 route_changed = 1 if (prev_route and curr_route and prev_route != curr_route) else 0
                 
                 # Compute route_entropy from route history (if we have access to index)
@@ -3394,16 +3407,16 @@ class ReproducibilityTracker:
                     if index_file.exists():
                         df = pd.read_parquet(index_file)
                         # Get route history for this cohort/target
-                        # Derive view from route_type for cohort_id computation
+                        # Derive view from view for cohort_id computation
                         view_for_cohort = "CROSS_SECTIONAL"
-                        if route_type:
-                            rt_upper = route_type.upper()
-                            if rt_upper in ("SYMBOL_SPECIFIC", "INDIVIDUAL"):
+                        if view:
+                            rt_upper = view.upper()
+                            if rt_upper == "SYMBOL_SPECIFIC":
                                 view_for_cohort = "SYMBOL_SPECIFIC"
                         cohort_id = self._compute_cohort_id(cohort_metadata, view=view_for_cohort)
-                        mask = (df['cohort_id'] == cohort_id) & (df['target'] == item_name)
-                        if route_type:
-                            mask &= (df['mode'] == route_type.upper())
+                        mask = (df['cohort_id'] == cohort_id) & (df['target'] == target)
+                        if view:
+                            mask &= (df['mode'] == view.upper())
                         route_history = df[mask]['route'].dropna().tolist()
                         if len(route_history) >= 3:
                             # Compute entropy: -sum(p * log2(p))
@@ -3428,18 +3441,18 @@ class ReproducibilityTracker:
                 
                 curr_run_data = {
                     **metrics,
-                    'N_effective_cs': cohort_metadata.get('N_effective_cs'),
-                    'n_samples': cohort_metadata.get('N_effective_cs'),
-                    'sample_size': cohort_metadata.get('N_effective_cs'),
+                    'n_effective_cs': cohort_metadata.get('n_effective_cs'),
+                    'n_samples': cohort_metadata.get('n_effective_cs'),
+                    'sample_size': cohort_metadata.get('n_effective_cs'),
                     'route': curr_route,
                     'route_changed': route_changed,
                     'route_entropy': route_entropy
                 }
                 prev_run_data = {
                     **previous,
-                    'N_effective_cs': previous.get('cohort_metadata', {}).get('N_effective_cs') or previous.get('N_effective_cs'),
-                    'n_samples': previous.get('cohort_metadata', {}).get('N_effective_cs') or previous.get('n_samples'),
-                    'sample_size': previous.get('cohort_metadata', {}).get('N_effective_cs') or previous.get('sample_size'),
+                    'n_effective_cs': previous.get('cohort_metadata', {}).get('n_effective_cs') or previous.get('n_effective_cs'),
+                    'n_samples': previous.get('cohort_metadata', {}).get('n_effective_cs') or previous.get('n_samples'),
+                    'sample_size': previous.get('cohort_metadata', {}).get('n_effective_cs') or previous.get('sample_size'),
                     'route': prev_route
                 }
                 
@@ -3456,29 +3469,29 @@ class ReproducibilityTracker:
                 # Legacy path: use flat structure
                 main_logger = _get_main_logger()
                 if main_logger != logger:
-                    main_logger.info(f"📋 Reproducibility: Using legacy mode for {stage}:{item_name} (files in {self.log_file.parent.name}/)")
+                    main_logger.info(f"📋 Reproducibility: Using legacy mode for {stage}:{target} (files in {self.log_file.parent.name}/)")
                 else:
-                    logger.info(f"📋 Reproducibility: Using legacy mode for {stage}:{item_name} (files in {self.log_file.parent.name}/)")
+                    logger.info(f"📋 Reproducibility: Using legacy mode for {stage}:{target} (files in {self.log_file.parent.name}/)")
                 
-                previous = self.load_previous_run(stage, item_name)
+                previous = self.load_previous_run(stage, target)
                 
                 if previous is None:
                     # Use main logger if available for better visibility
                     main_logger = _get_main_logger()
                     # Only log once - use main logger if available, otherwise use module logger
                     if main_logger != logger:
-                        main_logger.info(f"📊 Reproducibility: First run for {stage}:{item_name} (no previous run to compare)")
+                        main_logger.info(f"📊 Reproducibility: First run for {stage}:{target} (no previous run to compare)")
                     else:
-                        logger.info(f"📊 Reproducibility: First run for {stage}:{item_name} (no previous run to compare)")
+                        logger.info(f"📊 Reproducibility: First run for {stage}:{target} (no previous run to compare)")
                     # Save current run for next time
-                    self.save_run(stage, item_name, metrics, additional_data)
+                    self.save_run(stage, target, metrics, additional_data)
                     self._increment_mode_counter("LEGACY")
                     return
                 
                 # Extract metrics for comparison (only reached if previous exists)
                 metric_name = metrics.get("metric_name", "Score")
-                current_mean = float(metrics.get("mean_score", 0.0))
-                previous_mean = float(previous.get("mean_score", 0.0))
+                current_mean = float(metrics.get("auc", 0.0))
+                previous_mean = float(previous.get("auc", 0.0))
                 
                 current_std = float(metrics.get("std_score", 0.0))
                 previous_std = float(previous.get("std_score", 0.0))
@@ -3538,7 +3551,7 @@ class ReproducibilityTracker:
             # Main status line
             cohort_info = ""
             if use_cohort_aware and cohort_metadata:
-                n_info = f"N={cohort_metadata['N_effective_cs']}, symbols={cohort_metadata['n_symbols']}"
+                n_info = f"N={cohort_metadata['n_effective_cs']}, symbols={cohort_metadata['n_symbols']}"
                 if mean_stats.get('sample_adjusted'):
                     cohort_info = f" [cohort: {n_info}, sample-adjusted]"
                 else:
@@ -3565,8 +3578,10 @@ class ReproducibilityTracker:
             prev_n_info = ""
             curr_n_info = ""
             if use_cohort_aware and cohort_metadata:
-                prev_n = previous.get('cohort_metadata', {}).get('N_effective_cs') or previous.get('N_effective_cs') or previous.get('n_samples')
-                curr_n = cohort_metadata.get('N_effective_cs')
+                from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective
+                cohort_meta = previous.get('cohort_metadata', {})
+                prev_n = extract_n_effective(cohort_meta) or extract_n_effective(previous)
+                curr_n = cohort_metadata.get('n_effective_cs')
                 if prev_n:
                     prev_n_info = f", N={int(prev_n)}"
                 if curr_n:
@@ -3609,7 +3624,7 @@ class ReproducibilityTracker:
                 run_data = {
                     "timestamp": datetime.now().isoformat(),
                     "stage": stage,
-                    "item_name": item_name,
+                    "target": target,
                     **{k: float(v) if isinstance(v, (int, float)) else v 
                        for k, v in metrics.items()},
                     "cohort_metadata": cohort_metadata
@@ -3617,14 +3632,14 @@ class ReproducibilityTracker:
                 if additional_data:
                     run_data["additional_data"] = additional_data
                 
-                # Derive view from route_type for cohort_id computation
+                # Derive view from view for cohort_id computation
                 view_for_cohort = "CROSS_SECTIONAL"
-                if route_type:
-                    rt_upper = route_type.upper()
-                    if rt_upper in ("SYMBOL_SPECIFIC", "INDIVIDUAL"):
+                if view:
+                    rt_upper = view.upper()
+                    if rt_upper == "SYMBOL_SPECIFIC":
                         view_for_cohort = "SYMBOL_SPECIFIC"
                 cohort_id = self._compute_cohort_id(cohort_metadata, view=view_for_cohort)
-                self._save_to_cohort(stage, item_name, cohort_id, cohort_metadata, run_data, route_type, symbol, model_family, additional_data)
+                self._save_to_cohort(stage, target, cohort_id, cohort_metadata, run_data, view, symbol, model_family, additional_data)
                 self._increment_mode_counter("COHORT_AWARE")
                 
                 # Compute trend analysis for this series (if enough runs exist)
@@ -3648,7 +3663,7 @@ class ReproducibilityTracker:
                             # Find trend for this series
                             for series_key_str, trend_list in all_trends.items():
                                 # Check if this series matches
-                                if any(t.series_key.target == item_name and 
+                                if any(t.series_key.target == target and 
                                        t.series_key.stage == stage_normalized for t in trend_list):
                                     # Write trend.json to cohort directory (similar to metadata.json and metrics.json)
                                     if cohort_dir and cohort_dir.exists():
@@ -3656,16 +3671,16 @@ class ReproducibilityTracker:
                                             trend_analyzer.write_cohort_trend(
                                                 cohort_dir=cohort_dir,
                                                 stage=stage_normalized,
-                                                target=item_name,
+                                                target=target,
                                                 trends={series_key_str: trend_list}  # Pass pre-computed trends
                                             )
                                         except Exception as e:
                                             logger.debug(f"Failed to write trend.json: {e}")
                                     
                                     # Find trend for primary metric
-                                    primary_metric = metrics.get("metric_name", "mean_score")
+                                    primary_metric = metrics.get("metric_name", "auc")
                                     for trend in trend_list:
-                                        if trend.metric_name in ["auc_mean", "mean_score", primary_metric.lower()] if primary_metric else True:
+                                        if trend.metric_name in ["auc_mean", "auc", primary_metric.lower()] if primary_metric else True:
                                             if trend.status == "ok":
                                                 slope_str = f"{trend.slope_per_day:+.6f}" if trend.slope_per_day else "N/A"
                                                 main_logger = _get_main_logger()
@@ -3717,7 +3732,7 @@ class ReproducibilityTracker:
                     try:
                         drift_data = self._compute_drift(
                             previous, run_data, cohort_metadata,
-                            stage, item_name, route_type, symbol, model_family,
+                            stage, target, view, symbol, model_family,
                             cohort_id, run_id_clean
                         )
                         # Write drift.json to target-first structure only
@@ -3726,13 +3741,13 @@ class ReproducibilityTracker:
                                 get_target_reproducibility_dir, ensure_target_structure
                             )
                             base_output_dir = self._repro_base_dir
-                            ensure_target_structure(base_output_dir, item_name)
-                            target_repro_dir = get_target_reproducibility_dir(base_output_dir, item_name)
+                            ensure_target_structure(base_output_dir, target)
+                            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
                             
                             # Determine view
-                            view = route_type.upper() if route_type else "CROSS_SECTIONAL"
-                            if view == "INDIVIDUAL":
-                                view = "SYMBOL_SPECIFIC"
+                            view = view.upper() if view else "CROSS_SECTIONAL"
+                            if view not in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+                                view = "SYMBOL_SPECIFIC"  # Normalize legacy values
                             
                             if view == "SYMBOL_SPECIFIC" and symbol:
                                 target_cohort_dir = target_repro_dir / view / f"symbol={symbol}" / f"cohort={cohort_id}"
@@ -3752,7 +3767,7 @@ class ReproducibilityTracker:
                             logger.debug(f"Could not write drift.json to target-first structure: {e}")
                             # Don't re-raise - drift file failure shouldn't break the run
                     except Exception as e:
-                        logger.warning(f"Failed to compute drift for {stage}:{item_name}: {e}")
+                        logger.warning(f"Failed to compute drift for {stage}:{target}: {e}")
                         logger.debug(f"Drift computation traceback: {traceback.format_exc()}")
             else:
                 # CRITICAL: Even in legacy mode, try to write metadata.json and metrics.json to cohort directory
@@ -3760,10 +3775,10 @@ class ReproducibilityTracker:
                 # Build minimal cohort metadata from available data
                 minimal_cohort_metadata = {}
                 if metrics:
-                    # Try to extract N_effective from metrics
-                    n_effective = metrics.get('N_effective_cs') or metrics.get('n_samples') or metrics.get('sample_size')
+                    # Try to extract n_effective from metrics - use SST accessor
+                    n_effective = extract_n_effective(metrics)
                     if n_effective:
-                        minimal_cohort_metadata['N_effective_cs'] = int(n_effective)
+                        minimal_cohort_metadata['n_effective_cs'] = int(n_effective)
                 
                 if additional_data:
                     n_symbols = additional_data.get('n_symbols')
@@ -3793,20 +3808,20 @@ class ReproducibilityTracker:
                         }
                 
                 # If we have minimal cohort metadata, try to write to cohort directory
-                if minimal_cohort_metadata.get('N_effective_cs'):
+                if minimal_cohort_metadata.get('n_effective_cs'):
                     try:
                         # Compute cohort_id from minimal metadata
-                        # Derive view from route_type for cohort_id computation
+                        # Derive view from view for cohort_id computation
                         view_for_cohort = "CROSS_SECTIONAL"
-                        if route_type:
-                            rt_upper = route_type.upper()
-                            if rt_upper in ("SYMBOL_SPECIFIC", "INDIVIDUAL"):
+                        if view:
+                            rt_upper = view.upper()
+                            if rt_upper == "SYMBOL_SPECIFIC":
                                 view_for_cohort = "SYMBOL_SPECIFIC"
                         minimal_cohort_id = self._compute_cohort_id(minimal_cohort_metadata, view=view_for_cohort)
                         run_data = {
                             "timestamp": datetime.now().isoformat(),
                             "stage": stage,
-                            "item_name": item_name,
+                            "target": target,
                             **{k: float(v) if isinstance(v, (int, float)) else v 
                                for k, v in metrics.items()},
                             "cohort_metadata": minimal_cohort_metadata
@@ -3815,25 +3830,25 @@ class ReproducibilityTracker:
                             run_data["additional_data"] = additional_data
                         
                         # Try to write to cohort directory (even with minimal metadata)
-                        self._save_to_cohort(stage, item_name, minimal_cohort_id, minimal_cohort_metadata, run_data, route_type, symbol, model_family, additional_data)
+                        self._save_to_cohort(stage, target, minimal_cohort_id, minimal_cohort_metadata, run_data, view, symbol, model_family, additional_data)
                         self._increment_mode_counter("LEGACY_WITH_COHORT_WRITE")
                         logger.info(f"📊 Reproducibility: Wrote metadata.json/metrics.json to cohort directory (legacy mode with minimal metadata)")
                     except Exception as e:
                         # If cohort write fails, fall back to legacy save_run
                         logger.warning(f"Failed to write to cohort directory in legacy mode: {e}. Falling back to legacy save_run.")
                         logger.debug(f"Cohort write traceback: {traceback.format_exc()}")
-                        self.save_run(stage, item_name, metrics, additional_data)
+                        self.save_run(stage, target, metrics, additional_data)
                         self._increment_mode_counter("LEGACY")
                 else:
                     # No cohort metadata available - use legacy save_run
-                    self.save_run(stage, item_name, metrics, additional_data)
+                    self.save_run(stage, target, metrics, additional_data)
                     self._increment_mode_counter("LEGACY")
         except Exception as e:
             # Final safety net - ensure log_comparison never raises
             error_type = "IO_ERROR" if isinstance(e, (IOError, OSError)) else "SERIALIZATION_ERROR" if isinstance(e, (json.JSONDecodeError, TypeError)) else "UNKNOWN_ERROR"
             
             logger.error(
-                f"Reproducibility tracking failed completely for {stage}:{item_name}. "
+                f"Reproducibility tracking failed completely for {stage}:{target}. "
                 f"error_type={error_type}, reason={str(e)}"
             )
             logger.debug(f"Full traceback: {traceback.format_exc()}")
@@ -3860,7 +3875,7 @@ class ReproducibilityTracker:
         
         Args:
             ctx: RunContext containing all run data and configuration
-            metrics: Dictionary of metrics (mean_score, std_score, etc.)
+            metrics: Dictionary of metrics (auc, std_score, etc.)
         
         Returns:
             Dict with audit_report and saved metadata paths
@@ -3873,7 +3888,7 @@ class ReproducibilityTracker:
             logger.warning("RunContext not available, falling back to legacy log_comparison API")
             self.log_comparison(
                 stage=ctx.stage,
-                item_name=ctx.target_name or ctx.target_column or "unknown",
+                target=ctx.target or ctx.target_column or "unknown",
                 metrics=metrics,
                 additional_data=ctx.to_dict()
             )
@@ -3928,7 +3943,7 @@ class ReproducibilityTracker:
                 min_cs=ctx.min_cs,
                 max_cs_samples=ctx.max_cs_samples,
                 leakage_filter_version=ctx.leakage_filter_version,
-                universe_id=ctx.universe_id,
+                universe_sig=ctx.universe_sig,
                 compute_data_fingerprint=True,
                 compute_per_symbol_stats=True
             )
@@ -3936,15 +3951,30 @@ class ReproducibilityTracker:
             # Format for tracker
             cohort_metrics, cohort_additional_data = format_for_reproducibility_tracker(cohort_metadata)
         else:
-            # NON_COHORT mode: use minimal metadata
+            # NON_COHORT mode: use minimal metadata but still preserve critical scope fields
+            # FIX: Extract universe_sig, view, and symbols from RunContext to prevent scope warnings
             cohort_metrics = {}
             cohort_additional_data = {}
+            cohort_metadata = None  # FIX: Initialize to None for NON_COHORT mode to avoid UnboundLocalError
+            # Build minimal cs_config with universe_sig for scope tracking
+            if ctx.universe_sig or ctx.symbols:
+                minimal_cs_config = {}
+                if ctx.universe_sig:
+                    minimal_cs_config['universe_sig'] = ctx.universe_sig
+                if ctx.min_cs is not None:
+                    minimal_cs_config['min_cs'] = ctx.min_cs
+                if ctx.max_cs_samples is not None:
+                    minimal_cs_config['max_cs_samples'] = ctx.max_cs_samples
+                cohort_additional_data['cs_config'] = minimal_cs_config
+                if ctx.symbols:
+                    cohort_additional_data['symbols'] = ctx.symbols
+                    cohort_additional_data['n_symbols'] = len(ctx.symbols)
         
         # Build additional_data with CV details
         additional_data = {
             **cohort_additional_data,
             "cv_method": ctx.cv_method,
-            "cv_folds": ctx.cv_folds,
+            "folds": ctx.folds,
             "horizon_minutes": ctx.horizon_minutes,
             "purge_minutes": ctx.purge_minutes,
             "embargo_minutes": ctx.embargo_minutes,
@@ -3965,7 +3995,7 @@ class ReproducibilityTracker:
         
         # Add label definition hash
         if ctx.target_column:
-            label_def_str = f"{ctx.target_column}|{ctx.target_name or ctx.target_column}"
+            label_def_str = f"{ctx.target_column}|{ctx.target or ctx.target_column}"
             additional_data["label_definition_hash"] = hashlib.sha256(label_def_str.encode()).hexdigest()[:16]
         
         # Add view metadata for TARGET_RANKING
@@ -3976,25 +4006,28 @@ class ReproducibilityTracker:
         # Also add symbol for SYMBOL_SPECIFIC/INDIVIDUAL views
         if hasattr(ctx, 'symbol') and ctx.symbol:
             additional_data["symbol"] = ctx.symbol
+        # FIX: Add universe_sig at top level for scope tracking
+        if hasattr(ctx, 'universe_sig') and ctx.universe_sig:
+            additional_data["universe_sig"] = ctx.universe_sig
         
         # Merge metrics
         metrics_with_cohort = {**metrics, **cohort_metrics}
         
         # 4. Load previous run metadata for comparison
-        # FIX: For FEATURE_SELECTION, map view to route_type (ensures proper metrics scoping)
-        route_type_for_cohort = ctx.route_type if hasattr(ctx, 'route_type') else None
+        # FIX: For FEATURE_SELECTION, map view to view (ensures proper metrics scoping)
+        view_for_cohort = ctx.view if hasattr(ctx, 'view') else None
         if ctx.stage == "target_ranking" and hasattr(ctx, 'view') and ctx.view:
-            route_type_for_cohort = ctx.view
+            view_for_cohort = ctx.view
         elif ctx.stage == "feature_selection" and hasattr(ctx, 'view') and ctx.view:
-            # Map view to route_type for FEATURE_SELECTION
+            # Map view to view for FEATURE_SELECTION
             # FIX: Use SYMBOL_SPECIFIC directly (not INDIVIDUAL) to match directory structure
             if ctx.view.upper() == "CROSS_SECTIONAL":
-                route_type_for_cohort = "CROSS_SECTIONAL"
-            elif ctx.view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
-                route_type_for_cohort = "SYMBOL_SPECIFIC"  # Use SYMBOL_SPECIFIC to match directory structure
+                view_for_cohort = "CROSS_SECTIONAL"
+            else:
+                view_for_cohort = "SYMBOL_SPECIFIC"
         
-        # Use route_type_for_cohort as view (it's already normalized to CROSS_SECTIONAL or SYMBOL_SPECIFIC)
-        view_for_cohort = route_type_for_cohort.upper() if route_type_for_cohort else "CROSS_SECTIONAL"
+        # Use view_for_cohort as view (it's already normalized to CROSS_SECTIONAL or SYMBOL_SPECIFIC)
+        view_for_cohort = view_for_cohort.upper() if view_for_cohort else "CROSS_SECTIONAL"
         if view_for_cohort not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
             view_for_cohort = "CROSS_SECTIONAL"  # Default if unexpected value
         cohort_id = self._compute_cohort_id(cohort_metadata, view=view_for_cohort)
@@ -4005,13 +4038,13 @@ class ReproducibilityTracker:
                 get_target_reproducibility_dir
             )
             base_output_dir = self._repro_base_dir
-            target_name = ctx.target_name or ctx.target_column or "unknown"
-            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name)
+            target = ctx.target or ctx.target_column or "unknown"
+            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
             
             # Determine view
-            view = route_type_for_cohort.upper() if route_type_for_cohort else "CROSS_SECTIONAL"
-            if view == "INDIVIDUAL":
-                view = "SYMBOL_SPECIFIC"
+            view = view_for_cohort.upper() if view_for_cohort else "CROSS_SECTIONAL"
+            if view not in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+                view = "SYMBOL_SPECIFIC"  # Normalize legacy values
             
             if view == "SYMBOL_SPECIFIC" and ctx.symbol:
                 target_cohort_dir = target_repro_dir / view / f"symbol={ctx.symbol}" / f"cohort={cohort_id}"
@@ -4021,9 +4054,9 @@ class ReproducibilityTracker:
             # Fallback to legacy structure if target-first doesn't exist
             legacy_cohort_dir = self._get_cohort_dir(
                 ctx.stage,
-                target_name,
+                target,
                 cohort_id,
-                route_type_for_cohort,
+                view_for_cohort,
                 ctx.symbol,
                 ctx.model_family
             )
@@ -4049,7 +4082,7 @@ class ReproducibilityTracker:
                     "horizon_minutes": ctx.horizon_minutes,
                     "purge_minutes": ctx.purge_minutes,
                     "embargo_minutes": ctx.embargo_minutes,
-                    "folds": ctx.cv_folds,
+                    "folds": ctx.folds,
                     "feature_lookback_max_minutes": ctx.feature_lookback_max_minutes
                 }
             }
@@ -4066,10 +4099,10 @@ class ReproducibilityTracker:
             audit_report = {"mode": "off", "violations": [], "warnings": []}
         
         # 6. Save using existing log_comparison (which handles cohort-aware saving)
-        # For TARGET_RANKING, pass view as route_type
-        route_type_for_log = ctx.route_type
+        # For TARGET_RANKING, pass view as view
+        view_for_log = ctx.view
         if ctx.stage == "target_ranking" and hasattr(ctx, 'view') and ctx.view:
-            route_type_for_log = ctx.view
+            view_for_log = ctx.view
         
         # CRITICAL: Wrap log_comparison in try/except to ensure we can still write audit report
         # even if log_comparison fails. log_comparison itself has exception handling, but
@@ -4079,10 +4112,10 @@ class ReproducibilityTracker:
             # This ensures we use the same metadata that was extracted from RunContext, avoiding redundant extraction
             self.log_comparison(
                 stage=ctx.stage,
-                item_name=ctx.target_name or ctx.target_column or "unknown",
+                target=ctx.target or ctx.target_column or "unknown",
                 metrics=metrics_with_cohort,
                 additional_data=additional_data,
-                route_type=route_type_for_log,  # Use view for TARGET_RANKING
+                view=view_for_log,  # SST: use view parameter
                 symbol=ctx.symbol,
                 cohort_metadata=cohort_metadata  # Pass pre-extracted cohort_metadata from RunContext
             )
@@ -4097,42 +4130,42 @@ class ReproducibilityTracker:
         audit_report_path = None
         cohort_dir = None
         try:
-            # FIX: Use view as route_type for TARGET_RANKING and FEATURE_SELECTION when getting cohort directory
-            route_type_for_cohort_dir = route_type_for_log  # Use same as log_comparison
+            # FIX: Use view as view for TARGET_RANKING and FEATURE_SELECTION when getting cohort directory
+            view_for_cohort_dir = view_for_log  # Use same as log_comparison
             if ctx.stage == "target_ranking" and hasattr(ctx, 'view') and ctx.view:
-                route_type_for_cohort_dir = ctx.view
+                view_for_cohort_dir = ctx.view
             elif ctx.stage == "feature_selection" and hasattr(ctx, 'view') and ctx.view:
-                # Map view to route_type for FEATURE_SELECTION
+                # Map view to view for FEATURE_SELECTION
                 # FIX: Use SYMBOL_SPECIFIC directly (not INDIVIDUAL) to match directory structure
                 if ctx.view.upper() == "CROSS_SECTIONAL":
-                    route_type_for_cohort_dir = "CROSS_SECTIONAL"
-                elif ctx.view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
-                    route_type_for_cohort_dir = "SYMBOL_SPECIFIC"  # Use SYMBOL_SPECIFIC to match directory structure
+                    view_for_cohort_dir = "CROSS_SECTIONAL"
+                else:
+                    view_for_cohort_dir = "SYMBOL_SPECIFIC"
             
             # Use target-first structure
             from TRAINING.orchestration.utils.target_first_paths import (
                 get_target_reproducibility_dir, ensure_target_structure
             )
             base_output_dir = self._repro_base_dir
-            target_name = ctx.target_name or ctx.target_column or "unknown"
-            ensure_target_structure(base_output_dir, target_name)
-            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_name)
+            target = ctx.target or ctx.target_column or "unknown"
+            ensure_target_structure(base_output_dir, target)
+            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
             
-            # Determine view - use resolved_mode from run context (SST) if available
-            view = route_type_for_cohort_dir.upper() if route_type_for_cohort_dir else "CROSS_SECTIONAL"
-            if view == "INDIVIDUAL":
-                view = "SYMBOL_SPECIFIC"
+            # Determine view - use view from run context (SST) if available
+            view = view_for_cohort_dir.upper() if view_for_cohort_dir else "CROSS_SECTIONAL"
+            if view not in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+                view = "SYMBOL_SPECIFIC"  # Normalize legacy values
             
-            # Try to load resolved_mode from run context (SST) and use it if available
+            # Try to load view from run context (SST) and use it if available
             try:
-                from TRAINING.orchestration.utils.run_context import get_resolved_mode
-                resolved_mode = get_resolved_mode(self._repro_base_dir)
-                if resolved_mode:
-                    # Use resolved_mode instead of inferred view
-                    view = resolved_mode
-                    logger.debug(f"Using resolved_mode={resolved_mode} from run context (SST) for cohort directory")
+                from TRAINING.orchestration.utils.run_context import get_view
+                view = get_view(self._repro_base_dir)
+                if view:
+                    # Use view instead of inferred view
+                    view = view
+                    logger.debug(f"Using view={view} from run context (SST) for cohort directory")
             except Exception as e:
-                logger.debug(f"Could not load resolved_mode from run context: {e}, using inferred view={view}")
+                logger.debug(f"Could not load view from run context: {e}, using inferred view={view}")
             
             if view == "SYMBOL_SPECIFIC" and ctx.symbol:
                 target_cohort_dir = target_repro_dir / view / f"symbol={ctx.symbol}" / f"cohort={cohort_id}"
@@ -4142,9 +4175,9 @@ class ReproducibilityTracker:
             # Fallback to legacy for reading only
             legacy_cohort_dir = self._get_cohort_dir(
                 ctx.stage,
-                target_name,
+                target,
                 cohort_id,
-                route_type_for_cohort_dir,
+                view_for_cohort_dir,
                 ctx.symbol,
                 ctx.model_family
             )
@@ -4179,13 +4212,13 @@ class ReproducibilityTracker:
                         "cohort_id": cohort_id,
                         "run_id": ctx.run_id if hasattr(ctx, 'run_id') else None,
                         "stage": ctx.stage,
-                        "route_type": route_type_for_cohort_dir,
+                        "view": view_for_cohort_dir,
                         "view": ctx.view if hasattr(ctx, 'view') else None,
-                        "target_name": ctx.target_name or ctx.target_column or "unknown",  # Changed from "target" to "target_name"
-                        "n_effective": cohort_metadata.get('N_effective_cs', 0) if cohort_metadata else 0,  # Changed from "N_effective" to "n_effective"
+                        "target": ctx.target or ctx.target_column or "unknown",  # Changed from "target" to "target"
+                        "n_effective": cohort_metadata.get('n_effective_cs', 0) if cohort_metadata else 0,  # Changed from "n_effective" to "n_effective"
                         "n_symbols": cohort_metadata.get('n_symbols', 0) if cohort_metadata else 0,
-                        "date_range_start": cohort_metadata.get('date_range', {}).get('start_ts') if cohort_metadata else None,  # Changed from "date_start" to "date_range_start"
-                        "date_range_end": cohort_metadata.get('date_range', {}).get('end_ts') if cohort_metadata else None,  # Changed from "date_end" to "date_range_end"
+                        "date_start": cohort_metadata.get('date_range', {}).get('start_ts') if cohort_metadata else None,  # Changed from "date_start" to "date_start"
+                        "date_end": cohort_metadata.get('date_range', {}).get('end_ts') if cohort_metadata else None,  # Changed from "date_end" to "date_end"
                         "created_at": datetime.now().isoformat()
                     }
                     
@@ -4209,7 +4242,7 @@ class ReproducibilityTracker:
                             cohort_dir=target_cohort_dir,  # Use target-first, not legacy
                             stage=ctx.stage,
                             view=ctx.view if hasattr(ctx, 'view') else "UNKNOWN",
-                            target=ctx.target_name or ctx.target_column or "unknown",
+                            target=ctx.target or ctx.target_column or "unknown",
                             symbol=ctx.symbol if hasattr(ctx, 'symbol') else None,
                             run_id=minimal_metadata.get("run_id") or datetime.now().isoformat(),
                             metrics=minimal_metrics
@@ -4266,7 +4299,7 @@ class ReproducibilityTracker:
                     series_key_str = None
                     for sk, trend_list in all_trends.items():
                         # Check if this series matches
-                        if any(t.series_key.target == (ctx.target_name or ctx.target_column) and 
+                        if any(t.series_key.target == (ctx.target or ctx.target_column) and 
                                t.series_key.stage == ctx.stage.upper() for t in trend_list):
                             series_key_str = sk
                             break
@@ -4277,11 +4310,11 @@ class ReproducibilityTracker:
                         # Write trend.json to cohort directory (similar to metadata.json and metrics.json)
                         if cohort_dir and cohort_dir.exists():
                             try:
-                                target_name = ctx.target_name or ctx.target_column or "unknown"
+                                target = ctx.target or ctx.target_column or "unknown"
                                 trend_analyzer.write_cohort_trend(
                                     cohort_dir=cohort_dir,
                                     stage=ctx.stage.upper(),
-                                    target=target_name,
+                                    target=target,
                                     trends={series_key_str: trends}  # Pass pre-computed trends
                                 )
                                 
@@ -4303,7 +4336,7 @@ class ReproducibilityTracker:
                                     if results_dir and results_dir.name == "RESULTS":
                                         trend_analyzer.write_across_runs_timeseries(
                                             results_dir=results_dir,
-                                            target=target_name,
+                                            target=target,
                                             stage=ctx.stage.upper(),
                                             view=ctx.view if hasattr(ctx, 'view') else "CROSS_SECTIONAL"
                                         )
@@ -4321,11 +4354,11 @@ class ReproducibilityTracker:
                                 logger.debug(f"Failed to write trend.json: {e}")
                         
                         # Find trend for the primary metric
-                        primary_metric = metrics.get("metric_name", "mean_score")
+                        primary_metric = metrics.get("metric_name", "auc")
                         if primary_metric:
                             # Try to find matching metric trend
                             for trend in trends:
-                                if trend.metric_name in ["auc_mean", "mean_score", primary_metric.lower()]:
+                                if trend.metric_name in ["auc_mean", "auc", primary_metric.lower()]:
                                     if trend.status == "ok":
                                         trend_summary = {
                                             "slope_per_day": trend.slope_per_day,

@@ -63,9 +63,9 @@ class TransformerTrainer(BaseModelTrainer):
         # 3) Split only if no external validation provided
         if X_va is None or y_va is None:
             # Load test split params from config
-            test_size, random_state = self._get_test_split_params()
+            test_size, seed = self._get_test_split_params()
             X_tr, X_va, y_tr, y_va = train_test_split(
-                X_tr, y_tr, test_size=test_size, random_state=random_state
+                X_tr, y_tr, test_size=test_size, random_state=seed
             )
         
         # 4) Reshape for Transformer

@@ -161,7 +161,7 @@ def add_regime_feature(
     from sklearn.mixture import GaussianMixture
     
     if regime_config is None:
-        regime_config = {'n_components': 3, 'random_state': 42}
+        regime_config = {'n_components': 3, 'seed': 42}
     
     logger.info(f"\nAdding GMM regime feature (n_components={regime_config['n_components']})")
     

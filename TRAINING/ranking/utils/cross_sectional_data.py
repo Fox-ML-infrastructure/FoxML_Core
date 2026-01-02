@@ -14,36 +14,10 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Set, Any
 import logging
 import warnings
-import hashlib
+
+from TRAINING.common.utils.fingerprinting import _compute_feature_fingerprint
 
 logger = logging.getLogger(__name__)
-
-
-def _compute_feature_fingerprint(feature_names: List[str], set_invariant: bool = True) -> Tuple[str, str]:
-    """
-    Compute feature set fingerprints (set-invariant and order-sensitive).
-    
-    Args:
-        feature_names: List of feature names
-        set_invariant: If True, return set-invariant fingerprint (sorted). If False, return order-sensitive.
-    
-    Returns:
-        (set_fingerprint, order_fingerprint) tuple:
-        - set_fingerprint: Set-invariant fingerprint (sorted, for set equality checks)
-        - order_fingerprint: Order-sensitive fingerprint (for order-change detection)
-    """
-    feature_list = list(feature_names)
-    
-    # Set-invariant fingerprint (sorted, for set equality)
-    sorted_features = sorted(feature_list)
-    set_str = "\n".join(sorted_features)
-    set_fingerprint = hashlib.sha1(set_str.encode()).hexdigest()[:8]
-    
-    # Order-sensitive fingerprint (for order-change detection)
-    order_str = "\n".join(feature_list)
-    order_fingerprint = hashlib.sha1(order_str.encode()).hexdigest()[:8]
-    
-    return set_fingerprint, order_fingerprint
 
 
 def _log_feature_set(
@@ -233,8 +207,8 @@ def prepare_cross_sectional_data_for_ranking(
     feature_time_meta_map: Optional[Dict[str, Any]] = None,  # NEW: Optional map of feature_name -> FeatureTimeMeta
     base_interval_minutes: Optional[float] = None,  # NEW: Base training grid interval (for alignment)
     allow_single_symbol: bool = False,  # NEW: Allow single symbol for SYMBOL_SPECIFIC view
-    requested_mode: Optional[str] = None,  # NEW: Mode requested by caller/config
-    output_dir: Optional[Path] = None  # NEW: Output directory for persisting resolved_mode (SST)
+    requested_view: Optional[str] = None,  # SST: View requested by caller/config
+    output_dir: Optional[Path] = None  # NEW: Output directory for persisting view (SST)
 ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[List[str]], Optional[np.ndarray], Optional[np.ndarray], Optional[Dict[str, Any]]]:
     """
     Prepare cross-sectional data for ranking (simplified version of training pipeline).
@@ -372,70 +346,78 @@ def prepare_cross_sectional_data_for_ranking(
     
     # Compute universe signature for this symbol set
     from TRAINING.orchestration.utils.run_context import (
-        compute_universe_signature, get_resolved_mode_for_universe, save_run_context, validate_mode_contract
+        compute_universe_signature, get_view_for_universe, save_run_context, validate_view_contract
     )
     universe_sig = compute_universe_signature(loaded_symbols_list)
     symbols_sample = loaded_symbols_list[:3] if len(loaded_symbols_list) > 3 else loaded_symbols_list
     logger.info(f"🔑 Universe: sig={universe_sig} n_symbols={n_symbols_available} sample={symbols_sample}")
     
-    # Load existing resolved_mode for THIS universe only (not global)
+    # SST: Use requested_view if provided, fall back to deprecated requested_view
+    effective_requested_view = requested_view or requested_view
+    
+    # Load existing view for THIS universe only (not global)
     existing_entry = None
     if output_dir is not None:
         try:
-            existing_entry = get_resolved_mode_for_universe(output_dir, universe_sig)
+            existing_entry = get_view_for_universe(output_dir, universe_sig)
             if existing_entry:
-                logger.debug(f"Found cached mode for universe={universe_sig}: {existing_entry['resolved_mode']}")
+                # SST: Read view from entry
+                cached_view = existing_entry.get('view')
+                logger.debug(f"Found cached view for universe={universe_sig}: {cached_view}")
         except Exception as e:
             logger.debug(f"Could not load existing run context: {e}")
     
-    # Load mode policy from config
-    mode_policy = "auto"  # Default
+    # Load view policy from config (with backward compat for view_policy)
+    view_policy = "auto"  # Default
     auto_flip_min_symbols = RECOMMENDED_SYMBOLS  # Default
     try:
         from CONFIG.config_loader import get_cfg
-        mode_policy = get_cfg("training_config.routing.mode_policy", default="auto")
+        # New config keys (view_policy, requested_view) with fallback to old keys (view_policy, requested_view)
+        view_policy = get_cfg("training_config.routing.view_policy", 
+                              default=get_cfg("training_config.routing.view_policy", default="auto"))
         auto_flip_min_symbols = get_cfg("training_config.routing.auto_flip_min_symbols", default=RECOMMENDED_SYMBOLS)
-        if requested_mode is None:
-            requested_mode = get_cfg("training_config.routing.requested_mode", default=None)
+        if effective_requested_view is None:
+            effective_requested_view = get_cfg("training_config.routing.requested_view",
+                                     default=get_cfg("training_config.routing.requested_view", default=None))
     except Exception as e:
-        logger.debug(f"Could not load mode policy from config: {e}, using defaults")
+        logger.debug(f"Could not load view policy from config: {e}, using defaults")
     
-    # Determine resolved mode based on policy
+    # Determine resolved view based on policy
     # Only reuse if we have a cached entry for THIS universe
     if existing_entry:
-        # Reuse cached mode for this universe - reference stored original_reason directly (no nesting)
-        resolved_mode = existing_entry["resolved_mode"]
+        # Reuse cached view for this universe - reference stored original_reason directly (no nesting)
+        view = existing_entry.get('view')
         original_reason = existing_entry.get("original_reason", "N/A")
-        mode_reason = f"reusing cached mode for universe={universe_sig} (originally: {original_reason})"
-    elif mode_policy == "force":
-        # Force mode: use requested_mode exactly (no auto-flip)
-        if requested_mode is None:
-            logger.warning("mode_policy=force but requested_mode not set, defaulting to CROSS_SECTIONAL")
-            requested_mode = "CROSS_SECTIONAL"
-        resolved_mode = requested_mode
-        mode_reason = f"mode_policy=force, requested_mode={requested_mode}"
+        view_reason = f"reusing cached view for universe={universe_sig} (originally: {original_reason})"
+    elif view_policy == "force":
+        # Force view: use requested_view exactly (no auto-flip)
+        if effective_requested_view is None:
+            logger.warning("view_policy=force but requested_view not set, defaulting to CROSS_SECTIONAL")
+            effective_requested_view = "CROSS_SECTIONAL"
+        view = effective_requested_view
+        view_reason = f"view_policy=force, requested_view={effective_requested_view}"
     else:
         # Auto mode: resolve fresh based on panel size
         if n_symbols_available == 1:
-            if requested_mode and requested_mode != "SINGLE_SYMBOL_TS":
-                resolved_mode = requested_mode
-                mode_reason = f"n_symbols=1, using requested_mode={requested_mode} (per-symbol loop)"
+            if effective_requested_view and effective_requested_view != "SINGLE_SYMBOL_TS":
+                view = effective_requested_view
+                view_reason = f"n_symbols=1, using requested_view={effective_requested_view} (per-symbol loop)"
             else:
-                resolved_mode = "SINGLE_SYMBOL_TS"
-                mode_reason = "n_symbols=1"
+                view = "SINGLE_SYMBOL_TS"
+                view_reason = "n_symbols=1"
         elif n_symbols_available < auto_flip_min_symbols:
-            resolved_mode = "SYMBOL_SPECIFIC"
-            mode_reason = f"n_symbols={n_symbols_available} (small panel, < {auto_flip_min_symbols} recommended)"
+            view = "SYMBOL_SPECIFIC"
+            view_reason = f"n_symbols={n_symbols_available} (small panel, < {auto_flip_min_symbols} recommended)"
         else:
-            resolved_mode = "CROSS_SECTIONAL"
-            mode_reason = f"n_symbols={n_symbols_available} (full panel, >= {auto_flip_min_symbols})"
+            view = "CROSS_SECTIONAL"
+            view_reason = f"n_symbols={n_symbols_available} (full panel, >= {auto_flip_min_symbols})"
     
-    # Validate mode contract (only if we resolved a new mode, not cached)
+    # Validate view contract (only if we resolved a new view, not cached)
     if not existing_entry:
         try:
-            validate_mode_contract(resolved_mode, requested_mode, mode_policy)
+            validate_view_contract(view, effective_requested_view, view_policy)
         except ValueError as e:
-            logger.error(f"Mode contract validation failed: {e}")
+            logger.error(f"View contract validation failed: {e}")
             raise
     
     # Set data_scope based on current n_symbols_available (can vary per-symbol, non-immutable)
@@ -444,17 +426,17 @@ def prepare_cross_sectional_data_for_ranking(
     else:
         data_scope = "PANEL"
     
-    # Persist resolved_mode and data_scope to run context (SST)
-    # resolved_mode is immutable PER UNIVERSE, data_scope can be updated
+    # Persist view and data_scope to run context (SST)
+    # view is immutable PER UNIVERSE, data_scope can be updated
     if output_dir is not None:
         try:
             # For cached entries, pass the original_reason (not the "reusing..." message)
-            save_mode_reason = existing_entry["original_reason"] if existing_entry else mode_reason
+            save_view_reason = existing_entry["original_reason"] if existing_entry else view_reason
             save_run_context(
                 output_dir=output_dir,
-                requested_mode=requested_mode,
-                resolved_mode=resolved_mode,
-                mode_reason=save_mode_reason,
+                view=view,
+                requested_view=effective_requested_view,
+                view_reason=save_view_reason,
                 n_symbols=n_symbols_available,
                 data_scope=data_scope,
                 universe_signature=universe_sig,
@@ -464,14 +446,14 @@ def prepare_cross_sectional_data_for_ranking(
             logger.warning(f"Could not save run context: {e}")
     
     # Log requested vs effective (single authoritative line)
-    data_type_label = "Cross-sectional sampling" if resolved_mode == "CROSS_SECTIONAL" else "Panel data sampling"
+    data_type_label = "Cross-sectional sampling" if view == "CROSS_SECTIONAL" else "Panel data sampling"
     logger.info(
         f"📊 {data_type_label}: "
         f"requested_min_cs={min_cs} → effective_min_cs={effective_min_cs} "
         f"(reason={min_cs_reason}, n_symbols={n_symbols_available}), "
         f"max_cs_samples={max_cs_samples}"
     )
-    logger.info(f"📋 Mode resolution: requested_mode={requested_mode or 'N/A'}, resolved_mode={resolved_mode} (reason: {mode_reason})")
+    logger.info(f"📋 View resolution: requested_view={effective_requested_view or 'N/A'}, view={view} (reason: {view_reason})")
     
     # NEW: Multi-interval alignment support
     # If feature_time_meta_map and base_interval_minutes are provided, apply alignment
@@ -804,15 +786,22 @@ def prepare_cross_sectional_data_for_ranking(
     logger.info(f"   Removed {len(X) - len(X_clean)} rows due to cleaning")
     logger.info(f"   ⚠️  Note: NaN values preserved for CV-safe imputation (no leakage)")
     
-    # Store resolved mode and loader contract in a metadata dict (for telemetry)
+    # Store resolved view and loader contract in a metadata dict (for telemetry)
     # This will be extracted by callers and passed to reproducibility tracker
     resolved_config = {
-        'resolved_data_mode': resolved_mode,
-        'resolved_mode': resolved_mode,  # Alias for consistency (objective - immutable)
-        'requested_mode': requested_mode,
-        'mode_reason': mode_reason,
-        'mode_policy': mode_policy,
-        'data_scope': data_scope,  # NEW: Data scope (PANEL or SINGLE_SYMBOL) - can vary per-symbol
+        # SST canonical fields
+        'view': view,
+        'requested_view': effective_requested_view,
+        'view_reason': view_reason,
+        'view_policy': view_policy,
+        # DEPRECATED aliases (for backward compat)
+        'resolved_data_mode': view,  # DEPRECATED: Use view
+        'view': view,  # DEPRECATED: Use view
+        'requested_view': effective_requested_view,  # DEPRECATED: Use requested_view
+        'view_reason': view_reason,  # DEPRECATED: Use view_reason
+        'view_policy': view_policy,  # DEPRECATED: Use view_policy
+        # Other fields
+        'data_scope': data_scope,  # Data scope (PANEL or SINGLE_SYMBOL) - can vary per-symbol
         'n_symbols_loaded': n_symbols_available,
         'min_cs_required': min_cs,
         'effective_min_cs': effective_min_cs,

@@ -108,9 +108,9 @@ class MetricsWriter:
       "timestamp": "...",
       "stage": "...",
       "reproducibility_mode": "COHORT_AWARE",
-      "item_name": "...",
+      "target": "...",
       "metric_name": "...",
-      "mean_score": ...,
+      "auc": ...,
       ... (all metrics as flat keys)
     }
     
@@ -242,9 +242,9 @@ class MetricsWriter:
                 
                 # If we found a run directory, create reference pointer
                 if (base_output_dir / "targets").exists() or (base_output_dir / "REPRODUCIBILITY").exists():
-                    target_name_clean = target.replace('/', '_').replace('\\', '_')
-                    ensure_target_structure(base_output_dir, target_name_clean)
-                    target_metrics_dir = get_target_metrics_dir(base_output_dir, target_name_clean)
+                    target_clean = target.replace('/', '_').replace('\\', '_')
+                    ensure_target_structure(base_output_dir, target_clean)
+                    target_metrics_dir = get_target_metrics_dir(base_output_dir, target_clean)
                     
                     # Organize by view if multiple views exist
                     if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
@@ -300,9 +300,9 @@ class MetricsWriter:
           "timestamp": "...",
           "stage": "...",
           "reproducibility_mode": "COHORT_AWARE",
-          "item_name": "...",
+          "target": "...",
           "metric_name": "...",
-          "mean_score": ...,
+          "auc": ...,
           "std_score": ...,
           ... (all other metrics as flat keys)
         }
@@ -599,8 +599,8 @@ class MetricsWriter:
                     base_output_dir = base_output_dir.parent
                 
                 if (base_output_dir / "targets").exists():
-                    target_name_clean = target.replace('/', '_').replace('\\', '_')
-                    target_metrics_dir = get_target_metrics_dir(base_output_dir, target_name_clean)
+                    target_clean = target.replace('/', '_').replace('\\', '_')
+                    target_metrics_dir = get_target_metrics_dir(base_output_dir, target_clean)
                     if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
                         view_metrics_dir = target_metrics_dir / f"view={view}"
                         if view == "SYMBOL_SPECIFIC" and symbol:
@@ -666,10 +666,10 @@ class MetricsWriter:
             baseline_git_commit = baseline_metadata.get("git_commit") or baseline_data.get("git_commit")
             current_git_commit = current_metadata.get("git_commit") or self._get_git_commit()
             
-            baseline_config_hash = baseline_metadata.get("cs_config_hash") or baseline_metadata.get("config_hash")
-            current_config_hash = current_metadata.get("cs_config_hash") or current_metadata.get("config_hash")
+            baseline_config_hash = baseline_metadata.get("config_hash")
+            current_config_hash = current_metadata.get("config_hash")
             
-            # Compute data fingerprint (date range + N_effective + n_symbols)
+            # Compute data fingerprint (date range + n_effective + n_symbols)
             baseline_data_fingerprint = self._compute_data_fingerprint(baseline_metadata)
             current_data_fingerprint = self._compute_data_fingerprint(current_metadata)
             
@@ -913,7 +913,7 @@ class MetricsWriter:
         
         # Extract current fingerprints for matching
         current_seed = current_metadata.get("seed") if current_metadata else None
-        current_config_hash = current_metadata.get("cs_config_hash") or current_metadata.get("config_hash") if current_metadata else None
+        current_config_hash = current_metadata.get("config_hash") if current_metadata else None
         current_data_fingerprint = self._compute_data_fingerprint(current_metadata) if current_metadata else None
         
         # Find all cohort directories
@@ -940,7 +940,7 @@ class MetricsWriter:
             
             # Extract baseline fingerprints
             baseline_seed = baseline_metadata.get("seed")
-            baseline_config_hash = baseline_metadata.get("cs_config_hash") or baseline_metadata.get("config_hash")
+            baseline_config_hash = baseline_metadata.get("config_hash")
             baseline_data_fingerprint = self._compute_data_fingerprint(baseline_metadata)
             
             # Check if fingerprints match (all must match for determinism check)
@@ -1028,7 +1028,7 @@ class MetricsWriter:
         """
         Compute data fingerprint from metadata.
         
-        Fingerprint includes: date range, N_effective, n_symbols, universe_id
+        Fingerprint includes: date range, n_effective, n_symbols, universe_sig
         """
         try:
             import hashlib
@@ -1039,7 +1039,7 @@ class MetricsWriter:
             if date_start and date_end:
                 fingerprint_parts.append(f"dates:{date_start}:{date_end}")
             
-            n_effective = metadata.get("N_effective") or metadata.get("n_effective")
+            n_effective = metadata.get("n_effective")
             if n_effective is not None:
                 fingerprint_parts.append(f"n_eff:{n_effective}")
             
@@ -1047,9 +1047,9 @@ class MetricsWriter:
             if n_symbols is not None:
                 fingerprint_parts.append(f"n_sym:{n_symbols}")
             
-            universe_id = metadata.get("universe_id")
-            if universe_id:
-                fingerprint_parts.append(f"universe:{universe_id}")
+            universe_sig = metadata.get("universe_sig")
+            if universe_sig:
+                fingerprint_parts.append(f"universe:{universe_sig}")
             
             if fingerprint_parts:
                 fingerprint_str = "|".join(fingerprint_parts)
@@ -1059,21 +1059,9 @@ class MetricsWriter:
         return None
     
     def _get_git_commit(self) -> Optional[str]:
-        """Get current git commit hash."""
-        try:
-            import subprocess
-            result = subprocess.run(
-                ['git', 'rev-parse', '--short', 'HEAD'],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                check=False
-            )
-            if result.returncode == 0:
-                return result.stdout.strip()
-        except Exception as e:
-            logger.debug(f"Failed to get git commit: {e}")
-        return None
+        """Get current git commit hash. Delegates to SST module."""
+        from TRAINING.common.utils.git_utils import get_git_commit
+        return get_git_commit(short=True)
     
     def _get_fallback_metrics_dir(
         self,
@@ -1157,7 +1145,7 @@ class MetricsWriter:
                 if not target_dir.is_dir() or target_dir.name.startswith("metrics"):
                     continue
                 
-                target_name = target_dir.name
+                target = target_dir.name
                 target_metrics = []
                 
                 # Find most recent cohort for this target
@@ -1177,10 +1165,10 @@ class MetricsWriter:
                                 # PHASE 2: Unified schema - flat structure, no nested "metrics" key
                                 target_metrics = {k: v for k, v in target_data.items() 
                                                  if k not in ['run_id', 'timestamp', 'stage', 'reproducibility_mode']}
-                                rollup_data["targets"][target_name] = target_metrics
+                                rollup_data["targets"][target] = target_metrics
                                 all_metrics.append(target_metrics)
                         except Exception as e:
-                            logger.debug(f"Failed to load metrics for {target_name}: {e}")
+                            logger.debug(f"Failed to load metrics for {target}: {e}")
         
         # For SYMBOL_SPECIFIC: iterate per-target, then per-symbol
         elif view == "SYMBOL_SPECIFIC":
@@ -1188,7 +1176,7 @@ class MetricsWriter:
                 if not target_dir.is_dir() or target_dir.name.startswith("metrics"):
                     continue
                 
-                target_name = target_dir.name
+                target = target_dir.name
                 
                 for symbol_dir in target_dir.iterdir():
                     if not symbol_dir.is_dir() or not symbol_dir.name.startswith("symbol="):
@@ -1214,17 +1202,17 @@ class MetricsWriter:
                                     symbol_metrics = {k: v for k, v in symbol_data.items() 
                                                      if k not in ['run_id', 'timestamp', 'stage', 'reproducibility_mode']}
                                     
-                                    if target_name not in rollup_data["targets"]:
-                                        rollup_data["targets"][target_name] = {}
-                                    rollup_data["targets"][target_name][symbol_name] = symbol_metrics
+                                    if target not in rollup_data["targets"]:
+                                        rollup_data["targets"][target] = {}
+                                    rollup_data["targets"][target][symbol_name] = symbol_metrics
                                     
                                     if symbol_name not in rollup_data["symbols"]:
                                         rollup_data["symbols"][symbol_name] = {}
-                                    rollup_data["symbols"][symbol_name][target_name] = symbol_metrics
+                                    rollup_data["symbols"][symbol_name][target] = symbol_metrics
                                     
                                     all_metrics.append(symbol_metrics)
                             except Exception as e:
-                                logger.debug(f"Failed to load metrics for {target_name}/{symbol_name}: {e}")
+                                logger.debug(f"Failed to load metrics for {target}/{symbol_name}: {e}")
         
         # Compute aggregated metrics (mean across all targets/symbols)
         if all_metrics:
@@ -1254,14 +1242,14 @@ class MetricsWriter:
             # Write Parquet rollup (flattened, queryable format)
             # Convert rollup_data to DataFrame with one row per target/symbol
             parquet_rows = []
-            for target_name, target_data in rollup_data.get("targets", {}).items():
+            for target, target_data in rollup_data.get("targets", {}).items():
                 if isinstance(target_data, dict) and "symbols" not in target_data:
                     # CROSS_SECTIONAL: target-level metrics
                     row = {
                         "run_id": run_id,
                         "stage": stage,
                         "view": view,
-                        "target": target_name,
+                        "target": target,
                         "symbol": None,
                         "timestamp": rollup_data.get("timestamp"),
                         **{k: v for k, v in target_data.items() if isinstance(v, (int, float, str, bool)) or v is None}
@@ -1274,7 +1262,7 @@ class MetricsWriter:
                             "run_id": run_id,
                             "stage": stage,
                             "view": view,
-                            "target": target_name,
+                            "target": target,
                             "symbol": symbol_name,
                             "timestamp": rollup_data.get("timestamp"),
                             **{k: v for k, v in symbol_metrics.items() if isinstance(v, (int, float, str, bool)) or v is None}
@@ -1351,14 +1339,14 @@ class MetricsWriter:
             parquet_rows = []
             for view_name, view_data in rollup_data.get("views", {}).items():
                 # Extract targets from view rollup
-                for target_name, target_data in view_data.get("targets", {}).items():
+                for target, target_data in view_data.get("targets", {}).items():
                     if isinstance(target_data, dict) and "symbols" not in target_data:
                         # CROSS_SECTIONAL: target-level
                         row = {
                             "run_id": run_id,
                             "stage": stage,
                             "view": view_name,
-                            "target": target_name,
+                            "target": target,
                             "symbol": None,
                             "timestamp": rollup_data.get("timestamp"),
                             **{k: v for k, v in target_data.items() if isinstance(v, (int, float, str, bool)) or v is None}
@@ -1371,7 +1359,7 @@ class MetricsWriter:
                                 "run_id": run_id,
                                 "stage": stage,
                                 "view": view_name,
-                                "target": target_name,
+                                "target": target,
                                 "symbol": symbol_name,
                                 "timestamp": rollup_data.get("timestamp"),
                                 **{k: v for k, v in symbol_metrics.items() if isinstance(v, (int, float, str, bool)) or v is None}
@@ -1450,7 +1438,7 @@ def aggregate_metrics_facts(
     Aggregate all metrics.json files into a Parquet facts table.
     
     This creates/updates a long-format Parquet table with explicit dimensions:
-    - run_id, stage, view, target, symbol, universe_id, cohort_id
+    - run_id, stage, view, target, symbol, universe_sig, cohort_id
     - All metric values as separate columns
     
     Checks both target-first structure (targets/<target>/metrics/) and legacy REPRODUCIBILITY structure.
@@ -1548,7 +1536,7 @@ def aggregate_metrics_facts(
                 
                 target = target_path.name
                 symbol = None
-                universe_id = None
+                universe_sig = None
                 
                 # Check if this is a symbol directory (SYMBOL_SPECIFIC view)
                 if view == "SYMBOL_SPECIFIC":
@@ -1570,7 +1558,7 @@ def aggregate_metrics_facts(
                                 if metrics_file.exists():
                                     row = _extract_metrics_row(
                                         metrics_file, stage, view, target, symbol, 
-                                        cohort_id, universe_id
+                                        cohort_id, universe_sig
                                     )
                                     if row:
                                         rows.append(row)
@@ -1584,19 +1572,19 @@ def aggregate_metrics_facts(
                         metrics_file = cohort_path / "metrics.json"
                         
                         if metrics_file.exists():
-                            # Try to extract universe_id from metadata
+                            # Try to extract universe_sig from metadata
                             metadata_file = cohort_path / "metadata.json"
                             if metadata_file.exists():
                                 try:
                                     with open(metadata_file, 'r') as f:
                                         metadata = json.load(f)
-                                    universe_id = metadata.get('universe_id')
+                                    universe_sig = metadata.get('universe_sig')
                                 except Exception:
                                     pass
                             
                             row = _extract_metrics_row(
                                 metrics_file, stage, view, target, symbol,
-                                cohort_id, universe_id
+                                cohort_id, universe_sig
                             )
                             if row:
                                 rows.append(row)
@@ -1640,7 +1628,7 @@ def _extract_metrics_row(
     target: str,
     symbol: Optional[str],
     cohort_id: str,
-    universe_id: Optional[str]
+    universe_sig: Optional[str]
 ) -> Optional[Dict[str, Any]]:
     """
     Extract a single row from metrics.json (unified canonical schema) for facts table.
@@ -1662,7 +1650,7 @@ def _extract_metrics_row(
             'view': view,
             'target': target,
             'symbol': symbol if symbol else None,
-            'universe_id': universe_id if universe_id else None,
+            'universe_sig': universe_sig if universe_sig else None,
             'cohort_id': cohort_id
         }
         

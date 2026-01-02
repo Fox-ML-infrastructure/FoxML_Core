@@ -27,6 +27,12 @@ import warnings
 
 logger = logging.getLogger(__name__)
 
+# Import SST accessor functions
+from TRAINING.orchestration.utils.reproducibility.utils import (
+    extract_universe_sig,
+    extract_target,
+)
+
 # Import WriteScope for scope-safe path building
 try:
     from TRAINING.orchestration.utils.scope_resolution import (
@@ -45,23 +51,15 @@ except ImportError:
 
 
 def _normalize_universe_sig(meta: Dict[str, Any]) -> Optional[str]:
-    """Normalize universe signature: check both top-level and nested cs_config.
+    """Normalize universe signature: delegates to SST accessor.
     
     Single source of truth for universe_sig extraction. Checks:
     1. meta["universe_sig"] (canonical)
-    2. meta["universe_id"] (legacy alias)
+    2. meta["universe_sig"] (legacy alias)
     3. meta["cs_config"]["universe_sig"] (nested legacy)
-    4. meta["cs_config"]["universe_id"] (nested legacy alias)
+    4. meta["cs_config"]["universe_sig"] (nested legacy alias)
     """
-    # Top-level canonical
-    sig = meta.get("universe_sig") or meta.get("universe_id")
-    if sig:
-        return sig
-    # Nested fallback (legacy callers)
-    cs_config = meta.get("cs_config")
-    if isinstance(cs_config, dict):
-        return cs_config.get("universe_sig") or cs_config.get("universe_id")
-    return None
+    return extract_universe_sig(meta, meta.get("cs_config"))
 
 
 def _normalize_view(meta: Dict[str, Any]) -> Optional[str]:
@@ -289,7 +287,7 @@ def validate_cohort_metadata(
 ) -> None:
     """Validate that cohort metadata has all required fields for OutputLayout.
     
-    Required: view, universe_sig (or universe_id), target (or target_name)
+    Required: view, universe_sig, target
     Required if SYMBOL_SPECIFIC: symbol
     NOT required: cohort_id (passed as separate parameter to _save_to_cohort)
     
@@ -316,11 +314,11 @@ def validate_cohort_metadata(
 
     # Required: universe sig
     if not _normalize_universe_sig(cohort_metadata):
-        missing.append("universe_sig (or universe_id)")
+        missing.append("universe_sig")
 
-    # Required: target
-    if not (cohort_metadata.get("target") or cohort_metadata.get("target_name")):
-        missing.append("target (or target_name)")
+    # Required: target - use SST accessor
+    if not extract_target(cohort_metadata):
+        missing.append("target")
 
     # Required if SYMBOL_SPECIFIC
     # Use normalized view (actual if available, else expected)
@@ -352,7 +350,5 @@ def validate_cohort_metadata(
                 f"but expected '{symbol}'"
             )
 
-    # Normalize universe key (write canonical)
-    if "universe_id" in cohort_metadata and "universe_sig" not in cohort_metadata:
-        cohort_metadata["universe_sig"] = cohort_metadata["universe_id"]
+    # No longer need to normalize universe key - legacy key fully deprecated
 

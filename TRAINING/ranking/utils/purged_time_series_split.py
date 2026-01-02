@@ -69,7 +69,7 @@ class PurgedTimeSeriesSplit(_BaseKFold):
         # Load n_splits from config
         try:
             from CONFIG.config_loader import get_cfg
-            n_splits = int(get_cfg("preprocessing.validation.cv_folds", default=5, config_name="preprocessing_config"))
+            n_splits = int(get_cfg("preprocessing.validation.folds", default=5, config_name="preprocessing_config"))
         except Exception:
             n_splits = 5  # FALLBACK_DEFAULT_OK
         

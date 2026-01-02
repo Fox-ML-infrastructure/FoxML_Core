@@ -73,6 +73,8 @@ class CrossSectionalMetrics:
     feature_set_id: Optional[str] = None
     failed_model_families: List[str] = field(default_factory=list)
     stability_metrics: Optional[Dict[str, float]] = None  # mean_overlap, mean_tau, etc.
+    task_type: Optional[str] = None  # REGRESSION, BINARY_CLASSIFICATION, etc.
+    metric_name: Optional[str] = None  # R², AUC, etc.
 
 
 @dataclass
@@ -90,6 +92,31 @@ class SymbolMetrics:
     failed_model_families: List[str] = field(default_factory=list)
     model_status: str = "UNKNOWN"  # OK, FAILED, SKIPPED
     stability_metrics: Optional[Dict[str, float]] = None
+    task_type: Optional[str] = None  # REGRESSION, BINARY_CLASSIFICATION, etc.
+    metric_name: Optional[str] = None  # R², AUC, etc.
+
+
+def _get_score_threshold(config_value: Any, task_type: Optional[str]) -> float:
+    """
+    Get score threshold from config, handling task-type-aware thresholds.
+    
+    Args:
+        config_value: Either a float (legacy) or dict with classification/regression keys
+        task_type: Task type string (REGRESSION, BINARY_CLASSIFICATION, MULTICLASS_CLASSIFICATION)
+    
+    Returns:
+        Threshold value (float)
+    """
+    if isinstance(config_value, dict):
+        # Task-type aware config
+        if task_type and "CLASSIFICATION" in task_type.upper():
+            return config_value.get("classification", 0.5)
+        else:
+            # Default to regression for unknown or regression task types
+            return config_value.get("regression", -0.5)
+    else:
+        # Legacy: single threshold for all task types
+        return float(config_value)
 
 
 @dataclass
@@ -103,6 +130,20 @@ class RoutingDecision:
     reasons: List[str]
     cs_metrics: Optional[CrossSectionalMetrics] = None
     local_metrics: Optional[SymbolMetrics] = None
+    
+    def __post_init__(self):
+        """Validate routing decision invariants."""
+        # SST invariant: target must be set
+        if not self.target:
+            raise ValueError("RoutingDecision: target cannot be empty")
+        
+        # SST invariant: symbol must be set
+        if not self.symbol:
+            raise ValueError("RoutingDecision: symbol cannot be empty")
+        
+        # SST invariant: route must be a valid RouteState
+        if not isinstance(self.route, RouteState):
+            raise ValueError(f"RoutingDecision: route must be RouteState, got {type(self.route)}")
 
 
 class TrainingRouter:
@@ -264,9 +305,9 @@ class TrainingRouter:
             # This is a soft check - we'd need to know total families attempted
             pass
         
-        # Scoring / stability rules
-        strong_score = cs_config["strong_score"]
-        min_score = cs_config["min_score"]
+        # Scoring / stability rules - task-type aware thresholds
+        strong_score = _get_score_threshold(cs_config["strong_score"], cs_metrics.task_type)
+        min_score = _get_score_threshold(cs_config["min_score"], cs_metrics.task_type)
         
         if (cs_metrics.score >= strong_score and
             cs_metrics.stability.value in stability_allowlist):
@@ -278,7 +319,8 @@ class TrainingRouter:
         
         # Experimental lane
         if enable_experimental:
-            exp_min_score = experimental_config.get("min_score", 0.52)
+            exp_min_score_config = experimental_config.get("min_score", 0.52)
+            exp_min_score = _get_score_threshold(exp_min_score_config, cs_metrics.task_type) if isinstance(exp_min_score_config, dict) else exp_min_score_config
             exp_allowed_stabilities = experimental_config.get("allowed_stabilities", ["DRIFTING", "UNKNOWN"])
             if (cs_metrics.score >= exp_min_score and
                 cs_metrics.stability.value in exp_allowed_stabilities):
@@ -323,9 +365,9 @@ class TrainingRouter:
                 # This is a soft check - would need total families attempted
                 pass
         
-        # Scoring / stability rules
-        strong_score = symbol_config["strong_score"]
-        min_score = symbol_config["min_score"]
+        # Scoring / stability rules - task-type aware thresholds
+        strong_score = _get_score_threshold(symbol_config["strong_score"], symbol_metrics.task_type)
+        min_score = _get_score_threshold(symbol_config["min_score"], symbol_metrics.task_type)
         
         if (symbol_metrics.score >= strong_score and
             symbol_metrics.stability.value in stability_allowlist):
@@ -337,7 +379,8 @@ class TrainingRouter:
         
         # Experimental lane
         if enable_experimental:
-            exp_min_score = experimental_config.get("min_score", 0.52)
+            exp_min_score_config = experimental_config.get("min_score", 0.52)
+            exp_min_score = _get_score_threshold(exp_min_score_config, symbol_metrics.task_type) if isinstance(exp_min_score_config, dict) else exp_min_score_config
             exp_allowed_stabilities = experimental_config.get("allowed_stabilities", ["DRIFTING", "UNKNOWN"])
             if (symbol_metrics.score >= exp_min_score and
                 symbol_metrics.stability.value in exp_allowed_stabilities):
@@ -489,20 +532,22 @@ class TrainingRouter:
         Returns:
             Routing plan dict
         """
-        # Load resolved_mode from run context (SST)
+        # Load view from run context (SST)
         # output_dir is typically globals/routing_plan/, but run_context.json is at globals/
         # So we need to find the run root (parent of globals/)
-        resolved_mode = None
+        run_view = None
         try:
-            from TRAINING.orchestration.utils.run_context import get_resolved_mode
+            from TRAINING.orchestration.utils.run_context import load_run_context
             from TRAINING.orchestration.utils.target_first_paths import run_root
             # Navigate to run root from output_dir (which is typically globals/routing_plan/)
             run_root_dir = run_root(output_dir)
-            resolved_mode = get_resolved_mode(run_root_dir)
-            if resolved_mode:
-                logger.info(f"📋 Using resolved_mode={resolved_mode} from run context (SST) for routing plan generation")
+            context = load_run_context(run_root_dir)
+            if context:
+                run_view = context.get("view")
+            if run_view:
+                logger.info(f"📋 Using view={run_view} from run context (SST) for routing plan generation")
         except Exception as e:
-            logger.debug(f"Could not load resolved_mode from run context: {e}, will use mode from routing candidates")
+            logger.debug(f"Could not load view from run context: {e}, will use mode from routing candidates")
         
         # Group by target
         targets = routing_candidates["target"].unique()
@@ -513,7 +558,7 @@ class TrainingRouter:
                 "git_commit": git_commit or "unknown",
                 "config_hash": config_hash or "unknown",
                 "metrics_snapshot": "routing_candidates.parquet",
-                "resolved_mode": resolved_mode  # Include in metadata
+                "view": run_view  # Include in metadata (SST)
             },
             "targets": {}
         }
@@ -521,8 +566,8 @@ class TrainingRouter:
         for target in targets:
             target_rows = routing_candidates[routing_candidates["target"] == target]
             
-            # Extract CS metrics - use resolved_mode if available, otherwise fallback to CROSS_SECTIONAL
-            cs_mode_filter = resolved_mode if resolved_mode else "CROSS_SECTIONAL"
+            # Extract CS metrics - use view if available, otherwise fallback to CROSS_SECTIONAL
+            cs_mode_filter = run_view if run_view else "CROSS_SECTIONAL"
             cs_rows = target_rows[target_rows["mode"] == cs_mode_filter]
             cs_metrics = None
             if len(cs_rows) > 0:
@@ -537,15 +582,17 @@ class TrainingRouter:
                     leakage_status=LeakageStatus(cs_row.get("leakage_status", "UNKNOWN")),
                     feature_set_id=cs_row.get("feature_set_id"),
                     failed_model_families=cs_row.get("failed_model_families", []),
-                    stability_metrics=cs_row.get("stability_metrics")
+                    stability_metrics=cs_row.get("stability_metrics"),
+                    task_type=cs_row.get("task_type"),  # For task-aware thresholds
+                    metric_name=cs_row.get("metric_name")
                 )
                 # Classify stability from metrics if needed
                 if cs_metrics.stability == StabilityCategory.UNKNOWN and cs_metrics.stability_metrics:
                     cs_metrics.stability = self.classify_stability(cs_metrics.stability_metrics)
             
-            # Extract symbol metrics - use resolved_mode if available, otherwise fallback to SYMBOL_SPECIFIC
+            # Extract symbol metrics - use view if available, otherwise fallback to SYMBOL_SPECIFIC
             # NOTE: The fallback was incorrectly "SYMBOL" but routing_candidates uses "SYMBOL_SPECIFIC"
-            symbol_mode_filter = resolved_mode if resolved_mode else "SYMBOL_SPECIFIC"
+            symbol_mode_filter = run_view if run_view else "SYMBOL_SPECIFIC"
             symbol_rows = target_rows[target_rows["mode"] == symbol_mode_filter]
             # Filter out symbol=None rows (these are CS-equivalent aggregates, not per-symbol metrics)
             if "symbol" in symbol_rows.columns:
@@ -596,8 +643,10 @@ class TrainingRouter:
                     
                     if cs_metrics.stability.value not in stability_allowlist:
                         reason_parts.append(f"stability={cs_metrics.stability.value} not in {stability_allowlist}")
-                    if cs_metrics.score < cs_config["min_score"]:
-                        reason_parts.append(f"score={cs_metrics.score:.3f} < {cs_config['min_score']}")
+                    # Use task-type-aware threshold for logging
+                    effective_min_score = _get_score_threshold(cs_config["min_score"], cs_metrics.task_type)
+                    if cs_metrics.score < effective_min_score:
+                        reason_parts.append(f"score={cs_metrics.score:.3f} < {effective_min_score}")
                     if cs_metrics.sample_size < min_sample_size:
                         reason_parts.append(f"sample_size={cs_metrics.sample_size} < {min_sample_size}")
                     if self.config.get("block_on_leakage", True) and cs_metrics.leakage_status == LeakageStatus.BLOCKED:
@@ -633,7 +682,9 @@ class TrainingRouter:
                         feature_set_id=sym_row.get("feature_set_id"),
                         failed_model_families=sym_row.get("failed_model_families", []),
                         model_status=sym_row.get("model_status", "UNKNOWN"),
-                        stability_metrics=sym_row.get("stability_metrics")
+                        stability_metrics=sym_row.get("stability_metrics"),
+                        task_type=sym_row.get("task_type"),  # For task-aware thresholds
+                        metric_name=sym_row.get("metric_name")
                     )
                     # Classify stability from metrics if needed
                     if sym_metrics.stability == StabilityCategory.UNKNOWN and sym_metrics.stability_metrics:

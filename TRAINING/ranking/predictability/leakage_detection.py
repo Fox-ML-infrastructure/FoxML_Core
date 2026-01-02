@@ -517,8 +517,8 @@ def train_and_evaluate_models(
             # Generate deterministic seed for feature pruning based on target
             from TRAINING.common.determinism import stable_seed_from
             # Use target_column if available, otherwise use default
-            target_name_for_seed = target_column if target_column else 'pruning'
-            prune_seed = stable_seed_from([target_name_for_seed, 'feature_pruning'])
+            target_for_seed = target_column if target_column else 'pruning'
+            prune_seed = stable_seed_from([target_for_seed, 'feature_pruning'])
             
             # Load feature pruning config
             if _CONFIG_AVAILABLE:
@@ -541,7 +541,7 @@ def train_and_evaluate_models(
                 min_features=min_features,
                 task_type=task_str,
                 n_estimators=n_estimators,
-                random_state=prune_seed
+                seed=prune_seed
             )
             
             if pruning_stats.get('dropped_count', 0) > 0:
@@ -557,7 +557,7 @@ def train_and_evaluate_models(
     
     # Get CV config
     cv_config = multi_model_config.get('cross_validation', {}) if multi_model_config else {}
-    cv_folds = cv_config.get('cv_folds', 3)
+    folds = cv_config.get('folds', 3)
     cv_n_jobs = cv_config.get('n_jobs', 1)
     
     # CRITICAL: Use PurgedTimeSeriesSplit to prevent temporal leakage
@@ -674,12 +674,12 @@ def train_and_evaluate_models(
             logger.info(f"  Sorted data by timestamp (preserving alignment)")
         
         tscv = PurgedTimeSeriesSplit(
-            n_splits=cv_folds, 
+            n_splits=folds, 
             purge_overlap_time=purge_time,
             time_column_values=time_vals
         )
         if log_cfg.cv_detail:
-            logger.info(f"  Using PurgedTimeSeriesSplit (TIME-BASED): {cv_folds} folds, purge_time={purge_time}")
+            logger.info(f"  Using PurgedTimeSeriesSplit (TIME-BASED): {folds} folds, purge_time={purge_time}")
     else:
         # CRITICAL: Row-count based purging is INVALID for panel data (multiple symbols per timestamp)
         # With 50 symbols, 1 bar = 50 rows. Using row counts causes catastrophic leakage.
@@ -1596,22 +1596,22 @@ def train_and_evaluate_models(
             # Get config values
             mi_config = get_model_config('mutual_information', multi_model_config)
             
-            # Get random_state from SST (determinism system) - no hardcoded defaults
-            mi_random_state = mi_config.get('random_state')
-            if mi_random_state is None:
+            # Get seed from SST (determinism system) - no hardcoded defaults
+            mi_seed = mi_config.get('seed')
+            if mi_seed is None:
                 from TRAINING.common.determinism import stable_seed_from
-                mi_random_state = stable_seed_from(['mutual_information', target_column if target_column else 'default'])
+                mi_seed = stable_seed_from(['mutual_information', target_column if target_column else 'default'])
             
             # Suppress warnings for zero-variance features
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
                 if is_binary or is_multiclass:
                     importance = mutual_info_classif(X_dense, y, 
-                                                    random_state=mi_random_state,
+                                                    random_state=mi_seed,
                                                     discrete_features=mi_config.get('discrete_features', 'auto'))
                 else:
                     importance = mutual_info_regression(X_dense, y, 
-                                                       random_state=mi_random_state,
+                                                       random_state=mi_seed,
                                                        discrete_features=mi_config.get('discrete_features', 'auto'))
             
             # Update feature_names to match dense array
@@ -1771,23 +1771,23 @@ def train_and_evaluate_models(
             # Use random_forest config for Boruta estimator
             rf_config = get_model_config('random_forest', multi_model_config)
             
-            # Get random_state from SST (determinism system) - no hardcoded defaults
-            boruta_random_state = boruta_config.get('random_state')
-            if boruta_random_state is None:
+            # Get seed from SST (determinism system) - no hardcoded defaults
+            boruta_seed = boruta_config.get('seed')
+            if boruta_seed is None:
                 from TRAINING.common.determinism import stable_seed_from
-                boruta_random_state = stable_seed_from(['boruta', target_column if target_column else 'default'])
+                boruta_seed = stable_seed_from(['boruta', target_column if target_column else 'default'])
             
-            # Remove random_state from rf_config to prevent double argument error
+            # Remove seed from rf_config to prevent double argument error
             rf_config_clean = rf_config.copy()
-            rf_config_clean.pop('random_state', None)
+            rf_config_clean.pop('seed', None)
             
             if is_binary or is_multiclass:
-                rf = RandomForestClassifier(**rf_config_clean, random_state=boruta_random_state)
+                rf = RandomForestClassifier(**rf_config_clean, random_state=boruta_seed)
             else:
-                rf = RandomForestRegressor(**rf_config_clean, random_state=boruta_random_state)
+                rf = RandomForestRegressor(**rf_config_clean, random_state=boruta_seed)
             
             boruta = BorutaPy(rf, n_estimators='auto', verbose=0,
-                            random_state=boruta_random_state,
+                            random_state=boruta_seed,
                             max_iter=boruta_config.get('max_iter', 100))
             boruta.fit(X_dense, y)
             
@@ -1848,11 +1848,11 @@ def train_and_evaluate_models(
             # Get config values
             stability_config = get_model_config('stability_selection', multi_model_config)
             n_bootstrap = stability_config.get('n_bootstrap', 50)
-            # Get random_state from SST (determinism system) - no hardcoded defaults
-            random_state = stability_config.get('random_state')
-            if random_state is None:
+            # Get seed from SST (determinism system) - no hardcoded defaults
+            seed = stability_config.get('seed')
+            if seed is None:
                 from TRAINING.common.determinism import stable_seed_from
-                random_state = stable_seed_from(['stability_selection', target_column if target_column else 'default'])
+                seed = stable_seed_from(['stability_selection', target_column if target_column else 'default'])
             stability_cv = stability_config.get('cv', 3)
             stability_n_jobs = stability_config.get('n_jobs', 1)
             stability_cs = stability_config.get('Cs', 10)
@@ -1869,16 +1869,16 @@ def train_and_evaluate_models(
                 try:
                     # Use TimeSeriesSplit for internal CV (even though bootstrap breaks temporal order,
                     # this maintains consistency with the rest of the codebase)
-                    # Clean config to prevent double random_state argument
+                    # Clean config to prevent double seed argument
                     from TRAINING.common.utils.config_cleaner import clean_config_for_estimator
                     if is_binary or is_multiclass:
                         lr_config = {'Cs': stability_cs, 'cv': tscv, 'max_iter': lasso_config.get('max_iter', 1000), 'n_jobs': stability_n_jobs}
-                        lr_config_clean = clean_config_for_estimator(LogisticRegressionCV, lr_config, extra_kwargs={'random_state': random_state}, family_name='stability_selection')
-                        model = LogisticRegressionCV(**lr_config_clean, random_state=random_state)
+                        lr_config_clean = clean_config_for_estimator(LogisticRegressionCV, lr_config, extra_kwargs={'random_state': seed}, family_name='stability_selection')
+                        model = LogisticRegressionCV(**lr_config_clean, random_state=seed)
                     else:
                         lasso_config_clean_dict = {'cv': tscv, 'max_iter': lasso_config.get('max_iter', 1000), 'n_jobs': stability_n_jobs}
-                        lasso_config_clean = clean_config_for_estimator(LassoCV, lasso_config_clean_dict, extra_kwargs={'random_state': random_state}, family_name='stability_selection')
-                        model = LassoCV(**lasso_config_clean, random_state=random_state)
+                        lasso_config_clean = clean_config_for_estimator(LassoCV, lasso_config_clean_dict, extra_kwargs={'random_state': seed}, family_name='stability_selection')
+                        model = LassoCV(**lasso_config_clean, random_state=seed)
                     
                     model.fit(X_boot, y_boot)
                     coef = model.coef_[0] if len(model.coef_.shape) > 1 else model.coef_
@@ -1890,12 +1890,12 @@ def train_and_evaluate_models(
                     # Use a quick model for CV scoring
                     if is_binary or is_multiclass:
                         lr_cv_config = {'Cs': [1.0], 'cv': tscv, 'max_iter': lasso_config.get('max_iter', 1000), 'n_jobs': 1}
-                        lr_cv_config_clean = clean_config_for_estimator(LogisticRegressionCV, lr_cv_config, extra_kwargs={'random_state': random_state}, family_name='stability_selection')
-                        cv_model = LogisticRegressionCV(**lr_cv_config_clean, random_state=random_state)
+                        lr_cv_config_clean = clean_config_for_estimator(LogisticRegressionCV, lr_cv_config, extra_kwargs={'random_state': seed}, family_name='stability_selection')
+                        cv_model = LogisticRegressionCV(**lr_cv_config_clean, random_state=seed)
                     else:
                         lasso_cv_config = {'cv': tscv, 'max_iter': lasso_config.get('max_iter', 1000), 'n_jobs': 1}
-                        lasso_cv_config_clean = clean_config_for_estimator(LassoCV, lasso_cv_config, extra_kwargs={'random_state': random_state}, family_name='stability_selection')
-                        cv_model = LassoCV(**lasso_cv_config_clean, random_state=random_state)
+                        lasso_cv_config_clean = clean_config_for_estimator(LassoCV, lasso_cv_config, extra_kwargs={'random_state': seed}, family_name='stability_selection')
+                        cv_model = LassoCV(**lasso_cv_config_clean, random_state=seed)
                     cv_scores = cross_val_score(cv_model, X_boot, y_boot, cv=tscv, scoring=scoring, n_jobs=1, error_score=np.nan)
                     valid_cv_scores = cv_scores[~np.isnan(cv_scores)]
                     if len(valid_cv_scores) > 0:
@@ -2026,21 +2026,21 @@ def _save_feature_importances(
             break
         base_output_dir = base_output_dir.parent
     
-    target_name_clean = target_column.replace('/', '_').replace('\\', '_')
+    target_clean = target_column.replace('/', '_').replace('\\', '_')
     
     # PATCH 4: Use OutputLayout for properly scoped paths
     try:
         from TRAINING.orchestration.utils.output_layout import OutputLayout
         from TRAINING.orchestration.utils.target_first_paths import ensure_target_structure
         
-        ensure_target_structure(base_output_dir, target_name_clean)
+        ensure_target_structure(base_output_dir, target_clean)
         
         # Only pass symbol if view is SYMBOL_SPECIFIC
         symbol_for_layout = symbol if view == "SYMBOL_SPECIFIC" else None
         
         layout = OutputLayout(
             output_root=base_output_dir,
-            target=target_name_clean,
+            target=target_clean,
             view=view,
             universe_sig=universe_sig,
             symbol=symbol_for_layout,
@@ -2118,7 +2118,7 @@ def _triage_high_r2(
     y: np.ndarray,
     time_vals: Optional[np.ndarray] = None,
     symbols: Optional[np.ndarray] = None,
-    target_name: str = ""
+    target: str = ""
 ) -> Dict[str, Any]:
     """
     Run triage checks for high R² scores to validate if they indicate real leakage.
@@ -2128,7 +2128,7 @@ def _triage_high_r2(
         y: Target vector
         time_vals: Optional timestamps for holdout block test
         symbols: Optional symbol array for panel data (shuffle within symbol)
-        target_name: Target name (for logging)
+        target: Target name (for logging)
     
     Returns:
         Dict with triage results:
@@ -2213,10 +2213,10 @@ def _triage_high_r2(
 
 
 def detect_leakage(
-    mean_score: float,
+    auc: float,
     composite_score: float,
     mean_importance: float,
-    target_name: str = "",
+    target: str = "",
     model_scores: Dict[str, float] = None,
     task_type: TaskType = TaskType.REGRESSION,
     X: Optional[np.ndarray] = None,  # NEW: Optional data for triage checks
@@ -2259,7 +2259,7 @@ def detect_leakage(
     
     # Determine threshold based on task type and target name
     if task_type == TaskType.REGRESSION:
-        is_forward_return = target_name.startswith('fwd_ret_')
+        is_forward_return = target.startswith('fwd_ret_')
         if is_forward_return:
             # For forward returns: R² > 0.50 is suspicious
             reg_cfg = warning_cfg.get('regression', {}).get('forward_return', {})
@@ -2286,22 +2286,22 @@ def detect_leakage(
         metric_name = "Accuracy"
     
     # Check 1: Suspiciously high mean score (with triage for R²)
-    if mean_score > very_high_threshold:
+    if auc > very_high_threshold:
         flags.append("HIGH_SCORE")
         # Run triage checks if data is available and this is R²
         triage_results = None
         if metric_name == "R²" and X is not None and y is not None:
-            triage_results = _triage_high_r2(X, y, time_vals=time_vals, symbols=symbols, target_name=target_name)
+            triage_results = _triage_high_r2(X, y, time_vals=time_vals, symbols=symbols, target=target)
             if triage_results["passed"]:
                 logger.info(
-                    f"R²={mean_score:.3f} > {very_high_threshold:.2f}, but triage passed: "
+                    f"R²={auc:.3f} > {very_high_threshold:.2f}, but triage passed: "
                     f"permutation={triage_results.get('permutation_r2', 'N/A'):.3f}, "
                     f"holdout={triage_results.get('holdout_r2', 'N/A'):.3f}, "
                     f"shift_corr={triage_results.get('shift_correlation', 'N/A'):.3f}"
                 )
             else:
                 logger.warning(
-                    f"LEAKAGE WARNING: {metric_name}={mean_score:.3f} > {very_high_threshold:.2f} "
+                    f"LEAKAGE WARNING: {metric_name}={auc:.3f} > {very_high_threshold:.2f} "
                     f"(extremely high - likely leakage). Triage: "
                     f"permutation={triage_results.get('permutation_r2', 'N/A'):.3f}, "
                     f"holdout={triage_results.get('holdout_r2', 'N/A'):.3f}, "
@@ -2309,25 +2309,25 @@ def detect_leakage(
                 )
         else:
             logger.warning(
-                f"LEAKAGE WARNING: {metric_name}={mean_score:.3f} > {very_high_threshold:.2f} "
+                f"LEAKAGE WARNING: {metric_name}={auc:.3f} > {very_high_threshold:.2f} "
                 f"(extremely high - likely leakage)"
             )
-    elif mean_score > high_threshold:
+    elif auc > high_threshold:
         flags.append("HIGH_SCORE")
         # Run triage checks if data is available and this is R²
         triage_results = None
         if metric_name == "R²" and X is not None and y is not None:
-            triage_results = _triage_high_r2(X, y, time_vals=time_vals, symbols=symbols, target_name=target_name)
+            triage_results = _triage_high_r2(X, y, time_vals=time_vals, symbols=symbols, target=target)
             if triage_results["passed"]:
                 logger.info(
-                    f"R²={mean_score:.3f} > {high_threshold:.2f}, but triage passed: "
+                    f"R²={auc:.3f} > {high_threshold:.2f}, but triage passed: "
                     f"permutation={triage_results.get('permutation_r2', 'N/A'):.3f}, "
                     f"holdout={triage_results.get('holdout_r2', 'N/A'):.3f}, "
                     f"shift_corr={triage_results.get('shift_correlation', 'N/A'):.3f}"
                 )
             else:
                 logger.warning(
-                    f"LEAKAGE WARNING: {metric_name}={mean_score:.3f} > {high_threshold:.2f} "
+                    f"LEAKAGE WARNING: {metric_name}={auc:.3f} > {high_threshold:.2f} "
                     f"(suspiciously high - investigate). Triage: "
                     f"permutation={triage_results.get('permutation_r2', 'N/A'):.3f}, "
                     f"holdout={triage_results.get('holdout_r2', 'N/A'):.3f}, "
@@ -2335,7 +2335,7 @@ def detect_leakage(
                 )
         else:
             logger.warning(
-                f"LEAKAGE WARNING: {metric_name}={mean_score:.3f} > {high_threshold:.2f} "
+                f"LEAKAGE WARNING: {metric_name}={auc:.3f} > {high_threshold:.2f} "
                 f"(suspiciously high - investigate)"
             )
     
@@ -2353,19 +2353,19 @@ def detect_leakage(
     # Check 3: Composite score inconsistent with mean score
     # If composite is very high (> 0.5) but score is low (< 0.2 for regression, < 0.6 for classification), something's wrong
     score_low_threshold = 0.2 if task_type == TaskType.REGRESSION else 0.6
-    if composite_score > 0.5 and mean_score < score_low_threshold:
+    if composite_score > 0.5 and auc < score_low_threshold:
         flags.append("INCONSISTENT")
         logger.warning(
-            f"LEAKAGE WARNING: Composite={composite_score:.3f} but {metric_name}={mean_score:.3f} "
+            f"LEAKAGE WARNING: Composite={composite_score:.3f} but {metric_name}={auc:.3f} "
             f"(inconsistent - possible leakage)"
         )
     
     # Check 4: Very high importance with low score (might indicate leaked features)
     score_very_low_threshold = 0.1 if task_type == TaskType.REGRESSION else 0.5
-    if mean_importance > 0.7 and mean_score < score_very_low_threshold:
+    if mean_importance > 0.7 and auc < score_very_low_threshold:
         flags.append("INCONSISTENT")
         logger.warning(
-            f"LEAKAGE WARNING: Importance={mean_importance:.2f} but {metric_name}={mean_score:.3f} "
+            f"LEAKAGE WARNING: Importance={mean_importance:.2f} but {metric_name}={auc:.3f} "
             f"(high importance with low {metric_name} - check for leaked features)"
         )
     

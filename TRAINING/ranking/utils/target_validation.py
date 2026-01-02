@@ -99,7 +99,7 @@ def validate_target(
 def check_cv_compatibility(
     y: np.ndarray, 
     task_type: Optional[TaskType] = None,
-    cv_folds: int = 3
+    folds: int = 3
 ) -> Tuple[bool, Optional[str]]:
     """
     Check if target is compatible with cross-validation
@@ -110,7 +110,7 @@ def check_cv_compatibility(
     Args:
         y: Target array
         task_type: Optional TaskType (if None, will be inferred)
-        cv_folds: Number of CV folds
+        folds: Number of CV folds
     
     Returns:
         (is_compatible, error_message)
@@ -142,10 +142,10 @@ def check_cv_compatibility(
                 min_class_count = class_counts[class_counts > 0].min()
                 
                 # Need at least 1 sample per class per fold (less conservative)
-                # Changed from cv_folds * 2 to cv_folds * 1 to avoid rejecting valid targets unnecessarily
-                min_required = cv_folds * 1
+                # Changed from folds * 2 to folds * 1 to avoid rejecting valid targets unnecessarily
+                min_required = folds * 1
                 if min_class_count < min_required:
-                    return False, f"Smallest class has {min_class_count} samples, need {min_required} for {cv_folds}-fold CV"
+                    return False, f"Smallest class has {min_class_count} samples, need {min_required} for {folds}-fold CV"
         except (ValueError, OverflowError):
             return False, "Invalid class labels for classification"
     

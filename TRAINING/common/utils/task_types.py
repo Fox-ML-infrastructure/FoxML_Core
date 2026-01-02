@@ -262,10 +262,10 @@ def _get_model_constructor(
     config_clean = {k: v for k, v in config.items() 
                     if k not in ['objective', 'metric', 'eval_metric', 'loss_function']}
     
-    # CRITICAL FIX: Enforce reproducibility with default random_state
+    # CRITICAL FIX: Enforce reproducibility with default seed
     # Without this, results vary between runs, making it impossible to verify improvements
-    if 'random_state' not in config_clean:
-        config_clean['random_state'] = 42
+    if 'seed' not in config_clean:
+        config_clean['seed'] = 42
     
     if model_name == 'lightgbm':
         # CRITICAL FIX: Standardize constructor signatures - all accept **kwargs for consistency

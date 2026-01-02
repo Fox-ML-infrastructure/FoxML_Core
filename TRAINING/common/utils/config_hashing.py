@@ -9,6 +9,7 @@ Uses SHA256 of canonical JSON representation for consistency.
 
 import hashlib
 import json
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 
@@ -72,4 +73,29 @@ def compute_string_hash(value: str) -> str:
         Hexadecimal hash string
     """
     return hashlib.sha256(value.encode('utf-8')).hexdigest()
+
+
+def compute_config_hash_from_file(
+    config_path: Path,
+    short: bool = True
+) -> str:
+    """
+    Compute hash from config file contents.
+    
+    SST (Single Source of Truth) for file-based config hashing.
+    
+    Args:
+        config_path: Path to config file (YAML, JSON, etc.)
+        short: If True, return short hash (8 chars). If False, return full hash.
+    
+    Returns:
+        Hexadecimal hash string, or "unknown" if file cannot be read
+    """
+    try:
+        with open(config_path, "rb") as f:
+            content = f.read()
+        full_hash = hashlib.sha256(content).hexdigest()
+        return full_hash[:8] if short else full_hash
+    except Exception:
+        return "unknown"
 

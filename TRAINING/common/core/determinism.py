@@ -65,7 +65,7 @@ def get_deterministic_params(seed: Optional[int] = None) -> dict:
         seed = 42  # FALLBACK_DEFAULT_OK
     
     return {
-        'random_state': seed,
+        'seed': seed,
         'seed': seed,
         'n_jobs': 1,  # Avoid threading issues
         'deterministic': True
