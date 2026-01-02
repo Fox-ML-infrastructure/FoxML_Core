@@ -58,9 +58,21 @@ def normalize_family(family: Union[str, None]) -> str:
         # Apply FAMILY_ALIASES as final step (single source of truth)
         return FAMILY_ALIASES.get(result, result)
     
-    # Handle TitleCase "XGBoost" -> "xgboost"
+    # Handle specific brand names with embedded abbreviations
+    # These would otherwise be split incorrectly by CamelCase logic
     if family_clean == "XGBoost":
         return "xgboost"
+    if family_clean == "LightGBM":
+        return "lightgbm"
+    if family_clean == "NGBoost":
+        return "ngboost"
+    
+    # Handle all-caps abbreviations (MLP, LSTM, CNN, VAE, GAN, RNN)
+    # These should NOT be split letter-by-letter
+    if family_clean.isupper() and len(family_clean) <= 6:
+        result = family_clean.lower()
+        # Apply FAMILY_ALIASES as final step (single source of truth)
+        return FAMILY_ALIASES.get(result, result)
     
     # If already snake_case (has underscores), just lowercase
     if "_" in family_clean:
@@ -106,11 +118,24 @@ FAMILY_ALIASES = {
 # Special case mappings for normalize_family()
 # These handle common abbreviations and malformed variants
 # NOTE: Do NOT include canonical self-maps (e.g., 'xgboost': 'xgboost')
+# NOTE: Mis-normalized abbreviations (e.g., 'm_l_p') should go here to fix them
 SPECIAL_CASES = {
-    "x_g_boost": "xgboost",  # Fix malformed camelCase split
+    # Brand name fixes (if somehow mis-normalized before reaching here)
+    "light_g_b_m": "lightgbm",   # Fix malformed CamelCase split from "LightGBM"
+    "x_g_boost": "xgboost",      # Fix malformed CamelCase split
+    "n_g_boost": "ngboost",      # Fix malformed CamelCase split from "NGBoost"
     "xgb": "xgboost",
     "lgb": "lightgbm",
     "lgbm": "lightgbm",
+    # Fix mis-normalized all-caps abbreviations (M-L-P → m_l_p → mlp)
+    "m_l_p": "mlp",
+    "l_s_t_m": "lstm",
+    "c_n_n": "cnn1d",
+    "c_n_n_1d": "cnn1d",
+    "v_a_e": "vae",
+    "g_a_n": "gan",
+    # Short aliases
+    "cnn": "cnn1d",
 }
 
 
