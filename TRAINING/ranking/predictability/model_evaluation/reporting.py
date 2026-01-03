@@ -237,6 +237,7 @@ def save_feature_importances(
             df.to_csv(target_csv_file, index=False)
             
             # Save stability snapshot (non-invasive hook)
+            # Note: run_identity should be passed from caller for proper identity-based storage
             try:
                 from TRAINING.stability.feature_importance import save_snapshot_hook
                 # Use properly scoped structure for snapshots
@@ -248,6 +249,7 @@ def save_feature_importances(
                     output_dir=target_repro_dir,  # Save snapshots in scoped structure
                     auto_analyze=None,  # Load from config
                     run_identity=run_identity,  # Pass finalized identity for hash-based storage
+                    allow_legacy=(run_identity is None),  # Temporary: allow legacy until caller passes identity
                 )
             except Exception as e:
                 logger.debug(f"Stability snapshot save failed (non-critical): {e}")

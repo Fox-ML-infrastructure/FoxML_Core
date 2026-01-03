@@ -1350,6 +1350,7 @@ def train_and_evaluate_models(
                             ensure_target_structure(base_output_dir, target_clean)
                             target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
                             
+                            # TODO: Wire up run_identity for quick_pruner snapshots
                             save_snapshot_hook(
                                 target=target_column if target_column else 'unknown',
                                 method="quick_pruner",
@@ -1357,6 +1358,8 @@ def train_and_evaluate_models(
                                 universe_sig=None,  # FIX: universe_sig not available in train_and_evaluate_models scope; use None instead of view
                                 output_dir=target_repro_dir,  # Use target-first structure
                                 auto_analyze=None,  # Load from config
+                                run_identity=None,  # Not available in this scope
+                                allow_legacy=True,  # Temporary: allow legacy until identity wiring is complete
                             )
                 except Exception as e:
                     logger.debug(f"Stability snapshot save failed for quick_pruner (non-critical): {e}")
@@ -6279,13 +6282,15 @@ def evaluate_target_predictability(
             view_for_importances = view_for_writes if 'view_for_writes' in locals() else (view if 'view' in locals() else "CROSS_SECTIONAL")
             symbol_for_importances = symbol_for_writes if 'symbol_for_writes' in locals() else (symbol if ('symbol' in locals() and symbol) else None)
             universe_sig_for_importances = universe_sig_for_writes if 'universe_sig_for_writes' in locals() else None
+            # TODO: Wire up run_identity for target ranking snapshots (requires identity computation)
             _save_feature_importances(
                 target_column, 
                 symbol_for_importances, 
                 feature_importances, 
                 output_dir, 
                 view=view_for_importances,
-                universe_sig=universe_sig_for_importances
+                universe_sig=universe_sig_for_importances,
+                run_identity=None,  # Not available in target ranking scope yet
             )
         
         # Store suspicious features
