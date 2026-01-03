@@ -488,7 +488,8 @@ def compute_cross_sectional_stability(
     cs_importance: pd.Series,
     output_dir: Optional[Path] = None,
     top_k: int = 20,
-    universe_sig: Optional[str] = None
+    universe_sig: Optional[str] = None,
+    run_identity: Optional[Any] = None,  # RunIdentity for snapshot storage
 ) -> Dict[str, Any]:
     """
     Compute stability metrics for cross-sectional feature importance.
@@ -564,7 +565,38 @@ def compute_cross_sectional_stability(
             snapshot_base_dir = get_snapshot_base_dir(output_dir, target=target_column)
         
         if snapshot_base_dir:
-            # TODO: Wire up run_identity for CS feature ranking snapshots
+            # Compute CS identity from passed run_identity
+            cs_identity = None
+            if run_identity is not None:
+                try:
+                    from TRAINING.common.utils.fingerprinting import (
+                        RunIdentity, compute_hparams_fingerprint,
+                        compute_feature_fingerprint_from_specs
+                    )
+                    # Hparams: cross_sectional_panel has no model-specific params
+                    hparams_signature = compute_hparams_fingerprint(
+                        model_family="cross_sectional_panel",
+                        params={},
+                    )
+                    # Feature signature from CS importance features
+                    feature_specs = [{"key": f} for f in cs_importance.index]
+                    feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
+                    # Create updated partial and finalize
+                    updated_partial = RunIdentity(
+                        dataset_signature=run_identity.dataset_signature if hasattr(run_identity, 'dataset_signature') else "",
+                        split_signature=run_identity.split_signature if hasattr(run_identity, 'split_signature') else "",
+                        target_signature=run_identity.target_signature if hasattr(run_identity, 'target_signature') else "",
+                        feature_signature=None,
+                        hparams_signature=hparams_signature or "",
+                        routing_signature=run_identity.routing_signature if hasattr(run_identity, 'routing_signature') else "",
+                        routing_payload=run_identity.routing_payload if hasattr(run_identity, 'routing_payload') else None,
+                        train_seed=run_identity.train_seed if hasattr(run_identity, 'train_seed') else None,
+                        is_final=False,
+                    )
+                    cs_identity = updated_partial.finalize(feature_signature)
+                except Exception as e:
+                    logger.debug(f"Failed to compute CS identity: {e}")
+            
             snapshot_path = save_snapshot_from_series_hook(
                 target=target_column,
                 method=method_name,
@@ -572,8 +604,7 @@ def compute_cross_sectional_stability(
                 universe_sig=universe_sig,
                 output_dir=snapshot_base_dir,  # Use target-first structure
                 auto_analyze=False,  # We'll analyze manually to get metrics
-                run_identity=None,  # Not available in this scope
-                allow_legacy=True,  # Allow legacy until identity wiring is complete
+                run_identity=cs_identity,
             )
         else:
             snapshot_path = None

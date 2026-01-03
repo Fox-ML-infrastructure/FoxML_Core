@@ -1508,8 +1508,40 @@ def select_features_for_target(
                         f"target={target_column} view={view}"
                     )
                 
-                # Aggregated snapshot doesn't correspond to a specific model family's hparams,
-                # so we use legacy path (run_identity=None) for this snapshot
+                # Compute identity for aggregated snapshot
+                # Use "multi_model_aggregated" as hparams (hash of all enabled families)
+                aggregated_identity = None
+                if run_identity is not None:
+                    try:
+                        from TRAINING.common.utils.fingerprinting import (
+                            RunIdentity, compute_hparams_fingerprint,
+                            compute_feature_fingerprint_from_specs
+                        )
+                        # Hparams: hash all enabled model families together
+                        enabled_families = sorted([f for f, cfg in model_families_config.items() if cfg.get('enabled', False)]) if model_families_config else []
+                        hparams_signature = compute_hparams_fingerprint(
+                            model_family="multi_model_aggregated",
+                            params={"enabled_families": enabled_families},
+                        )
+                        # Feature signature from aggregated features
+                        feature_specs = [{"key": f} for f in importance_dict.keys()]
+                        feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
+                        # Create updated partial with hparams and finalize
+                        updated_partial = RunIdentity(
+                            dataset_signature=run_identity.dataset_signature,
+                            split_signature=run_identity.split_signature if hasattr(run_identity, 'split_signature') else "",
+                            target_signature=run_identity.target_signature,
+                            feature_signature=None,
+                            hparams_signature=hparams_signature or "",
+                            routing_signature=run_identity.routing_signature,
+                            routing_payload=run_identity.routing_payload if hasattr(run_identity, 'routing_payload') else None,
+                            train_seed=run_identity.train_seed,
+                            is_final=False,
+                        )
+                        aggregated_identity = updated_partial.finalize(feature_signature)
+                    except Exception as e:
+                        logger.debug(f"Failed to compute aggregated identity: {e}")
+                
                 save_snapshot_hook(
                     target=target_column,
                     method="multi_model_aggregated",
@@ -1517,8 +1549,7 @@ def select_features_for_target(
                     universe_sig=snapshot_universe_sig,  # SST or None, NEVER view
                     output_dir=target_repro_dir,  # Use target-first structure
                     auto_analyze=None,  # Load from config
-                    run_identity=None,  # Aggregated has no single hparams - use legacy
-                    allow_legacy=True,  # Explicitly allow legacy for aggregated
+                    run_identity=aggregated_identity,
                 )
     except Exception as e:
         logger.debug(f"Stability snapshot save failed for aggregated selection (non-critical): {e}")

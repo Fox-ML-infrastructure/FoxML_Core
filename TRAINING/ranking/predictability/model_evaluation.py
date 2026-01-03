@@ -459,7 +459,8 @@ def train_and_evaluate_models(
     resolved_config: Optional[Any] = None,  # NEW: ResolvedConfig with correct purge/embargo (post-pruning)
     dropped_tracker: Optional[Any] = None,  # NEW: Optional DroppedFeaturesTracker for telemetry
     view: str = "CROSS_SECTIONAL",  # View type for REPRODUCIBILITY structure
-    symbol: Optional[str] = None  # Symbol name for SYMBOL_SPECIFIC view
+    symbol: Optional[str] = None,  # Symbol name for SYMBOL_SPECIFIC view
+    run_identity: Optional[Any] = None,  # RunIdentity for snapshot storage
 ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, float], float, Dict[str, List[Tuple[str, float]]], Dict[str, Dict[str, float]], List[Dict[str, Any]]]:
     """
     Train multiple models and return task-aware metrics + importance magnitude
@@ -1350,16 +1351,46 @@ def train_and_evaluate_models(
                             ensure_target_structure(base_output_dir, target_clean)
                             target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
                             
-                            # TODO: Wire up run_identity for quick_pruner snapshots
+                            # Compute quick_pruner identity from passed run_identity
+                            quick_pruner_identity = None
+                            if run_identity is not None:
+                                try:
+                                    from TRAINING.common.utils.fingerprinting import (
+                                        RunIdentity, compute_hparams_fingerprint,
+                                        compute_feature_fingerprint_from_specs
+                                    )
+                                    # Hparams: quick_pruner has no model-specific params
+                                    hparams_signature = compute_hparams_fingerprint(
+                                        model_family="quick_pruner",
+                                        params={},
+                                    )
+                                    # Feature signature from pruned features
+                                    feature_specs = [{"key": f} for f in pruning_stats['full_importance_dict'].keys()]
+                                    feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
+                                    # Create updated partial with hparams and finalize
+                                    updated_partial = RunIdentity(
+                                        dataset_signature=run_identity.dataset_signature if hasattr(run_identity, 'dataset_signature') else "",
+                                        split_signature=run_identity.split_signature if hasattr(run_identity, 'split_signature') else "",
+                                        target_signature=run_identity.target_signature if hasattr(run_identity, 'target_signature') else "",
+                                        feature_signature=None,
+                                        hparams_signature=hparams_signature or "",
+                                        routing_signature=run_identity.routing_signature if hasattr(run_identity, 'routing_signature') else "",
+                                        routing_payload=run_identity.routing_payload if hasattr(run_identity, 'routing_payload') else None,
+                                        train_seed=run_identity.train_seed if hasattr(run_identity, 'train_seed') else None,
+                                        is_final=False,
+                                    )
+                                    quick_pruner_identity = updated_partial.finalize(feature_signature)
+                                except Exception as e:
+                                    logger.debug(f"Failed to compute quick_pruner identity: {e}")
+                            
                             save_snapshot_hook(
                                 target=target_column if target_column else 'unknown',
                                 method="quick_pruner",
                                 importance_dict=pruning_stats['full_importance_dict'],
-                                universe_sig=None,  # FIX: universe_sig not available in train_and_evaluate_models scope; use None instead of view
+                                universe_sig=None,  # universe_sig not available in train_and_evaluate_models scope
                                 output_dir=target_repro_dir,  # Use target-first structure
                                 auto_analyze=None,  # Load from config
-                                run_identity=None,  # Not available in this scope
-                                allow_legacy=True,  # Temporary: allow legacy until identity wiring is complete
+                                run_identity=quick_pruner_identity,
                             )
                 except Exception as e:
                     logger.debug(f"Stability snapshot save failed for quick_pruner (non-critical): {e}")
@@ -6221,6 +6252,56 @@ def evaluate_target_predictability(
         # NEW: Track early filter drops (schema/pattern/registry) - capture before filter_features_for_target
         all_columns_before_filter = columns_after_target_exclusions.copy() if 'columns_after_target_exclusions' in locals() else []
         
+        # Compute partial identity for quick_pruner (split_signature computed after folds created)
+        partial_identity = None
+        try:
+            from TRAINING.common.utils.fingerprinting import (
+                RunIdentity, compute_target_fingerprint, compute_routing_fingerprint
+            )
+            from TRAINING.common.utils.config_hashing import canonical_json, sha256_full
+            
+            # Dataset signature
+            dataset_payload = {
+                "data_dir": str(data_dir),
+                "symbols": sorted(symbols),
+            }
+            if max_rows_per_symbol is not None:
+                dataset_payload["max_rows_per_symbol"] = max_rows_per_symbol
+            dataset_signature = sha256_full(canonical_json(dataset_payload))
+            
+            # Target signature
+            target_sig = compute_target_fingerprint(target=target_column)
+            if target_sig and len(target_sig) == 16:
+                target_sig = sha256_full(target_sig)
+            
+            # Routing signature
+            view_for_id = view_for_writes if 'view_for_writes' in locals() else view
+            symbol_for_id = symbol_for_writes if 'symbol_for_writes' in locals() else symbol
+            routing_sig, routing_payload = compute_routing_fingerprint(
+                view=view_for_id,
+                symbol=symbol_for_id,
+            )
+            
+            # Get seed
+            train_seed = None
+            if experiment_config and hasattr(experiment_config, 'seed'):
+                train_seed = experiment_config.seed
+            
+            # Create partial identity (split computed after folds created inside train_and_evaluate_models)
+            partial_identity = RunIdentity(
+                dataset_signature=dataset_signature or "",
+                split_signature="",  # Computed inside train_and_evaluate_models
+                target_signature=target_sig or "",
+                feature_signature=None,
+                hparams_signature="",  # Computed per model
+                routing_signature=routing_sig or "",
+                routing_payload=routing_payload,
+                train_seed=train_seed,
+                is_final=False,
+            )
+        except Exception as e:
+            logger.debug(f"Failed to compute partial identity: {e}")
+        
         result = train_and_evaluate_models(
             X, y, feature_names, task_type, model_families, multi_model_config,
             target_column=target_column,
@@ -6232,7 +6313,8 @@ def evaluate_target_predictability(
             resolved_config=resolved_config,  # Pass resolved config with correct purge/embargo (post-pruning)
             dropped_tracker=dropped_tracker,  # Pass tracker for telemetry
             view=view_for_writes if 'view_for_writes' in locals() else view,  # Use SST-resolved view
-            symbol=symbol_for_writes if 'symbol_for_writes' in locals() else symbol  # Use SST-resolved symbol
+            symbol=symbol_for_writes if 'symbol_for_writes' in locals() else symbol,  # Use SST-resolved symbol
+            run_identity=partial_identity,  # Pass partial identity for quick_pruner
         )
         
         if result is None or len(result) != 7:
@@ -6914,7 +6996,8 @@ def evaluate_target_predictability(
                                 resolved_config=resolved_config,
                                 dropped_tracker=dropped_tracker,
                                 view=view_for_writes if 'view_for_writes' in locals() else view,  # Use SST-resolved view
-                                symbol=symbol_for_writes if 'symbol_for_writes' in locals() else symbol  # Use SST-resolved symbol
+                                symbol=symbol_for_writes if 'symbol_for_writes' in locals() else symbol,  # Use SST-resolved symbol
+                                run_identity=partial_identity,  # Pass partial identity for quick_pruner
                             )
                             
                             # Compute post-quarantine mean score

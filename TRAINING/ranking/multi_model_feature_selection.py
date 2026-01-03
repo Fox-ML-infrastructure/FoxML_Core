@@ -3456,7 +3456,8 @@ def process_single_symbol(
     explicit_interval: Optional[Union[int, str]] = None,  # Optional explicit interval from config
     experiment_config: Optional[Any] = None,  # Optional ExperimentConfig (for data.bar_interval)
     output_dir: Optional[Path] = None,  # Optional output directory for stability snapshots
-    selected_features: Optional[List[str]] = None  # FIX: Use pruned feature list from shared harness
+    selected_features: Optional[List[str]] = None,  # FIX: Use pruned feature list from shared harness
+    run_identity: Optional[Any] = None,  # RunIdentity for snapshot storage
 ) -> Tuple[List[ImportanceResult], List[Dict[str, Any]]]:
     """
     Process a single symbol with multiple model families.
@@ -3801,7 +3802,38 @@ def process_single_symbol(
                             
                             # FIX: Use model_family (e.g., "lightgbm", "ridge", "elastic_net") as method name
                             # NOT importance_method (e.g., "native", "shap") - stability should be per-family
-                            # TODO: Wire up run_identity for multi-model feature selection snapshots
+                            # Compute identity for this model family
+                            family_identity = None
+                            if run_identity is not None:
+                                try:
+                                    from TRAINING.common.utils.fingerprinting import (
+                                        RunIdentity, compute_hparams_fingerprint,
+                                        compute_feature_fingerprint_from_specs
+                                    )
+                                    # Hparams for this family
+                                    hparams_signature = compute_hparams_fingerprint(
+                                        model_family=family_name,
+                                        params={},  # Default params used
+                                    )
+                                    # Feature signature from importance series
+                                    feature_specs = [{"key": f} for f in importance.index]
+                                    feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
+                                    # Create updated partial and finalize
+                                    updated_partial = RunIdentity(
+                                        dataset_signature=run_identity.dataset_signature if hasattr(run_identity, 'dataset_signature') else "",
+                                        split_signature=run_identity.split_signature if hasattr(run_identity, 'split_signature') else "",
+                                        target_signature=run_identity.target_signature if hasattr(run_identity, 'target_signature') else "",
+                                        feature_signature=None,
+                                        hparams_signature=hparams_signature or "",
+                                        routing_signature=run_identity.routing_signature if hasattr(run_identity, 'routing_signature') else "",
+                                        routing_payload=run_identity.routing_payload if hasattr(run_identity, 'routing_payload') else None,
+                                        train_seed=run_identity.train_seed if hasattr(run_identity, 'train_seed') else None,
+                                        is_final=False,
+                                    )
+                                    family_identity = updated_partial.finalize(feature_signature)
+                                except Exception as e:
+                                    logger.debug(f"Failed to compute family identity for {family_name}: {e}")
+                            
                             save_snapshot_from_series_hook(
                                 target=target_column if target_column else 'unknown',
                                 method=family_name,  # Use model_family, not importance_method
@@ -3809,8 +3841,7 @@ def process_single_symbol(
                                 universe_sig=universe_sig,  # FIX: Use feature_universe_fingerprint (not just symbol)
                                 output_dir=output_dir,
                                 auto_analyze=None,  # Load from config
-                                run_identity=None,  # Not available in this scope
-                                allow_legacy=True,  # Allow legacy until identity wiring is complete
+                                run_identity=family_identity,
                             )
                         except Exception as e:
                             logger.debug(f"Stability snapshot save failed for {family_name} (non-critical): {e}")

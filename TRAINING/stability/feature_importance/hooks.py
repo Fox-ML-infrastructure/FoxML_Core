@@ -168,7 +168,8 @@ def save_snapshot_hook(
                     # Get snapshot count for informative message
                     from .io import load_snapshots
                     try:
-                        snapshots = load_snapshots(base_dir, target, method)
+                        # Use allow_legacy=True since we may have just saved a legacy snapshot
+                        snapshots = load_snapshots(base_dir, target, method, allow_legacy=True)
                         snapshot_count = len(snapshots)
                         if snapshot_count == 1:
                             logger.info(
