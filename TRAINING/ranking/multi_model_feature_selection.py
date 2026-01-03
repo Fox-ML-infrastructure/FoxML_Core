@@ -3801,6 +3801,7 @@ def process_single_symbol(
                             
                             # FIX: Use model_family (e.g., "lightgbm", "ridge", "elastic_net") as method name
                             # NOT importance_method (e.g., "native", "shap") - stability should be per-family
+                            # TODO: Wire up run_identity for multi-model feature selection snapshots
                             save_snapshot_from_series_hook(
                                 target=target_column if target_column else 'unknown',
                                 method=family_name,  # Use model_family, not importance_method
@@ -3808,6 +3809,8 @@ def process_single_symbol(
                                 universe_sig=universe_sig,  # FIX: Use feature_universe_fingerprint (not just symbol)
                                 output_dir=output_dir,
                                 auto_analyze=None,  # Load from config
+                                run_identity=None,  # Not available in this scope
+                                allow_legacy=True,  # Allow legacy until identity wiring is complete
                             )
                         except Exception as e:
                             logger.debug(f"Stability snapshot save failed for {family_name} (non-critical): {e}")

@@ -211,12 +211,13 @@ def save_snapshot_from_series_hook(
     run_id: Optional[str] = None,
     auto_analyze: Optional[bool] = None,  # None = load from config
     run_identity: Optional[Any] = None,   # RunIdentity object or dict
+    allow_legacy: bool = False,  # If True, allow saving without identity (legacy path)
 ) -> Optional[Path]:
     """
     Hook function to save snapshot from pandas Series.
-    
+
     Convenience wrapper for Series-based importance data.
-    
+
     Args:
         target: Target name
         method: Method name
@@ -227,6 +228,7 @@ def save_snapshot_from_series_hook(
         auto_analyze: If True, automatically run stability analysis.
                      If None, loads from config (safety.feature_importance.auto_analyze_stability)
         run_identity: Optional RunIdentity object or dict with identity signatures.
+        allow_legacy: If True, allow saving without identity (legacy path).
     
     Returns:
         Path to saved snapshot, or None if saving failed
@@ -242,6 +244,7 @@ def save_snapshot_from_series_hook(
         run_id=run_id,
         auto_analyze=auto_analyze,
         run_identity=run_identity,
+        allow_legacy=allow_legacy,
     )
 
 

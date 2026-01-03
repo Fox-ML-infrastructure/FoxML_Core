@@ -564,13 +564,16 @@ def compute_cross_sectional_stability(
             snapshot_base_dir = get_snapshot_base_dir(output_dir, target=target_column)
         
         if snapshot_base_dir:
+            # TODO: Wire up run_identity for CS feature ranking snapshots
             snapshot_path = save_snapshot_from_series_hook(
                 target=target_column,
                 method=method_name,
                 importance_series=cs_importance,
                 universe_sig=universe_sig,
                 output_dir=snapshot_base_dir,  # Use target-first structure
-                auto_analyze=False  # We'll analyze manually to get metrics
+                auto_analyze=False,  # We'll analyze manually to get metrics
+                run_identity=None,  # Not available in this scope
+                allow_legacy=True,  # Allow legacy until identity wiring is complete
             )
         else:
             snapshot_path = None
