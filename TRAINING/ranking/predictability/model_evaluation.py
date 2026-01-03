@@ -6282,7 +6282,101 @@ def evaluate_target_predictability(
             view_for_importances = view_for_writes if 'view_for_writes' in locals() else (view if 'view' in locals() else "CROSS_SECTIONAL")
             symbol_for_importances = symbol_for_writes if 'symbol_for_writes' in locals() else (symbol if ('symbol' in locals() and symbol) else None)
             universe_sig_for_importances = universe_sig_for_writes if 'universe_sig_for_writes' in locals() else None
-            # TODO: Wire up run_identity for target ranking snapshots (requires identity computation)
+            
+            # Compute RunIdentity for target ranking snapshots
+            target_ranking_identity = None
+            try:
+                from TRAINING.common.utils.fingerprinting import (
+                    RunIdentity, compute_target_fingerprint, compute_routing_fingerprint,
+                    compute_split_fingerprint, compute_hparams_fingerprint,
+                    compute_feature_fingerprint_from_specs
+                )
+                from TRAINING.common.utils.config_hashing import canonical_json, sha256_full
+                
+                # Dataset signature
+                dataset_payload = {
+                    "data_dir": str(data_dir),
+                    "symbols": sorted(symbols),
+                }
+                if max_rows_per_symbol is not None:
+                    dataset_payload["max_rows_per_symbol"] = max_rows_per_symbol
+                dataset_signature = sha256_full(canonical_json(dataset_payload))
+                
+                # Target signature
+                target_signature = compute_target_fingerprint(target=target_column)
+                if target_signature and len(target_signature) == 16:
+                    target_signature = sha256_full(target_signature)
+                
+                # Routing signature
+                routing_signature, routing_payload = compute_routing_fingerprint(
+                    view=view_for_importances,
+                    symbol=symbol_for_importances,
+                )
+                
+                # Split signature from fold_timestamps
+                split_signature = None
+                if fold_timestamps:
+                    fold_boundaries = []
+                    for fold_info in fold_timestamps:
+                        if isinstance(fold_info, dict):
+                            start = fold_info.get('train_start')
+                            end = fold_info.get('test_end')
+                            if start and end:
+                                fold_boundaries.append((start, end))
+                    if fold_boundaries:
+                        # Get purge/embargo from resolved_config if available
+                        purge_min = resolved_config.purge_minutes if resolved_config and hasattr(resolved_config, 'purge_minutes') else 0.0
+                        embargo_min = resolved_config.embargo_minutes if resolved_config and hasattr(resolved_config, 'embargo_minutes') else 0.0
+                        split_signature = compute_split_fingerprint(
+                            cv_method="purged_kfold",
+                            n_folds=len(fold_boundaries),
+                            purge_minutes=purge_min,
+                            embargo_minutes=embargo_min,
+                            fold_boundaries=fold_boundaries,
+                            split_seed=None,
+                        )
+                
+                # Get seed
+                train_seed = None
+                if experiment_config and hasattr(experiment_config, 'seed'):
+                    train_seed = experiment_config.seed
+                
+                # Create identity per model family and save
+                for model_family, model_importances in feature_importances.items():
+                    if not model_importances:
+                        continue
+                    
+                    # Hparams signature for this family
+                    family_config = {}
+                    if multi_model_config and 'model_families' in multi_model_config:
+                        family_config = multi_model_config['model_families'].get(model_family, {})
+                    hparams_signature = compute_hparams_fingerprint(
+                        model_family=model_family,
+                        params=family_config.get('params', family_config),
+                    )
+                    
+                    # Feature signature from features in this model's importances
+                    feature_specs = [{"key": f} for f in model_importances.keys()]
+                    feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
+                    
+                    # Create partial and finalize
+                    partial = RunIdentity(
+                        dataset_signature=dataset_signature or "",
+                        split_signature=split_signature or "",
+                        target_signature=target_signature or "",
+                        feature_signature=None,
+                        hparams_signature=hparams_signature or "",
+                        routing_signature=routing_signature or "",
+                        routing_payload=routing_payload,
+                        train_seed=train_seed,
+                        is_final=False,
+                    )
+                    target_ranking_identity = partial.finalize(feature_signature)
+                    break  # Use first model's identity for the batch save
+            except Exception as e:
+                logger.debug(f"Failed to compute RunIdentity for target ranking: {e}")
+                target_ranking_identity = None
+            
             _save_feature_importances(
                 target_column, 
                 symbol_for_importances, 
@@ -6290,7 +6384,7 @@ def evaluate_target_predictability(
                 output_dir, 
                 view=view_for_importances,
                 universe_sig=universe_sig_for_importances,
-                run_identity=None,  # Not available in target ranking scope yet
+                run_identity=target_ranking_identity,
             )
         
         # Store suspicious features
