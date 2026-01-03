@@ -627,6 +627,14 @@ class DiffTelemetry:
         target = ctx.target
         symbol = additional_data.get('symbol') if additional_data else None
         
+        # Extract universe_sig for comparison scoping (CRITICAL for CS runs)
+        # Check top-level first, then cs_config for backward compatibility
+        universe_sig = None
+        if additional_data:
+            universe_sig = additional_data.get('universe_sig')
+            if not universe_sig and 'cs_config' in additional_data:
+                universe_sig = additional_data['cs_config'].get('universe_sig')
+        
         # Build fingerprints (using resolved context)
         config_fp = self._compute_config_fingerprint_from_context(ctx, additional_data)
         data_fp = self._compute_data_fingerprint_from_context(ctx)
@@ -709,8 +717,10 @@ class DiffTelemetry:
                 library_versions_signature = hashlib.sha256(lib_str.encode()).hexdigest()[:16]
         
         # Build comparison group (using resolved context, stage-aware)
+        # CRITICAL: Pass symbol and universe_sig for proper comparison scoping
         comparison_group = self._build_comparison_group_from_context(
-            stage, ctx, config_fp, data_fp, target_fp, hyperparameters_signature, train_seed, library_versions_signature
+            stage, ctx, config_fp, data_fp, target_fp, hyperparameters_signature, train_seed, library_versions_signature,
+            symbol=symbol, universe_sig=universe_sig
         )
         
         # Normalize inputs (using resolved context - no nulls for required fields)
@@ -1124,7 +1134,9 @@ class DiffTelemetry:
         task_fp: Optional[str],
         hyperparameters_signature: Optional[str] = None,
         train_seed: Optional[int] = None,
-        library_versions_signature: Optional[str] = None
+        library_versions_signature: Optional[str] = None,
+        symbol: Optional[str] = None,
+        universe_sig: Optional[str] = None
     ) -> ComparisonGroup:
         """Build comparison group from resolved context (stage-aware).
         
@@ -1132,6 +1144,10 @@ class DiffTelemetry:
         - TARGET_RANKING: Does NOT include model_family or feature_signature (not applicable)
         - FEATURE_SELECTION: Includes feature_signature but NOT model_family
         - TRAINING: Includes both model_family and feature_signature
+        
+        CRITICAL: symbol and universe_sig are required for proper comparison scoping:
+        - symbol: For SS runs, ensures AAPL only compares to AAPL (not AVGO)
+        - universe_sig: For CS runs, ensures same symbol set comparisons
         
         This prevents storing null placeholders for fields that aren't stage-relevant.
         """
@@ -1188,7 +1204,9 @@ class DiffTelemetry:
             feature_signature=feature_signature,  # Stage-specific: None for TARGET_RANKING
             hyperparameters_signature=hp_sig,  # Stage-specific: Only for FEATURE_SELECTION and TRAINING
             train_seed=seed,  # Stage-specific: Only for FEATURE_SELECTION and TRAINING
-            library_versions_signature=lib_sig  # Stage-specific: Only for FEATURE_SELECTION and TRAINING
+            library_versions_signature=lib_sig,  # Stage-specific: Only for FEATURE_SELECTION and TRAINING
+            universe_sig=universe_sig,  # CRITICAL: For CS, ensures same symbol set comparisons
+            symbol=symbol  # CRITICAL: For SS, ensures AAPL only compares to AAPL
         )
     
     def _build_comparison_group(
@@ -2562,6 +2580,13 @@ class DiffTelemetry:
         # Must be same target (if specified)
         if current.target and prev.target and current.target != prev.target:
             return False, f"Different targets: {current.target} vs {prev.target}"
+        
+        # CRITICAL: For SYMBOL_SPECIFIC view, must be same symbol
+        # This is defense-in-depth (comparison_group.to_key() also includes symbol now)
+        # but protects against comparing older snapshots without updated comparison groups
+        if current.view == "SYMBOL_SPECIFIC":
+            if current.symbol != prev.symbol:
+                return False, f"Different symbols: {current.symbol} vs {prev.symbol}"
         
         # CRITICAL: Must have identical comparison groups (all metadata must match exactly)
         # This is the primary check - all outcome-influencing metadata must match

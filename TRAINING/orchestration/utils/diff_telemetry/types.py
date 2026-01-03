@@ -104,6 +104,8 @@ class ComparisonGroup:
     - Same hyperparameters (learning_rate, max_depth, etc. - CRITICAL: impact outcomes)
     - Same train_seed (CRITICAL: different seeds = different outcomes)
     - Same library versions (CRITICAL: different versions = different outcomes)
+    - Same universe_sig (for CS: different symbol sets = different outcomes)
+    - Same symbol (for SS: AAPL only compares to AAPL, not AVGO)
     
     Runs are stored together ONLY if they match exactly on all these dimensions.
     """
@@ -117,6 +119,8 @@ class ComparisonGroup:
     hyperparameters_signature: Optional[str] = None  # Hash of hyperparameters (CRITICAL: different HPs = different outcomes)
     train_seed: Optional[int] = None  # Training seed (CRITICAL: different seeds = different outcomes)
     library_versions_signature: Optional[str] = None  # Hash of library versions (CRITICAL: different versions = different outcomes)
+    universe_sig: Optional[str] = None  # Universe signature (CRITICAL: different symbol sets = different outcomes for CS)
+    symbol: Optional[str] = None  # Symbol ticker (CRITICAL: for SS, AAPL only compares to AAPL, not AVGO)
     
     def to_key(self) -> str:
         """Generate comparison group key.
@@ -153,6 +157,12 @@ class ComparisonGroup:
         # CRITICAL: Include library versions signature (different versions = different outcomes)
         if self.library_versions_signature:
             parts.append(f"libs={self.library_versions_signature[:8]}")
+        # CRITICAL: Include universe_sig for CS runs (different symbol sets = different outcomes)
+        if self.universe_sig:
+            parts.append(f"universe={self.universe_sig[:8]}")
+        # CRITICAL: Include symbol for SS runs (AAPL only compares to AAPL)
+        if self.symbol:
+            parts.append(f"symbol={self.symbol}")
         return "|".join(parts) if parts else "default"
     
     def to_dir_name(self) -> str:

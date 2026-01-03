@@ -29,21 +29,42 @@ routing:
   # Task-type aware: different thresholds for classification (AUC) vs regression (R²)
   # Classification: AUC range is 0.5 (random) to 1.0 (perfect)
   # Regression: R² range is -inf to 1.0 (0 = predicting mean, negative = worse than mean)
+  # Horizon-aware: longer horizons are inherently harder to predict, so thresholds are relaxed
   cross_sectional:
     min_score:
       classification: 0.52       # AUC slightly above random (0.5)
-      regression: -0.5           # R² allows poor fits but not catastrophic
+      regression:                # Horizon-aware R² thresholds
+        default: -0.5            # Fallback if horizon unknown
+        short: 0.0               # < 60 min: expect positive R²
+        medium: -0.3             # 60min - 4h: allow slightly negative
+        long: -1.0               # 4h - 1d: allow poor fits
+        very_long: -2.0          # > 1d: allow very poor fits (inherently hard)
     strong_score:
       classification: 0.58       # AUC threshold for "strong" CS signal
-      regression: 0.05           # R² threshold for "strong" CS signal
+      regression:                # Horizon-aware R² thresholds for "strong" signal
+        default: 0.05            # Fallback if horizon unknown
+        short: 0.15              # < 60 min: higher expectations
+        medium: 0.10             # 60min - 4h
+        long: 0.0                # 4h - 1d: break-even is good
+        very_long: -0.5          # > 1d: slightly negative is acceptable
   
   symbol:
     min_score:
       classification: 0.54       # AUC slightly higher for symbol-specific
-      regression: -0.3           # R² tighter for symbol-specific
+      regression:                # Horizon-aware R² thresholds
+        default: -0.3            # Fallback if horizon unknown
+        short: 0.05              # < 60 min: expect positive R²
+        medium: -0.2             # 60min - 4h
+        long: -0.8               # 4h - 1d
+        very_long: -1.5          # > 1d
     strong_score:
       classification: 0.60       # AUC threshold for "strong" symbol signal
-      regression: 0.10           # R² threshold for "strong" symbol signal
+      regression:                # Horizon-aware R² thresholds for "strong" signal
+        default: 0.10            # Fallback if horizon unknown
+        short: 0.20              # < 60 min
+        medium: 0.15             # 60min - 4h
+        long: 0.05               # 4h - 1d
+        very_long: -0.3          # > 1d
   
   # --- Stability Requirements ---
   # Stability categories: STABLE, DRIFTING, DIVERGED, UNKNOWN

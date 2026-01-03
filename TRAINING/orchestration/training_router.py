@@ -27,6 +27,42 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+def _resolve_horizon_minutes(target: str) -> Optional[int]:
+    """
+    Resolve horizon in minutes from target name.
+    
+    Uses SST contract function if available, with fallback regex extraction.
+    
+    Args:
+        target: Target name (e.g., 'fwd_ret_10m', 'fwd_ret_5d', 'y_will_peak_60m_0.8')
+        
+    Returns:
+        Horizon in minutes, or None if cannot be determined
+    """
+    try:
+        from TRAINING.common.utils.sst_contract import resolve_target_horizon_minutes
+        return resolve_target_horizon_minutes(target)
+    except ImportError:
+        pass
+    
+    # Fallback: simple regex extraction
+    import re
+    # Try to match patterns like 10m, 60m, 1d, 5d
+    m_match = re.search(r'(\d+)m(?:_|$)', target)
+    if m_match:
+        return int(m_match.group(1))
+    
+    d_match = re.search(r'(\d+)d(?:_|$)', target)
+    if d_match:
+        return int(d_match.group(1)) * 1440  # days to minutes
+    
+    h_match = re.search(r'(\d+)h(?:_|$)', target)
+    if h_match:
+        return int(h_match.group(1)) * 60  # hours to minutes
+    
+    return None
+
+
 class RouteState(str, Enum):
     """Training route states."""
     ROUTE_CROSS_SECTIONAL = "ROUTE_CROSS_SECTIONAL"
@@ -96,14 +132,47 @@ class SymbolMetrics:
     metric_name: Optional[str] = None  # R², AUC, etc.
 
 
-def _get_score_threshold(config_value: Any, task_type: Optional[str]) -> float:
+def _get_horizon_tier(horizon_minutes: Optional[int]) -> str:
     """
-    Get score threshold from config, handling task-type-aware thresholds.
-    
+    Get horizon tier from horizon in minutes.
+
+    Tiers:
+        short: < 60 min (e.g., fwd_ret_10m, fwd_ret_30m)
+        medium: 60min - 4h (e.g., fwd_ret_60m, fwd_ret_120m)
+        long: 4h - 1d (e.g., fwd_ret_1d)
+        very_long: > 1d (e.g., fwd_ret_5d)
+
+    Args:
+        horizon_minutes: Target horizon in minutes
+
+    Returns:
+        Tier name string
+    """
+    if horizon_minutes is None:
+        return "default"
+    if horizon_minutes < 60:
+        return "short"
+    elif horizon_minutes < 240:  # 4 hours
+        return "medium"
+    elif horizon_minutes < 1440:  # 1 day
+        return "long"
+    else:
+        return "very_long"
+
+
+def _get_score_threshold(
+    config_value: Any,
+    task_type: Optional[str],
+    horizon_minutes: Optional[int] = None
+) -> float:
+    """
+    Get score threshold from config, handling task-type and horizon-aware thresholds.
+
     Args:
         config_value: Either a float (legacy) or dict with classification/regression keys
         task_type: Task type string (REGRESSION, BINARY_CLASSIFICATION, MULTICLASS_CLASSIFICATION)
-    
+        horizon_minutes: Target horizon in minutes (for regression horizon-aware thresholds)
+
     Returns:
         Threshold value (float)
     """
@@ -112,8 +181,15 @@ def _get_score_threshold(config_value: Any, task_type: Optional[str]) -> float:
         if task_type and "CLASSIFICATION" in task_type.upper():
             return config_value.get("classification", 0.5)
         else:
-            # Default to regression for unknown or regression task types
-            return config_value.get("regression", -0.5)
+            # Regression - check for horizon-aware nested config
+            regression_config = config_value.get("regression", -0.5)
+            if isinstance(regression_config, dict):
+                # Horizon-aware regression thresholds
+                tier = _get_horizon_tier(horizon_minutes)
+                return regression_config.get(tier, regression_config.get("default", -0.5))
+            else:
+                # Legacy: single regression threshold
+                return float(regression_config)
     else:
         # Legacy: single threshold for all task types
         return float(config_value)
@@ -305,9 +381,10 @@ class TrainingRouter:
             # This is a soft check - we'd need to know total families attempted
             pass
         
-        # Scoring / stability rules - task-type aware thresholds
-        strong_score = _get_score_threshold(cs_config["strong_score"], cs_metrics.task_type)
-        min_score = _get_score_threshold(cs_config["min_score"], cs_metrics.task_type)
+        # Scoring / stability rules - task-type and horizon-aware thresholds
+        horizon_minutes = _resolve_horizon_minutes(cs_metrics.target)
+        strong_score = _get_score_threshold(cs_config["strong_score"], cs_metrics.task_type, horizon_minutes)
+        min_score = _get_score_threshold(cs_config["min_score"], cs_metrics.task_type, horizon_minutes)
         
         if (cs_metrics.score >= strong_score and
             cs_metrics.stability.value in stability_allowlist):
@@ -320,7 +397,7 @@ class TrainingRouter:
         # Experimental lane
         if enable_experimental:
             exp_min_score_config = experimental_config.get("min_score", 0.52)
-            exp_min_score = _get_score_threshold(exp_min_score_config, cs_metrics.task_type) if isinstance(exp_min_score_config, dict) else exp_min_score_config
+            exp_min_score = _get_score_threshold(exp_min_score_config, cs_metrics.task_type, horizon_minutes) if isinstance(exp_min_score_config, dict) else exp_min_score_config
             exp_allowed_stabilities = experimental_config.get("allowed_stabilities", ["DRIFTING", "UNKNOWN"])
             if (cs_metrics.score >= exp_min_score and
                 cs_metrics.stability.value in exp_allowed_stabilities):
@@ -365,9 +442,10 @@ class TrainingRouter:
                 # This is a soft check - would need total families attempted
                 pass
         
-        # Scoring / stability rules - task-type aware thresholds
-        strong_score = _get_score_threshold(symbol_config["strong_score"], symbol_metrics.task_type)
-        min_score = _get_score_threshold(symbol_config["min_score"], symbol_metrics.task_type)
+        # Scoring / stability rules - task-type and horizon-aware thresholds
+        horizon_minutes = _resolve_horizon_minutes(symbol_metrics.target)
+        strong_score = _get_score_threshold(symbol_config["strong_score"], symbol_metrics.task_type, horizon_minutes)
+        min_score = _get_score_threshold(symbol_config["min_score"], symbol_metrics.task_type, horizon_minutes)
         
         if (symbol_metrics.score >= strong_score and
             symbol_metrics.stability.value in stability_allowlist):
@@ -380,7 +458,7 @@ class TrainingRouter:
         # Experimental lane
         if enable_experimental:
             exp_min_score_config = experimental_config.get("min_score", 0.52)
-            exp_min_score = _get_score_threshold(exp_min_score_config, symbol_metrics.task_type) if isinstance(exp_min_score_config, dict) else exp_min_score_config
+            exp_min_score = _get_score_threshold(exp_min_score_config, symbol_metrics.task_type, horizon_minutes) if isinstance(exp_min_score_config, dict) else exp_min_score_config
             exp_allowed_stabilities = experimental_config.get("allowed_stabilities", ["DRIFTING", "UNKNOWN"])
             if (symbol_metrics.score >= exp_min_score and
                 symbol_metrics.stability.value in exp_allowed_stabilities):
@@ -643,8 +721,9 @@ class TrainingRouter:
                     
                     if cs_metrics.stability.value not in stability_allowlist:
                         reason_parts.append(f"stability={cs_metrics.stability.value} not in {stability_allowlist}")
-                    # Use task-type-aware threshold for logging
-                    effective_min_score = _get_score_threshold(cs_config["min_score"], cs_metrics.task_type)
+                    # Use task-type and horizon-aware threshold for logging
+                    horizon_minutes_for_log = _resolve_horizon_minutes(cs_metrics.target)
+                    effective_min_score = _get_score_threshold(cs_config["min_score"], cs_metrics.task_type, horizon_minutes_for_log)
                     if cs_metrics.score < effective_min_score:
                         reason_parts.append(f"score={cs_metrics.score:.3f} < {effective_min_score}")
                     if cs_metrics.sample_size < min_sample_size:

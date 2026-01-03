@@ -16,6 +16,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2026-01-02 (Horizon-Aware Routing and Telemetry Comparison Fixes)
+- **Feature**: Implemented horizon-aware routing thresholds for regression targets.
+  - `routing.yaml`: Regression `min_score` and `strong_score` now support horizon tiers: `short` (<60min), `medium` (60min-4h), `long` (4h-1d), `very_long` (>1d)
+  - `training_router.py`: Added `_resolve_horizon_minutes()` and `_get_horizon_tier()` helper functions
+  - `training_router.py`: Modified `_get_score_threshold()` to accept optional `horizon_minutes` and select appropriate tier
+  - Long-horizon targets (e.g., `fwd_ret_5d`) no longer blocked due to inherently lower R² scores
+- **Critical Fix**: Fixed telemetry comparing different symbols/universes incorrectly (e.g., AAPL metrics compared to AVGO).
+  - `diff_telemetry/types.py`: Added `symbol` and `universe_sig` fields to `ComparisonGroup`
+  - `diff_telemetry/types.py`: Updated `to_key()` to include both fields in comparison key
+  - `diff_telemetry.py`: Added `symbol` and `universe_sig` parameters to `_build_comparison_group_from_context()`
+  - `diff_telemetry.py`: Extracted `universe_sig` from `additional_data` with `cs_config` fallback
+  - `diff_telemetry.py`: Added explicit symbol check in `_check_comparability()` for SYMBOL_SPECIFIC view
+  - Now AAPL only compares to previous AAPL runs, not AVGO; CS runs only compare to same universe
+- **Impact**: Long-horizon regression targets route correctly. Telemetry diffs are accurate (no more misleading "auc: +99%" changes from cross-symbol comparisons). Stability warnings "Found snapshots from 2 different symbols/universes" should stop appearing.
+- **Files Changed**: `routing.yaml`, `training_router.py`, `diff_telemetry/types.py`, `diff_telemetry.py`
+
 #### 2026-01-02 (universe_sig Propagation Fixes and High-AUC Investigation)
 - **Fix**: Improved `universe_sig` propagation in feature selection pipeline to eliminate `Missing universe_sig` warnings.
   - `feature_selector.py`: Added early initialization of `universe_sig_for_writes`, `view_for_writes`, `symbol_for_writes` before shared harness block
