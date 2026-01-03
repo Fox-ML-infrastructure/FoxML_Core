@@ -1221,7 +1221,8 @@ def select_features_for_target(
                     selected_features=None,  # Not available in fallback path (computed after aggregation)
                     explicit_interval=explicit_interval,
                     experiment_config=experiment_config,
-                    output_dir=output_dir
+                    output_dir=output_dir,
+                    run_identity=run_identity,  # Pass partial identity for snapshot storage
                 )
                 return symbol, symbol_results, symbol_statuses, None
             except Exception as e:
@@ -1285,7 +1286,8 @@ def select_features_for_target(
                         explicit_interval=explicit_interval,
                         experiment_config=experiment_config,
                         output_dir=output_dir,  # Pass output_dir for reproducibility tracking
-                        selected_features=None  # Not available in fallback path (computed after aggregation)
+                        selected_features=None,  # Not available in fallback path (computed after aggregation)
+                        run_identity=run_identity,  # Pass partial identity for snapshot storage
                     )
                     
                     all_results.extend(symbol_results)
@@ -1652,7 +1654,8 @@ def select_features_for_target(
                     cs_importance=cs_importance,
                     output_dir=output_dir,
                     top_k=20,
-                    universe_sig="ALL"  # Cross-sectional uses all symbols
+                    universe_sig="ALL",  # Cross-sectional uses all symbols
+                    run_identity=run_identity,  # Pass partial identity for snapshot storage
                 )
                 
                 # Compact logging (similar to per-model reproducibility)
