@@ -1298,6 +1298,63 @@ class IntelligentTrainer:
             # LOSO: train on all symbols except symbol
             symbols_to_use = [s for s in self.symbols if s != symbol]
         
+        # Compute partial RunIdentity for reproducibility tracking
+        # Split and hparams signatures computed inside selector where folds/models are known
+        partial_identity = None
+        try:
+            from TRAINING.common.utils.fingerprinting import (
+                RunIdentity,
+                compute_target_fingerprint,
+                compute_routing_fingerprint,
+            )
+            from TRAINING.common.utils.config_hashing import canonical_json, sha256_full
+            
+            # Dataset signature from available data
+            dataset_payload = {
+                "data_dir": str(self.data_dir),
+                "symbols": sorted(symbols_to_use),
+            }
+            if self.experiment_config:
+                if hasattr(self.experiment_config, 'max_samples_per_symbol'):
+                    dataset_payload["max_samples_per_symbol"] = self.experiment_config.max_samples_per_symbol
+            dataset_signature = sha256_full(canonical_json(dataset_payload))
+            
+            # Target signature from target config
+            target_signature = compute_target_fingerprint(target=target)
+            # Convert 16-char to 64-char if needed
+            if target_signature and len(target_signature) == 16:
+                target_signature = sha256_full(target_signature)
+            
+            # Routing signature from view/symbol
+            routing_signature, routing_payload = compute_routing_fingerprint(
+                view=view,
+                symbol=symbol,
+            )
+            
+            # Get seed from experiment config
+            train_seed = None
+            if self.experiment_config and hasattr(self.experiment_config, 'seed'):
+                train_seed = self.experiment_config.seed
+            elif hasattr(self, 'seed'):
+                train_seed = self.seed
+            
+            # Create partial identity (split and hparams computed in selector)
+            partial_identity = RunIdentity(
+                dataset_signature=dataset_signature or "",
+                split_signature="",  # Computed in selector after folds created
+                target_signature=target_signature or "",
+                feature_signature=None,  # Computed after feature selection
+                hparams_signature="",  # Computed per model family in selector
+                routing_signature=routing_signature or "",
+                routing_payload=routing_payload,
+                train_seed=train_seed,
+                is_final=False,
+            )
+            logger.debug(f"Created partial RunIdentity for {target}")
+        except Exception as e:
+            logger.warning(f"Failed to create partial RunIdentity: {e}")
+            partial_identity = None
+        
         selected_features, _ = select_features_for_target(
             target_column=target,
             symbols=symbols_to_use,
@@ -1310,7 +1367,8 @@ class IntelligentTrainer:
             explicit_interval=explicit_interval,  # Pass explicit interval to avoid auto-detection warnings
             experiment_config=self.experiment_config,  # Pass experiment config for data.bar_interval
             view=view,  # Pass view to ensure consistency
-            symbol=symbol  # Pass symbol for SYMBOL_SPECIFIC view
+            symbol=symbol,  # Pass symbol for SYMBOL_SPECIFIC view
+            run_identity=partial_identity,  # Pass partial identity for reproducibility
         )
         
         # Load confidence and apply routing

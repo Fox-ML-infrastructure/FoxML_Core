@@ -30,6 +30,7 @@ def save_snapshot_hook(
     run_id: Optional[str] = None,
     auto_analyze: Optional[bool] = None,  # None = load from config
     run_identity: Optional[Any] = None,   # RunIdentity object or dict
+    allow_legacy: bool = False,  # If True, allow saving without identity (legacy path)
 ) -> Optional[Path]:
     """
     Hook function to save feature importance snapshot.
@@ -47,6 +48,8 @@ def save_snapshot_hook(
                      If None, loads from config (safety.feature_importance.auto_analyze_stability)
         run_identity: Optional RunIdentity object or dict with identity signatures.
                      PREFERRED: Pass RunIdentity SST object for full reproducibility.
+        allow_legacy: If True, allow saving without identity (legacy path).
+                     If False (default), raise if no identity provided.
     
     Returns:
         Path to saved snapshot, or None if saving failed
@@ -98,9 +101,16 @@ def save_snapshot_hook(
                     "Use RunIdentity.finalize(feature_signature) for full reproducibility."
                 )
         else:
-            # No run_identity provided - legacy behavior with warning
+            # No run_identity provided
+            if not allow_legacy:
+                # HARD REFUSAL: Cannot save without identity unless legacy explicitly allowed
+                raise ValueError(
+                    "Cannot save snapshot without run_identity and allow_legacy=False. "
+                    "Either provide a finalized RunIdentity or set allow_legacy=True."
+                )
+            # Legacy mode explicitly allowed - warn and continue
             logger.warning(
-                "save_snapshot_hook called without run_identity - using legacy path. "
+                "save_snapshot_hook called without run_identity (allow_legacy=True) - using legacy path. "
                 "Pass finalized RunIdentity for hash-based storage and correct grouping."
             )
         

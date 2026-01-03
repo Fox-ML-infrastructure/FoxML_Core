@@ -679,9 +679,76 @@ def select_features_for_target(
                                     break
                                 base_output_dir = base_output_dir.parent
                             
+                            # Compute split_signature from fold info (folds are now finalized)
+                            split_signature = None
+                            if run_identity is not None and fold_timestamps:
+                                try:
+                                    from TRAINING.common.utils.fingerprinting import compute_split_fingerprint
+                                    from datetime import datetime
+                                    # Convert fold_timestamps to boundaries
+                                    fold_boundaries = []
+                                    for fold_info in fold_timestamps:
+                                        if isinstance(fold_info, dict):
+                                            start = fold_info.get('start') or fold_info.get('train_start')
+                                            end = fold_info.get('end') or fold_info.get('val_end')
+                                            if start and end:
+                                                fold_boundaries.append((start, end))
+                                    if fold_boundaries:
+                                        split_signature = compute_split_fingerprint(
+                                            cv_method=harness.cv_method if hasattr(harness, 'cv_method') else "purged_kfold",
+                                            n_folds=len(fold_boundaries),
+                                            purge_minutes=purge_minutes or 0.0,
+                                            embargo_minutes=embargo_minutes or 0.0,
+                                            fold_boundaries=fold_boundaries,
+                                            split_seed=None,
+                                        )
+                                except Exception as e:
+                                    logger.debug(f"Failed to compute split_signature: {e}")
+                            
                             # Use base run directory - save_snapshot_hook will use target-first structure
                             for model_family, importance_dict in all_feature_importances.items():
                                 if importance_dict:
+                                    # Finalize identity for this model family
+                                    final_identity = None
+                                    if run_identity is not None:
+                                        try:
+                                            from TRAINING.common.utils.fingerprinting import (
+                                                RunIdentity, compute_hparams_fingerprint,
+                                                compute_feature_fingerprint_from_specs
+                                            )
+                                            # Compute hparams_signature for this model family
+                                            family_config = model_families_config.get(model_family, {}) if model_families_config else {}
+                                            hparams_signature = compute_hparams_fingerprint(
+                                                model_family=model_family,
+                                                params=family_config.get('params', family_config),
+                                            )
+                                            
+                                            # Compute feature_signature from final features
+                                            feature_specs = [{"key": f} for f in importance_dict.keys()]
+                                            feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
+                                            
+                                            # Create updated partial with split + hparams
+                                            updated_partial = RunIdentity(
+                                                dataset_signature=run_identity.dataset_signature,
+                                                split_signature=split_signature or "",
+                                                target_signature=run_identity.target_signature,
+                                                feature_signature=None,
+                                                hparams_signature=hparams_signature or "",
+                                                routing_signature=run_identity.routing_signature,
+                                                routing_payload=run_identity.routing_payload,
+                                                train_seed=run_identity.train_seed,
+                                                is_final=False,
+                                            )
+                                            
+                                            # Finalize - will raise if required signatures missing
+                                            final_identity = updated_partial.finalize(feature_signature)
+                                        except ValueError as ve:
+                                            # Required signatures missing - RE-RAISE (contract violation)
+                                            logger.error(f"Identity finalization failed for {model_family}: {ve}")
+                                            raise
+                                        except Exception as e:
+                                            logger.debug(f"Failed to finalize identity for {model_family}: {e}")
+                                    
                                     # FIX: Ensure method name is model_family (e.g., "lightgbm", "ridge")
                                     # NOT importance_method (e.g., "native") - stability must be per-family
                                     # FIX: Pass universe_sig (from SST), not view - prevents scope bugs
@@ -708,7 +775,8 @@ def select_features_for_target(
                                         universe_sig=snapshot_universe_sig,  # SST or None, NEVER view
                                         output_dir=base_output_dir,  # Pass run directory - will use target-first structure
                                         auto_analyze=None,  # Load from config
-                                        run_identity=run_identity,  # Pass finalized identity for hash-based storage
+                                        run_identity=final_identity,  # Pass FINALIZED identity
+                                        allow_legacy=(final_identity is None),  # Allow legacy only if identity failed
                                     )
                         except Exception as e:
                             logger.debug(f"Stability snapshot save failed for {symbol_to_process} (non-critical): {e}")
@@ -1440,6 +1508,8 @@ def select_features_for_target(
                         f"target={target_column} view={view}"
                     )
                 
+                # Aggregated snapshot doesn't correspond to a specific model family's hparams,
+                # so we use legacy path (run_identity=None) for this snapshot
                 save_snapshot_hook(
                     target=target_column,
                     method="multi_model_aggregated",
@@ -1447,7 +1517,8 @@ def select_features_for_target(
                     universe_sig=snapshot_universe_sig,  # SST or None, NEVER view
                     output_dir=target_repro_dir,  # Use target-first structure
                     auto_analyze=None,  # Load from config
-                    run_identity=run_identity,  # Pass finalized identity for hash-based storage
+                    run_identity=None,  # Aggregated has no single hparams - use legacy
+                    allow_legacy=True,  # Explicitly allow legacy for aggregated
                 )
     except Exception as e:
         logger.debug(f"Stability snapshot save failed for aggregated selection (non-critical): {e}")
