@@ -1364,8 +1364,9 @@ def train_and_evaluate_models(
                                         model_family="quick_pruner",
                                         params={},
                                     )
-                                    # Feature signature from pruned features
-                                    feature_specs = [{"key": f} for f in pruning_stats['full_importance_dict'].keys()]
+                                    # Feature signature from pruned features (registry-resolved)
+                                    from TRAINING.common.utils.fingerprinting import resolve_feature_specs_from_registry
+                                    feature_specs = resolve_feature_specs_from_registry(list(pruning_stats['full_importance_dict'].keys()))
                                     feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
                                     # Create updated partial with hparams and finalize
                                     updated_partial = RunIdentity(
@@ -6437,8 +6438,9 @@ def evaluate_target_predictability(
                         params=family_config.get('params', family_config),
                     )
                     
-                    # Feature signature from features in this model's importances
-                    feature_specs = [{"key": f} for f in model_importances.keys()]
+                    # Feature signature from features in this model's importances (registry-resolved)
+                    from TRAINING.common.utils.fingerprinting import resolve_feature_specs_from_registry
+                    feature_specs = resolve_feature_specs_from_registry(list(model_importances.keys()))
                     feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
                     
                     # Create partial and finalize

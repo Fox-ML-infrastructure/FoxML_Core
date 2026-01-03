@@ -723,8 +723,9 @@ def select_features_for_target(
                                                 params=family_config.get('params', family_config),
                                             )
                                             
-                                            # Compute feature_signature from final features
-                                            feature_specs = [{"key": f} for f in importance_dict.keys()]
+                                            # Compute feature_signature from final features (registry-resolved)
+                                            from TRAINING.common.utils.fingerprinting import resolve_feature_specs_from_registry
+                                            feature_specs = resolve_feature_specs_from_registry(list(importance_dict.keys()))
                                             feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
                                             
                                             # Create updated partial with split + hparams
@@ -1525,8 +1526,9 @@ def select_features_for_target(
                             model_family="multi_model_aggregated",
                             params={"enabled_families": enabled_families},
                         )
-                        # Feature signature from aggregated features
-                        feature_specs = [{"key": f} for f in importance_dict.keys()]
+                        # Feature signature from aggregated features (registry-resolved)
+                        from TRAINING.common.utils.fingerprinting import resolve_feature_specs_from_registry
+                        feature_specs = resolve_feature_specs_from_registry(list(importance_dict.keys()))
                         feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
                         # Create updated partial with hparams and finalize
                         updated_partial = RunIdentity(

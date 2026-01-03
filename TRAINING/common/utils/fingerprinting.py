@@ -575,22 +575,107 @@ def compute_hparams_fingerprint(
     return sha256_full(canonical_json(payload))
 
 
+def resolve_feature_specs_from_registry(
+    feature_names: List[str],
+    registry: Optional[Any] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Registry-based best-effort feature manifest for fingerprinting.
+
+    Guarantees:
+    - Never returns empty-string placeholders.
+    - Never silently returns names-only: degraded cases are encoded in-manifest.
+    - Distinguishes explicit registry entries from auto-inferred.
+    - Uses full SHA256 for entry digests (no truncation).
+
+    LIMITATION:
+    - Still reconstructs from names; bulletproof fix is to fingerprint actual
+      resolved FeatureSpec objects at matrix materialization time.
+    
+    Args:
+        feature_names: List of feature names to resolve
+        registry: Optional FeatureRegistry instance (auto-loaded if None)
+    
+    Returns:
+        List of spec dicts with registry metadata encoded
+    """
+    # Filter out None/non-string, dedupe, stable ordering
+    names = sorted(set(str(n) for n in feature_names if n is not None))
+
+    registry_available = True
+    if registry is None:
+        try:
+            from TRAINING.common.feature_registry import get_registry
+            registry = get_registry()
+        except Exception:
+            registry_available = False
+            registry = None
+
+    specs: List[Dict[str, Any]] = []
+    for name in names:
+        entry: Dict[str, Any] = {
+            "key": name,
+            "registry_available": registry_available,
+        }
+
+        if not registry_available:
+            # Degraded: can't resolve entries at all
+            entry["registry_explicit"] = False
+            specs.append(entry)
+            continue
+
+        # Check if feature is EXPLICITLY in registry vs auto-inferred
+        # get_feature_metadata() never returns None - it auto-infers for unknowns
+        explicit_features = getattr(registry, 'features', {}) or {}
+        is_explicit = name in explicit_features
+
+        entry["registry_explicit"] = is_explicit
+
+        try:
+            if is_explicit:
+                metadata = explicit_features[name]
+            else:
+                metadata = registry.get_feature_metadata(name)  # Auto-inferred
+        except Exception:
+            # Shouldn't happen, but defensive
+            metadata = {"source": "error", "lag_bars": 0, "allowed_horizons": []}
+
+        # Contract to identity-relevant fields only
+        entry_payload = {
+            "lag_bars": metadata.get("lag_bars"),
+            "source": metadata.get("source"),
+            "allowed_horizons": metadata.get("allowed_horizons", []),
+            "rejected": metadata.get("rejected", False),
+            "scope": metadata.get("scope"),
+            "version": metadata.get("version"),
+        }
+
+        # Full 64-char digest (no truncation)
+        entry["registry_digest"] = sha256_full(canonical_json(entry_payload))
+        specs.append(entry)
+
+    return specs
+
+
 def compute_feature_fingerprint_from_specs(
     resolved_specs: List[Dict[str, Any]],
 ) -> str:
     """
-    Compute feature fingerprint from resolved FeatureSpec objects.
+    Compute feature fingerprint from resolved feature specs.
     
-    CRITICAL: This hashes the FINAL feature set (post-selection/pruning),
-    not candidate features. Each spec should include:
-    - key: Canonical feature key (e.g., "price/returns/v3")
-    - params: Feature parameters
-    - scope: Feature scope (cross_sectional, symbol_specific)
-    - version: Feature version
-    - output_columns: List of output column names
-    - impl_digest: Implementation digest (optional, for code changes)
+    Supports two input formats:
+    1. Registry-resolved specs (from resolve_feature_specs_from_registry)
+       - Has registry_available, registry_explicit, registry_digest
+    2. Legacy specs with full feature metadata
+       - Has key, params, scope, version, output_columns, impl_digest
     
-    Sorts entries by canonical_json(entry) to handle collisions.
+    Adds mode marker to indicate provenance:
+    - registry_explicit: All features have explicit registry entries
+    - registry_mixed: Some explicit, some auto-inferred
+    - registry_inferred: All features auto-inferred from name patterns
+    - names_only_degraded: Registry unavailable, names only
+    - empty: No features
+    - legacy: Using legacy spec format (no registry metadata)
     
     Args:
         resolved_specs: List of resolved feature spec dicts
@@ -598,23 +683,53 @@ def compute_feature_fingerprint_from_specs(
     Returns:
         64-character SHA256 fingerprint (full hash for identity)
     """
+    # Build manifest from specs
     manifest = []
     for spec in resolved_specs:
-        entry = {
-            "key": spec.get("key") or spec.get("name"),
-            "params": spec.get("params", {}),
-            "scope": spec.get("scope"),
-            "version": spec.get("version"),
-            "output_columns": spec.get("output_columns", []),
-            "impl_digest": spec.get("impl_digest"),
-        }
+        # Check if this is a registry-resolved spec or legacy format
+        if "registry_available" in spec:
+            # Registry-resolved format - pass through as-is
+            entry = {
+                "key": spec.get("key"),
+                "registry_available": spec.get("registry_available"),
+                "registry_explicit": spec.get("registry_explicit"),
+                "registry_digest": spec.get("registry_digest"),
+            }
+        else:
+            # Legacy format - extract fields
+            entry = {
+                "key": spec.get("key") or spec.get("name"),
+                "params": spec.get("params", {}),
+                "scope": spec.get("scope"),
+                "version": spec.get("version"),
+                "output_columns": spec.get("output_columns", []),
+                "impl_digest": spec.get("impl_digest"),
+            }
         manifest.append(entry)
     
     # Sort by serialized entry to handle key collisions
     manifest.sort(key=lambda x: canonical_json(x))
     
+    # Determine mode from registry state
+    if not resolved_specs:
+        mode = "empty"
+    elif any("registry_available" in spec for spec in resolved_specs):
+        # Registry-resolved format
+        if all(not spec.get("registry_available", True) for spec in resolved_specs):
+            mode = "names_only_degraded"
+        elif all(spec.get("registry_explicit", False) for spec in resolved_specs):
+            mode = "registry_explicit"
+        elif any(spec.get("registry_explicit", False) for spec in resolved_specs):
+            mode = "registry_mixed"
+        else:
+            mode = "registry_inferred"
+    else:
+        # Legacy format
+        mode = "legacy"
+    
     payload = {
         "schema": 1,
+        "mode": mode,
         "features": manifest,
     }
     

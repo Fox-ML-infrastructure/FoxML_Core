@@ -578,8 +578,9 @@ def compute_cross_sectional_stability(
                         model_family="cross_sectional_panel",
                         params={},
                     )
-                    # Feature signature from CS importance features
-                    feature_specs = [{"key": f} for f in cs_importance.index]
+                    # Feature signature from CS importance features (registry-resolved)
+                    from TRAINING.common.utils.fingerprinting import resolve_feature_specs_from_registry
+                    feature_specs = resolve_feature_specs_from_registry(list(cs_importance.index))
                     feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
                     # Create updated partial and finalize
                     updated_partial = RunIdentity(

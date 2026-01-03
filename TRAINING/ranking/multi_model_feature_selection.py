@@ -3815,8 +3815,9 @@ def process_single_symbol(
                                         model_family=family_name,
                                         params={},  # Default params used
                                     )
-                                    # Feature signature from importance series
-                                    feature_specs = [{"key": f} for f in importance.index]
+                                    # Feature signature from importance series (registry-resolved)
+                                    from TRAINING.common.utils.fingerprinting import resolve_feature_specs_from_registry
+                                    feature_specs = resolve_feature_specs_from_registry(list(importance.index))
                                     feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
                                     # Create updated partial and finalize
                                     updated_partial = RunIdentity(
