@@ -64,25 +64,44 @@ def save_snapshot_hook(
             except Exception:
                 auto_analyze = True  # Default to enabled
         
-        # Convert RunIdentity object to dict if needed
+        # Validate and convert RunIdentity
         identity_dict = None
+        use_hash_path = False
+        
         if run_identity is not None:
-            if hasattr(run_identity, 'to_dict'):
+            # Check if it's a RunIdentity object with is_final
+            if hasattr(run_identity, 'is_final'):
+                if not run_identity.is_final:
+                    # HARD REFUSAL: Cannot save snapshot with partial identity
+                    raise ValueError(
+                        "Cannot save snapshot with partial RunIdentity (is_final=False). "
+                        "Call run_identity.finalize(feature_signature) before saving. "
+                        f"Current identity: {run_identity.debug_key if hasattr(run_identity, 'debug_key') else 'unknown'}"
+                    )
+                # Valid finalized identity - use hash-based path
                 identity_dict = run_identity.to_dict()
+                use_hash_path = True
+            elif hasattr(run_identity, 'to_dict'):
+                # Has to_dict but no is_final - treat as legacy RunIdentity
+                identity_dict = run_identity.to_dict()
+                # Check if it has the keys (finalized)
+                if identity_dict.get('replicate_key') and identity_dict.get('strict_key'):
+                    use_hash_path = True
             elif isinstance(run_identity, dict):
                 identity_dict = run_identity
+                # Check if dict has required keys for hash path
+                if run_identity.get('replicate_key') and run_identity.get('strict_key'):
+                    use_hash_path = True
             else:
-                warnings.warn(
-                    f"run_identity should be RunIdentity object or dict, got {type(run_identity).__name__}. "
-                    "Identity fields will not be saved. Use RunIdentity SST for full reproducibility.",
-                    category=UserWarning,
-                    stacklevel=2,
+                raise TypeError(
+                    f"run_identity must be RunIdentity object or dict, got {type(run_identity).__name__}. "
+                    "Use RunIdentity.finalize(feature_signature) for full reproducibility."
                 )
         else:
-            # Warn if run_identity is not provided (legacy behavior)
-            logger.debug(
-                "save_snapshot_hook called without run_identity - identity signatures "
-                "will not be recorded. Consider passing RunIdentity SST for full reproducibility."
+            # No run_identity provided - legacy behavior with warning
+            logger.warning(
+                "save_snapshot_hook called without run_identity - using legacy path. "
+                "Pass finalized RunIdentity for hash-based storage and correct grouping."
             )
         
         # Create snapshot
@@ -99,7 +118,7 @@ def save_snapshot_hook(
         # Use target for target-first structure
         # Snapshots should only be saved to target-specific directories, never at root level
         base_dir = get_snapshot_base_dir(output_dir, target=target)
-        snapshot_path = save_importance_snapshot(snapshot, base_dir)
+        snapshot_path = save_importance_snapshot(snapshot, base_dir, use_hash_path=use_hash_path)
         
         logger.debug(f"Saved importance snapshot: {snapshot_path}")
         
@@ -164,6 +183,10 @@ def save_snapshot_hook(
         
         return snapshot_path
     
+    except (ValueError, TypeError) as e:
+        # ValueError/TypeError indicates programming error (e.g., partial identity) - re-raise
+        logger.error(f"Failed to save importance snapshot: {e}")
+        raise
     except Exception as e:
         logger.warning(f"Failed to save importance snapshot: {e}")
         return None
@@ -334,11 +357,12 @@ def analyze_all_stability_hook(
                             
                             # Load snapshots for this target/method
                             from .io import load_snapshots
-                            snapshots = load_snapshots(snapshot_base_dir, target, method_name)
+                            snapshots = load_snapshots(snapshot_base_dir, target=target, method=method_name, allow_legacy=True)
                             if len(snapshots) < 2:
                                 continue
                             
                             # Analyze stability (filter by universe_sig to avoid cross-symbol comparisons)
+                            # filter_mode defaults to "replicate" - silently ignores legacy snapshots without signatures
                             from .analysis import compute_stability_metrics
                             metrics = compute_stability_metrics(snapshots, top_k=20, filter_by_universe_sig=True)
                             if metrics:
@@ -385,11 +409,12 @@ def analyze_all_stability_hook(
                         
                         # Load snapshots for this target/method
                         from .io import load_snapshots
-                        snapshots = load_snapshots(snapshot_base_dir, target, method_name)
+                        snapshots = load_snapshots(snapshot_base_dir, target=target, method=method_name, allow_legacy=True)
                         if len(snapshots) < 2:
                             continue
                         
                         # Analyze stability (filter by universe_sig to avoid cross-symbol comparisons)
+                        # filter_mode defaults to "replicate" - silently ignores legacy snapshots without signatures
                         from .analysis import compute_stability_metrics
                         metrics = compute_stability_metrics(snapshots, top_k=20, filter_by_universe_sig=True)
                         if metrics:

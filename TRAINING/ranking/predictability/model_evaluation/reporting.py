@@ -141,7 +141,8 @@ def save_feature_importances(
     feature_importances: Dict[str, Dict[str, float]],
     output_dir: Path = None,
     view: str = "CROSS_SECTIONAL",
-    universe_sig: Optional[str] = None  # PATCH 4: Required for proper scoping
+    universe_sig: Optional[str] = None,  # PATCH 4: Required for proper scoping
+    run_identity: Optional[Any] = None,  # Finalized RunIdentity for hash-based storage
 ) -> None:
     """
     Save detailed per-model, per-feature importance scores to CSV files.
@@ -246,6 +247,7 @@ def save_feature_importances(
                     universe_sig=universe_sig,  # Use universe_sig, not view
                     output_dir=target_repro_dir,  # Save snapshots in scoped structure
                     auto_analyze=None,  # Load from config
+                    run_identity=run_identity,  # Pass finalized identity for hash-based storage
                 )
             except Exception as e:
                 logger.debug(f"Stability snapshot save failed (non-critical): {e}")

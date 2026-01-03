@@ -159,6 +159,7 @@ def select_features_for_target(
     symbol: Optional[str] = None,  # Required for SYMBOL_SPECIFIC view
     force_refresh: bool = False,  # If True, bypass cache and re-run Phase 2
     universe_sig: Optional[str] = None,  # Universe signature from SST (resolved_data_config)
+    run_identity: Optional[Any] = None,  # Finalized RunIdentity for hash-based storage
 ) -> Tuple[List[str], pd.DataFrame]:
     """
     Select top features for a target using multi-model consensus.
@@ -707,6 +708,7 @@ def select_features_for_target(
                                         universe_sig=snapshot_universe_sig,  # SST or None, NEVER view
                                         output_dir=base_output_dir,  # Pass run directory - will use target-first structure
                                         auto_analyze=None,  # Load from config
+                                        run_identity=run_identity,  # Pass finalized identity for hash-based storage
                                     )
                         except Exception as e:
                             logger.debug(f"Stability snapshot save failed for {symbol_to_process} (non-critical): {e}")
@@ -1445,6 +1447,7 @@ def select_features_for_target(
                     universe_sig=snapshot_universe_sig,  # SST or None, NEVER view
                     output_dir=target_repro_dir,  # Use target-first structure
                     auto_analyze=None,  # Load from config
+                    run_identity=run_identity,  # Pass finalized identity for hash-based storage
                 )
     except Exception as e:
         logger.debug(f"Stability snapshot save failed for aggregated selection (non-critical): {e}")

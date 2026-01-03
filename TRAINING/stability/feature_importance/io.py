@@ -20,26 +20,51 @@ logger = logging.getLogger(__name__)
 def save_importance_snapshot(
     snapshot: FeatureImportanceSnapshot,
     base_dir: Path,
+    use_hash_path: bool = False,
 ) -> Path:
     """
     Save feature importance snapshot to disk.
     
     Directory structure:
-        {base_dir}/{target}/{method}/{run_id}.json
+        Hash-based (preferred): {base_dir}/replicate/{replicate_key}/{strict_key}.json
+        Legacy: {base_dir}/{target}/{method}/{run_id}.json
     
     Args:
         snapshot: FeatureImportanceSnapshot to save
         base_dir: Base directory for snapshots (e.g., "artifacts/feature_importance")
+        use_hash_path: If True, use hash-based path (replicate_key/strict_key)
     
     Returns:
         Path to saved snapshot file
     """
-    # Create directory structure
-    target_dir = base_dir / snapshot.target / snapshot.method
-    target_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Save as JSON
-    path = target_dir / f"{snapshot.run_id}.json"
+    if use_hash_path:
+        # Hash-based path: replicate/<replicate_key>/<strict_key>.json
+        replicate_key = snapshot.replicate_key
+        strict_key = snapshot.strict_key
+        
+        if not replicate_key or not strict_key:
+            raise ValueError(
+                "Cannot use hash-based path without replicate_key and strict_key. "
+                "Ensure run_identity is finalized before saving."
+            )
+        
+        # Create directory structure
+        replicate_dir = base_dir / "replicate" / replicate_key
+        replicate_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save as JSON
+        path = replicate_dir / f"{strict_key}.json"
+        
+        logger.debug(f"Saving snapshot with hash-based path: {path}")
+    else:
+        # Legacy path: target/method/run_id.json
+        target_dir = base_dir / snapshot.target / snapshot.method
+        target_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save as JSON
+        path = target_dir / f"{snapshot.run_id}.json"
+        
+        logger.debug(f"Saving snapshot with legacy path: {path}")
     
     try:
         with path.open("w") as f:
@@ -54,53 +79,121 @@ def save_importance_snapshot(
 
 def load_snapshots(
     base_dir: Path,
-    target: str,
-    method: str,
+    target: Optional[str] = None,
+    method: Optional[str] = None,
     min_timestamp: Optional[datetime] = None,
     max_timestamp: Optional[datetime] = None,
+    replicate_key: Optional[str] = None,
+    strict_key: Optional[str] = None,
+    allow_legacy: bool = False,
 ) -> List[FeatureImportanceSnapshot]:
     """
-    Load all snapshots for a target and method.
+    Load snapshots with hash-based or legacy paths.
+    
+    PREFERRED: Use replicate_key to load all snapshots in a replicate group.
+    LEGACY: Use target/method with allow_legacy=True.
     
     Args:
         base_dir: Base directory for snapshots
-        target: Target name to load
-        method: Method name to load
+        target: Target name (legacy mode only)
+        method: Method name (legacy mode only)
         min_timestamp: Optional minimum timestamp filter
         max_timestamp: Optional maximum timestamp filter
+        replicate_key: Load all snapshots with this replicate_key (hash-based)
+        strict_key: Load single snapshot with this strict_key (requires replicate_key)
+        allow_legacy: If True, allow loading from legacy target/method paths
     
     Returns:
         List of FeatureImportanceSnapshot instances, sorted by created_at (oldest first)
     """
-    target_dir = base_dir / target / method
-    
-    if not target_dir.exists():
-        logger.debug(f"No snapshots directory found: {target_dir}")
-        return []
-    
     snapshots = []
-    for path in sorted(target_dir.glob("*.json")):
-        try:
-            with path.open("r") as f:
-                data = json.load(f)
-            
-            snapshot = FeatureImportanceSnapshot.from_dict(data)
-            
-            # Apply timestamp filters if provided
-            if min_timestamp and snapshot.created_at < min_timestamp:
-                continue
-            if max_timestamp and snapshot.created_at > max_timestamp:
-                continue
-            
-            snapshots.append(snapshot)
-        except Exception as e:
-            logger.warning(f"Failed to load snapshot {path}: {e}")
-            continue
     
-    # Sort by creation time (oldest first)
-    snapshots.sort(key=lambda s: s.created_at)
+    # Hash-based loading (preferred)
+    if replicate_key:
+        replicate_dir = base_dir / "replicate" / replicate_key
+        
+        if not replicate_dir.exists():
+            logger.debug(f"No replicate directory found: {replicate_dir}")
+            return []
+        
+        if strict_key:
+            # Load single snapshot
+            path = replicate_dir / f"{strict_key}.json"
+            if path.exists():
+                try:
+                    with path.open("r") as f:
+                        data = json.load(f)
+                    snapshots.append(FeatureImportanceSnapshot.from_dict(data))
+                except Exception as e:
+                    logger.warning(f"Failed to load snapshot {path}: {e}")
+            return snapshots
+        
+        # Load all snapshots in replicate group
+        for path in sorted(replicate_dir.glob("*.json")):
+            try:
+                with path.open("r") as f:
+                    data = json.load(f)
+                
+                snapshot = FeatureImportanceSnapshot.from_dict(data)
+                
+                # Apply timestamp filters if provided
+                if min_timestamp and snapshot.created_at < min_timestamp:
+                    continue
+                if max_timestamp and snapshot.created_at > max_timestamp:
+                    continue
+                
+                snapshots.append(snapshot)
+            except Exception as e:
+                logger.warning(f"Failed to load snapshot {path}: {e}")
+                continue
+        
+        # Sort by creation time (oldest first)
+        snapshots.sort(key=lambda s: s.created_at)
+        return snapshots
     
-    return snapshots
+    # Legacy loading (requires explicit opt-in)
+    if target and method:
+        if not allow_legacy:
+            logger.warning(
+                f"Legacy snapshot loading requested for {target}/{method} but allow_legacy=False. "
+                "Use replicate_key for hash-based loading, or set allow_legacy=True."
+            )
+            return []
+        
+        target_dir = base_dir / target / method
+        
+        if not target_dir.exists():
+            logger.debug(f"No snapshots directory found: {target_dir}")
+            return []
+        
+        for path in sorted(target_dir.glob("*.json")):
+            try:
+                with path.open("r") as f:
+                    data = json.load(f)
+                
+                snapshot = FeatureImportanceSnapshot.from_dict(data)
+                
+                # Apply timestamp filters if provided
+                if min_timestamp and snapshot.created_at < min_timestamp:
+                    continue
+                if max_timestamp and snapshot.created_at > max_timestamp:
+                    continue
+                
+                snapshots.append(snapshot)
+            except Exception as e:
+                logger.warning(f"Failed to load snapshot {path}: {e}")
+                continue
+        
+        # Sort by creation time (oldest first)
+        snapshots.sort(key=lambda s: s.created_at)
+        return snapshots
+    
+    # No valid loading mode specified
+    logger.warning(
+        "load_snapshots called without replicate_key or target/method. "
+        "Use replicate_key for hash-based loading."
+    )
+    return []
 
 
 def get_snapshot_base_dir(output_dir: Optional[Path] = None, target: Optional[str] = None) -> Path:

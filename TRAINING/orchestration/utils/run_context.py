@@ -121,6 +121,12 @@ class RunContext:
     _feature_registry_hash: Optional[str] = field(default=None, init=False, repr=False)
     _label_definition_hash: Optional[str] = field(default=None, init=False, repr=False)
     
+    # Run Identity (SST for reproducibility)
+    # Partial: computed early (before feature selection)
+    # Final: computed after features are locked
+    run_identity_partial: Optional[Any] = field(default=None, repr=False)  # RunIdentity (is_final=False)
+    run_identity: Optional[Any] = field(default=None, repr=False)  # RunIdentity (is_final=True)
+    
     def __post_init__(self):
         """
         Validate and normalize SST fields.
@@ -218,6 +224,67 @@ class RunContext:
                 missing.append(field_name)
         
         return missing
+    
+    def compute_partial_identity(
+        self,
+        dataset_signature: str,
+        split_signature: str,
+        target_signature: str,
+        hparams_signature: str,
+        routing_signature: str,
+        routing_payload: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Compute and store partial RunIdentity (before features are locked).
+        
+        Call this early in the pipeline before feature selection.
+        Call finalize_identity() after features are locked.
+        
+        Args:
+            dataset_signature: 64-char SHA256 from cohort metadata
+            split_signature: 64-char SHA256 from CV/split config
+            target_signature: 64-char SHA256 from target config
+            hparams_signature: 64-char SHA256 from model hyperparameters
+            routing_signature: 64-char SHA256 from contracted routing payload
+            routing_payload: Optional contracted routing dict for debugging
+        """
+        from TRAINING.common.utils.fingerprinting import RunIdentity
+        
+        self.run_identity_partial = RunIdentity(
+            schema_version=1,
+            dataset_signature=dataset_signature,
+            split_signature=split_signature,
+            target_signature=target_signature,
+            feature_signature=None,  # Not yet known
+            hparams_signature=hparams_signature,
+            routing_signature=routing_signature,
+            routing_payload=routing_payload,
+            train_seed=self.seed,
+            is_final=False,
+        )
+        logger.debug(f"Computed partial RunIdentity: {self.run_identity_partial.debug_key}")
+    
+    def finalize_identity(self, feature_signature: str) -> None:
+        """
+        Finalize RunIdentity after features are locked.
+        
+        MUST be called after feature selection/pruning is complete.
+        Creates a new finalized identity with computed keys.
+        
+        Args:
+            feature_signature: 64-char SHA256 from resolved feature specs
+            
+        Raises:
+            ValueError: If partial identity not computed yet
+        """
+        if self.run_identity_partial is None:
+            raise ValueError(
+                "Cannot finalize identity: partial identity not computed. "
+                "Call compute_partial_identity() first."
+            )
+        
+        self.run_identity = self.run_identity_partial.finalize(feature_signature)
+        logger.debug(f"Finalized RunIdentity: {self.run_identity.debug_key}")
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert context to dictionary for serialization."""

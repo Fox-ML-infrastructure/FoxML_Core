@@ -227,6 +227,88 @@ class TestSha256:
 class TestRunIdentity:
     """Tests for RunIdentity dataclass."""
     
+    def test_partial_identity_has_no_keys(self):
+        """Partial identity (is_final=False) has None keys."""
+        from TRAINING.common.utils.fingerprinting import RunIdentity
+        
+        partial = RunIdentity(
+            dataset_signature="abc123",
+            split_signature="def456",
+            target_signature="ghi789",
+            feature_signature=None,  # Not finalized
+            hparams_signature="mno345",
+            routing_signature="pqr678",
+            train_seed=42,
+            is_final=False,
+        )
+        
+        assert partial.strict_key is None
+        assert partial.replicate_key is None
+        assert partial.debug_key is None
+    
+    def test_finalize_creates_final_identity(self):
+        """finalize() creates new identity with computed keys."""
+        from TRAINING.common.utils.fingerprinting import RunIdentity
+        
+        partial = RunIdentity(
+            dataset_signature="abc123",
+            split_signature="def456",
+            target_signature="ghi789",
+            feature_signature=None,
+            hparams_signature="mno345",
+            routing_signature="pqr678",
+            train_seed=42,
+            is_final=False,
+        )
+        
+        # Finalize with feature signature
+        final = partial.finalize("feature_sig_123")
+        
+        assert final.is_final is True
+        assert final.feature_signature == "feature_sig_123"
+        assert final.strict_key is not None
+        assert final.replicate_key is not None
+        assert len(final.strict_key) == 64
+        
+        # Original is unchanged
+        assert partial.strict_key is None
+    
+    def test_finalize_fails_if_already_final(self):
+        """finalize() raises if already final."""
+        from TRAINING.common.utils.fingerprinting import RunIdentity
+        
+        final = RunIdentity(
+            dataset_signature="abc123",
+            split_signature="def456",
+            target_signature="ghi789",
+            feature_signature="jkl012",
+            hparams_signature="mno345",
+            routing_signature="pqr678",
+            train_seed=42,
+            is_final=True,
+        )
+        
+        with pytest.raises(ValueError, match="already finalized"):
+            final.finalize("new_feature_sig")
+    
+    def test_finalize_fails_if_missing_signatures(self):
+        """finalize() raises if required signatures missing."""
+        from TRAINING.common.utils.fingerprinting import RunIdentity
+        
+        partial = RunIdentity(
+            dataset_signature="abc123",
+            split_signature="def456",
+            target_signature="",  # Missing!
+            feature_signature=None,
+            hparams_signature="mno345",
+            routing_signature="pqr678",
+            train_seed=42,
+            is_final=False,
+        )
+        
+        with pytest.raises(ValueError, match="missing required signatures"):
+            partial.finalize("feature_sig")
+    
     def test_strict_key_includes_seed(self):
         """strict_key includes train_seed."""
         from TRAINING.common.utils.fingerprinting import RunIdentity
@@ -239,6 +321,7 @@ class TestRunIdentity:
             hparams_signature="mno345",
             routing_signature="pqr678",
             train_seed=42,
+            is_final=True,
         )
         
         id2 = RunIdentity(
@@ -249,6 +332,7 @@ class TestRunIdentity:
             hparams_signature="mno345",
             routing_signature="pqr678",
             train_seed=99,  # Different seed
+            is_final=True,
         )
         
         # strict_key should differ
@@ -269,6 +353,7 @@ class TestRunIdentity:
             hparams_signature="mno345",
             routing_signature="pqr678",
             train_seed=42,
+            is_final=True,
         )
         
         id_no_seed = RunIdentity(
@@ -279,6 +364,7 @@ class TestRunIdentity:
             hparams_signature="mno345",
             routing_signature="pqr678",
             train_seed=None,
+            is_final=True,
         )
         
         # replicate_key should be same regardless of seed
@@ -296,16 +382,17 @@ class TestRunIdentity:
             hparams_signature="mno345",
             routing_signature="pqr678",
             train_seed=42,
+            is_final=True,
         )
         
         assert len(identity.strict_key) == 64
         assert len(identity.replicate_key) == 64
     
-    def test_is_complete(self):
-        """is_complete() checks all required signatures."""
+    def test_is_complete_checks_is_final(self):
+        """is_complete() returns True only if is_final=True."""
         from TRAINING.common.utils.fingerprinting import RunIdentity
         
-        # Complete identity
+        # Complete identity (finalized)
         complete = RunIdentity(
             dataset_signature="abc123",
             split_signature="def456",
@@ -313,17 +400,19 @@ class TestRunIdentity:
             feature_signature="jkl012",
             hparams_signature="mno345",
             routing_signature="pqr678",
+            is_final=True,
         )
         assert complete.is_complete()
         
-        # Incomplete identity (missing routing)
+        # Incomplete identity (not finalized, even with all signatures)
         incomplete = RunIdentity(
             dataset_signature="abc123",
             split_signature="def456",
             target_signature="ghi789",
             feature_signature="jkl012",
             hparams_signature="mno345",
-            routing_signature="",  # Empty
+            routing_signature="pqr678",
+            is_final=False,
         )
         assert not incomplete.is_complete()
     
@@ -339,6 +428,7 @@ class TestRunIdentity:
             hparams_signature="mno345",
             routing_signature="pqr678",
             train_seed=42,
+            is_final=True,
         )
         
         # Roundtrip

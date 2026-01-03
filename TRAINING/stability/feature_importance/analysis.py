@@ -217,7 +217,7 @@ def compute_stability_metrics(
     snapshots: List[FeatureImportanceSnapshot],
     top_k: int = 20,
     filter_by_universe_sig: bool = True,  # Filter by universe_sig to avoid cross-symbol comparisons
-    filter_mode: str = "legacy",  # "strict", "replicate", or "legacy"
+    filter_mode: str = "replicate",  # "strict", "replicate", or "legacy" - defaults to replicate
 ) -> Dict[str, float]:
     """
     Compute stability metrics for a list of snapshots.
@@ -256,8 +256,45 @@ def compute_stability_metrics(
         - n_comparisons: Number of pairwise comparisons
         - status: "stable", "drifting", "diverged", or "insufficient"
         - validation_error: If present, reason why validation failed (strict/replicate modes)
+        - n_legacy_ignored: Number of legacy snapshots ignored in strict/replicate mode
     """
-    # Validate group signatures for strict/replicate modes
+    n_legacy_ignored = 0
+    
+    # In strict/replicate mode, first filter out legacy snapshots (those without required signatures)
+    # This allows graceful coexistence of old and new snapshots
+    if filter_mode in ("strict", "replicate"):
+        required_sigs = ["dataset_signature", "split_signature", "target_signature",
+                        "feature_signature", "hparams_signature", "routing_signature"]
+        
+        valid_snapshots = []
+        for s in snapshots:
+            has_all_sigs = all(getattr(s, sig, None) for sig in required_sigs)
+            if has_all_sigs:
+                valid_snapshots.append(s)
+            else:
+                n_legacy_ignored += 1
+        
+        if n_legacy_ignored > 0:
+            logger.debug(
+                f"Filtered out {n_legacy_ignored} legacy snapshots without required signatures "
+                f"in {filter_mode} mode. Remaining: {len(valid_snapshots)} snapshots."
+            )
+        
+        snapshots = valid_snapshots
+        
+        if len(snapshots) < 2:
+            return {
+                "mean_overlap": np.nan,
+                "std_overlap": np.nan,
+                "mean_tau": np.nan,
+                "std_tau": np.nan,
+                "n_snapshots": len(snapshots),
+                "n_comparisons": 0,
+                "status": "insufficient",
+                "n_legacy_ignored": n_legacy_ignored,
+            }
+    
+    # Validate group signatures for strict/replicate modes (after filtering)
     if filter_mode in ("strict", "replicate"):
         validation = validate_group_signatures(snapshots, mode=filter_mode)
         if not validation:
@@ -273,6 +310,7 @@ def compute_stability_metrics(
                 "n_comparisons": 0,
                 "status": "invalid",
                 "validation_error": validation.reason,
+                "n_legacy_ignored": n_legacy_ignored,
             }
     
     # Filter snapshots by universe_sig if requested (for SYMBOL_SPECIFIC mode)

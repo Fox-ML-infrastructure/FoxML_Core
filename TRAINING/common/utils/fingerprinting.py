@@ -29,8 +29,11 @@ class RunIdentity:
     """
     Single Source of Truth for run identity.
     
-    Computed once at run initialization, passed to all downstream components.
-    Persisted alongside run artifacts for future reference.
+    Two-phase construction:
+    1. Create partial identity (without feature_signature) early in pipeline
+    2. Call finalize(feature_signature) after features are locked to get final identity
+    
+    Keys are ONLY computed when is_final=True. Partial identities have no keys.
     
     Keys:
     - strict_key: Full identity including train_seed (for diff telemetry)
@@ -39,33 +42,99 @@ class RunIdentity:
     
     All identity keys use full 64-char SHA256 hashes to avoid collisions.
     """
-    # Schema version (bump if component structure changes)
+    # Schema version (bump if component structure changes) - INCLUDED IN KEY PAYLOAD
     schema_version: int = 1
     
     # Component signatures (64-char SHA256)
     dataset_signature: str = ""
     split_signature: str = ""
     target_signature: str = ""
-    feature_signature: str = ""
+    feature_signature: Optional[str] = None  # None for partial, set when finalized
     hparams_signature: str = ""
     routing_signature: str = ""
+    
+    # Contracted routing payload (stored for debugging, not just the hash)
+    routing_payload: Optional[Dict[str, Any]] = None
     
     # Optional signatures
     library_versions_signature: Optional[str] = None
     
-    # Training randomness
+    # Training randomness (required for strict_key)
     train_seed: Optional[int] = None
     
-    # Pre-computed keys (computed in __post_init__)
-    strict_key: str = field(init=False, default="")
-    replicate_key: str = field(init=False, default="")
-    debug_key: str = field(init=False, default="")
+    # Finalization flag - keys only valid when True
+    is_final: bool = False
+    
+    # Pre-computed keys (only set when is_final=True)
+    strict_key: Optional[str] = field(init=False, default=None)
+    replicate_key: Optional[str] = field(init=False, default=None)
+    debug_key: Optional[str] = field(init=False, default=None)
     
     def __post_init__(self):
-        """Compute keys from component signatures."""
-        self.strict_key = self._compute_strict_key()
-        self.replicate_key = self._compute_replicate_key()
-        self.debug_key = self._compute_debug_key()
+        """Compute keys only if finalized."""
+        if self.is_final:
+            self._validate_required_for_final()
+            self.strict_key = self._compute_strict_key()
+            self.replicate_key = self._compute_replicate_key()
+            self.debug_key = self._compute_debug_key()
+        else:
+            self.strict_key = None
+            self.replicate_key = None
+            self.debug_key = None
+    
+    def _validate_required_for_final(self) -> None:
+        """Validate all required signatures are present for finalization."""
+        missing = []
+        if not self.dataset_signature:
+            missing.append("dataset_signature")
+        if not self.split_signature:
+            missing.append("split_signature")
+        if not self.target_signature:
+            missing.append("target_signature")
+        if not self.feature_signature:
+            missing.append("feature_signature")
+        if not self.hparams_signature:
+            missing.append("hparams_signature")
+        if not self.routing_signature:
+            missing.append("routing_signature")
+        
+        if missing:
+            raise ValueError(
+                f"Cannot finalize RunIdentity: missing required signatures: {missing}"
+            )
+    
+    def finalize(self, feature_signature: str) -> 'RunIdentity':
+        """
+        Create a finalized identity with the given feature_signature.
+        
+        Returns a NEW RunIdentity object with is_final=True and computed keys.
+        Does not mutate the original.
+        
+        Args:
+            feature_signature: 64-char SHA256 of final resolved feature specs
+            
+        Returns:
+            New RunIdentity with is_final=True and computed keys
+            
+        Raises:
+            ValueError: If any required partial signatures are missing
+        """
+        if self.is_final:
+            raise ValueError("RunIdentity is already finalized")
+        
+        return RunIdentity(
+            schema_version=self.schema_version,
+            dataset_signature=self.dataset_signature,
+            split_signature=self.split_signature,
+            target_signature=self.target_signature,
+            feature_signature=feature_signature,
+            hparams_signature=self.hparams_signature,
+            routing_signature=self.routing_signature,
+            routing_payload=self.routing_payload,
+            library_versions_signature=self.library_versions_signature,
+            train_seed=self.train_seed,
+            is_final=True,
+        )
     
     def _compute_strict_key(self) -> str:
         """Compute strict identity key (includes train_seed)."""
@@ -112,7 +181,7 @@ class RunIdentity:
             parts.append(f"routing={self.routing_signature[:8]}")
         if self.train_seed is not None:
             parts.append(f"seed={self.train_seed}")
-        return "|".join(parts) if parts else "empty"
+        return "|".join(parts) if parts else "partial"
     
     def to_dict(self) -> Dict[str, Any]:
         """Serialize for persistence."""
@@ -124,8 +193,10 @@ class RunIdentity:
             "feature_signature": self.feature_signature,
             "hparams_signature": self.hparams_signature,
             "routing_signature": self.routing_signature,
+            "routing_payload": self.routing_payload,
             "library_versions_signature": self.library_versions_signature,
             "train_seed": self.train_seed,
+            "is_final": self.is_final,
             "strict_key": self.strict_key,
             "replicate_key": self.replicate_key,
             "debug_key": self.debug_key,
@@ -139,24 +210,18 @@ class RunIdentity:
             dataset_signature=data.get("dataset_signature", ""),
             split_signature=data.get("split_signature", ""),
             target_signature=data.get("target_signature", ""),
-            feature_signature=data.get("feature_signature", ""),
+            feature_signature=data.get("feature_signature"),
             hparams_signature=data.get("hparams_signature", ""),
             routing_signature=data.get("routing_signature", ""),
+            routing_payload=data.get("routing_payload"),
             library_versions_signature=data.get("library_versions_signature"),
             train_seed=data.get("train_seed"),
+            is_final=data.get("is_final", False),
         )
     
     def is_complete(self) -> bool:
-        """Check if all required signatures are present."""
-        required = [
-            self.dataset_signature,
-            self.split_signature,
-            self.target_signature,
-            self.feature_signature,
-            self.hparams_signature,
-            self.routing_signature,
-        ]
-        return all(sig for sig in required)
+        """Check if all required signatures are present (alias for is_final check)."""
+        return self.is_final
 
 
 def construct_comparison_group_key_from_dict(
@@ -554,3 +619,45 @@ def compute_feature_fingerprint_from_specs(
     }
     
     return sha256_full(canonical_json(payload))
+
+
+def compute_routing_fingerprint(
+    view: str,
+    symbol: Optional[str] = None,
+    min_symbols_threshold: Optional[int] = None,
+    auto_flip_enabled: bool = False,
+    gating_flags: Optional[Dict[str, bool]] = None,
+    feature_availability: Optional[Dict[str, bool]] = None,
+) -> Tuple[str, Dict[str, Any]]:
+    """
+    Compute routing fingerprint from contracted routing payload.
+    
+    CRITICAL: Only hash fields that affect model behavior, not runtime noise.
+    Returns both the signature AND the contracted payload for debugging.
+    
+    Args:
+        view: Modeling view (CROSS_SECTIONAL or SYMBOL_SPECIFIC)
+        symbol: Symbol being processed (if SYMBOL_SPECIFIC)
+        min_symbols_threshold: Threshold for auto-flip to symbol-specific
+        auto_flip_enabled: Whether auto-flip is enabled
+        gating_flags: Dict of gating flags that affect feature availability
+        feature_availability: Dict of feature -> available for this routing
+    
+    Returns:
+        Tuple of (64-char signature, contracted payload dict)
+        Store the payload for debugging "why did routing_signature change?"
+    """
+    # Build contracted payload (only behavior-affecting fields)
+    contracted_payload = {
+        "schema": 1,
+        "view": view,
+        "symbol": symbol,
+        "min_symbols_threshold": min_symbols_threshold,
+        "auto_flip_enabled": auto_flip_enabled,
+        "gating_flags": gating_flags,
+        "feature_availability": feature_availability,
+    }
+    
+    signature = sha256_full(canonical_json(contracted_payload))
+    
+    return signature, contracted_payload
