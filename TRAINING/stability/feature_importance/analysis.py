@@ -24,6 +24,96 @@ from .io import load_snapshots
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# GROUP VALIDATION (for strict/replicate modes)
+# =============================================================================
+
+class ValidationResult:
+    """Result of group signature validation."""
+    
+    __slots__ = ('ok', 'reason')
+    
+    def __init__(self, ok: bool, reason: Optional[str] = None):
+        self.ok = ok
+        self.reason = reason
+    
+    def __bool__(self) -> bool:
+        return self.ok
+
+
+def validate_group_signatures(
+    snapshots: List[FeatureImportanceSnapshot],
+    mode: str = "legacy"
+) -> ValidationResult:
+    """
+    Validate that snapshots in a group have consistent signatures.
+    
+    CRITICAL: In "strict" and "replicate" modes, this performs HARD REFUSAL:
+    - All required signatures must be present
+    - All signatures must be identical across the group
+    - Routing signatures must be consistent
+    
+    Args:
+        snapshots: List of snapshots to validate
+        mode: "strict" (all signatures must match, including train_seed grouping),
+              "replicate" (all signatures must match, exclude train_seed),
+              "legacy" (best-effort, only filter by universe_sig)
+    
+    Returns:
+        ValidationResult with ok=True if valid, ok=False with reason if invalid
+    """
+    if len(snapshots) < 2:
+        return ValidationResult(ok=True)
+    
+    if mode == "legacy":
+        # Legacy mode: no strict validation, just check basic universe_sig
+        return ValidationResult(ok=True)
+    
+    # Required signatures for strict/replicate modes
+    required_sigs = [
+        "dataset_signature",
+        "split_signature", 
+        "target_signature",
+        "feature_signature",
+        "hparams_signature",
+        "routing_signature",
+    ]
+    
+    # Check that all required signatures are present in every snapshot
+    for sig_name in required_sigs:
+        for i, snapshot in enumerate(snapshots):
+            sig_value = getattr(snapshot, sig_name, None)
+            if not sig_value:
+                return ValidationResult(
+                    ok=False,
+                    reason=f"Snapshot {i} (run_id={snapshot.run_id}) missing required {sig_name}. "
+                           f"In {mode} mode, all signatures must be present."
+                )
+    
+    # Check that all signatures are identical across the group
+    for sig_name in required_sigs:
+        values = {getattr(s, sig_name) for s in snapshots}
+        if len(values) > 1:
+            return ValidationResult(
+                ok=False,
+                reason=f"Multiple {sig_name} values in group: {values}. "
+                       f"Refusing to compare snapshots with different signatures."
+            )
+    
+    # In strict mode, verify train_seed is consistent (for diff telemetry)
+    # In replicate mode, train_seed can vary (that's the point)
+    if mode == "strict":
+        seeds = {s.train_seed for s in snapshots}
+        if len(seeds) > 1:
+            return ValidationResult(
+                ok=False,
+                reason=f"Multiple train_seed values in strict mode: {seeds}. "
+                       f"Use 'replicate' mode to compare across different seeds."
+            )
+    
+    return ValidationResult(ok=True)
+
+
 def top_k_overlap(s1: FeatureImportanceSnapshot, s2: FeatureImportanceSnapshot, k: int = 20) -> float:
     """
     Compute Jaccard similarity of top-K features between two snapshots.
@@ -126,31 +216,36 @@ def selection_frequency(
 def compute_stability_metrics(
     snapshots: List[FeatureImportanceSnapshot],
     top_k: int = 20,
-    filter_by_universe_sig: bool = True  # NEW: Filter by universe_sig to avoid cross-symbol comparisons
+    filter_by_universe_sig: bool = True,  # Filter by universe_sig to avoid cross-symbol comparisons
+    filter_mode: str = "legacy",  # "strict", "replicate", or "legacy"
 ) -> Dict[str, float]:
     """
     Compute stability metrics for a list of snapshots.
-    
+
     **CRITICAL**: This function assumes all snapshots are from the SAME model family
     and importance method (e.g., all LightGBM with "native" importance).
     Comparing snapshots from different methods (RFE vs Boruta vs Lasso) will
     naturally have low overlap because they use different importance definitions.
-    
+
     **CRITICAL**: For SYMBOL_SPECIFIC mode, snapshots should be from the SAME symbol.
     Comparing snapshots across different symbols (AAPL vs MSFT) will show low overlap
     due to symbol heterogeneity, not instability. Use filter_by_universe_sig=True to
     filter snapshots by the symbol part of universe_sig.
-    
+
     The snapshots should be sorted by importance (descending) already, so we
     compare top-K by feature name (not magnitude, since magnitudes are not comparable
     across different importance definitions).
-    
+
     Args:
         snapshots: List of snapshots to analyze (must be same method/family)
         top_k: Number of top features to consider for overlap
         filter_by_universe_sig: If True, filter snapshots to only include those with
             the same universe_sig (or same symbol prefix if universe_sig format is "SYMBOL:...")
-    
+        filter_mode: Grouping/validation mode:
+            - "strict": All signatures must match (including train_seed grouping)
+            - "replicate": All signatures must match (exclude train_seed for cross-seed stability)
+            - "legacy": Best-effort grouping by universe_sig only (backward compatible)
+
     Returns:
         Dictionary with stability metrics:
         - mean_overlap: Mean Jaccard similarity of top-K features
@@ -160,7 +255,26 @@ def compute_stability_metrics(
         - n_snapshots: Number of snapshots
         - n_comparisons: Number of pairwise comparisons
         - status: "stable", "drifting", "diverged", or "insufficient"
+        - validation_error: If present, reason why validation failed (strict/replicate modes)
     """
+    # Validate group signatures for strict/replicate modes
+    if filter_mode in ("strict", "replicate"):
+        validation = validate_group_signatures(snapshots, mode=filter_mode)
+        if not validation:
+            logger.error(
+                f"❌ Stability computation REFUSED in {filter_mode} mode: {validation.reason}"
+            )
+            return {
+                "mean_overlap": np.nan,
+                "std_overlap": np.nan,
+                "mean_tau": np.nan,
+                "std_tau": np.nan,
+                "n_snapshots": len(snapshots),
+                "n_comparisons": 0,
+                "status": "invalid",
+                "validation_error": validation.reason,
+            }
+    
     # Filter snapshots by universe_sig if requested (for SYMBOL_SPECIFIC mode)
     if filter_by_universe_sig and len(snapshots) > 0:
         # Extract symbol from universe_sig if format is "SYMBOL:..."

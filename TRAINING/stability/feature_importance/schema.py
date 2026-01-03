@@ -18,6 +18,11 @@ class FeatureImportanceSnapshot:
     Snapshot of feature importance for a single run.
     
     Used for tracking stability across runs, universes, and methods.
+    
+    Identity fields (for strict/replicate grouping):
+    - strict_key: Full 64-char SHA256 (includes train_seed)
+    - replicate_key: Full 64-char SHA256 (excludes train_seed)
+    - Component signatures: dataset, split, target, feature, hparams, routing
     """
     target: str
     method: str                      # "quick_pruner", "rfe", "boruta", "lightgbm", etc.
@@ -27,6 +32,21 @@ class FeatureImportanceSnapshot:
     features: List[str]              # Feature names (same order as importances)
     importances: List[float]         # Importance values (same order as features)
     
+    # Identity keys (computed from signatures)
+    strict_key: Optional[str] = None      # Full 64-char hash (includes seed)
+    replicate_key: Optional[str] = None   # Full 64-char hash (excludes seed)
+    
+    # Component signatures (64-char SHA256 each)
+    feature_signature: Optional[str] = None
+    split_signature: Optional[str] = None
+    target_signature: Optional[str] = None
+    hparams_signature: Optional[str] = None
+    dataset_signature: Optional[str] = None
+    routing_signature: Optional[str] = None
+    
+    # Training randomness
+    train_seed: Optional[int] = None
+    
     @classmethod
     def from_dict_series(
         cls,
@@ -35,7 +55,8 @@ class FeatureImportanceSnapshot:
         importance_dict: Dict[str, float],
         universe_sig: Optional[str] = None,
         run_id: Optional[str] = None,
-        created_at: Optional[datetime] = None
+        created_at: Optional[datetime] = None,
+        run_identity: Optional[Dict] = None,
     ) -> 'FeatureImportanceSnapshot':
         """
         Create snapshot from dictionary of feature -> importance.
@@ -47,6 +68,7 @@ class FeatureImportanceSnapshot:
             universe_sig: Optional universe identifier
             run_id: Optional run ID (generates UUID if not provided)
             created_at: Optional creation timestamp (uses now if not provided)
+            run_identity: Optional RunIdentity.to_dict() for identity signatures
         
         Returns:
             FeatureImportanceSnapshot instance
@@ -62,6 +84,9 @@ class FeatureImportanceSnapshot:
         if created_at is None:
             created_at = datetime.utcnow()
         
+        # Extract identity fields from run_identity if provided
+        identity = run_identity or {}
+        
         return cls(
             target=target,
             method=method,
@@ -69,7 +94,16 @@ class FeatureImportanceSnapshot:
             run_id=run_id,
             created_at=created_at,
             features=features,
-            importances=importances
+            importances=importances,
+            strict_key=identity.get("strict_key"),
+            replicate_key=identity.get("replicate_key"),
+            feature_signature=identity.get("feature_signature"),
+            split_signature=identity.get("split_signature"),
+            target_signature=identity.get("target_signature"),
+            hparams_signature=identity.get("hparams_signature"),
+            dataset_signature=identity.get("dataset_signature"),
+            routing_signature=identity.get("routing_signature"),
+            train_seed=identity.get("train_seed"),
         )
     
     @classmethod
@@ -80,7 +114,8 @@ class FeatureImportanceSnapshot:
         importance_series,  # pd.Series with feature names as index
         universe_sig: Optional[str] = None,
         run_id: Optional[str] = None,
-        created_at: Optional[datetime] = None
+        created_at: Optional[datetime] = None,
+        run_identity: Optional[Dict] = None,
     ) -> 'FeatureImportanceSnapshot':
         """
         Create snapshot from pandas Series.
@@ -92,6 +127,7 @@ class FeatureImportanceSnapshot:
             universe_sig: Optional universe identifier
             run_id: Optional run ID
             created_at: Optional creation timestamp
+            run_identity: Optional RunIdentity.to_dict() for identity signatures
         
         Returns:
             FeatureImportanceSnapshot instance
@@ -104,12 +140,13 @@ class FeatureImportanceSnapshot:
             importance_dict=importance_dict,
             universe_sig=universe_sig,
             run_id=run_id,
-            created_at=created_at
+            created_at=created_at,
+            run_identity=run_identity,
         )
     
     def to_dict(self) -> Dict:
         """Convert snapshot to dictionary for JSON serialization."""
-        return {
+        result = {
             "target": self.target,
             "method": self.method,
             "universe_sig": self.universe_sig,
@@ -118,6 +155,26 @@ class FeatureImportanceSnapshot:
             "features": self.features,
             "importances": self.importances,
         }
+        # Add identity fields if present
+        if self.strict_key:
+            result["strict_key"] = self.strict_key
+        if self.replicate_key:
+            result["replicate_key"] = self.replicate_key
+        if self.feature_signature:
+            result["feature_signature"] = self.feature_signature
+        if self.split_signature:
+            result["split_signature"] = self.split_signature
+        if self.target_signature:
+            result["target_signature"] = self.target_signature
+        if self.hparams_signature:
+            result["hparams_signature"] = self.hparams_signature
+        if self.dataset_signature:
+            result["dataset_signature"] = self.dataset_signature
+        if self.routing_signature:
+            result["routing_signature"] = self.routing_signature
+        if self.train_seed is not None:
+            result["train_seed"] = self.train_seed
+        return result
     
     @classmethod
     def from_dict(cls, data: Dict) -> 'FeatureImportanceSnapshot':
@@ -131,4 +188,14 @@ class FeatureImportanceSnapshot:
             created_at=datetime.fromisoformat(data["created_at"]),
             features=data["features"],
             importances=data["importances"],
+            # Identity fields
+            strict_key=data.get("strict_key"),
+            replicate_key=data.get("replicate_key"),
+            feature_signature=data.get("feature_signature"),
+            split_signature=data.get("split_signature"),
+            target_signature=data.get("target_signature"),
+            hparams_signature=data.get("hparams_signature"),
+            dataset_signature=data.get("dataset_signature"),
+            routing_signature=data.get("routing_signature"),
+            train_seed=data.get("train_seed"),
         )

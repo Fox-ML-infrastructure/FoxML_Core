@@ -8,8 +8,9 @@ These functions handle snapshot creation and automatic stability analysis.
 """
 
 import logging
+import warnings
 from pathlib import Path
-from typing import Dict, Optional, List, Union
+from typing import Dict, Optional, List, Union, Any
 from datetime import datetime
 import uuid
 
@@ -28,6 +29,7 @@ def save_snapshot_hook(
     output_dir: Optional[Path] = None,
     run_id: Optional[str] = None,
     auto_analyze: Optional[bool] = None,  # None = load from config
+    run_identity: Optional[Any] = None,   # RunIdentity object or dict
 ) -> Optional[Path]:
     """
     Hook function to save feature importance snapshot.
@@ -43,6 +45,8 @@ def save_snapshot_hook(
         run_id: Optional run ID (generates UUID if not provided)
         auto_analyze: If True, automatically run stability analysis after saving.
                      If None, loads from config (safety.feature_importance.auto_analyze_stability)
+        run_identity: Optional RunIdentity object or dict with identity signatures.
+                     PREFERRED: Pass RunIdentity SST object for full reproducibility.
     
     Returns:
         Path to saved snapshot, or None if saving failed
@@ -60,6 +64,27 @@ def save_snapshot_hook(
             except Exception:
                 auto_analyze = True  # Default to enabled
         
+        # Convert RunIdentity object to dict if needed
+        identity_dict = None
+        if run_identity is not None:
+            if hasattr(run_identity, 'to_dict'):
+                identity_dict = run_identity.to_dict()
+            elif isinstance(run_identity, dict):
+                identity_dict = run_identity
+            else:
+                warnings.warn(
+                    f"run_identity should be RunIdentity object or dict, got {type(run_identity).__name__}. "
+                    "Identity fields will not be saved. Use RunIdentity SST for full reproducibility.",
+                    category=UserWarning,
+                    stacklevel=2,
+                )
+        else:
+            # Warn if run_identity is not provided (legacy behavior)
+            logger.debug(
+                "save_snapshot_hook called without run_identity - identity signatures "
+                "will not be recorded. Consider passing RunIdentity SST for full reproducibility."
+            )
+        
         # Create snapshot
         snapshot = FeatureImportanceSnapshot.from_dict_series(
             target=target,
@@ -67,6 +92,7 @@ def save_snapshot_hook(
             importance_dict=importance_dict,
             universe_sig=universe_sig,
             run_id=run_id,
+            run_identity=identity_dict,
         )
         
         # Save snapshot
@@ -151,6 +177,7 @@ def save_snapshot_from_series_hook(
     output_dir: Optional[Path] = None,
     run_id: Optional[str] = None,
     auto_analyze: Optional[bool] = None,  # None = load from config
+    run_identity: Optional[Any] = None,   # RunIdentity object or dict
 ) -> Optional[Path]:
     """
     Hook function to save snapshot from pandas Series.
@@ -166,6 +193,7 @@ def save_snapshot_from_series_hook(
         run_id: Optional run ID
         auto_analyze: If True, automatically run stability analysis.
                      If None, loads from config (safety.feature_importance.auto_analyze_stability)
+        run_identity: Optional RunIdentity object or dict with identity signatures.
     
     Returns:
         Path to saved snapshot, or None if saving failed
@@ -180,6 +208,7 @@ def save_snapshot_from_series_hook(
         output_dir=output_dir,
         run_id=run_id,
         auto_analyze=auto_analyze,
+        run_identity=run_identity,
     )
 
 

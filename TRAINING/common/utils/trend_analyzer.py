@@ -33,6 +33,9 @@ from typing import Dict, Any, List, Optional, Tuple, Set
 import numpy as np
 import pandas as pd
 
+# Import SST for comparison group key construction
+from TRAINING.common.utils.fingerprinting import construct_comparison_group_key_from_dict
+
 logger = logging.getLogger(__name__)
 
 
@@ -462,11 +465,13 @@ class TrendAnalyzer:
     
     def _construct_comparison_group_key(self, metadata: Dict[str, Any]) -> Optional[str]:
         """
-        Construct comparison_group_key from metadata, matching ComparisonGroup.to_key() logic.
+        Construct comparison_group_key from metadata.
         
+        Uses SST function from fingerprinting.py to avoid duplication.
+
         Args:
             metadata: Metadata dictionary from metadata.json
-            
+
         Returns:
             Comparison group key string, or None if not available
         """
@@ -475,36 +480,14 @@ class TrendAnalyzer:
         comparison_group_key = diff_telemetry.get('comparison_group_key')
         if comparison_group_key:
             return comparison_group_key
-        
-        # If not available, construct from comparison_group dict
+
+        # If not available, construct from comparison_group dict using SST
         comparison_group = diff_telemetry.get('comparison_group', {})
         if not comparison_group:
             return None
-        
-        parts = []
-        if comparison_group.get('experiment_id'):
-            parts.append(f"exp={comparison_group['experiment_id']}")
-        if comparison_group.get('dataset_signature'):
-            parts.append(f"data={comparison_group['dataset_signature'][:8]}")
-        if comparison_group.get('task_signature'):
-            parts.append(f"task={comparison_group['task_signature'][:8]}")
-        if comparison_group.get('routing_signature'):
-            parts.append(f"route={comparison_group['routing_signature'][:8]}")
-        if comparison_group.get('n_effective') is not None:
-            parts.append(f"n={comparison_group['n_effective']}")
-        if comparison_group.get('model_family'):
-            parts.append(f"family={comparison_group['model_family']}")
-        if comparison_group.get('feature_signature'):
-            parts.append(f"features={comparison_group['feature_signature'][:8]}")
-        if comparison_group.get('hyperparameters_signature'):
-            parts.append(f"hps={comparison_group['hyperparameters_signature'][:8]}")
-        if comparison_group.get('train_seed') is not None:
-            parts.append(f"seed={comparison_group['train_seed']}")
-        if comparison_group.get('library_versions_signature'):
-            parts.append(f"libs={comparison_group['library_versions_signature'][:8]}")
-        
-        # Return "default" if no parts (matching ComparisonGroup.to_key() behavior)
-        return "|".join(parts) if parts else "default"
+
+        # Use SST function (debug mode for backward compatible short-hash format)
+        return construct_comparison_group_key_from_dict(comparison_group, mode="debug")
     
     def _extract_index_row(
         self,

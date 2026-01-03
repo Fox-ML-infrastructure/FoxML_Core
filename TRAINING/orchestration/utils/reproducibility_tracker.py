@@ -119,6 +119,9 @@ from TRAINING.orchestration.utils.reproducibility.utils import (
 )
 from TRAINING.common.utils.file_utils import write_atomic_json as _write_atomic_json
 
+# Import SST for comparison group key construction
+from TRAINING.common.utils.fingerprinting import construct_comparison_group_key_from_dict
+
 # Helper for inline usage
 def _extract_horizon_minutes_sst(metadata, cv_details):
     return extract_horizon_minutes(metadata, cv_details)
@@ -126,48 +129,12 @@ def _extract_horizon_minutes_sst(metadata, cv_details):
 
 def _construct_comparison_group_key_from_dict(comparison_group: Dict[str, Any]) -> str:
     """
-    Construct comparison_group_key from comparison_group dict, matching ComparisonGroup.to_key() logic.
+    Construct comparison_group_key from comparison_group dict.
     
-    This ensures consistency between how keys are constructed in reproducibility_tracker and trend_analyzer.
-    
-    Args:
-        comparison_group: Dictionary with comparison group fields (from diff_telemetry snapshot)
-        
-    Returns:
-        Comparison group key string (returns "default" if no parts, matching ComparisonGroup.to_key())
+    DEPRECATED: Use construct_comparison_group_key_from_dict from fingerprinting.py directly.
+    This wrapper exists for backward compatibility.
     """
-    if not comparison_group:
-        return "default"
-    
-    parts = []
-    if comparison_group.get('experiment_id'):
-        parts.append(f"exp={comparison_group['experiment_id']}")
-    if comparison_group.get('dataset_signature'):
-        parts.append(f"data={comparison_group['dataset_signature'][:8]}")
-    if comparison_group.get('task_signature'):
-        parts.append(f"task={comparison_group['task_signature'][:8]}")
-    if comparison_group.get('routing_signature'):
-        parts.append(f"route={comparison_group['routing_signature'][:8]}")
-    # CRITICAL: Include exact n_effective to ensure only identical sample sizes compare
-    if comparison_group.get('n_effective') is not None:
-        parts.append(f"n={comparison_group['n_effective']}")
-    # CRITICAL: Include model_family (different families = different outcomes)
-    if comparison_group.get('model_family'):
-        parts.append(f"family={comparison_group['model_family']}")
-    # CRITICAL: Include feature signature (different features = different outcomes)
-    if comparison_group.get('feature_signature'):
-        parts.append(f"features={comparison_group['feature_signature'][:8]}")
-    # CRITICAL: Include hyperparameters signature (different HPs = different outcomes)
-    if comparison_group.get('hyperparameters_signature'):
-        parts.append(f"hps={comparison_group['hyperparameters_signature'][:8]}")
-    # CRITICAL: Include train_seed (different seeds = different outcomes)
-    if comparison_group.get('train_seed') is not None:
-        parts.append(f"seed={comparison_group['train_seed']}")
-    # CRITICAL: Include library versions signature (different versions = different outcomes)
-    if comparison_group.get('library_versions_signature'):
-        parts.append(f"libs={comparison_group['library_versions_signature'][:8]}")
-    
-    return "|".join(parts) if parts else "default"
+    return construct_comparison_group_key_from_dict(comparison_group, mode="debug")
 
 
 # All utility functions are now imported from reproducibility.utils (see imports above)
