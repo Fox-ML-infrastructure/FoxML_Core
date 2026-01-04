@@ -164,22 +164,10 @@ os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
 # TF_CPP_MIN_LOG_LEVEL already set at top of file
 
 # CRITICAL: Import determinism FIRST before any ML libraries
-from TRAINING.common.determinism import set_global_determinism, stable_seed_from, seed_for, get_deterministic_params, log_determinism_info
+from TRAINING.common.determinism import init_determinism_from_config, stable_seed_from, seed_for, get_deterministic_params, log_determinism_info
 
-# Set global determinism immediately - OPTIMIZED FOR PERFORMANCE
-# Load base_seed from config if available
-if _CONFIG_AVAILABLE:
-    base_seed = get_cfg("pipeline.determinism.base_seed", default=42)
-else:
-    base_seed = 42  # FALLBACK_DEFAULT_OK
-BASE_SEED = set_global_determinism(
-    base_seed=base_seed,
-    threads=None,  # Auto-detect optimal thread count
-    deterministic_algorithms=False,  # Allow parallel algorithms
-    prefer_cpu_tree_train=False,  # Use GPU when available
-    tf_on=True,  # Enable TensorFlow GPU
-    strict_mode=False  # Allow optimizations
-)
+# Set global determinism immediately (reads from config, respects REPRO_MODE env var)
+BASE_SEED = init_determinism_from_config()
 
 import argparse
 import logging

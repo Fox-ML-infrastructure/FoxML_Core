@@ -62,17 +62,10 @@ except ImportError:
     base_seed = 42  # FALLBACK_DEFAULT_OK
 
 # Import determinism system FIRST (before any ML libraries)
-from TRAINING.common.determinism import set_global_determinism, seed_for, stable_seed_from
+from TRAINING.common.determinism import init_determinism_from_config, seed_for, stable_seed_from
 
-# Set global determinism immediately
-BASE_SEED = set_global_determinism(
-    base_seed=base_seed,
-    threads=None,  # Auto-detect optimal thread count
-    deterministic_algorithms=False,  # Allow parallel algorithms for performance
-    prefer_cpu_tree_train=False,  # Use GPU when available
-    tf_on=False,  # TensorFlow not needed for ranking
-    strict_mode=False  # Allow optimizations
-)
+# Set global determinism immediately (reads from config, respects REPRO_MODE env var)
+BASE_SEED = init_determinism_from_config()
 
 # Try to import config loader (for other config access)
 try:

@@ -48,24 +48,10 @@ import numpy as np
 
 # CRITICAL: Set global determinism BEFORE importing any ML libraries
 # This ensures reproducible results across runs
-from TRAINING.common.determinism import set_global_determinism
+from TRAINING.common.determinism import init_determinism_from_config
 
-# Load seed from config or use default
-_DEFAULT_SEED = 42
-try:
-    from CONFIG.config_loader import get_cfg
-    _DEFAULT_SEED = int(get_cfg("reproducibility.seed", default=42, config_name="pipeline_config"))
-except Exception:
-    pass
-
-# Set determinism immediately
-set_global_determinism(
-    base_seed=_DEFAULT_SEED,
-    threads=None,  # Auto-detect
-    deterministic_algorithms=False,  # Allow parallel for performance
-    prefer_cpu_tree_train=False,  # Use GPU when available
-    tf_on=False,  # TensorFlow not needed here
-)
+# Set determinism immediately (reads from config, respects REPRO_MODE env var)
+init_determinism_from_config()
 
 # Import ranking/selection modules
 from TRAINING.ranking import (

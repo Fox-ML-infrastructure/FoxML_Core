@@ -77,7 +77,6 @@ def set_global_determinism(
     """
     # Auto-detect optimal thread count if not specified
     if threads is None:
-        import os
         threads = max(1, (os.cpu_count() or 4) - 1)  # Use all cores except 1
     
     global BASE_SEED
@@ -125,9 +124,8 @@ def set_global_determinism(
         "TF_ENABLE_ONEDNN_OPTS": "0",  # More deterministic kernels
         "TF_FORCE_GPU_ALLOW_GROWTH": "true",  # Allow memory growth
         # "TF_LOGGING_VERBOSITY": "ERROR",  # Removed - show warnings
-        # GPU memory limits
-        "CUDA_VISIBLE_DEVICES": "0",  # Use only GPU 0
-        "TF_FORCE_GPU_ALLOW_GROWTH": "true",  # Allow memory growth
+        # GPU visibility: hide in strict mode / prefer_cpu_tree_train, otherwise use GPU 0
+        "CUDA_VISIBLE_DEVICES": "-1" if (strict_mode or prefer_cpu_tree_train) else "0",
         # Suppress XGBoost warnings
         "XGBOOST_VERBOSE": "0",
         # Suppress sklearn warnings
@@ -545,6 +543,30 @@ def load_reproducibility_config() -> Dict[str, Any]:
 def is_strict_mode() -> bool:
     """Check if strict mode is enabled."""
     return load_reproducibility_config()["mode"] == "strict"
+
+
+def init_determinism_from_config() -> int:
+    """
+    Initialize determinism from config, respecting env overrides.
+    
+    This is the preferred entry point for all modules. It reads from:
+    1. Environment variables (REPRO_MODE, REPRO_SEED) - highest priority
+    2. CONFIG/pipeline/training/reproducibility.yaml
+    
+    Returns:
+        The base seed used
+    """
+    cfg = load_reproducibility_config()
+    strict = cfg["mode"] == "strict"
+    
+    return set_global_determinism(
+        base_seed=cfg["seed"],
+        threads=1 if strict and cfg.get("force_single_thread", True) else None,
+        deterministic_algorithms=strict,
+        prefer_cpu_tree_train=strict and cfg.get("disable_gpu_tree_models", True),
+        tf_on=False,  # Caller can enable if needed
+        strict_mode=strict,
+    )
 
 
 # ============================================================================

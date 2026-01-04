@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### January
 
+- **2026-01-04 (GPU/CPU Determinism Config Fix)** — Fixed critical disconnect between reproducibility config settings and actual GPU/CPU device selection. Replaced 4 hardcoded `set_global_determinism()` calls with config-aware `init_determinism_from_config()`. Added strict mode checks to GPU detection in target ranking (LightGBM, XGBoost, CatBoost), feature selection (LightGBM), and training phase (XGBoost, PyTorch, TensorFlow). Fixed `CUDA_VISIBLE_DEVICES` to hide GPUs in strict mode. Fixed `UnboundLocalError` from redundant `import os`. `REPRO_MODE=strict` now properly forces CPU across all phases for true deterministic runs.
+  → [View](2026-01-04-gpu-cpu-determinism-config-fix.md)
+
 - **2026-01-04 (RunIdentity Wiring Fixes and Path Organization)** — Fixed critical bugs preventing `run_identity` signatures from appearing in TARGET_RANKING snapshots: (1) Added `run_identity` and `prediction_fingerprint` parameters to `_save_to_cohort()` function. (2) Fixed `log_comparison()` to use locally-computed `partial_identity` instead of null parameter. (3) Added `train_seed` fallback chain and `hparams_signature` computation for TARGET_RANKING. (4) Simplified SYMBOL_SPECIFIC paths - removed redundant `universe=` prefix to match cohort path pattern. TARGET_RANKING snapshots now contain populated signatures for determinism verification.
   → [View](2026-01-04-run-identity-wiring-and-path-organization.md)
 

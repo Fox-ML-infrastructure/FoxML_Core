@@ -52,17 +52,10 @@ except ImportError:
     base_seed = 42  # FALLBACK_DEFAULT_OK
 
 # Import determinism system FIRST (before any ML libraries)
-from TRAINING.common.determinism import set_global_determinism, seed_for, stable_seed_from
+from TRAINING.common.determinism import init_determinism_from_config, seed_for, stable_seed_from, is_strict_mode
 
-# Set global determinism immediately
-BASE_SEED = set_global_determinism(
-    base_seed=base_seed,
-    threads=None,  # Auto-detect optimal thread count
-    deterministic_algorithms=False,  # Allow parallel algorithms for performance
-    prefer_cpu_tree_train=False,  # Use GPU when available
-    tf_on=False,  # TensorFlow not needed for feature selection
-    strict_mode=False  # Allow optimizations
-)
+# Set global determinism immediately (reads from config, respects REPRO_MODE env var)
+BASE_SEED = init_determinism_from_config()
 
 from CONFIG.config_loader import load_model_config
 import yaml
@@ -1026,52 +1019,58 @@ def train_model_and_get_importance(
             
             # GPU settings (will fallback to CPU if GPU not available)
             gpu_params = {}
-            try:
-                from CONFIG.config_loader import get_cfg
-                # SST: All values from config, no hardcoded defaults
-                test_enabled = get_cfg('gpu.lightgbm.test_enabled', default=True, config_name='gpu_config')
-                test_n_estimators = get_cfg('gpu.lightgbm.test_n_estimators', default=1, config_name='gpu_config')
-                test_samples = get_cfg('gpu.lightgbm.test_samples', default=10, config_name='gpu_config')
-                test_features = get_cfg('gpu.lightgbm.test_features', default=5, config_name='gpu_config')
-                gpu_device_id = get_cfg('gpu.lightgbm.gpu_device_id', default=0, config_name='gpu_config')
-                gpu_platform_id = get_cfg('gpu.lightgbm.gpu_platform_id', default=0, config_name='gpu_config')
-                try_cuda_first = get_cfg('gpu.lightgbm.try_cuda_first', default=True, config_name='gpu_config')
-                preferred_device = get_cfg('gpu.lightgbm.device', default='cuda', config_name='gpu_config')
-                
-                if test_enabled and try_cuda_first:
-                    # Try CUDA first (fastest)
-                    try:
-                        test_model = LGBMRegressor(device='cuda', n_estimators=test_n_estimators, gpu_device_id=gpu_device_id, verbose=-1)
-                        test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
-                        gpu_params = {'device': 'cuda', 'gpu_device_id': gpu_device_id}
-                    except Exception:
+            
+            # STRICT MODE: Force CPU for determinism
+            if is_strict_mode():
+                logger.debug("  Strict mode: forcing CPU for LightGBM (GPU disabled for determinism)")
+                # Skip GPU detection entirely - gpu_params stays empty (CPU)
+            else:
+                try:
+                    from CONFIG.config_loader import get_cfg
+                    # SST: All values from config, no hardcoded defaults
+                    test_enabled = get_cfg('gpu.lightgbm.test_enabled', default=True, config_name='gpu_config')
+                    test_n_estimators = get_cfg('gpu.lightgbm.test_n_estimators', default=1, config_name='gpu_config')
+                    test_samples = get_cfg('gpu.lightgbm.test_samples', default=10, config_name='gpu_config')
+                    test_features = get_cfg('gpu.lightgbm.test_features', default=5, config_name='gpu_config')
+                    gpu_device_id = get_cfg('gpu.lightgbm.gpu_device_id', default=0, config_name='gpu_config')
+                    gpu_platform_id = get_cfg('gpu.lightgbm.gpu_platform_id', default=0, config_name='gpu_config')
+                    try_cuda_first = get_cfg('gpu.lightgbm.try_cuda_first', default=True, config_name='gpu_config')
+                    preferred_device = get_cfg('gpu.lightgbm.device', default='cuda', config_name='gpu_config')
+                    
+                    if test_enabled and try_cuda_first:
+                        # Try CUDA first (fastest)
                         try:
-                            # Try OpenCL
-                            test_model = LGBMRegressor(device='gpu', n_estimators=test_n_estimators, gpu_platform_id=gpu_platform_id, gpu_device_id=gpu_device_id, verbose=-1)
+                            test_model = LGBMRegressor(device='cuda', n_estimators=test_n_estimators, gpu_device_id=gpu_device_id, verbose=-1)
                             test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
-                            gpu_params = {'device': 'gpu', 'gpu_platform_id': gpu_platform_id, 'gpu_device_id': gpu_device_id}
+                            gpu_params = {'device': 'cuda', 'gpu_device_id': gpu_device_id}
+                        except Exception:
+                            try:
+                                # Try OpenCL
+                                test_model = LGBMRegressor(device='gpu', n_estimators=test_n_estimators, gpu_platform_id=gpu_platform_id, gpu_device_id=gpu_device_id, verbose=-1)
+                                test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
+                                gpu_params = {'device': 'gpu', 'gpu_platform_id': gpu_platform_id, 'gpu_device_id': gpu_device_id}
+                            except Exception:
+                                pass  # Fallback to CPU silently
+                    elif test_enabled and preferred_device in ['cuda', 'gpu']:
+                        # Use preferred device directly
+                        try:
+                            if preferred_device == 'cuda':
+                                test_model = LGBMRegressor(device='cuda', n_estimators=test_n_estimators, gpu_device_id=gpu_device_id, verbose=-1)
+                                gpu_params = {'device': 'cuda', 'gpu_device_id': gpu_device_id}
+                            else:
+                                test_model = LGBMRegressor(device='gpu', n_estimators=test_n_estimators, gpu_platform_id=gpu_platform_id, gpu_device_id=gpu_device_id, verbose=-1)
+                                gpu_params = {'device': 'gpu', 'gpu_platform_id': gpu_platform_id, 'gpu_device_id': gpu_device_id}
+                            test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
                         except Exception:
                             pass  # Fallback to CPU silently
-                elif test_enabled and preferred_device in ['cuda', 'gpu']:
-                    # Use preferred device directly
-                    try:
+                    elif preferred_device in ['cuda', 'gpu']:
+                        # Skip test, use preferred device from config
                         if preferred_device == 'cuda':
-                            test_model = LGBMRegressor(device='cuda', n_estimators=test_n_estimators, gpu_device_id=gpu_device_id, verbose=-1)
                             gpu_params = {'device': 'cuda', 'gpu_device_id': gpu_device_id}
                         else:
-                            test_model = LGBMRegressor(device='gpu', n_estimators=test_n_estimators, gpu_platform_id=gpu_platform_id, gpu_device_id=gpu_device_id, verbose=-1)
                             gpu_params = {'device': 'gpu', 'gpu_platform_id': gpu_platform_id, 'gpu_device_id': gpu_device_id}
-                        test_model.fit(np.random.rand(test_samples, test_features), np.random.rand(test_samples))
-                    except Exception:
-                        pass  # Fallback to CPU silently
-                elif preferred_device in ['cuda', 'gpu']:
-                    # Skip test, use preferred device from config
-                    if preferred_device == 'cuda':
-                        gpu_params = {'device': 'cuda', 'gpu_device_id': gpu_device_id}
-                    else:
-                        gpu_params = {'device': 'gpu', 'gpu_platform_id': gpu_platform_id, 'gpu_device_id': gpu_device_id}
-            except Exception:
-                pass  # Fallback to CPU silently
+                except Exception:
+                    pass  # Fallback to CPU silently
             
             # Clean config: remove params that don't apply to sklearn wrapper
             # Remove early stopping (requires eval_set) and other semantic params

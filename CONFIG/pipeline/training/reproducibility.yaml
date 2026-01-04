@@ -12,7 +12,7 @@ reproducibility:
   # Mode: strict | best_effort
   # strict: requires launcher, forces CPU, single-thread, bitwise reproducible
   # best_effort: sets seeds and flags, allows multi-threading (DEFAULT)
-  mode: best_effort
+  mode: strict
   
   # Base seed for all random operations
   seed: 42

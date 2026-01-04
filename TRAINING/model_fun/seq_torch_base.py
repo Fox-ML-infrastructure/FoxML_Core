@@ -80,7 +80,18 @@ class SeqTorchTrainerBase:
             "early_stop": 6,
         }, **(config or {})}
         
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # STRICT MODE: Force CPU for determinism
+        force_cpu = False
+        try:
+            from TRAINING.common.determinism import is_strict_mode
+            if is_strict_mode():
+                force_cpu = True
+                import logging
+                logging.getLogger(__name__).info("[PyTorch] Strict mode: forcing CPU (GPU disabled for determinism)")
+        except ImportError:
+            pass  # determinism module not available, continue normally
+        
+        self.device = torch.device("cpu" if force_cpu else ("cuda" if torch.cuda.is_available() else "cpu"))
         torch.set_num_threads(int(self.config.get("num_threads", 1)))
         self.model.to(self.device)
         

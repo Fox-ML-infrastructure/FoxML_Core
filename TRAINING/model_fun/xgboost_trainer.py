@@ -288,6 +288,15 @@ class XGBoostTrainer(BaseModelTrainer):
         tree_method = "hist"  # Always use hist (GPU is controlled by device parameter)
         use_gpu = False
         
+        # STRICT MODE: Force CPU for determinism
+        try:
+            from TRAINING.common.determinism import is_strict_mode
+            if is_strict_mode():
+                logger.info("[XGBoost] Strict mode: forcing CPU (GPU disabled for determinism)")
+                cpu_only = True
+        except ImportError:
+            pass  # determinism module not available, continue normally
+        
         if not cpu_only:
             # Check if GPU is available before using it
             if self._check_gpu_available():

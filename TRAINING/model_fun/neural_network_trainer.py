@@ -4,7 +4,7 @@
 
 import os
 import numpy as np
-from TRAINING.common.determinism import get_deterministic_params, seed_for
+from TRAINING.common.determinism import get_deterministic_params, seed_for, is_strict_mode
 import logging
 from typing import Dict, Any, Optional
 from .base_trainer import BaseModelTrainer
@@ -28,6 +28,11 @@ class NeuralNetworkTrainer(BaseModelTrainer):
     
     def _train_neural_network(self, X_tr, y_tr, X_va=None, y_va=None, cpu_only=False, num_threads=12, feat_cols=None, seed=None, epochs=50, **kwargs):
         """Train Neural Network model."""
+        # STRICT MODE: Force CPU for determinism
+        if is_strict_mode():
+            logger.info("[NeuralNetwork] Strict mode: forcing CPU (GPU disabled for determinism)")
+            cpu_only = True
+        
         # Load batch_size and max_epochs from training profile
         try:
             from CONFIG.config_loader import get_cfg, get_optimizer_config

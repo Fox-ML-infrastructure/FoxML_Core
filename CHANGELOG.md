@@ -16,6 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2026-01-04 (GPU/CPU Determinism Config Fix)
+- **Critical Fix**: Fixed config settings being ignored - replaced 4 hardcoded `set_global_determinism()` calls with config-aware `init_determinism_from_config()`.
+  - All entry points now read from `reproducibility.yaml` and respect `REPRO_MODE` environment variable
+  - `TRAINING/common/determinism.py`: Added `init_determinism_from_config()` function
+  - `ranking/predictability/main.py`, `multi_model_feature_selection.py`, `intelligent_trainer.py`, `training_strategies/utils.py`: Replaced hardcoded calls
+- **Critical Fix**: GPU device selection now respects strict mode - added `is_strict_mode()` checks to all GPU detection blocks.
+  - `model_evaluation.py`: LightGBM, XGBoost, CatBoost now force CPU in strict mode
+  - `multi_model_feature_selection.py`: LightGBM now forces CPU in strict mode
+  - `xgboost_trainer.py`, `seq_torch_base.py`, `neural_network_trainer.py`: Training phase now forces CPU in strict mode
+- **Critical Fix**: Fixed `CUDA_VISIBLE_DEVICES` to hide GPUs in strict mode (`CUDA_VISIBLE_DEVICES="-1"`).
+- **Bug Fix**: Fixed `UnboundLocalError` in `set_global_determinism()` from redundant `import os` shadowing module-level import.
+- **Impact**: `REPRO_MODE=strict` now properly forces CPU across all phases (target ranking, feature selection, training) for true deterministic runs. Config settings in `reproducibility.yaml` are now respected.
+- **Files Changed**: `determinism.py`, `model_evaluation.py`, `multi_model_feature_selection.py`, `intelligent_trainer.py`, `training_strategies/utils.py`, `xgboost_trainer.py`, `seq_torch_base.py`, `neural_network_trainer.py`
+
 #### 2026-01-04 (RunIdentity Wiring Fixes and Path Organization)
 - **Critical Fix**: Fixed `NameError: name 'run_identity' is not defined` in `_save_to_cohort()`.
   - `reproducibility_tracker.py`: Added `run_identity` and `prediction_fingerprint` parameters to `_save_to_cohort()` function signature
