@@ -154,9 +154,9 @@ def load_snapshots(
     # Legacy loading (requires explicit opt-in)
     if target and method:
         if not allow_legacy:
-            logger.warning(
-                f"Legacy snapshot loading requested for {target}/{method} but allow_legacy=False. "
-                "Use replicate_key for hash-based loading, or set allow_legacy=True."
+            logger.debug(
+                f"Legacy snapshot loading skipped for {target}/{method} (allow_legacy=False). "
+                "Use replicate_key for hash-based loading."
             )
             return []
         
