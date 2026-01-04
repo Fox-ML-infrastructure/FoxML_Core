@@ -6364,10 +6364,13 @@ def evaluate_target_predictability(
                 else:
                     try:
                         # Epoch-safe min/max computation
-                        import numpy as np
-                        arr = np.asarray(time_vals)
+                        # Note: numpy/pandas imports here are scoped to this block only
+                        # They don't affect module-level pd which is imported at top of file
+                        import numpy as _np_local
+                        import pandas as _pd_local
+                        arr = _np_local.asarray(time_vals)
                         
-                        if np.issubdtype(arr.dtype, np.number):
+                        if _np_local.issubdtype(arr.dtype, _np_local.number):
                             # Epoch array: compute min/max numerically, then canonicalize with unit inference
                             ts_min_raw = int(arr.min())
                             ts_max_raw = int(arr.max())
@@ -6375,8 +6378,7 @@ def evaluate_target_predictability(
                             data_end_utc = canonicalize_timestamp(ts_max_raw, assume_utc_for_naive=assume_utc)
                         else:
                             # Datetime-like: type-stable vectorized conversion
-                            import pandas as pd
-                            t = pd.to_datetime(time_vals, utc=False, errors="raise")
+                            t = _pd_local.to_datetime(time_vals, utc=False, errors="raise")
                             ts_min, ts_max = t.min(), t.max()
                             data_start_utc = canonicalize_timestamp(ts_min, assume_utc_for_naive=assume_utc)
                             data_end_utc = canonicalize_timestamp(ts_max, assume_utc_for_naive=assume_utc)
