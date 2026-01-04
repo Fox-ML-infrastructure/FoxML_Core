@@ -55,6 +55,31 @@ bin/run_deterministic.sh python TRAINING/orchestration/intelligent_trainer.py \
 diff <(grep fingerprint run1.log) <(grep fingerprint run2.log)
 ```
 
+### Verify Using Snapshots
+
+Each run produces `snapshot.json` files with determinism-relevant signatures:
+
+```bash
+# Find snapshots from your run
+find RESULTS/runs/*/targets/*/reproducibility -name "snapshot.json"
+
+# Compare comparison_group fields between runs
+jq '.comparison_group' run1/targets/fwd_ret_10m/reproducibility/CROSS_SECTIONAL/cohort=*/snapshot.json
+```
+
+**Key fields to compare:**
+
+| Field | Purpose |
+|-------|---------|
+| `dataset_signature` | Hash of data_dir + symbols |
+| `task_signature` | Hash of target config |
+| `routing_signature` | Hash of view + symbol routing |
+| `hyperparameters_signature` | Hash of model hyperparameters |
+| `train_seed` | Random seed used |
+| `metrics_sha256` | Hash of output metrics |
+
+If all signatures match between runs, the configuration is identical.
+
 ### What to Expect
 - **Identical fingerprints** = determinism working
 - **Different fingerprints** = something is non-deterministic
@@ -108,6 +133,36 @@ determinism.py
     ▼
 Bitwise Identical Results
 ```
+
+## Output Directory Structure
+
+Reproducibility artifacts are organized under each target:
+
+```
+RESULTS/runs/<run_name>/
+└── targets/<target>/
+    └── reproducibility/
+        ├── CROSS_SECTIONAL/
+        │   ├── universe=<sig>/           # Identifies symbol set
+        │   │   └── feature_importances/  # Per-model CSV files
+        │   └── cohort=cs_<id>/
+        │       ├── snapshot.json         # Full snapshot with signatures
+        │       ├── metrics.json          # Output metrics
+        │       ├── metadata.json         # Run metadata
+        │       └── diff_prev.json        # Comparison to previous run
+        └── SYMBOL_SPECIFIC/
+            └── symbol=AAPL/              # Per-symbol directory
+                ├── feature_importances/  # Per-model CSV files
+                └── cohort=sy_<id>/
+                    ├── snapshot.json
+                    ├── metrics.json
+                    ├── metadata.json
+                    └── diff_prev.json
+```
+
+**Key directories:**
+- `CROSS_SECTIONAL/` - Multi-symbol (panel) runs
+- `SYMBOL_SPECIFIC/symbol=XXX/` - Per-symbol runs
 
 ## Configuration Files
 

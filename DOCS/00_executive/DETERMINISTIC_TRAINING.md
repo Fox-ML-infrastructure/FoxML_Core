@@ -224,6 +224,20 @@ For full details, see [Run Identity Reference](../02_reference/configuration/RUN
 
 ---
 
+## Strict Determinism (Bitwise Reproducible)
+
+For runs requiring **bitwise identical results** (financial audit compliance):
+
+```bash
+# Use the deterministic launcher script
+bin/run_deterministic.sh python TRAINING/orchestration/intelligent_trainer.py \
+    --experiment-config your_config
+```
+
+This sets `PYTHONHASHSEED`, thread limits, and `REPRO_MODE=strict` **before Python starts**.
+
+See [Deterministic Runs Reference](../02_reference/configuration/DETERMINISTIC_RUNS.md) for details.
+
 ## Verification
 
 Verify your setup is reproducible:
@@ -236,6 +250,17 @@ python TRAINING/training_strategies/main.py --target fwd_ret_5m
 # Results should be reproducible (consistent predictions and metrics within expected variance)
 # Use the reproducibility tracking system to compare runs and verify consistency
 ```
+
+### Verify Using Snapshots
+
+Each run produces `snapshot.json` with determinism signatures:
+
+```bash
+# Check snapshot signatures
+jq '.comparison_group' RESULTS/runs/*/targets/*/reproducibility/*/cohort=*/snapshot.json
+```
+
+Identical signatures = identical configuration.
 
 ---
 
