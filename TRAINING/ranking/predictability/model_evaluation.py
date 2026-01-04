@@ -6338,17 +6338,77 @@ def evaluate_target_predictability(
                 from TRAINING.common.utils.fingerprinting import (
                     RunIdentity, compute_target_fingerprint, compute_routing_fingerprint,
                     compute_split_fingerprint, compute_hparams_fingerprint,
-                    compute_feature_fingerprint_from_specs
+                    compute_feature_fingerprint_from_specs,
+                    canonicalize_timestamp, get_identity_mode
                 )
                 from TRAINING.common.utils.config_hashing import canonical_json, sha256_full
                 
-                # Dataset signature
+                # Dataset signature (finance-safe: no path noise, includes date range)
+                # Get identity mode from config
+                identity_mode = get_identity_mode()
+                assume_utc = identity_mode in ("relaxed", "legacy")
+                
+                # Extract date range - handle empty and failures properly
+                data_start_utc = None
+                data_end_utc = None
+                timestamp_canon_failed = False
+                empty_time_vals = False
+                
+                if time_vals is None or len(time_vals) == 0:
+                    # Empty timestamps - different handling by mode
+                    empty_time_vals = True
+                    if identity_mode == "strict":
+                        raise ValueError("Cannot compute dataset signature: time_vals is empty (strict mode)")
+                    else:
+                        logger.warning("time_vals is empty - dataset identity may be incomplete")
+                else:
+                    try:
+                        # Epoch-safe min/max computation
+                        import numpy as np
+                        arr = np.asarray(time_vals)
+                        
+                        if np.issubdtype(arr.dtype, np.number):
+                            # Epoch array: compute min/max numerically, then canonicalize with unit inference
+                            ts_min_raw = int(arr.min())
+                            ts_max_raw = int(arr.max())
+                            data_start_utc = canonicalize_timestamp(ts_min_raw, assume_utc_for_naive=assume_utc)
+                            data_end_utc = canonicalize_timestamp(ts_max_raw, assume_utc_for_naive=assume_utc)
+                        else:
+                            # Datetime-like: type-stable vectorized conversion
+                            import pandas as pd
+                            t = pd.to_datetime(time_vals, utc=False, errors="raise")
+                            ts_min, ts_max = t.min(), t.max()
+                            data_start_utc = canonicalize_timestamp(ts_min, assume_utc_for_naive=assume_utc)
+                            data_end_utc = canonicalize_timestamp(ts_max, assume_utc_for_naive=assume_utc)
+                    except Exception as e:
+                        if identity_mode == "strict":
+                            raise ValueError(f"Cannot compute dataset signature: timestamp canonicalization failed: {e}")
+                        else:
+                            logger.warning(f"Timestamp canonicalization failed (relaxed mode): {e}")
+                            timestamp_canon_failed = True
+                
+                # Build payload - finance-safe, no path noise
                 dataset_payload = {
-                    "data_dir": str(data_dir),
-                    "symbols": sorted(symbols),
+                    # Core identity
+                    "symbols_digest": sha256_full(canonical_json(sorted(symbols))),
+                    "start_ts_utc": data_start_utc,
+                    "end_ts_utc": data_end_utc,
+                    
+                    # Row-shaping filters
+                    "max_rows_per_symbol": max_rows_per_symbol,
+                    
+                    # Sampling method versioning
+                    "sampling_method": "stable_seed_from:v1",
+                    
+                    # Row footprint
+                    "n_rows_total": len(time_vals) if time_vals is not None else None,
+                    
+                    # Failure/empty markers (prevent false hash matches)
+                    "timestamp_canon_failed": timestamp_canon_failed if timestamp_canon_failed else None,
+                    "empty_time_vals": empty_time_vals if empty_time_vals else None,
                 }
-                if max_rows_per_symbol is not None:
-                    dataset_payload["max_rows_per_symbol"] = max_rows_per_symbol
+                # data_dir REMOVED - filesystem noise, not identity
+                
                 dataset_signature = sha256_full(canonical_json(dataset_payload))
                 
                 # Target signature

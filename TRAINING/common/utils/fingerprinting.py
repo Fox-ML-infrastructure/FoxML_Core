@@ -85,6 +85,72 @@ def get_identity_mode() -> str:
 
 
 # =============================================================================
+# TIMESTAMP CANONICALIZATION (Finance-Safe)
+# =============================================================================
+
+def _infer_epoch_unit(x: int) -> str:
+    """
+    Infer epoch unit from magnitude.
+    
+    2026-ish magnitudes:
+      s  ~ 1e9
+      ms ~ 1e12
+      us ~ 1e15
+      ns ~ 1e18
+    """
+    ax = abs(int(x))
+    if ax >= 10**17:
+        return "ns"
+    if ax >= 10**14:
+        return "us"
+    if ax >= 10**11:
+        return "ms"
+    return "s"
+
+
+def canonicalize_timestamp(ts: Any, *, assume_utc_for_naive: bool = False) -> Optional[str]:
+    """
+    Convert timestamp to stable UTC ISO string: 'YYYY-MM-DDTHH:MM:SSZ'
+    
+    Handles: datetime, pd.Timestamp, numpy datetime64, unix epoch (s/ms/us/ns).
+    
+    Args:
+        ts: Any timestamp-like value
+        assume_utc_for_naive: If False (default), raises on naive timestamps.
+                             If True, treats naive as UTC (for relaxed mode).
+    
+    Returns:
+        Canonical UTC string 'YYYY-MM-DDTHH:MM:SSZ' or None if ts is None.
+    
+    Raises:
+        ValueError: If ts is naive and assume_utc_for_naive=False (strict mode).
+    """
+    if ts is None:
+        return None
+
+    import pandas as pd
+
+    # Epoch number - 4-way unit inference
+    if isinstance(ts, (int, float)) or type(ts).__name__ in ("int64", "int32", "float64", "float32"):
+        unit = _infer_epoch_unit(int(ts))
+        t = pd.Timestamp(int(ts), unit=unit)
+    else:
+        t = ts if isinstance(ts, pd.Timestamp) else pd.Timestamp(ts)
+
+    # Timezone handling - explicit policy
+    if t.tz is None:
+        if not assume_utc_for_naive:
+            raise ValueError(f"Naive timestamp encountered: {t!r}. Set assume_utc_for_naive=True or fix data.")
+        t = t.tz_localize("UTC")
+    else:
+        t = t.tz_convert("UTC")
+
+    # Floor to seconds for stability (removes microsecond noise)
+    t = t.floor("s")
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+# =============================================================================
 # RUN IDENTITY (SST Object)
 # =============================================================================
 
