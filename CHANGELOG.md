@@ -16,6 +16,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2026-01-04 (RunIdentity Wiring Fixes and Path Organization)
+- **Critical Fix**: Fixed `NameError: name 'run_identity' is not defined` in `_save_to_cohort()`.
+  - `reproducibility_tracker.py`: Added `run_identity` and `prediction_fingerprint` parameters to `_save_to_cohort()` function signature
+  - Updated all 4 call sites to pass the new parameters through to `finalize_run()`
+- **Critical Fix**: Fixed `run_identity=run_identity` using null parameter instead of computed identity.
+  - `model_evaluation.py`: Changed `log_comparison(..., run_identity=run_identity)` to use `partial_identity` (computed at line 6291 with actual data)
+  - This was the root cause of null signatures in TARGET_RANKING snapshots
+- **Feature**: Populated `train_seed` and `hparams_signature` for TARGET_RANKING stage.
+  - `model_evaluation.py`: Added fallback chain for `train_seed`: experiment_config.seed → config loader → default 42
+  - `model_evaluation.py`: Compute `hparams_signature` from evaluation model families for reproducibility tracking
+- **Critical Fix**: Simplified SYMBOL_SPECIFIC path organization - removed redundant `universe=` prefix.
+  - `output_layout.py`: `repro_dir()` now returns `SYMBOL_SPECIFIC/symbol={sym}/` instead of `SYMBOL_SPECIFIC/universe={sig}/symbol={sym}/`
+  - This matches the cohort path pattern used by `reproducibility_tracker.py`
+  - CROSS_SECTIONAL unchanged (still uses `universe=` to identify symbol set)
+- **Impact**: TARGET_RANKING snapshots now contain populated `dataset_signature`, `task_signature`, `routing_signature`, `train_seed`, `hparams_signature`. SYMBOL_SPECIFIC directory structure is now consistent between cohorts and feature importances.
+- **Files Changed**: `reproducibility_tracker.py`, `model_evaluation.py`, `output_layout.py`
+
 #### 2026-12-30 (Prediction Hashing for Determinism Verification and Drift Detection)
 - **Feature**: Implemented prediction hashing system for determinism verification and live drift detection.
   - `prediction_hashing.py` (NEW): Utility for computing stable, reproducible prediction fingerprints
