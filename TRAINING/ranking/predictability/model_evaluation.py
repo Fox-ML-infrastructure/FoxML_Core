@@ -6282,10 +6282,30 @@ def evaluate_target_predictability(
                 symbol=symbol_for_id,
             )
             
-            # Get seed
+            # Get seed - try multiple sources with fallback to default
             train_seed = None
             if experiment_config and hasattr(experiment_config, 'seed'):
                 train_seed = experiment_config.seed
+            if train_seed is None:
+                try:
+                    from CONFIG.config_loader import get_cfg
+                    train_seed = get_cfg("pipeline.determinism.base_seed", default=42)
+                except Exception:
+                    train_seed = 42  # FALLBACK_DEFAULT_OK
+            
+            # Compute hparams_signature for TARGET_RANKING evaluation models
+            hparams_sig = ""
+            try:
+                from TRAINING.common.utils.fingerprinting import compute_hparams_fingerprint
+                eval_params = {
+                    "model_families": sorted(model_families) if model_families else [],
+                }
+                hparams_sig = compute_hparams_fingerprint(
+                    model_family="target_ranking_eval",
+                    params=eval_params,
+                )
+            except Exception:
+                pass
             
             # Create partial identity (split computed after folds created inside train_and_evaluate_models)
             partial_identity = RunIdentity(
@@ -6293,7 +6313,7 @@ def evaluate_target_predictability(
                 split_signature="",  # Computed inside train_and_evaluate_models
                 target_signature=target_sig or "",
                 feature_signature=None,
-                hparams_signature="",  # Computed per model
+                hparams_signature=hparams_sig,  # Hash of evaluation model families
                 routing_signature=routing_sig or "",
                 routing_payload=routing_payload,
                 train_seed=train_seed,
