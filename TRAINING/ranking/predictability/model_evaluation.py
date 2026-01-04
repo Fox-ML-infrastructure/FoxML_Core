@@ -5019,7 +5019,8 @@ def evaluate_target_predictability(
     experiment_config: Optional[Any] = None,  # Optional ExperimentConfig (for data.bar_interval)
     view: str = "CROSS_SECTIONAL",  # "CROSS_SECTIONAL", "SYMBOL_SPECIFIC", or "LOSO"
     symbol: Optional[str] = None,  # Required for SYMBOL_SPECIFIC and LOSO views
-    scope_purpose: str = "FINAL"  # "FINAL" or "ROUTING_EVAL" - controls where artifacts are written
+    scope_purpose: str = "FINAL",  # "FINAL" or "ROUTING_EVAL" - controls where artifacts are written
+    run_identity: Optional[Any] = None,  # NEW: RunIdentity SST object for authoritative signatures
 ) -> TargetPredictabilityScore:
     """Evaluate predictability of a single target across symbols"""
     
@@ -7685,13 +7686,15 @@ def evaluate_target_predictability(
                     # Fallback to default if config not available
                     additional_data_with_cohort['seed'] = 42
                 
+                # NEW: Pass run_identity for authoritative signatures in snapshot
                 tracker.log_comparison(
                     stage=scope.stage.value if scope else "target_ranking",
                     target=target,
                     metrics=metrics_with_cohort,
                     additional_data=additional_data_with_cohort,
                     view=scope.view.value if scope else view_for_writes,
-                    symbol=scope.symbol if scope else symbol_for_writes
+                    symbol=scope.symbol if scope else symbol_for_writes,
+                    run_identity=run_identity,  # NEW: Pass RunIdentity SST object
                 )
         except Exception as e:
             logger.warning(f"Reproducibility tracking failed for {target}: {e}")

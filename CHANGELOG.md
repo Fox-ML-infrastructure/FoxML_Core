@@ -39,6 +39,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Files Created**: `TRAINING/common/utils/prediction_hashing.py`
 - **Files Changed**: `schema.py`, `hooks.py`, `analysis.py`
 
+#### 2026-01-03 (Diff Telemetry - RunIdentity Wiring and Path Fix)
+- **Feature**: Wired `run_identity` SST object through entire snapshot creation chain for authoritative signatures.
+  - `diff_telemetry.py`: Added `run_identity` and `prediction_fingerprint` to `normalize_snapshot()`, `finalize_run()`, `_build_comparison_group_from_context()`, `_compute_predictions_digest()`
+  - `reproducibility_tracker.py`: Added `run_identity` and `prediction_fingerprint` to `log_comparison()`, passed through to `finalize_run()` at both call sites
+  - `target_ranker.py`: Added `run_identity` to `evaluate_target_predictability()` and `rank_targets()`, wired through 6 internal call sites
+  - `model_evaluation.py`: Added `run_identity` to `evaluate_target_predictability()` function signature
+  - `feature_selector.py`: Updated `log_comparison()` call to pass `run_identity`
+- **Critical Fix**: Fixed CROSS_SECTIONAL vs SYMBOL_SPECIFIC path organization bug in multiple locations.
+  - `reproducibility_tracker.py`: If symbol is set OR cohort_id starts with `sy_`, force `view = "SYMBOL_SPECIFIC"` (3 locations)
+  - `diff_telemetry.py`: `save_snapshot()` and `save_diff()` now prefer snapshot's view/symbol over path parsing
+  - Prevents symbol-specific cohorts (e.g., BAC) being written to CROSS_SECTIONAL directory
+- **Impact**: Snapshots now contain populated `feature_signature`, `hparams_signature`, `dataset_signature`, `predictions_sha256` from SST. Comparison groups correctly scope by view/symbol, ensuring BAC only compares to BAC.
+- **Files Changed**: `diff_telemetry.py`, `reproducibility_tracker.py`, `target_ranker.py`, `model_evaluation.py`, `feature_selector.py`
+
 #### 2026-01-03 (Determinism SST - Production-Ready Reproducibility)
 - **Feature**: Implemented production-grade Single Source of Truth (SST) for determinism enforcement.
   - `repro_bootstrap.py` (NEW): Pre-import bootstrap that sets thread env vars BEFORE numpy/torch are imported

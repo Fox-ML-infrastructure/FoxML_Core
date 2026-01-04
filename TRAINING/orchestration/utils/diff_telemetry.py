@@ -584,7 +584,9 @@ class DiffTelemetry:
         cohort_metadata: Optional[Dict[str, Any]] = None,
         additional_data: Optional[Dict[str, Any]] = None,
         cohort_dir: Optional[Path] = None,
-        resolved_metadata: Optional[Dict[str, Any]] = None
+        resolved_metadata: Optional[Dict[str, Any]] = None,
+        run_identity: Optional[Any] = None,  # NEW: RunIdentity SST object
+        prediction_fingerprint: Optional[Dict] = None,  # NEW: Prediction fingerprint dict
     ) -> NormalizedSnapshot:
         """
         Create normalized snapshot from run data.
@@ -603,6 +605,8 @@ class DiffTelemetry:
             additional_data: Additional data dict
             cohort_dir: Cohort directory (fallback - only used if resolved_metadata not provided)
             resolved_metadata: In-memory metadata dict (SST - preferred source)
+            run_identity: RunIdentity SST object with authoritative signatures
+            prediction_fingerprint: Prediction fingerprint dict for predictions_sha256
         
         Returns:
             NormalizedSnapshot
@@ -718,9 +722,10 @@ class DiffTelemetry:
         
         # Build comparison group (using resolved context, stage-aware)
         # CRITICAL: Pass symbol and universe_sig for proper comparison scoping
+        # NEW: Pass run_identity for authoritative signatures
         comparison_group = self._build_comparison_group_from_context(
             stage, ctx, config_fp, data_fp, target_fp, hyperparameters_signature, train_seed, library_versions_signature,
-            symbol=symbol, universe_sig=universe_sig
+            symbol=symbol, universe_sig=universe_sig, run_identity=run_identity
         )
         
         # Normalize inputs (using resolved context - no nulls for required fields)
@@ -736,7 +741,8 @@ class DiffTelemetry:
         # These enable comparison of outputs across reruns for reproducibility tracking
         metrics_sha256 = self._compute_metrics_digest(outputs, resolved_metadata, cohort_dir)
         artifacts_manifest_sha256 = self._compute_artifacts_manifest_digest(cohort_dir, stage)
-        predictions_sha256 = self._compute_predictions_digest(cohort_dir, stage)
+        # NEW: Pass prediction_fingerprint for authoritative prediction hash
+        predictions_sha256 = self._compute_predictions_digest(cohort_dir, stage, prediction_fingerprint)
         
         # Build fingerprint source descriptions (for auditability)
         fingerprint_sources = {}
@@ -1136,19 +1142,23 @@ class DiffTelemetry:
         train_seed: Optional[int] = None,
         library_versions_signature: Optional[str] = None,
         symbol: Optional[str] = None,
-        universe_sig: Optional[str] = None
+        universe_sig: Optional[str] = None,
+        run_identity: Optional[Any] = None,  # NEW: RunIdentity SST object
     ) -> ComparisonGroup:
         """Build comparison group from resolved context (stage-aware).
-        
+
         CRITICAL: Only includes fields that are relevant for the stage.
         - TARGET_RANKING: Does NOT include model_family or feature_signature (not applicable)
         - FEATURE_SELECTION: Includes feature_signature but NOT model_family
         - TRAINING: Includes both model_family and feature_signature
-        
+
         CRITICAL: symbol and universe_sig are required for proper comparison scoping:
         - symbol: For SS runs, ensures AAPL only compares to AAPL (not AVGO)
         - universe_sig: For CS runs, ensures same symbol set comparisons
         
+        NEW: If run_identity is provided (RunIdentity SST object), use its signatures
+        instead of the fallback values from ResolvedRunContext.
+
         This prevents storing null placeholders for fields that aren't stage-relevant.
         """
         # Routing signature from view (SST) - use view if available, fallback to view
@@ -1169,30 +1179,51 @@ class DiffTelemetry:
         # Stage-specific fields
         model_family = None
         feature_signature = None
-        
+
         # Stage-specific fields
         hp_sig = None
         seed = None
         lib_sig = None  # Initialize for all stages
-        
-        if stage == "TARGET_RANKING":
-            # TARGET_RANKING: model_family, feature_signature, hyperparameters, train_seed, and library_versions are NOT applicable
-            # Don't include them (not None, just omit from ComparisonGroup)
-            pass
-        elif stage == "FEATURE_SELECTION":
-            # FEATURE_SELECTION: feature_signature, hyperparameters, train_seed, and library_versions are required
-            # CRITICAL: Different hyperparameters/seeds/versions in feature selection models = different features selected
-            feature_signature = ctx.feature_fingerprint
-            hp_sig = hyperparameters_signature
-            seed = train_seed
-            lib_sig = library_versions_signature
-        elif stage == "TRAINING":
-            # TRAINING: model_family, feature_signature, hyperparameters, train_seed, and library_versions are all required
-            model_family = ctx.model_family
-            feature_signature = ctx.feature_fingerprint
-            hp_sig = hyperparameters_signature
-            seed = train_seed
-            lib_sig = library_versions_signature
+
+        # NEW: If run_identity is provided, use its signatures (SST source of truth)
+        if run_identity is not None:
+            # Extract signatures from RunIdentity if available
+            if hasattr(run_identity, 'feature_signature') and run_identity.feature_signature:
+                feature_signature = run_identity.feature_signature
+            if hasattr(run_identity, 'hparams_signature') and run_identity.hparams_signature:
+                hp_sig = run_identity.hparams_signature
+            if hasattr(run_identity, 'train_seed') and run_identity.train_seed is not None:
+                seed = run_identity.train_seed
+            if hasattr(run_identity, 'dataset_signature') and run_identity.dataset_signature:
+                # Override data_fp with the authoritative dataset_signature
+                data_fp = run_identity.dataset_signature
+            if hasattr(run_identity, 'target_signature') and run_identity.target_signature:
+                task_fp = run_identity.target_signature
+            if hasattr(run_identity, 'routing_signature') and run_identity.routing_signature:
+                routing_signature = run_identity.routing_signature
+            # Model family from context (not in RunIdentity)
+            if stage == "TRAINING":
+                model_family = ctx.model_family
+        else:
+            # Fallback to old logic when run_identity not provided
+            if stage == "TARGET_RANKING":
+                # TARGET_RANKING: model_family, feature_signature, hyperparameters, train_seed, and library_versions are NOT applicable
+                # Don't include them (not None, just omit from ComparisonGroup)
+                pass
+            elif stage == "FEATURE_SELECTION":
+                # FEATURE_SELECTION: feature_signature, hyperparameters, train_seed, and library_versions are required
+                # CRITICAL: Different hyperparameters/seeds/versions in feature selection models = different features selected
+                feature_signature = ctx.feature_fingerprint
+                hp_sig = hyperparameters_signature
+                seed = train_seed
+                lib_sig = library_versions_signature
+            elif stage == "TRAINING":
+                # TRAINING: model_family, feature_signature, hyperparameters, train_seed, and library_versions are all required
+                model_family = ctx.model_family
+                feature_signature = ctx.feature_fingerprint
+                hp_sig = hyperparameters_signature
+                seed = train_seed
+                lib_sig = library_versions_signature
         
         return ComparisonGroup(
             experiment_id=ctx.experiment_id,  # Can be None if not tracked
@@ -1996,14 +2027,22 @@ class DiffTelemetry:
     def _compute_predictions_digest(
         self,
         cohort_dir: Optional[Path],
-        stage: str
+        stage: str,
+        prediction_fingerprint: Optional[Dict] = None,  # NEW: Prediction fingerprint dict
     ) -> Optional[str]:
         """
         Compute SHA256 digest of predictions for reproducibility verification.
-        
+
         This enables comparison of predictions across reruns.
         Currently, predictions may not be stored in cohort directories for all stages.
+        
+        NEW: If prediction_fingerprint is provided, use its prediction_hash directly.
+        This is the authoritative source from the prediction hashing system.
         """
+        # NEW: If prediction_fingerprint provided, use its hash
+        if prediction_fingerprint and prediction_fingerprint.get('prediction_hash'):
+            return prediction_fingerprint['prediction_hash']
+        
         if not cohort_dir or not cohort_dir.exists():
             return None
         
@@ -2123,19 +2162,29 @@ class DiffTelemetry:
                             get_target_reproducibility_dir, ensure_target_structure
                         )
                         
+                        # CRITICAL FIX: Prefer snapshot's view/symbol over path parsing
+                        # This fixes CROSS_SECTIONAL vs SYMBOL_SPECIFIC path organization bug
+                        snapshot_view = getattr(snapshot, 'view', None)
+                        snapshot_symbol = getattr(snapshot, 'symbol', None)
+                        
+                        # Use snapshot's view if available, otherwise fallback to path-parsed view
+                        view_for_target = snapshot_view if snapshot_view else view
+                        
                         # Normalize view for FEATURE_SELECTION (INDIVIDUAL -> SYMBOL_SPECIFIC)
-                        view_for_target = view
-                        if stage == 'FEATURE_SELECTION' and view == 'INDIVIDUAL':
+                        if stage == 'FEATURE_SELECTION' and view_for_target == 'INDIVIDUAL':
                             view_for_target = 'SYMBOL_SPECIFIC'
+                        
+                        # Use snapshot's symbol if available, otherwise fallback to path-parsed symbol
+                        symbol_for_target_final = snapshot_symbol if snapshot_symbol else symbol_for_target
                         
                         # Ensure target structure exists
                         ensure_target_structure(base_output_dir, target)
                         
                         # Build target-first reproducibility path
                         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
-                        if view_for_target == "SYMBOL_SPECIFIC" and symbol_for_target:
+                        if view_for_target == "SYMBOL_SPECIFIC" and symbol_for_target_final:
                             # Include symbol in path to prevent overwriting
-                            target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol_for_target}" / f"cohort={cohort_id}"
+                            target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol_for_target_final}" / f"cohort={cohort_id}"
                         else:
                             target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
                         target_cohort_dir.mkdir(parents=True, exist_ok=True)
@@ -2277,17 +2326,30 @@ class DiffTelemetry:
                         get_target_reproducibility_dir, ensure_target_structure
                     )
                     
+                    # CRITICAL FIX: Prefer snapshot's view/symbol over path parsing
+                    snapshot_view = getattr(snapshot, 'view', None)
+                    snapshot_symbol = getattr(snapshot, 'symbol', None)
+                    
+                    # Use snapshot's view if available, otherwise fallback to path-parsed view
+                    view_for_target = snapshot_view if snapshot_view else view
+                    
                     # Normalize view for FEATURE_SELECTION (INDIVIDUAL -> SYMBOL_SPECIFIC)
-                    view_for_target = view
-                    if stage == 'FEATURE_SELECTION' and view == 'INDIVIDUAL':
+                    if stage == 'FEATURE_SELECTION' and view_for_target == 'INDIVIDUAL':
                         view_for_target = 'SYMBOL_SPECIFIC'
+                    
+                    # Use snapshot's symbol if available
+                    symbol_for_target = snapshot_symbol
                     
                     # Ensure target structure exists
                     ensure_target_structure(base_output_dir, target)
                     
                     # Build target-first reproducibility path
                     target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
-                    target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
+                    if view_for_target == "SYMBOL_SPECIFIC" and symbol_for_target:
+                        # Include symbol in path to prevent overwriting
+                        target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol_for_target}" / f"cohort={cohort_id}"
+                    else:
+                        target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
                     target_cohort_dir.mkdir(parents=True, exist_ok=True)
                     
                     # Write snapshot.json to target-first structure
@@ -3894,10 +3956,23 @@ class DiffTelemetry:
                             get_target_reproducibility_dir, ensure_target_structure
                         )
                         
-                        # Normalize view for FEATURE_SELECTION (INDIVIDUAL -> SYMBOL_SPECIFIC)
-                        view_for_target = view
-                        if stage == 'FEATURE_SELECTION' and view == 'INDIVIDUAL':
+                        # CRITICAL FIX: Extract symbol FIRST, then determine view
+                        # If a symbol exists, this is SYMBOL_SPECIFIC regardless of what path parsing said
+                        symbol_for_target = None
+                        parts = Path(cohort_dir).parts
+                        for part in parts:
+                            if part.startswith('symbol='):
+                                symbol_for_target = part.replace('symbol=', '')
+                                break
+                        
+                        # Normalize view: if symbol exists, it's SYMBOL_SPECIFIC
+                        # Otherwise, use path-parsed view with INDIVIDUAL->SYMBOL_SPECIFIC normalization
+                        if symbol_for_target:
                             view_for_target = 'SYMBOL_SPECIFIC'
+                        else:
+                            view_for_target = view
+                            if stage == 'FEATURE_SELECTION' and view == 'INDIVIDUAL':
+                                view_for_target = 'SYMBOL_SPECIFIC'
                         
                         # Ensure target structure exists
                         ensure_target_structure(base_output_dir, target)
@@ -3906,15 +3981,6 @@ class DiffTelemetry:
                         # For CROSS_SECTIONAL: targets/<target>/reproducibility/CROSS_SECTIONAL/cohort=<cohort_id>/
                         # For SYMBOL_SPECIFIC: targets/<target>/reproducibility/SYMBOL_SPECIFIC/symbol=<symbol>/cohort=<cohort_id>/
                         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
-                        # Extract symbol from cohort_dir path if available
-                        symbol_for_target = None
-                        if view_for_target == "SYMBOL_SPECIFIC":
-                            # Try to extract symbol from cohort_dir path
-                            parts = Path(cohort_dir).parts
-                            for part in parts:
-                                if part.startswith('symbol='):
-                                    symbol_for_target = part.replace('symbol=', '')
-                                    break
                         
                         if view_for_target == "SYMBOL_SPECIFIC" and symbol_for_target:
                             # Include symbol in path to prevent overwriting
@@ -4182,7 +4248,9 @@ class DiffTelemetry:
         cohort_dir: Path,
         cohort_metadata: Optional[Dict[str, Any]] = None,
         additional_data: Optional[Dict[str, Any]] = None,
-        resolved_metadata: Optional[Dict[str, Any]] = None
+        resolved_metadata: Optional[Dict[str, Any]] = None,
+        run_identity: Optional[Any] = None,  # NEW: RunIdentity SST object
+        prediction_fingerprint: Optional[Dict] = None,  # NEW: Prediction fingerprint dict
     ) -> Optional[Dict[str, Any]]:
         """
         Finalize run: create snapshot, compute diffs, update baseline.
@@ -4200,6 +4268,8 @@ class DiffTelemetry:
             cohort_metadata: Cohort metadata (fallback if resolved_metadata not provided)
             additional_data: Additional data
             resolved_metadata: In-memory metadata dict (SST - use this if available)
+            run_identity: RunIdentity SST object with authoritative signatures
+            prediction_fingerprint: Prediction fingerprint dict for predictions_sha256
         
         Returns:
             Diff telemetry data dict
@@ -4288,13 +4358,16 @@ class DiffTelemetry:
                 )
         
         # Create normalized snapshot (prefer resolved_metadata for SST consistency)
+        # NEW: Pass run_identity and prediction_fingerprint for authoritative signatures
         snapshot = self.normalize_snapshot(
             stage=stage,
             run_data=run_data,
             cohort_metadata=cohort_metadata,
             additional_data=additional_data,
             cohort_dir=cohort_dir,
-            resolved_metadata=resolved_metadata
+            resolved_metadata=resolved_metadata,
+            run_identity=run_identity,
+            prediction_fingerprint=prediction_fingerprint
         )
         
         # Save snapshot

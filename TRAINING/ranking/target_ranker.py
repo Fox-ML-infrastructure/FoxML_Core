@@ -94,7 +94,8 @@ def evaluate_target_predictability(
     experiment_config: Optional[Any] = None,  # Optional ExperimentConfig (for data.bar_interval)
     view: str = "CROSS_SECTIONAL",  # "CROSS_SECTIONAL", "SYMBOL_SPECIFIC", or "LOSO"
     symbol: Optional[str] = None,  # Required for SYMBOL_SPECIFIC and LOSO views
-    scope_purpose: str = "ROUTING_EVAL"  # Default to ROUTING_EVAL for target ranking
+    scope_purpose: str = "ROUTING_EVAL",  # Default to ROUTING_EVAL for target ranking
+    run_identity: Optional[Any] = None,  # NEW: RunIdentity SST object for authoritative signatures
 ) -> TargetPredictabilityScore:
     """
     Evaluate predictability of a single target across symbols.
@@ -183,7 +184,8 @@ def evaluate_target_predictability(
         experiment_config=experiment_config,
         view=view,
         symbol=symbol,
-        scope_purpose=scope_purpose
+        scope_purpose=scope_purpose,
+        run_identity=run_identity,  # NEW: Pass RunIdentity SST object
     )
 
 
@@ -230,7 +232,8 @@ def rank_targets(
     max_targets_to_evaluate: Optional[int] = None,  # Limit number of targets to evaluate (for faster testing)
     target_ranking_config: Optional['TargetRankingConfig'] = None,  # New typed config (optional)
     explicit_interval: Optional[Union[int, str]] = None,  # Explicit interval from config (e.g., "5m")
-    experiment_config: Optional[Any] = None  # Optional ExperimentConfig (for data.bar_interval)
+    experiment_config: Optional[Any] = None,  # Optional ExperimentConfig (for data.bar_interval)
+    run_identity: Optional[Any] = None,  # NEW: RunIdentity SST object for authoritative signatures
 ) -> List[TargetPredictabilityScore]:
     """
     Rank multiple targets by predictability.
@@ -543,7 +546,8 @@ def rank_targets(
                     explicit_interval=explicit_interval,
                     experiment_config=experiment_config,
                     view="CROSS_SECTIONAL",
-                    symbol=None
+                    symbol=None,
+                    run_identity=run_identity,  # NEW: Pass RunIdentity
                 )
             
             result_data['result_cs'] = result_cs
@@ -610,7 +614,8 @@ def rank_targets(
                                 explicit_interval=explicit_interval,
                                 experiment_config=experiment_config,
                                 view="SYMBOL_SPECIFIC",
-                                symbol=symbol
+                                symbol=symbol,
+                                run_identity=run_identity,  # NEW: Pass RunIdentity
                             )
                         
                         if result_sym.auc != -999.0:
@@ -640,7 +645,8 @@ def rank_targets(
                             explicit_interval=explicit_interval,
                             experiment_config=experiment_config,
                             view="LOSO",
-                            symbol=symbol
+                            symbol=symbol,
+                            run_identity=run_identity,  # NEW: Pass RunIdentity
                         )
                         result_loso_dict[symbol] = result_loso_sym
                     except Exception as e:
@@ -801,7 +807,8 @@ def rank_targets(
                         explicit_interval=explicit_interval,
                         experiment_config=experiment_config,
                         view="CROSS_SECTIONAL",
-                        symbol=None
+                        symbol=None,
+                        run_identity=run_identity,  # NEW: Pass RunIdentity
                     )
                 
                 # Store cross-sectional result FIRST (needed for gating symbol-specific)
@@ -903,7 +910,8 @@ def rank_targets(
                                     explicit_interval=explicit_interval,
                                     experiment_config=experiment_config,
                                     view="SYMBOL_SPECIFIC",
-                                    symbol=symbol
+                                    symbol=symbol,
+                                    run_identity=run_identity,  # NEW: Pass RunIdentity
                                 )
                             
                             # Gate: Skip if result is degenerate (auc = -999)
@@ -963,7 +971,8 @@ def rank_targets(
                                 explicit_interval=explicit_interval,
                                 experiment_config=experiment_config,
                                 view="LOSO",
-                                symbol=symbol
+                                symbol=symbol,
+                                run_identity=run_identity,  # NEW: Pass RunIdentity
                             )
                             result_loso_dict[symbol] = result_loso_sym
                         except Exception as e:

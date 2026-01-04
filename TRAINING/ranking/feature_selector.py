@@ -2528,13 +2528,15 @@ def select_features_for_target(
                     pass
                 
                 # Use WriteScope-derived values for tracker call
+                # NEW: Pass run_identity for authoritative signatures in snapshot
                 tracker.log_comparison(
                     stage=scope.stage.value if scope else "feature_selection",
                     target=target_column,
                     metrics=metrics_with_cohort,
                     additional_data=additional_data_with_cohort,
                     view=scope.view.value if scope else scope_view,
-                    symbol=scope.symbol if scope else scope_symbol
+                    symbol=scope.symbol if scope else scope_symbol,
+                    run_identity=run_identity,  # NEW: Pass RunIdentity SST object
                 )
         except Exception as e:
             # FIX: Ensure cohort variables exist before logging (may not be initialized if exception occurred early)

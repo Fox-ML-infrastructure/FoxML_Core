@@ -1779,6 +1779,15 @@ class ReproducibilityTracker:
                     if not view_for_target:
                         view_for_target = "CROSS_SECTIONAL"  # Default
                 
+                # CRITICAL FIX: If symbol is set, force SYMBOL_SPECIFIC regardless of view parameter
+                # This prevents symbol-specific cohorts being written to CROSS_SECTIONAL directory
+                if symbol:
+                    view_for_target = "SYMBOL_SPECIFIC"
+                # Also check cohort_id prefix as backup indicator
+                elif cohort_id and cohort_id.startswith("sy_"):
+                    view_for_target = "SYMBOL_SPECIFIC"
+                    logger.debug(f"Detected symbol-specific cohort from cohort_id prefix: {cohort_id}")
+                
                 # Get base output directory (run directory, not REPRODUCIBILITY subdirectory)
                 base_output_dir = self._repro_base_dir
                 
@@ -1845,7 +1854,9 @@ class ReproducibilityTracker:
                         cohort_dir=cohort_dir,
                         cohort_metadata=cohort_metadata,
                         additional_data=additional_data,
-                        resolved_metadata=full_metadata  # CRITICAL: Pass in-memory metadata for SST consistency
+                        resolved_metadata=full_metadata,  # CRITICAL: Pass in-memory metadata for SST consistency
+                        run_identity=run_identity,  # NEW: Pass RunIdentity for authoritative signatures
+                        prediction_fingerprint=prediction_fingerprint,  # NEW: Pass prediction fingerprint
                     )
                 
                 # Store diff telemetry data for integration into metadata/metrics
@@ -2117,7 +2128,9 @@ class ReproducibilityTracker:
                     cohort_dir=target_cohort_dir,  # Use target-first structure
                     cohort_metadata=cohort_metadata,
                     additional_data=additional_data,
-                    resolved_metadata=full_metadata  # CRITICAL: Use same full_metadata as will be written to metadata.json
+                    resolved_metadata=full_metadata,  # CRITICAL: Use same full_metadata as will be written to metadata.json
+                    run_identity=run_identity,  # NEW: Pass RunIdentity for authoritative signatures
+                    prediction_fingerprint=prediction_fingerprint,  # NEW: Pass prediction fingerprint
                 )
                 
                 # Store diff telemetry data for integration into metadata/metrics
@@ -3162,7 +3175,9 @@ class ReproducibilityTracker:
         view: Optional[str] = None,
         symbol: Optional[str] = None,
         model_family: Optional[str] = None,
-        cohort_metadata: Optional[Dict[str, Any]] = None  # NEW: Allow passing pre-extracted cohort_metadata
+        cohort_metadata: Optional[Dict[str, Any]] = None,  # NEW: Allow passing pre-extracted cohort_metadata
+        run_identity: Optional[Any] = None,  # NEW: RunIdentity SST object for authoritative signatures
+        prediction_fingerprint: Optional[Dict] = None,  # NEW: Prediction fingerprint for predictions_sha256
     ) -> None:
         """
         Compare current run to previous run and log the comparison for reproducibility verification.
@@ -3184,6 +3199,8 @@ class ReproducibilityTracker:
             symbol: Optional symbol name (for symbol-specific views)
             model_family: Optional model family (for training stage)
             view: Modeling granularity ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
+            run_identity: Optional RunIdentity SST object with authoritative signatures
+            prediction_fingerprint: Optional prediction fingerprint dict for predictions_sha256
         """
         # SST: view takes precedence over view
         if view is not None:
@@ -3715,7 +3732,13 @@ class ReproducibilityTracker:
                             view = view.upper() if view else "CROSS_SECTIONAL"
                             if view not in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
                                 view = "SYMBOL_SPECIFIC"  # Normalize legacy values
-                            
+
+                            # CRITICAL FIX: If symbol is set, force SYMBOL_SPECIFIC
+                            if symbol:
+                                view = "SYMBOL_SPECIFIC"
+                            elif cohort_id and cohort_id.startswith("sy_"):
+                                view = "SYMBOL_SPECIFIC"
+
                             if view == "SYMBOL_SPECIFIC" and symbol:
                                 target_cohort_dir = target_repro_dir / view / f"symbol={symbol}" / f"cohort={cohort_id}"
                             else:
@@ -4133,6 +4156,12 @@ class ReproducibilityTracker:
                     logger.debug(f"Using view={view} from run context (SST) for cohort directory")
             except Exception as e:
                 logger.debug(f"Could not load view from run context: {e}, using inferred view={view}")
+            
+            # CRITICAL FIX: If symbol is set, force SYMBOL_SPECIFIC
+            if ctx.symbol:
+                view = "SYMBOL_SPECIFIC"
+            elif cohort_id and cohort_id.startswith("sy_"):
+                view = "SYMBOL_SPECIFIC"
             
             if view == "SYMBOL_SPECIFIC" and ctx.symbol:
                 target_cohort_dir = target_repro_dir / view / f"symbol={ctx.symbol}" / f"cohort={cohort_id}"
