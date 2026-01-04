@@ -4,7 +4,8 @@
 OutputLayout: Canonical output path builder with view+universe scoping.
 
 This is the Single Source of Truth (SST) for all artifact paths.
-All paths include universe={universe_sig}/ to prevent cross-run collisions.
+- CROSS_SECTIONAL paths include universe={universe_sig}/ to identify the symbol set
+- SYMBOL_SPECIFIC paths use symbol={symbol}/ only (universe= is redundant)
 
 Usage:
     layout = OutputLayout(
@@ -79,8 +80,8 @@ def _normalize_view(meta: Dict[str, Any]) -> Optional[str]:
 
 class OutputLayout:
     """Canonical output path builder with view+universe scoping.
-    
-    All paths include universe={universe_sig}/ to prevent cross-run collisions.
+
+    CROSS_SECTIONAL uses universe={sig}/, SYMBOL_SPECIFIC uses symbol={sym}/ only.
     
     Invariants:
     - view must be "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
@@ -190,8 +191,12 @@ class OutputLayout:
         """Get reproducibility directory for target, scoped by view/universe/symbol.
         
         Returns:
-            FINAL: targets/{target}/reproducibility/{view}/universe={universe_sig}/[symbol={symbol}/]
-            ROUTING_EVAL: routing_evaluation/{view}/universe={universe_sig}/[symbol={symbol}/]
+            CROSS_SECTIONAL: targets/{target}/reproducibility/CROSS_SECTIONAL/universe={universe_sig}/
+            SYMBOL_SPECIFIC: targets/{target}/reproducibility/SYMBOL_SPECIFIC/symbol={symbol}/
+            ROUTING_EVAL: routing_evaluation/{view}/... (same pattern)
+        
+        Note: SYMBOL_SPECIFIC uses symbol= only (no universe=) to match cohort path pattern
+        and avoid redundant nesting. The symbol already uniquely identifies the scope.
         """
         if self.is_routing_eval:
             # Routing evaluation artifacts go to separate root
@@ -200,10 +205,11 @@ class OutputLayout:
             # Final artifacts go under target
             base = self.output_root / "targets" / self.target / "reproducibility" / self.view
         
-        base = base / f"universe={self.universe_sig}"
+        # For SYMBOL_SPECIFIC: symbol= is sufficient (universe= is redundant)
+        # For CROSS_SECTIONAL: universe= identifies the multi-symbol set
         if self.view == "SYMBOL_SPECIFIC" and self.symbol:
             return base / f"symbol={self.symbol}"
-        return base
+        return base / f"universe={self.universe_sig}"
     
     def cohort_dir(self) -> Path:
         """Get cohort directory within reproducibility.
