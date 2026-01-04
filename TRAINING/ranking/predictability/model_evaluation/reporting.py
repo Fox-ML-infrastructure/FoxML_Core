@@ -143,6 +143,7 @@ def save_feature_importances(
     view: str = "CROSS_SECTIONAL",
     universe_sig: Optional[str] = None,  # PATCH 4: Required for proper scoping
     run_identity: Optional[Any] = None,  # Finalized RunIdentity for hash-based storage
+    model_metrics: Optional[Dict[str, Dict]] = None,  # Model metrics with prediction fingerprints
 ) -> None:
     """
     Save detailed per-model, per-feature importance scores to CSV files.
@@ -160,6 +161,8 @@ def save_feature_importances(
         output_dir: Base output directory (defaults to results/)
         view: CROSS_SECTIONAL or SYMBOL_SPECIFIC
         universe_sig: Universe signature from SST (required for proper scoping)
+        run_identity: Finalized RunIdentity for hash-based storage
+        model_metrics: Model metrics dict containing prediction fingerprints
     """
     # PATCH 4: Require universe_sig for proper scoping
     if not universe_sig:
@@ -239,6 +242,12 @@ def save_feature_importances(
             # Save stability snapshot (non-invasive hook)
             try:
                 from TRAINING.stability.feature_importance import save_snapshot_hook
+                
+                # Extract prediction fingerprint if available
+                prediction_fp = None
+                if model_metrics and model_name in model_metrics:
+                    prediction_fp = model_metrics[model_name].get('prediction_fingerprint')
+                
                 # Use properly scoped structure for snapshots
                 save_snapshot_hook(
                     target=target_column,
@@ -249,6 +258,7 @@ def save_feature_importances(
                     auto_analyze=None,  # Load from config
                     run_identity=run_identity,  # Pass finalized identity for hash-based storage
                     allow_legacy=(run_identity is None),  # Allow legacy if identity computation failed
+                    prediction_fingerprint=prediction_fp,  # Pass prediction hash for determinism tracking
                 )
             except Exception as e:
                 logger.debug(f"Stability snapshot save failed (non-critical): {e}")

@@ -2310,6 +2310,33 @@ def train_and_evaluate_models(
                     model_metrics[model_name]['training_r2'] = training_accuracy
                 else:
                     model_metrics[model_name]['training_accuracy'] = training_accuracy
+            
+            # Compute prediction fingerprint for determinism tracking
+            try:
+                from TRAINING.common.utils.prediction_hashing import compute_prediction_fingerprint_for_model
+                # Get strict mode from identity config
+                strict_mode = False
+                try:
+                    from TRAINING.common.utils.fingerprinting import get_identity_mode
+                    strict_mode = get_identity_mode() == "strict"
+                except Exception:
+                    pass
+                
+                # y_proba may not be defined for regression - use locals()
+                proba_for_hash = locals().get('y_proba', None)
+                
+                fp_dict = compute_prediction_fingerprint_for_model(
+                    preds=y_pred,
+                    proba=proba_for_hash,
+                    model=model,
+                    task_type=str(task_type),
+                    X=X,
+                    strict_mode=strict_mode,
+                )
+                if fp_dict:
+                    model_metrics[model_name]['prediction_fingerprint'] = fp_dict
+            except Exception as fp_e:
+                logger.debug(f"Prediction fingerprint failed for {model_name}: {fp_e}")
         except Exception as e:
             logger.warning(f"Failed to compute full metrics for {model_name}: {e}")
             # Fallback to primary score only
@@ -6502,6 +6529,7 @@ def evaluate_target_predictability(
                 view=view_for_importances,
                 universe_sig=universe_sig_for_importances,
                 run_identity=target_ranking_identity,
+                model_metrics=model_metrics,  # Pass for prediction fingerprints
             )
         
         # Store suspicious features

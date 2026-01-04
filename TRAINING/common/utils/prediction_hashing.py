@@ -24,7 +24,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 import numpy as np
 
@@ -204,6 +204,92 @@ def prediction_fingerprint(
         shape=list(a.shape),
         quantize=quantize,
     )
+
+
+def compute_prediction_fingerprint_for_model(
+    preds: np.ndarray,
+    proba: Optional[np.ndarray],
+    model: Any,
+    task_type: str,
+    X: Any,
+    strict_mode: bool = False,
+) -> Optional[dict]:
+    """
+    Compute prediction fingerprint for a trained model.
+    
+    This is the main helper for wiring prediction hashing into model evaluation.
+    Handles row ID extraction, binary proba normalization, and strict mode.
+    
+    Args:
+        preds: Model predictions (y_pred)
+        proba: Model probabilities (y_proba) - required for classification
+        model: Trained model (for classes_ extraction)
+        task_type: "REGRESSION", "BINARY_CLASSIFICATION", or "MULTICLASS_CLASSIFICATION"
+        X: Feature matrix (DataFrame or ndarray) - used for row ID extraction
+        strict_mode: If True, raise on failure; if False, return None
+    
+    Returns:
+        Dictionary with fingerprint data, or None if failed (non-strict mode)
+    
+    Example:
+        fp_dict = compute_prediction_fingerprint_for_model(
+            preds=y_pred,
+            proba=y_proba,
+            model=model,
+            task_type="REGRESSION",
+            X=X_val,
+            strict_mode=False,
+        )
+        if fp_dict:
+            model_metrics[model_name]['prediction_fingerprint'] = fp_dict
+    """
+    try:
+        # Extract row IDs: prefer DataFrame index, fallback to arange
+        if hasattr(X, 'index'):
+            # DataFrame - use index
+            row_ids = X.index.astype(str).values
+        else:
+            # ndarray - use positional indices
+            n_samples = len(preds) if preds is not None else len(proba)
+            row_ids = np.arange(n_samples).astype(str)
+        
+        # Normalize task_type string (handle both enum and string)
+        task_str = str(task_type).upper()
+        if "REGRESSION" in task_str:
+            kind = "regression"
+            to_hash = preds
+            class_order = None
+        elif "BINARY" in task_str:
+            kind = "binary_proba"
+            # CRITICAL: Always extract positive-class proba as (n,) to avoid shape ambiguity
+            if proba is not None:
+                if proba.ndim == 2 and proba.shape[1] >= 2:
+                    to_hash = proba[:, 1]  # Positive class probability
+                elif proba.ndim == 1:
+                    to_hash = proba  # Already (n,)
+                else:
+                    to_hash = proba.ravel()  # Flatten
+            else:
+                to_hash = preds  # Fallback to predictions
+            class_order = getattr(model, 'classes_', None)
+        else:  # MULTICLASS
+            kind = "multiclass_proba"
+            to_hash = proba if proba is not None else preds
+            class_order = getattr(model, 'classes_', None)
+        
+        fp = prediction_fingerprint(
+            preds=to_hash,
+            row_ids=row_ids,
+            kind=kind,
+            class_order=class_order,
+        )
+        return fp.to_dict()
+        
+    except Exception as e:
+        if strict_mode:
+            raise RuntimeError(f"Prediction fingerprint failed in strict mode: {e}") from e
+        logger.debug(f"Prediction fingerprint computation failed: {e}")
+        return None
 
 
 def compare_prediction_fingerprints(
