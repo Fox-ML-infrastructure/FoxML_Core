@@ -3821,17 +3821,30 @@ def train_and_evaluate_models(
                     fingerprint = None
                 
                 try:
+                    # CRITICAL: CatBoost get_feature_importance() requires Pool objects in many cases
+                    # Even in CPU mode, some CatBoost versions require Pool for feature importance
+                    # Always convert to Pool to ensure compatibility
+                    if isinstance(X, np.ndarray):
+                        # Get categorical features if available
+                        cat_features = []
+                        if hasattr(model, 'cat_features'):
+                            cat_features = model.cat_features
+                        elif hasattr(model, 'base_model') and hasattr(model.base_model, 'get_cat_feature_indices'):
+                            try:
+                                cat_features = model.base_model.get_cat_feature_indices()
+                            except Exception:
+                                cat_features = []
+                        
+                        importance_data = Pool(data=X, cat_features=cat_features if cat_features else None)
+                    else:
+                        importance_data = X
+                    
                     if hasattr(model, 'base_model'):
                         # Wrapper model - use base model
-                        # For GPU mode, convert X to Pool if needed
-                        if use_gpu and isinstance(X, np.ndarray):
-                            importance_data = Pool(data=X, cat_features=model.cat_features)
-                        else:
-                            importance_data = X
                         importance = model.base_model.get_feature_importance(data=importance_data, type='PredictionValuesChange')
                     else:
                         # Direct model (CPU mode)
-                        importance = model.get_feature_importance(data=X, type='PredictionValuesChange')
+                        importance = model.get_feature_importance(data=importance_data, type='PredictionValuesChange')
                     
                     # Track call
                     if auditor and auditor.enabled:
@@ -3848,13 +3861,27 @@ def train_and_evaluate_models(
                 except Exception as e:
                     logger.warning(f"  ⚠️  CatBoost feature importance computation failed: {e}")
                     logger.debug(f"  CatBoost importance error details:", exc_info=True)
-                    # Try fallback: use numpy array directly (might work even in GPU mode)
+                    # Try fallback: ensure Pool object is used (CatBoost requires Pool for get_feature_importance)
                     try:
-                        if hasattr(model, 'base_model'):
-                            importance = model.base_model.get_feature_importance(data=X, type='PredictionValuesChange')
+                        # Always use Pool for fallback too
+                        if isinstance(X, np.ndarray):
+                            cat_features = []
+                            if hasattr(model, 'cat_features'):
+                                cat_features = model.cat_features
+                            elif hasattr(model, 'base_model') and hasattr(model.base_model, 'get_cat_feature_indices'):
+                                try:
+                                    cat_features = model.base_model.get_cat_feature_indices()
+                                except Exception:
+                                    cat_features = []
+                            importance_data = Pool(data=X, cat_features=cat_features if cat_features else None)
                         else:
-                            importance = model.get_feature_importance(data=X, type='PredictionValuesChange')
-                        logger.info(f"  ✅ CatBoost importance computed using fallback method")
+                            importance_data = X
+                        
+                        if hasattr(model, 'base_model'):
+                            importance = model.base_model.get_feature_importance(data=importance_data, type='PredictionValuesChange')
+                        else:
+                            importance = model.get_feature_importance(data=importance_data, type='PredictionValuesChange')
+                        logger.info(f"  ✅ CatBoost importance computed using fallback method (Pool conversion)")
                     except Exception as e2:
                         logger.warning(f"  ⚠️  CatBoost importance fallback also failed: {e2}")
                         importance = None
@@ -3880,7 +3907,7 @@ def train_and_evaluate_models(
                 # Model didn't fit - can't compute importance
                 importance = np.array([])
                 all_feature_importances['catboost'] = {}
-            if len(importance) > 0:
+            if importance is not None and len(importance) > 0:
                 total_importance = np.sum(importance)
                 if total_importance > 0:
                     top_fraction = _get_importance_top_fraction()

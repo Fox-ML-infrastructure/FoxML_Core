@@ -870,12 +870,33 @@ def _compute_catboost_importance_worker(model_data, X_data, feature_names_data, 
     Worker process to compute CatBoost importance.
     
     This must be a module-level function (not nested) to be picklable for multiprocessing.
+    CRITICAL: CatBoost get_feature_importance() requires Pool objects when data parameter is provided.
     """
     try:
-        if hasattr(model_data, 'base_model'):
-            importance_raw = model_data.base_model.get_feature_importance(data=X_data, type='PredictionValuesChange')
+        import numpy as np
+        from catboost import Pool
+        
+        # CRITICAL: CatBoost requires Pool objects for get_feature_importance(data=...)
+        # Convert numpy array to Pool if needed
+        if isinstance(X_data, np.ndarray):
+            # Get categorical features if available
+            cat_features = []
+            if hasattr(model_data, 'cat_features'):
+                cat_features = model_data.cat_features
+            elif hasattr(model_data, 'base_model') and hasattr(model_data.base_model, 'get_cat_feature_indices'):
+                try:
+                    cat_features = model_data.base_model.get_cat_feature_indices()
+                except Exception:
+                    cat_features = []
+            
+            importance_data = Pool(data=X_data, cat_features=cat_features if cat_features else None)
         else:
-            importance_raw = model_data.get_feature_importance(data=X_data, type='PredictionValuesChange')
+            importance_data = X_data
+        
+        if hasattr(model_data, 'base_model'):
+            importance_raw = model_data.base_model.get_feature_importance(data=importance_data, type='PredictionValuesChange')
+        else:
+            importance_raw = model_data.get_feature_importance(data=importance_data, type='PredictionValuesChange')
         result_queue.put(('success', pd.Series(importance_raw, index=feature_names_data)))
     except Exception as e:
         result_queue.put(('error', str(e)))
