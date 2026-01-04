@@ -7686,7 +7686,7 @@ def evaluate_target_predictability(
                     # Fallback to default if config not available
                     additional_data_with_cohort['seed'] = 42
                 
-                # NEW: Pass run_identity for authoritative signatures in snapshot
+                # FIX: Use partial_identity (computed with real data) instead of run_identity param
                 tracker.log_comparison(
                     stage=scope.stage.value if scope else "target_ranking",
                     target=target,
@@ -7694,7 +7694,7 @@ def evaluate_target_predictability(
                     additional_data=additional_data_with_cohort,
                     view=scope.view.value if scope else view_for_writes,
                     symbol=scope.symbol if scope else symbol_for_writes,
-                    run_identity=run_identity,  # NEW: Pass RunIdentity SST object
+                    run_identity=partial_identity,  # FIX: Use locally-computed identity with real data
                 )
         except Exception as e:
             logger.warning(f"Reproducibility tracking failed for {target}: {e}")
