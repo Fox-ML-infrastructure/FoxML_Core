@@ -1064,7 +1064,9 @@ class ReproducibilityTracker:
         symbol: Optional[str] = None,
         model_family: Optional[str] = None,
         additional_data: Optional[Dict[str, Any]] = None,
-        trend_metadata: Optional[Dict[str, Any]] = None
+        trend_metadata: Optional[Dict[str, Any]] = None,
+        run_identity: Optional[Any] = None,  # NEW: RunIdentity SST object
+        prediction_fingerprint: Optional[Dict] = None,  # NEW: Prediction fingerprint
     ) -> None:
         """
         Save run to cohort-specific directory with structured layout.
@@ -3302,7 +3304,8 @@ class ReproducibilityTracker:
                         run_data["additional_data"] = additional_data
                     
                     # FIX: Pass symbol and model_family to _save_to_cohort so symbol subdirectory is created
-                    self._save_to_cohort(stage, target, cohort_id, cohort_metadata, run_data, view, symbol, model_family, additional_data)
+                    # NEW: Also pass run_identity and prediction_fingerprint for snapshot creation
+                    self._save_to_cohort(stage, target, cohort_id, cohort_metadata, run_data, view, symbol, model_family, additional_data, run_identity=run_identity, prediction_fingerprint=prediction_fingerprint)
                     self._increment_mode_counter("COHORT_AWARE")
                     
                     main_logger = _get_main_logger()
@@ -3344,7 +3347,8 @@ class ReproducibilityTracker:
                     if additional_data:
                         run_data["additional_data"] = additional_data
                     
-                    self._save_to_cohort(stage, target, cohort_id, cohort_metadata, run_data, view, symbol, model_family, additional_data)
+                    # NEW: Pass run_identity and prediction_fingerprint for snapshot creation
+                    self._save_to_cohort(stage, target, cohort_id, cohort_metadata, run_data, view, symbol, model_family, additional_data, run_identity=run_identity, prediction_fingerprint=prediction_fingerprint)
                     self._increment_mode_counter("COHORT_AWARE")
                     
                     main_logger = _get_main_logger()
@@ -3623,7 +3627,8 @@ class ReproducibilityTracker:
                     if rt_upper == "SYMBOL_SPECIFIC":
                         view_for_cohort = "SYMBOL_SPECIFIC"
                 cohort_id = self._compute_cohort_id(cohort_metadata, view=view_for_cohort)
-                self._save_to_cohort(stage, target, cohort_id, cohort_metadata, run_data, view, symbol, model_family, additional_data)
+                # NEW: Pass run_identity and prediction_fingerprint for snapshot creation
+                self._save_to_cohort(stage, target, cohort_id, cohort_metadata, run_data, view, symbol, model_family, additional_data, run_identity=run_identity, prediction_fingerprint=prediction_fingerprint)
                 self._increment_mode_counter("COHORT_AWARE")
                 
                 # Compute trend analysis for this series (if enough runs exist)
@@ -3820,7 +3825,8 @@ class ReproducibilityTracker:
                             run_data["additional_data"] = additional_data
                         
                         # Try to write to cohort directory (even with minimal metadata)
-                        self._save_to_cohort(stage, target, minimal_cohort_id, minimal_cohort_metadata, run_data, view, symbol, model_family, additional_data)
+                        # NEW: Pass run_identity and prediction_fingerprint for snapshot creation
+                        self._save_to_cohort(stage, target, minimal_cohort_id, minimal_cohort_metadata, run_data, view, symbol, model_family, additional_data, run_identity=run_identity, prediction_fingerprint=prediction_fingerprint)
                         self._increment_mode_counter("LEGACY_WITH_COHORT_WRITE")
                         logger.info(f"📊 Reproducibility: Wrote metadata.json/metrics.json to cohort directory (legacy mode with minimal metadata)")
                     except Exception as e:
