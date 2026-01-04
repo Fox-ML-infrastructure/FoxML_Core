@@ -47,6 +47,13 @@ class FeatureImportanceSnapshot:
     # Training randomness
     train_seed: Optional[int] = None
     
+    # Prediction fingerprints (for determinism verification and drift detection)
+    prediction_hash: Optional[str] = None          # Strict bitwise hash
+    prediction_hash_live: Optional[str] = None     # Quantized hash for drift detection
+    prediction_row_ids_hash: Optional[str] = None  # Hash of row identifiers
+    prediction_classes_hash: Optional[str] = None  # Hash of class order (classification)
+    prediction_kind: Optional[str] = None          # "regression", "binary_proba", etc.
+    
     @classmethod
     def from_dict_series(
         cls,
@@ -104,6 +111,12 @@ class FeatureImportanceSnapshot:
             dataset_signature=identity.get("dataset_signature"),
             routing_signature=identity.get("routing_signature"),
             train_seed=identity.get("train_seed"),
+            # Prediction fingerprints
+            prediction_hash=identity.get("prediction_hash"),
+            prediction_hash_live=identity.get("prediction_hash_live"),
+            prediction_row_ids_hash=identity.get("prediction_row_ids_hash"),
+            prediction_classes_hash=identity.get("prediction_classes_hash"),
+            prediction_kind=identity.get("prediction_kind"),
         )
     
     @classmethod
@@ -174,6 +187,17 @@ class FeatureImportanceSnapshot:
             result["routing_signature"] = self.routing_signature
         if self.train_seed is not None:
             result["train_seed"] = self.train_seed
+        # Prediction fingerprints
+        if self.prediction_hash:
+            result["prediction_hash"] = self.prediction_hash
+        if self.prediction_hash_live:
+            result["prediction_hash_live"] = self.prediction_hash_live
+        if self.prediction_row_ids_hash:
+            result["prediction_row_ids_hash"] = self.prediction_row_ids_hash
+        if self.prediction_classes_hash:
+            result["prediction_classes_hash"] = self.prediction_classes_hash
+        if self.prediction_kind:
+            result["prediction_kind"] = self.prediction_kind
         return result
     
     @classmethod
@@ -198,4 +222,10 @@ class FeatureImportanceSnapshot:
             dataset_signature=data.get("dataset_signature"),
             routing_signature=data.get("routing_signature"),
             train_seed=data.get("train_seed"),
+            # Prediction fingerprints
+            prediction_hash=data.get("prediction_hash"),
+            prediction_hash_live=data.get("prediction_hash_live"),
+            prediction_row_ids_hash=data.get("prediction_row_ids_hash"),
+            prediction_classes_hash=data.get("prediction_classes_hash"),
+            prediction_kind=data.get("prediction_kind"),
         )

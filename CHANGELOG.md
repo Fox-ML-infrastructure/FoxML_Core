@@ -16,6 +16,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2026-12-30 (Prediction Hashing for Determinism Verification and Drift Detection)
+- **Feature**: Implemented prediction hashing system for determinism verification and live drift detection.
+  - `prediction_hashing.py` (NEW): Utility for computing stable, reproducible prediction fingerprints
+  - `PredictionFingerprint` dataclass: Contains strict hash, live hash, row_ids_hash, classes_hash, kind, dtype, shape
+  - `prediction_fingerprint()`: Computes both strict (bitwise) and live (quantized) hashes
+  - `canonicalize_preds()`: Standardizes predictions (dtype, NaN handling, optional quantization)
+  - `compare_prediction_fingerprints()`: Compares two fingerprints with row identity validation
+- **Feature**: Prediction hash integration into snapshot schema:
+  - `schema.py`: Added `prediction_hash`, `prediction_hash_live`, `prediction_row_ids_hash`, `prediction_classes_hash`, `prediction_kind` fields
+  - `hooks.py`: `save_snapshot_hook()` accepts `prediction_fingerprint` parameter
+  - `analysis.py`: `compute_stability_metrics()` tracks `pred_hash_match_rate` and flags strict mode mismatches
+- **Feature**: Live-safe hashing scheme:
+  - Row identity binding (hashes include row_ids to ensure order independence)
+  - Classification-specific handling (class order, probabilities vs labels)
+  - Quantized hash for drift tolerance (default 1e-6)
+  - NaN canonicalization for cross-platform stability
+- **Impact**: Prediction hashes can now be tracked as metrics alongside feature importance, enabling:
+  - Strict determinism verification (bitwise identical predictions = identical hashes)
+  - Live drift detection (quantized hashes tolerate float jitter)
+  - Audit trail (tamper-evident prediction records)
+- **Files Created**: `TRAINING/common/utils/prediction_hashing.py`
+- **Files Changed**: `schema.py`, `hooks.py`, `analysis.py`
+
 #### 2026-01-03 (Determinism SST - Production-Ready Reproducibility)
 - **Feature**: Implemented production-grade Single Source of Truth (SST) for determinism enforcement.
   - `repro_bootstrap.py` (NEW): Pre-import bootstrap that sets thread env vars BEFORE numpy/torch are imported

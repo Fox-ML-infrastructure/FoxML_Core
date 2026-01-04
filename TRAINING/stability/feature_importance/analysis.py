@@ -356,6 +356,10 @@ def compute_stability_metrics(
     overlaps = []
     taus = []
     
+    # Prediction hash comparison tracking
+    pred_hash_matches = []       # For strict hash equality
+    pred_hash_live_matches = []  # For live drift detection
+    
     for i in range(len(snapshots) - 1):
         s1 = snapshots[i]
         s2 = snapshots[i + 1]
@@ -366,12 +370,20 @@ def compute_stability_metrics(
         tau = rank_correlation(s1, s2)
         if not np.isnan(tau):
             taus.append(tau)
+        
+        # Compare prediction hashes if available
+        if s1.prediction_hash and s2.prediction_hash:
+            # Check row_ids_hash to ensure comparability
+            if s1.prediction_row_ids_hash == s2.prediction_row_ids_hash:
+                pred_hash_matches.append(s1.prediction_hash == s2.prediction_hash)
+                if s1.prediction_hash_live and s2.prediction_hash_live:
+                    pred_hash_live_matches.append(s1.prediction_hash_live == s2.prediction_hash_live)
     
     # Compute statistics
     overlaps_array = np.array(overlaps)
     taus_array = np.array(taus) if taus else np.array([np.nan])
     
-    return {
+    result = {
         "mean_overlap": float(np.nanmean(overlaps_array)),
         "std_overlap": float(np.nanstd(overlaps_array)),
         "mean_tau": float(np.nanmean(taus_array)) if len(taus) > 0 else np.nan,
@@ -379,6 +391,23 @@ def compute_stability_metrics(
         "n_comparisons": len(overlaps),
         "n_snapshots": len(snapshots),
     }
+    
+    # Add prediction hash comparison metrics if available
+    if pred_hash_matches:
+        result["n_pred_hash_comparisons"] = len(pred_hash_matches)
+        result["pred_hash_match_rate"] = sum(pred_hash_matches) / len(pred_hash_matches)
+        if pred_hash_live_matches:
+            result["pred_hash_live_match_rate"] = sum(pred_hash_live_matches) / len(pred_hash_live_matches)
+        
+        # Flag if strict hashes mismatch in strict mode (determinism failure)
+        if filter_mode == "strict" and result["pred_hash_match_rate"] < 1.0:
+            mismatches = len(pred_hash_matches) - sum(pred_hash_matches)
+            logger.warning(
+                f"⚠️  Strict mode: {mismatches} prediction hash mismatches detected "
+                f"(determinism failure). Match rate: {result['pred_hash_match_rate']:.1%}"
+            )
+    
+    return result
 
 
 def analyze_stability_auto(

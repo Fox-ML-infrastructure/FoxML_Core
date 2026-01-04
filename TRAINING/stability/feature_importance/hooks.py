@@ -31,6 +31,7 @@ def save_snapshot_hook(
     auto_analyze: Optional[bool] = None,  # None = load from config
     run_identity: Optional[Any] = None,   # RunIdentity object or dict
     allow_legacy: bool = False,  # If True, allow saving without identity (legacy path)
+    prediction_fingerprint: Optional[Dict] = None,  # PredictionFingerprint.to_dict() for hash tracking
 ) -> Optional[Path]:
     """
     Hook function to save feature importance snapshot.
@@ -50,6 +51,12 @@ def save_snapshot_hook(
                      PREFERRED: Pass RunIdentity SST object for full reproducibility.
         allow_legacy: If True, allow saving without identity (legacy path).
                      If False (default), raise if no identity provided.
+        prediction_fingerprint: Optional PredictionFingerprint.to_dict() containing:
+                     - prediction_hash: Strict bitwise hash for determinism verification
+                     - prediction_hash_live: Quantized hash for drift detection
+                     - prediction_row_ids_hash: Hash of row identifiers
+                     - prediction_classes_hash: Hash of class order (classification)
+                     - prediction_kind: "regression", "binary_proba", etc.
     
     Returns:
         Path to saved snapshot, or None if saving failed
@@ -133,6 +140,22 @@ def save_snapshot_hook(
                 logger.error(f"No identity provided (relaxed mode): {error_msg}")
             else:  # legacy mode
                 logger.debug("No identity provided (legacy mode)")
+        
+        # Merge prediction fingerprint into identity_dict if provided
+        if prediction_fingerprint:
+            if identity_dict is None:
+                identity_dict = {}
+            # Map PredictionFingerprint fields to snapshot fields
+            if "prediction_hash" in prediction_fingerprint:
+                identity_dict["prediction_hash"] = prediction_fingerprint["prediction_hash"]
+            if "prediction_hash_live" in prediction_fingerprint:
+                identity_dict["prediction_hash_live"] = prediction_fingerprint["prediction_hash_live"]
+            if "row_ids_hash" in prediction_fingerprint:
+                identity_dict["prediction_row_ids_hash"] = prediction_fingerprint["row_ids_hash"]
+            if "classes_hash" in prediction_fingerprint:
+                identity_dict["prediction_classes_hash"] = prediction_fingerprint["classes_hash"]
+            if "kind" in prediction_fingerprint:
+                identity_dict["prediction_kind"] = prediction_fingerprint["kind"]
         
         # Create snapshot
         snapshot = FeatureImportanceSnapshot.from_dict_series(
@@ -233,6 +256,7 @@ def save_snapshot_from_series_hook(
     auto_analyze: Optional[bool] = None,  # None = load from config
     run_identity: Optional[Any] = None,   # RunIdentity object or dict
     allow_legacy: bool = False,  # If True, allow saving without identity (legacy path)
+    prediction_fingerprint: Optional[Dict] = None,  # PredictionFingerprint.to_dict()
 ) -> Optional[Path]:
     """
     Hook function to save snapshot from pandas Series.
@@ -250,6 +274,7 @@ def save_snapshot_from_series_hook(
                      If None, loads from config (safety.feature_importance.auto_analyze_stability)
         run_identity: Optional RunIdentity object or dict with identity signatures.
         allow_legacy: If True, allow saving without identity (legacy path).
+        prediction_fingerprint: Optional PredictionFingerprint.to_dict() for hash tracking.
     
     Returns:
         Path to saved snapshot, or None if saving failed
@@ -266,6 +291,7 @@ def save_snapshot_from_series_hook(
         auto_analyze=auto_analyze,
         run_identity=run_identity,
         allow_legacy=allow_legacy,
+        prediction_fingerprint=prediction_fingerprint,
     )
 
 
