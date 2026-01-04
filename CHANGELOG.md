@@ -16,6 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2026-01-03 (Deterministic Run Identity System)
+- **Feature**: Implemented comprehensive deterministic run identity system for reproducibility tracking.
+  - `fingerprinting.py`: Added `RunIdentity` SST dataclass with two-phase construction (partial → final)
+  - `fingerprinting.py`: Strict/replicate key separation (strict includes seed, replicate excludes for cross-seed stability)
+  - `fingerprinting.py`: Registry-based feature fingerprinting with per-feature metadata hashing
+  - `config_hashing.py`: Centralized canonicalization (`canonical_json`, `sha256_full`, `sha256_short`)
+  - `identity_config.yaml`: Production-grade configurable enforcement (strict/relaxed/legacy modes)
+- **Feature**: Hash-based snapshot storage keyed by identity (`replicate/<replicate_key>/<strict_key>.json`).
+- **Feature**: Configurable identity enforcement via `CONFIG/identity_config.yaml`:
+  - `identity.mode`: strict (fail on missing), relaxed (log and continue), legacy (backward compat)
+  - `stability.filter_mode`: replicate (cross-seed), strict (same seed), legacy
+  - `feature_identity.mode`: registry_resolved (per-feature metadata), names_only (deprecated)
+- **Enhancement**: Feature fingerprinting now includes registry metadata (lag_bars, source, allowed_horizons, version) and explicit provenance markers (`registry_explicit`, `registry_mixed`, `registry_inferred`, `names_only_degraded`).
+- **Safety**: Partial identities cannot be saved (enforced via `is_final` flag and `finalize()` validation).
+- **Safety**: Stability analysis refuses invalid/mismatched signature groups in non-legacy modes.
+- **Impact**: Runs with identical configurations produce identical identity keys. Stability analysis only compares truly equivalent runs. No silent degradation in strict mode.
+- **Files Changed**: `fingerprinting.py`, `config_hashing.py`, `hooks.py`, `feature_selector.py`, `model_evaluation.py`, `cross_sectional_feature_ranker.py`, `multi_model_feature_selection.py`, `intelligent_trainer.py`, `identity_config.yaml` (NEW)
+
 #### 2026-01-02 (Horizon-Aware Routing and Telemetry Comparison Fixes)
 - **Feature**: Implemented horizon-aware routing thresholds for regression targets.
   - `routing.yaml`: Regression `min_score` and `strong_score` now support horizon tiers: `short` (<60min), `medium` (60min-4h), `long` (4h-1d), `very_long` (>1d)

@@ -2,6 +2,13 @@
 
 This directory contains detailed per-day changelogs for FoxML Core. For the lightweight root changelog, see [CHANGELOG.md](../../../CHANGELOG.md).
 
+## 2026
+
+### January
+
+- **2026-01-03 (Deterministic Run Identity System)** — Implemented comprehensive deterministic run identity system for reproducibility tracking. Added `RunIdentity` SST dataclass with two-phase construction (partial → final), strict/replicate key separation, registry-based feature fingerprinting with per-feature metadata hashing, and configurable enforcement modes (strict/relaxed/legacy). Hash-based snapshot storage keyed by identity. Feature fingerprinting now includes registry metadata and explicit provenance markers. Partial identities cannot be saved. Stability analysis refuses invalid groups in non-legacy modes.
+  → [View](2026-01-03-deterministic-run-identity.md)
+
 ## 2025
 
 ### December
