@@ -7,7 +7,7 @@
 >
 > See [LICENSE](LICENSE) and [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md) for full terms.
 
-> **🔍 Reproducibility & Auditability:** This system focuses on reproducibility (consistent results within expected variance) and comprehensive auditability (full tracking of inputs, configs, and outputs). Note: True bitwise determinism (identical outputs at the binary level) requires lower-level language implementations and strict control over floating-point operations.
+> **🔍 Reproducibility & Auditability:** This system supports **bitwise deterministic runs** via strict mode (`bin/run_deterministic.sh`) for financial audit compliance, plus comprehensive auditability (full tracking of inputs, configs, and outputs). See [Deterministic Runs](DOCS/02_reference/configuration/DETERMINISTIC_RUNS.md).
 
 ---
 
@@ -36,6 +36,7 @@ FoxML Core provides:
 
 - **Intelligent training pipeline** with automated target ranking and feature selection
 - **GPU acceleration** for target ranking, feature selection, and model training (LightGBM, XGBoost, CatBoost)
+- **Bitwise deterministic runs** via strict mode for financial audit compliance and regulatory requirements
 - **Config-based usage** with minimal command-line arguments
 - **Leakage detection system** with pre-training leak detection and auto-fix
 - **Single Source of Truth (SST)** config system - all 20 model families use config-driven hyperparameters
@@ -79,6 +80,7 @@ FoxML Core is **general-purpose ML cross-sectional infrastructure** for panel da
 - **[Quick Start](DOCS/00_executive/QUICKSTART.md)** - Get running in 5 minutes
 - **[Getting Started](DOCS/00_executive/GETTING_STARTED.md)** - Complete onboarding guide
 - **[Architecture Overview](DOCS/00_executive/ARCHITECTURE_OVERVIEW.md)** - System at a glance
+- **[Deterministic Runs](DOCS/02_reference/configuration/DETERMINISTIC_RUNS.md)** - Bitwise reproducible runs for audit compliance
 
 **Complete documentation:**
 - **[Documentation Index](DOCS/INDEX.md)** - Full documentation navigation

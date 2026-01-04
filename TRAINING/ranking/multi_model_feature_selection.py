@@ -1098,6 +1098,10 @@ def train_model_and_get_importance(
             # verbose will be set explicitly if needed, or use default from config_cleaner
             lgb_config.pop('verbose', None)
             
+            # CRITICAL: Force deterministic mode for reproducibility
+            lgb_config['deterministic'] = True
+            lgb_config['force_row_wise'] = True  # Required for deterministic=True
+            
             # Add GPU params if available (will override any device in config)
             lgb_config.update(gpu_params)
             

@@ -121,6 +121,7 @@ def quick_importance_prune(
         pruning_learning_rate = 0.1
     
     # Train a fast LightGBM model to get importance
+    # CRITICAL: Use deterministic=True for reproducibility (especially with GPU)
     if task_type == 'regression':
         model = lgb.LGBMRegressor(
             n_estimators=n_estimators,
@@ -128,7 +129,9 @@ def quick_importance_prune(
             learning_rate=pruning_learning_rate,
             verbosity=-1,
             random_state=seed,  # FIX: LightGBM sklearn API uses random_state
-            n_jobs=1  # Single thread for quick pruning
+            n_jobs=1,  # Single thread for quick pruning
+            deterministic=True,  # CRITICAL: Reproducible results
+            force_row_wise=True  # Required for deterministic=True
         )
     else:
         # Classification
@@ -154,7 +157,9 @@ def quick_importance_prune(
             objective=objective,
             verbosity=-1,
             random_state=seed,  # FIX: LightGBM sklearn API uses random_state
-            n_jobs=1
+            n_jobs=1,
+            deterministic=True,  # CRITICAL: Reproducible results
+            force_row_wise=True  # Required for deterministic=True
         )
     
     try:

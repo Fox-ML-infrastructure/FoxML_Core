@@ -1,0 +1,150 @@
+# Determinism Test Configuration
+# Based on e2e_full_targets_test.yaml but with DETERMINISM ENFORCED
+# Purpose: Verify bitwise reproducibility across runs
+#
+# Usage:
+#   Run 1: bin/run_deterministic.sh python TRAINING/orchestration/intelligent_trainer.py --experiment-config determinism_test 2>&1 | tee run1.log
+#   Run 2: bin/run_deterministic.sh python TRAINING/orchestration/intelligent_trainer.py --experiment-config determinism_test 2>&1 | tee run2.log
+#   Compare: diff <(grep fingerprint run1.log) <(grep fingerprint run2.log)
+#
+# For production financial use:
+#   - Always use strict mode for reproducibility audits
+#   - Store run fingerprints for regulatory compliance
+#   - Compare fingerprints across runs to detect drift
+
+experiment:
+  name: determinism_test
+  description: "Determinism verification: Comprehensive test with reproducibility enforced"
+
+# ============================================================================
+# DATA CONFIGURATION
+# ============================================================================
+data:
+  # Data directory (relative to repo root or absolute path)
+  data_dir: data/data_labeled_v3/interval=5m
+  
+  # Auto-discover symbols from data_dir
+  symbols: []  # Auto-discover all symbols
+  symbol_batch_size: 10  # Use 10 symbols to enable CROSS_SECTIONAL mode
+  
+  # Reduced limits for faster testing (increase for production)
+  max_samples_per_symbol: 2000
+  max_rows_per_symbol: 2000
+  max_rows_train: 20000
+  max_cs_samples: 2000
+  min_cs: 3
+
+# ============================================================================
+# INTELLIGENT TRAINING CONFIGURATION
+# ============================================================================
+intelligent_training:
+  # Auto-discover ALL targets from data
+  auto_targets: true
+  
+  # Evaluate top N targets
+  top_n_targets: 5
+  
+  # Maximum targets to evaluate
+  max_targets_to_evaluate: 15
+  
+  # Auto-discover features
+  auto_features: true
+  
+  # Number of top features to select
+  top_m_features: 50
+  
+  # Training strategy
+  strategy: single_task
+  
+  # Skip leakage diagnostics for faster testing
+  run_leakage_diagnostics: false
+  
+  # Exclude target patterns
+  exclude_target_patterns:
+    - "fwd_ret_20d"
+    - "fwd_ret_15d"
+
+# ============================================================================
+# TARGET CONFIGURATION (Legacy/Reference)
+# ============================================================================
+targets:
+  # Primary target (fallback ONLY if auto_targets=false)
+  # primary: fwd_ret_60m
+
+# ============================================================================
+# FEATURE SELECTION CONFIGURATION
+# ============================================================================
+feature_selection:
+  # Model families to use for feature selection (comprehensive set)
+  model_families:
+    - lightgbm
+    - xgboost
+    - random_forest
+    - catboost
+    - neural_network
+    - lasso
+    - mutual_information
+    - univariate_selection
+
+# ============================================================================
+# TRAINING CONFIGURATION
+# ============================================================================
+training:
+  # Model families to train
+  model_families:
+    # CPU families (fast, reliable)
+    - lightgbm
+    - xgboost
+    - ensemble
+    - quantile_lightgbm
+    # GPU families (TensorFlow) - requires TensorFlow
+    - mlp
+    - cnn1d
+    - lstm
+    - transformer
+
+# ============================================================================
+# DECISION CONFIGURATION
+# ============================================================================
+decisions:
+  apply_mode: "off"
+  min_level_to_apply: 2
+  use_bayesian: false
+
+# ============================================================================
+# CRITICAL: DISABLE ALL PARALLELISM FOR DETERMINISM
+# ============================================================================
+# Unlike e2e_full_targets_test.yaml, parallelism is DISABLED here
+# to ensure bitwise reproducible results across runs.
+
+multi_target:
+  parallel_targets: false  # CRITICAL: Sequential for determinism
+  skip_on_error: true      # Continue on error (same as e2e)
+  save_summary: true
+
+multi_model_feature_selection:
+  parallel_symbols: false  # CRITICAL: Sequential for determinism
+
+threading:
+  parallel:
+    max_workers_process: 1  # CRITICAL: Single worker for determinism
+    max_workers_thread: 1   # CRITICAL: Single worker for determinism
+    enabled: false          # CRITICAL: Disable parallelism
+
+# ============================================================================
+# VERIFICATION INSTRUCTIONS
+# ============================================================================
+# After running twice with strict mode:
+#
+# 1. Compare fingerprints in logs:
+#    grep "fingerprint" run1.log > fp1.txt
+#    grep "fingerprint" run2.log > fp2.txt
+#    diff fp1.txt fp2.txt  # Should be empty (identical)
+#
+# 2. Compare feature importances:
+#    diff -r RESULTS/runs/<run1>/*/feature_importances RESULTS/runs/<run2>/*/feature_importances
+#
+# 3. For production financial use:
+#    - Store fingerprints in audit log
+#    - Verify fingerprints match expected values
+#    - Any drift indicates environment/code change

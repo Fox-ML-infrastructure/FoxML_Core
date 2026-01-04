@@ -2407,8 +2407,13 @@ def train_and_evaluate_models(
                 lgb_config = {}
             # Remove objective, device, and verbose from config (we set these explicitly)
             # CRITICAL: Remove verbose to prevent double argument error
-            lgb_config_clean = {k: v for k, v in lgb_config.items() if k not in ['device', 'objective', 'metric', 'verbose']}
+            lgb_config_clean = {k: v for k, v in lgb_config.items() if k not in ['device', 'objective', 'metric', 'verbose', 'deterministic', 'force_row_wise']}
             
+            # CRITICAL: Force deterministic mode for reproducibility
+            # This is essential for consistent results across runs, especially with GPU
+            lgb_config_clean['deterministic'] = True
+            lgb_config_clean['force_row_wise'] = True  # Required for deterministic=True
+
             # Set verbose level from backend config
             # Note: verbose is a model constructor parameter, not fit() parameter
             verbose_level = lgbm_backend_cfg.native_verbosity

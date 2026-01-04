@@ -1,0 +1,42 @@
+# =============================================================================
+# REPRODUCIBILITY CONFIGURATION
+# =============================================================================
+# Single Source of Truth for determinism settings.
+#
+# IMPORTANT: Environment variables override these settings.
+#   REPRO_MODE, REPRO_SEED, REPRO_VERSION
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later OR Commercial
+
+reproducibility:
+  # Mode: strict | best_effort
+  # strict: requires launcher, forces CPU, single-thread, bitwise reproducible
+  # best_effort: sets seeds and flags, allows multi-threading (DEFAULT)
+  mode: best_effort
+  
+  # Base seed for all random operations
+  seed: 42
+  
+  # Version string for seed derivation (change to invalidate old seeds)
+  version: v1
+  
+  # Strict mode settings (only apply when mode=strict)
+  strict:
+    # Hard-fail if required env vars not set
+    require_env_vars: true
+    
+    # Force CPU for tree models (GPU is non-deterministic)
+    disable_gpu_tree_models: true
+    
+    # Force single-threaded execution
+    force_single_thread: true
+    
+    # Sort feature/target/fold lists for stable ordering
+    enforce_stable_ordering: true
+    
+  # Best-effort mode settings (only apply when mode=best_effort)
+  best_effort:
+    require_env_vars: false
+    disable_gpu_tree_models: false
+    force_single_thread: false
+    enforce_stable_ordering: false

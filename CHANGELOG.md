@@ -16,6 +16,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2026-01-03 (Determinism SST - Production-Ready Reproducibility)
+- **Feature**: Implemented production-grade Single Source of Truth (SST) for determinism enforcement.
+  - `repro_bootstrap.py` (NEW): Pre-import bootstrap that sets thread env vars BEFORE numpy/torch are imported
+  - `bin/run_deterministic.sh` (NEW): Launcher script that sets `PYTHONHASHSEED` before Python starts
+  - `reproducibility.yaml` (NEW): SST config for strict/best_effort modes with subsettings
+- **Feature**: Strict mode for bitwise reproducible runs (financial audit compliance):
+  - Forces CPU-only execution (`device_type: cpu`)
+  - Single-threaded (`n_jobs=1`, `OMP_NUM_THREADS=1`, `MKL_NUM_THREADS=1`)
+  - Hard-fails if `PYTHONHASHSEED` not set before Python starts
+  - Hard-fails if numeric libraries imported before bootstrap
+- **Feature**: `create_estimator()` single choke point for all model instantiation:
+  - Applies determinism params automatically (random_state, n_jobs, device_type)
+  - Uses correct sklearn API keys per library (n_jobs vs num_threads)
+  - `normalize_seed()` prevents seed=0 and overflow issues
+  - `resolve_seed()` uses SHA256 for stable, versioned seed derivation
+- **Feature**: `stable_sort()` for deterministic ordering at key boundaries (features, targets, folds, symbols).
+- **Feature**: Import-time strict assertion in `determinism.py` catches bootstrap-before-import violations.
+- **Testing**: Two-process strict determinism test (`test_determinism_strict.py`) with bitwise prediction hash comparison.
+- **Config**: `determinism_test.yaml` experiment config for verifying reproducibility.
+- **Impact**: Runs with `bin/run_deterministic.sh` produce bitwise identical results across separate process invocations. Verified with prediction hash comparison.
+- **Files Created**: `repro_bootstrap.py`, `bin/run_deterministic.sh`, `reproducibility.yaml`, `determinism_test.yaml`, `test_determinism_strict.py`
+- **Files Changed**: `determinism.py` (major additions), `intelligent_trainer.py` (bootstrap import)
+
 #### 2026-01-03 (Deterministic Run Identity System)
 - **Critical Fix**: Added `set_global_determinism()` to `intelligent_trainer.py` - **this was the root cause of non-reproducible runs**.
   - Same config + same data now produces identical fingerprints every run

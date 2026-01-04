@@ -13,19 +13,13 @@ This is a new entry point that wraps train_with_strategies.py, adding:
 - Backward compatibility with existing workflows
 """
 
+# ============================================================================
+# CRITICAL: Path setup MUST happen before any TRAINING imports
+# ============================================================================
 import sys
-import os
-import argparse
-import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
-import json
-import hashlib
-import time
-import datetime
-import numpy as np
 
-# Add project root to path
+# Add project root to path FIRST (before any TRAINING imports)
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
@@ -34,6 +28,23 @@ if str(_PROJECT_ROOT) not in sys.path:
 _TRAINING_ROOT = Path(__file__).resolve().parents[1]
 if str(_TRAINING_ROOT) not in sys.path:
     sys.path.insert(0, str(_TRAINING_ROOT))
+
+# ============================================================================
+# CRITICAL: Import repro_bootstrap FIRST before ANY numeric libraries
+# This sets thread env vars BEFORE numpy/torch/sklearn are imported.
+# DO NOT move this import or add imports above it (except path setup)!
+# ============================================================================
+import TRAINING.common.repro_bootstrap  # noqa: F401 - side effects only
+
+import os
+import argparse
+import logging
+from typing import List, Dict, Any, Optional, Tuple
+import json
+import hashlib
+import time
+import datetime
+import numpy as np
 
 # CRITICAL: Set global determinism BEFORE importing any ML libraries
 # This ensures reproducible results across runs

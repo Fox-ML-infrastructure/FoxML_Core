@@ -193,6 +193,9 @@ def train_panel_model(
             
             # Clean config to prevent duplicate/unknown param errors
             config = clean_config_for_estimator(est_cls, config, {}, model_family)
+            # CRITICAL: Force deterministic mode for reproducibility
+            config['deterministic'] = True
+            config['force_row_wise'] = True  # Required for deterministic=True
             model = est_cls(**config)
             
             model.fit(X, y)

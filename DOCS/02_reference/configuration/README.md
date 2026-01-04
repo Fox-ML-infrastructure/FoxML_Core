@@ -3,7 +3,8 @@
 Centralized configuration management for FoxML Core training pipeline, model families, feature selection, and leakage detection.
 
 > **📚 Complete Configuration Guides:**
-> - **[Modular Config System](MODULAR_CONFIG_SYSTEM.md)** - NEW: Complete guide to modular configs (experiment configs, typed configs, migration)
+> - **[Deterministic Runs](DETERMINISTIC_RUNS.md)** - NEW: Bitwise reproducible runs for financial audit compliance
+> - **[Modular Config System](MODULAR_CONFIG_SYSTEM.md)** - Complete guide to modular configs (experiment configs, typed configs, migration)
 > - [Feature & Target Configs](FEATURE_TARGET_CONFIGS.md) - Complete feature/target configuration guide
 > - [Training Pipeline Configs](TRAINING_PIPELINE_CONFIGS.md) - System resources and training behavior
 > - [Safety & Leakage Configs](SAFETY_LEAKAGE_CONFIGS.md) - Leakage detection and numerical stability
@@ -12,7 +13,7 @@ Centralized configuration management for FoxML Core training pipeline, model fam
 > - [Config Loader API](CONFIG_LOADER_API.md) - Programmatic config loading
 > - [Config Overlays](CONFIG_OVERLAYS.md) - Overlay system for environment-specific configs
 > - [Environment Variables](ENVIRONMENT_VARIABLES.md) - Environment-based configuration
-> - [Config Audit](CONFIG_AUDIT.md) - **NEW**: Config folder audit, hardcoded values tracking, and organization plan
+> - [Config Audit](CONFIG_AUDIT.md) - Config folder audit, hardcoded values tracking, and organization plan
 
 ## Overview
 

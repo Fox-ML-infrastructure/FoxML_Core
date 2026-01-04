@@ -1,0 +1,83 @@
+# Determinism Test Configuration - LARGE
+# Purpose: Verify reproducibility with larger, more realistic sample sizes
+# WARNING: Slower than determinism_test.yaml due to larger data + single-threaded execution
+#
+# Usage:
+#   bin/run_deterministic.sh python TRAINING/orchestration/intelligent_trainer.py --experiment-config determinism_test_large
+
+experiment:
+  name: determinism_test_large
+  description: "Determinism verification: Larger samples, single-threaded, reproducible"
+
+# ============================================================================
+# DATA CONFIGURATION (Larger samples for realistic test)
+# ============================================================================
+data:
+  data_dir: data/data_labeled_v3/interval=5m
+  
+  symbols: []  # Auto-discover
+  symbol_batch_size: 5  # More symbols
+  
+  # Larger data (closer to production)
+  max_samples_per_symbol: 5000   # 10x larger than small test
+  max_rows_per_symbol: 5000
+  max_rows_train: 25000          # 25k rows
+  max_cs_samples: 5000
+  min_cs: 3
+
+# ============================================================================
+# INTELLIGENT TRAINING
+# ============================================================================
+intelligent_training:
+  auto_targets: true
+  top_n_targets: 3               # More targets
+  max_targets_to_evaluate: 5
+  
+  auto_features: true
+  top_m_features: 50             # More features
+  
+  strategy: single_task
+  run_leakage_diagnostics: false
+  
+  exclude_target_patterns:
+    - "fwd_ret_20d"
+    - "fwd_ret_15d"
+    - "fwd_ret_10d"
+
+# ============================================================================
+# FEATURE SELECTION
+# ============================================================================
+feature_selection:
+  model_families:
+    - lightgbm
+    - xgboost
+    - random_forest
+
+# ============================================================================
+# TRAINING
+# ============================================================================
+training:
+  model_families:
+    - lightgbm
+    - xgboost
+
+# ============================================================================
+# CRITICAL: DISABLE ALL PARALLELISM FOR DETERMINISM
+# ============================================================================
+multi_target:
+  parallel_targets: false
+  skip_on_error: false
+  save_summary: true
+
+multi_model_feature_selection:
+  parallel_symbols: false
+
+threading:
+  parallel:
+    max_workers_process: 1
+    max_workers_thread: 1
+    enabled: false
+
+decisions:
+  apply_mode: "off"
+  use_bayesian: false
