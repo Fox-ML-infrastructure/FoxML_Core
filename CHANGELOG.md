@@ -17,12 +17,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Recent Highlights
 
 #### 2026-01-03 (Deterministic Run Identity System)
+- **Critical Fix**: Added `set_global_determinism()` to `intelligent_trainer.py` - **this was the root cause of non-reproducible runs**.
+  - Same config + same data now produces identical fingerprints every run
+  - Sets `PYTHONHASHSEED`, numpy/random seeds, and ML library seeds at module load time
+  - Must be called before any ML library imports
 - **Feature**: Implemented comprehensive deterministic run identity system for reproducibility tracking.
   - `fingerprinting.py`: Added `RunIdentity` SST dataclass with two-phase construction (partial → final)
   - `fingerprinting.py`: Strict/replicate key separation (strict includes seed, replicate excludes for cross-seed stability)
   - `fingerprinting.py`: Registry-based feature fingerprinting with per-feature metadata hashing
+  - `fingerprinting.py`: Finance-safe timestamp canonicalization (`canonicalize_timestamp()` with epoch inference)
   - `config_hashing.py`: Centralized canonicalization (`canonical_json`, `sha256_full`, `sha256_short`)
   - `identity_config.yaml`: Production-grade configurable enforcement (strict/relaxed/legacy modes)
+- **Feature**: Finance-safe dataset identity includes:
+  - `symbols_digest`: Hash of sorted symbols (not raw list)
+  - `start_ts_utc`, `end_ts_utc`: Canonicalized UTC timestamps from actual data
+  - Row-shaping filters: `max_rows_per_symbol`, `max_samples_per_symbol`, `interval`, `min_cs_samples`
+  - `sampling_method`: Algorithm version tracking
+  - Strict mode raises on empty timestamps; relaxed mode marks `timestamp_canon_failed`
 - **Feature**: Hash-based snapshot storage keyed by identity (`replicate/<replicate_key>/<strict_key>.json`).
 - **Feature**: Configurable identity enforcement via `CONFIG/identity_config.yaml`:
   - `identity.mode`: strict (fail on missing), relaxed (log and continue), legacy (backward compat)
@@ -31,8 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Enhancement**: Feature fingerprinting now includes registry metadata (lag_bars, source, allowed_horizons, version) and explicit provenance markers (`registry_explicit`, `registry_mixed`, `registry_inferred`, `names_only_degraded`).
 - **Safety**: Partial identities cannot be saved (enforced via `is_final` flag and `finalize()` validation).
 - **Safety**: Stability analysis refuses invalid/mismatched signature groups in non-legacy modes.
-- **Impact**: Runs with identical configurations produce identical identity keys. Stability analysis only compares truly equivalent runs. No silent degradation in strict mode.
-- **Files Changed**: `fingerprinting.py`, `config_hashing.py`, `hooks.py`, `feature_selector.py`, `model_evaluation.py`, `cross_sectional_feature_ranker.py`, `multi_model_feature_selection.py`, `intelligent_trainer.py`, `identity_config.yaml` (NEW)
+- **Impact**: Runs with identical configurations produce identical identity keys and fingerprints. Stability analysis only compares truly equivalent runs. No silent degradation in strict mode.
+- **Files Changed**: `intelligent_trainer.py` (determinism), `fingerprinting.py`, `config_hashing.py`, `hooks.py`, `feature_selector.py`, `model_evaluation.py`, `cross_sectional_feature_ranker.py`, `multi_model_feature_selection.py`, `identity_config.yaml` (NEW)
 
 #### 2026-01-02 (Horizon-Aware Routing and Telemetry Comparison Fixes)
 - **Feature**: Implemented horizon-aware routing thresholds for regression targets.

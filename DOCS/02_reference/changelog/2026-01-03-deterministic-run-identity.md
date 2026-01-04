@@ -4,17 +4,56 @@
 
 Implemented a comprehensive deterministic run identity system to ensure stability analysis and diff telemetry only compare truly equivalent runs. This replaces ad-hoc grouping with cryptographically robust identity keys derived from canonical payloads.
 
+**Critical Fix**: Added `set_global_determinism()` to `intelligent_trainer.py` - this was the root cause of non-reproducible runs between identical configurations.
+
 ## Problem Statement
 
-Prior to this change, stability analysis could incorrectly compare runs with:
-- Different feature sets (same names, different implementations)
-- Different hyperparameters
-- Different data splits
-- Different universe/symbol configurations
+Prior to this change:
+1. **Non-deterministic runs**: Same config produced different fingerprints each run because `intelligent_trainer.py` didn't set global determinism (PYTHONHASHSEED, numpy seeds, etc.)
+2. **Incorrect comparisons**: Stability analysis could compare runs with different feature sets, hyperparameters, data splits, or universe configurations
+3. **Finance-unsafe identity**: Dataset fingerprints didn't include date ranges, leading to false matches across different market regimes
 
 This led to misleading stability metrics and comparison deltas.
 
 ## Solution
+
+### Critical Fix: Global Determinism
+
+**Root Cause**: `intelligent_trainer.py` was missing `set_global_determinism()` call.
+
+**Fix**: Added at module load time (before ML imports):
+```python
+from TRAINING.common.determinism import set_global_determinism
+
+set_global_determinism(
+    base_seed=_DEFAULT_SEED,
+    threads=None,  # Auto-detect
+    deterministic_algorithms=False,  # Allow parallel for performance
+    prefer_cpu_tree_train=False,
+    tf_on=False,
+)
+```
+
+**Effect**:
+- `PYTHONHASHSEED` set → deterministic dict ordering
+- numpy/random seeds set → reproducible random operations
+- ML library seeds set → reproducible model training
+- Same config + same data = identical fingerprints every run
+
+### Finance-Safe Dataset Identity
+
+Dataset signatures now include invariants critical for financial ML:
+- `symbols_digest`: SHA256 of sorted symbols (not raw list)
+- `start_ts_utc`, `end_ts_utc`: Canonicalized UTC timestamps from actual loaded data
+- Row-shaping filters: `max_rows_per_symbol`, `max_samples_per_symbol`, `interval`, `min_cs_samples`
+- `sampling_method`: Algorithm version tracking (e.g., `"stable_seed_from:v1"`)
+- `n_rows_total`: Row count for additional validation
+
+**Timestamp Canonicalization** (`fingerprinting.py`):
+- `_infer_epoch_unit()`: Detects nanoseconds/microseconds/milliseconds/seconds
+- `canonicalize_timestamp()`: Converts any timestamp type to `YYYY-MM-DDTHH:MM:SSZ`
+- Strict mode: Raises on empty timestamps or canonicalization failure
+- Relaxed mode: Marks `timestamp_canon_failed: true` in payload (prevents false matches)
 
 ### Core Components
 
@@ -92,12 +131,20 @@ Benefits:
 - `CONFIG/identity_config.yaml` - Identity enforcement configuration
 
 ### Modified Files
+- `TRAINING/orchestration/intelligent_trainer.py` **(CRITICAL)**
+  - Added `set_global_determinism()` at module load time
+  - This was the root cause of non-reproducible runs
+  - Loads seed from config or uses default 42
+  - Partial identity created at pipeline start, passed to feature selection
+
 - `TRAINING/common/utils/fingerprinting.py`
   - Added `RunIdentity` dataclass with two-phase construction
   - Added `resolve_feature_specs_from_registry()` for rich feature specs
   - Added `compute_feature_fingerprint_from_specs()` with provenance markers
   - Added `compute_routing_fingerprint()` for routing identity
   - Added `get_identity_config()` and `get_identity_mode()` config loaders
+  - Added `_infer_epoch_unit()` for robust epoch timestamp handling
+  - Added `canonicalize_timestamp()` for UTC normalization
 
 - `TRAINING/common/utils/config_hashing.py`
   - Added `canonicalize()` function with type-specific handling
@@ -118,7 +165,9 @@ Benefits:
   - Exception handling respects identity mode
 
 - `TRAINING/ranking/predictability/model_evaluation.py`
-  - Full identity computation for target ranking
+  - Finance-safe dataset identity (symbols_digest, date range, filters)
+  - Removed `data_dir` from fingerprint (runtime noise)
+  - Added robust timestamp canonicalization with strict/relaxed failure modes
   - Per-model-family hparams/feature signatures
   - Identity passed to `save_feature_importances()`
 
@@ -129,10 +178,6 @@ Benefits:
 - `TRAINING/ranking/multi_model_feature_selection.py`
   - Per-family identity computation
   - Identity passed to snapshot hooks
-
-- `TRAINING/orchestration/intelligent_trainer.py`
-  - Partial identity created at pipeline start
-  - Passed to feature selection
 
 ## Testing
 
