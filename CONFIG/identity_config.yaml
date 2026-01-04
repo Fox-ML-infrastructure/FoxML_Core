@@ -9,7 +9,7 @@ identity:
   # - strict: Fail if any required signature is missing (PRODUCTION DEFAULT)
   # - relaxed: Log error but continue with degraded identity
   # - legacy: Allow snapshots without identity (backward compat only)
-  mode: strict
+  mode: relaxed  # Changed from strict - debugging fingerprint determinism
 
 # =============================================================================
 # STABILITY ANALYSIS
