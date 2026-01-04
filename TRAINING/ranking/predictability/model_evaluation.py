@@ -1351,49 +1351,14 @@ def train_and_evaluate_models(
                             ensure_target_structure(base_output_dir, target_clean)
                             target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
                             
-                            # Compute quick_pruner identity from passed run_identity
-                            quick_pruner_identity = None
-                            if run_identity is not None:
-                                try:
-                                    from TRAINING.common.utils.fingerprinting import (
-                                        RunIdentity, compute_hparams_fingerprint,
-                                        compute_feature_fingerprint_from_specs
-                                    )
-                                    # Hparams: quick_pruner has no model-specific params
-                                    hparams_signature = compute_hparams_fingerprint(
-                                        model_family="quick_pruner",
-                                        params={},
-                                    )
-                                    # Feature signature from pruned features (registry-resolved)
-                                    from TRAINING.common.utils.fingerprinting import resolve_feature_specs_from_registry
-                                    feature_specs = resolve_feature_specs_from_registry(list(pruning_stats['full_importance_dict'].keys()))
-                                    feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
-                                    # Create updated partial with hparams and finalize
-                                    updated_partial = RunIdentity(
-                                        dataset_signature=run_identity.dataset_signature if hasattr(run_identity, 'dataset_signature') else "",
-                                        split_signature=run_identity.split_signature if hasattr(run_identity, 'split_signature') else "",
-                                        target_signature=run_identity.target_signature if hasattr(run_identity, 'target_signature') else "",
-                                        feature_signature=None,
-                                        hparams_signature=hparams_signature or "",
-                                        routing_signature=run_identity.routing_signature if hasattr(run_identity, 'routing_signature') else "",
-                                        routing_payload=run_identity.routing_payload if hasattr(run_identity, 'routing_payload') else None,
-                                        train_seed=run_identity.train_seed if hasattr(run_identity, 'train_seed') else None,
-                                        is_final=False,
-                                    )
-                                    quick_pruner_identity = updated_partial.finalize(feature_signature)
-                                except Exception as e:
-                                    logger.debug(f"Failed to compute quick_pruner identity: {e}")
-                            
-                            save_snapshot_hook(
-                                target=target_column if target_column else 'unknown',
-                                method="quick_pruner",
-                                importance_dict=pruning_stats['full_importance_dict'],
-                                universe_sig=None,  # universe_sig not available in train_and_evaluate_models scope
-                                output_dir=target_repro_dir,  # Use target-first structure
-                                auto_analyze=None,  # Load from config
-                                run_identity=quick_pruner_identity,
-                                allow_legacy=(quick_pruner_identity is None),  # Fallback if identity computation failed
-                            )
+                            # NOTE: Quick_pruner snapshots are DISABLED for production use.
+                            # Reason: Quick_pruner runs BEFORE CV splits are created, so it cannot
+                            # have a complete RunIdentity (missing split_signature). Saving it as a
+                            # "stability snapshot" would be semantically incorrect - it's a pre-CV
+                            # preprocessing step, not a model evaluation result.
+                            # The pruning stats are still computed and used internally; we just
+                            # don't persist them to the identity-tracked snapshot system.
+                            logger.debug(f"Quick_pruner stats computed (not saved to stability snapshots - pre-CV data)")
                 except Exception as e:
                     logger.debug(f"Stability snapshot save failed for quick_pruner (non-critical): {e}")
         except RuntimeError as e:
