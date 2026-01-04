@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### January
 
+- **2026-01-04 (RunIdentity Wiring Fixes and Path Organization)** — Fixed critical bugs preventing `run_identity` signatures from appearing in TARGET_RANKING snapshots: (1) Added `run_identity` and `prediction_fingerprint` parameters to `_save_to_cohort()` function. (2) Fixed `log_comparison()` to use locally-computed `partial_identity` instead of null parameter. (3) Added `train_seed` fallback chain and `hparams_signature` computation for TARGET_RANKING. (4) Simplified SYMBOL_SPECIFIC paths - removed redundant `universe=` prefix to match cohort path pattern. TARGET_RANKING snapshots now contain populated signatures for determinism verification.
+  → [View](2026-01-04-run-identity-wiring-and-path-organization.md)
+
 - **2026-01-03 (Deterministic Run Identity System)** — Implemented comprehensive deterministic run identity system for reproducibility tracking. Added `RunIdentity` SST dataclass with two-phase construction (partial → final), strict/replicate key separation, registry-based feature fingerprinting with per-feature metadata hashing, and configurable enforcement modes (strict/relaxed/legacy). Hash-based snapshot storage keyed by identity. Feature fingerprinting now includes registry metadata and explicit provenance markers. Partial identities cannot be saved. Stability analysis refuses invalid groups in non-legacy modes.
   → [View](2026-01-03-deterministic-run-identity.md)
 

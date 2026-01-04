@@ -2,6 +2,24 @@
 
 This document tracks key cross-references between documentation files to ensure consistency.
 
+## New Files (2026-01-04)
+
+### RunIdentity Wiring and Path Organization
+- **Files**:
+  - `DOCS/02_reference/changelog/2026-01-04-run-identity-wiring-and-path-organization.md` - Detailed changelog
+  - `CHANGELOG.md` - Root changelog entry
+- **Updated Docs**:
+  - `DOCS/00_executive/DETERMINISTIC_TRAINING.md` - Added strict determinism section and snapshot verification
+  - `DOCS/02_reference/configuration/DETERMINISTIC_RUNS.md` - Added output directory structure and snapshot verification
+  - `DOCS/02_reference/changelog/README.md` - Added index entry
+- **References**:
+  - `DOCS/02_reference/configuration/RUN_IDENTITY.md` - RunIdentity system reference
+  - `bin/run_deterministic.sh` - Deterministic launcher script
+- **Code Changes**:
+  - `TRAINING/orchestration/utils/reproducibility_tracker.py` - `_save_to_cohort()` params
+  - `TRAINING/ranking/predictability/model_evaluation.py` - `partial_identity` usage, seed fallback
+  - `TRAINING/orchestration/utils/output_layout.py` - SYMBOL_SPECIFIC path simplification
+
 ## New Files (2025-12-14)
 
 ### Telemetry System
