@@ -527,7 +527,7 @@ def compute_target_fingerprint(
         binning_rules: Binning rules for classification
     
     Returns:
-        16-character hex fingerprint, or None if no target info provided
+        64-character SHA256 fingerprint, or None if no target info provided
     """
     payload = {
         "schema": 1,
@@ -542,12 +542,13 @@ def compute_target_fingerprint(
         "winsorize_limits": list(winsorize_limits) if winsorize_limits else None,
         "binning_rules": binning_rules,
     }
-    
+
     json_str = canonical_json(payload)
     if json_str == '{"schema":1}':
         return None
-    
-    return sha256_short(json_str, 16)
+
+    # Use full 64-char hash for identity consistency
+    return sha256_full(json_str)
 
 
 # =============================================================================
