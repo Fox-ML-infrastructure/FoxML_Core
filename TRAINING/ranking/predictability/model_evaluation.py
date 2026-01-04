@@ -1392,6 +1392,7 @@ def train_and_evaluate_models(
                                 output_dir=target_repro_dir,  # Use target-first structure
                                 auto_analyze=None,  # Load from config
                                 run_identity=quick_pruner_identity,
+                                allow_legacy=(quick_pruner_identity is None),  # Fallback if identity computation failed
                             )
                 except Exception as e:
                     logger.debug(f"Stability snapshot save failed for quick_pruner (non-critical): {e}")
