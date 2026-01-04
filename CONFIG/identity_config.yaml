@@ -1,0 +1,38 @@
+# Run Identity Configuration
+# Controls how strictly run identity is enforced for reproducibility tracking
+
+# =============================================================================
+# IDENTITY ENFORCEMENT
+# =============================================================================
+identity:
+  # Mode for identity enforcement at snapshot save time
+  # - strict: Fail if any required signature is missing (PRODUCTION DEFAULT)
+  # - relaxed: Log error but continue with degraded identity
+  # - legacy: Allow snapshots without identity (backward compat only)
+  mode: strict
+
+# =============================================================================
+# STABILITY ANALYSIS
+# =============================================================================
+stability:
+  # Mode for stability analysis grouping/validation
+  # - strict: All signatures must match, including train_seed
+  # - replicate: All signatures must match, exclude train_seed (cross-seed stability)
+  # - legacy: Best-effort grouping by universe_sig only
+  filter_mode: replicate
+  
+  # Whether to include legacy snapshots (without identity) in analysis
+  # Set to true only during migration from old snapshots
+  allow_legacy_snapshots: false
+  
+  # Minimum snapshots required for stability metrics
+  min_snapshots: 2
+
+# =============================================================================
+# FEATURE IDENTITY
+# =============================================================================
+feature_identity:
+  # How to compute feature_signature
+  # - registry_resolved: Use registry metadata per-feature (recommended)
+  # - names_only: Just feature names (deprecated)
+  mode: registry_resolved

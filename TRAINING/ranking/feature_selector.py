@@ -779,6 +779,18 @@ def select_features_for_target(
                                         run_identity=final_identity,  # Pass FINALIZED identity
                                         allow_legacy=(final_identity is None),  # Allow legacy only if identity failed
                                     )
+                        except ValueError as ve:
+                            # Identity validation failure - respect config mode
+                            try:
+                                from TRAINING.common.utils.fingerprinting import get_identity_mode
+                                mode = get_identity_mode()
+                            except Exception:
+                                mode = "strict"
+                            if mode == "strict":
+                                logger.error(f"Snapshot save failed (strict mode): {ve}")
+                                raise  # Re-raise in strict mode
+                            else:
+                                logger.error(f"Snapshot save failed ({mode} mode, continuing): {ve}")
                         except Exception as e:
                             logger.debug(f"Stability snapshot save failed for {symbol_to_process} (non-critical): {e}")
                     

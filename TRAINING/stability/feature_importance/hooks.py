@@ -67,20 +67,35 @@ def save_snapshot_hook(
             except Exception:
                 auto_analyze = True  # Default to enabled
         
+        # Load identity enforcement mode from config
+        identity_mode = "strict"  # Default to strict
+        try:
+            from TRAINING.common.utils.fingerprinting import get_identity_mode
+            identity_mode = get_identity_mode()
+        except Exception:
+            pass  # Use default strict mode
+        
         # Validate and convert RunIdentity
         identity_dict = None
         use_hash_path = False
-        
+
         if run_identity is not None:
             # Check if it's a RunIdentity object with is_final
             if hasattr(run_identity, 'is_final'):
                 if not run_identity.is_final:
-                    # HARD REFUSAL: Cannot save snapshot with partial identity
-                    raise ValueError(
+                    # Partial identity - behavior depends on mode
+                    error_msg = (
                         "Cannot save snapshot with partial RunIdentity (is_final=False). "
                         "Call run_identity.finalize(feature_signature) before saving. "
                         f"Current identity: {run_identity.debug_key if hasattr(run_identity, 'debug_key') else 'unknown'}"
                     )
+                    if identity_mode == "strict":
+                        raise ValueError(error_msg)
+                    elif identity_mode == "relaxed":
+                        logger.error(f"Identity validation failed (relaxed mode): {error_msg}")
+                        # Continue with degraded identity
+                    else:  # legacy mode
+                        logger.warning(f"Partial identity ignored (legacy mode): {error_msg}")
                 # Valid finalized identity - use hash-based path
                 identity_dict = run_identity.to_dict()
                 use_hash_path = True
@@ -101,18 +116,23 @@ def save_snapshot_hook(
                     "Use RunIdentity.finalize(feature_signature) for full reproducibility."
                 )
         else:
-            # No run_identity provided
-            if not allow_legacy:
-                # HARD REFUSAL: Cannot save without identity unless legacy explicitly allowed
-                raise ValueError(
-                    "Cannot save snapshot without run_identity and allow_legacy=False. "
-                    "Either provide a finalized RunIdentity or set allow_legacy=True."
-                )
-            # Legacy mode explicitly allowed - warn and continue
-            logger.warning(
-                "save_snapshot_hook called without run_identity (allow_legacy=True) - using legacy path. "
-                "Pass finalized RunIdentity for hash-based storage and correct grouping."
+            # No run_identity provided - behavior depends on mode
+            error_msg = (
+                "Cannot save snapshot without run_identity. "
+                "Provide a finalized RunIdentity for proper reproducibility tracking."
             )
+            if identity_mode == "strict" and not allow_legacy:
+                raise ValueError(error_msg + " (strict mode, allow_legacy=False)")
+            elif identity_mode == "strict" and allow_legacy:
+                # Explicit escape hatch in strict mode - warn loudly
+                logger.warning(
+                    f"Saving snapshot WITHOUT identity in STRICT mode (allow_legacy=True override). "
+                    f"target={target} method={method}"
+                )
+            elif identity_mode == "relaxed":
+                logger.error(f"No identity provided (relaxed mode): {error_msg}")
+            else:  # legacy mode
+                logger.debug("No identity provided (legacy mode)")
         
         # Create snapshot
         snapshot = FeatureImportanceSnapshot.from_dict_series(

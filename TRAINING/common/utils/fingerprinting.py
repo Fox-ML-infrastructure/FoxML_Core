@@ -8,8 +8,10 @@ Do not duplicate fingerprint logic elsewhere.
 """
 
 import hashlib
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 # Import canonicalization SST from config_hashing
@@ -18,6 +20,68 @@ from TRAINING.common.utils.config_hashing import (
     sha256_full,
     sha256_short,
 )
+
+logger = logging.getLogger(__name__)
+
+# =============================================================================
+# IDENTITY CONFIG LOADER
+# =============================================================================
+
+_IDENTITY_CONFIG_CACHE: Optional[Dict[str, Any]] = None
+
+
+def get_identity_config() -> Dict[str, Any]:
+    """
+    Load identity configuration from CONFIG/identity_config.yaml.
+    
+    Returns cached config after first load.
+    
+    Defaults (if config file not found):
+    - identity.mode: "strict"
+    - stability.filter_mode: "replicate"
+    - stability.allow_legacy_snapshots: False
+    - feature_identity.mode: "registry_resolved"
+    """
+    global _IDENTITY_CONFIG_CACHE
+    
+    if _IDENTITY_CONFIG_CACHE is not None:
+        return _IDENTITY_CONFIG_CACHE
+    
+    # Default config (production-safe)
+    defaults = {
+        "identity": {"mode": "strict"},
+        "stability": {
+            "filter_mode": "replicate",
+            "allow_legacy_snapshots": False,
+            "min_snapshots": 2,
+        },
+        "feature_identity": {"mode": "registry_resolved"},
+    }
+    
+    # Try to load from file
+    try:
+        import yaml
+        config_path = Path(__file__).resolve().parents[3] / "CONFIG" / "identity_config.yaml"
+        if config_path.exists():
+            with open(config_path, 'r') as f:
+                loaded = yaml.safe_load(f) or {}
+            # Merge with defaults
+            for key in defaults:
+                if key in loaded:
+                    defaults[key].update(loaded[key])
+            logger.debug(f"Loaded identity config from {config_path}")
+        else:
+            logger.debug(f"Identity config not found at {config_path}, using defaults")
+    except Exception as e:
+        logger.debug(f"Failed to load identity config: {e}, using defaults")
+    
+    _IDENTITY_CONFIG_CACHE = defaults
+    return defaults
+
+
+def get_identity_mode() -> str:
+    """Get identity enforcement mode: 'strict', 'relaxed', or 'legacy'."""
+    return get_identity_config().get("identity", {}).get("mode", "strict")
 
 
 # =============================================================================
