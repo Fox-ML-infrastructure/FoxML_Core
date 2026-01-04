@@ -27,6 +27,8 @@ Key principle: Only diff things that are **canonically normalized** and **hash-a
    - `dataset_signature`: Same universe + time rules
    - `task_signature`: Same target + horizon + objective
    - `routing_signature`: Same routing config
+   
+   > **Note**: As of 2026-01-03, comparison groups are derived from [RunIdentity](../../02_reference/configuration/RUN_IDENTITY.md) keys. The `strict_key` is used for diff telemetry (same-seed comparisons), while `replicate_key` is used for stability analysis (cross-seed comparisons).
 
 3. **DiffResult**: Result of diffing two snapshots
    - Changed keys (canonical paths)
@@ -81,6 +83,22 @@ RESULTS/
                     metadata.json
                     metrics.json
 ```
+
+**Hash-Based Structure** (as of 2026-01-03 - Identity-Keyed):
+
+Feature importance snapshots are now stored under identity-based paths:
+```
+feature_importance_snapshots/
+  replicate/<replicate_key>/      # Grouped by replicate_key
+    <strict_key>.json             # Individual snapshots by strict_key
+```
+
+This enables:
+- **No collisions** - 64-char SHA256 hashes are unique
+- **Fast grouping** - Glob replicate directory for stability analysis
+- **Debuggable** - `debug_key` stored inside each snapshot
+
+See [Run Identity System](../../02_reference/configuration/RUN_IDENTITY.md) for details.
 
 **Legacy Structure** (deprecated, no longer created):
 ```

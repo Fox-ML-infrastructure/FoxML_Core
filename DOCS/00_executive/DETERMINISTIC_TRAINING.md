@@ -181,6 +181,49 @@ training_profiles:
 
 ---
 
+## Run Identity System
+
+The run identity system (added 2026-01-03) provides cryptographically robust identity keys for comparing runs:
+
+### Identity Keys
+
+| Key | Purpose |
+|-----|---------|
+| `replicate_key` | Cross-seed stability analysis (excludes seed) |
+| `strict_key` | Diff telemetry (includes seed) |
+
+Same config + different seeds → same `replicate_key` → grouped for stability analysis.
+
+### Configuration
+
+```yaml
+# CONFIG/identity_config.yaml
+identity:
+  mode: strict  # strict | relaxed | legacy
+
+stability:
+  filter_mode: replicate
+  allow_legacy_snapshots: false
+```
+
+**Modes**:
+- `strict` (default): Fail if identity signatures missing
+- `relaxed`: Log error, continue anyway
+- `legacy`: Backward compatibility
+
+### What Gets Hashed
+
+- Dataset (symbols, data_dir, sample counts)
+- Target (column, task type, horizon)
+- Features (names + registry metadata)
+- Hyperparameters (per model family)
+- Splits (CV method, fold boundaries)
+- Routing (view, symbol if SS)
+
+For full details, see [Run Identity Reference](../02_reference/configuration/RUN_IDENTITY.md).
+
+---
+
 ## Verification
 
 Verify your setup is reproducible:
@@ -198,6 +241,7 @@ python TRAINING/training_strategies/main.py --target fwd_ret_5m
 
 ## Related Documentation
 
+- **Run Identity System**: [DOCS/02_reference/configuration/RUN_IDENTITY.md](../02_reference/configuration/RUN_IDENTITY.md)
 - **Internal Technical Details**: `DOCS/03_technical/internal/SST_DETERMINISM_GUARANTEES.md` (note: file name preserved for historical reference)
 - **Configuration Reference**: `DOCS/02_reference/configuration/`
 - **Model Configuration**: `DOCS/02_reference/configuration/MODEL_CONFIGURATION.md`
