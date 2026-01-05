@@ -333,18 +333,57 @@ class ComparisonGroup:
         Uses a single hash of the comparison group key for compactness, with
         optional human-readable components (n_effective, model_family) if available.
         
+        NOTE: This method does NOT validate required fields. It generates a directory
+        name from whatever fields are available. This is intentional because:
+        - At startup, not all fields are known yet (split_signature, task_signature, etc.)
+        - Validation should only happen when comparing runs, not when creating directories
+        
         Example: "exp=test|data=abc12345|task=def67890|n=5000|family=lightgbm|features=ghi11111"
         -> "cg-abc12345_n-5000" (compact hash + n_effective)
         
         Args:
-            stage: Stage name for key generation (needed for new to_key() signature)
+            stage: Stage name (included in hash for uniqueness)
         """
-        key = self.to_key(stage, strict=False)
         import hashlib
         
-        # If key is None (invalid group), return a default
-        if key is None:
-            return "cg-invalid"
+        # Build a hash from ALL available fields (no validation, no filtering)
+        # This ensures unique directories even with partial information
+        parts = []
+        parts.append(f"stage={stage}")
+        
+        if self.experiment_id is not None:
+            parts.append(f"exp={self.experiment_id}")
+        if self.dataset_signature is not None:
+            parts.append(f"data={self.dataset_signature}")
+        if self.task_signature is not None:
+            parts.append(f"task={self.task_signature}")
+        if self.routing_signature is not None:
+            parts.append(f"route={self.routing_signature}")
+        if self.split_signature is not None:
+            parts.append(f"split={self.split_signature}")
+        if self.n_effective is not None:
+            parts.append(f"n={self.n_effective}")
+        if self.model_family is not None:
+            parts.append(f"family={self.model_family}")
+        if self.feature_signature is not None:
+            parts.append(f"features={self.feature_signature}")
+        if self.hyperparameters_signature is not None:
+            parts.append(f"hps={self.hyperparameters_signature}")
+        if self.train_seed is not None:
+            parts.append(f"seed={self.train_seed}")
+        if self.library_versions_signature is not None:
+            parts.append(f"libs={self.library_versions_signature}")
+        if self.universe_sig is not None:
+            parts.append(f"universe={self.universe_sig}")
+        if self.symbol is not None:
+            parts.append(f"symbol={self.symbol}")
+        
+        # If no parts at all, use a fallback
+        if not parts:
+            return "cg-unknown"
+        
+        # Generate hash from available parts
+        key = "|".join(parts)
         
         # Generate a single compact hash from the full key
         key_hash = hashlib.sha256(key.encode()).hexdigest()[:12]  # 12 chars for uniqueness
