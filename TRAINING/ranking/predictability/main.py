@@ -234,6 +234,20 @@ def main():
     completed = checkpoint.load_completed()
     logger.info(f"Found {len(completed)} completed targets in checkpoint")
     
+    # Create partial RunIdentity for CLI entry using SST factory
+    cli_run_identity = None
+    try:
+        from TRAINING.common.utils.fingerprinting import create_stage_identity
+        cli_run_identity = create_stage_identity(
+            stage="TARGET_RANKING",
+            symbols=symbols,
+            experiment_config=None,  # CLI has no experiment_config
+            data_dir=args.data_dir,
+        )
+        logger.debug(f"Created CLI TARGET_RANKING identity with train_seed={cli_run_identity.train_seed}")
+    except Exception as e:
+        logger.warning(f"Failed to create CLI run identity: {e}")
+    
     # Evaluate each target
     results = []
     total_targets = len(targets_to_eval)
@@ -261,7 +275,8 @@ def main():
             result = evaluate_target_predictability(
                 target, target_config, symbols, args.data_dir, model_families, multi_model_config,
                 output_dir=args.output_dir, min_cs=args.min_cs, max_cs_samples=args.max_cs_samples,
-                max_rows_per_symbol=args.max_rows_per_symbol
+                max_rows_per_symbol=args.max_rows_per_symbol,
+                run_identity=cli_run_identity,  # SST: Pass identity for reproducibility tracking
             )
             
             # Save checkpoint after each target

@@ -6552,47 +6552,59 @@ def evaluate_target_predictability(
                     train_seed = experiment_config.seed
                 
                 # Create identity per model family and save
-                for model_family, model_importances in feature_importances.items():
-                    if not model_importances:
-                        continue
-                    
-                    # Hparams signature for this family
-                    family_config = {}
-                    if multi_model_config and 'model_families' in multi_model_config:
-                        family_config = multi_model_config['model_families'].get(model_family, {})
-                    hparams_signature = compute_hparams_fingerprint(
-                        model_family=model_family,
-                        params=family_config.get('params', family_config),
-                    )
-                    
-                    # Feature signature from features in this model's importances (registry-resolved)
-                    from TRAINING.common.utils.fingerprinting import resolve_feature_specs_from_registry
-                    feature_specs = resolve_feature_specs_from_registry(list(model_importances.keys()))
-                    feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
-                    
-                    # Create partial and finalize
-                    partial = RunIdentity(
-                        dataset_signature=dataset_signature or "",
-                        split_signature=split_signature or "",
-                        target_signature=target_signature or "",
-                        feature_signature=None,
-                        hparams_signature=hparams_signature or "",
-                        routing_signature=routing_signature or "",
-                        routing_payload=routing_payload,
-                        train_seed=train_seed,
-                        is_final=False,
-                    )
-                    target_ranking_identity = partial.finalize(feature_signature)
-                    break  # Use first model's identity for the batch save
+                # Check if we have any feature importances to process
+                if not feature_importances:
+                    logger.warning("No feature_importances available - cannot compute local target_ranking_identity")
+                else:
+                    for model_family, model_importances in feature_importances.items():
+                        if not model_importances:
+                            continue
+                        
+                        # Hparams signature for this family
+                        family_config = {}
+                        if multi_model_config and 'model_families' in multi_model_config:
+                            family_config = multi_model_config['model_families'].get(model_family, {})
+                        hparams_signature = compute_hparams_fingerprint(
+                            model_family=model_family,
+                            params=family_config.get('params', family_config),
+                        )
+                        
+                        # Feature signature from features in this model's importances (registry-resolved)
+                        from TRAINING.common.utils.fingerprinting import resolve_feature_specs_from_registry
+                        feature_specs = resolve_feature_specs_from_registry(list(model_importances.keys()))
+                        feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
+                        
+                        # Create partial and finalize
+                        partial = RunIdentity(
+                            dataset_signature=dataset_signature or "",
+                            split_signature=split_signature or "",
+                            target_signature=target_signature or "",
+                            feature_signature=None,
+                            hparams_signature=hparams_signature or "",
+                            routing_signature=routing_signature or "",
+                            routing_payload=routing_payload,
+                            train_seed=train_seed,
+                            is_final=False,
+                        )
+                        target_ranking_identity = partial.finalize(feature_signature)
+                        break  # Use first model's identity for the batch save
             except Exception as e:
-                logger.debug(f"Failed to compute RunIdentity for target ranking: {e}")
+                logger.warning(f"Failed to compute RunIdentity for target ranking: {e}")  # Upgraded from debug
                 target_ranking_identity = None
             
             # CRITICAL: Use passed-in run_identity as fallback if local computation failed
             # This ensures stability hooks get a valid identity for auditability
             identity_for_save = target_ranking_identity or run_identity
             if identity_for_save is None:
-                logger.warning("No RunIdentity available for feature importance snapshot (strict mode will warn)")
+                # Check strict mode and log appropriately
+                try:
+                    from TRAINING.common.determinism import is_strict_mode
+                    if is_strict_mode():
+                        logger.error("STRICT MODE: No RunIdentity available for feature importance snapshot - reproducibility compromised")
+                    else:
+                        logger.warning("No RunIdentity available for feature importance snapshot (non-strict mode)")
+                except Exception:
+                    logger.warning("No RunIdentity available for feature importance snapshot")
             
             _save_feature_importances(
                 target_column, 

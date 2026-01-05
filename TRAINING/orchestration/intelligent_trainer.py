@@ -1159,6 +1159,20 @@ class IntelligentTrainer:
         except Exception:
             pass
         
+        # Create partial RunIdentity for TARGET_RANKING using SST factory
+        target_ranking_identity = None
+        try:
+            from TRAINING.common.utils.fingerprinting import create_stage_identity
+            target_ranking_identity = create_stage_identity(
+                stage="TARGET_RANKING",
+                symbols=self.symbols,
+                experiment_config=experiment_config,
+                data_dir=self.data_dir,
+            )
+            logger.debug(f"Created TARGET_RANKING identity with train_seed={target_ranking_identity.train_seed}")
+        except Exception as e:
+            logger.warning(f"Failed to create TARGET_RANKING identity: {e}")
+        
         # Rank targets
         logger.info(f"Evaluating {len(targets_dict)} targets with {len(model_families)} model families...")
         rankings = rank_targets(
@@ -1175,7 +1189,8 @@ class IntelligentTrainer:
             experiment_config=experiment_config,  # Pass experiment config
             min_cs=min_cs,  # Pass min_cs from config
             max_cs_samples=max_cs_samples,  # Pass max_cs_samples from config
-            max_rows_per_symbol=max_rows_per_symbol  # Pass max_rows_per_symbol from config
+            max_rows_per_symbol=max_rows_per_symbol,  # Pass max_rows_per_symbol from config
+            run_identity=target_ranking_identity,  # SST: Pass identity for reproducibility tracking
         )
         
         # After target ranking completes, organize by sample size (n_effective)
@@ -1316,7 +1331,6 @@ class IntelligentTrainer:
             # LOSO: train on all symbols except symbol
             symbols_to_use = [s for s in self.symbols if s != symbol]
         
-        # Compute partial RunIdentity for reproducibility tracking
         # Compute universe_sig for reproducibility tracking
         universe_sig = None
         try:
@@ -1325,25 +1339,24 @@ class IntelligentTrainer:
         except Exception as e:
             logger.debug(f"Failed to compute universe_sig: {e}")
         
-        # Split and hparams signatures computed inside selector where folds/models are known
+        # Create partial RunIdentity using SST factory, then add target-specific fields
         partial_identity = None
         try:
             from TRAINING.common.utils.fingerprinting import (
+                create_stage_identity,
                 RunIdentity,
                 compute_target_fingerprint,
                 compute_routing_fingerprint,
             )
-            from TRAINING.common.utils.config_hashing import canonical_json, sha256_full
+            from TRAINING.common.utils.config_hashing import sha256_full
             
-            # Dataset signature from available data
-            dataset_payload = {
-                "data_dir": str(self.data_dir),
-                "symbols": sorted(symbols_to_use),
-            }
-            if self.experiment_config:
-                if hasattr(self.experiment_config, 'max_samples_per_symbol'):
-                    dataset_payload["max_samples_per_symbol"] = self.experiment_config.max_samples_per_symbol
-            dataset_signature = sha256_full(canonical_json(dataset_payload))
+            # Use SST factory for base identity (handles seed fallback chain)
+            base_identity = create_stage_identity(
+                stage="FEATURE_SELECTION",
+                symbols=symbols_to_use,
+                experiment_config=self.experiment_config,
+                data_dir=self.data_dir,
+            )
             
             # Target signature from target config
             target_signature = compute_target_fingerprint(target=target)
@@ -1357,34 +1370,20 @@ class IntelligentTrainer:
                 symbol=symbol,
             )
             
-            # Get seed from experiment config with fallback chain
-            train_seed = None
-            if self.experiment_config and hasattr(self.experiment_config, 'seed'):
-                train_seed = self.experiment_config.seed
-            elif hasattr(self, 'seed'):
-                train_seed = self.seed
-            
-            # Fallback to config base_seed if not found
-            if train_seed is None:
-                try:
-                    from CONFIG.config_loader import get_cfg
-                    train_seed = get_cfg("pipeline.determinism.base_seed", default=42)
-                except Exception:
-                    train_seed = 42  # FALLBACK_DEFAULT_OK
-            
-            # Create partial identity (split and hparams computed in selector)
+            # Extend base identity with target-specific fields
+            # (split and hparams computed in selector where folds/models are known)
             partial_identity = RunIdentity(
-                dataset_signature=dataset_signature or "",
+                dataset_signature=base_identity.dataset_signature,
                 split_signature="",  # Computed in selector after folds created
                 target_signature=target_signature or "",
                 feature_signature=None,  # Computed after feature selection
                 hparams_signature="",  # Computed per model family in selector
                 routing_signature=routing_signature or "",
                 routing_payload=routing_payload,
-                train_seed=train_seed,
+                train_seed=base_identity.train_seed,
                 is_final=False,
             )
-            logger.debug(f"Created partial RunIdentity for {target}")
+            logger.debug(f"Created partial RunIdentity for {target} using SST factory")
         except Exception as e:
             logger.warning(f"Failed to create partial RunIdentity: {e}")
             partial_identity = None

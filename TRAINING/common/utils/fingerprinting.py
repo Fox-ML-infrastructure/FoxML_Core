@@ -369,6 +369,71 @@ class RunIdentity:
         return self.is_final
 
 
+def create_stage_identity(
+    stage: str,  # "TARGET_RANKING", "FEATURE_SELECTION", "TRAINING"
+    symbols: List[str],
+    experiment_config: Optional[Any] = None,
+    data_dir: Optional[Path] = None,
+) -> RunIdentity:
+    """
+    SST factory for creating partial RunIdentity objects.
+    
+    This is the Single Source of Truth for identity creation across all pipeline
+    entry points. Use this instead of manually constructing RunIdentity objects.
+    
+    Call finalize(feature_signature) on the returned object after features are locked.
+    
+    Args:
+        stage: Pipeline stage (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
+        symbols: List of symbols in the universe
+        experiment_config: Optional experiment config (for seed extraction)
+        data_dir: Optional data directory (currently unused, reserved for future)
+    
+    Returns:
+        Partial RunIdentity (is_final=False) ready for finalization
+    
+    Example:
+        # Early in pipeline
+        partial = create_stage_identity("TARGET_RANKING", symbols, experiment_config)
+        
+        # Later, after features are locked
+        final = partial.finalize(feature_signature)
+    """
+    # Universe signature from symbols
+    universe_sig = ""
+    if symbols:
+        try:
+            from TRAINING.orchestration.utils.run_context import compute_universe_signature
+            universe_sig = compute_universe_signature(symbols) or ""
+        except Exception:
+            # Fallback: compute manually
+            import hashlib
+            symbols_str = "|".join(sorted(symbols))
+            universe_sig = hashlib.sha256(symbols_str.encode()).hexdigest()
+    
+    # Seed with fallback chain
+    train_seed = None
+    if experiment_config and hasattr(experiment_config, 'seed'):
+        train_seed = experiment_config.seed
+    if train_seed is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            train_seed = get_cfg("pipeline.determinism.base_seed", default=42)
+        except Exception:
+            train_seed = 42
+    
+    return RunIdentity(
+        dataset_signature=universe_sig,
+        split_signature="",  # Computed after CV folds created
+        target_signature="",  # Computed per-target
+        feature_signature=None,  # Set via finalize()
+        hparams_signature="",  # Computed per-model
+        routing_signature="",  # Computed per-view
+        train_seed=train_seed,
+        is_final=False,
+    )
+
+
 def construct_comparison_group_key_from_dict(
     comparison_group: Dict[str, Any],
     mode: str = "debug",
