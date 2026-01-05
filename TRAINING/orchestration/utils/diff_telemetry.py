@@ -268,8 +268,7 @@ class DiffTelemetry:
         cohort_dir.mkdir(parents=True, exist_ok=True)
         baseline_file = cohort_dir / "baseline.json"
         try:
-            with open(baseline_file, 'w') as f:
-                json.dump(baseline.to_dict(), f, indent=2, default=str)
+            _write_atomic_json(baseline_file, baseline.to_dict(), default=str)
             logger.debug(f"✅ Saved baseline.json to {baseline_file}")
         except Exception as e:
             logger.error(f"❌ Failed to save baseline to {baseline_file}: {e}")
@@ -2496,7 +2495,11 @@ class DiffTelemetry:
             logger.info(f"📁 Organizing run by comparison group metadata...")
             logger.info(f"   From: {self.run_dir}")
             logger.info(f"   To:   {target_dir}")
-            logger.info(f"   Group: {snapshot.comparison_group.to_key(snapshot.stage, strict=False)}")
+            group_key = snapshot.comparison_group.to_key(snapshot.stage, strict=False)
+            if group_key:
+                logger.info(f"   Group: {group_key}")
+            else:
+                logger.warning(f"   Group: <invalid - missing required fields>")
             
             shutil.move(str(self.run_dir), str(target_dir))
             
