@@ -259,8 +259,10 @@ class DiffTelemetry:
     def _save_baseline_to_cohort(self, cohort_dir: Path, baseline: BaselineState):
         """Save baseline to cohort directory."""
         cohort_dir = Path(cohort_dir)
-        # NEVER create REPRODUCIBILITY directories - only use target-first structure
-        if "REPRODUCIBILITY" in str(cohort_dir):
+        cohort_dir_str = str(cohort_dir)
+        # NEVER create legacy REPRODUCIBILITY directories - only use target-first structure
+        # Check for uppercase REPRODUCIBILITY (legacy) but allow lowercase reproducibility (target-first)
+        if "REPRODUCIBILITY" in cohort_dir_str and "reproducibility" not in cohort_dir_str.lower():
             logger.warning(f"⚠️ Skipping baseline save to legacy REPRODUCIBILITY path: {cohort_dir}")
             return
         cohort_dir.mkdir(parents=True, exist_ok=True)
@@ -268,8 +270,11 @@ class DiffTelemetry:
         try:
             with open(baseline_file, 'w') as f:
                 json.dump(baseline.to_dict(), f, indent=2, default=str)
+            logger.debug(f"✅ Saved baseline.json to {baseline_file}")
         except Exception as e:
-            logger.warning(f"Failed to save baseline to {baseline_file}: {e}")
+            logger.error(f"❌ Failed to save baseline to {baseline_file}: {e}")
+            import traceback
+            logger.debug(f"Baseline save traceback: {traceback.format_exc()}")
     
     def _deserialize_snapshot(self, data: Dict[str, Any]) -> NormalizedSnapshot:
         """Deserialize snapshot from dict."""
@@ -2132,8 +2137,18 @@ class DiffTelemetry:
         
         # CRITICAL: Ensure we only write to target-first structure
         # If cohort_dir is in legacy REPRODUCIBILITY structure, find/create target-first equivalent
+        # Also handle paths that are already in target-first format (reproducibility/...)
         target_cohort_dir = cohort_dir
-        if "REPRODUCIBILITY" in str(cohort_dir):
+        cohort_dir_str = str(cohort_dir)
+        is_legacy_path = "REPRODUCIBILITY" in cohort_dir_str
+        is_target_first_path = "reproducibility" in cohort_dir_str.lower() and not is_legacy_path
+        
+        # If path is already in target-first format, use it directly
+        if is_target_first_path:
+            # Path is already correct, just ensure it exists
+            target_cohort_dir = Path(cohort_dir)
+            target_cohort_dir.mkdir(parents=True, exist_ok=True)
+        elif is_legacy_path:
             # Extract identifiers from cohort_dir path and create target-first path
             try:
                 parts = Path(cohort_dir).parts
@@ -2296,32 +2311,52 @@ class DiffTelemetry:
         
         # Save full snapshot atomically
         snapshot_file = cohort_dir / "snapshot.json"
-        snapshot_dict = snapshot.to_dict()
-        _write_atomic_json(snapshot_file, snapshot_dict)
+        try:
+            snapshot_dict = snapshot.to_dict()
+            _write_atomic_json(snapshot_file, snapshot_dict)
+            logger.debug(f"✅ Saved snapshot.json to {snapshot_file}")
+        except Exception as e:
+            logger.error(f"❌ Failed to save snapshot.json to {snapshot_file}: {e}")
+            import traceback
+            logger.debug(f"Snapshot save traceback: {traceback.format_exc()}")
+            raise  # Re-raise to prevent silent failure
         
         # Also write to target-first structure (for TARGET_RANKING and FEATURE_SELECTION stages)
+        # NOTE: This is now redundant since we already write to target-first structure above,
+        # but keeping for backward compatibility and to ensure snapshot.json is written
         try:
-            # Extract identifiers from cohort_dir path
-            # Path structure: .../STAGE/VIEW/target/cohort=.../
-            parts = Path(cohort_dir).parts
-            stage = None
-            view = None
-            target = None
+            # Extract identifiers from snapshot (preferred) or cohort_dir path
+            # Prefer snapshot's stage/view/target over path parsing
+            stage = snapshot.stage
+            view = getattr(snapshot, 'view', None)
+            target = snapshot.target
             cohort_id = None
             
-            for i, part in enumerate(parts):
-                if part in ['TARGET_RANKING', 'FEATURE_SELECTION', 'TRAINING']:
-                    stage = part
-                    if i + 1 < len(parts) and parts[i+1] in ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC', 'LOSO', 'INDIVIDUAL']:
-                        view = parts[i+1]
-                        if i + 2 < len(parts) and not parts[i+2].startswith('cohort='):
-                            target = parts[i+2]
-                    # Find cohort_id
-                    for j in range(i, len(parts)):
-                        if parts[j].startswith('cohort='):
-                            cohort_id = parts[j].replace('cohort=', '')
-                            break
+            # Extract cohort_id from path if not available from snapshot
+            parts = Path(cohort_dir).parts
+            for part in parts:
+                if part.startswith('cohort='):
+                    cohort_id = part.replace('cohort=', '')
                     break
+            
+            # If we couldn't get identifiers from snapshot, try parsing path (legacy support)
+            if not stage or not target:
+                for i, part in enumerate(parts):
+                    if part in ['TARGET_RANKING', 'FEATURE_SELECTION', 'TRAINING']:
+                        if not stage:
+                            stage = part
+                        if i + 1 < len(parts) and parts[i+1] in ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC', 'LOSO', 'INDIVIDUAL']:
+                            if not view:
+                                view = parts[i+1]
+                            if i + 2 < len(parts) and not parts[i+2].startswith('cohort='):
+                                if not target:
+                                    target = parts[i+2]
+                        # Find cohort_id
+                        for j in range(i, len(parts)):
+                            if parts[j].startswith('cohort='):
+                                cohort_id = parts[j].replace('cohort=', '')
+                                break
+                        break
             
             # Only create target-first structure for TARGET_RANKING and FEATURE_SELECTION
             if stage in ['TARGET_RANKING', 'FEATURE_SELECTION'] and target and cohort_id:
@@ -3911,8 +3946,10 @@ class DiffTelemetry:
             cohort_dir: Cohort directory
         """
         cohort_dir = Path(cohort_dir)
-        # NEVER create REPRODUCIBILITY directories - only use target-first structure
-        if "REPRODUCIBILITY" in str(cohort_dir):
+        cohort_dir_str = str(cohort_dir)
+        # NEVER create legacy REPRODUCIBILITY directories - only use target-first structure
+        # Check for uppercase REPRODUCIBILITY (legacy) but allow lowercase reproducibility (target-first)
+        if "REPRODUCIBILITY" in cohort_dir_str and "reproducibility" not in cohort_dir_str.lower():
             logger.warning(f"⚠️ Skipping diff save to legacy REPRODUCIBILITY path: {cohort_dir}")
             return
         
@@ -4050,7 +4087,8 @@ class DiffTelemetry:
         # Use target-first directory for all writes - NEVER use legacy REPRODUCIBILITY paths
         if target_cohort_dir is None:
             # If we couldn't create target-first structure, check if cohort_dir is already target-first
-            if "REPRODUCIBILITY" not in str(cohort_dir):
+            cohort_dir_str = str(cohort_dir)
+            if "reproducibility" in cohort_dir_str.lower() and "REPRODUCIBILITY" not in cohort_dir_str:
                 # It's already target-first, use it
                 target_cohort_dir = cohort_dir
             else:
@@ -4090,48 +4128,47 @@ class DiffTelemetry:
                     'top_improvements': diff.summary.get('top_improvements', [])
                 }
             }
-            # Write to target-first structure only
-            if target_cohort_dir:
-                try:
-                    target_metric_deltas_file = target_cohort_dir / "metric_deltas.json"
-                    _write_atomic_json(target_metric_deltas_file, metric_deltas_data)
-                    logger.debug(f"✅ Saved metric_deltas.json to target-first structure: {target_metric_deltas_file}")
-                except Exception as e:
-                    logger.warning(f"Failed to save metric_deltas.json to target-first structure: {e}")
-            else:
-                logger.warning(f"Target cohort directory not available, cannot save metric_deltas.json")
+            # Write to target-first structure (cohort_dir is already set to target_cohort_dir above)
+            try:
+                metric_deltas_file = cohort_dir / "metric_deltas.json"
+                _write_atomic_json(metric_deltas_file, metric_deltas_data)
+                logger.debug(f"✅ Saved metric_deltas.json to {metric_deltas_file}")
+            except Exception as e:
+                logger.error(f"❌ Failed to save metric_deltas.json to {metric_deltas_file}: {e}")
+                import traceback
+                logger.debug(f"Metric deltas save traceback: {traceback.format_exc()}")
         
         # Add reference to metric_deltas.json in diff_prev.json summary (before writing)
         if metric_deltas_file_path:
             prev_diff_dict['summary']['metric_deltas_file'] = metric_deltas_file_path
         
         # Ensure summary includes impact classification (already computed in compute_diff)
-        # Write to target-first structure only
-        if target_cohort_dir:
-            try:
-                target_prev_diff_file = target_cohort_dir / "diff_prev.json"
-                _write_atomic_json(target_prev_diff_file, prev_diff_dict)
-                logger.debug(f"✅ Saved diff_prev.json to target-first structure: {target_prev_diff_file}")
-            except Exception as e:
-                logger.warning(f"Failed to save diff_prev.json to target-first structure: {e}")
-        else:
-            logger.warning(f"Target cohort directory not available, cannot save diff_prev.json")
+        # Write to target-first structure (cohort_dir is already set to target_cohort_dir above)
+        try:
+            prev_diff_file = cohort_dir / "diff_prev.json"
+            _write_atomic_json(prev_diff_file, prev_diff_dict)
+            logger.debug(f"✅ Saved diff_prev.json to {prev_diff_file}")
+        except Exception as e:
+            logger.error(f"❌ Failed to save diff_prev.json to {prev_diff_file}: {e}")
+            import traceback
+            logger.debug(f"Diff prev save traceback: {traceback.format_exc()}")
         
         # Tier C: Full raw metrics remain in metrics.json (already written by MetricsWriter)
         # We don't duplicate them here - just reference the path
         
-        # Save baseline diff if available (atomically) to target-first structure only
-        if baseline_diff and target_cohort_dir:
+        # Save baseline diff if available (atomically) to target-first structure
+        if baseline_diff:
             try:
                 baseline_diff_dict = baseline_diff.to_dict()
-                target_baseline_diff_file = target_cohort_dir / "diff_baseline.json"
-                _write_atomic_json(target_baseline_diff_file, baseline_diff_dict)
-                logger.debug(f"✅ Saved diff_baseline.json to target-first structure: {target_baseline_diff_file}")
+                baseline_diff_file = cohort_dir / "diff_baseline.json"
+                _write_atomic_json(baseline_diff_file, baseline_diff_dict)
+                logger.debug(f"✅ Saved diff_baseline.json to {baseline_diff_file}")
             except Exception as e:
-                logger.warning(f"Failed to save diff_baseline.json to target-first structure: {e}")
+                logger.error(f"❌ Failed to save diff_baseline.json to {baseline_diff_file}: {e}")
+                import traceback
+                logger.debug(f"Baseline diff save traceback: {traceback.format_exc()}")
         
-        if target_cohort_dir:
-            logger.debug(f"✅ Saved diffs to {target_cohort_dir}")
+        logger.debug(f"✅ Saved diffs to {cohort_dir}")
     
     def _emit_trend_time_series(
         self,
@@ -4441,6 +4478,7 @@ class DiffTelemetry:
                 
                 if results_dir.name == "RESULTS":
                     # Search for the previous run's cohort directory
+                    # CRITICAL: Look in target-first structure: targets/<target>/reproducibility/<VIEW>/...
                     runs_dir = results_dir / "runs"
                     if runs_dir.exists():
                         for cg_dir in runs_dir.iterdir():
@@ -4449,22 +4487,62 @@ class DiffTelemetry:
                             for run_dir in cg_dir.iterdir():
                                 if not run_dir.is_dir():
                                     continue
-                                stage_dir = run_dir / "REPRODUCIBILITY" / prev_snapshot.stage / prev_snapshot.view / target_clean
-                                if stage_dir.exists():
-                                    for cohort_subdir in stage_dir.iterdir():
-                                        if cohort_subdir.is_dir() and cohort_subdir.name.startswith("cohort="):
-                                            snapshot_file = cohort_subdir / "snapshot.json"
-                                            if snapshot_file.exists():
-                                                try:
-                                                    with open(snapshot_file, 'r') as f:
-                                                        snapshot_data = json.load(f)
-                                                        if snapshot_data.get('run_id') == prev_snapshot.run_id:
-                                                            prev_cohort_dir = cohort_subdir
-                                                            break
-                                                except Exception:
-                                                    continue
-                                    if prev_cohort_dir:
-                                        break
+                                # Try target-first structure first
+                                targets_dir = run_dir / "targets"
+                                if targets_dir.exists() and (targets_dir / target_clean).exists():
+                                    target_dir = targets_dir / target_clean
+                                    repro_dir = target_dir / "reproducibility"
+                                    if repro_dir.exists():
+                                        view_dir = repro_dir / prev_snapshot.view
+                                        if view_dir.exists():
+                                            # Check for symbol-specific path
+                                            if prev_snapshot.symbol:
+                                                symbol_dir = view_dir / f"symbol={prev_snapshot.symbol}"
+                                                if symbol_dir.exists():
+                                                    for cohort_subdir in symbol_dir.iterdir():
+                                                        if cohort_subdir.is_dir() and cohort_subdir.name.startswith("cohort="):
+                                                            snapshot_file = cohort_subdir / "snapshot.json"
+                                                            if snapshot_file.exists():
+                                                                try:
+                                                                    with open(snapshot_file, 'r') as f:
+                                                                        snapshot_data = json.load(f)
+                                                                        if snapshot_data.get('run_id') == prev_snapshot.run_id:
+                                                                            prev_cohort_dir = cohort_subdir
+                                                                            break
+                                                                except Exception:
+                                                                    continue
+                                            # Check for cross-sectional path (no symbol)
+                                            if not prev_cohort_dir:
+                                                for cohort_subdir in view_dir.iterdir():
+                                                    if cohort_subdir.is_dir() and cohort_subdir.name.startswith("cohort="):
+                                                        snapshot_file = cohort_subdir / "snapshot.json"
+                                                        if snapshot_file.exists():
+                                                            try:
+                                                                with open(snapshot_file, 'r') as f:
+                                                                    snapshot_data = json.load(f)
+                                                                    if snapshot_data.get('run_id') == prev_snapshot.run_id:
+                                                                        prev_cohort_dir = cohort_subdir
+                                                                        break
+                                                            except Exception:
+                                                                continue
+                                # Fallback to legacy REPRODUCIBILITY structure
+                                if not prev_cohort_dir:
+                                    stage_dir = run_dir / "REPRODUCIBILITY" / prev_snapshot.stage / prev_snapshot.view / target_clean
+                                    if stage_dir.exists():
+                                        for cohort_subdir in stage_dir.iterdir():
+                                            if cohort_subdir.is_dir() and cohort_subdir.name.startswith("cohort="):
+                                                snapshot_file = cohort_subdir / "snapshot.json"
+                                                if snapshot_file.exists():
+                                                    try:
+                                                        with open(snapshot_file, 'r') as f:
+                                                            snapshot_data = json.load(f)
+                                                            if snapshot_data.get('run_id') == prev_snapshot.run_id:
+                                                                prev_cohort_dir = cohort_subdir
+                                                                break
+                                                    except Exception:
+                                                        continue
+                                if prev_cohort_dir:
+                                    break
                             if prev_cohort_dir:
                                 break
         
@@ -4532,22 +4610,62 @@ class DiffTelemetry:
                                     for run_dir in cg_dir.iterdir():
                                         if not run_dir.is_dir():
                                             continue
-                                        stage_dir = run_dir / "REPRODUCIBILITY" / baseline_snapshot.stage / baseline_snapshot.view / target_clean
-                                        if stage_dir.exists():
-                                            for cohort_subdir in stage_dir.iterdir():
-                                                if cohort_subdir.is_dir() and cohort_subdir.name.startswith("cohort="):
-                                                    snapshot_file = cohort_subdir / "snapshot.json"
-                                                    if snapshot_file.exists():
-                                                        try:
-                                                            with open(snapshot_file, 'r') as f:
-                                                                snapshot_data = json.load(f)
-                                                                if snapshot_data.get('run_id') == baseline_snapshot.run_id:
-                                                                    baseline_cohort_dir = cohort_subdir
-                                                                    break
-                                                        except Exception:
-                                                            continue
-                                            if baseline_cohort_dir:
-                                                break
+                                        # Try target-first structure first
+                                        targets_dir = run_dir / "targets"
+                                        if targets_dir.exists() and (targets_dir / target_clean).exists():
+                                            target_dir = targets_dir / target_clean
+                                            repro_dir = target_dir / "reproducibility"
+                                            if repro_dir.exists():
+                                                view_dir = repro_dir / baseline_snapshot.view
+                                                if view_dir.exists():
+                                                    # Check for symbol-specific path
+                                                    if baseline_snapshot.symbol:
+                                                        symbol_dir = view_dir / f"symbol={baseline_snapshot.symbol}"
+                                                        if symbol_dir.exists():
+                                                            for cohort_subdir in symbol_dir.iterdir():
+                                                                if cohort_subdir.is_dir() and cohort_subdir.name.startswith("cohort="):
+                                                                    snapshot_file = cohort_subdir / "snapshot.json"
+                                                                    if snapshot_file.exists():
+                                                                        try:
+                                                                            with open(snapshot_file, 'r') as f:
+                                                                                snapshot_data = json.load(f)
+                                                                                if snapshot_data.get('run_id') == baseline_snapshot.run_id:
+                                                                                    baseline_cohort_dir = cohort_subdir
+                                                                                    break
+                                                                        except Exception:
+                                                                            continue
+                                                    # Check for cross-sectional path (no symbol)
+                                                    if not baseline_cohort_dir:
+                                                        for cohort_subdir in view_dir.iterdir():
+                                                            if cohort_subdir.is_dir() and cohort_subdir.name.startswith("cohort="):
+                                                                snapshot_file = cohort_subdir / "snapshot.json"
+                                                                if snapshot_file.exists():
+                                                                    try:
+                                                                        with open(snapshot_file, 'r') as f:
+                                                                            snapshot_data = json.load(f)
+                                                                            if snapshot_data.get('run_id') == baseline_snapshot.run_id:
+                                                                                baseline_cohort_dir = cohort_subdir
+                                                                                break
+                                                                    except Exception:
+                                                                        continue
+                                        # Fallback to legacy REPRODUCIBILITY structure
+                                        if not baseline_cohort_dir:
+                                            stage_dir = run_dir / "REPRODUCIBILITY" / baseline_snapshot.stage / baseline_snapshot.view / target_clean
+                                            if stage_dir.exists():
+                                                for cohort_subdir in stage_dir.iterdir():
+                                                    if cohort_subdir.is_dir() and cohort_subdir.name.startswith("cohort="):
+                                                        snapshot_file = cohort_subdir / "snapshot.json"
+                                                        if snapshot_file.exists():
+                                                            try:
+                                                                with open(snapshot_file, 'r') as f:
+                                                                    snapshot_data = json.load(f)
+                                                                    if snapshot_data.get('run_id') == baseline_snapshot.run_id:
+                                                                        baseline_cohort_dir = cohort_subdir
+                                                                        break
+                                                            except Exception:
+                                                                continue
+                                        if baseline_cohort_dir:
+                                            break
                                     if baseline_cohort_dir:
                                         break
                 

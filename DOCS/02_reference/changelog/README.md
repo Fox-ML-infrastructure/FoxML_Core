@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### January
 
+- **2026-01-04 (Reproducibility File Output Fixes)** — Fixed critical bugs preventing reproducibility files from being written to cohort directories. Fixed path detection to handle target-first structure (`reproducibility/...` vs `REPRODUCIBILITY/...`). Fixed `snapshot.json`, `baseline.json`, and diff files (`diff_prev.json`, `metric_deltas.json`, `diff_baseline.json`) not being written. Fixed previous snapshot lookup to search in target-first structure instead of legacy `REPRODUCIBILITY/...`. Added error handling and logging for all writes. All files now correctly written to target-first structure for both CROSS_SECTIONAL and SYMBOL_SPECIFIC views.
+  → [View](2026-01-04-reproducibility-file-output-fixes.md)
+
 - **2026-01-04 (GPU/CPU Determinism Config Fix)** — Fixed critical disconnect between reproducibility config settings and actual GPU/CPU device selection. Replaced 4 hardcoded `set_global_determinism()` calls with config-aware `init_determinism_from_config()`. Added strict mode checks to GPU detection in target ranking (LightGBM, XGBoost, CatBoost), feature selection (LightGBM), and training phase (XGBoost, PyTorch, TensorFlow). Fixed `CUDA_VISIBLE_DEVICES` to hide GPUs in strict mode. Fixed `UnboundLocalError` from redundant `import os`. `REPRO_MODE=strict` now properly forces CPU across all phases for true deterministic runs.
   → [View](2026-01-04-gpu-cpu-determinism-config-fix.md)
 

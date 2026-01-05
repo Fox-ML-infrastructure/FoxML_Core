@@ -16,6 +16,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2026-01-04 (Reproducibility File Output Fixes)
+- **Critical Fix**: Fixed `snapshot.json` not being written to cohort directories.
+  - `diff_telemetry.py`: Fixed path detection to handle target-first structure (`reproducibility/...` vs `REPRODUCIBILITY/...`)
+  - Added error handling and logging for snapshot writes
+  - Snapshot extraction now uses snapshot object fields instead of path parsing
+- **Critical Fix**: Fixed `baseline.json` not being written to cohort directories.
+  - `diff_telemetry.py`: `_save_baseline_to_cohort()` now allows lowercase `reproducibility` paths (was blocking on uppercase `REPRODUCIBILITY`)
+  - Added error handling and logging
+- **Critical Fix**: Fixed diff files (`diff_prev.json`, `metric_deltas.json`, `diff_baseline.json`) not being written.
+  - `diff_telemetry.py`: `save_diff()` now correctly handles target-first paths
+  - Fixed path parsing to extract stage/view/target from snapshot object when available
+  - Ensured files are written even when path parsing fails but directory is already correct
+  - Added error handling and logging for all diff file writes
+- **Critical Fix**: Fixed path reconstruction for finding previous snapshots.
+  - `diff_telemetry.py`: `finalize_run()` now searches in target-first structure (`targets/<target>/reproducibility/...`) instead of legacy `REPRODUCIBILITY/...`
+  - Handles both CROSS_SECTIONAL and SYMBOL_SPECIFIC views correctly
+  - Falls back to legacy structure if target-first not found
+- **Impact**: All reproducibility files (`snapshot.json`, `baseline.json`, `diff_prev.json`, `metric_deltas.json`, `diff_baseline.json`) are now correctly written to cohort directories for both CROSS_SECTIONAL and SYMBOL_SPECIFIC views. Previous snapshot lookup now works correctly in target-first structure.
+- **Files Changed**: `diff_telemetry.py`
+
 #### 2026-01-04 (GPU/CPU Determinism Config Fix)
 - **Critical Fix**: Fixed config settings being ignored - replaced 4 hardcoded `set_global_determinism()` calls with config-aware `init_determinism_from_config()`.
   - All entry points now read from `reproducibility.yaml` and respect `REPRO_MODE` environment variable
