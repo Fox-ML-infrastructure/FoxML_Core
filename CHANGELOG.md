@@ -25,8 +25,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `diff_telemetry/types.py`: Added `feature_signature` to `REQUIRED_FIELDS_BY_STAGE_BASE["TARGET_RANKING"]`
   - `diff_telemetry.py`: Updated `_build_comparison_group_from_context()` to extract `feature_signature` for TARGET_RANKING
   - Added fallback to compute `feature_signature` from `ctx.feature_names` if not available
-- **Impact**: Runs with identical config/data now produce identical feature sets with identical ordering. Runs with different feature sets are correctly marked as incomparable.
-- **Files Changed**: `leakage_filtering.py`, `data_loading.py`, `diff_telemetry.py`, `diff_telemetry/types.py`
+- **Fix**: Added `train_seed` and `universe_sig` fallbacks for FEATURE_SELECTION tracking.
+  - `intelligent_trainer.py`: Added fallback to config `base_seed` (default 42) for `train_seed`
+  - `intelligent_trainer.py`: Added `universe_sig` computation from `symbols_to_use`
+  - Eliminates `ComparisonGroup missing required fields: [train_seed]` warnings
+- **Fix**: Fixed `artifacts_manifest_sha256` not computed for CROSS_SECTIONAL TARGET_RANKING.
+  - `diff_telemetry.py`: Normalized artifact lookup to handle different directory structures:
+    - SYMBOL_SPECIFIC: `symbol=.../feature_importances/`
+    - CROSS_SECTIONAL: `universe=.../feature_importances/`
+  - Now correctly finds artifacts in both views
+- **Impact**: Runs with identical config/data now produce identical feature sets with identical ordering. Runs with different feature sets are correctly marked as incomparable. FEATURE_SELECTION comparison tracking now works. Artifact manifests computed for both views.
+- **Files Changed**: `leakage_filtering.py`, `data_loading.py`, `diff_telemetry.py`, `diff_telemetry/types.py`, `intelligent_trainer.py`
 
 #### 2026-01-04 (Reproducibility File Output Fixes)
 - **Critical Fix**: Fixed `snapshot.json` not being written to cohort directories.
