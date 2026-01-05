@@ -6588,6 +6588,12 @@ def evaluate_target_predictability(
                 logger.debug(f"Failed to compute RunIdentity for target ranking: {e}")
                 target_ranking_identity = None
             
+            # CRITICAL: Use passed-in run_identity as fallback if local computation failed
+            # This ensures stability hooks get a valid identity for auditability
+            identity_for_save = target_ranking_identity or run_identity
+            if identity_for_save is None:
+                logger.warning("No RunIdentity available for feature importance snapshot (strict mode will warn)")
+            
             _save_feature_importances(
                 target_column, 
                 symbol_for_importances, 
@@ -6595,7 +6601,7 @@ def evaluate_target_predictability(
                 output_dir, 
                 view=view_for_importances,
                 universe_sig=universe_sig_for_importances,
-                run_identity=target_ranking_identity,
+                run_identity=identity_for_save,  # Use local or passed-in identity
                 model_metrics=model_metrics,  # Pass for prediction fingerprints
             )
         

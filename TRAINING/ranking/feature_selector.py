@@ -1558,6 +1558,10 @@ def select_features_for_target(
                     except Exception as e:
                         logger.debug(f"Failed to compute aggregated identity: {e}")
                 
+                # CRITICAL: Use passed-in run_identity as fallback if aggregated computation failed
+                # This ensures stability hooks get a valid identity for auditability
+                identity_for_snapshot = aggregated_identity or run_identity
+                
                 save_snapshot_hook(
                     target=target_column,
                     method="multi_model_aggregated",
@@ -1565,7 +1569,8 @@ def select_features_for_target(
                     universe_sig=snapshot_universe_sig,  # SST or None, NEVER view
                     output_dir=target_repro_dir,  # Use target-first structure
                     auto_analyze=None,  # Load from config
-                    run_identity=aggregated_identity,
+                    run_identity=identity_for_snapshot,  # Use computed or passed-in identity
+                    allow_legacy=(identity_for_snapshot is None),  # Allow legacy only if no identity available
                 )
     except Exception as e:
         logger.debug(f"Stability snapshot save failed for aggregated selection (non-critical): {e}")
