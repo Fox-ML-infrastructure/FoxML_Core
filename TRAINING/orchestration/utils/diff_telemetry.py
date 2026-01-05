@@ -1972,9 +1972,9 @@ class DiffTelemetry:
         This enables comparison of artifacts (feature_importances.parquet, etc.) across reruns.
         Creates a manifest of artifact files with their sizes and modification times.
         
-        Artifacts are stored at the view level (one level up from cohort directory):
-        - TARGET_RANKING: targets/{target}/reproducibility/{view}/feature_importances/, target_confidence.json
-        - FEATURE_SELECTION: targets/{target}/reproducibility/{view}/feature_importances/, selected_features.txt, target_confidence.json
+        Artifacts are stored at the view level with view-specific scoping:
+        - SYMBOL_SPECIFIC: targets/{target}/reproducibility/SYMBOL_SPECIFIC/symbol={sym}/feature_importances/
+        - CROSS_SECTIONAL: targets/{target}/reproducibility/CROSS_SECTIONAL/universe={sig}/feature_importances/
         - TRAINING: targets/{target}/reproducibility/{view}/cohort={cohort_id}/ (artifacts in cohort dir)
         """
         if not cohort_dir or not cohort_dir.exists():
@@ -1983,22 +1983,45 @@ class DiffTelemetry:
         # For TARGET_RANKING and FEATURE_SELECTION, artifacts are at target level (one level up from cohort)
         # For TRAINING, artifacts are in the cohort directory itself
         if stage in ['TARGET_RANKING', 'FEATURE_SELECTION']:
-            # Go up one level from cohort={cohort_id} to target level
-            target_dir = cohort_dir.parent
+            # Go up one level from cohort={cohort_id} to view level
+            view_dir = cohort_dir.parent
+            
+            # Find feature_importances directory - handle both structures:
+            # - SYMBOL_SPECIFIC: symbol=.../feature_importances/ (cohort is inside symbol=)
+            # - CROSS_SECTIONAL: universe=.../feature_importances/ (cohort is sibling to universe=)
+            feature_importances_dir = None
+            
+            # Check if we're in SYMBOL_SPECIFIC (cohort is inside symbol=)
+            if view_dir.name.startswith('symbol='):
+                # SYMBOL_SPECIFIC: look directly in symbol= directory
+                feature_importances_dir = view_dir / 'feature_importances'
+            else:
+                # CROSS_SECTIONAL: look for universe=*/feature_importances/ sibling to cohort
+                # The view_dir is the CROSS_SECTIONAL directory containing both cohort= and universe=
+                universe_dirs = list(view_dir.glob('universe=*'))
+                if universe_dirs:
+                    # Use first universe dir (there should only be one per view)
+                    feature_importances_dir = universe_dirs[0] / 'feature_importances'
+                else:
+                    # Fallback: look directly in view_dir (legacy structure)
+                    feature_importances_dir = view_dir / 'feature_importances'
+            
+            target_dir = view_dir
         else:
             # TRAINING: artifacts are in cohort directory
             target_dir = cohort_dir
+            feature_importances_dir = None
         
         # Define artifact file patterns by stage
         artifact_patterns = {
             'TARGET_RANKING': [
-                ('target_confidence.json', target_dir),  # At target level
-                ('feature_importances', target_dir / 'feature_importances')  # Directory with CSV files
+                ('target_confidence.json', target_dir),  # At view level
+                ('feature_importances', feature_importances_dir)  # Directory with CSV files
             ],
             'FEATURE_SELECTION': [
-                ('selected_features.txt', target_dir),  # At target level
-                ('target_confidence.json', target_dir),  # At target level
-                ('feature_importances', target_dir / 'feature_importances')  # Directory with CSV files
+                ('selected_features.txt', target_dir),  # At view level
+                ('target_confidence.json', target_dir),  # At view level
+                ('feature_importances', feature_importances_dir)  # Directory with CSV files
             ],
             'TRAINING': [
                 ('model_hash.txt', cohort_dir),  # In cohort directory
