@@ -4622,9 +4622,10 @@ def train_and_evaluate_models(
                     from TRAINING.common.determinism import stable_seed_from
                     boruta_seed = stable_seed_from(['boruta', target_column if target_column else 'default'])
                 
-                # Remove seed from rf_config to prevent double argument error
+                # Remove all seed keys from rf_config to prevent double argument error
                 rf_config_clean = rf_config.copy()
-                rf_config_clean.pop('seed', None)
+                for seed_key in ['seed', 'random_state', 'random_seed']:
+                    rf_config_clean.pop(seed_key, None)
                 
                 if is_binary or is_multiclass:
                     rf = RandomForestClassifier(**rf_config_clean, random_state=boruta_seed)
