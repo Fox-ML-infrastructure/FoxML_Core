@@ -6445,7 +6445,11 @@ def evaluate_target_predictability(
                 # Dataset signature (finance-safe: no path noise, includes date range)
                 # Get identity mode from config
                 identity_mode = get_identity_mode()
-                assume_utc = identity_mode in ("relaxed", "legacy")
+                # For identity computation, ALWAYS assume UTC for naive timestamps.
+                # This is deterministic (same naive timestamp -> same UTC result) and
+                # doesn't affect other strict mode behaviors (required fields, validation).
+                # Naive timestamps are a DATA FORMAT issue, not a reproducibility concern.
+                assume_utc = True
                 
                 # Extract date range - handle empty and failures properly
                 data_start_utc = None
