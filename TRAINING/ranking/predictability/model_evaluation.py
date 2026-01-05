@@ -4844,7 +4844,7 @@ def train_and_evaluate_models(
             # Use lasso config for stability selection models
             lasso_config = get_model_config('lasso', multi_model_config)
             
-            for _ in range(n_bootstrap):
+            for i in range(n_bootstrap):
                 # Use deterministic seed for bootstrap sampling
                 from TRAINING.common.determinism import stable_seed_from
                 bootstrap_seed = stable_seed_from(['bootstrap', target_column if 'target_column' in locals() else 'default', f'iter_{i}'])

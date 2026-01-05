@@ -450,39 +450,65 @@ def get_model_config(model_name: str, multi_model_config: Dict[str, Any]) -> Dic
         logger.warning(f"Config for '{model_name}' is not a dict (got {type(config)}). Using empty config.")
         return {}
     
-    # SST: Inject seed from global config or determinism system if not present
-    # This ensures all models use a consistent, traceable seed
-    seed_keys = ['seed', 'random_state', 'random_seed']
-    has_seed = any(k in config for k in seed_keys)
+    # SST: Normalize seed key to what each model expects AND inject if missing
+    # Models that handle seed explicitly or are deterministic - skip all seed processing
+    SKIP_SEED_PROCESSING = {
+        'boruta', 'stability_selection',  # Handle seed explicitly in training code
+        'lasso', 'ridge', 'elasticnet',    # Deterministic (no random_state in base class)
+        'mutual_information',              # Uses seed explicitly in training code
+        'univariate_selection',            # Deterministic
+    }
+    if model_name in SKIP_SEED_PROCESSING:
+        # Remove any seed keys that shouldn't be there (defensive)
+        seed_keys = ['seed', 'random_state', 'random_seed']
+        if any(k in config for k in seed_keys):
+            config = config.copy()
+            for k in seed_keys:
+                config.pop(k, None)
+        return config
     
-    if not has_seed:
+    # Determine the correct seed key for this model family
+    if model_name == 'catboost':
+        expected_key = 'random_seed'
+    elif model_name in ['random_forest', 'histogram_gradient_boosting', 'rfe', 'neural_network']:
+        expected_key = 'random_state'
+    else:
+        # LightGBM, XGBoost use 'seed'
+        expected_key = 'seed'
+    
+    # Find any existing seed value and normalize to expected key
+    seed_keys = ['seed', 'random_state', 'random_seed']
+    existing_seed = None
+    for k in seed_keys:
+        if k in config:
+            existing_seed = config[k]
+            break
+    
+    # If no seed in config, get from SST
+    if existing_seed is None:
         try:
             # First try global.seed from multi_model_config
-            global_seed = None
             if multi_model_config:
-                global_seed = multi_model_config.get('global', {}).get('seed')
+                existing_seed = multi_model_config.get('global', {}).get('seed')
             
             # Fallback to pipeline.determinism.base_seed
-            if global_seed is None:
+            if existing_seed is None:
                 try:
                     from CONFIG.config_loader import get_cfg
-                    global_seed = get_cfg("pipeline.determinism.base_seed", default=42)
+                    existing_seed = get_cfg("pipeline.determinism.base_seed", default=42)
                 except Exception:
-                    global_seed = 42  # FALLBACK_DEFAULT_OK
+                    existing_seed = 42  # FALLBACK_DEFAULT_OK
             
-            # Use appropriate key for model family
-            if model_name == 'catboost':
-                seed_key = 'random_seed'
-            elif model_name in ['random_forest', 'histogram_gradient_boosting', 'rfe', 'boruta']:
-                seed_key = 'random_state'
-            else:
-                seed_key = 'seed'
-            
-            config = config.copy()  # Don't mutate original
-            config[seed_key] = global_seed
-            logger.debug(f"Injected {seed_key}={global_seed} into {model_name} config (SST)")
+            logger.debug(f"Injected {expected_key}={existing_seed} into {model_name} config (SST)")
         except Exception as e:
-            logger.debug(f"Failed to inject seed into {model_name} config: {e}")
+            logger.debug(f"Failed to get seed for {model_name}: {e}")
+            return config
+    
+    # Build clean config with only the expected seed key
+    config = config.copy()
+    for k in seed_keys:
+        config.pop(k, None)
+    config[expected_key] = existing_seed
     
     return config
 
