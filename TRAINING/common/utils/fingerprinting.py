@@ -80,7 +80,22 @@ def get_identity_config() -> Dict[str, Any]:
 
 
 def get_identity_mode() -> str:
-    """Get identity enforcement mode: 'strict', 'relaxed', or 'legacy'."""
+    """Get identity enforcement mode: 'strict', 'relaxed', or 'legacy'.
+    
+    SST: If reproducibility.yaml mode=strict, identity enforcement is also strict.
+    This ensures full auditability when determinism is enforced.
+    
+    Fallback to identity_config.yaml for non-strict reproducibility mode.
+    """
+    # SST: Reproducibility strict implies identity strict
+    try:
+        from TRAINING.common.determinism import is_strict_mode
+        if is_strict_mode():
+            return "strict"
+    except Exception:
+        pass
+    
+    # Fallback to identity_config.yaml setting
     return get_identity_config().get("identity", {}).get("mode", "strict")
 
 

@@ -9,7 +9,11 @@ identity:
   # - strict: Fail if any required signature is missing (PRODUCTION DEFAULT)
   # - relaxed: Log error but continue with degraded identity
   # - legacy: Allow snapshots without identity (backward compat only)
-  mode: relaxed  # Changed from strict - debugging fingerprint determinism
+  #
+  # SST: If reproducibility.yaml mode=strict, identity mode is ALWAYS strict
+  # regardless of this setting. This config only applies when reproducibility
+  # mode is best_effort. See get_identity_mode() in fingerprinting.py.
+  mode: strict  # Default strict (only used when reproducibility.mode != strict)
 
 # =============================================================================
 # STABILITY ANALYSIS
