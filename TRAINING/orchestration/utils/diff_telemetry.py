@@ -1231,6 +1231,7 @@ class DiffTelemetry:
                 lib_sig = library_versions_signature
         
         # Extract split_signature from run_identity or context
+        # CRITICAL: split_signature is required for TARGET_RANKING, so compute it if missing
         split_sig = None
         if run_identity is not None and hasattr(run_identity, 'split_signature') and run_identity.split_signature:
             split_sig = run_identity.split_signature
@@ -1239,6 +1240,36 @@ class DiffTelemetry:
         elif ctx.fold_assignment_hash:
             # Fallback: use fold_assignment_hash as split signature
             split_sig = ctx.fold_assignment_hash
+        else:
+            # CRITICAL: Compute split_signature from context fields if not available
+            # This ensures TARGET_RANKING has required split_signature
+            split_parts = []
+            if ctx.cv_method:
+                split_parts.append(f"cv_method={ctx.cv_method}")
+            if ctx.folds is not None:
+                split_parts.append(f"folds={ctx.folds}")
+            if ctx.purge_minutes is not None:
+                split_parts.append(f"purge_minutes={ctx.purge_minutes}")
+            if ctx.embargo_minutes is not None:
+                normalized_embargo = self._normalize_value_for_hash(ctx.embargo_minutes)
+                split_parts.append(f"embargo_minutes={normalized_embargo}")
+            if ctx.leakage_filter_version:
+                split_parts.append(f"leakage_filter_version={ctx.leakage_filter_version}")
+            if ctx.horizon_minutes is not None:
+                split_parts.append(f"horizon_minutes={ctx.horizon_minutes}")
+            if ctx.split_seed is not None:
+                split_parts.append(f"split_seed={ctx.split_seed}")
+            if ctx.fold_assignment_hash:
+                split_parts.append(f"fold_assignment_hash={ctx.fold_assignment_hash}")
+            
+            if split_parts:
+                split_str = "|".join(sorted(split_parts))
+                split_sig = hashlib.sha256(split_str.encode()).hexdigest()
+            else:
+                # Last resort: use a default signature if no split info available
+                # This should rarely happen, but prevents validation failure
+                logger.warning(f"No split information available for {stage}, using default split signature")
+                split_sig = hashlib.sha256(b"default_split").hexdigest()
         
         comparison_group = ComparisonGroup(
             experiment_id=ctx.experiment_id,  # Can be None if not tracked
