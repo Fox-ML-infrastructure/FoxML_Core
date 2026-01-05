@@ -1208,7 +1208,21 @@ class DiffTelemetry:
             # Model family from context (not in RunIdentity)
             if stage == "TRAINING":
                 model_family = ctx.model_family
-        else:
+        
+        # SST fallback: Always populate train_seed for traceability (all stages)
+        # Even if not required for comparison in TARGET_RANKING, it's useful for auditing
+        if seed is None:
+            if train_seed is not None:
+                seed = train_seed
+            else:
+                try:
+                    from CONFIG.config_loader import get_cfg
+                    seed = get_cfg("pipeline.determinism.base_seed", default=42)
+                except Exception:
+                    seed = 42  # FALLBACK_DEFAULT_OK
+                logger.debug(f"Using SST fallback train_seed={seed} for {stage}")
+        
+        if run_identity is None:
             # Fallback to old logic when run_identity not provided
             if stage == "TARGET_RANKING":
                 # TARGET_RANKING: model_family, hyperparameters, train_seed, and library_versions are NOT applicable
