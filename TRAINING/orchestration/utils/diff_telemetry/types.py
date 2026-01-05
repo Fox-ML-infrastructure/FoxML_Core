@@ -8,7 +8,57 @@ Data classes and enums for diff telemetry system.
 
 from dataclasses import dataclass, field, asdict
 from enum import Enum
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
+import logging
+
+logger = logging.getLogger(__name__)
+
+# =============================================================================
+# COMPARISON GROUP VALIDATION CONSTANTS
+# =============================================================================
+
+# Base required fields (always required)
+REQUIRED_FIELDS_BY_STAGE_BASE = {
+    "TARGET_RANKING": [
+        "dataset_signature",
+        "task_signature", 
+        "routing_signature",
+        "n_effective",
+        "split_signature",  # CRITICAL: CV split identity
+    ],
+    "FEATURE_SELECTION": [
+        "dataset_signature",
+        "task_signature",
+        "routing_signature", 
+        "n_effective",
+        "split_signature",  # CRITICAL: CV split identity
+        "feature_signature",
+        "hyperparameters_signature",
+        "train_seed",
+    ],
+    "TRAINING": [
+        "dataset_signature",
+        "task_signature",
+        "routing_signature",
+        "n_effective",
+        "split_signature",  # CRITICAL: CV split identity
+        "model_family",
+        "feature_signature",
+        "hyperparameters_signature",
+        "train_seed",
+    ],
+}
+
+# Additional fields required only in strict mode
+REQUIRED_FIELDS_BY_STAGE_STRICT_EXTRA = {
+    "TARGET_RANKING": [],
+    "FEATURE_SELECTION": ["library_versions_signature"],
+    "TRAINING": ["library_versions_signature"],
+}
+
+# Schema version for ComparisonGroup structure
+# Increment if structure changes to prevent key collisions
+COMPARISON_GROUP_SCHEMA_VERSION = 1
 
 
 class ChangeSeverity(str, Enum):
@@ -99,6 +149,7 @@ class ComparisonGroup:
     - Same dataset (universe, date range, min_cs, max_cs_samples)
     - Same task (target, horizon, objective)
     - Same routing/view configuration
+    - Same split configuration (CV method, folds, purge/embargo)
     - Same model_family (different families produce different outcomes)
     - Same feature set (different features produce different outcomes)
     - Same hyperparameters (learning_rate, max_depth, etc. - CRITICAL: impact outcomes)
@@ -113,6 +164,7 @@ class ComparisonGroup:
     dataset_signature: Optional[str] = None  # Hash of universe + time rules + min_cs + max_cs_samples
     task_signature: Optional[str] = None  # Hash of target + horizon + objective
     routing_signature: Optional[str] = None  # Hash of routing config
+    split_signature: Optional[str] = None  # Hash of CV/split configuration (CRITICAL: different splits = different outcomes)
     n_effective: Optional[int] = None  # Exact sample size (CRITICAL: must match exactly)
     model_family: Optional[str] = None  # Model family (CRITICAL: different families = different outcomes)
     feature_signature: Optional[str] = None  # Hash of feature set (CRITICAL: different features = different outcomes)
@@ -122,50 +174,160 @@ class ComparisonGroup:
     universe_sig: Optional[str] = None  # Universe signature (CRITICAL: different symbol sets = different outcomes for CS)
     symbol: Optional[str] = None  # Symbol ticker (CRITICAL: for SS, AAPL only compares to AAPL, not AVGO)
     
-    def to_key(self) -> str:
+    def validate(self, stage: str, strict: bool = False) -> Tuple[bool, Optional[List[str]]]:
+        """Validate comparison group has all required fields for stage.
+        
+        CRITICAL: Unknown stages are treated as invalid (no silent bypass).
+        
+        Args:
+            stage: Stage name (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
+            strict: If True, raise on invalid; if False, return (False, missing_fields)
+        
+        Returns:
+            (is_valid, missing_fields) - missing_fields is None if valid
+        """
+        # CRITICAL: Unknown stage is invalid (no silent bypass)
+        if stage not in REQUIRED_FIELDS_BY_STAGE_BASE:
+            if strict:
+                raise ValueError(
+                    f"Unknown stage '{stage}' - cannot validate ComparisonGroup. "
+                    f"Known stages: {list(REQUIRED_FIELDS_BY_STAGE_BASE.keys())}"
+                )
+            return False, [f"<unknown_stage:{stage}>"]
+        
+        # Get base required fields
+        required = list(REQUIRED_FIELDS_BY_STAGE_BASE.get(stage, []))
+        
+        # Add strict-only fields if in strict mode
+        if strict:
+            strict_extra = REQUIRED_FIELDS_BY_STAGE_STRICT_EXTRA.get(stage, [])
+            required.extend(strict_extra)
+        
+        missing = []
+        
+        for field_name in required:
+            value = getattr(self, field_name, None)
+            # CRITICAL: Use explicit checks, never truthy filtering
+            if value is None or (isinstance(value, str) and value == ""):
+                missing.append(field_name)
+        
+        if missing:
+            if strict:
+                raise ValueError(
+                    f"ComparisonGroup missing required fields for {stage}: {missing}. "
+                    f"Cannot generate valid comparison key."
+                )
+            return False, missing
+        return True, None
+    
+    def to_key(self, stage: str, strict: bool = False) -> Optional[str]:
         """Generate comparison group key.
         
-        This key is used to:
-        1. Group runs in storage (runs with same key stored together)
-        2. Find previous comparable runs (only runs with same key are comparable)
-        3. Establish baselines (baselines are per comparison_group_key)
+        CRITICAL: Returns None if group is invalid (non-strict) or raises (strict).
+        Never returns "default" or partial keys.
+        
+        CRITICAL: Stage is REQUIRED (no None allowed) to prevent invalid keys.
+        
+        Args:
+            stage: Stage name for validation (TARGET_RANKING, FEATURE_SELECTION, TRAINING) - REQUIRED
+            strict: If True, raise on invalid; if False, return None + log warning
+        
+        Returns:
+            Comparison key string, or None if invalid (non-strict mode)
         """
-        parts = []
-        if self.experiment_id:
-            parts.append(f"exp={self.experiment_id}")
-        if self.dataset_signature:
-            parts.append(f"data={self.dataset_signature[:8]}")
-        if self.task_signature:
-            parts.append(f"task={self.task_signature[:8]}")
-        if self.routing_signature:
-            parts.append(f"route={self.routing_signature[:8]}")
-        # CRITICAL: Include exact n_effective to ensure only identical sample sizes compare
-        if self.n_effective is not None:
-            parts.append(f"n={self.n_effective}")
-        # CRITICAL: Include model_family (different families = different outcomes)
-        if self.model_family:
-            parts.append(f"family={self.model_family}")
-        # CRITICAL: Include feature signature (different features = different outcomes)
-        if self.feature_signature:
-            parts.append(f"features={self.feature_signature[:8]}")
-        # CRITICAL: Include hyperparameters signature (different HPs = different outcomes)
-        if self.hyperparameters_signature:
-            parts.append(f"hps={self.hyperparameters_signature[:8]}")
-        # CRITICAL: Include train_seed (different seeds = different outcomes)
-        if self.train_seed is not None:
-            parts.append(f"seed={self.train_seed}")
-        # CRITICAL: Include library versions signature (different versions = different outcomes)
-        if self.library_versions_signature:
-            parts.append(f"libs={self.library_versions_signature[:8]}")
-        # CRITICAL: Include universe_sig for CS runs (different symbol sets = different outcomes)
-        if self.universe_sig:
-            parts.append(f"universe={self.universe_sig[:8]}")
-        # CRITICAL: Include symbol for SS runs (AAPL only compares to AAPL)
-        if self.symbol:
-            parts.append(f"symbol={self.symbol}")
-        return "|".join(parts) if parts else "default"
+        # CRITICAL: Stage is required
+        if stage is None:
+            raise ValueError("Stage is required for to_key() - cannot generate key without stage")
+        
+        # Validate (will raise in strict mode if invalid)
+        try:
+            is_valid, missing = self.validate(stage, strict=strict)
+            if not is_valid:
+                if strict:
+                    raise  # Already raised in validate()
+                # Non-strict: log and return None
+                logger.warning(
+                    f"ComparisonGroup invalid for {stage}: missing {missing}. "
+                    f"Returning None key (not comparable)."
+                )
+                return None
+        except ValueError:
+            if strict:
+                raise
+            return None
+        
+        # CRITICAL: Include schema version to prevent collisions from structure changes
+        parts = [f"schema={COMPARISON_GROUP_SCHEMA_VERSION}"]
+        
+        # CRITICAL: Include stage in key to prevent cross-stage collisions
+        parts.append(f"stage={stage}")
+        
+        # Serialize ALL fields explicitly (NO truthy filtering - use explicit None/empty checks)
+        # Use deterministic field order (alphabetical by field name for canonical ordering)
+        
+        # Helper to escape pipe delimiters in free-text fields
+        def escape_value(v: str) -> str:
+            if v is None:
+                return "<NONE>"
+            # Replace pipe with escaped form
+            return str(v).replace("|", "\\|")
+        
+        # Optional: experiment_id
+        exp_val = escape_value(self.experiment_id) if self.experiment_id is not None else "<NONE>"
+        parts.append(f"exp={exp_val}")
+        
+        # Required: dataset_signature (use full signature, not truncated)
+        data_val = self.dataset_signature if self.dataset_signature is not None else "<NONE>"
+        parts.append(f"data={data_val}")
+        
+        # Required: task_signature (use full signature)
+        task_val = self.task_signature if self.task_signature is not None else "<NONE>"
+        parts.append(f"task={task_val}")
+        
+        # Required: routing_signature (use full signature)
+        route_val = self.routing_signature if self.routing_signature is not None else "<NONE>"
+        parts.append(f"route={route_val}")
+        
+        # Required: split_signature (use full signature)
+        split_val = self.split_signature if self.split_signature is not None else "<NONE>"
+        parts.append(f"split={split_val}")
+        
+        # Required: n_effective
+        n_val = self.n_effective if self.n_effective is not None else "<NONE>"
+        parts.append(f"n={n_val}")
+        
+        # Optional: model_family (required for TRAINING)
+        family_val = escape_value(self.model_family) if self.model_family is not None else "<NONE>"
+        parts.append(f"family={family_val}")
+        
+        # Optional: feature_signature (required for FEATURE_SELECTION, TRAINING) - use full signature
+        features_val = self.feature_signature if self.feature_signature is not None else "<NONE>"
+        parts.append(f"features={features_val}")
+        
+        # Optional: hyperparameters_signature (required for FEATURE_SELECTION, TRAINING) - use full signature
+        hps_val = self.hyperparameters_signature if self.hyperparameters_signature is not None else "<NONE>"
+        parts.append(f"hps={hps_val}")
+        
+        # Required: train_seed (for FEATURE_SELECTION, TRAINING)
+        seed_val = self.train_seed if self.train_seed is not None else "<NONE>"
+        parts.append(f"seed={seed_val}")
+        
+        # Optional: library_versions_signature (required in strict mode) - use full signature
+        libs_val = self.library_versions_signature if self.library_versions_signature is not None else "<NONE>"
+        parts.append(f"libs={libs_val}")
+        
+        # Optional: universe_sig (use full signature)
+        universe_val = self.universe_sig if self.universe_sig is not None else "<NONE>"
+        parts.append(f"universe={universe_val}")
+        
+        # Optional: symbol
+        symbol_val = escape_value(self.symbol) if self.symbol is not None else "<NONE>"
+        parts.append(f"symbol={symbol_val}")
+        
+        # CRITICAL: Never return "default" - return joined parts (or None if validation failed)
+        return "|".join(parts)
     
-    def to_dir_name(self) -> str:
+    def to_dir_name(self, stage: str = "TRAINING") -> str:
         """Generate compact, filesystem-safe directory name from comparison group key.
         
         Uses a single hash of the comparison group key for compactness, with
@@ -173,9 +335,16 @@ class ComparisonGroup:
         
         Example: "exp=test|data=abc12345|task=def67890|n=5000|family=lightgbm|features=ghi11111"
         -> "cg-abc12345_n-5000" (compact hash + n_effective)
+        
+        Args:
+            stage: Stage name for key generation (needed for new to_key() signature)
         """
-        key = self.to_key()
+        key = self.to_key(stage, strict=False)
         import hashlib
+        
+        # If key is None (invalid group), return a default
+        if key is None:
+            return "cg-invalid"
         
         # Generate a single compact hash from the full key
         key_hash = hashlib.sha256(key.encode()).hexdigest()[:12]  # 12 chars for uniqueness

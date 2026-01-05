@@ -1225,11 +1225,22 @@ class DiffTelemetry:
                 seed = train_seed
                 lib_sig = library_versions_signature
         
-        return ComparisonGroup(
+        # Extract split_signature from run_identity or context
+        split_sig = None
+        if run_identity is not None and hasattr(run_identity, 'split_signature') and run_identity.split_signature:
+            split_sig = run_identity.split_signature
+        elif ctx.split_protocol_fingerprint:
+            split_sig = ctx.split_protocol_fingerprint
+        elif ctx.fold_assignment_hash:
+            # Fallback: use fold_assignment_hash as split signature
+            split_sig = ctx.fold_assignment_hash
+        
+        comparison_group = ComparisonGroup(
             experiment_id=ctx.experiment_id,  # Can be None if not tracked
             dataset_signature=data_fp,
             task_signature=task_fp,
             routing_signature=routing_signature,
+            split_signature=split_sig,  # CRITICAL: CV split identity (required for all stages)
             n_effective=ctx.n_effective,  # CRITICAL: Exact sample size (required, non-null)
             model_family=model_family,  # Stage-specific: None for TARGET_RANKING/FEATURE_SELECTION
             feature_signature=feature_signature,  # Stage-specific: None for TARGET_RANKING
@@ -1239,6 +1250,13 @@ class DiffTelemetry:
             universe_sig=universe_sig,  # CRITICAL: For CS, ensures same symbol set comparisons
             symbol=symbol  # CRITICAL: For SS, ensures AAPL only compares to AAPL
         )
+        
+        # Validate in strict mode
+        from TRAINING.common.determinism import is_strict_mode
+        if is_strict_mode():
+            comparison_group.validate(stage, strict=True)  # Will raise if invalid
+        
+        return comparison_group
     
     def _build_comparison_group(
         self,
@@ -2412,7 +2430,7 @@ class DiffTelemetry:
             logger.info(f"📁 Organizing run by comparison group metadata...")
             logger.info(f"   From: {self.run_dir}")
             logger.info(f"   To:   {target_dir}")
-            logger.info(f"   Group: {snapshot.comparison_group.to_key()}")
+            logger.info(f"   Group: {snapshot.comparison_group.to_key(snapshot.stage, strict=False)}")
             
             shutil.move(str(self.run_dir), str(target_dir))
             
@@ -2653,8 +2671,31 @@ class DiffTelemetry:
         # CRITICAL: Must have identical comparison groups (all metadata must match exactly)
         # This is the primary check - all outcome-influencing metadata must match
         if current.comparison_group and prev.comparison_group:
-            cg_curr = current.comparison_group.to_key()
-            cg_prev = prev.comparison_group.to_key()
+            # CRITICAL: Validate both comparison groups before comparing
+            # Validate current
+            try:
+                is_valid, missing = current.comparison_group.validate(current.stage, strict=False)
+                if not is_valid:
+                    return False, f"Current snapshot missing required fields: {missing}"
+            except Exception as e:
+                return False, f"Current snapshot validation failed: {e}"
+            
+            # Validate prev
+            try:
+                is_valid, missing = prev.comparison_group.validate(prev.stage, strict=False)
+                if not is_valid:
+                    return False, f"Previous snapshot missing required fields: {missing}"
+            except Exception as e:
+                return False, f"Previous snapshot validation failed: {e}"
+            
+            # Now compare keys (both should be valid)
+            cg_curr = current.comparison_group.to_key(current.stage, strict=False)
+            cg_prev = prev.comparison_group.to_key(prev.stage, strict=False)
+            
+            # CRITICAL: If either key is None, not comparable
+            if cg_curr is None or cg_prev is None:
+                return False, "One or both comparison groups are invalid (missing required fields)"
+            
             if cg_curr != cg_prev:
                 return False, f"Different comparison groups: {cg_curr} vs {cg_prev}"
         elif current.comparison_group or prev.comparison_group:
@@ -3454,7 +3495,11 @@ class DiffTelemetry:
         if not snapshot.comparison_group:
             return None
         
-        group_key = snapshot.comparison_group.to_key()
+        # CRITICAL: to_key() now requires stage and may return None for invalid groups
+        group_key = snapshot.comparison_group.to_key(snapshot.stage, strict=False)
+        if group_key is None:
+            logger.warning(f"Snapshot {snapshot.run_id} has invalid comparison group, cannot find comparable")
+            return None
         
         # First, search in current run's snapshots
         # NOTE: We only use snapshots from snapshot_index.json search below (which verifies file existence)
@@ -3535,8 +3580,9 @@ class DiffTelemetry:
                                                 continue
                                             
                                             # Only add if same comparison_group (exactly the same runs)
+                                            snap_key = snap.comparison_group.to_key(snap.stage, strict=False) if snap.comparison_group else None
                                             if (snap.comparison_group and 
-                                                snap.comparison_group.to_key() == group_key):
+                                                snap_key is not None and snap_key == group_key):
                                                 comparable, reason = self._check_comparability(snapshot, snap)
                                                 if comparable:
                                                     # CRITICAL: Verify snapshot file actually exists on disk
@@ -3738,7 +3784,11 @@ class DiffTelemetry:
         if not snapshot.comparison_group:
             return None, False
         
-        group_key = snapshot.comparison_group.to_key()
+        # CRITICAL: to_key() now requires stage and may return None for invalid groups
+        group_key = snapshot.comparison_group.to_key(snapshot.stage, strict=False)
+        if group_key is None:
+            logger.warning(f"Snapshot {snapshot.run_id} has invalid comparison group, cannot get/establish baseline")
+            return None, False
         
         # Check cache first
         if group_key in self._baselines:
@@ -3755,7 +3805,7 @@ class DiffTelemetry:
         comparable_runs = [
             snap for snap in self._snapshots.values()
             if (snap.comparison_group and 
-                snap.comparison_group.to_key() == group_key and
+                snap.comparison_group.to_key(snap.stage, strict=False) == group_key and
                 snap.run_id != snapshot.run_id)  # Exclude same run_id
         ]
         
@@ -3808,8 +3858,9 @@ class DiffTelemetry:
                                                     if snap.run_id == snapshot.run_id:
                                                         continue
                                                     # Only add if same comparison_group (exactly the same runs)
+                                                    snap_key = snap.comparison_group.to_key(snap.stage, strict=False) if snap.comparison_group else None
                                                     if (snap.comparison_group and 
-                                                        snap.comparison_group.to_key() == group_key):
+                                                        snap_key is not None and snap_key == group_key):
                                                         comparable_runs.append(snap)
                                                 except Exception:
                                                     continue
@@ -4105,7 +4156,7 @@ class DiffTelemetry:
         # Get comparison group key
         comparison_group_key = None
         if snapshot.comparison_group:
-            comparison_group_key = snapshot.comparison_group.to_key()
+            comparison_group_key = snapshot.comparison_group.to_key(snapshot.stage, strict=False)
         
         # Extract target from target (for TARGET_RANKING) or from other sources
         target = snapshot.target or "unknown"

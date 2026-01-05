@@ -1010,6 +1010,39 @@ def train_model_and_get_importance(
     importance_method = family_config['importance_method']
     model_config = family_config['config']
     
+    # CRITICAL: Strict mode assertions for determinism
+    if is_strict_mode():
+        import os
+        # Assert threading is single-thread
+        omp_threads = os.environ.get('OMP_NUM_THREADS')
+        if omp_threads != '1':
+            logger.warning(f"Strict mode: OMP_NUM_THREADS={omp_threads}, expected '1'. Determinism may be compromised.")
+        
+        # Assert model params use single-thread AND deterministic flags AND randomness knobs
+        if model_family in ['lightgbm', 'lgbm']:
+            if model_config.get('num_threads', 1) != 1:
+                logger.warning(f"Strict mode: LightGBM num_threads={model_config.get('num_threads')}, expected 1")
+            if not model_config.get('deterministic', False):
+                logger.warning(f"Strict mode: LightGBM deterministic={model_config.get('deterministic')}, expected True")
+            # Check randomness knobs
+            if 'seed' not in model_config and 'random_state' not in model_config:
+                logger.warning(f"Strict mode: LightGBM missing seed/random_state")
+        elif model_family in ['xgboost', 'xgb']:
+            if model_config.get('nthread', 1) != 1:
+                logger.warning(f"Strict mode: XGBoost nthread={model_config.get('nthread')}, expected 1")
+            if 'seed' not in model_config and 'random_state' not in model_config:
+                logger.warning(f"Strict mode: XGBoost missing seed/random_state")
+        elif model_family in ['randomforest', 'random_forest']:
+            if model_config.get('n_jobs', 1) != 1:
+                logger.warning(f"Strict mode: RandomForest n_jobs={model_config.get('n_jobs')}, expected 1")
+            if 'random_state' not in model_config:
+                logger.warning(f"Strict mode: RandomForest missing random_state")
+        elif model_family in ['catboost', 'cat']:
+            if model_config.get('thread_count', 1) != 1:
+                logger.warning(f"Strict mode: CatBoost thread_count={model_config.get('thread_count')}, expected 1")
+            if 'random_seed' not in model_config and 'random_state' not in model_config:
+                logger.warning(f"Strict mode: CatBoost missing random_seed/random_state")
+    
     # Load cv_n_jobs for parallelization (same logic as model_evaluation.py)
     cv_n_jobs = 1  # Default to single-threaded
     try:
@@ -3614,7 +3647,8 @@ def process_single_symbol(
             logger.debug(f"  {symbol}: Using {len(available_features)} features (validated with strict registry filtering)")
         else:
             # Fallback: rebuild feature list (original behavior)
-            all_columns = df.columns.tolist()
+            # CRITICAL: Sort columns for deterministic ordering
+            all_columns = sorted(df.columns.tolist())
             # Track stats before filtering
             registry_stats['features_before_registry'] = len([c for c in all_columns if c != target_column])
             
@@ -3687,7 +3721,11 @@ def process_single_symbol(
         # FIX: Initialize feature_names from X_df.columns before any filtering
         # This prevents UnboundLocalError when feature_names is used before assignment
         # In fallback path, feature_names may not exist from shared harness, so derive from dataframe
-        feature_names = X_df.columns.tolist()
+        # CRITICAL: Sort feature_names for deterministic ordering
+        # DataFrame column order may not be deterministic across runs
+        feature_names = sorted(X_df.columns.tolist())
+        # Reorder DataFrame columns to match sorted feature_names
+        X_df = X_df[feature_names]
         
         # Update X
         X_arr = X_df.values.astype('float32')  # Already float32 from conversion above
@@ -4334,7 +4372,16 @@ def aggregate_multi_model_importance(
     summary_df['boruta_tentative'] = boruta_tentative_mask.values
     
     # Sort by final consensus score (with Boruta effect)
-    summary_df = summary_df.sort_values('consensus_score', ascending=False).reset_index(drop=True)
+    # CRITICAL: Use stable sort with tie-breaker for deterministic ordering
+    # Round consensus_score to 12 decimals for ordering stability (float jitter protection)
+    summary_df['_consensus_score_rounded'] = summary_df['consensus_score'].round(12)
+    summary_df = summary_df.sort_values(
+        ['_consensus_score_rounded', 'feature'], 
+        ascending=[False, True],
+        kind='mergesort'  # CRITICAL: Stable sort for ties
+    ).reset_index(drop=True)
+    # Drop temporary rounded column (keep original consensus_score)
+    summary_df = summary_df.drop(columns=['_consensus_score_rounded'])
     
     # Filter by minimum consensus if specified
     min_models = aggregation_config.get('require_min_models', 1)

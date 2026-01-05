@@ -356,8 +356,9 @@ class RunIdentity:
 
 def construct_comparison_group_key_from_dict(
     comparison_group: Dict[str, Any],
-    mode: str = "debug"
-) -> str:
+    mode: str = "debug",
+    stage: str = "TRAINING"
+) -> Optional[str]:
     """
     Construct comparison group key from dict (for backward compatibility).
     
@@ -366,18 +367,20 @@ def construct_comparison_group_key_from_dict(
     
     Args:
         comparison_group: Dictionary with comparison group fields
-        mode: "strict" (full 64-char hash), "replicate" (no seed), or "debug" (short hashes)
+        mode: "strict" (full 64-char hash), "replicate" (no seed), or "debug" (full format)
+        stage: Stage name for key construction (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
     
     Returns:
-        Comparison group key string
+        Comparison group key string, or None if invalid
     """
     if not comparison_group:
-        return "default"
+        return None  # No longer return "default" - invalid groups return None
     
     if mode == "strict":
         # Full hash including seed
         payload = {
             "schema": 1,
+            "stage": stage,
             "dataset": comparison_group.get("dataset_signature"),
             "split": comparison_group.get("split_signature"),
             "target": comparison_group.get("task_signature"),  # Note: task_signature maps to target
@@ -385,6 +388,7 @@ def construct_comparison_group_key_from_dict(
             "hparams": comparison_group.get("hyperparameters_signature"),
             "routing": comparison_group.get("routing_signature"),
             "seed": comparison_group.get("train_seed"),
+            "libs": comparison_group.get("library_versions_signature"),
         }
         return sha256_full(canonical_json(payload))
     
@@ -392,6 +396,7 @@ def construct_comparison_group_key_from_dict(
         # Full hash excluding seed
         payload = {
             "schema": 1,
+            "stage": stage,
             "dataset": comparison_group.get("dataset_signature"),
             "split": comparison_group.get("split_signature"),
             "target": comparison_group.get("task_signature"),
@@ -402,30 +407,64 @@ def construct_comparison_group_key_from_dict(
         }
         return sha256_full(canonical_json(payload))
     
-    else:  # debug mode - backward compatible short-hash format
-        parts = []
-        if comparison_group.get('experiment_id'):
-            parts.append(f"exp={comparison_group['experiment_id']}")
-        if comparison_group.get('dataset_signature'):
-            parts.append(f"data={comparison_group['dataset_signature'][:8]}")
-        if comparison_group.get('task_signature'):
-            parts.append(f"task={comparison_group['task_signature'][:8]}")
-        if comparison_group.get('routing_signature'):
-            parts.append(f"route={comparison_group['routing_signature'][:8]}")
-        if comparison_group.get('n_effective') is not None:
-            parts.append(f"n={comparison_group['n_effective']}")
-        if comparison_group.get('model_family'):
-            parts.append(f"family={comparison_group['model_family']}")
-        if comparison_group.get('feature_signature'):
-            parts.append(f"features={comparison_group['feature_signature'][:8]}")
-        if comparison_group.get('hyperparameters_signature'):
-            parts.append(f"hps={comparison_group['hyperparameters_signature'][:8]}")
-        if comparison_group.get('train_seed') is not None:
-            parts.append(f"seed={comparison_group['train_seed']}")
-        if comparison_group.get('library_versions_signature'):
-            parts.append(f"libs={comparison_group['library_versions_signature'][:8]}")
+    else:  # debug mode - new format matching ComparisonGroup.to_key()
+        # Import schema version from types
+        try:
+            from TRAINING.orchestration.utils.diff_telemetry.types import COMPARISON_GROUP_SCHEMA_VERSION
+            schema_version = COMPARISON_GROUP_SCHEMA_VERSION
+        except ImportError:
+            schema_version = 1
         
-        return "|".join(parts) if parts else "default"
+        # Helper to escape pipe delimiters
+        def escape_value(v: str) -> str:
+            if v is None:
+                return "<NONE>"
+            return str(v).replace("|", "\\|")
+        
+        parts = [f"schema={schema_version}"]
+        parts.append(f"stage={stage}")
+        
+        # Serialize all fields explicitly (no truthy filtering)
+        exp_val = escape_value(comparison_group.get('experiment_id')) if comparison_group.get('experiment_id') is not None else "<NONE>"
+        parts.append(f"exp={exp_val}")
+        
+        data_val = comparison_group.get('dataset_signature') if comparison_group.get('dataset_signature') is not None else "<NONE>"
+        parts.append(f"data={data_val}")
+        
+        task_val = comparison_group.get('task_signature') if comparison_group.get('task_signature') is not None else "<NONE>"
+        parts.append(f"task={task_val}")
+        
+        route_val = comparison_group.get('routing_signature') if comparison_group.get('routing_signature') is not None else "<NONE>"
+        parts.append(f"route={route_val}")
+        
+        split_val = comparison_group.get('split_signature') if comparison_group.get('split_signature') is not None else "<NONE>"
+        parts.append(f"split={split_val}")
+        
+        n_val = comparison_group.get('n_effective') if comparison_group.get('n_effective') is not None else "<NONE>"
+        parts.append(f"n={n_val}")
+        
+        family_val = escape_value(comparison_group.get('model_family')) if comparison_group.get('model_family') is not None else "<NONE>"
+        parts.append(f"family={family_val}")
+        
+        features_val = comparison_group.get('feature_signature') if comparison_group.get('feature_signature') is not None else "<NONE>"
+        parts.append(f"features={features_val}")
+        
+        hps_val = comparison_group.get('hyperparameters_signature') if comparison_group.get('hyperparameters_signature') is not None else "<NONE>"
+        parts.append(f"hps={hps_val}")
+        
+        seed_val = comparison_group.get('train_seed') if comparison_group.get('train_seed') is not None else "<NONE>"
+        parts.append(f"seed={seed_val}")
+        
+        libs_val = comparison_group.get('library_versions_signature') if comparison_group.get('library_versions_signature') is not None else "<NONE>"
+        parts.append(f"libs={libs_val}")
+        
+        universe_val = comparison_group.get('universe_sig') if comparison_group.get('universe_sig') is not None else "<NONE>"
+        parts.append(f"universe={universe_val}")
+        
+        symbol_val = escape_value(comparison_group.get('symbol')) if comparison_group.get('symbol') is not None else "<NONE>"
+        parts.append(f"symbol={symbol_val}")
+        
+        return "|".join(parts)
 
 
 def compute_feature_fingerprint(

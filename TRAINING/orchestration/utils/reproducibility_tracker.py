@@ -127,14 +127,21 @@ def _extract_horizon_minutes_sst(metadata, cv_details):
     return extract_horizon_minutes(metadata, cv_details)
 
 
-def _construct_comparison_group_key_from_dict(comparison_group: Dict[str, Any]) -> str:
+def _construct_comparison_group_key_from_dict(comparison_group: Dict[str, Any], stage: str = "TRAINING") -> Optional[str]:
     """
     Construct comparison_group_key from comparison_group dict.
     
     DEPRECATED: Use construct_comparison_group_key_from_dict from fingerprinting.py directly.
     This wrapper exists for backward compatibility.
+    
+    Args:
+        comparison_group: Dict of comparison group fields
+        stage: Stage name for validation (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
+    
+    Returns:
+        Comparison key string, or None if invalid
     """
-    return construct_comparison_group_key_from_dict(comparison_group, mode="debug")
+    return construct_comparison_group_key_from_dict(comparison_group, mode="debug", stage=stage)
 
 
 # All utility functions are now imported from reproducibility.utils (see imports above)
@@ -1881,12 +1888,14 @@ class ReproducibilityTracker:
             
             # Extract comparison group key
             comparison_group = snapshot.get('comparison_group')
+            stage = snapshot.get('stage', 'TRAINING')  # Get stage from snapshot
             comparison_group_key = None
             if isinstance(comparison_group, dict):
                 # Construct key from dict fields (matching ComparisonGroup.to_key() logic)
-                comparison_group_key = _construct_comparison_group_key_from_dict(comparison_group)
+                comparison_group_key = _construct_comparison_group_key_from_dict(comparison_group, stage)
             elif hasattr(comparison_group, 'to_key'):
-                comparison_group_key = comparison_group.to_key()
+                # CRITICAL: to_key() now requires stage parameter
+                comparison_group_key = comparison_group.to_key(stage, strict=False)
             
             # Extract diff telemetry metadata (full detail for audit trail)
             # CRITICAL: Always write valid diff_telemetry object, even if not comparable
