@@ -6550,10 +6550,16 @@ def evaluate_target_predictability(
                             split_seed=None,
                         )
                 
-                # Get seed
+                # Get seed - SST fallback chain
                 train_seed = None
                 if experiment_config and hasattr(experiment_config, 'seed'):
                     train_seed = experiment_config.seed
+                if train_seed is None:
+                    try:
+                        from CONFIG.config_loader import get_cfg
+                        train_seed = get_cfg("pipeline.determinism.base_seed", default=42)
+                    except Exception:
+                        train_seed = 42  # FALLBACK_DEFAULT_OK
                 
                 # Create identity per model family and save
                 # Check if we have any feature importances to process
