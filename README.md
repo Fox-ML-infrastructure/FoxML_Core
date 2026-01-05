@@ -3,7 +3,6 @@
 > **License:**  
 > - **AGPL-3.0** (open source)  
 > - **Commercial License** (for proprietary or for-profit use)  
-> - **Humanitarian & Public Benefit Exception** (limited, conditional; see [HUMANITARIAN_LICENSE.md](HUMANITARIAN_LICENSE.md))  
 >
 > See [LICENSE](LICENSE) and [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md) for full terms.
 

@@ -1,8 +1,8 @@
 # FoxML Core Licensing
 
-> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, `LICENSE` controls for free use, and `HUMANITARIAN_LICENSE.md` controls for the humanitarian exception.
+> **Document Hierarchy:** This document is provided for guidance only. In case of any conflict, `COMMERCIAL_LICENSE.md` is the authoritative and controlling document for all commercial licensing terms and obligations, and `LICENSE` controls for free use.
 
-FoxML Core licensing: **AGPL v3 + Commercial + Humanitarian Exception**.
+FoxML Core licensing: **AGPL v3 + Commercial**.
 
 ---
 
@@ -36,33 +36,6 @@ FoxML Core licensing: **AGPL v3 + Commercial + Humanitarian Exception**.
 - License to modify + integrate
 - No copyleft obligations
 - Standard commercial protections
-
----
-
-## Humanitarian & Public Benefit Exception (Limited, Conditional)
-
-The Humanitarian & Public Benefit Exception is a **limited-use exception** to the standard licensing model. It is not a separate license type.
-
-**Eligible organizations include:**
-- Registered non-profit organizations (501(c)(3) or equivalent)
-- Accredited academic or research institutions
-- Government or public-sector research bodies
-- NGOs and charities
-- Companies conducting non-commercial humanitarian work (with organizational isolation from commercial activities)
-
-**Conditions (all must be met):**
-- No revenue generation (direct or indirect)
-- No proprietary embedding
-- No resale, sublicensing, or commercial redistribution
-- No use for profit optimization or commercial support
-- Attribution required
-
-**Key restrictions:**
-- Indirect revenue (lead generation, investor signaling, efficiency gains for commercial operations) disqualifies use
-- Use must be organizationally and operationally isolated from commercial activities
-- Transition to commercial use requires a commercial license
-
-**See [`../HUMANITARIAN_LICENSE.md`](../HUMANITARIAN_LICENSE.md) for complete terms and eligibility FAQ.**
 
 ---
 
@@ -131,6 +104,5 @@ Subject: `FoxML Core Commercial Licensing`
 - [`SUBSCRIPTIONS.md`](SUBSCRIPTIONS.md) - Detailed licensing process
 - [`../COMMERCIAL_LICENSE.md`](../COMMERCIAL_LICENSE.md) - Full commercial license text
 - [`../LICENSE`](../LICENSE) - Free use terms (AGPL v3)
-- [`../HUMANITARIAN_LICENSE.md`](../HUMANITARIAN_LICENSE.md) - Humanitarian & Public Benefit Exception
 - [`ROADMAP_BOUNDARIES.md`](ROADMAP_BOUNDARIES.md) - ⚠️ **Strategic licensing roadmap**
 - [`GRADUATED_CLOSE_MODEL.md`](GRADUATED_CLOSE_MODEL.md) - Graduated close model details

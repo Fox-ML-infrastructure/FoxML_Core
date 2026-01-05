@@ -7,24 +7,27 @@ This is separate from the open-source changelog and focuses on enterprise-releva
 
 ## Version History
 
-### 2025-12-27 — Humanitarian & Public Benefit License Exception
+### 2026-01-05 — License Simplification
 
 **Licensing Update:**
 
-Added a Humanitarian & Public Benefit License Exception as a third licensing option. This enables genuine humanitarian use while maintaining commercial licensing requirements for revenue-generating activities.
+Removed the Humanitarian & Public Benefit License Exception. Simplified to dual-license model: AGPL v3 + Commercial.
 
-**Key Features:**
-- Explicit eligibility criteria (non-profits, academic institutions, government research, NGOs)
-- Anti-abuse measures including indirect revenue clause
-- Organizational isolation requirement for companies with mixed commercial/humanitarian activities
-- Transition clause requiring commercial license when organizations monetize
-- Termination clause with clear enforcement path
-
-**Documentation:**
-- New: `HUMANITARIAN_LICENSE.md`
+**Changes:**
+- Removed: `HUMANITARIAN_LICENSE.md`
 - Updated: `README.md`, `COMMERCIAL_LICENSE.md`, `LEGAL/LICENSING.md`, `LEGAL/QUICK_REFERENCE.md`, `LEGAL/ACADEMIC.md`
 
-**Enterprise Impact:** None. Commercial licensing requirements unchanged for for-profit organizations. The humanitarian exception does not apply to VC-backed startups, hedge funds, trading firms, or internal corporate research teams.
+**Enterprise Impact:** None. Commercial licensing requirements unchanged.
+
+---
+
+### 2025-12-27 — Humanitarian & Public Benefit License Exception (SUPERSEDED)
+
+**Note:** This exception was removed on 2026-01-05. See above.
+
+**Original Licensing Update:**
+
+Added a Humanitarian & Public Benefit License Exception as a third licensing option.
 
 ---
 

@@ -13,14 +13,6 @@
 - Open-source contributors
 - **Note:** If you deploy as a service, you must publish modifications under AGPL v3
 
-🌍 **HUMANITARIAN & PUBLIC BENEFIT EXCEPTION (Limited, Conditional):**
-- Registered non-profits, NGOs, charities
-- Accredited academic/research institutions
-- Government/public-sector research bodies
-- **Conditions:** No revenue (direct or indirect), no proprietary embedding, attribution required
-- **Note:** Must be organizationally isolated from commercial activities
-- See `HUMANITARIAN_LICENSE.md` for eligibility FAQ
-
 ❌ **COMMERCIAL LICENSE REQUIRED:**
 - Proprietary internal use
 - Production trading systems
@@ -74,9 +66,8 @@ Subject: `FoxML Core Commercial Licensing`
 2. **`LEGAL/SUBSCRIPTIONS.md`** — Detailed licensing process and pricing
 3. **`COMMERCIAL_LICENSE.md`** — Authoritative commercial license terms
 4. **`LICENSE`** — Free use terms (AGPL v3)
-5. **`HUMANITARIAN_LICENSE.md`** — Humanitarian & Public Benefit Exception
-6. **`LEGAL/ROADMAP_BOUNDARIES.md`** — ⚠️ **Strategic licensing roadmap** (v1.x last fully open window)
-7. **`LEGAL/GRADUATED_CLOSE_MODEL.md`** — Graduated close model details
+5. **`LEGAL/ROADMAP_BOUNDARIES.md`** — ⚠️ **Strategic licensing roadmap** (v1.x last fully open window)
+6. **`LEGAL/GRADUATED_CLOSE_MODEL.md`** — Graduated close model details
 
 **Everything else is supplementary. If it contradicts the above, the above wins.**
 
@@ -95,8 +86,6 @@ Subject: `FoxML Core Commercial Licensing`
 **AGPL v3 Use:** Use under the GNU Affero General Public License v3, which requires that if you modify the software and deploy it as a service (including internal services), you must publish your modifications under AGPL v3. Suitable for open research, experimentation, and projects that can comply with copyleft requirements.
 
 **Commercial License Use:** Use under a paid commercial license, which allows proprietary internal use, production deployments, closed-source integrations, and modifications without source disclosure obligations. Required when AGPL compliance is not possible or desired.
-
-**Humanitarian & Public Benefit Exception:** A limited-use exception (not a separate license) for eligible non-profit, academic, government, and public-sector organizations. Requires: no revenue generation (direct or indirect), no proprietary embedding, organizational isolation from commercial activities, and attribution. Transition to commercial use requires a commercial license. See `HUMANITARIAN_LICENSE.md` for full terms.
 
 ---
 

@@ -16,6 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2026-01-05 (Seed Injection and License Cleanup)
+- **Enhancement**: Added automatic seed injection to all model configs for complete tracking.
+  - `data_loading.py`: `get_model_config()` now auto-injects seed from SST (global.seed or pipeline.determinism.base_seed)
+  - Normalizes seed key per model family: `seed` (LightGBM, XGBoost), `random_state` (sklearn), `random_seed` (CatBoost)
+  - Skips deterministic models (Lasso, Ridge) and models that handle seed explicitly (Boruta, Stability Selection)
+- **Bug Fix**: Fixed stability selection loop variable (`_` → `i`) causing `UnboundLocalError`.
+- **Bug Fix**: Fixed Boruta config cleanup to remove all seed keys (`seed`, `random_state`, `random_seed`).
+- **Enhancement**: `train_seed` now populated for all stages (including TARGET_RANKING) for traceability.
+  - SST fallback ensures train_seed is always set from config, even when not required for comparison
+- **Cleanup**: Removed `HUMANITARIAN_LICENSE.md` and references.
+  - Simplified license structure to AGPL-3.0 + Commercial License only
+  - Removed contract_tests from git tracking (now in .gitignore)
+- **Impact**: Seeds are now fully traceable in model configs and comparison groups. All runs have train_seed populated.
+- **Files Changed**: `data_loading.py`, `model_evaluation.py`, `diff_telemetry.py`, `README.md`, `HUMANITARIAN_LICENSE.md` (deleted)
+
 #### 2026-01-05 (Feature Loading Determinism Fix)
 - **Critical Fix**: Fixed non-deterministic feature ordering causing different feature counts between runs.
   - `leakage_filtering.py`: Fixed `list(set(...))` → `sorted(set(...))` for deterministic ordering

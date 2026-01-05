@@ -14,13 +14,6 @@
 - Individual researchers and developers
 - Open-source academic contributions
 
-**Humanitarian & Public Benefit Exception may apply for:**
-- Accredited academic and research institutions conducting non-commercial research
-- Non-profit research organizations
-- Public-sector research bodies
-- **Conditions:** No revenue (direct or indirect), no proprietary embedding, attribution required
-- See [`HUMANITARIAN_LICENSE.md`](../HUMANITARIAN_LICENSE.md) for full eligibility criteria and FAQ
-
 **Commercial license required for:**
 - Proprietary internal use
 - Production systems
@@ -98,4 +91,4 @@ Subject: `FoxML Core Academic Licensing`
 
 ---
 
-**See [`LICENSE`](../LICENSE) for AGPL v3 terms and [`HUMANITARIAN_LICENSE.md`](../HUMANITARIAN_LICENSE.md) for the Humanitarian & Public Benefit Exception.**
+**See [`LICENSE`](../LICENSE) for AGPL v3 terms and [`COMMERCIAL_LICENSE.md`](../COMMERCIAL_LICENSE.md) for commercial licensing.**

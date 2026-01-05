@@ -5,12 +5,11 @@ Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 
 ---
 
-## ⚠️ **LICENSING: AGPL v3 + COMMERCIAL + HUMANITARIAN EXCEPTION**
+## ⚠️ **LICENSING: AGPL v3 + COMMERCIAL**
 
 **FoxML Core licensing options:**
 - **AGPL v3** for open research, experimentation, and projects that can comply with AGPL copyleft requirements
 - **Commercial license** required for proprietary, internal, or production deployments where AGPL compliance is not possible
-- **Humanitarian & Public Benefit Exception** for eligible non-profit, academic, and public-sector organizations (see `HUMANITARIAN_LICENSE.md`)
 
 **📋 Strategic Licensing Roadmap:** v1.x is the last fully open window. Core training infrastructure remains open; production orchestration layer will require commercial license in v2.0+. See `LEGAL/ROADMAP_BOUNDARIES.md` for complete details.
 
@@ -157,7 +156,7 @@ No sublicensing rights are granted unless explicitly permitted in a separate SOW
 
 **Free Use Unaffected.**
 
-Qualifying non-commercial academic research use remains free as defined in `LICENSE`. Additionally, eligible organizations may qualify for the Humanitarian & Public Benefit Exception as defined in `HUMANITARIAN_LICENSE.md`. This Commercial License does not limit or restrict free use rights or the humanitarian exception.
+Qualifying non-commercial academic research use remains free as defined in `LICENSE`. This Commercial License does not limit or restrict free use rights.
 
 **IMPORTANT — Open Source Contribution Does Not Exempt Organizational Use:**
 Contributing code, fixes, or improvements to the Software does not exempt Licensee from the requirement to obtain a commercial license for any organizational use. Contributing is separate from and does not affect commercial licensing requirements. Any organizational use requires a commercial license regardless of whether Licensee has contributed to the Software.
