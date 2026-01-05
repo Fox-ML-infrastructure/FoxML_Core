@@ -1152,7 +1152,7 @@ class DiffTelemetry:
         """Build comparison group from resolved context (stage-aware).
 
         CRITICAL: Only includes fields that are relevant for the stage.
-        - TARGET_RANKING: Does NOT include model_family or feature_signature (not applicable)
+        - TARGET_RANKING: Does NOT include model_family (not applicable) BUT DOES include feature_signature
         - FEATURE_SELECTION: Includes feature_signature but NOT model_family
         - TRAINING: Includes both model_family and feature_signature
 
@@ -1211,9 +1211,10 @@ class DiffTelemetry:
         else:
             # Fallback to old logic when run_identity not provided
             if stage == "TARGET_RANKING":
-                # TARGET_RANKING: model_family, feature_signature, hyperparameters, train_seed, and library_versions are NOT applicable
-                # Don't include them (not None, just omit from ComparisonGroup)
-                pass
+                # TARGET_RANKING: model_family, hyperparameters, train_seed, and library_versions are NOT applicable
+                # BUT feature_signature IS required - different features = different results
+                feature_signature = ctx.feature_fingerprint
+                # NOTE: If feature_fingerprint is not available, will be computed below from feature_names
             elif stage == "FEATURE_SELECTION":
                 # FEATURE_SELECTION: feature_signature, hyperparameters, train_seed, and library_versions are required
                 # CRITICAL: Different hyperparameters/seeds/versions in feature selection models = different features selected
@@ -1270,6 +1271,13 @@ class DiffTelemetry:
                 logger.warning(f"No split information available for {stage}, using default split signature")
                 split_sig = hashlib.sha256(b"default_split").hexdigest()
         
+        # CRITICAL: Compute feature_signature from feature_names if not available
+        # This ensures TARGET_RANKING has the required feature_signature
+        if feature_signature is None and ctx.feature_names:
+            feature_list_str = "|".join(sorted(ctx.feature_names))
+            feature_signature = hashlib.sha256(feature_list_str.encode()).hexdigest()
+            logger.debug(f"Computed feature_signature from {len(ctx.feature_names)} feature names")
+        
         comparison_group = ComparisonGroup(
             experiment_id=ctx.experiment_id,  # Can be None if not tracked
             dataset_signature=data_fp,
@@ -1278,7 +1286,7 @@ class DiffTelemetry:
             split_signature=split_sig,  # CRITICAL: CV split identity (required for all stages)
             n_effective=ctx.n_effective,  # CRITICAL: Exact sample size (required, non-null)
             model_family=model_family,  # Stage-specific: None for TARGET_RANKING/FEATURE_SELECTION
-            feature_signature=feature_signature,  # Stage-specific: None for TARGET_RANKING
+            feature_signature=feature_signature,  # CRITICAL: Required for all stages (different features = different results)
             hyperparameters_signature=hp_sig,  # Stage-specific: Only for FEATURE_SELECTION and TRAINING
             train_seed=seed,  # Stage-specific: Only for FEATURE_SELECTION and TRAINING
             library_versions_signature=lib_sig,  # Stage-specific: Only for FEATURE_SELECTION and TRAINING

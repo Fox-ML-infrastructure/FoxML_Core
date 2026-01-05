@@ -25,6 +25,7 @@ REQUIRED_FIELDS_BY_STAGE_BASE = {
         "routing_signature",
         "n_effective",
         "split_signature",  # CRITICAL: CV split identity
+        "feature_signature",  # CRITICAL: Different features = different results
     ],
     "FEATURE_SELECTION": [
         "dataset_signature",

@@ -834,7 +834,8 @@ def filter_features_for_target(
         hardcoded_safe_features = [f for f in all_available if _is_ranking_safe_feature(f)]
         
         # Combine: schema-based + hardcoded fallback
-        ranking_safe_features = list(set(schema_safe_features) | set(hardcoded_safe_features))
+        # CRITICAL: Sort for deterministic ordering (set iteration order is non-deterministic)
+        ranking_safe_features = sorted(set(schema_safe_features) | set(hardcoded_safe_features))
         
         # If default_action is 'allow', also include unknown features that don't match leak patterns
         # These are features that passed earlier filtering (not targets, not metadata, not obvious leaks)
@@ -858,7 +859,8 @@ def filter_features_for_target(
             logger.info(f"  Ranking mode: Added {len(added_safe)} safe features from schema (OHLCV/TA families)")
             logger.debug(f"    Added features: {added_safe[:20]}{'...' if len(added_safe) > 20 else ''}")
         
-        safe_columns = list(safe_set)
+        # CRITICAL: Sort for deterministic ordering (set iteration order is non-deterministic)
+        safe_columns = sorted(safe_set)
         
         if verbose:
             # Count features by source, accounting for overlap
@@ -950,7 +952,9 @@ def filter_features_for_target(
         # Don't fail if sanitization unavailable - just log and continue
         logger.debug(f"Active sanitization unavailable: {e}")
     
-    return safe_columns
+    # CRITICAL: Always return sorted for deterministic ordering
+    # This ensures consistent feature order regardless of input column order
+    return sorted(safe_columns)
 
 
 def _classify_target_type(target_column: str, config: Dict[str, Any]) -> str:

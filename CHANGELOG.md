@@ -16,6 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2026-01-05 (Feature Loading Determinism Fix)
+- **Critical Fix**: Fixed non-deterministic feature ordering causing different feature counts between runs.
+  - `leakage_filtering.py`: Fixed `list(set(...))` → `sorted(set(...))` for deterministic ordering
+  - `leakage_filtering.py`: Added `sorted()` to final return to ensure consistent feature order
+  - `data_loading.py`: Added `sorted()` to feature_names and reordered DataFrame columns to match
+- **Critical Fix**: Added `feature_signature` to TARGET_RANKING required fields.
+  - `diff_telemetry/types.py`: Added `feature_signature` to `REQUIRED_FIELDS_BY_STAGE_BASE["TARGET_RANKING"]`
+  - `diff_telemetry.py`: Updated `_build_comparison_group_from_context()` to extract `feature_signature` for TARGET_RANKING
+  - Added fallback to compute `feature_signature` from `ctx.feature_names` if not available
+- **Impact**: Runs with identical config/data now produce identical feature sets with identical ordering. Runs with different feature sets are correctly marked as incomparable.
+- **Files Changed**: `leakage_filtering.py`, `data_loading.py`, `diff_telemetry.py`, `diff_telemetry/types.py`
+
 #### 2026-01-04 (Reproducibility File Output Fixes)
 - **Critical Fix**: Fixed `snapshot.json` not being written to cohort directories.
   - `diff_telemetry.py`: Fixed path detection to handle target-first structure (`reproducibility/...` vs `REPRODUCIBILITY/...`)

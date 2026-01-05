@@ -359,7 +359,13 @@ def prepare_features_and_target(
         X = X.drop(columns=object_cols)
     
     y = df[target_column]
-    feature_names = X.columns.tolist()
+    
+    # CRITICAL: Sort feature names for deterministic ordering
+    # Even if safe_columns is already sorted, this ensures consistent ordering
+    # regardless of DataFrame column order after object column removal
+    feature_names = sorted(X.columns.tolist())
+    # Reorder DataFrame columns to match sorted feature_names
+    X = X[feature_names]
     
     return X.to_numpy(), y.to_numpy(), feature_names, task_type
 
