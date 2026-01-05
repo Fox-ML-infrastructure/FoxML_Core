@@ -1584,11 +1584,26 @@ def select_features_for_target(
     
     # Store cohort metadata context for later use in reproducibility tracking
     # Extract from available data: symbols, cs_config, and optionally load mtf_data for date ranges
+    # CRITICAL: Always populate min_cs and max_cs_samples (required for diff_telemetry validation)
+    # Use cs_config values if enabled, otherwise use harness values from earlier config loading
+    cohort_min_cs = cs_config.get('min_cs', 10) if cs_config.get('enabled', False) else None
+    cohort_max_cs = cs_config.get('max_cs_samples', 1000) if cs_config.get('enabled', False) else None
+    # Fallback to harness values if not set (loaded from pipeline config earlier)
+    if cohort_min_cs is None and 'harness_min_cs' in dir() and harness_min_cs is not None:
+        cohort_min_cs = harness_min_cs
+    if cohort_max_cs is None and 'harness_max_cs_samples' in dir() and harness_max_cs_samples is not None:
+        cohort_max_cs = harness_max_cs_samples
+    # Ultimate fallback to defaults
+    if cohort_min_cs is None:
+        cohort_min_cs = 10
+    if cohort_max_cs is None:
+        cohort_max_cs = 1000
+    
     cohort_context = {
         'symbols': symbols,
         'data_dir': data_dir,
-        'min_cs': cs_config.get('min_cs', 10) if cs_config.get('enabled', False) else None,
-        'max_cs_samples': cs_config.get('max_cs_samples', 1000) if cs_config.get('enabled', False) else None,
+        'min_cs': cohort_min_cs,
+        'max_cs_samples': cohort_max_cs,
         'mtf_data': None  # Will try to load if needed
     }
     
@@ -2068,11 +2083,14 @@ def select_features_for_target(
                     )
                 else:
                     # Fallback: try to extract from function variables (shouldn't happen if cohort_context is set)
+                    # Use harness values or defaults for min_cs/max_cs_samples
+                    fallback_min_cs = harness_min_cs if 'harness_min_cs' in dir() and harness_min_cs else 10
+                    fallback_max_cs = harness_max_cs_samples if 'harness_max_cs_samples' in dir() and harness_max_cs_samples else 1000
                     cohort_metadata = extract_cohort_metadata(
                         symbols=symbols,
                         mtf_data=mtf_data if 'mtf_data' in locals() else None,
-                        min_cs=None,
-                        max_cs_samples=None,
+                        min_cs=fallback_min_cs,
+                        max_cs_samples=fallback_max_cs,
                         universe_sig=sst_universe_sig  # FIX: Pass universe_sig from SST
                     )
                 
