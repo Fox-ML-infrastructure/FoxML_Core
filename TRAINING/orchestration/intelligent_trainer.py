@@ -1317,6 +1317,14 @@ class IntelligentTrainer:
             symbols_to_use = [s for s in self.symbols if s != symbol]
         
         # Compute partial RunIdentity for reproducibility tracking
+        # Compute universe_sig for reproducibility tracking
+        universe_sig = None
+        try:
+            from TRAINING.orchestration.utils.run_context import compute_universe_signature
+            universe_sig = compute_universe_signature(symbols_to_use)
+        except Exception as e:
+            logger.debug(f"Failed to compute universe_sig: {e}")
+        
         # Split and hparams signatures computed inside selector where folds/models are known
         partial_identity = None
         try:
@@ -1349,12 +1357,20 @@ class IntelligentTrainer:
                 symbol=symbol,
             )
             
-            # Get seed from experiment config
+            # Get seed from experiment config with fallback chain
             train_seed = None
             if self.experiment_config and hasattr(self.experiment_config, 'seed'):
                 train_seed = self.experiment_config.seed
             elif hasattr(self, 'seed'):
                 train_seed = self.seed
+            
+            # Fallback to config base_seed if not found
+            if train_seed is None:
+                try:
+                    from CONFIG.config_loader import get_cfg
+                    train_seed = get_cfg("pipeline.determinism.base_seed", default=42)
+                except Exception:
+                    train_seed = 42  # FALLBACK_DEFAULT_OK
             
             # Create partial identity (split and hparams computed in selector)
             partial_identity = RunIdentity(
@@ -1386,6 +1402,7 @@ class IntelligentTrainer:
             experiment_config=self.experiment_config,  # Pass experiment config for data.bar_interval
             view=view,  # Pass view to ensure consistency
             symbol=symbol,  # Pass symbol for SYMBOL_SPECIFIC view
+            universe_sig=universe_sig,  # Pass universe_sig for reproducibility tracking
             run_identity=partial_identity,  # Pass partial identity for reproducibility
         )
         
