@@ -1,0 +1,38 @@
+# ChangePoint Model Configuration
+# Change point detection for regime shifts
+
+model_family: "ChangePoint"
+description: "Change point detection for identifying market regime transitions"
+
+hyperparameters:
+  # Algorithm
+  algorithm: "pelt"  # "pelt", "binseg", or "window"
+  model: "rbf"  # Cost function: "l1", "l2", "rbf", "linear", "normal", "ar"
+  min_size: 10  # Minimum segment length
+  jump: 1  # Subsampling step (1 = no subsampling)
+  
+  # Penalty
+  penalty: "BIC"  # "AIC", "BIC", or numeric value
+  pen_value: null  # Custom penalty value (if not using AIC/BIC)
+  
+  # Performance
+  n_bkps: 5  # Maximum number of breakpoints (for binseg)
+
+# Variants
+variants:
+  sensitive:
+    min_size: 5
+    penalty: "AIC"
+    algorithm: "pelt"
+    
+  balanced:
+    min_size: 10
+    penalty: "BIC"
+    algorithm: "pelt"
+    
+  conservative:
+    min_size: 20
+    penalty: "BIC"
+    pen_value: 10
+    algorithm: "binseg"
+

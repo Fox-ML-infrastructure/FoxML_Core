@@ -254,7 +254,8 @@ def compute_cross_sectional_importance(
     max_cs_samples: int = None,
     normalization: Optional[str] = None,
     model_configs: Optional[Dict[str, Dict]] = None,
-    output_dir: Optional[Path] = None  # Optional output directory for reproducibility tracking
+    output_dir: Optional[Path] = None,  # Optional output directory for reproducibility tracking
+    universe_sig: Optional[str] = None,  # FIX: Thread universe_sig for proper scope tracking
 ) -> pd.Series:
     """
     Compute cross-sectional feature importance using panel models.
@@ -410,11 +411,13 @@ def compute_cross_sectional_importance(
             )
             
             # Extract cohort metadata
+            # FIX: Pass universe_sig for proper scope tracking in telemetry
             cohort_metadata = extract_cohort_metadata(
                 symbols=symbols,
                 mtf_data=None,  # Not available here, but symbols are enough for basic tracking
                 min_cs=min_cs,
-                max_cs_samples=max_cs_samples
+                max_cs_samples=max_cs_samples,
+                universe_sig=universe_sig  # FIX: Thread universe_sig through
             )
             
             # FIX: Extract horizon_minutes from target column for COHORT_AWARE mode
@@ -426,7 +429,17 @@ def compute_cross_sectional_importance(
                 except Exception:
                     pass
             
+            # FIX: Load seed from config for reproducibility tracking (matches feature_selector.py pattern)
+            ctx_seed = None
+            try:
+                from CONFIG.config_loader import get_cfg
+                ctx_seed = get_cfg("pipeline.determinism.base_seed", default=42)
+            except Exception:
+                ctx_seed = 42  # Fallback to default
+            
             # Build RunContext
+            # FIX: Pass seed for train_seed in ComparisonGroup (required for FEATURE_SELECTION)
+            # FIX: Pass min_cs and max_cs_samples for resolved_metadata validation
             ctx = RunContext(
                 stage="FEATURE_SELECTION",
                 target=target_column,
@@ -442,7 +455,10 @@ def compute_cross_sectional_importance(
                 folds=None,
                 fold_timestamps=None,
                 data_interval_minutes=None,
-                seed=None
+                seed=ctx_seed,  # FIX: Pass seed for train_seed requirement
+                min_cs=min_cs,  # FIX: Pass min_cs for resolved_metadata
+                max_cs_samples=max_cs_samples,  # FIX: Pass max_cs_samples for resolved_metadata
+                universe_sig=universe_sig  # FIX: Pass universe_sig for proper scope tracking
             )
             
             # Build metrics dict
@@ -601,6 +617,14 @@ def compute_cross_sectional_stability(
                 except Exception as e:
                     logger.debug(f"Failed to compute CS identity: {e}")
             
+            # FIX: Check if identity is actually finalized before passing to snapshot hook
+            # Partial identities (is_final=False) or None cannot be used in strict mode
+            identity_is_finalized = (
+                cs_identity is not None and 
+                hasattr(cs_identity, 'is_final') and 
+                cs_identity.is_final
+            )
+            
             snapshot_path = save_snapshot_from_series_hook(
                 target=target_column,
                 method=method_name,
@@ -608,7 +632,8 @@ def compute_cross_sectional_stability(
                 universe_sig=universe_sig,
                 output_dir=snapshot_base_dir,  # Use target-first structure
                 auto_analyze=False,  # We'll analyze manually to get metrics
-                run_identity=cs_identity,
+                run_identity=cs_identity if identity_is_finalized else None,  # Only pass finalized identity
+                allow_legacy=(not identity_is_finalized),  # FIX: Allow legacy if identity not finalized
             )
         else:
             snapshot_path = None

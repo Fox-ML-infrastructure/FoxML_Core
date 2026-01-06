@@ -241,11 +241,13 @@ def extract_cohort_metadata(
     metadata['date_range'] = date_range if date_range else {}
     
     # 4. Build cs_config
-    cs_config = {}
-    if min_cs is not None:
-        cs_config['min_cs'] = int(min_cs)
-    if max_cs_samples is not None:
-        cs_config['max_cs_samples'] = int(max_cs_samples)
+    # FIX: Always include min_cs and max_cs_samples keys even if None
+    # This ensures resolved_metadata validation doesn't fail on missing keys
+    # The validation requires these fields to exist (can be None, but must exist)
+    cs_config = {
+        'min_cs': int(min_cs) if min_cs is not None else None,
+        'max_cs_samples': int(max_cs_samples) if max_cs_samples is not None else None,
+    }
     if leakage_filter_version is not None:
         cs_config['leakage_filter_version'] = str(leakage_filter_version)
     if universe_sig is not None:

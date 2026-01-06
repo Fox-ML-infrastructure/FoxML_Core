@@ -1,0 +1,311 @@
+always_exclude:
+  regex_patterns:
+  - ^tth_
+  - ^tth_abs_
+  - ^mfe_share_
+  - ^mdd_share_
+  - ^time_in_profit_
+  - ^time_in_drawdown_
+  - ^flipcount_
+  - ^hit_direction_
+  - ^hit_asym_
+  - ^y_first_touch
+  - ^y_
+  - ^p_
+  - ^max_return_
+  - ^min_return_
+  - ^excursion_
+  - ^vol_at_t_
+  - ^mfe_\d+m_
+  - ^mdd_\d+m_
+  - ^barrier_
+  - .*_1d$
+  - .*_1D$
+  - .*_24h$
+  - .*_24H$
+  - ^daily_.*
+  - .*_daily$
+  - .*daily.*
+  - .*day.*
+  - .*1440(?!\d)
+  - .*_1440m
+  - .*volatility.*day
+  - .*vol.*day
+  - .*volume.*day
+  - .*rolling.*daily
+  - .*daily.*high
+  - .*daily.*low
+  prefix_patterns:
+  - barrier_
+  - excursion_
+  - flipcount_
+  - hit_asym_
+  - hit_direction_
+  - max_return_
+  - mdd_
+  - mdd_share_
+  - mfe_
+  - mfe_share_
+  - min_return_
+  - time_in_drawdown_
+  - time_in_profit_
+  - tth_
+  - tth_abs_
+  - vol_at_t_
+  keyword_patterns:
+  - first_touch
+  exact_patterns:
+  - _day
+  - _hour
+  - _month
+  - _weekday
+  - ad_line
+  - adx_14
+  - adx_x_vol
+  - atr_14
+  - atr_x_vol
+  - awesome_oscillator
+  - bb_lower_20
+  - bb_width_20
+  - bb_x_ret
+  - bb_x_vol
+  - bb_x_volume
+  - beta_60d
+  - bid_ask_spread_est
+  - cci_10
+  - cci_20
+  - cci_x_vol
+  - close
+  - close_vol_frac
+  - cmf
+  - day_of_month
+  - day_of_week
+  - day_x_volume
+  - donchian_middle
+  - donchian_upper
+  - ease_of_movement
+  - effective_spread
+  - flipcount_10m
+  - flipcount_15m
+  - flipcount_5m
+  - flipcount_60m
+  - force_index
+  - fractal_low
+  - gap_co
+  - gap_x_volume
+  - gk_vol_10
+  - gk_vol_20
+  - gk_vol_5
+  - high
+  - high_vol_frac
+  - hour_13
+  - hour_of_day
+  - hour_x_volume
+  - hull_ma_10
+  - hull_ma_20
+  - hull_ma_5
+  - ichimoku_chikou
+  - ichimoku_kijun
+  - ichimoku_senkou_a
+  - ichimoku_senkou_b
+  - ichimoku_tenkan
+  - intraday_seasonality_15m
+  - intraday_seasonality_30m
+  - keltner_upper
+  - liquidity_ratio
+  - low_vol_frac
+  - macd
+  - macd_hist
+  - macd_signal
+  - macd_x_ret
+  - macd_x_vol
+  - macd_x_volume
+  - market_correlation_20d
+  - market_correlation_60d
+  - market_facilitation_index
+  - market_impact
+  - mass_index
+  - mfi_14
+  - mfi_21
+  - mom_10d
+  - mom_1d
+  - mom_3d
+  - momentum_10
+  - momentum_20
+  - momentum_x_volatility
+  - month_of_year
+  - n_trades
+  - negative_volume_index
+  - obv
+  - obv_ema
+  - open_loc_1d
+  - open_vol_frac
+  - order_flow_imbalance
+  - overnight_return
+  - overnight_vol
+  - parkinson_vol_10
+  - parkinson_vol_20
+  - parkinson_vol_5
+  - price_impact
+  - price_momentum_60d
+  - price_volume_trend
+  - range_compression_5m
+  - range_compression_60m
+  - range_frac
+  - realized_spread
+  - realized_vol_10
+  - realized_vol_20
+  - realized_vol_5
+  - ret2_15m
+  - ret2_5m
+  - ret2_60m
+  - ret_15m
+  - ret_1m
+  - ret_30m
+  - ret_60m
+  - ret_oc
+  - ret_ord_10m
+  - ret_ord_15m
+  - ret_ord_30m
+  - ret_ord_5m
+  - ret_ord_60m
+  - ret_zscore_10m
+  - ret_zscore_15m
+  - ret_zscore_30m
+  - ret_zscore_5m
+  - ret_zscore_60m
+  - roc_10
+  - roc_20
+  - roc_50
+  - roc_x_volatility
+  - rs_vol_10
+  - rs_vol_20
+  - rs_vol_5
+  - rsi_10
+  - rsi_14
+  - rsi_21
+  - rsi_30
+  - rsi_5
+  - rsi_7
+  - rsi_x_vol
+  - rsi_x_volume
+  - sma_10
+  - sma_200
+  - stoch_d_14
+  - stoch_d_21
+  - stoch_d_5
+  - stoch_k_5
+  - stoch_x_ret
+  - stoch_x_vol
+  - tema_20
+  - time_in_profit_10m
+  - time_in_profit_15m
+  - time_in_profit_5m
+  - time_in_profit_60m
+  - trade_size_vol
+  - trading_day_of_month
+  - trading_day_of_quarter
+  - turnover
+  - turnover_20
+  - turnover_5
+  - vol_15m
+  - vol_30m
+  - vol_5m
+  - vol_60m
+  - vol_clustering_15m
+  - vol_clustering_5m
+  - vol_clustering_60m
+  - vol_dollar
+  - vol_over_vol_15m
+  - vol_over_vol_5m
+  - vol_over_vol_60m
+  - vol_persistence
+  - vol_x_ret_15m
+  - vol_x_ret_60m
+  - volatility_60d
+  - volume_ema_20
+  - volume_ema_5
+  - volume_price_trend
+  - volume_quantile_20d
+  - volume_ratio_20d
+  - volume_ratio_5d
+  - volume_raw
+  - volume_roc_10
+  - volume_roc_20
+  - volume_roc_5
+  - volume_sma_20
+  - volume_sma_5
+  - volume_sma_50
+  - volume_std_20d
+  - volume_volatility_20d
+  - vwap
+  - vwap_dev
+  - vwap_dev_15m
+  - vwap_dev_30m
+  - vwap_dev_5m
+  - vwap_dev_high
+  - vwap_dev_low
+  - wd_3
+  - williams_accumulation
+  - williams_r_7
+  - yz_vol_10
+  - yz_vol_20
+  - yz_vol_5
+target_type_rules:
+  forward_return:
+    prefix_patterns:
+    - fwd_ret_
+    horizon_overlap:
+      enabled: true
+      exclude_if_ge: true
+      exclude_all: true
+  barrier:
+    prefix_patterns:
+    - tth_
+    - tth_abs_
+    - hit_direction_
+    - hit_asym_
+    - fwd_ret_
+    keyword_patterns:
+    - peak
+    - valley
+    - swing
+    - first_touch
+    - zigzag_high
+    - zigzag_low
+    horizon_overlap:
+      enabled: true
+      exclude_matching_horizon: true
+      exclude_overlapping_horizon: true
+  first_touch:
+    use_barrier_rules: true
+target_classification:
+  forward_return:
+    prefix: fwd_ret_
+  barrier:
+    prefix: y_will_
+  first_touch:
+    keyword: first_touch
+    prefix: y_
+horizon_extraction:
+  patterns:
+  - regex: (\d+)m
+    multiplier: 1
+  - regex: (\d+)h
+    multiplier: 60
+  - regex: (\d+)d
+    multiplier: 1440
+metadata_columns:
+- ts
+- datetime
+- symbol
+- interval
+- source
+- date
+- time
+- timestamp
+config:
+  exclude_metadata: true
+  exclude_targets: true
+  exclude_temporal_overlap: true
+  verbose_logging: false

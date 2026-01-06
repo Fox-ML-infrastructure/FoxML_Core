@@ -1,0 +1,62 @@
+# XGBoost Model Configuration
+# Spec 2: High Regularization to prevent overfitting
+
+model_family: "XGBoost"
+description: "Gradient Boosting with high regularization"
+
+# Spec 2 Recommended Ranges:
+# - max_depth: 5-8
+# - learning_rate: 0.01-0.05
+# - subsample/colsample: 0.7-0.8
+# - min_child_weight: 0.1-1.0
+# - gamma: 0.1-0.5
+
+hyperparameters:
+  # Tree structure
+  max_depth: 7  # 5-8 range, using 7
+  min_child_weight: 0.5  # 0.1-1.0 range
+  gamma: 0.3  # min_split_gain: 0.1-0.5 range
+  
+  # Feature/sample sampling
+  subsample: 0.75  # 0.7-0.8 range
+  colsample_bytree: 0.75  # 0.7-0.8 range
+  
+  # Regularization
+  reg_alpha: 0.1  # L1 regularization (0.1-1.0 range)
+  reg_lambda: 0.1  # L2 regularization (0.1-1.0 range)
+  
+  # Learning
+  eta: 0.03  # learning_rate: 0.01-0.05 range, using middle
+  n_estimators: 1000  # Use early stopping instead
+  early_stopping_rounds: 50
+  
+  # Performance
+  num_threads: 4  # Can be overridden by OMP_NUM_THREADS env var
+  threads: 4
+
+# Variants for different use cases
+variants:
+  conservative:
+    max_depth: 5
+    eta: 0.01
+    subsample: 0.7
+    colsample_bytree: 0.7
+    reg_alpha: 1.0
+    reg_lambda: 1.0
+    
+  balanced:
+    max_depth: 7
+    eta: 0.03
+    subsample: 0.75
+    colsample_bytree: 0.75
+    reg_alpha: 0.1
+    reg_lambda: 0.1
+    
+  aggressive:
+    max_depth: 8
+    eta: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_alpha: 0.05
+    reg_lambda: 0.05
+

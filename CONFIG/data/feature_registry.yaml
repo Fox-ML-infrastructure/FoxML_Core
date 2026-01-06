@@ -1,0 +1,1467 @@
+features:
+  ret_1:
+    source: price
+    lag_bars: 1
+    allowed_horizons:
+    - 1
+    - 2
+    - 3
+    - 5
+    - 12
+    - 24
+    - 60
+    description: 1-bar lagged return
+  ret_2:
+    source: price
+    lag_bars: 2
+    allowed_horizons:
+    - 2
+    - 3
+    - 5
+    - 12
+    - 24
+    - 60
+    description: 2-bar lagged return
+  ret_5:
+    source: price
+    lag_bars: 5
+    allowed_horizons:
+    - 5
+    - 12
+    - 24
+    - 60
+    description: 5-bar lagged return
+  ret_10:
+    source: price
+    lag_bars: 10
+    allowed_horizons:
+    - 10
+    - 12
+    - 24
+    - 60
+    description: 10-bar lagged return
+  ret_15:
+    source: price
+    lag_bars: 15
+    allowed_horizons:
+    - 15
+    - 24
+    - 60
+    description: 15-bar lagged return
+  ret_30:
+    source: price
+    lag_bars: 30
+    allowed_horizons:
+    - 30
+    - 60
+    description: 30-bar lagged return
+  ret_60:
+    source: price
+    lag_bars: 60
+    allowed_horizons:
+    - 60
+    description: 60-bar lagged return
+  rsi_10:
+    source: derived
+    lag_bars: 10
+    allowed_horizons: []
+    description: RSI with 10-bar lookback
+    rejected: true
+  rsi_14:
+    source: derived
+    lag_bars: 14
+    allowed_horizons: []
+    description: RSI with 14-bar lookback
+    rejected: true
+  sma_20:
+    source: derived
+    lag_bars: 20
+    allowed_horizons:
+    - 1
+    - 2
+    - 3
+    - 5
+    - 12
+    - 24
+    - 60
+    description: 20-bar simple moving average
+  sma_50:
+    source: derived
+    lag_bars: 50
+    allowed_horizons:
+    - 1
+    - 2
+    - 3
+    - 5
+    - 12
+    - 24
+    - 60
+    description: 50-bar simple moving average
+  sma_200:
+    source: derived
+    lag_bars: 200
+    allowed_horizons: []
+    description: 200-bar simple moving average
+    rejected: true
+  ema_12:
+    source: derived
+    lag_bars: 12
+    allowed_horizons:
+    - 1
+    - 2
+    - 3
+    - 5
+    - 12
+    - 24
+    - 60
+    description: 12-bar exponential moving average
+  ema_26:
+    source: derived
+    lag_bars: 26
+    allowed_horizons:
+    - 1
+    - 2
+    - 3
+    - 5
+    - 12
+    - 24
+    - 60
+    description: 26-bar exponential moving average
+  volume:
+    source: volume
+    lag_bars: 1
+    allowed_horizons:
+    - 1
+    - 2
+    - 3
+    - 5
+    - 12
+    - 24
+    - 60
+    description: Volume (1-bar lag)
+  volume_sma_20:
+    source: derived
+    lag_bars: 20
+    allowed_horizons: []
+    description: 20-bar volume moving average
+    rejected: true
+  volatility_10:
+    source: derived
+    lag_bars: 10
+    allowed_horizons:
+    - 1
+    - 2
+    - 3
+    - 5
+    - 12
+    - 24
+    - 60
+    description: 10-bar volatility
+  volatility_20:
+    source: derived
+    lag_bars: 20
+    allowed_horizons:
+    - 1
+    - 2
+    - 3
+    - 5
+    - 12
+    - 24
+    - 60
+    description: 20-bar volatility
+  vwap:
+    source: derived
+    lag_bars: 1
+    allowed_horizons: []
+    description: Volume-weighted average price (1-bar lag)
+    rejected: true
+  vwap_dev_high:
+    source: derived
+    lag_bars: 1
+    allowed_horizons: []
+    description: VWAP deviation high (1-bar lag)
+    rejected: true
+  vwap_dev_low:
+    source: derived
+    lag_bars: 1
+    allowed_horizons: []
+    description: VWAP deviation low (1-bar lag)
+    rejected: true
+  momentum_10:
+    source: derived
+    lag_bars: 10
+    allowed_horizons: []
+    description: 10-bar momentum
+    rejected: true
+  momentum_20:
+    source: derived
+    lag_bars: 20
+    allowed_horizons: []
+    description: 20-bar momentum
+    rejected: true
+  ret_future_1:
+    source: price
+    rejected: true
+    reason: Future return (looks into future - structurally leaky)
+    description: 'REJECTED: Future return (looks into future)'
+  tth_5m:
+    source: derived
+    description: 'REJECTED: Time-to-hit requires future path'
+    rejected: true
+    reason: Time-to-hit requires future path
+    lag_bars: 1
+  barrier_5m_0.8:
+    source: derived
+    description: 'REJECTED: Barrier features encode barrier logic'
+    rejected: true
+    reason: Barrier features encode barrier logic
+  p_up_60m_0.8:
+    source: target_proxy
+    description: 'REJECTED: Prediction/probability feature (leaky)'
+    rejected: true
+    reason: Prediction/probability feature (leaky)
+  ts:
+    source: metadata
+    description: 'REJECTED: Timestamp column - metadata, not a feature'
+    rejected: true
+    reason: Metadata column, not a feature
+  symbol:
+    source: metadata
+    description: 'REJECTED: Symbol column - metadata, not a feature'
+    rejected: true
+    reason: Metadata column, not a feature
+  date:
+    source: metadata
+    description: 'REJECTED: Date column - metadata, not a feature'
+    rejected: true
+    reason: Metadata column, not a feature
+  ret_zscore_5m:
+    source: derived
+    description: 'Fixed: lag_bars=1 (minutes_to_bars(5m/5m))'
+    rejected: false
+    reason: Auto-detected as leaky feature
+    allowed_horizons: []
+    lag_bars: 1
+  flipcount_10m:
+    source: derived
+    description: 'Fixed: lag_bars=2 (minutes_to_bars(10m/5m))'
+    rejected: false
+    reason: Auto-detected as leaky feature
+    allowed_horizons: []
+    lag_bars: 2
+  time_in_profit_10m:
+    source: derived
+    description: 'Fixed: lag_bars=2 (minutes_to_bars(10m/5m))'
+    rejected: false
+    reason: Auto-detected as leaky feature
+    allowed_horizons: []
+    lag_bars: 2
+  time_in_profit_5m:
+    source: derived
+    description: 'Fixed: lag_bars=1 (minutes_to_bars(5m/5m))'
+    rejected: false
+    reason: Auto-detected as leaky feature
+    allowed_horizons: []
+    lag_bars: 1
+  flipcount_5m:
+    source: derived
+    description: 'Fixed: lag_bars=1 (minutes_to_bars(5m/5m))'
+    rejected: false
+    reason: Auto-detected as leaky feature
+    allowed_horizons: []
+    lag_bars: 1
+  ret_zscore_10m:
+    source: derived
+    description: 'Fixed: lag_bars=2 (minutes_to_bars(10m/5m))'
+    rejected: false
+    reason: Auto-detected as leaky feature
+    allowed_horizons: []
+    lag_bars: 2
+  hour_of_day:
+    source: metadata
+    description: Calendar/time metadata (lag_bars=0 is correct)
+    rejected: true
+    reason: Auto-detected as leaky feature
+    lag_bars: 0
+    allowed_horizons: []
+  time_in_profit_15m:
+    source: derived
+    description: 'Fixed: lag_bars=3 (minutes_to_bars(15m/5m))'
+    rejected: false
+    reason: Auto-detected as leaky feature
+    allowed_horizons: []
+    lag_bars: 3
+  flipcount_15m:
+    source: derived
+    description: 'Fixed: lag_bars=3 (minutes_to_bars(15m/5m))'
+    rejected: false
+    reason: Auto-detected as leaky feature
+    allowed_horizons: []
+    lag_bars: 3
+  vol_15m:
+    source: derived
+    description: 'Fixed: lag_bars=3 (minutes_to_bars(15m/5m))'
+    rejected: false
+    reason: Auto-detected as leaky feature
+    allowed_horizons: []
+    lag_bars: 3
+  ret_zscore_30m:
+    source: derived
+    description: 'Fixed: lag_bars=6 (minutes_to_bars(30m/5m))'
+    rejected: false
+    reason: Auto-detected as leaky feature
+    allowed_horizons: []
+    lag_bars: 6
+  ret_zscore_60m:
+    lag_bars: 12
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=12 (minutes_to_bars(60m/5m))'
+    allowed_horizons: []
+  ret_zscore_15m:
+    lag_bars: 3
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=3 (minutes_to_bars(15m/5m))'
+    allowed_horizons: []
+  time_in_profit_60m:
+    lag_bars: 12
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=12 (minutes_to_bars(60m/5m))'
+    allowed_horizons: []
+  vol_clustering_15m:
+    lag_bars: 3
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=3 (minutes_to_bars(15m/5m))'
+  vol_over_vol_15m:
+    lag_bars: 3
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=3 (minutes_to_bars(15m/5m))'
+    allowed_horizons: []
+  flipcount_60m:
+    lag_bars: 12
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=12 (minutes_to_bars(60m/5m))'
+    allowed_horizons: []
+  vol_over_vol_60m:
+    lag_bars: 12
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=12 (minutes_to_bars(60m/5m))'
+    allowed_horizons: []
+  _hour:
+    lag_bars: 0
+    allowed_horizons: []
+    source: metadata
+    rejected: false
+    description: Calendar/time metadata (lag_bars=0 is correct)
+  day_of_month:
+    lag_bars: 0
+    allowed_horizons: []
+    source: metadata
+    rejected: false
+    description: Calendar/time metadata (lag_bars=0 is correct)
+  volume_sma_50:
+    lag_bars: 50
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=50 (indicator_period)'
+  yz_vol_20:
+    lag_bars: 20
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=20 (volatility_window)'
+  market_correlation_20d:
+    lag_bars: 5760
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=5760 (days_to_bars(20d*1440/5m))'
+  negative_volume_index:
+    lag_bars: 1
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=1 (complex_override)'
+  volatility_60d:
+    lag_bars: 17280
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=17280 (days_to_bars(60d*1440/5m))'
+  volume_ratio_20d:
+    lag_bars: 5760
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=5760 (days_to_bars(20d*1440/5m))'
+  mass_index:
+    lag_bars: 25
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=25 (complex_override)'
+  rsi_21:
+    lag_bars: 21
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=21 (indicator_period)'
+  _month:
+    lag_bars: 0
+    allowed_horizons: []
+    source: metadata
+    rejected: false
+    description: Calendar/time metadata (lag_bars=0 is correct)
+  price_volume_trend:
+    lag_bars: 1
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=1 (complex_override)'
+  obv_ema:
+    lag_bars: 20
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=20 (complex_override)'
+  atr_x_vol:
+    lag_bars: 14
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=14 (complex_override)'
+  volume_volatility_20d:
+    lag_bars: 5760
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=5760 (days_to_bars(20d*1440/5m))'
+  beta_60d:
+    lag_bars: 17280
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=17280 (days_to_bars(60d*1440/5m))'
+  adx_14:
+    lag_bars: 14
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=14 (indicator_period)'
+  gk_vol_5:
+    lag_bars: 5
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=5 (volatility_window)'
+  parkinson_vol_5:
+    lag_bars: 5
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=5 (volatility_window)'
+  _day:
+    lag_bars: 0
+    allowed_horizons: []
+    source: metadata
+    rejected: false
+    description: Calendar/time metadata (lag_bars=0 is correct)
+  vol_60m:
+    lag_bars: 12
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=12 (minutes_to_bars(60m/5m))'
+  volume_std_20d:
+    lag_bars: 5760
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=5760 (days_to_bars(20d*1440/5m))'
+  vol_persistence:
+    lag_bars: 20
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=20 (complex_override)'
+  market_correlation_60d:
+    lag_bars: 17280
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=17280 (days_to_bars(60d*1440/5m))'
+  month_of_year:
+    lag_bars: 0
+    allowed_horizons: []
+    source: metadata
+    rejected: false
+    description: Calendar/time metadata (lag_bars=0 is correct)
+  trading_day_of_month:
+    lag_bars: 0
+    allowed_horizons: []
+    source: metadata
+    rejected: false
+    description: Calendar/time metadata (lag_bars=0 is correct)
+  vol_clustering_60m:
+    lag_bars: 12
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=12 (minutes_to_bars(60m/5m))'
+  ret_ord_5m:
+    lag_bars: 1
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=1 (minutes_to_bars(5m/5m))'
+  rsi_30:
+    lag_bars: 30
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=30 (indicator_period)'
+  realized_vol_20:
+    lag_bars: 20
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=20 (volatility_window)'
+  obv:
+    lag_bars: 1
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=1 (complex_override)'
+  rs_vol_20:
+    lag_bars: 20
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=20 (volatility_window)'
+  price_impact:
+    lag_bars: 1
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=1 (complex_override)'
+  atr_14:
+    lag_bars: 14
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=14 (indicator_period)'
+  cmf:
+    lag_bars: 21
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=21 (complex_override)'
+  mfi_14:
+    lag_bars: 14
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=14 (indicator_period)'
+  macd_hist:
+    lag_bars: 26
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=26 (complex_override)'
+  ichimoku_chikou:
+    lag_bars: 52
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=52 (complex_override)'
+  mfi_21:
+    lag_bars: 21
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=21 (indicator_period)'
+  _weekday:
+    lag_bars: 0
+    allowed_horizons: []
+    source: metadata
+    rejected: false
+    description: Calendar/time metadata (lag_bars=0 is correct)
+  volume_quantile_20d:
+    lag_bars: 5760
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=5760 (days_to_bars(20d*1440/5m))'
+  volume_ratio_5d:
+    lag_bars: 1440
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=1440 (days_to_bars(5d*1440/5m))'
+  bb_width_20:
+    lag_bars: 20
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=20 (indicator_period)'
+  vol_over_vol_5m:
+    lag_bars: 1
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=1 (minutes_to_bars(5m/5m))'
+  roc_50:
+    lag_bars: 50
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=50 (indicator_period)'
+  stoch_d_21:
+    lag_bars: 21
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=21 (indicator_period)'
+  volume_roc_10:
+    lag_bars: 10
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=10 (indicator_period)'
+  day_of_week:
+    lag_bars: 0
+    allowed_horizons: []
+    source: metadata
+    rejected: false
+    description: Calendar/time metadata (lag_bars=0 is correct)
+  vol_30m:
+    lag_bars: 6
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=6 (minutes_to_bars(30m/5m))'
+  macd_signal:
+    lag_bars: 26
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=26 (complex_override)'
+  ret2_60m:
+    lag_bars: 12
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=12 (minutes_to_bars(60m/5m))'
+  awesome_oscillator:
+    lag_bars: 34
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=34 (complex_override)'
+  high_vol_frac:
+    lag_bars: 1
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=1 (complex_override)'
+  price_momentum_60d:
+    lag_bars: 17280
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=17280 (days_to_bars(60d*1440/5m))'
+  rsi_7:
+    lag_bars: 7
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=7 (indicator_period)'
+  parkinson_vol_10:
+    lag_bars: 10
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=10 (volatility_window)'
+  stoch_k_5:
+    lag_bars: 5
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=5 (indicator_period)'
+  n_trades:
+    lag_bars: 1
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=1 (complex_override)'
+  open_loc_1d:
+    lag_bars: 288
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=288 (days_to_bars(1d*1440/5m))'
+  roc_10:
+    lag_bars: 10
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=10 (indicator_period)'
+  stoch_d_5:
+    lag_bars: 5
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=5 (indicator_period)'
+  stoch_x_vol:
+    lag_bars: 14
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=14 (complex_override)'
+  fractal_low:
+    lag_bars: 5
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=5 (complex_override)'
+  cci_20:
+    lag_bars: 20
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=20 (indicator_period)'
+  mom_10d:
+    lag_bars: 2880
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=2880 (days_to_bars(10d*1440/5m))'
+  stoch_x_ret:
+    lag_bars: 14
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=14 (complex_override)'
+  turnover_5:
+    lag_bars: 5
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=5 (indicator_period)'
+  ret2_5m:
+    lag_bars: 1
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=1 (minutes_to_bars(5m/5m))'
+  mom_1d:
+    lag_bars: 288
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=288 (days_to_bars(1d*1440/5m))'
+  mom_3d:
+    lag_bars: 864
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=864 (days_to_bars(3d*1440/5m))'
+  ease_of_movement:
+    lag_bars: 14
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=14 (complex_override)'
+  ret_60m:
+    lag_bars: 12
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=12 (minutes_to_bars(60m/5m))'
+  macd_x_ret:
+    lag_bars: 26
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=26 (complex_override)'
+  ret_30m:
+    lag_bars: 6
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=6 (minutes_to_bars(30m/5m))'
+  volume_roc_20:
+    lag_bars: 20
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=20 (indicator_period)'
+  yz_vol_5:
+    lag_bars: 5
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=5 (volatility_window)'
+  hull_ma_10:
+    lag_bars: 10
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=10 (indicator_period)'
+  day_x_volume:
+    lag_bars: 1
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=1 (complex_override)'
+  ichimoku_senkou_b:
+    lag_bars: 52
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=52 (complex_override)'
+  turnover:
+    lag_bars: 20
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=20 (complex_override)'
+  volume_ema_20:
+    lag_bars: 20
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=20 (indicator_period)'
+  trade_size_vol:
+    lag_bars: 5
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=5 (complex_override)'
+  adx_x_vol:
+    lag_bars: 14
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=14 (complex_override)'
+  rs_vol_5:
+    lag_bars: 5
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=5 (volatility_window)'
+  ichimoku_senkou_a:
+    lag_bars: 52
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=52 (complex_override)'
+  ret_ord_30m:
+    lag_bars: 6
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=6 (minutes_to_bars(30m/5m))'
+  macd_x_vol:
+    lag_bars: 26
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=26 (complex_override)'
+  turnover_20:
+    lag_bars: 20
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=20 (indicator_period)'
+  bb_lower_20:
+    lag_bars: 20
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=20 (indicator_period)'
+  ret_15m:
+    lag_bars: 3
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=3 (minutes_to_bars(15m/5m))'
+  ret2_15m:
+    lag_bars: 3
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=3 (minutes_to_bars(15m/5m))'
+  liquidity_ratio:
+    lag_bars: 20
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=20 (complex_override)'
+  rs_vol_10:
+    lag_bars: 10
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=10 (volatility_window)'
+  market_facilitation_index:
+    lag_bars: 1
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=1 (complex_override)'
+  vol_x_ret_60m:
+    lag_bars: 12
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=12 (minutes_to_bars(60m/5m))'
+  macd_x_volume:
+    lag_bars: 26
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=26 (complex_override)'
+  volume_roc_5:
+    lag_bars: 5
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=5 (indicator_period)'
+  bb_x_ret:
+    lag_bars: 20
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=20 (complex_override)'
+  volume_sma_5:
+    lag_bars: 5
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=5 (indicator_period)'
+  force_index:
+    lag_bars: 13
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=13 (complex_override)'
+  sma_10:
+    lag_bars: 10
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=10 (indicator_period)'
+  market_impact:
+    lag_bars: 1
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=1 (complex_override)'
+  rsi_5:
+    lag_bars: 5
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=5 (indicator_period)'
+  ret_ord_15m:
+    lag_bars: 3
+    allowed_horizons: []
+    source: derived
+    rejected: false
+    description: 'Fixed: lag_bars=3 (minutes_to_bars(15m/5m))'
+  ret_ord_60m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vol_clustering_5m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  ichimoku_kijun:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  hull_ma_20:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  volume_ema_5:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  yz_vol_10:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  overnight_vol:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  bb_x_volume:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  hull_ma_5:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  rsi_x_volume:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vwap_dev_5m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  high:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  gk_vol_20:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  realized_spread:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  williams_accumulation:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  gap_x_volume:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  parkinson_vol_20:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  cci_x_vol:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  keltner_upper:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  ret_1m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  macd:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  hour_x_volume:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  realized_vol_10:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vol_5m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  gk_vol_10:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  overnight_return:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  ad_line:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  effective_spread:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  order_flow_imbalance:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  intraday_seasonality_30m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  tema_20:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  donchian_upper:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  hour_13:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  volume_price_trend:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vol_x_ret_15m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  gap_co:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  bb_x_vol:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  realized_vol_5:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  donchian_middle:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vwap_dev:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  rsi_x_vol:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  low_vol_frac:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  ret_oc:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vwap_dev_15m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  momentum_x_volatility:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  intraday_seasonality_15m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  volume_raw:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vol_dollar:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  williams_r_7:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  roc_20:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  range_frac:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  ichimoku_tenkan:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  wd_3:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  trading_day_of_quarter:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  cci_10:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  roc_x_volatility:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  close_vol_frac:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  ret_ord_10m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  range_compression_5m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  open_vol_frac:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  stoch_d_14:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  range_compression_60m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vwap_dev_30m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  bid_ask_spread_est:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  close:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+feature_families:
+  lagged_returns:
+    pattern: ^ret_\d+$
+    default_lag_bars: null
+    default_allowed_horizons:
+    - 1
+    - 2
+    - 3
+    - 5
+    - 12
+    - 24
+    - 60
+    description: Lagged returns (ret_N where N is lag)
+  technical_indicators:
+    pattern: ^(rsi|sma|ema|macd|bb|atr|adx)_\d+$
+    default_lag_bars: null
+    default_allowed_horizons:
+    - 1
+    - 2
+    - 3
+    - 5
+    - 12
+    - 24
+    - 60
+    description: Technical indicators with numeric lookback
+  volume_features:
+    pattern: ^(volume|vol_|obv|ad|cmf)
+    default_lag_bars: 1
+    default_allowed_horizons:
+    - 1
+    - 2
+    - 3
+    - 5
+    - 12
+    - 24
+    - 60
+    description: Volume-based features
+  volatility_features:
+    pattern: ^(volatility|vol_|std_|var_)
+    default_lag_bars: null
+    default_allowed_horizons:
+    - 1
+    - 2
+    - 3
+    - 5
+    - 12
+    - 24
+    - 60
+    description: Volatility features
+  rejected_future_returns:
+    pattern: ^(ret_future_|fwd_ret_)
+    default_lag_bars: -1
+    default_allowed_horizons: []
+    rejected: true
+    description: 'REJECTED: Future returns (leaky)'
+  rejected_time_to_hit:
+    pattern: ^tth_
+    default_lag_bars: 0
+    default_allowed_horizons: []
+    rejected: true
+    description: 'REJECTED: Time-to-hit features (leaky)'
+  rejected_mfe_mdd:
+    pattern: ^(mfe|mdd)_
+    default_lag_bars: 0
+    default_allowed_horizons: []
+    rejected: true
+    description: 'REJECTED: MFE/MDD features (leaky)'
+  rejected_barriers:
+    pattern: ^barrier_
+    default_lag_bars: 0
+    default_allowed_horizons: []
+    rejected: true
+    description: 'REJECTED: Barrier features (leaky)'
+  rejected_targets:
+    pattern: ^(y_|target_)
+    default_lag_bars: 0
+    default_allowed_horizons: []
+    rejected: true
+    description: 'REJECTED: Target columns (leaky)'
+  rejected_predictions:
+    pattern: ^p_
+    default_lag_bars: 0
+    default_allowed_horizons: []
+    rejected: true
+    description: 'REJECTED: Prediction/probability features (leaky)'
+  rejected_metadata:
+    pattern: ^(ts|timestamp|symbol|time)$
+    default_lag_bars: 0
+    default_allowed_horizons: []
+    rejected: true
+    description: 'REJECTED: Metadata columns'
+validation:
+  hard_rules:
+  - lag_bars >= 0
+  - allowed_horizons must be non-empty for usable features
+  warnings:
+  - lag_bars == 0 and source in ['price', 'derived']
+  - source == 'unknown'

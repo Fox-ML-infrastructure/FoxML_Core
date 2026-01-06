@@ -1,0 +1,194 @@
+# Feature and Target Schema Configuration
+# Explicitly defines what columns are metadata, targets, or features
+# This makes the implicit schema explicit and configurable
+
+# Metadata columns - always excluded from features
+metadata_columns:
+  - symbol
+  - interval
+  - source
+  - ts
+  - timestamp
+  - date
+  - time
+  - datetime
+  - processed_at
+  - version
+  - session
+
+# Target column patterns - these are targets, not features
+# They remain in the dataset for extraction but are excluded from features
+target_patterns:
+  # Classification targets
+  - "^y_will_peak"
+  - "^y_will_valley"
+  - "^y_will_swing"
+  - "^y_first_touch"
+  - "^y_mfe_"
+  - "^y_mdd_"
+  - "^y_"
+  
+  # Regression targets
+  - "^fwd_ret_"
+  
+  # Barrier-related targets
+  - "^barrier_"
+  - "^zigzag_"
+  - "^p_up_"
+  - "^p_down_"
+  
+  # Other target-like columns
+  - "^tth_"
+  - "^mfe_"
+  - "^mdd_"
+  - "^excursion_"
+  - "^hit_direction_"
+  - "^hit_asym_"
+  - "^max_return_"
+  - "^min_return_"
+  - "^vol_at_t_"
+
+# Feature families - safe features for ranking
+# These are always allowed in ranking mode, even if registry excludes them
+feature_families:
+  # Core OHLCV - always safe
+  ohlcv:
+    patterns:
+      - "^open$"
+      - "^high$"
+      - "^low$"
+      - "^close$"
+      - "^volume$"
+    description: "Core market data (OHLCV)"
+    always_allow_in_ranking: true
+  
+  # Returns - backward-looking only
+  returns:
+    patterns:
+      - "^ret_"
+      - "^returns_"
+    description: "Backward-looking returns"
+    always_allow_in_ranking: true
+  
+  # Volatility - backward-looking
+  volatility:
+    patterns:
+      - "^vol_"
+      - "^volatility_"
+      - "^atr_"
+      - "^std_"
+      - "^var_"
+      - "^true_range_"
+    description: "Volatility measures"
+    always_allow_in_ranking: true
+  
+  # Moving averages - all backward-looking
+  moving_averages:
+    patterns:
+      - "^sma_"
+      - "^ema_"
+      - "^hma_"
+      - "^wma_"
+      - "^vwma_"
+      - "^kama_"
+      - "^tema_"
+      - "^dema_"
+      - "^hull_ma_"
+    description: "Moving averages"
+    always_allow_in_ranking: true
+  
+  # Oscillators - backward-looking
+  oscillators:
+    patterns:
+      - "^rsi_"
+      - "^macd"
+      - "^stoch_"
+      - "^williams_r"
+      - "^cci_"
+      - "^roc_"
+    description: "Technical oscillators"
+    always_allow_in_ranking: true
+  
+  # Bollinger Bands - backward-looking
+  bollinger_bands:
+    patterns:
+      - "^bollinger_"
+      - "^bb_"
+    description: "Bollinger Bands"
+    always_allow_in_ranking: true
+  
+  # Momentum - backward-looking
+  momentum:
+    patterns:
+      - "^mom_"
+      - "^momentum_"
+      - "^price_momentum_"
+    description: "Momentum indicators"
+    always_allow_in_ranking: true
+  
+  # Volume indicators - backward-looking
+  volume_indicators:
+    patterns:
+      - "^volume"
+      - "^dollar_volume"
+      - "^turnover_"
+      - "^vwap"
+      - "^obv"
+      - "^ad_line"
+      - "^cmf"
+    description: "Volume-based indicators"
+    always_allow_in_ranking: true
+  
+  # Trend indicators - backward-looking
+  trend_indicators:
+    patterns:
+      - "^adx"
+      - "^plus_di"
+      - "^minus_di"
+      - "^aroon_"
+      - "^psar"
+    description: "Trend indicators"
+    always_allow_in_ranking: true
+  
+  # Support/Resistance - backward-looking (past highs/lows)
+  support_resistance:
+    patterns:
+      - "^rolling_max_"
+      - "^rolling_min_"
+      - "^daily_high"
+      - "^daily_low"
+    description: "Support/resistance levels (past data)"
+    always_allow_in_ranking: true
+
+# Mode-specific rules
+modes:
+  ranking:
+    # In ranking mode: allow all feature families + unknown non-leaky features
+    default_action: allow  # Unknown features that don't match leak patterns are allowed
+    allow_families:
+      - ohlcv
+      - returns
+      - volatility
+      - moving_averages
+      - oscillators
+      - bollinger_bands
+      - momentum
+      - volume_indicators
+      - trend_indicators
+      - support_resistance
+  
+  training:
+    # In training mode: stricter (can be configured per use case)
+    default_action: allow  # Can be changed to "reject_unknown" for stricter training
+    allow_families:
+      - ohlcv
+      - returns
+      - volatility
+      - moving_averages
+      - oscillators
+      - bollinger_bands
+      - momentum
+      - volume_indicators
+      - trend_indicators
+      - support_resistance
+

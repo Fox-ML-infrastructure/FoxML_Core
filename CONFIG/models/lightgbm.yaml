@@ -1,0 +1,61 @@
+# LightGBM Model Configuration
+# Spec 2: High Regularization to prevent overfitting
+
+model_family: "LightGBM"
+description: "Gradient Boosting Decision Tree with high regularization"
+
+# Spec 2 Recommended Ranges:
+# - max_depth: 7-9
+# - num_leaves: 64-128
+# - learning_rate: 0.01-0.05
+# - subsample/colsample: 0.7-0.8
+# - regularization: 0.1-1.0
+
+hyperparameters:
+  # Tree structure
+  num_leaves: 96  # 64-128 range, using middle
+  max_depth: 8  # 7-9 range, using 8
+  min_data_in_leaf: 200
+  min_child_weight: 0.5  # 0.1-1.0 range
+  
+  # Feature/sample sampling
+  feature_fraction: 0.75  # 0.7-0.8 range (colsample_bytree)
+  bagging_fraction: 0.75  # 0.7-0.8 range (subsample)
+  bagging_freq: 1  # Enable bagging every iteration
+  
+  # Regularization
+  lambda_l1: 0.1  # L1 regularization (0.1-1.0 range)
+  lambda_l2: 0.1  # L2 regularization (0.1-1.0 range)
+  
+  # Learning
+  learning_rate: 0.03  # 0.01-0.05 range, using middle
+  n_estimators: 1000  # Use early stopping instead of fixed count
+  early_stopping_rounds: 50
+  
+  # Performance
+  num_threads: 4  # Can be overridden by OMP_NUM_THREADS env var
+  threads: 4
+
+# Variants for different use cases
+variants:
+  conservative:
+    max_depth: 7
+    num_leaves: 64
+    learning_rate: 0.01
+    lambda_l1: 1.0
+    lambda_l2: 1.0
+    
+  balanced:
+    max_depth: 8
+    num_leaves: 96
+    learning_rate: 0.03
+    lambda_l1: 0.1
+    lambda_l2: 0.1
+    
+  aggressive:
+    max_depth: 9
+    num_leaves: 128
+    learning_rate: 0.05
+    lambda_l1: 0.05
+    lambda_l2: 0.05
+

@@ -1,0 +1,52 @@
+# GMM Regime Model Configuration
+# Gaussian Mixture Model for regime detection
+
+model_family: "GMMRegime"
+description: "Gaussian Mixture Model for market regime classification"
+
+hyperparameters:
+  # GMM parameters
+  n_components: 3  # Number of regimes (e.g., bull, bear, sideways)
+  covariance_type: "full"  # "full", "tied", "diag", or "spherical"
+  max_iter: 100
+  n_init: 10  # Number of initializations
+  init_params: "kmeans"  # or "random"
+  
+  # Convergence
+  tol: 0.001
+  reg_covar: 0.000001  # Regularization for covariance matrices
+  
+  # Random state - auto-injected from defaults.randomness.seed (or pipeline.determinism.base_seed)
+  # seed: null  # null = use centralized seed
+
+# Regime presets
+regime_presets:
+  two_regime:  # Simple bull/bear
+    n_components: 2
+    
+  three_regime:  # Bull/bear/sideways
+    n_components: 3
+    
+  four_regime:  # Bull/bear/high_vol/low_vol
+    n_components: 4
+    
+  five_regime:  # Fine-grained
+    n_components: 5
+
+# Variants
+variants:
+  simple:
+    n_components: 2
+    covariance_type: "diag"
+    max_iter: 50
+    
+  balanced:
+    n_components: 3
+    covariance_type: "full"
+    max_iter: 100
+    
+  complex:
+    n_components: 5
+    covariance_type: "full"
+    max_iter: 200
+

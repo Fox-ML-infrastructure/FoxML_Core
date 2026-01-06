@@ -1,0 +1,40 @@
+# VAE Model Configuration
+# Variational Autoencoder for feature learning and dimensionality reduction
+
+model_family: "VAE"
+description: "Variational Autoencoder for unsupervised feature learning"
+
+hyperparameters:
+  # Training
+  epochs: 50
+  batch_size: 512
+  # patience: auto-injected from defaults (10)
+  learning_rate: 0.001
+  
+  # Architecture
+  latent_dim: 10  # Dimension of latent space
+  encoder_layers: [256, 128]
+  decoder_layers: [128, 256]
+  # dropout: auto-injected from defaults (0.2)
+  
+  # Loss weighting
+  kl_weight: 0.1  # Weight for KL divergence loss
+  reconstruction_loss: "mse"  # or "binary_crossentropy"
+
+# Variants
+variants:
+  small:
+    latent_dim: 5
+    encoder_layers: [128, 64]
+    decoder_layers: [64, 128]
+    
+  medium:
+    latent_dim: 10
+    encoder_layers: [256, 128]
+    decoder_layers: [128, 256]
+    
+  large:
+    latent_dim: 20
+    encoder_layers: [512, 256, 128]
+    decoder_layers: [128, 256, 512]
+

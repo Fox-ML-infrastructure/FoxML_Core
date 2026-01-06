@@ -1,0 +1,73 @@
+# Multi-Task Neural Network Configuration
+# Spec 1: Multi-Task Learning with shared encoder and multiple output heads
+
+model_family: "MultiTask"
+description: "Multi-task neural network with shared encoder and multiple heads"
+
+# For correlated targets (TTH, MDD, MFE), use multi-target mode with loss weights
+
+hyperparameters:
+  # Training
+  epochs: 50
+  batch_size: 512
+  # patience: auto-injected from defaults (10)
+  
+  # Architecture
+  hidden_dim: 256  # Shared hidden layer size
+  # dropout: auto-injected from defaults (0.2)
+  
+  # Optimizer
+  learning_rate: 0.0003  # 1e-4 to 5e-4 range, using middle (3e-4)
+  optimizer: "adam"
+  
+  # Multi-task specific
+  use_multi_head: null  # Auto-detect from y shape
+  loss_weights: null  # Dict mapping target names to weights (equal if null)
+  targets: null  # List of target names for multi-head
+
+# Recommended loss weights for correlated targets
+loss_weight_presets:
+  equal_weights:
+    fwd_ret_5m: 1.0
+    mfe_5m: 1.0
+    mdd_5m: 1.0
+    tth_5m: 1.0
+    
+  return_focused:
+    fwd_ret_5m: 2.0
+    mfe_5m: 1.0
+    mdd_5m: 1.0
+    tth_5m: 0.5
+    
+  risk_focused:
+    fwd_ret_5m: 0.5
+    mfe_5m: 1.5
+    mdd_5m: 2.0
+    tth_5m: 1.0
+    
+  time_focused:
+    fwd_ret_5m: 0.5
+    mfe_5m: 1.0
+    mdd_5m: 1.0
+    tth_5m: 2.0
+
+# Variants
+variants:
+  lightweight:
+    hidden_dim: 128
+    epochs: 30
+    batch_size: 1024
+    dropout: 0.1
+    
+  balanced:
+    hidden_dim: 256
+    epochs: 50
+    batch_size: 512
+    dropout: 0.2
+    
+  heavy:
+    hidden_dim: 512
+    epochs: 100
+    batch_size: 256
+    dropout: 0.3
+

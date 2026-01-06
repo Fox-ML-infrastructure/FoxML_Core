@@ -1562,6 +1562,14 @@ def select_features_for_target(
                 # This ensures stability hooks get a valid identity for auditability
                 identity_for_snapshot = aggregated_identity or run_identity
                 
+                # FIX: Check if identity is actually finalized before passing to snapshot hook
+                # Partial identities (is_final=False) cannot be used in strict mode
+                identity_is_finalized = (
+                    identity_for_snapshot is not None and 
+                    hasattr(identity_for_snapshot, 'is_final') and 
+                    identity_for_snapshot.is_final
+                )
+                
                 save_snapshot_hook(
                     target=target_column,
                     method="multi_model_aggregated",
@@ -1569,8 +1577,8 @@ def select_features_for_target(
                     universe_sig=snapshot_universe_sig,  # SST or None, NEVER view
                     output_dir=target_repro_dir,  # Use target-first structure
                     auto_analyze=None,  # Load from config
-                    run_identity=identity_for_snapshot,  # Use computed or passed-in identity
-                    allow_legacy=(identity_for_snapshot is None),  # Allow legacy only if no identity available
+                    run_identity=identity_for_snapshot if identity_is_finalized else None,  # Only pass finalized identity
+                    allow_legacy=(not identity_is_finalized),  # Allow legacy if identity not finalized
                 )
     except Exception as e:
         logger.debug(f"Stability snapshot save failed for aggregated selection (non-critical): {e}")
@@ -1654,7 +1662,8 @@ def select_features_for_target(
                 max_cs_samples=cs_config.get('max_cs_samples', 1000),
                 normalization=cs_config.get('normalization'),
                 model_configs=cs_config.get('model_configs'),
-                output_dir=output_dir  # Pass output_dir for reproducibility tracking
+                output_dir=output_dir,  # Pass output_dir for reproducibility tracking
+                universe_sig=universe_sig  # FIX: Thread universe_sig for proper scope tracking
             )
             
             # Merge CS scores into summary_df
