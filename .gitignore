@@ -71,11 +71,11 @@ pyproject.toml
 # Data and Datasets
 # ============================================
 
-# Data directories
-data/
-results/
-models/
-logs/
+# Data directories (root-level only, not TRAINING/data/ or TRAINING/models/)
+/data/
+/results/
+/models/
+/logs/
 cache/
 tmp/
 temp/
