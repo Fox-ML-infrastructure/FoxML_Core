@@ -3867,7 +3867,8 @@ class ReproducibilityTracker:
         self,
         ctx: Any,  # RunContext (using Any to avoid circular import issues)
         metrics: Dict[str, Any],
-        additional_data_override: Optional[Dict[str, Any]] = None
+        additional_data_override: Optional[Dict[str, Any]] = None,
+        prediction_fingerprint: Optional[Dict] = None  # NEW: Prediction fingerprint for predictions_sha256
     ) -> Dict[str, Any]:
         """
         Automated audit-grade reproducibility tracking using RunContext.
@@ -3881,6 +3882,8 @@ class ReproducibilityTracker:
         Args:
             ctx: RunContext containing all run data and configuration
             metrics: Dictionary of metrics (auc, std_score, etc.)
+            additional_data_override: Optional dict to merge into additional_data
+            prediction_fingerprint: Optional prediction fingerprint dict for predictions_sha256
         
         Returns:
             Dict with audit_report and saved metadata paths
@@ -4125,7 +4128,8 @@ class ReproducibilityTracker:
                 additional_data=additional_data,
                 view=view_for_log,  # SST: use view parameter
                 symbol=ctx.symbol,
-                cohort_metadata=cohort_metadata  # Pass pre-extracted cohort_metadata from RunContext
+                cohort_metadata=cohort_metadata,  # Pass pre-extracted cohort_metadata from RunContext
+                prediction_fingerprint=prediction_fingerprint  # FIX: Pass through for predictions_sha256
             )
         except Exception as e:
             # log_comparison should never raise (it has its own exception handling),

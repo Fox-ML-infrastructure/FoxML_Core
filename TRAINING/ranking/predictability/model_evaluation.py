@@ -7612,8 +7612,30 @@ def evaluate_target_predictability(
                 if 'symbol' in locals() and symbol:
                     ctx.symbol = symbol
                 
-                # Use automated log_run API
-                audit_result = tracker.log_run(ctx, metrics_dict)
+                # FIX: Aggregate prediction fingerprints from model_metrics for predictions_sha256
+                # This must happen in the NEW log_run path (not just fallback)
+                aggregated_prediction_fingerprint = None
+                per_model_hashes = {}
+                if 'model_metrics' in locals() and model_metrics:
+                    import hashlib
+                    pred_hashes = []
+                    for model_name, metrics_entry in model_metrics.items():
+                        if isinstance(metrics_entry, dict) and 'prediction_fingerprint' in metrics_entry:
+                            pred_hash = metrics_entry['prediction_fingerprint'].get('prediction_hash', '')
+                            if pred_hash:
+                                pred_hashes.append(pred_hash)
+                                per_model_hashes[model_name] = pred_hash
+                    if pred_hashes:
+                        combined = hashlib.sha256('|'.join(sorted(pred_hashes)).encode()).hexdigest()
+                        aggregated_prediction_fingerprint = {'prediction_hash': combined}
+                        logger.info(f"✅ Aggregated {len(pred_hashes)} prediction fingerprints for predictions_sha256")
+                    else:
+                        logger.warning(f"⚠️ No prediction_fingerprints found in model_metrics ({len(model_metrics)} models)")
+                else:
+                    logger.warning("⚠️ model_metrics not available for prediction fingerprint aggregation")
+                
+                # Use automated log_run API with prediction fingerprint
+                audit_result = tracker.log_run(ctx, metrics_dict, prediction_fingerprint=aggregated_prediction_fingerprint)
                 
                 # Log audit report summary if available
                 if audit_result.get("audit_report"):

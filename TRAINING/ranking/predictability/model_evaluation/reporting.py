@@ -267,7 +267,8 @@ def save_feature_importances(
                     symbol=symbol,  # Pass symbol for SYMBOL_SPECIFIC view
                 )
             except Exception as e:
-                logger.debug(f"Stability snapshot save failed (non-critical): {e}")
+                # FIX: Log at WARNING level to diagnose why non-xgboost models fail
+                logger.warning(f"Stability snapshot save failed for {model_name}: {e}")
         
         logger.info(f"  💾 Saved feature importances to: {target_importances_dir}")
     except Exception as e:
