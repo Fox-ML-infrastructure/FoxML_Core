@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Feature selection tracks input vs output signatures (`feature_signature_input` / `feature_signature_output`)
 - Stage dependencies explicit in snapshots (`selected_targets`, `selected_features`)
 - Seeds derived from identity for true determinism
+- **FIX**: `allow_legacy=True` now respected for partial RunIdentity (was being ignored)
+- **FIX**: Defensive model_metrics handling to ensure fingerprints reach aggregation
 - [Full details →](DOCS/02_reference/changelog/2026-01-06-determinism-tracking-comprehensive.md)
 
 **View-Scoped Artifact Paths** - Proper separation by view/symbol.
