@@ -266,11 +266,12 @@ def get_snapshot_base_dir(
     target: Optional[str] = None,
     view: str = "CROSS_SECTIONAL",
     symbol: Optional[str] = None,
+    universe_sig: Optional[str] = None,
 ) -> Path:
     """
     Get base directory for snapshots.
     
-    Uses target-first structure scoped by view if output_dir and target are provided.
+    Uses target-first structure scoped by view and universe if output_dir and target are provided.
     Never creates root-level feature_importance_snapshots directory.
     
     Args:
@@ -278,6 +279,7 @@ def get_snapshot_base_dir(
         target: Optional target name for target-first structure
         view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC" for scoping
         symbol: Symbol name for SYMBOL_SPECIFIC view
+        universe_sig: Universe signature for additional scoping within view
     
     Returns:
         Path to base snapshot directory
@@ -313,7 +315,7 @@ def get_snapshot_base_dir(
                 ensure_target_structure(base_output_dir, target_clean)
                 return ensure_scoped_artifact_dir(
                     base_output_dir, target_clean, "feature_importance_snapshots",
-                    view=view, symbol=symbol
+                    view=view, symbol=symbol, universe_sig=universe_sig
                 )
             except Exception as e:
                 # If target-first structure fails, raise error (no fallback to artifacts)

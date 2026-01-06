@@ -638,6 +638,8 @@ def compute_cross_sectional_stability(
                 auto_analyze=False,  # We'll analyze manually to get metrics
                 run_identity=cs_identity if identity_is_finalized else None,  # Only pass finalized identity
                 allow_legacy=(not identity_is_finalized),  # FIX: Allow legacy if identity not finalized
+                view="CROSS_SECTIONAL",  # Cross-sectional ranker is always CROSS_SECTIONAL
+                symbol=None,  # No symbol for CROSS_SECTIONAL view
             )
         else:
             snapshot_path = None

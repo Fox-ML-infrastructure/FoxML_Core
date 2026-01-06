@@ -778,6 +778,8 @@ def select_features_for_target(
                                         auto_analyze=None,  # Load from config
                                         run_identity=final_identity,  # Pass FINALIZED identity
                                         allow_legacy=(final_identity is None),  # Allow legacy only if identity failed
+                                        view=view,  # Pass view for proper scoping
+                                        symbol=symbol_to_process,  # Pass symbol for SYMBOL_SPECIFIC view
                                     )
                         except ValueError as ve:
                             # Identity validation failure - respect config mode
@@ -1579,6 +1581,8 @@ def select_features_for_target(
                     auto_analyze=None,  # Load from config
                     run_identity=identity_for_snapshot if identity_is_finalized else None,  # Only pass finalized identity
                     allow_legacy=(not identity_is_finalized),  # Allow legacy if identity not finalized
+                    view=view,  # Pass view for proper scoping
+                    symbol=symbol,  # Pass symbol for SYMBOL_SPECIFIC view
                 )
     except Exception as e:
         logger.debug(f"Stability snapshot save failed for aggregated selection (non-critical): {e}")

@@ -3923,6 +3923,8 @@ def process_single_symbol(
                                 auto_analyze=None,  # Load from config
                                 run_identity=family_identity,
                                 allow_legacy=True,  # FIX: Ensure ALL families get snapshots even if identity fails
+                                view="SYMBOL_SPECIFIC",  # process_single_symbol is always SYMBOL_SPECIFIC
+                                symbol=symbol,  # Pass symbol for proper scoping
                             )
                         except Exception as e:
                             logger.debug(f"Stability snapshot save failed for {family_name} (non-critical): {e}")

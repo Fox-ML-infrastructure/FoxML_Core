@@ -263,6 +263,8 @@ def save_feature_importances(
                     prediction_fingerprint=prediction_fp,  # Pass prediction hash for determinism tracking
                     stage="TARGET_RANKING",  # Correctly label as TARGET_RANKING stage
                     write_fs_snapshot=False,  # TARGET_RANKING uses snapshot.json, not fs_snapshot
+                    view=view,  # Pass view for proper scoping
+                    symbol=symbol,  # Pass symbol for SYMBOL_SPECIFIC view
                 )
             except Exception as e:
                 logger.debug(f"Stability snapshot save failed (non-critical): {e}")
