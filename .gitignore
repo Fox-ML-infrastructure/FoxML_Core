@@ -49,6 +49,9 @@ catboost_info/
 TRAINING/contract_tests/
 **/contract_tests/
 
+# Internal tools (development only)
+TRAINING/tools/
+
 # Output directory
 output/
 
