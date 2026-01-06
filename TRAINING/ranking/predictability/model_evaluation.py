@@ -2336,8 +2336,11 @@ def train_and_evaluate_models(
                 )
                 if fp_dict:
                     model_metrics[model_name]['prediction_fingerprint'] = fp_dict
+                    logger.debug(f"✅ Computed prediction_fingerprint for {model_name}: hash={fp_dict.get('prediction_hash', '')[:12]}...")
+                else:
+                    logger.debug(f"⚠️ compute_prediction_fingerprint_for_model returned None for {model_name}")
             except Exception as fp_e:
-                logger.debug(f"Prediction fingerprint failed for {model_name}: {fp_e}")
+                logger.warning(f"Prediction fingerprint failed for {model_name}: {fp_e}")
         except Exception as e:
             logger.warning(f"Failed to compute full metrics for {model_name}: {e}")
             # Fallback to primary score only
@@ -7797,22 +7800,33 @@ def evaluate_target_predictability(
                     if 'model_metrics' in locals() and model_metrics:
                         import hashlib
                         pred_hashes = []
+                        models_without_fp = []
                         for model_name, metrics in model_metrics.items():
                             if isinstance(metrics, dict) and 'prediction_fingerprint' in metrics:
                                 pred_hash = metrics['prediction_fingerprint'].get('prediction_hash', '')
                                 if pred_hash:
                                     pred_hashes.append(pred_hash)
                                     per_model_hashes[model_name] = pred_hash  # Track per-model
+                            else:
+                                models_without_fp.append(model_name)
+                        
+                        if models_without_fp:
+                            logger.debug(f"Models missing prediction_fingerprint: {models_without_fp}")
+                        
                         if pred_hashes:
                             # Create combined hash from sorted prediction hashes
                             combined = hashlib.sha256('|'.join(sorted(pred_hashes)).encode()).hexdigest()
                             aggregated_prediction_fingerprint = {'prediction_hash': combined}
-                            logger.debug(f"Aggregated {len(pred_hashes)} prediction fingerprints for reproducibility")
+                            logger.info(f"✅ Aggregated {len(pred_hashes)} prediction fingerprints for predictions_sha256")
                             # Add per-model hashes to additional_data for auditability
                             if per_model_hashes:
                                 additional_data_with_cohort['prediction_hashes'] = per_model_hashes
+                        else:
+                            logger.warning(f"⚠️ No prediction_fingerprints found in model_metrics ({len(model_metrics)} models). predictions_sha256 will be null.")
+                    else:
+                        logger.warning(f"⚠️ model_metrics not available for prediction fingerprint aggregation. predictions_sha256 will be null.")
                 except Exception as e:
-                    logger.debug(f"Failed to aggregate prediction fingerprints: {e}")
+                    logger.warning(f"Failed to aggregate prediction fingerprints: {e}")
                 
                 # FIX: Use partial_identity (computed with real data) instead of run_identity param
                 tracker.log_comparison(
