@@ -68,6 +68,13 @@
   - Added `create_stage_identity` fallback when `run_identity` is None
 - **Bug Fix**: Fixed `predictions_sha256` always null in `snapshot_index.json` for TARGET_RANKING.
   - `model_evaluation.py`: Aggregated prediction fingerprints from `model_metrics` and passed to `tracker.log_comparison()`
+  - `model_evaluation.py`: Added aggregation to NEW `log_run` API path (was only in fallback `except ImportError` path)
+  - `reproducibility_tracker.py`: Added `prediction_fingerprint` parameter to `log_run()` and pass through to `log_comparison()`
+- **Bug Fix**: Fixed replicate folder only containing xgboost (all models overwriting same file).
+  - Root cause: All models shared same `strict_key` because single identity was created from first model's hparams
+  - `model_evaluation.py`: Removed `break` statement, now builds `per_model_identities` dict with each model's unique identity
+  - `reporting.py`: Updated `save_feature_importances()` to accept `Dict[str, RunIdentity]` and look up per-model identity
+  - Each model now gets unique `strict_key`/`replicate_key` based on its actual `hparams_signature`
 - **Bug Fix**: Fixed TRAINING stage missing `run_identity` in `log_comparison()` calls.
   - `intelligent_trainer.py`: Added `training_identity = create_stage_identity(...)` before training
   - `training.py`: Added `run_identity` and `experiment_config` parameters, with `create_stage_identity` fallback

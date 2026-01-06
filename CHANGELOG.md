@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Seeds derived from identity for true determinism
 - **FIX**: `allow_legacy=True` now respected for partial RunIdentity (was being ignored)
 - **FIX**: Defensive model_metrics handling to ensure fingerprints reach aggregation
+- **FIX**: Per-model RunIdentity in TARGET_RANKING prevents replicate folder overwrites
+- **FIX**: `predictions_sha256` now populated via `log_run` API path (was only in fallback path)
 - [Full details →](DOCS/02_reference/changelog/2026-01-06-determinism-tracking-comprehensive.md)
 
 **View-Scoped Artifact Paths** - Proper separation by view/symbol.
