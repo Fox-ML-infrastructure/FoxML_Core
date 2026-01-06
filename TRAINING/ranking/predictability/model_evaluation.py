@@ -2339,9 +2339,9 @@ def train_and_evaluate_models(
                 )
                 if fp_dict:
                     model_metrics[model_name]['prediction_fingerprint'] = fp_dict
-                    logger.debug(f"✅ Computed prediction_fingerprint for {model_name}: hash={fp_dict.get('prediction_hash', '')[:12]}...")
+                    logger.info(f"✅ Computed prediction_fingerprint for {model_name}: hash={fp_dict.get('prediction_hash', '')[:12]}...")
                 else:
-                    logger.debug(f"⚠️ compute_prediction_fingerprint_for_model returned None for {model_name}")
+                    logger.warning(f"⚠️ compute_prediction_fingerprint_for_model returned None for {model_name}")
             except Exception as fp_e:
                 logger.warning(f"Prediction fingerprint failed for {model_name}: {fp_e}")
         except Exception as e:
@@ -7804,7 +7804,11 @@ def evaluate_target_predictability(
                 aggregated_prediction_fingerprint = None
                 per_model_hashes = {}  # For auditability
                 try:
-                    if 'model_metrics' in locals() and model_metrics:
+                    # DEBUG: Log model_metrics availability
+                    # NOTE: model_metrics is defined at function entry (line 498) and populated by _compute_and_store_metrics
+                    mm_count = len(model_metrics) if model_metrics else 0
+                    logger.info(f"🔍 Aggregating prediction fingerprints from {mm_count} models in model_metrics")
+                    if model_metrics:
                         import hashlib
                         pred_hashes = []
                         models_without_fp = []
@@ -7818,7 +7822,10 @@ def evaluate_target_predictability(
                                 models_without_fp.append(model_name)
                         
                         if models_without_fp:
-                            logger.debug(f"Models missing prediction_fingerprint: {models_without_fp}")
+                            logger.warning(f"🔍 Models missing prediction_fingerprint: {models_without_fp}")
+                        
+                        # DEBUG: Show models with fingerprints
+                        logger.debug(f"🔍 Models WITH prediction_fingerprint: {list(per_model_hashes.keys())}")
                         
                         if pred_hashes:
                             # Create combined hash from sorted prediction hashes
@@ -7831,7 +7838,7 @@ def evaluate_target_predictability(
                         else:
                             logger.warning(f"⚠️ No prediction_fingerprints found in model_metrics ({len(model_metrics)} models). predictions_sha256 will be null.")
                     else:
-                        logger.warning(f"⚠️ model_metrics not available for prediction fingerprint aggregation. predictions_sha256 will be null.")
+                        logger.warning(f"⚠️ model_metrics is empty for prediction fingerprint aggregation. predictions_sha256 will be null.")
                 except Exception as e:
                     logger.warning(f"Failed to aggregate prediction fingerprints: {e}")
                 

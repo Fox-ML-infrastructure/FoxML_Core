@@ -259,7 +259,7 @@ def save_feature_importances(
                     output_dir=target_repro_dir,  # Save snapshots in scoped structure
                     auto_analyze=None,  # Load from config
                     run_identity=run_identity,  # Pass finalized identity for hash-based storage
-                    allow_legacy=(run_identity is None),  # Allow legacy if identity computation failed
+                    allow_legacy=True,  # FIX: Ensure ALL model families get snapshots
                     prediction_fingerprint=prediction_fp,  # Pass prediction hash for determinism tracking
                     stage="TARGET_RANKING",  # Correctly label as TARGET_RANKING stage
                     write_fs_snapshot=False,  # TARGET_RANKING uses snapshot.json, not fs_snapshot
