@@ -51,6 +51,9 @@ TRAINING/contract_tests/
 
 # Internal tools (development only)
 TRAINING/tools/
+CONFIG/tools/
+CONFIG/find_hardcoded_paths.py
+CONFIG/migrate_structure.py
 
 # Output directory
 output/
