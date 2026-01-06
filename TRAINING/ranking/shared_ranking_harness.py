@@ -83,6 +83,15 @@ class RankingHarness:
         self.max_cs_samples = max_cs_samples
         self.max_rows_per_symbol = max_rows_per_symbol
         
+        # SST: Compute universe_sig for consistent artifact scoping
+        self.universe_sig = None
+        if self.symbols:
+            try:
+                from TRAINING.orchestration.utils.run_context import compute_universe_signature
+                self.universe_sig = compute_universe_signature(self.symbols)
+            except Exception:
+                pass
+        
         # Validate view and symbol parameters
         if view == "SYMBOL_SPECIFIC" and symbol is None:
             raise ValueError(f"symbol parameter required for SYMBOL_SPECIFIC view")
@@ -255,14 +264,14 @@ class RankingHarness:
                         logger.warning(f"Could not resolve REPRODUCIBILITY base from {self.output_dir}, using as-is")
                 
                 # Save to target-first structure with view scoping
-                # (targets/<target>/reproducibility/<VIEW>/[symbol=...]/feature_exclusions/)
+                # (targets/<target>/reproducibility/<VIEW>/[symbol=...]/[universe=...]/feature_exclusions/)
                 from TRAINING.orchestration.utils.target_first_paths import (
                     ensure_scoped_artifact_dir, ensure_target_structure
                 )
                 ensure_target_structure(base_output_dir, target_clean)
                 target_exclusion_dir = ensure_scoped_artifact_dir(
                     base_output_dir, target_clean, "feature_exclusions",
-                    view=self.view, symbol=self.symbol
+                    view=self.view, symbol=self.symbol, universe_sig=self.universe_sig
                 )
             
             target_exclusion_dir.mkdir(parents=True, exist_ok=True)

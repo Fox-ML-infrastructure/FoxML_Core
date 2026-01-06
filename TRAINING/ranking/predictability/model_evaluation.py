@@ -502,6 +502,9 @@ def train_and_evaluate_models(
     all_feature_importances = {}  # {model_name: {feature: importance}} for detailed export
     fold_timestamps = []  # List of fold timestamp info
     
+    # SST: Extract universe_sig from run_identity for consistent artifact scoping
+    train_universe_sig = getattr(run_identity, 'dataset_signature', None) if run_identity else None
+    
     # Timing instrumentation for all importance producers (SST: thresholds from config)
     import time
     timing_data = {}  # {model_family: elapsed_seconds}
@@ -924,7 +927,7 @@ def train_and_evaluate_models(
                                 ensure_target_structure(base_output_dir, target_clean)
                                 target_artifact_dir = ensure_scoped_artifact_dir(
                                     base_output_dir, target_clean, "featureset_artifacts",
-                                    view=view, symbol=symbol
+                                    view=view, symbol=symbol, universe_sig=train_universe_sig
                                 )
                                 post_prune_artifact.save(target_artifact_dir)
                                 logger.debug(f"Saved POST_PRUNE artifact to view-scoped location: {target_artifact_dir}")
@@ -5075,6 +5078,10 @@ def evaluate_target_predictability(
 ) -> TargetPredictabilityScore:
     """Evaluate predictability of a single target across symbols"""
     
+    # SST: Extract universe_sig from run_identity for consistent artifact scoping
+    # This ensures all artifacts within this stage use the same universe signature
+    early_universe_sig = getattr(run_identity, 'dataset_signature', None) if run_identity else None
+    
     # Ensure numpy is available (imported at module level, but ensure it's accessible)
     import numpy as np  # Use global import from top of file
     
@@ -5304,7 +5311,7 @@ def evaluate_target_predictability(
         ensure_target_structure(base_output_dir, target_clean)
         target_exclusion_dir = ensure_scoped_artifact_dir(
             base_output_dir, target_clean, "feature_exclusions",
-            view=view, symbol=symbol
+            view=view, symbol=symbol, universe_sig=early_universe_sig
         )
         
         # Try to load existing exclusion list first (check target-first structure)
@@ -5932,7 +5939,7 @@ def evaluate_target_predictability(
                             ensure_target_structure(base_output_dir, target_clean)
                             target_artifact_dir = ensure_scoped_artifact_dir(
                                 base_output_dir, target_clean, "featureset_artifacts",
-                                view=view, symbol=symbol
+                                view=view, symbol=symbol, universe_sig=early_universe_sig
                             )
                             artifact.save(target_artifact_dir)
                             logger.debug(f"Saved POST_GATEKEEPER artifact to view-scoped location: {target_artifact_dir}")
