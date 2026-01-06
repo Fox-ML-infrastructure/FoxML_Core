@@ -16,6 +16,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2026-01-06 (Comprehensive Determinism Tracking)
+- **Enhancement**: All 8 model families now get feature importance snapshots (was only XGBoost).
+  - `feature_selector.py`: Changed `allow_legacy=(final_identity is None)` to `allow_legacy=True`
+- **Enhancement**: Training stage now computes and tracks prediction fingerprints.
+  - `training.py`: Added prediction fingerprint computation for both SYMBOL_SPECIFIC and CROSS_SECTIONAL models
+  - Uses `compute_prediction_fingerprint_for_model()` with aggregated hash across model components
+- **Enhancement**: Feature selection now tracks input vs output feature signatures.
+  - `fingerprinting.py`: Added `feature_signature_input` and `feature_signature_output` to `RunIdentity`
+  - `schema.py`: Added `feature_fingerprint_input` and `feature_fingerprint_output` to `FeatureSelectionSnapshot`
+  - Enables diffing "what went in" vs "what came out" of feature selection
+- **Enhancement**: Stage dependencies now explicit in snapshots.
+  - `feature_selector.py`: Added `selected_targets` to FS snapshot inputs
+  - `training.py`: Added `selected_features` to Training snapshot additional_data
+- **Enhancement**: Seeds now derived from identity for true determinism.
+  - `fingerprinting.py`: `create_stage_identity()` derives `train_seed` from `base_seed + universe_sig`
+  - Same universe + same config = same seed every time
+- **Bug Fix**: Fixed `UnboundLocalError: hashlib` in `create_stage_identity()`.
+  - Removed shadowing local import that caused error when main import succeeded
+- **Impact**: Complete determinism tracking chain: TR → FS → Training with prediction fingerprints at all stages.
+- **Files Changed**: `feature_selector.py`, `training.py`, `fingerprinting.py`, `schema.py`
+
 #### 2026-01-06 (View-Scoped Artifact Paths)
 - **Enhancement**: Artifacts now scoped by view/symbol for proper separation.
   - `target_first_paths.py`: Added `get_scoped_artifact_dir()` and `ensure_scoped_artifact_dir()` helpers
