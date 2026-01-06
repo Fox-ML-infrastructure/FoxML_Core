@@ -4021,9 +4021,11 @@ class ReproducibilityTracker:
         # 4. Load previous run metadata for comparison
         # FIX: For FEATURE_SELECTION, map view to view (ensures proper metrics scoping)
         view_for_cohort = ctx.view if hasattr(ctx, 'view') else None
-        if ctx.stage == "target_ranking" and hasattr(ctx, 'view') and ctx.view:
+        # FIX: Use case-insensitive comparison for stage (may be lowercase or uppercase)
+        stage_upper = ctx.stage.upper() if ctx.stage else ""
+        if stage_upper == "TARGET_RANKING" and hasattr(ctx, 'view') and ctx.view:
             view_for_cohort = ctx.view
-        elif ctx.stage == "feature_selection" and hasattr(ctx, 'view') and ctx.view:
+        elif stage_upper == "FEATURE_SELECTION" and hasattr(ctx, 'view') and ctx.view:
             # Map view to view for FEATURE_SELECTION
             # FIX: Use SYMBOL_SPECIFIC directly (not INDIVIDUAL) to match directory structure
             if ctx.view.upper() == "CROSS_SECTIONAL":
@@ -4106,7 +4108,8 @@ class ReproducibilityTracker:
         # 6. Save using existing log_comparison (which handles cohort-aware saving)
         # For TARGET_RANKING, pass view as view
         view_for_log = ctx.view
-        if ctx.stage == "target_ranking" and hasattr(ctx, 'view') and ctx.view:
+        # FIX: Use case-insensitive comparison for stage
+        if stage_upper == "TARGET_RANKING" and hasattr(ctx, 'view') and ctx.view:
             view_for_log = ctx.view
         
         # CRITICAL: Wrap log_comparison in try/except to ensure we can still write audit report
@@ -4137,9 +4140,10 @@ class ReproducibilityTracker:
         try:
             # FIX: Use view as view for TARGET_RANKING and FEATURE_SELECTION when getting cohort directory
             view_for_cohort_dir = view_for_log  # Use same as log_comparison
-            if ctx.stage == "target_ranking" and hasattr(ctx, 'view') and ctx.view:
+            # FIX: Use case-insensitive comparison for stage (stage_upper computed earlier)
+            if stage_upper == "TARGET_RANKING" and hasattr(ctx, 'view') and ctx.view:
                 view_for_cohort_dir = ctx.view
-            elif ctx.stage == "feature_selection" and hasattr(ctx, 'view') and ctx.view:
+            elif stage_upper == "FEATURE_SELECTION" and hasattr(ctx, 'view') and ctx.view:
                 # Map view to view for FEATURE_SELECTION
                 # FIX: Use SYMBOL_SPECIFIC directly (not INDIVIDUAL) to match directory structure
                 if ctx.view.upper() == "CROSS_SECTIONAL":

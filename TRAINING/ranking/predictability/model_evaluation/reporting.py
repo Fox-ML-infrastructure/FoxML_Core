@@ -250,6 +250,7 @@ def save_feature_importances(
                 
                 # Use properly scoped structure for snapshots
                 # NOTE: This is called from TARGET_RANKING stage (model_evaluation.py)
+                # We disable fs_snapshot here - TARGET_RANKING uses snapshot.json, not fs_snapshot.json
                 save_snapshot_hook(
                     target=target_column,
                     method=model_name,
@@ -261,6 +262,7 @@ def save_feature_importances(
                     allow_legacy=(run_identity is None),  # Allow legacy if identity computation failed
                     prediction_fingerprint=prediction_fp,  # Pass prediction hash for determinism tracking
                     stage="TARGET_RANKING",  # Correctly label as TARGET_RANKING stage
+                    write_fs_snapshot=False,  # TARGET_RANKING uses snapshot.json, not fs_snapshot
                 )
             except Exception as e:
                 logger.debug(f"Stability snapshot save failed (non-critical): {e}")

@@ -7526,7 +7526,7 @@ def evaluate_target_predictability(
                     fold_timestamps=fold_timestamps if 'fold_timestamps' in locals() else None,
                     feature_lookback_max_minutes=feature_lookback_max,
                     data_interval_minutes=data_interval_minutes if 'data_interval_minutes' in locals() else None,
-                    stage="target_ranking",
+                    stage="TARGET_RANKING",  # FIX: Use uppercase for consistency
                     output_dir=output_dir,
                     seed=seed_value,
                     view=view_for_ctx,  # FIX: Set view in constructor for diff telemetry
@@ -7784,6 +7784,7 @@ def evaluate_target_predictability(
                 # FIX: Aggregate prediction fingerprints from model_metrics for predictions_sha256
                 # This enables determinism verification by tracking per-model prediction hashes
                 aggregated_prediction_fingerprint = None
+                per_model_hashes = {}  # For auditability
                 try:
                     if 'model_metrics' in locals() and model_metrics:
                         import hashlib
@@ -7793,17 +7794,21 @@ def evaluate_target_predictability(
                                 pred_hash = metrics['prediction_fingerprint'].get('prediction_hash', '')
                                 if pred_hash:
                                     pred_hashes.append(pred_hash)
+                                    per_model_hashes[model_name] = pred_hash  # Track per-model
                         if pred_hashes:
                             # Create combined hash from sorted prediction hashes
                             combined = hashlib.sha256('|'.join(sorted(pred_hashes)).encode()).hexdigest()
                             aggregated_prediction_fingerprint = {'prediction_hash': combined}
                             logger.debug(f"Aggregated {len(pred_hashes)} prediction fingerprints for reproducibility")
+                            # Add per-model hashes to additional_data for auditability
+                            if per_model_hashes:
+                                additional_data_with_cohort['prediction_hashes'] = per_model_hashes
                 except Exception as e:
                     logger.debug(f"Failed to aggregate prediction fingerprints: {e}")
                 
                 # FIX: Use partial_identity (computed with real data) instead of run_identity param
                 tracker.log_comparison(
-                    stage=scope.stage.value if scope else "target_ranking",
+                    stage=scope.stage.value if scope else "TARGET_RANKING",  # FIX: Use uppercase
                     target=target,
                     metrics=metrics_with_cohort,
                     additional_data=additional_data_with_cohort,

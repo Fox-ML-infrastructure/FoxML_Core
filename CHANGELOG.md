@@ -16,6 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2026-01-06 (Snapshot Output Fixes and Human-Readable Manifests)
+- **Critical Fix**: Fixed stage case mismatch causing FEATURE_SELECTION snapshots to not be written.
+  - `model_evaluation.py`: Changed `stage="target_ranking"` to `stage="TARGET_RANKING"` (uppercase)
+  - `feature_selector.py`: Changed fallback from `"feature_selection"` to `"FEATURE_SELECTION"` (uppercase)
+  - `reproducibility_tracker.py`: Normalized stage comparisons to use `.upper()` (lines 4024, 4026, 4109, 4142)
+- **Enhancement**: Disabled fs_snapshot.json during TARGET_RANKING to reduce confusion.
+  - `reporting.py`: Added `write_fs_snapshot=False` to `save_snapshot_hook()` call
+  - TARGET_RANKING now only writes `snapshot.json` (complete) + hash-based snapshots
+  - FEATURE_SELECTION continues to write `fs_snapshot.json` (human-readable)
+- **Enhancement**: Added per-model prediction hashes to TARGET_RANKING for auditability.
+  - `model_evaluation.py`: Added `prediction_hashes` dict to `additional_data` with per-model hashes
+- **Enhancement**: Added human-readable manifests to feature_importance_snapshots.
+  - `io.py`: Added `_update_directory_manifest()` for per-directory manifest.json
+  - `io.py`: Added `update_global_importance_manifest()` for root manifest.json
+  - Manifests map hash-based filenames to method/target/timestamp metadata
+- **Impact**: FEATURE_SELECTION snapshots now written correctly. Hash-based directories navigable via manifest.json.
+- **Files Changed**: `model_evaluation.py`, `feature_selector.py`, `reproducibility_tracker.py`, `reporting.py`, `io.py`
+
 #### 2026-01-06 (Feature Selection Telemetry and Stage Labeling Fixes)
 - **Critical Fix**: Fixed fs_snapshot stage mislabeling - snapshots from TARGET_RANKING were incorrectly labeled as "FEATURE_SELECTION".
   - `schema.py`: Added `stage` parameter to `FeatureSelectionSnapshot.from_importance_snapshot()`

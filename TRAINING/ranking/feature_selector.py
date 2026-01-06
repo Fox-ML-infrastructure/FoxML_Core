@@ -2562,7 +2562,7 @@ def select_features_for_target(
                 # Use WriteScope-derived values for tracker call
                 # NEW: Pass run_identity for authoritative signatures in snapshot
                 tracker.log_comparison(
-                    stage=scope.stage.value if scope else "feature_selection",
+                    stage=scope.stage.value if scope else "FEATURE_SELECTION",  # FIX: Use uppercase
                     target=target_column,
                     metrics=metrics_with_cohort,
                     additional_data=additional_data_with_cohort,

@@ -70,11 +70,70 @@ def save_importance_snapshot(
         with path.open("w") as f:
             json.dump(snapshot.to_dict(), f, indent=2)
         logger.debug(f"Saved importance snapshot: {path}")
+        
+        # Write per-directory manifest for human readability (hash-based path only)
+        if use_hash_path:
+            _update_directory_manifest(replicate_dir, snapshot, strict_key)
+            # Also update global manifest for easy method-to-directory lookup
+            update_global_importance_manifest(base_dir, snapshot)
     except Exception as e:
         logger.error(f"Failed to save importance snapshot to {path}: {e}")
         raise
     
     return path
+
+
+def _update_directory_manifest(
+    replicate_dir: Path,
+    snapshot: FeatureImportanceSnapshot,
+    strict_key: str,
+) -> None:
+    """
+    Update manifest.json in a replicate directory for human readability.
+    
+    The manifest maps hash-based filenames to human-readable metadata.
+    """
+    manifest_path = replicate_dir / "manifest.json"
+    
+    try:
+        # Load existing manifest or create new
+        if manifest_path.exists():
+            with manifest_path.open("r") as f:
+                manifest = json.load(f)
+        else:
+            manifest = {
+                "target": snapshot.target,
+                "method": snapshot.method,
+                "view": getattr(snapshot, 'view', 'CROSS_SECTIONAL'),
+                "replicate_key": snapshot.replicate_key,
+                "snapshots": []
+            }
+        
+        # Add this snapshot if not already present
+        snapshot_entry = {
+            "file": f"{strict_key}.json",
+            "timestamp": snapshot.created_at.isoformat() if hasattr(snapshot.created_at, 'isoformat') else str(snapshot.created_at),
+            "run_id": snapshot.run_id,
+            "n_features": len(snapshot.features) if snapshot.features else 0,
+        }
+        
+        # Check if already in manifest
+        existing_files = [s.get('file') for s in manifest.get('snapshots', [])]
+        if snapshot_entry['file'] not in existing_files:
+            manifest.setdefault('snapshots', []).append(snapshot_entry)
+        
+        # Update metadata
+        manifest['target'] = snapshot.target
+        manifest['method'] = snapshot.method
+        manifest['last_updated'] = datetime.utcnow().isoformat()
+        
+        # Write manifest
+        with manifest_path.open("w") as f:
+            json.dump(manifest, f, indent=2)
+        
+        logger.debug(f"Updated manifest at {manifest_path}")
+    except Exception as e:
+        logger.debug(f"Failed to update manifest (non-critical): {e}")
 
 
 def load_snapshots(
@@ -432,3 +491,71 @@ def create_fs_snapshot_from_importance(
     except Exception as e:
         logger.warning(f"Failed to create FeatureSelectionSnapshot: {e}")
         return None
+
+
+def update_global_importance_manifest(
+    base_dir: Path,
+    snapshot: FeatureImportanceSnapshot,
+) -> None:
+    """
+    Update global manifest.json in feature_importance_snapshots/ directory.
+    
+    Maps method names to their replicate directories for human navigation.
+    
+    Structure:
+    {
+        "target": "fwd_ret_10m",
+        "last_updated": "2026-01-06T...",
+        "methods": {
+            "xgboost": {
+                "replicate_dir": "replicate/abc123.../",
+                "last_run_id": "...",
+                "n_snapshots": 5
+            },
+            ...
+        }
+    }
+    """
+    manifest_path = base_dir / "manifest.json"
+    
+    try:
+        # Load existing manifest or create new
+        if manifest_path.exists():
+            with manifest_path.open("r") as f:
+                manifest = json.load(f)
+        else:
+            manifest = {
+                "target": snapshot.target,
+                "methods": {},
+            }
+        
+        # Update method entry
+        method = snapshot.method
+        replicate_key = snapshot.replicate_key
+        
+        if method and replicate_key:
+            if method not in manifest.get('methods', {}):
+                manifest.setdefault('methods', {})[method] = {
+                    "replicate_dir": f"replicate/{replicate_key}/",
+                    "last_run_id": snapshot.run_id,
+                    "n_snapshots": 1,
+                }
+            else:
+                # Update existing entry
+                entry = manifest['methods'][method]
+                entry['last_run_id'] = snapshot.run_id
+                entry['n_snapshots'] = entry.get('n_snapshots', 0) + 1
+                # Update replicate_dir if different (new replicate group)
+                if entry.get('replicate_dir') != f"replicate/{replicate_key}/":
+                    entry['replicate_dir'] = f"replicate/{replicate_key}/"
+        
+        manifest['target'] = snapshot.target
+        manifest['last_updated'] = datetime.utcnow().isoformat()
+        
+        # Write manifest
+        with manifest_path.open("w") as f:
+            json.dump(manifest, f, indent=2)
+        
+        logger.debug(f"Updated global manifest at {manifest_path}")
+    except Exception as e:
+        logger.debug(f"Failed to update global manifest (non-critical): {e}")
