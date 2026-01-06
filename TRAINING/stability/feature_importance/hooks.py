@@ -32,6 +32,12 @@ def save_snapshot_hook(
     run_identity: Optional[Any] = None,   # RunIdentity object or dict
     allow_legacy: bool = False,  # If True, allow saving without identity (legacy path)
     prediction_fingerprint: Optional[Dict] = None,  # PredictionFingerprint.to_dict() for hash tracking
+    view: Optional[str] = None,  # "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
+    symbol: Optional[str] = None,  # Symbol name for SYMBOL_SPECIFIC views
+    inputs: Optional[Dict] = None,  # Optional inputs dict for fs_snapshot
+    process: Optional[Dict] = None,  # Optional process dict for fs_snapshot
+    write_fs_snapshot: bool = True,  # If True, also write fs_snapshot.json and update global index
+    stage: str = "FEATURE_SELECTION",  # Pipeline stage for fs_snapshot labeling
 ) -> Optional[Path]:
     """
     Hook function to save feature importance snapshot.
@@ -57,6 +63,7 @@ def save_snapshot_hook(
                      - prediction_row_ids_hash: Hash of row identifiers
                      - prediction_classes_hash: Hash of class order (classification)
                      - prediction_kind: "regression", "binary_proba", etc.
+        stage: Pipeline stage for fs_snapshot - "FEATURE_SELECTION" (default) or "TARGET_RANKING"
     
     Returns:
         Path to saved snapshot, or None if saving failed
@@ -175,6 +182,28 @@ def save_snapshot_hook(
         
         logger.debug(f"Saved importance snapshot: {snapshot_path}")
         
+        # Create and save FeatureSelectionSnapshot if requested (human-readable format)
+        if write_fs_snapshot:
+            try:
+                from .io import create_fs_snapshot_from_importance
+                # Determine view from universe_sig if not explicitly provided
+                effective_view = view or ("SYMBOL_SPECIFIC" if (symbol or (universe_sig and ':' in universe_sig)) else "CROSS_SECTIONAL")
+                # Determine cohort directory from snapshot_path
+                cohort_dir = snapshot_path.parent if snapshot_path else None
+                
+                create_fs_snapshot_from_importance(
+                    importance_snapshot=snapshot,
+                    view=effective_view,
+                    symbol=symbol,
+                    cohort_dir=cohort_dir,
+                    output_dir=output_dir,
+                    inputs=inputs,
+                    process=process,
+                    stage=stage,  # Pass stage for correct labeling
+                )
+            except Exception as e:
+                logger.debug(f"Failed to create fs_snapshot (non-critical): {e}")
+        
         # Auto-analyze if enabled
         if auto_analyze:
             try:
@@ -251,6 +280,12 @@ def save_snapshot_from_series_hook(
     run_identity: Optional[Any] = None,   # RunIdentity object or dict
     allow_legacy: bool = False,  # If True, allow saving without identity (legacy path)
     prediction_fingerprint: Optional[Dict] = None,  # PredictionFingerprint.to_dict()
+    view: Optional[str] = None,  # "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
+    symbol: Optional[str] = None,  # Symbol name for SYMBOL_SPECIFIC views
+    inputs: Optional[Dict] = None,  # Optional inputs dict for fs_snapshot
+    process: Optional[Dict] = None,  # Optional process dict for fs_snapshot
+    write_fs_snapshot: bool = True,  # If True, also write fs_snapshot.json
+    stage: str = "FEATURE_SELECTION",  # Pipeline stage for fs_snapshot labeling
 ) -> Optional[Path]:
     """
     Hook function to save snapshot from pandas Series.
@@ -269,6 +304,12 @@ def save_snapshot_from_series_hook(
         run_identity: Optional RunIdentity object or dict with identity signatures.
         allow_legacy: If True, allow saving without identity (legacy path).
         prediction_fingerprint: Optional PredictionFingerprint.to_dict() for hash tracking.
+        view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC" for fs_snapshot
+        symbol: Symbol name for SYMBOL_SPECIFIC views
+        inputs: Optional inputs dict for fs_snapshot
+        process: Optional process dict for fs_snapshot
+        write_fs_snapshot: If True, also write fs_snapshot.json and update global index
+        stage: Pipeline stage for fs_snapshot - "FEATURE_SELECTION" (default) or "TARGET_RANKING"
     
     Returns:
         Path to saved snapshot, or None if saving failed
@@ -286,6 +327,12 @@ def save_snapshot_from_series_hook(
         run_identity=run_identity,
         allow_legacy=allow_legacy,
         prediction_fingerprint=prediction_fingerprint,
+        view=view,
+        symbol=symbol,
+        inputs=inputs,
+        process=process,
+        write_fs_snapshot=write_fs_snapshot,
+        stage=stage,  # Pass stage for correct labeling
     )
 
 

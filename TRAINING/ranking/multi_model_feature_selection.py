@@ -3745,6 +3745,22 @@ def process_single_symbol(
         # Train each enabled model family with structured status tracking
         enabled_families = [f for f, cfg in model_families_config.items() if cfg.get('enabled', False)]
         
+        # FIX: Create fallback identity using SST factory if run_identity wasn't passed
+        # This ensures ALL model families can save snapshots (not just xgboost)
+        # Mirrors TARGET_RANKING pattern from main.py:238-249
+        effective_run_identity = run_identity
+        if effective_run_identity is None:
+            try:
+                from TRAINING.common.utils.fingerprinting import create_stage_identity
+                effective_run_identity = create_stage_identity(
+                    stage="FEATURE_SELECTION",
+                    symbols=[symbol] if symbol else [],
+                    experiment_config=experiment_config,
+                )
+                logger.debug(f"  {symbol}: Created fallback FEATURE_SELECTION identity with train_seed={effective_run_identity.train_seed}")
+            except Exception as e:
+                logger.debug(f"  {symbol}: Failed to create fallback identity: {e}")
+        
         # Log reproducibility info for this symbol
         try:
             from TRAINING.common.determinism import BASE_SEED
@@ -3865,8 +3881,9 @@ def process_single_symbol(
                             # FIX: Use model_family (e.g., "lightgbm", "ridge", "elastic_net") as method name
                             # NOT importance_method (e.g., "native", "shap") - stability should be per-family
                             # Compute identity for this model family
+                            # FIX: Use effective_run_identity (includes fallback) instead of run_identity
                             family_identity = None
-                            if run_identity is not None:
+                            if effective_run_identity is not None:
                                 try:
                                     from TRAINING.common.utils.fingerprinting import (
                                         RunIdentity, compute_hparams_fingerprint,
@@ -3883,14 +3900,14 @@ def process_single_symbol(
                                     feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
                                     # Create updated partial and finalize
                                     updated_partial = RunIdentity(
-                                        dataset_signature=run_identity.dataset_signature if hasattr(run_identity, 'dataset_signature') else "",
-                                        split_signature=run_identity.split_signature if hasattr(run_identity, 'split_signature') else "",
-                                        target_signature=run_identity.target_signature if hasattr(run_identity, 'target_signature') else "",
+                                        dataset_signature=effective_run_identity.dataset_signature if hasattr(effective_run_identity, 'dataset_signature') else "",
+                                        split_signature=effective_run_identity.split_signature if hasattr(effective_run_identity, 'split_signature') else "",
+                                        target_signature=effective_run_identity.target_signature if hasattr(effective_run_identity, 'target_signature') else "",
                                         feature_signature=None,
                                         hparams_signature=hparams_signature or "",
-                                        routing_signature=run_identity.routing_signature if hasattr(run_identity, 'routing_signature') else "",
-                                        routing_payload=run_identity.routing_payload if hasattr(run_identity, 'routing_payload') else None,
-                                        train_seed=run_identity.train_seed if hasattr(run_identity, 'train_seed') else None,
+                                        routing_signature=effective_run_identity.routing_signature if hasattr(effective_run_identity, 'routing_signature') else "",
+                                        routing_payload=effective_run_identity.routing_payload if hasattr(effective_run_identity, 'routing_payload') else None,
+                                        train_seed=effective_run_identity.train_seed if hasattr(effective_run_identity, 'train_seed') else None,
                                         is_final=False,
                                     )
                                     family_identity = updated_partial.finalize(feature_signature)
@@ -3905,6 +3922,7 @@ def process_single_symbol(
                                 output_dir=output_dir,
                                 auto_analyze=None,  # Load from config
                                 run_identity=family_identity,
+                                allow_legacy=True,  # FIX: Ensure ALL families get snapshots even if identity fails
                             )
                         except Exception as e:
                             logger.debug(f"Stability snapshot save failed for {family_name} (non-critical): {e}")

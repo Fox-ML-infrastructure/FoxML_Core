@@ -346,7 +346,9 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                            max_rows_train: int = None,
                                            target_features: Dict[str, Any] = None,
                                            target_families: Optional[Dict[str, List[str]]] = None,
-                                           routing_decisions: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
+                                           routing_decisions: Optional[Dict[str, Dict[str, Any]]] = None,
+                                           run_identity: Optional[Any] = None,  # NEW: RunIdentity for reproducibility tracking
+                                           experiment_config: Optional[Any] = None) -> Dict[str, Any]:  # NEW: For SST fallback
     """Train models for a specific interval using comprehensive approach (replicates original script)."""
     
     logger.info(f"🎯 Training models for interval: {interval}")
@@ -361,6 +363,22 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         'failed_targets': [],  # Track targets that failed data preparation
         'failed_reasons': {}   # Track why each target failed
     }
+    
+    # SST: Create or use run_identity for reproducibility tracking
+    # Mirrors the pattern from FEATURE_SELECTION and multi_model_feature_selection.py
+    effective_run_identity = run_identity
+    if effective_run_identity is None:
+        try:
+            from TRAINING.common.utils.fingerprinting import create_stage_identity
+            symbols = list(mtf_data.keys()) if mtf_data else []
+            effective_run_identity = create_stage_identity(
+                stage="TRAINING",
+                symbols=symbols,
+                experiment_config=experiment_config,
+            )
+            logger.debug(f"Created fallback TRAINING identity with train_seed={effective_run_identity.train_seed}")
+        except Exception as e:
+            logger.debug(f"Failed to create fallback identity for TRAINING: {e}")
     
     for j, target in enumerate(targets, 1):
         logger.info(f"🎯 [{j}/{len(targets)}] Training models for target: {target}")
@@ -1055,7 +1073,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     metrics=metrics_with_cohort,
                                     additional_data=additional_data_with_cohort,
                                     symbol=scope.symbol,
-                                    view=scope.view.value
+                                    view=scope.view.value,
+                                    run_identity=effective_run_identity,  # SST: Pass identity for reproducibility
                                 )
                         except Exception as e:
                             logger.warning(f"Reproducibility tracking failed for {family}:{target}:{symbol}: {e}")
@@ -1485,7 +1504,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     metrics=metrics_with_cohort,
                                     additional_data=additional_data_adapted,
                                     model_family=family_normalized,
-                                    view=scope.view.value if scope else "CROSS_SECTIONAL"
+                                    view=scope.view.value if scope else "CROSS_SECTIONAL",
+                                    run_identity=effective_run_identity,  # SST: Pass identity for reproducibility
                                 )
                         except Exception as e:
                             logger.warning(f"Reproducibility tracking failed for {family}:{target}: {e}")

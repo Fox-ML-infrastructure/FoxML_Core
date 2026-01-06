@@ -16,6 +16,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2026-01-06 (Feature Selection Telemetry and Stage Labeling Fixes)
+- **Critical Fix**: Fixed fs_snapshot stage mislabeling - snapshots from TARGET_RANKING were incorrectly labeled as "FEATURE_SELECTION".
+  - `schema.py`: Added `stage` parameter to `FeatureSelectionSnapshot.from_importance_snapshot()`
+  - `schema.py`: Fixed `get_index_key()` to use `self.stage` instead of hardcoded "FEATURE_SELECTION"
+  - `hooks.py`: Added `stage` parameter to `save_snapshot_hook()` and `save_snapshot_from_series_hook()`
+  - `io.py`: Added `stage` parameter to `create_fs_snapshot_from_importance()`
+  - `reporting.py`: Updated TARGET_RANKING caller to pass `stage="TARGET_RANKING"`
+- **Bug Fix**: Fixed all 8 model families now get snapshots during feature selection (was only XGBoost).
+  - `multi_model_feature_selection.py`: Set `allow_legacy=True` in `save_snapshot_from_series_hook()` calls
+  - Added `create_stage_identity` fallback when `run_identity` is None
+- **Bug Fix**: Fixed `predictions_sha256` always null in `snapshot_index.json` for TARGET_RANKING.
+  - `model_evaluation.py`: Aggregated prediction fingerprints from `model_metrics` and passed to `tracker.log_comparison()`
+- **Bug Fix**: Fixed TRAINING stage missing `run_identity` in `log_comparison()` calls.
+  - `intelligent_trainer.py`: Added `training_identity = create_stage_identity(...)` before training
+  - `training.py`: Added `run_identity` and `experiment_config` parameters, with `create_stage_identity` fallback
+- **Bug Fix**: Fixed TensorFlow models failing with "Random ops require a seed to be set when determinism is enabled".
+  - `isolation_runner.py`: Added `tf.random.set_seed()` in `_bootstrap_family_runtime()` for TensorFlow families
+- **Bug Fix**: Fixed excessive LightGBM warning spam ("No further splits with positive gain").
+  - `quantile_lightgbm_trainer.py`: Changed `verbosity: 0` to `verbosity: -1` in `_quantile_params`
+- **Bug Fix**: Fixed feature selection telemetry warnings for missing `universe_sig`, `min_cs`, `max_cs_samples`, `train_seed`.
+  - `cross_sectional_feature_ranker.py`: Propagated `universe_sig` and added `seed`, `min_cs`, `max_cs_samples` to `RunContext`
+  - `cohort_metadata_extractor.py`: Ensured `cs_config` always includes `min_cs` and `max_cs_samples` keys
+- **Impact**: All three pipeline stages (TARGET_RANKING, FEATURE_SELECTION, TRAINING) now have complete determinism tracking with correctly labeled snapshots, prediction hashes, and run identities.
+- **Files Changed**: `schema.py`, `hooks.py`, `io.py`, `reporting.py`, `multi_model_feature_selection.py`, `model_evaluation.py`, `intelligent_trainer.py`, `training.py`, `isolation_runner.py`, `quantile_lightgbm_trainer.py`, `cross_sectional_feature_ranker.py`, `cohort_metadata_extractor.py`
+
 #### 2026-01-05 (Seed Injection and License Cleanup)
 - **Enhancement**: Added automatic seed injection to all model configs for complete tracking.
   - `data_loading.py`: `get_model_config()` now auto-injects seed from SST (global.seed or pipeline.determinism.base_seed)

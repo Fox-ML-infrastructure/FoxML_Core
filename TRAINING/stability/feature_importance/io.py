@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
 
-from .schema import FeatureImportanceSnapshot
+from .schema import FeatureImportanceSnapshot, FeatureSelectionSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +130,9 @@ def load_snapshots(
         
         # Load all snapshots in replicate group
         for path in sorted(replicate_dir.glob("*.json")):
+            # Skip fs_snapshot.json (different schema, not a FeatureImportanceSnapshot)
+            if path.name == "fs_snapshot.json":
+                continue
             try:
                 with path.open("r") as f:
                     data = json.load(f)
@@ -167,6 +170,9 @@ def load_snapshots(
             return []
         
         for path in sorted(target_dir.glob("*.json")):
+            # Skip fs_snapshot.json (different schema, not a FeatureImportanceSnapshot)
+            if path.name == "fs_snapshot.json":
+                continue
             try:
                 with path.open("r") as f:
                     data = json.load(f)
@@ -259,3 +265,170 @@ def get_snapshot_base_dir(output_dir: Optional[Path] = None, target: Optional[st
         from pathlib import Path
         repo_root = Path(__file__).resolve().parents[4]  # TRAINING/stability/feature_importance/io.py -> repo root
         return repo_root / "artifacts" / "feature_importance"
+
+
+def save_fs_snapshot(
+    snapshot: 'FeatureSelectionSnapshot',
+    cohort_dir: Path,
+) -> Path:
+    """
+    Save FeatureSelectionSnapshot to fs_snapshot.json in cohort directory.
+    
+    Mirrors the snapshot.json structure used by TARGET_RANKING.
+    
+    Args:
+        snapshot: FeatureSelectionSnapshot to save
+        cohort_dir: Cohort directory (e.g., targets/fwd_ret_10m/reproducibility/CROSS_SECTIONAL/cohort=.../
+    
+    Returns:
+        Path to saved fs_snapshot.json
+    """
+    from .schema import FeatureSelectionSnapshot
+    
+    cohort_dir = Path(cohort_dir)
+    cohort_dir.mkdir(parents=True, exist_ok=True)
+    
+    path = cohort_dir / "fs_snapshot.json"
+    
+    try:
+        with path.open("w") as f:
+            json.dump(snapshot.to_dict(), f, indent=2, default=str)
+        logger.debug(f"Saved fs_snapshot.json: {path}")
+    except Exception as e:
+        logger.error(f"Failed to save fs_snapshot.json to {path}: {e}")
+        raise
+    
+    return path
+
+
+def update_fs_snapshot_index(
+    snapshot: 'FeatureSelectionSnapshot',
+    output_dir: Path,
+) -> Optional[Path]:
+    """
+    Update globals/fs_snapshot_index.json with new snapshot entry.
+    
+    Mirrors the snapshot_index.json structure used by TARGET_RANKING.
+    
+    Args:
+        snapshot: FeatureSelectionSnapshot to add to index
+        output_dir: Run output directory (containing globals/)
+    
+    Returns:
+        Path to updated fs_snapshot_index.json, or None on failure
+    """
+    from .schema import FeatureSelectionSnapshot
+    
+    output_dir = Path(output_dir)
+    
+    # Find globals directory
+    globals_dir = None
+    # Try to find run root with globals/
+    base_dir = output_dir
+    for _ in range(10):
+        if (base_dir / "globals").exists():
+            globals_dir = base_dir / "globals"
+            break
+        if not base_dir.parent.exists():
+            break
+        base_dir = base_dir.parent
+    
+    if globals_dir is None:
+        # Create globals in output_dir
+        globals_dir = output_dir / "globals"
+        globals_dir.mkdir(parents=True, exist_ok=True)
+    
+    index_path = globals_dir / "fs_snapshot_index.json"
+    
+    # Load existing index or create new
+    index = {}
+    if index_path.exists():
+        try:
+            with index_path.open("r") as f:
+                index = json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load existing fs_snapshot_index.json: {e}")
+            index = {}
+    
+    # Add/update entry
+    key = snapshot.get_index_key()
+    index[key] = snapshot.to_dict()
+    
+    # Write updated index
+    try:
+        with index_path.open("w") as f:
+            json.dump(index, f, indent=2, default=str)
+        logger.debug(f"Updated fs_snapshot_index.json with key: {key}")
+        return index_path
+    except Exception as e:
+        logger.error(f"Failed to update fs_snapshot_index.json: {e}")
+        return None
+
+
+def create_fs_snapshot_from_importance(
+    importance_snapshot: FeatureImportanceSnapshot,
+    view: str = "CROSS_SECTIONAL",
+    symbol: Optional[str] = None,
+    cohort_dir: Optional[Path] = None,
+    output_dir: Optional[Path] = None,
+    inputs: Optional[Dict] = None,
+    process: Optional[Dict] = None,
+    stage: str = "FEATURE_SELECTION",  # Allow caller to specify stage
+) -> Optional['FeatureSelectionSnapshot']:
+    """
+    Create and save FeatureSelectionSnapshot from existing FeatureImportanceSnapshot.
+    
+    This bridges the existing snapshot system with the new full structure,
+    writing fs_snapshot.json and updating fs_snapshot_index.json.
+    
+    Args:
+        importance_snapshot: Existing FeatureImportanceSnapshot
+        view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
+        symbol: Symbol name for SYMBOL_SPECIFIC views
+        cohort_dir: Optional cohort directory for fs_snapshot.json
+        output_dir: Optional output directory for fs_snapshot_index.json
+        inputs: Optional inputs dict (config, data, target info)
+        process: Optional process dict (split info)
+        stage: Pipeline stage - "FEATURE_SELECTION" (default) or "TARGET_RANKING"
+    
+    Returns:
+        FeatureSelectionSnapshot if created successfully, None otherwise
+    """
+    from .schema import FeatureSelectionSnapshot
+    
+    try:
+        # Create snapshot from importance snapshot
+        fs_snapshot = FeatureSelectionSnapshot.from_importance_snapshot(
+            importance_snapshot=importance_snapshot,
+            view=view,
+            symbol=symbol,
+            inputs=inputs,
+            process=process,
+            stage=stage,  # Pass stage to schema
+        )
+        
+        # Set path relative to targets/
+        if cohort_dir:
+            cohort_path = Path(cohort_dir)
+            # Try to extract relative path from targets/
+            try:
+                path_parts = cohort_path.parts
+                if 'targets' in path_parts:
+                    targets_idx = path_parts.index('targets')
+                    relative_path = '/'.join(path_parts[targets_idx:])
+                    fs_snapshot.path = f"{relative_path}/fs_snapshot.json"
+            except Exception:
+                fs_snapshot.path = str(cohort_path / "fs_snapshot.json")
+        
+        # Save to cohort directory if provided
+        if cohort_dir:
+            save_fs_snapshot(fs_snapshot, cohort_dir)
+        
+        # Update global index if output_dir provided
+        if output_dir:
+            update_fs_snapshot_index(fs_snapshot, output_dir)
+        
+        return fs_snapshot
+    except Exception as e:
+        logger.warning(f"Failed to create FeatureSelectionSnapshot: {e}")
+        return None

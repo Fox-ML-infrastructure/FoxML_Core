@@ -7781,6 +7781,26 @@ def evaluate_target_predictability(
                     # Fallback to default if config not available
                     additional_data_with_cohort['seed'] = 42
                 
+                # FIX: Aggregate prediction fingerprints from model_metrics for predictions_sha256
+                # This enables determinism verification by tracking per-model prediction hashes
+                aggregated_prediction_fingerprint = None
+                try:
+                    if 'model_metrics' in locals() and model_metrics:
+                        import hashlib
+                        pred_hashes = []
+                        for model_name, metrics in model_metrics.items():
+                            if isinstance(metrics, dict) and 'prediction_fingerprint' in metrics:
+                                pred_hash = metrics['prediction_fingerprint'].get('prediction_hash', '')
+                                if pred_hash:
+                                    pred_hashes.append(pred_hash)
+                        if pred_hashes:
+                            # Create combined hash from sorted prediction hashes
+                            combined = hashlib.sha256('|'.join(sorted(pred_hashes)).encode()).hexdigest()
+                            aggregated_prediction_fingerprint = {'prediction_hash': combined}
+                            logger.debug(f"Aggregated {len(pred_hashes)} prediction fingerprints for reproducibility")
+                except Exception as e:
+                    logger.debug(f"Failed to aggregate prediction fingerprints: {e}")
+                
                 # FIX: Use partial_identity (computed with real data) instead of run_identity param
                 tracker.log_comparison(
                     stage=scope.stage.value if scope else "target_ranking",
@@ -7790,6 +7810,7 @@ def evaluate_target_predictability(
                     view=scope.view.value if scope else view_for_writes,
                     symbol=scope.symbol if scope else symbol_for_writes,
                     run_identity=partial_identity,  # FIX: Use locally-computed identity with real data
+                    prediction_fingerprint=aggregated_prediction_fingerprint,  # FIX: Pass aggregated predictions for predictions_sha256
                 )
         except Exception as e:
             logger.warning(f"Reproducibility tracking failed for {target}: {e}")

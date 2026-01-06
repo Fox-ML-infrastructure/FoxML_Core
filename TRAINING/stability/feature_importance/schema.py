@@ -6,8 +6,8 @@ Feature Importance Snapshot Schema
 Standardized format for storing feature importance snapshots for stability analysis.
 """
 
-from dataclasses import dataclass
-from typing import Dict, Optional, List
+from dataclasses import dataclass, field
+from typing import Dict, Optional, List, Any
 from datetime import datetime
 import uuid
 
@@ -229,3 +229,181 @@ class FeatureImportanceSnapshot:
             prediction_classes_hash=data.get("prediction_classes_hash"),
             prediction_kind=data.get("prediction_kind"),
         )
+
+
+@dataclass
+class FeatureSelectionSnapshot:
+    """
+    Full snapshot for feature selection stage - mirrors TARGET_RANKING snapshot structure.
+    
+    Written to:
+    - Per-cohort: targets/{target}/reproducibility/{view}/cohort=.../fs_snapshot.json
+    - Global index: globals/fs_snapshot_index.json
+    
+    Structure mirrors snapshot_index.json entries for TARGET_RANKING but with
+    stage="FEATURE_SELECTION" and includes method (model family).
+    """
+    # Identity
+    run_id: str
+    timestamp: str
+    stage: str = "FEATURE_SELECTION"
+    view: str = "CROSS_SECTIONAL"  # "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
+    target: str = ""
+    symbol: Optional[str] = None  # For SYMBOL_SPECIFIC views
+    method: str = ""  # Model family: "xgboost", "lightgbm", "multi_model_aggregated", etc.
+    
+    # Fingerprints (for determinism verification)
+    fingerprint_schema_version: str = "1.0"
+    config_fingerprint: Optional[str] = None
+    data_fingerprint: Optional[str] = None
+    feature_fingerprint: Optional[str] = None
+    target_fingerprint: Optional[str] = None
+    predictions_sha256: Optional[str] = None  # Aggregated prediction hash
+    
+    # Inputs (mirrors TARGET_RANKING)
+    inputs: Dict[str, Any] = field(default_factory=dict)
+    # {
+    #   "config": {"min_cs": 3, "max_cs_samples": 2000},
+    #   "data": {"n_symbols": 10, "date_start": "...", "date_end": "..."},
+    #   "target": {"target": "fwd_ret_10m", "view": "CROSS_SECTIONAL", "horizon_minutes": 10}
+    # }
+    
+    # Process
+    process: Dict[str, Any] = field(default_factory=dict)
+    # {
+    #   "split": {"cv_method": "purged_kfold", "purge_minutes": 245.0, "split_seed": 42}
+    # }
+    
+    # Outputs
+    outputs: Dict[str, Any] = field(default_factory=dict)
+    # {
+    #   "metrics": {"n_features_selected": 15, "mean_importance": 0.26},
+    #   "top_features": ["low_vol_frac", "ret_zscore_15m", ...]
+    # }
+    
+    # Comparison group (for cross-run matching)
+    comparison_group: Dict[str, Any] = field(default_factory=dict)
+    # {
+    #   "dataset_signature": "...",
+    #   "split_signature": "...",
+    #   "train_seed": 42,
+    #   "universe_sig": "ef91e9db233a"
+    # }
+    
+    # Path to this snapshot (for global index)
+    path: Optional[str] = None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "run_id": self.run_id,
+            "timestamp": self.timestamp,
+            "stage": self.stage,
+            "view": self.view,
+            "target": self.target,
+            "symbol": self.symbol,
+            "method": self.method,
+            "fingerprint_schema_version": self.fingerprint_schema_version,
+            "config_fingerprint": self.config_fingerprint,
+            "data_fingerprint": self.data_fingerprint,
+            "feature_fingerprint": self.feature_fingerprint,
+            "target_fingerprint": self.target_fingerprint,
+            "predictions_sha256": self.predictions_sha256,
+            "inputs": self.inputs,
+            "process": self.process,
+            "outputs": self.outputs,
+            "comparison_group": self.comparison_group,
+            "path": self.path,
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'FeatureSelectionSnapshot':
+        """Create from dictionary (loaded from JSON)."""
+        return cls(
+            run_id=data.get("run_id", ""),
+            timestamp=data.get("timestamp", ""),
+            stage=data.get("stage", "FEATURE_SELECTION"),
+            view=data.get("view", "CROSS_SECTIONAL"),
+            target=data.get("target", ""),
+            symbol=data.get("symbol"),
+            method=data.get("method", ""),
+            fingerprint_schema_version=data.get("fingerprint_schema_version", "1.0"),
+            config_fingerprint=data.get("config_fingerprint"),
+            data_fingerprint=data.get("data_fingerprint"),
+            feature_fingerprint=data.get("feature_fingerprint"),
+            target_fingerprint=data.get("target_fingerprint"),
+            predictions_sha256=data.get("predictions_sha256"),
+            inputs=data.get("inputs", {}),
+            process=data.get("process", {}),
+            outputs=data.get("outputs", {}),
+            comparison_group=data.get("comparison_group", {}),
+            path=data.get("path"),
+        )
+    
+    @classmethod
+    def from_importance_snapshot(
+        cls,
+        importance_snapshot: FeatureImportanceSnapshot,
+        view: str = "CROSS_SECTIONAL",
+        symbol: Optional[str] = None,
+        inputs: Optional[Dict[str, Any]] = None,
+        process: Optional[Dict[str, Any]] = None,
+        outputs: Optional[Dict[str, Any]] = None,
+        stage: str = "FEATURE_SELECTION",  # Allow caller to specify stage
+    ) -> 'FeatureSelectionSnapshot':
+        """
+        Create from a FeatureImportanceSnapshot with additional context.
+        
+        This bridges the existing snapshot system with the new full structure.
+        
+        Args:
+            stage: Pipeline stage - "FEATURE_SELECTION" (default) or "TARGET_RANKING"
+        """
+        # Build comparison group from importance snapshot signatures
+        comparison_group = {}
+        if importance_snapshot.dataset_signature:
+            comparison_group["dataset_signature"] = importance_snapshot.dataset_signature
+        if importance_snapshot.split_signature:
+            comparison_group["split_signature"] = importance_snapshot.split_signature
+        if importance_snapshot.target_signature:
+            comparison_group["target_signature"] = importance_snapshot.target_signature
+        if importance_snapshot.routing_signature:
+            comparison_group["routing_signature"] = importance_snapshot.routing_signature
+        if importance_snapshot.train_seed is not None:
+            comparison_group["train_seed"] = importance_snapshot.train_seed
+        if importance_snapshot.universe_sig:
+            comparison_group["universe_sig"] = importance_snapshot.universe_sig
+        
+        # Build outputs from importance data
+        default_outputs = {
+            "metrics": {
+                "n_features": len(importance_snapshot.features),
+                "mean_importance": sum(importance_snapshot.importances) / len(importance_snapshot.importances) if importance_snapshot.importances else 0,
+            },
+            "top_features": importance_snapshot.features[:10],  # Top 10 features
+        }
+        
+        return cls(
+            run_id=importance_snapshot.run_id,
+            timestamp=importance_snapshot.created_at.isoformat(),
+            stage=stage,  # Use caller-provided stage
+            view=view,
+            target=importance_snapshot.target,
+            symbol=symbol,
+            method=importance_snapshot.method,
+            feature_fingerprint=importance_snapshot.feature_signature,
+            predictions_sha256=importance_snapshot.prediction_hash,
+            inputs=inputs or {},
+            process=process or {},
+            outputs=outputs or default_outputs,
+            comparison_group=comparison_group,
+        )
+    
+    def get_index_key(self) -> str:
+        """
+        Generate index key for globals/fs_snapshot_index.json.
+        
+        Format: {timestamp}:{stage}:{target}:{view}:{method}:{symbol_or_NONE}
+        """
+        symbol_part = self.symbol if self.symbol else "NONE"
+        return f"{self.timestamp}:{self.stage}:{self.target}:{self.view}:{self.method}:{symbol_part}"

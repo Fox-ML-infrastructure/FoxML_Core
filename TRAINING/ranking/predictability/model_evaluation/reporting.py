@@ -249,6 +249,7 @@ def save_feature_importances(
                     prediction_fp = model_metrics[model_name].get('prediction_fingerprint')
                 
                 # Use properly scoped structure for snapshots
+                # NOTE: This is called from TARGET_RANKING stage (model_evaluation.py)
                 save_snapshot_hook(
                     target=target_column,
                     method=model_name,
@@ -259,6 +260,7 @@ def save_feature_importances(
                     run_identity=run_identity,  # Pass finalized identity for hash-based storage
                     allow_legacy=(run_identity is None),  # Allow legacy if identity computation failed
                     prediction_fingerprint=prediction_fp,  # Pass prediction hash for determinism tracking
+                    stage="TARGET_RANKING",  # Correctly label as TARGET_RANKING stage
                 )
             except Exception as e:
                 logger.debug(f"Stability snapshot save failed (non-critical): {e}")

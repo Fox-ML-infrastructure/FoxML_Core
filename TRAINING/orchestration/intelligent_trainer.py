@@ -2582,6 +2582,21 @@ class IntelligentTrainer:
         
         # Call the training function
         logger.info("Starting model training...")
+        
+        # SST: Create partial identity for TRAINING stage (mirrors FEATURE_SELECTION pattern)
+        training_identity = None
+        try:
+            from TRAINING.common.utils.fingerprinting import create_stage_identity
+            training_identity = create_stage_identity(
+                stage="TRAINING",
+                symbols=symbols,  # Full universe
+                experiment_config=self.experiment_config,
+                data_dir=self.data_dir,
+            )
+            logger.debug(f"Created TRAINING identity with train_seed={training_identity.train_seed}")
+        except Exception as e:
+            logger.debug(f"Failed to create TRAINING identity: {e}")
+        
         training_results = train_models_for_interval_comprehensive(
             interval=interval,
             targets=filtered_targets,  # Use filtered targets
@@ -2594,7 +2609,9 @@ class IntelligentTrainer:
             max_rows_train=max_rows_train,
             target_features=features_to_use,
             target_families=target_families_map if target_families_map else None,  # Per-target families from plan
-            routing_decisions=routing_decisions_for_training  # Pass routing decisions
+            routing_decisions=routing_decisions_for_training,  # Pass routing decisions
+            run_identity=training_identity,  # SST: Pass identity for reproducibility tracking
+            experiment_config=self.experiment_config,  # SST: For fallback identity creation
         )
         
         logger.info("="*80)
