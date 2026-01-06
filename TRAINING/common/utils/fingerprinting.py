@@ -410,8 +410,7 @@ def create_stage_identity(
             from TRAINING.orchestration.utils.run_context import compute_universe_signature
             universe_sig = compute_universe_signature(symbols) or ""
         except Exception:
-            # Fallback: compute manually
-            import hashlib
+            # Fallback: compute manually (uses module-level hashlib import)
             symbols_str = "|".join(sorted(symbols))
             universe_sig = hashlib.sha256(symbols_str.encode()).hexdigest()
     
