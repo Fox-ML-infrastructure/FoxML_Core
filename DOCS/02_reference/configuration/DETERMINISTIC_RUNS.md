@@ -18,8 +18,14 @@ python TRAINING/orchestration/intelligent_trainer.py --experiment-config your_co
 
 | Mode | Command | Reproducibility | Performance |
 |------|---------|-----------------|-------------|
-| **Strict** | `bin/run_deterministic.sh python ...` | Bitwise identical | CPU only, single-threaded |
+| **Strict** | `bin/run_deterministic.sh python ...` | Bitwise identical | CPU only (GPU disabled) |
 | **Best Effort** | `python ...` | Seeded but may vary | Full GPU/parallelism |
+
+## What Causes Non-Determinism?
+
+**GPU is the primary source of non-determinism.** GPU operations use parallel floating-point arithmetic where operation ordering is not guaranteed, causing slight numerical differences between runs.
+
+**Multithreading with CPU is generally deterministic** when models are properly seeded. The pipeline sets seeds for all randomness sources, so multithreaded CPU execution typically produces identical results.
 
 ## What Strict Mode Does
 
@@ -28,16 +34,17 @@ The launcher script (`bin/run_deterministic.sh`) sets critical environment varia
 ```bash
 PYTHONHASHSEED=42        # Deterministic Python hash
 REPRO_MODE=strict        # Enable strict mode
-OMP_NUM_THREADS=1        # Single-threaded OpenMP
-MKL_NUM_THREADS=1        # Single-threaded MKL
-CUBLAS_WORKSPACE_CONFIG=:4096:8  # CUDA determinism
+OMP_NUM_THREADS=1        # Single-threaded OpenMP (conservative)
+MKL_NUM_THREADS=1        # Single-threaded MKL (conservative)
+CUBLAS_WORKSPACE_CONFIG=:4096:8  # CUDA determinism (if GPU used)
 ```
 
 The training pipeline then:
-- Forces all models to use `n_jobs=1` (single-threaded)
-- Forces tree models to use `device_type=cpu` (no GPU)
+- **Forces tree models to use `device_type=cpu`** (no GPU) - this is the critical setting
 - Sets `deterministic=True` for LightGBM
+- Uses `n_jobs=1` (conservative, but multithreading may work)
 - Uses SHA256-based seed derivation for stability
+- Injects seeds into all model configs automatically
 
 ## Verification
 
@@ -86,21 +93,30 @@ If all signatures match between runs, the configuration is identical.
 
 ## Config Requirements
 
-For deterministic runs, your experiment config MUST disable parallelism:
+For guaranteed deterministic runs, your experiment config should disable GPU:
 
 ```yaml
-multi_target:
-  parallel_targets: false  # Sequential execution
+# The critical setting - GPU is the source of non-determinism
+reproducibility:
+  mode: strict
+  strict:
+    disable_gpu_tree_models: true  # REQUIRED for determinism
+```
 
-multi_model_feature_selection:
-  parallel_symbols: false  # Sequential execution
+**Optional (conservative) settings:**
+
+```yaml
+# These are set by the launcher script but may not be strictly necessary
+# if all models are properly seeded
+multi_target:
+  parallel_targets: false  # Sequential (conservative)
 
 threading:
   parallel:
-    max_workers_process: 1  # Single worker
-    max_workers_thread: 1   # Single worker
-    enabled: false          # Disable parallelism
+    enabled: false  # Disable parallelism (conservative)
 ```
+
+**Note:** Multithreading with properly seeded CPU models typically produces identical results. The single-threaded settings are conservative guarantees, not strict requirements.
 
 See `CONFIG/experiments/determinism_test.yaml` for a complete example.
 
@@ -175,16 +191,18 @@ RESULTS/runs/<run_name>/
 ### reproducibility.yaml
 ```yaml
 reproducibility:
-  mode: best_effort  # Default (strict via launcher)
+  mode: strict  # or best_effort
   seed: 42
   version: v1
   
   strict:
     require_env_vars: true
-    disable_gpu_tree_models: true
-    force_single_thread: true
-    enforce_stable_ordering: true
+    disable_gpu_tree_models: true   # CRITICAL: GPU causes non-determinism
+    force_single_thread: true        # Conservative (may not be required)
+    enforce_stable_ordering: true    # Sort features/targets for stability
 ```
+
+**Key insight:** `disable_gpu_tree_models: true` is the critical setting. GPU floating-point operations have non-deterministic ordering. CPU operations with proper seeding are deterministic even with multithreading.
 
 ## For Production Financial Use
 

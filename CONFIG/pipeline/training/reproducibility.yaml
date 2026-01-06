@@ -25,10 +25,12 @@ reproducibility:
     # Hard-fail if required env vars not set
     require_env_vars: true
     
-    # Force CPU for tree models (GPU is non-deterministic)
+    # Force CPU for tree models (GPU introduces non-determinism due to 
+    # floating-point operation ordering in parallel CUDA kernels)
     disable_gpu_tree_models: true
     
-    # Force single-threaded execution
+    # Force single-threaded execution (conservative - multithreading may
+    # work for determinism with seeded models, but single-thread guarantees it)
     force_single_thread: true
     
     # Sort feature/target/fold lists for stable ordering
