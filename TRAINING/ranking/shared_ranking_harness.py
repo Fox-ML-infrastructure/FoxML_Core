@@ -254,20 +254,28 @@ class RankingHarness:
                     if "REPRODUCIBILITY" in str(base_output_dir):
                         logger.warning(f"Could not resolve REPRODUCIBILITY base from {self.output_dir}, using as-is")
                 
-                # Save to target-first structure (targets/<target>/reproducibility/feature_exclusions/)
+                # Save to target-first structure with view scoping
+                # (targets/<target>/reproducibility/<VIEW>/[symbol=...]/feature_exclusions/)
                 from TRAINING.orchestration.utils.target_first_paths import (
-                    get_target_reproducibility_dir, ensure_target_structure
+                    ensure_scoped_artifact_dir, ensure_target_structure
                 )
                 ensure_target_structure(base_output_dir, target_clean)
-                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
-                target_exclusion_dir = target_repro_dir / "feature_exclusions"
+                target_exclusion_dir = ensure_scoped_artifact_dir(
+                    base_output_dir, target_clean, "feature_exclusions",
+                    view=self.view, symbol=self.symbol
+                )
             
             target_exclusion_dir.mkdir(parents=True, exist_ok=True)
             
-            # Try to load existing exclusion list first (check target-first structure)
+            # Try to load existing exclusion list first (check target-first structure with view scoping)
             existing_exclusions = load_target_exclusion_list(target, target_exclusion_dir)
             if existing_exclusions is None:
-                # Fallback to legacy location (for reading existing runs only)
+                # Fallback to old target-first location (unscoped by view)
+                from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+                legacy_target_dir = get_target_reproducibility_dir(base_output_dir, target_clean) / "feature_exclusions"
+                existing_exclusions = load_target_exclusion_list(target, legacy_target_dir)
+            if existing_exclusions is None:
+                # Fallback to legacy REPRODUCIBILITY location
                 if self.job_type == "rank_targets":
                     legacy_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / self.view / target_clean / "feature_exclusions"
                 elif self.job_type == "rank_features":
