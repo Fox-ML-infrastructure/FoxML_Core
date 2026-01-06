@@ -261,16 +261,23 @@ def load_snapshots(
     return []
 
 
-def get_snapshot_base_dir(output_dir: Optional[Path] = None, target: Optional[str] = None) -> Path:
+def get_snapshot_base_dir(
+    output_dir: Optional[Path] = None,
+    target: Optional[str] = None,
+    view: str = "CROSS_SECTIONAL",
+    symbol: Optional[str] = None,
+) -> Path:
     """
     Get base directory for snapshots.
     
-    Uses target-first structure if output_dir and target are provided.
+    Uses target-first structure scoped by view if output_dir and target are provided.
     Never creates root-level feature_importance_snapshots directory.
     
     Args:
         output_dir: Optional output directory (snapshots go in target-first structure)
         target: Optional target name for target-first structure
+        view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC" for scoping
+        symbol: Symbol name for SYMBOL_SPECIFIC view
     
     Returns:
         Path to base snapshot directory
@@ -300,12 +307,14 @@ def get_snapshot_base_dir(output_dir: Optional[Path] = None, target: Optional[st
         if base_output_dir.exists() and (base_output_dir / "targets").exists():
             try:
                 from TRAINING.orchestration.utils.target_first_paths import (
-                    get_target_reproducibility_dir, ensure_target_structure
+                    ensure_scoped_artifact_dir, ensure_target_structure
                 )
                 target_clean = target.replace('/', '_').replace('\\', '_')
                 ensure_target_structure(base_output_dir, target_clean)
-                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
-                return target_repro_dir / "feature_importance_snapshots"
+                return ensure_scoped_artifact_dir(
+                    base_output_dir, target_clean, "feature_importance_snapshots",
+                    view=view, symbol=symbol
+                )
             except Exception as e:
                 # If target-first structure fails, raise error (no fallback to artifacts)
                 raise RuntimeError(

@@ -175,9 +175,9 @@ def save_snapshot_hook(
         )
         
         # Save snapshot
-        # Use target for target-first structure
+        # Use target for target-first structure with view/symbol scoping
         # Snapshots should only be saved to target-specific directories, never at root level
-        base_dir = get_snapshot_base_dir(output_dir, target=target)
+        base_dir = get_snapshot_base_dir(output_dir, target=target, view=view or "CROSS_SECTIONAL", symbol=symbol)
         snapshot_path = save_importance_snapshot(snapshot, base_dir, use_hash_path=use_hash_path)
         
         logger.debug(f"Saved importance snapshot: {snapshot_path}")

@@ -116,6 +116,81 @@ def get_target_reproducibility_dir(base_output_dir: Path, target: str) -> Path:
     return get_target_dir(base_output_dir, target) / "reproducibility"
 
 
+def get_scoped_artifact_dir(
+    base_output_dir: Path,
+    target: str,
+    artifact_type: str,
+    view: str = "CROSS_SECTIONAL",
+    symbol: Optional[str] = None,
+    universe_sig: Optional[str] = None,
+) -> Path:
+    """
+    Get view-scoped artifact directory for a target.
+    
+    Artifacts are scoped by view and optionally by symbol to support:
+    - Different feature exclusions per view/symbol
+    - Different feature importance snapshots per view/symbol
+    - Different featureset artifacts per view/symbol
+    
+    Args:
+        base_output_dir: Base run output directory
+        target: Target name
+        artifact_type: Type of artifact ("feature_exclusions", "feature_importance_snapshots", "featureset_artifacts")
+        view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
+        symbol: Symbol name for SYMBOL_SPECIFIC view (required if view is SYMBOL_SPECIFIC)
+        universe_sig: Optional universe signature for additional scoping
+    
+    Returns:
+        Path to targets/<target>/reproducibility/<VIEW>/[symbol=<symbol>/][universe=<universe>/]<artifact_type>/
+    
+    Examples:
+        CROSS_SECTIONAL: targets/fwd_ret_10m/reproducibility/CROSS_SECTIONAL/universe=abc123/feature_exclusions/
+        SYMBOL_SPECIFIC: targets/fwd_ret_10m/reproducibility/SYMBOL_SPECIFIC/symbol=AAPL/universe=abc123/feature_exclusions/
+    """
+    repro_dir = get_target_reproducibility_dir(base_output_dir, target)
+    
+    # Normalize view
+    view_upper = view.upper() if view else "CROSS_SECTIONAL"
+    if view_upper not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
+        view_upper = "CROSS_SECTIONAL"
+    
+    # Build path
+    artifact_path = repro_dir / view_upper
+    
+    # Add symbol for SYMBOL_SPECIFIC view
+    if view_upper == "SYMBOL_SPECIFIC" and symbol:
+        artifact_path = artifact_path / f"symbol={symbol}"
+    
+    # Add universe signature if provided
+    if universe_sig:
+        artifact_path = artifact_path / f"universe={universe_sig}"
+    
+    # Add artifact type
+    artifact_path = artifact_path / artifact_type
+    
+    return artifact_path
+
+
+def ensure_scoped_artifact_dir(
+    base_output_dir: Path,
+    target: str,
+    artifact_type: str,
+    view: str = "CROSS_SECTIONAL",
+    symbol: Optional[str] = None,
+    universe_sig: Optional[str] = None,
+) -> Path:
+    """
+    Get view-scoped artifact directory and ensure it exists.
+    
+    Same as get_scoped_artifact_dir but creates the directory if it doesn't exist.
+    """
+    artifact_dir = get_scoped_artifact_dir(
+        base_output_dir, target, artifact_type, view, symbol, universe_sig
+    )
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    return artifact_dir
+
+
 def get_global_trends_dir(base_output_dir: Path) -> Path:
     """
     Get global trends directory (cross-target within-run analyses).

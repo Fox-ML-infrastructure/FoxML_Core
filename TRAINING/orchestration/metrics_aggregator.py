@@ -590,26 +590,38 @@ class MetricsAggregator:
             view = "CROSS_SECTIONAL" if (universe_sig == "ALL" or universe_sig is None) else "SYMBOL_SPECIFIC"
             symbol = None if view == "CROSS_SECTIONAL" else universe_sig
             
-            # Build REPRODUCIBILITY path for snapshots
+            # Build paths for snapshots (target-first with view scoping + legacy fallback)
             target_clean = target.replace('/', '_').replace('\\', '_')
-            if view == "SYMBOL_SPECIFIC" and symbol:
-                # Try FEATURE_SELECTION first (for feature selection metrics)
-                repro_base_fs = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view / target_clean / f"symbol={symbol}"
-                snapshot_base_dir_fs = get_snapshot_base_dir(repro_base_fs)
-                # Also try TARGET_RANKING
-                repro_base_tr = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / view / target_clean / f"symbol={symbol}"
-                snapshot_base_dir_tr = get_snapshot_base_dir(repro_base_tr)
-            else:
-                # Try FEATURE_SELECTION first
-                repro_base_fs = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view / target_clean
-                snapshot_base_dir_fs = get_snapshot_base_dir(repro_base_fs)
-                # Also try TARGET_RANKING
-                repro_base_tr = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / view / target_clean
-                snapshot_base_dir_tr = get_snapshot_base_dir(repro_base_tr)
             
-            # Try loading from target-first first, then legacy locations (feature selection and target ranking)
+            # Try target-first structure with view scoping (new path)
+            try:
+                snapshot_base_dir_scoped = get_snapshot_base_dir(
+                    base_output_dir, target=target_clean, view=view, symbol=symbol
+                )
+            except Exception:
+                snapshot_base_dir_scoped = None
+            
+            # Fallback: target-first without view scoping (old target-first path)
+            try:
+                from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
+                snapshot_base_dir_unscoped = target_repro_dir / "feature_importance_snapshots"
+            except Exception:
+                snapshot_base_dir_unscoped = None
+            
+            # Legacy REPRODUCIBILITY paths
+            if view == "SYMBOL_SPECIFIC" and symbol:
+                repro_base_fs = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view / target_clean / f"symbol={symbol}"
+                repro_base_tr = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / view / target_clean / f"symbol={symbol}"
+            else:
+                repro_base_fs = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view / target_clean
+                repro_base_tr = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / view / target_clean
+            snapshot_base_dir_fs = repro_base_fs / "feature_importance_snapshots" if repro_base_fs.exists() else None
+            snapshot_base_dir_tr = repro_base_tr / "feature_importance_snapshots" if repro_base_tr.exists() else None
+            
+            # Try loading from all possible locations
             snapshots = []
-            for snapshot_base_dir in [snapshot_base_dir_target, snapshot_base_dir_fs, snapshot_base_dir_tr]:
+            for snapshot_base_dir in [snapshot_base_dir_scoped, snapshot_base_dir_unscoped, snapshot_base_dir_fs, snapshot_base_dir_tr]:
                 if snapshot_base_dir is None:
                     continue
                 if snapshot_base_dir.exists():

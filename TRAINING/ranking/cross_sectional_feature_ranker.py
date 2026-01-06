@@ -574,14 +574,18 @@ def compute_cross_sectional_stability(
             
             if base_output_dir.exists():
                 target_clean = target_column.replace('/', '_').replace('\\', '_')
-                from TRAINING.orchestration.utils.target_first_paths import (
-                    get_target_reproducibility_dir, ensure_target_structure
-                )
+                from TRAINING.orchestration.utils.target_first_paths import ensure_target_structure
                 ensure_target_structure(base_output_dir, target_clean)
-                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
-                snapshot_base_dir = get_snapshot_base_dir(target_repro_dir, target=target_column)
+                # Cross-sectional importance is always CROSS_SECTIONAL view
+                snapshot_base_dir = get_snapshot_base_dir(
+                    output_dir, target=target_column,
+                    view="CROSS_SECTIONAL", symbol=None
+                )
         else:
-            snapshot_base_dir = get_snapshot_base_dir(output_dir, target=target_column)
+            snapshot_base_dir = get_snapshot_base_dir(
+                output_dir, target=target_column,
+                view="CROSS_SECTIONAL", symbol=None
+            )
         
         if snapshot_base_dir:
             # Compute CS identity from passed run_identity

@@ -16,6 +16,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights
 
+#### 2026-01-06 (View-Scoped Artifact Paths)
+- **Enhancement**: Artifacts now scoped by view/symbol for proper separation.
+  - `target_first_paths.py`: Added `get_scoped_artifact_dir()` and `ensure_scoped_artifact_dir()` helpers
+  - Path pattern: `targets/<target>/reproducibility/<VIEW>/[symbol=<symbol>/]<artifact_type>/`
+- **Updated Callers**:
+  - `model_evaluation.py`: Feature exclusions and featureset artifacts now use view-scoped paths
+  - `io.py`: `get_snapshot_base_dir()` now accepts `view` and `symbol` parameters
+  - `hooks.py`: Updated `save_snapshot_hook()` to pass view/symbol to `get_snapshot_base_dir()`
+  - `cross_sectional_feature_ranker.py`: Updated snapshot base dir calls for CROSS_SECTIONAL view
+  - `metrics_aggregator.py`: Updated stability analysis to search both scoped and unscoped paths
+- **Backwards Compatibility**: Reader functions search both new scoped paths and old unscoped paths.
+- **Impact**: Artifacts for different views (CROSS_SECTIONAL vs SYMBOL_SPECIFIC) no longer collide.
+
 #### 2026-01-06 (Snapshot Output Fixes and Human-Readable Manifests)
 - **Critical Fix**: Fixed stage case mismatch causing FEATURE_SELECTION snapshots to not be written.
   - `model_evaluation.py`: Changed `stage="target_ranking"` to `stage="TARGET_RANKING"` (uppercase)

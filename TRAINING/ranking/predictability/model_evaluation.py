@@ -918,15 +918,16 @@ def train_and_evaluate_models(
                         if base_output_dir.exists():
                             try:
                                 from TRAINING.orchestration.utils.target_first_paths import (
-                                    get_target_reproducibility_dir, ensure_target_structure
+                                    ensure_scoped_artifact_dir, ensure_target_structure
                                 )
                                 target_clean = target_column.replace('/', '_').replace('\\', '_')
                                 ensure_target_structure(base_output_dir, target_clean)
-                                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
-                                target_artifact_dir = target_repro_dir / "featureset_artifacts"
-                                target_artifact_dir.mkdir(parents=True, exist_ok=True)
+                                target_artifact_dir = ensure_scoped_artifact_dir(
+                                    base_output_dir, target_clean, "featureset_artifacts",
+                                    view=view, symbol=symbol
+                                )
                                 post_prune_artifact.save(target_artifact_dir)
-                                logger.debug(f"Saved POST_PRUNE artifact to target-first location: {target_artifact_dir}")
+                                logger.debug(f"Saved POST_PRUNE artifact to view-scoped location: {target_artifact_dir}")
                             except Exception as e2:
                                 logger.debug(f"Failed to save POST_PRUNE artifact to target-first location: {e2}")
                     
@@ -5290,22 +5291,28 @@ def evaluate_target_predictability(
         else:
             base_output_dir = output_dir
         
-        # Save feature exclusions to target-first structure (targets/<target>/reproducibility/feature_exclusions/)
-        # Note: Exclusions are shared at target level (not per-symbol, not per-cohort)
+        # Save feature exclusions to target-first structure scoped by view
+        # (targets/<target>/reproducibility/<VIEW>/[symbol=...]/feature_exclusions/)
         target_clean = target.replace('/', '_').replace('\\', '_')
         
         from TRAINING.orchestration.utils.target_first_paths import (
-            get_target_reproducibility_dir, ensure_target_structure
+            ensure_scoped_artifact_dir, ensure_target_structure
         )
         ensure_target_structure(base_output_dir, target_clean)
-        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
-        target_exclusion_dir = target_repro_dir / "feature_exclusions"
-        target_exclusion_dir.mkdir(parents=True, exist_ok=True)
+        target_exclusion_dir = ensure_scoped_artifact_dir(
+            base_output_dir, target_clean, "feature_exclusions",
+            view=view, symbol=symbol
+        )
         
         # Try to load existing exclusion list first (check target-first structure)
         existing_exclusions = load_target_exclusion_list(target, target_exclusion_dir)
         if existing_exclusions is None:
-            # Fallback to legacy location (for reading existing runs only)
+            # Fallback to old target-first location (unscoped by view)
+            from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+            legacy_target_dir = get_target_reproducibility_dir(base_output_dir, target_clean) / "feature_exclusions"
+            existing_exclusions = load_target_exclusion_list(target, legacy_target_dir)
+        if existing_exclusions is None:
+            # Fallback to legacy REPRODUCIBILITY location
             legacy_repro_base = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING"
             legacy_exclusion_dir = legacy_repro_base / view / target_clean / "feature_exclusions"
             existing_exclusions = load_target_exclusion_list(target, legacy_exclusion_dir)
