@@ -6580,7 +6580,10 @@ def evaluate_target_predictability(
                     except Exception:
                         train_seed = 42  # FALLBACK_DEFAULT_OK
                 
-                # Create identity per model family and save
+                # FIX: Create per-model identity dict to avoid strict_key collisions
+                # Each model family gets its own identity based on its hparams_signature
+                per_model_identities = {}  # Dict[str, RunIdentity]
+                
                 # Check if we have any feature importances to process
                 if not feature_importances:
                     logger.warning("No feature_importances available - cannot compute local target_ranking_identity")
@@ -6589,51 +6592,56 @@ def evaluate_target_predictability(
                         if not model_importances:
                             continue
                         
-                        # Hparams signature for this family
-                        family_config = {}
-                        if multi_model_config and 'model_families' in multi_model_config:
-                            family_config = multi_model_config['model_families'].get(model_family, {})
-                        hparams_signature = compute_hparams_fingerprint(
-                            model_family=model_family,
-                            params=family_config.get('params', family_config),
-                        )
-                        
-                        # Feature signature from features in this model's importances (registry-resolved)
-                        from TRAINING.common.utils.fingerprinting import resolve_feature_specs_from_registry
-                        feature_specs = resolve_feature_specs_from_registry(list(model_importances.keys()))
-                        feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
-                        
-                        # Create partial and finalize
-                        partial = RunIdentity(
-                            dataset_signature=dataset_signature or "",
-                            split_signature=split_signature or "",
-                            target_signature=target_signature or "",
-                            feature_signature=None,
-                            hparams_signature=hparams_signature or "",
-                            routing_signature=routing_signature or "",
-                            routing_payload=routing_payload,
-                            train_seed=train_seed,
-                            is_final=False,
-                        )
-                        target_ranking_identity = partial.finalize(feature_signature)
-                        break  # Use first model's identity for the batch save
+                        try:
+                            # Hparams signature for this family
+                            family_config = {}
+                            if multi_model_config and 'model_families' in multi_model_config:
+                                family_config = multi_model_config['model_families'].get(model_family, {})
+                            hparams_signature = compute_hparams_fingerprint(
+                                model_family=model_family,
+                                params=family_config.get('params', family_config),
+                            )
+                            
+                            # Feature signature from features in this model's importances (registry-resolved)
+                            from TRAINING.common.utils.fingerprinting import resolve_feature_specs_from_registry
+                            feature_specs = resolve_feature_specs_from_registry(list(model_importances.keys()))
+                            feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
+                            
+                            # Create partial and finalize for THIS model family
+                            partial = RunIdentity(
+                                dataset_signature=dataset_signature or "",
+                                split_signature=split_signature or "",
+                                target_signature=target_signature or "",
+                                feature_signature=None,
+                                hparams_signature=hparams_signature or "",
+                                routing_signature=routing_signature or "",
+                                routing_payload=routing_payload,
+                                train_seed=train_seed,
+                                is_final=False,
+                            )
+                            per_model_identities[model_family] = partial.finalize(feature_signature)
+                        except Exception as model_e:
+                            logger.debug(f"Failed to compute identity for {model_family}: {model_e}")
+                        # NO break - continue loop to build identity for ALL models
             except Exception as e:
                 logger.warning(f"Failed to compute RunIdentity for target ranking: {e}")  # Upgraded from debug
-                target_ranking_identity = None
             
-            # CRITICAL: Use passed-in run_identity as fallback if local computation failed
-            # This ensures stability hooks get a valid identity for auditability
-            identity_for_save = target_ranking_identity or run_identity
-            if identity_for_save is None:
-                # Check strict mode and log appropriately
-                try:
-                    from TRAINING.common.determinism import is_strict_mode
-                    if is_strict_mode():
-                        logger.error("STRICT MODE: No RunIdentity available for feature importance snapshot - reproducibility compromised")
-                    else:
-                        logger.warning("No RunIdentity available for feature importance snapshot (non-strict mode)")
-                except Exception:
-                    logger.warning("No RunIdentity available for feature importance snapshot")
+            # FIX: Pass per-model identity dict if we have any, else fallback to shared identity
+            if per_model_identities:
+                identity_for_save = per_model_identities  # Dict[str, RunIdentity]
+                logger.debug(f"Created per-model identities for {len(per_model_identities)} model families")
+            else:
+                identity_for_save = run_identity  # Fallback to shared identity
+                if identity_for_save is None:
+                    # Check strict mode and log appropriately
+                    try:
+                        from TRAINING.common.determinism import is_strict_mode
+                        if is_strict_mode():
+                            logger.error("STRICT MODE: No RunIdentity available for feature importance snapshot - reproducibility compromised")
+                        else:
+                            logger.warning("No RunIdentity available for feature importance snapshot (non-strict mode)")
+                    except Exception:
+                        logger.warning("No RunIdentity available for feature importance snapshot")
             
             _save_feature_importances(
                 target_column, 

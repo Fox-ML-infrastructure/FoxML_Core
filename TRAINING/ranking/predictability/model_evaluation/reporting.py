@@ -142,7 +142,7 @@ def save_feature_importances(
     output_dir: Path = None,
     view: str = "CROSS_SECTIONAL",
     universe_sig: Optional[str] = None,  # PATCH 4: Required for proper scoping
-    run_identity: Optional[Any] = None,  # Finalized RunIdentity for hash-based storage
+    run_identity: Optional[Any] = None,  # Finalized RunIdentity OR Dict[str, RunIdentity] per model
     model_metrics: Optional[Dict[str, Dict]] = None,  # Model metrics with prediction fingerprints
 ) -> None:
     """
@@ -161,7 +161,8 @@ def save_feature_importances(
         output_dir: Base output directory (defaults to results/)
         view: CROSS_SECTIONAL or SYMBOL_SPECIFIC
         universe_sig: Universe signature from SST (required for proper scoping)
-        run_identity: Finalized RunIdentity for hash-based storage
+        run_identity: Finalized RunIdentity for hash-based storage, OR Dict[str, RunIdentity]
+                      mapping model_name -> identity for per-model snapshots
         model_metrics: Model metrics dict containing prediction fingerprints
     """
     # PATCH 4: Require universe_sig for proper scoping
@@ -248,6 +249,18 @@ def save_feature_importances(
                 if model_metrics and model_name in model_metrics:
                     prediction_fp = model_metrics[model_name].get('prediction_fingerprint')
                 
+                # FIX: Look up per-model identity if run_identity is a dict
+                # This ensures each model gets its own strict_key/replicate_key
+                model_identity = None
+                if isinstance(run_identity, dict):
+                    # Per-model identity dict: {model_name: RunIdentity}
+                    model_identity = run_identity.get(model_name)
+                    if model_identity is None:
+                        logger.debug(f"No per-model identity for {model_name}, using legacy path")
+                else:
+                    # Shared identity (fallback) - all models use same keys (may overwrite)
+                    model_identity = run_identity
+                
                 # Use properly scoped structure for snapshots
                 # NOTE: This is called from TARGET_RANKING stage (model_evaluation.py)
                 # We disable fs_snapshot here - TARGET_RANKING uses snapshot.json, not fs_snapshot.json
@@ -258,7 +271,7 @@ def save_feature_importances(
                     universe_sig=universe_sig,  # Use universe_sig, not view
                     output_dir=target_repro_dir,  # Save snapshots in scoped structure
                     auto_analyze=None,  # Load from config
-                    run_identity=run_identity,  # Pass finalized identity for hash-based storage
+                    run_identity=model_identity,  # FIX: Use per-model identity
                     allow_legacy=True,  # FIX: Ensure ALL model families get snapshots
                     prediction_fingerprint=prediction_fp,  # Pass prediction hash for determinism tracking
                     stage="TARGET_RANKING",  # Correctly label as TARGET_RANKING stage
