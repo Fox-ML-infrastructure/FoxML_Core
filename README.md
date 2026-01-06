@@ -1,5 +1,9 @@
 # FoxML Core — ML Cross-Sectional Infrastructure
 
+**FoxML is research-grade ML infrastructure. It assumes prior experience with Python, Linux, and quantitative workflows.**
+
+> ⚠️ **Disclaimer:** This software is provided for research and educational purposes only. It does not constitute financial advice, and no guarantees of returns or performance are made. Use at your own risk.
+
 > **License:**  
 > - **AGPL-3.0** (open source)  
 > - **Commercial License** (for proprietary or for-profit use)  
