@@ -194,7 +194,9 @@ class RunIdentity:
     dataset_signature: str = ""
     split_signature: str = ""
     target_signature: str = ""
-    feature_signature: Optional[str] = None  # None for partial, set when finalized
+    feature_signature: Optional[str] = None  # None for partial, set when finalized (alias for feature_signature_output)
+    feature_signature_input: Optional[str] = None  # Candidate feature universe entering FS stage
+    feature_signature_output: Optional[str] = None  # Selected features exiting FS stage
     hparams_signature: str = ""
     routing_signature: str = ""
     
@@ -273,6 +275,8 @@ class RunIdentity:
             split_signature=self.split_signature,
             target_signature=self.target_signature,
             feature_signature=feature_signature,
+            feature_signature_input=self.feature_signature_input,
+            feature_signature_output=feature_signature,  # Selected features = output
             hparams_signature=self.hparams_signature,
             routing_signature=self.routing_signature,
             routing_payload=self.routing_payload,
@@ -411,22 +415,34 @@ def create_stage_identity(
             symbols_str = "|".join(sorted(symbols))
             universe_sig = hashlib.sha256(symbols_str.encode()).hexdigest()
     
-    # Seed with fallback chain
-    train_seed = None
+    # Seed derivation: prefer config seed, then derive from universe_sig for reproducibility
+    # This ensures: same universe + same config = same seed
+    base_seed = None
     if experiment_config and hasattr(experiment_config, 'seed'):
-        train_seed = experiment_config.seed
-    if train_seed is None:
+        base_seed = experiment_config.seed
+    if base_seed is None:
         try:
             from CONFIG.config_loader import get_cfg
-            train_seed = get_cfg("pipeline.determinism.base_seed", default=42)
+            base_seed = get_cfg("pipeline.determinism.base_seed", default=42)
         except Exception:
-            train_seed = 42
+            base_seed = 42
+    
+    # FIX: Derive final seed from base_seed + universe_sig for identity-based determinism
+    # This ensures different universes get different (but reproducible) seeds
+    if universe_sig:
+        # Combine base_seed with universe_sig for per-universe determinism
+        seed_input = f"{base_seed}:{universe_sig}"
+        train_seed = int(hashlib.sha256(seed_input.encode()).hexdigest()[:8], 16) % (2**31)
+    else:
+        train_seed = base_seed
     
     return RunIdentity(
         dataset_signature=universe_sig,
         split_signature="",  # Computed after CV folds created
         target_signature="",  # Computed per-target
         feature_signature=None,  # Set via finalize()
+        feature_signature_input=None,  # Set before FS stage starts
+        feature_signature_output=None,  # Set after FS stage completes (same as feature_signature)
         hparams_signature="",  # Computed per-model
         routing_signature="",  # Computed per-view
         train_seed=train_seed,

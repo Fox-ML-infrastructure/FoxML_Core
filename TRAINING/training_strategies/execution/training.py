@@ -1061,11 +1061,46 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     "n_features": len(feature_names) if feature_names else 0,
                                     "model_family": family,
                                     "route": route,  # Add route information
+                                    "selected_features": feature_names[:20] if feature_names else [],  # FIX: Track top selected features from FS
                                     **cohort_additional_data
                                 }
                                 
                                 # Use WriteScope to populate additional_data correctly
                                 scope.to_additional_data(additional_data_with_cohort)
+                                
+                                # FIX: Compute prediction fingerprint for Training stage determinism tracking
+                                prediction_fingerprint = None
+                                try:
+                                    if strategy_manager and hasattr(strategy_manager, 'models'):
+                                        from TRAINING.common.utils.prediction_hashing import compute_prediction_fingerprint_for_model
+                                        models = strategy_manager.models
+                                        pred_hashes = []
+                                        for model_name, model in models.items():
+                                            if model is not None and hasattr(model, 'predict'):
+                                                try:
+                                                    # Use subset of X for efficiency
+                                                    X_subset = X[:min(1000, len(X))]
+                                                    preds = model.predict(X_subset)
+                                                    proba = model.predict_proba(X_subset) if hasattr(model, 'predict_proba') else None
+                                                    fp = compute_prediction_fingerprint_for_model(
+                                                        preds=preds,
+                                                        proba=proba,
+                                                        model=model,
+                                                        task_type="REGRESSION",  # Will be normalized inside
+                                                        X=X_subset,
+                                                        strict_mode=False,
+                                                    )
+                                                    if fp and fp.get('prediction_hash'):
+                                                        pred_hashes.append(fp['prediction_hash'])
+                                                except Exception as fp_e:
+                                                    logger.debug(f"Prediction fingerprint failed for {model_name}: {fp_e}")
+                                        if pred_hashes:
+                                            import hashlib
+                                            combined = hashlib.sha256('|'.join(sorted(pred_hashes)).encode()).hexdigest()
+                                            prediction_fingerprint = {'prediction_hash': combined}
+                                            logger.debug(f"✅ Computed prediction_fingerprint for {family}: {combined[:12]}...")
+                                except Exception as pf_e:
+                                    logger.debug(f"Prediction fingerprint computation failed: {pf_e}")
                                 
                                 tracker.log_comparison(
                                     stage=scope.stage.value,
@@ -1075,6 +1110,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     symbol=scope.symbol,
                                     view=scope.view.value,
                                     run_identity=effective_run_identity,  # SST: Pass identity for reproducibility
+                                    prediction_fingerprint=prediction_fingerprint,  # FIX: Add prediction fingerprint
                                 )
                         except Exception as e:
                             logger.warning(f"Reproducibility tracking failed for {family}:{target}:{symbol}: {e}")
@@ -1474,6 +1510,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     "n_features": len(feature_names) if feature_names else 0,
                                     "model_family": family,  # Add model family for routing
                                     "route": route,  # Add route information
+                                    "selected_features": feature_names[:20] if feature_names else [],  # FIX: Track top selected features from FS
                                     **cohort_additional_data  # Adds n_symbols, date_range, cs_config if available
                                 }
                                 
@@ -1498,6 +1535,36 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     else:
                                         additional_data_adapted[key] = value
                                 
+                                # FIX: Compute prediction fingerprint for Training stage determinism tracking
+                                prediction_fingerprint_cs = None
+                                try:
+                                    if model_result and model_result.get('success'):
+                                        from TRAINING.common.utils.prediction_hashing import compute_prediction_fingerprint_for_model
+                                        strategy_mgr = model_result.get('strategy_manager')
+                                        if strategy_mgr and hasattr(strategy_mgr, 'models'):
+                                            pred_hashes = []
+                                            X_for_fp = X if 'X' in locals() else None
+                                            for model_name, model in strategy_mgr.models.items():
+                                                if model is not None and hasattr(model, 'predict') and X_for_fp is not None:
+                                                    try:
+                                                        X_subset = X_for_fp[:min(1000, len(X_for_fp))]
+                                                        preds = model.predict(X_subset)
+                                                        proba = model.predict_proba(X_subset) if hasattr(model, 'predict_proba') else None
+                                                        fp = compute_prediction_fingerprint_for_model(
+                                                            preds=preds, proba=proba, model=model,
+                                                            task_type="REGRESSION", X=X_subset, strict_mode=False,
+                                                        )
+                                                        if fp and fp.get('prediction_hash'):
+                                                            pred_hashes.append(fp['prediction_hash'])
+                                                    except Exception:
+                                                        pass
+                                            if pred_hashes:
+                                                import hashlib
+                                                combined = hashlib.sha256('|'.join(sorted(pred_hashes)).encode()).hexdigest()
+                                                prediction_fingerprint_cs = {'prediction_hash': combined}
+                                except Exception:
+                                    pass
+                                
                                 tracker.log_comparison(
                                     stage=scope.stage.value if scope else "model_training",
                                     target=f"{target}:{family_normalized}",
@@ -1506,6 +1573,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     model_family=family_normalized,
                                     view=scope.view.value if scope else "CROSS_SECTIONAL",
                                     run_identity=effective_run_identity,  # SST: Pass identity for reproducibility
+                                    prediction_fingerprint=prediction_fingerprint_cs,  # FIX: Add prediction fingerprint
                                 )
                         except Exception as e:
                             logger.warning(f"Reproducibility tracking failed for {family}:{target}: {e}")

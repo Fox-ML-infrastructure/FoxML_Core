@@ -777,7 +777,7 @@ def select_features_for_target(
                                         output_dir=base_output_dir,  # Pass run directory - will use target-first structure
                                         auto_analyze=None,  # Load from config
                                         run_identity=final_identity,  # Pass FINALIZED identity
-                                        allow_legacy=(final_identity is None),  # Allow legacy only if identity failed
+                                        allow_legacy=True,  # FIX: Ensure ALL model families get snapshots
                                         view=view,  # Pass view for proper scoping
                                         symbol=symbol_to_process,  # Pass symbol for SYMBOL_SPECIFIC view
                                     )
@@ -1572,6 +1572,12 @@ def select_features_for_target(
                     identity_for_snapshot.is_final
                 )
                 
+                # FIX: Build inputs dict with selected_targets (from TARGET_RANKING stage)
+                fs_inputs = {
+                    "selected_targets": [target_column],  # This target passed TR
+                    "candidate_features": list(importance_dict.keys()) if importance_dict else [],
+                }
+                
                 save_snapshot_hook(
                     target=target_column,
                     method="multi_model_aggregated",
@@ -1583,6 +1589,7 @@ def select_features_for_target(
                     allow_legacy=(not identity_is_finalized),  # Allow legacy if identity not finalized
                     view=view,  # Pass view for proper scoping
                     symbol=symbol,  # Pass symbol for SYMBOL_SPECIFIC view
+                    inputs=fs_inputs,  # FIX: Pass inputs with selected_targets
                 )
     except Exception as e:
         logger.debug(f"Stability snapshot save failed for aggregated selection (non-critical): {e}")

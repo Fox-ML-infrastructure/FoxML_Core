@@ -256,7 +256,9 @@ class FeatureSelectionSnapshot:
     fingerprint_schema_version: str = "1.0"
     config_fingerprint: Optional[str] = None
     data_fingerprint: Optional[str] = None
-    feature_fingerprint: Optional[str] = None
+    feature_fingerprint: Optional[str] = None  # Alias for feature_fingerprint_output (selected features)
+    feature_fingerprint_input: Optional[str] = None  # Candidate feature universe entering FS
+    feature_fingerprint_output: Optional[str] = None  # Selected features exiting FS
     target_fingerprint: Optional[str] = None
     predictions_sha256: Optional[str] = None  # Aggregated prediction hash
     
@@ -265,7 +267,9 @@ class FeatureSelectionSnapshot:
     # {
     #   "config": {"min_cs": 3, "max_cs_samples": 2000},
     #   "data": {"n_symbols": 10, "date_start": "...", "date_end": "..."},
-    #   "target": {"target": "fwd_ret_10m", "view": "CROSS_SECTIONAL", "horizon_minutes": 10}
+    #   "target": {"target": "fwd_ret_10m", "view": "CROSS_SECTIONAL", "horizon_minutes": 10},
+    #   "selected_targets": ["fwd_ret_10m", "fwd_ret_30m"],  # From TARGET_RANKING stage
+    #   "candidate_features": ["low_vol_frac", "ret_zscore_15m", ...],  # Input feature universe
     # }
     
     # Process
@@ -307,6 +311,8 @@ class FeatureSelectionSnapshot:
             "config_fingerprint": self.config_fingerprint,
             "data_fingerprint": self.data_fingerprint,
             "feature_fingerprint": self.feature_fingerprint,
+            "feature_fingerprint_input": self.feature_fingerprint_input,
+            "feature_fingerprint_output": self.feature_fingerprint_output,
             "target_fingerprint": self.target_fingerprint,
             "predictions_sha256": self.predictions_sha256,
             "inputs": self.inputs,
@@ -331,6 +337,8 @@ class FeatureSelectionSnapshot:
             config_fingerprint=data.get("config_fingerprint"),
             data_fingerprint=data.get("data_fingerprint"),
             feature_fingerprint=data.get("feature_fingerprint"),
+            feature_fingerprint_input=data.get("feature_fingerprint_input"),
+            feature_fingerprint_output=data.get("feature_fingerprint_output"),
             target_fingerprint=data.get("target_fingerprint"),
             predictions_sha256=data.get("predictions_sha256"),
             inputs=data.get("inputs", {}),
