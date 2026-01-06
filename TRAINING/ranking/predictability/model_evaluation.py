@@ -5923,15 +5923,16 @@ def evaluate_target_predictability(
                     if base_output_dir.exists():
                         try:
                             from TRAINING.orchestration.utils.target_first_paths import (
-                                get_target_reproducibility_dir, ensure_target_structure
+                                ensure_scoped_artifact_dir, ensure_target_structure
                             )
                             target_clean = target_column.replace('/', '_').replace('\\', '_')
                             ensure_target_structure(base_output_dir, target_clean)
-                            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
-                            target_artifact_dir = target_repro_dir / "featureset_artifacts"
-                            target_artifact_dir.mkdir(parents=True, exist_ok=True)
+                            target_artifact_dir = ensure_scoped_artifact_dir(
+                                base_output_dir, target_clean, "featureset_artifacts",
+                                view=view, symbol=symbol
+                            )
                             artifact.save(target_artifact_dir)
-                            logger.debug(f"Saved POST_GATEKEEPER artifact to target-first location: {target_artifact_dir}")
+                            logger.debug(f"Saved POST_GATEKEEPER artifact to view-scoped location: {target_artifact_dir}")
                         except Exception as e2:
                             logger.debug(f"Failed to save POST_GATEKEEPER artifact to target-first location: {e2}")
                 
