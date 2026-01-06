@@ -101,7 +101,7 @@ class QuantileLightGBMTrainer(BaseModelTrainer):
             "max_depth": self.config["max_depth"],
             "max_bin": self.config["max_bin"],
             "bin_construct_sample_cnt": 200000,
-            "verbosity": 0,  # 0 allows log_evaluation callback output while suppressing other verbose output
+            "verbosity": -1,  # -1 suppresses all LightGBM warnings including "No further splits"
             "force_col_wise": True,  # Faster on wide tables
             "feature_pre_filter": True,
             "two_round": True,

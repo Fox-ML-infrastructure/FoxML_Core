@@ -244,6 +244,15 @@ def _bootstrap_family_runtime(family: str, logger_inst):
             except Exception:
                 pass
             
+            # Set TensorFlow seed for determinism (TF_DETERMINISTIC_OPS=1 requires seed)
+            # Reuse PYTHONHASHSEED which is exported by lock_determinism() in parent process
+            try:
+                seed = int(_os.getenv("PYTHONHASHSEED", "42"))
+                tf.random.set_seed(seed)
+                logger_inst.info(f"[bootstrap] TF seed set to {seed}")
+            except Exception as e:
+                logger_inst.warning(f"[bootstrap] Failed to set TF seed: {e}")
+            
             # Get TF build info for diagnostics
             try:
                 build = getattr(tf.sysconfig, "get_build_info", lambda: {})()
