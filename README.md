@@ -4,6 +4,8 @@
 
 > ⚠️ **Disclaimer:** This software is provided for research and educational purposes only. It does not constitute financial advice, and no guarantees of returns or performance are made. Use at your own risk.
 
+> 💻 **Interface:** This is a command-line and config-driven system. There is no graphical UI, web dashboard, or visual interface. All interaction is via YAML configuration files and Python scripts.
+
 > **License:**  
 > - **AGPL-3.0** (open source)  
 > - **Commercial License** (for proprietary or for-profit use)  
