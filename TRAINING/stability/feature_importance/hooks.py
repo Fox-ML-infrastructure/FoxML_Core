@@ -97,22 +97,30 @@ def save_snapshot_hook(
             # Check if it's a RunIdentity object with is_final
             if hasattr(run_identity, 'is_final'):
                 if not run_identity.is_final:
-                    # Partial identity - behavior depends on mode
+                    # Partial identity - check allow_legacy FIRST before strict mode check
                     error_msg = (
                         "Cannot save snapshot with partial RunIdentity (is_final=False). "
                         "Call run_identity.finalize(feature_signature) before saving. "
                         f"Current identity: {run_identity.debug_key if hasattr(run_identity, 'debug_key') else 'unknown'}"
                     )
-                    if identity_mode == "strict":
-                        raise ValueError(error_msg)
+                    if allow_legacy:
+                        # FIX: Explicit escape hatch - use legacy path instead of failing
+                        logger.warning(
+                            f"Partial identity with allow_legacy=True - using legacy path. "
+                            f"target={target} method={method}"
+                        )
+                        # Fall through to legacy path (identity_dict stays None, use_hash_path stays False)
+                    elif identity_mode == "strict":
+                        raise ValueError(error_msg + " (strict mode, allow_legacy=False)")
                     elif identity_mode == "relaxed":
                         logger.error(f"Identity validation failed (relaxed mode): {error_msg}")
-                        # Continue with degraded identity
+                        # Continue with degraded identity (no hash path)
                     else:  # legacy mode
                         logger.warning(f"Partial identity ignored (legacy mode): {error_msg}")
-                # Valid finalized identity - use hash-based path
-                identity_dict = run_identity.to_dict()
-                use_hash_path = True
+                else:
+                    # Valid finalized identity - use hash-based path
+                    identity_dict = run_identity.to_dict()
+                    use_hash_path = True
             elif hasattr(run_identity, 'to_dict'):
                 # Has to_dict but no is_final - treat as legacy RunIdentity
                 identity_dict = run_identity.to_dict()

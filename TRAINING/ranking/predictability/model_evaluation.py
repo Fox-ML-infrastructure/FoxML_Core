@@ -7804,10 +7804,13 @@ def evaluate_target_predictability(
                 aggregated_prediction_fingerprint = None
                 per_model_hashes = {}  # For auditability
                 try:
-                    # DEBUG: Log model_metrics availability
-                    # NOTE: model_metrics is defined at function entry (line 498) and populated by _compute_and_store_metrics
+                    # DEBUG: Defensive check - ensure model_metrics is in scope and populated
+                    # model_metrics is unpacked from train_and_evaluate_models result at line ~6419
+                    if 'model_metrics' not in locals():
+                        logger.warning("⚠️ model_metrics not in local scope - this is a bug!")
+                        model_metrics = {}  # Defensive fallback
                     mm_count = len(model_metrics) if model_metrics else 0
-                    logger.info(f"🔍 Aggregating prediction fingerprints from {mm_count} models in model_metrics")
+                    logger.info(f"🔍 Aggregating prediction fingerprints from {mm_count} models in model_metrics: {list(model_metrics.keys()) if model_metrics else []}")
                     if model_metrics:
                         import hashlib
                         pred_hashes = []
@@ -7822,10 +7825,16 @@ def evaluate_target_predictability(
                                 models_without_fp.append(model_name)
                         
                         if models_without_fp:
-                            logger.warning(f"🔍 Models missing prediction_fingerprint: {models_without_fp}")
+                            # DEBUG: Show what keys each model HAS if it's missing prediction_fingerprint
+                            for m in models_without_fp:
+                                m_metrics = model_metrics.get(m, {})
+                                if isinstance(m_metrics, dict):
+                                    logger.warning(f"🔍 Model {m} missing prediction_fingerprint, has keys: {list(m_metrics.keys())}")
+                                else:
+                                    logger.warning(f"🔍 Model {m} has non-dict metrics: {type(m_metrics)}")
                         
                         # DEBUG: Show models with fingerprints
-                        logger.debug(f"🔍 Models WITH prediction_fingerprint: {list(per_model_hashes.keys())}")
+                        logger.info(f"🔍 Models WITH prediction_fingerprint: {list(per_model_hashes.keys())}")
                         
                         if pred_hashes:
                             # Create combined hash from sorted prediction hashes
