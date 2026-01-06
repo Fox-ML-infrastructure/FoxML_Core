@@ -247,7 +247,6 @@ if isinstance(feature_df, pd.DataFrame):
   - All stages have boundary assertions
 
 ### Supporting Changes
-- `03_technical/implementation/training_utils/INTERNAL/`: Ordered fingerprints
 
 ## Verification
 

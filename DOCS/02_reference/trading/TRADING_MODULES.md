@@ -45,7 +45,7 @@ Both modules integrate with the TRAINING pipeline to execute trades based on tra
 - [ALPACA Module README](../../../ALPACA_trading/config/README.md) - Module-level documentation
 
 **Related**:
-- [Trading Technical Docs](../03_technical/trading/README.md) - Deep technical documentation
+- [Trading Technical Docs](../../03_technical/trading/README.md) - Deep technical documentation
 - [Broker Integration Compliance](../../../LEGAL/BROKER_INTEGRATION_COMPLIANCE.md) - Legal framework
 
 ## IBKR Trading Module
@@ -69,12 +69,12 @@ Both modules integrate with the TRAINING pipeline to execute trades based on tra
 **Documentation**:
 - [IBKR Configuration Guide](IBKR_CONFIGURATION.md) - Configuration files and settings
 - [IBKR Scripts Guide](IBKR_SCRIPTS.md) - Script usage and execution
-- [IBKR Technical Docs](../03_technical/trading/) - Architecture, implementation, testing, operations
+- [IBKR Technical Docs](../../03_technical/trading/) - Architecture, implementation, testing, operations
 
 **Related**:
-- [Mathematical Foundations](../03_technical/trading/architecture/MATHEMATICAL_FOUNDATIONS.md) - Mathematical equations for cost-aware ensemble trading
-- [Optimization Architecture](../03_technical/trading/architecture/OPTIMIZATION_ARCHITECTURE.md) - C++ optimization system
-- [Live Trading Integration](../03_technical/trading/implementation/LIVE_TRADING_INTEGRATION.md) - Integration guide
+- [Mathematical Foundations](../../03_technical/trading/architecture/MATHEMATICAL_FOUNDATIONS.md) - Mathematical equations for cost-aware ensemble trading
+- [Optimization Architecture](../../03_technical/trading/architecture/OPTIMIZATION_ARCHITECTURE.md) - C++ optimization system
+- [Live Trading Integration](../../03_technical/trading/implementation/LIVE_TRADING_INTEGRATION.md) - Integration guide
 - [Broker Integration Compliance](../../../LEGAL/BROKER_INTEGRATION_COMPLIANCE.md) - Legal framework
 
 ## Integration with TRAINING Pipeline
@@ -148,9 +148,9 @@ python IBKR_trading/scripts/start_live_trading.py
 
 ## Related Documentation
 
-- [Trading Technical Documentation](../03_technical/trading/README.md) - Deep technical docs
+- [Trading Technical Documentation](../../03_technical/trading/README.md) - Deep technical docs
 - [Broker Integration Compliance](../../../LEGAL/BROKER_INTEGRATION_COMPLIANCE.md) - Legal framework
 - [ALPACA Configuration](ALPACA_CONFIGURATION.md) - ALPACA config guide
 - [IBKR Configuration](IBKR_CONFIGURATION.md) - IBKR config guide
-- [Trading Operations](../03_technical/trading/operations/) - Deployment and operations
+- [Trading Operations](../../03_technical/trading/operations/) - Deployment and operations
 

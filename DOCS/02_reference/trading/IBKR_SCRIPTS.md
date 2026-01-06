@@ -112,6 +112,6 @@ All scripts include:
 
 - [IBKR Configuration Guide](IBKR_CONFIGURATION.md) - Configuration files
 - [Trading Modules Overview](TRADING_MODULES.md) - Complete guide
-- [Live Trading Integration](../03_technical/trading/implementation/LIVE_TRADING_INTEGRATION.md) - Integration guide
-- [IBKR Technical Docs](../03_technical/trading/) - Deep technical documentation
+- [Live Trading Integration](../../03_technical/trading/implementation/LIVE_TRADING_INTEGRATION.md) - Integration guide
+- [IBKR Technical Docs](../../03_technical/trading/) - Deep technical documentation
 

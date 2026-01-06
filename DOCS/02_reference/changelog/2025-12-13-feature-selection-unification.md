@@ -2,7 +2,6 @@
 
 **Feature Selection Now Uses Same Harness, Config System, and Comprehensive Functionality as Target Ranking**
 
-**Related**: [SST Enforcement Design](../../03_technical/implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md) | [Feature Selection Guide](../../03_technical/implementation/FEATURE_SELECTION_GUIDE.md)
 
 For a quick overview, see the [root changelog](../../../CHANGELOG.md).  
 For other dates, see the [changelog index](README.md).
@@ -164,7 +163,6 @@ For other dates, see the [changelog index](README.md).
   - `TRAINING/ranking/multi_model_feature_selection.py` - Dtype enforcement, linear models, stability fingerprint, skip reasons
   - `TRAINING/ranking/shared_ranking_harness.py` - Hard dtype guardrail, inf handling
   - `TRAINING/ranking/predictability/leakage_detection.py` - RFE clamping
-  - `03_technical/implementation/training_utils/INTERNAL/) - Complete verification of all 6 critical checks + 2 last-mile improvements
   - [Critical Fixes](../../03_technical/fixes/2025-12-13-critical-fixes.md) - Detailed root-cause analysis and fixes
   - [Telemetry Scoping Fix](../../03_technical/fixes/2025-12-13-telemetry-scoping-fix.md) - Telemetry scoping implementation
   - [Sharp Edges Verification](../../03_technical/fixes/2025-12-13-sharp-edges-verification.md) - Verification against user checklist

@@ -107,7 +107,7 @@ TRAINING/
   - `multi_model_feature_selection.py` → `multi_model_feature_selection/` folder
   - `intelligent_trainer.py` → `intelligent_trainer/` folder
   - `leakage_detection.py` → `leakage_detection/` folder
-- **Backward compatibility maintained** via `03_technical/implementation/training_utils/INTERNAL/)** for complete details
+- **Backward compatibility maintained** via wrapper pattern (see [Refactoring & Wrappers](../../01_tutorials/REFACTORING_AND_WRAPPERS.md))
 
 ### 2025-12-09: Initial Large File Splits
 
@@ -117,7 +117,6 @@ TRAINING/
 
 **For detailed refactoring documentation, see:**
 - **[Refactoring & Wrappers Guide](../../01_tutorials/REFACTORING_AND_WRAPPERS.md)** - User-facing guide explaining wrappers and import patterns
-- **[Refactoring Summary](../../INTERNAL/REFACTORING_SUMMARY_INTERNAL.md)** - Internal technical details
 - **[Module-Specific Docs](../../03_technical/refactoring/)** - Detailed structure for each refactored module
 
 ### Key Points

@@ -1,6 +1,5 @@
 # Single Source of Truth for Lookback Computation - 2025-12-13
 
-**Related**: [SST Enforcement Design](../../03_technical/implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md) | [Single Source of Truth Fix Summary](../../03_technical/fixes/2025-12-13-single-source-of-truth-fix.md) | [SST Enforcement Design Document](../../03_technical/fixes/2025-12-13-sst-enforcement-design.md)
 
 ## Overview
 
@@ -214,6 +213,5 @@ No migration required. The fix is automatic and transparent.
 
 ## Related Documentation
 
-- [SST Enforcement Design](../../03_technical/implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md) - Complete design document
 - [Single Source of Truth Fix](../../03_technical/fixes/2025-12-13-single-source-of-truth-fix.md) - Detailed fix documentation
 - [SST Enforcement Design Document](../../03_technical/fixes/2025-12-13-sst-enforcement-design.md) - Implementation details

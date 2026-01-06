@@ -1,7 +1,7 @@
 # Single Source of Truth for Lookback Computation - Fix Summary
 
 **Date**: 2025-12-13  
-**Related**: [Single Source of Truth Changelog](../../02_reference/changelog/2025-12-13-single-source-of-truth.md) | [POST_PRUNE Invariant Check](2025-12-13-post-prune-invariant-check.md) | [XD Pattern Fix Summary](2025-12-13-xd-pattern-fix.md) | [Complete Fix Summary](2025-12-13-single-source-of-truth-complete.md)
+**Related**: [Single Source of Truth Changelog](../../02_reference/changelog/2025-12-13-single-source-of-truth.md)
 
 ## Problem Statement
 
@@ -191,7 +191,3 @@ Run with `lookback_budget_minutes: 240` and verify:
 ## Related Documentation
 
 - [Single Source of Truth Changelog](../../02_reference/changelog/2025-12-13-single-source-of-truth.md)
-- [POST_PRUNE Invariant Check](../../../../03_technical/implementation/training_utils/INTERNAL/)
-- [XD Pattern Fix Summary](../../../../03_technical/implementation/training_utils/INTERNAL/)
-- [Gatekeeper Lookback Fix](../../../../03_technical/implementation/training_utils/INTERNAL/)
-- [Lookback Inference Consistency Fix](../../../../03_technical/implementation/training_utils/INTERNAL/)

@@ -5,9 +5,7 @@ Known issues, bug fixes, and migration notes.
 ## Contents
 
 - **[Known Issues](KNOWN_ISSUES.md)** - Current issues and limitations
-- **[Bug Fixes](BUG_FIXES.md)** - Fix history
 - **[Migration Notes](MIGRATION_NOTES.md)** - Migration guide
-- **[TensorFlow Executable Stack Fix](TENSORFLOW_EXECUTABLE_STACK_FIX.md)** - TensorFlow fix
 
 ## Recent Critical Fixes (2025-12-13)
 
@@ -18,18 +16,11 @@ Known issues, bug fixes, and migration notes.
 ### Leakage Controls & Fingerprint Tracking
 
 - **[Single Source of Truth Fix](2025-12-13-single-source-of-truth-fix.md)** - Main fix summary for single source of truth lookback computation
-- **[Single Source of Truth Complete](2025-12-13-single-source-of-truth-complete.md)** - Complete fix summary with all details
-- **[Single Source of Truth Detailed](2025-12-13-single-source-of-truth-fix-detailed.md)** - Detailed technical notes
-- **[POST_PRUNE Invariant Check](2025-12-13-post-prune-invariant-check.md)** - Invariant check implementation
-- **[XD Pattern Fix](2025-12-13-xd-pattern-fix.md)** - Day-suffix pattern inference fix
-- **[Gatekeeper Lookback Fix](2025-12-13-gatekeeper-lookback-fix.md)** - Gatekeeper lookback computation fix
-- **[Lookback Detection Fix](2025-12-13-lookback-detection-fix.md)** - Lookback detection precedence fix
-- **[Lookback Inference Consistency Fix](2025-12-13-lookback-inference-consistency-fix.md)** - Consistency fixes for lookback inference
-- **[Canonical Map XD Fix](2025-12-13-canonical-map-xd-fix.md)** - Canonical map day-suffix fix
 - **[Lookback Fingerprint Tracking](2025-12-13-lookback-fingerprint-tracking.md)** - Initial fingerprint tracking implementation to ensure lookback computed on exact final feature set
 - **[Fingerprint Improvements](2025-12-13-fingerprint-improvements.md)** - Set-invariant fingerprints, LookbackResult dataclass, explicit stage logging
 - **[Lookback Result Migration](2025-12-13-lookback-result-dataclass-migration.md)** - Migration from tuple to dataclass return types
 - **[Leakage Validation Fix](2025-12-13-leakage-validation-fix.md)** - Unified leakage budget calculator, calendar feature classification, separate purge/embargo validation
+- **[Gatekeeper Feature Dropping Fix](2025-12-13-gatekeeper-feature-dropping-fix.md)** - Fix for gatekeeper feature dropping
 
 ### Feature Selection Critical Fixes
 
@@ -44,8 +35,7 @@ Known issues, bug fixes, and migration notes.
 ### Feature Selection and Config Fixes (2025-12-14)
 
 - **[Feature Selection and Config Fixes Changelog](../../02_reference/changelog/2025-12-14-feature-selection-and-config-fixes.md)** - Complete detailed changelog
-- **Status**: ✅ All fixes implemented and tested
-- **Branch**: `fix/lookahead-bias-fixes`
+- **Status**: All fixes implemented and tested
 - **Fixes**:
   - Fixed UnboundLocalError for `np` (11 model families now working)
   - Fixed missing import (`parse_duration_minutes`)
@@ -58,10 +48,8 @@ Known issues, bug fixes, and migration notes.
 
 ### Look-Ahead Bias Fixes (2025-12-14)
 
-- **[Look-Ahead Bias Fix Plan](LOOKAHEAD_BIAS_FIX_PLAN.md)** - Complete analysis of 4 critical look-ahead bias issues and required fixes
-- **[Safe Implementation Plan](LOOKAHEAD_BIAS_SAFE_IMPLEMENTATION.md)** - Feature flag-based implementation strategy with gradual rollout plan
-- **Status**: ✅ All fixes implemented (behind feature flags, default: OFF)
-- **Branch**: `fix/lookahead-bias-fixes`
+- **[Look-Ahead Bias Fixes Changelog](../../02_reference/changelog/2025-12-14-lookahead-bias-fixes.md)** - Complete changelog for look-ahead bias fixes
+- **Status**: All fixes implemented (behind feature flags, default: OFF)
 - **Fixes**:
   - Fix #1: Rolling windows exclude current bar
   - Fix #2: CV-based normalization support
@@ -73,9 +61,6 @@ Known issues, bug fixes, and migration notes.
 
 - [Known Issues](../../02_reference/KNOWN_ISSUES.md) - Reference documentation
 - [Changelog](../../02_reference/changelog/README.md) - Change history
-- [Feature Selection and Config Fixes Changelog](../../02_reference/changelog/2025-12-14-feature-selection-and-config-fixes.md) - Complete changelog for feature selection and config fixes
-- [Look-Ahead Bias Fixes Changelog](../../02_reference/changelog/2025-12-14-lookahead-bias-fixes.md) - Complete changelog for look-ahead bias fixes
 - [Feature Selection Unification Changelog](../../02_reference/changelog/2025-12-13-feature-selection-unification.md) - Complete changelog for feature selection unification
 - [Experiment Config Guide](../../01_tutorials/configuration/EXPERIMENT_CONFIG_GUIDE.md) - How to use experiment configs (includes exclude_target_patterns)
 - [Auto Target Ranking](../../01_tutorials/training/AUTO_TARGET_RANKING.md) - Target discovery and ranking (includes exclude_target_patterns)
-

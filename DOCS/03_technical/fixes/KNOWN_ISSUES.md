@@ -60,6 +60,5 @@ Report issues via GitHub issues or contact: jenn.lewis5789@gmail.com
 
 ## See Also
 
-- [Bug Fixes](BUG_FIXES.md) - Fix history
 - [Testing Plan](../testing/TESTING_PLAN.md) - Testing procedures
 

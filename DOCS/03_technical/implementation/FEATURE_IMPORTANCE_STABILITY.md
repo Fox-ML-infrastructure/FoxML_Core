@@ -680,7 +680,6 @@ for feat, p in sorted(freq.items(), key=lambda x: -x[1])[:10]:
 
 ## RELATED DOCUMENTATION
 
-- `INTERNAL_DOCS/FEATURE_IMPORTANCE_STABILITY_INTEGRATION_PLAN.md`: DETAILED INTEGRATION PLAN
 - `TRAINING/stability/README.md`: QUICK START GUIDE
 - `CONFIG/training_config/safety_config.yaml`: CONFIGURATION REFERENCE
 

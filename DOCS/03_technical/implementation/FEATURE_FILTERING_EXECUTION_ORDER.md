@@ -158,4 +158,3 @@ This document defines the exact order of operations for feature filtering to ens
 ## Related Documentation
 
 - [Active Sanitization Guide](ACTIVE_SANITIZATION.md) - Phase 5 details
-- [Target-Conditional Exclusions](../utils/target_conditional_exclusions.py) - Phase 2 details

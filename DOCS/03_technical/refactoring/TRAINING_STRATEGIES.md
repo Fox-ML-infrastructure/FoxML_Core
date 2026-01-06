@@ -126,4 +126,3 @@ All 20 model families are supported:
 ## Related Documentation
 
 - **[Refactoring & Wrappers Guide](../../01_tutorials/REFACTORING_AND_WRAPPERS.md)** - Complete explanation of how wrappers work and import patterns
-- **[Refactoring Summary](../../INTERNAL/REFACTORING_SUMMARY_INTERNAL.md)** - Overall refactoring details

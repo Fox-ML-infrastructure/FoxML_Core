@@ -9,7 +9,7 @@
 **Claim**: "Leakage-safe research architecture with pre-training leak detection and auto-fix"
 
 **Evidence Found**:
-- ✅ Code exists: `TRAINING/common/leakage_auto_fixer.py`, `03_technical/implementation/training_utils/INTERNAL/`
+- ✅ Code exists: `TRAINING/common/leakage_auto_fixer.py`
 - ❌ **No test files found**: Only 3 test files in `TRAINING/tests/`:
   - `test_no_hardcoded_hparams.py` (SST compliance)
   - `test_sequential_mode.py` (training mode)

@@ -119,6 +119,6 @@ Use `ibkr_daily_test.yaml` for daily validation and testing.
 
 - [IBKR Scripts Guide](IBKR_SCRIPTS.md) - Script usage
 - [Trading Modules Overview](TRADING_MODULES.md) - Complete guide
-- [Live Trading Integration](../03_technical/trading/implementation/LIVE_TRADING_INTEGRATION.md) - Integration guide
-- [IBKR Technical Docs](../03_technical/trading/) - Deep technical documentation
+- [Live Trading Integration](../../03_technical/trading/implementation/LIVE_TRADING_INTEGRATION.md) - Integration guide
+- [IBKR Technical Docs](../../03_technical/trading/) - Deep technical documentation
 

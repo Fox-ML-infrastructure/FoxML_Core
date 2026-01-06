@@ -2,7 +2,6 @@
 
 **Fingerprint Tracking System for Lookback Computation Consistency**
 
-**Related**: [SST Enforcement Design](../../03_technical/implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md) | [Fingerprint Improvements](../../03_technical/fixes/2025-12-13-fingerprint-improvements.md)
 
 For a quick overview, see the [root changelog](../../../CHANGELOG.md).  
 For other dates, see the [changelog index](README.md).
@@ -170,7 +169,6 @@ Implemented comprehensive fingerprint tracking system to ensure lookback computa
 ## Files Modified
 
 ### Core Implementation
-- `03_technical/implementation/training_utils/INTERNAL/)
 - [Leakage Validation Fix](../../03_technical/fixes/2025-12-13-leakage-validation-fix.md)
 - [Fingerprint Improvements](../../03_technical/fixes/2025-12-13-fingerprint-improvements.md)
 - [Lookback Result Migration](../../03_technical/fixes/2025-12-13-lookback-result-dataclass-migration.md)

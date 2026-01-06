@@ -22,7 +22,7 @@ Feature selection methodology and implementation.
 - **SST Enforcement**: Uses `EnforcedFeatureSet` contract for provably split-brain free enforcement
 - **Stability Analysis**: Calls `analyze_all_stability_hook()` at end of run
 
-**NEW (2025-12-13)**: SST Enforcement Design ensures feature selection uses the same `EnforcedFeatureSet` contract as target ranking, with immediate X slicing and boundary assertions. See [SST Enforcement Design](03_technical/implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md) for details.
+SST Enforcement Design ensures feature selection uses the same `EnforcedFeatureSet` contract as target ranking, with immediate X slicing and boundary assertions.
 
 ### Output Structure
 - **Same Format**: CSV and YAML files match target ranking format

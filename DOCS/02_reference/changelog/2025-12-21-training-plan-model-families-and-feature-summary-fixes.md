@@ -243,5 +243,5 @@ The fix ensures:
 
 - [Target-First Structure Migration](2025-12-19-target-first-structure-migration.md)
 - [Feature Selection Routing and Training View Tracking](2025-12-21-feature-selection-routing-and-training-view-tracking.md)
-- [Training Plan Generation Issues](fix_training_plan_generation_issues_9dc3aa3e.plan.md)
+- Training Plan Generation Issues
 

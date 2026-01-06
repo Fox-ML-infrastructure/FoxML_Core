@@ -2,7 +2,7 @@
 
 **Date**: 2025-12-13  
 **Status**: Complete  
-**Related**: [SST Enforcement Design Changelog](../../02_reference/changelog/2025-12-13-sst-enforcement-design.md) | [Single Source of Truth Fix](2025-12-13-single-source-of-truth-complete.md)
+**Related**: [SST Enforcement Design Changelog](../../02_reference/changelog/2025-12-13-sst-enforcement-design.md) | Single Source of Truth Fix
 
 ## Overview
 
@@ -146,7 +146,3 @@ def assert_featureset_fingerprint(
 ## Related Documentation
 
 - [SST Enforcement Design Changelog](../../02_reference/changelog/2025-12-13-sst-enforcement-design.md) - Complete changelog
-- [SST Enforcement Design Document](03_technical/implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md) - Design specification
-- [Type Boundary Wiring Complete](03_technical/implementation/training_utils/INTERNAL/) - Implementation details
-- [Boundary Assertions Complete](03_technical/implementation/training_utils/INTERNAL/) - Assertion details
-- [SST Implementation Coverage](03_technical/implementation/training_utils/INTERNAL/) - Coverage matrix

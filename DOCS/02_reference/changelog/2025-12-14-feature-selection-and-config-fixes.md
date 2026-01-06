@@ -229,7 +229,6 @@ intelligent_training:
 - `TRAINING/ranking/target_ranker.py` - Added skip reason tracking
 - `TRAINING/ranking/target_routing.py` - Fixed routing reason strings, added skip reasons to JSON
 - `TRAINING/orchestration/intelligent_trainer.py` - Fixed config loading, added target exclusion
-- `03_technical/implementation/training_utils/INTERNAL/` - Added pricing anchor
 
 ---
 

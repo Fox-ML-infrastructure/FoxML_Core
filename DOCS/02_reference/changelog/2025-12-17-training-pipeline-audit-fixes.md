@@ -182,7 +182,6 @@ This changelog documents critical fixes to training pipeline contract breaks acr
 ## Files Changed Summary
 
 **Core Fixes:**
-- `03_technical/implementation/training_utils/INTERNAL/` for complete verification checklist.
 
 **Quick Verification:**
 ```bash

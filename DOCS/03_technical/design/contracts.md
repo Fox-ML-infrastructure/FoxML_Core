@@ -196,9 +196,3 @@ These areas lack explicit contracts and should be addressed:
 | FEATURE_SELECTION | `RunContext` + `RoutingDecisions` | Feature list + provenance | Stability thresholds |
 | TRAINING | `RunContext` + `TaskSpec` + features | Model artifacts | Deterministic seeds, fingerprint |
 
----
-
-## Related Documentation
-
-- [Vocabulary Reference](vocabulary.md) - Canonical terms
-- [Boundary Audit](boundary_audit.md) - Concrete issues

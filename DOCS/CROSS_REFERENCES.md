@@ -27,7 +27,6 @@ This document tracks key cross-references between documentation files to ensure 
   - `TRAINING/utils/telemetry.py` (new)
   - `CONFIG/pipeline/training/safety.yaml` (added `safety.telemetry` section)
 - **References**:
-  - `03_technical/implementation/training_utils/INTERNAL/` - Reproducibility structure (telemetry follows same structure)
   - `CHANGELOG.md` - Root changelog entry
 - **Structure**: Sidecar files in cohort directories, view-level and stage-level rollups
 
@@ -69,10 +68,6 @@ This document tracks key cross-references between documentation files to ensure 
   - `CONFIG_LOADER_API.md` - API functions
   - `CONFIG_BASICS.md` - Example structure
 
-### Utility Modules
-- **Files**: 
-  - `03_technical/implementation/training_utils/INTERNAL/` (configuration) - Overview
-- `USAGE_EXAMPLES.md` - Practical examples
 
 ### Training Pipeline
 All training docs should reference:
@@ -106,9 +101,6 @@ All API docs should reference:
   - `INTELLIGENT_TRAINING_TUTORIAL.md` - Updated output structure section
   - `CHANGELOG.md` - Added highlights section
   - `changelog/2025-12-12.md` - Complete detailed changelog
-- **Code**:
-  - `03_technical/implementation/training_utils/INTERNAL/` - Storage structure section
-
 ### Integrated Config Backups
 - **New Location**: `RESULTS/{cohort_id}/{run_name}/backups/` (when `output_dir` provided)
 - **Legacy Location**: `CONFIG/backups/` (backward compatible)
@@ -163,28 +155,10 @@ See `LEGACY/README.md` for migration guide.
 
 ### Look-Ahead Bias Fixes
 - **Files**:
-  - `DOCS/03_technical/fixes/LOOKAHEAD_BIAS_FIX_PLAN.md`
-  - `DOCS/03_technical/fixes/LOOKAHEAD_BIAS_SAFE_IMPLEMENTATION.md`
   - `DOCS/02_reference/changelog/2025-12-14-lookahead-bias-fixes.md`
 - **References**:
   - `CHANGELOG.md` - Added to Recent Highlights
-  - `DOCS/INDEX.md` - Added to Fixes section
-  - `DOCS/02_reference/changelog/README.md` - Added 2025-12-14 entry
-  - `DOCS/03_technical/fixes/README.md` - Added look-ahead bias fixes section
-  - `DOCS/03_technical/README.md` - Added to Fixes section
   - `CONFIG/pipeline/training/safety.yaml` - Added lookahead_bias_fixes config section
-  - `CONFIG/experiments/e2e_ranking_test.yaml` - Added lookahead_bias_fixes config section
-
-## Cross-Reference Updates (2025-12-13)
-
-**SST Enforcement Design Implementation:**
-- **Files**:
-  - `03_technical/implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md` - Complete design specification
-  - `03_technical/implementation/training_utils/INTERNAL/` - Added to recent fixes
-- **Related Documentation**:
-  - Links to Single Source of Truth fix
-  - Links to Fingerprint Tracking
-  - Links to Feature Selection Unification
 
 ## Cross-Reference Updates (2025-12-12)
 

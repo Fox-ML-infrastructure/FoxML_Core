@@ -238,7 +238,7 @@ The pipeline automatically detects and fixes data leakage:
 - Warning thresholds (classification, regression)
 - Auto-fixer settings (enabled, min_confidence, max_features_per_run)
 
-See [Leakage Analysis](../../03_technical/research/INTERNAL/LEAKAGE_ANALYSIS.md) for complete configuration details.
+See `CONFIG/pipeline/training/safety.yaml` for complete leakage detection configuration.
 
 **Output:**
 - `output_dir/target_rankings/target_predictability_rankings.csv` - Full rankings

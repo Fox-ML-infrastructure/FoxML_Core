@@ -1,7 +1,6 @@
 # Feature Selection Lookback Cap Integration
 
-**Date**: 2025-12-13  
-**Related**: [Single Source of Truth Fix](INTERNAL/SINGLE_SOURCE_OF_TRUTH_COMPLETE.md) | [SST Enforcement Design](INTERNAL/SST_ENFORCEMENT_DESIGN.md)
+**Date**: 2025-12-13
 
 ## Overview
 
@@ -225,9 +224,4 @@ Run feature selection with `lookback_budget_minutes: 240` and verify:
 - [x] Invariants enforced (hard-fail in strict mode)
 - [x] No syntax errors
 
-## Related Documentation
-
-- [Single Source of Truth Fix Summary](SINGLE_SOURCE_OF_TRUTH_COMPLETE.md)
-- [POST_PRUNE Invariant Check](POST_PRUNE_INVARIANT_CHECK.md)
-- [XD Pattern Fix Summary](XD_PATTERN_FIX_SUMMARY.md)
 

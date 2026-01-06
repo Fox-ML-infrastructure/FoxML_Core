@@ -18,7 +18,6 @@ For other dates, see the [changelog index](README.md).
 - **Explicit Bar Parsing**: `parse_duration_bars()` removes ambiguity between seconds and bars
 - **Interval-Aware Strictness**: Primary mechanism uses data resolution for purge/lookback enforcement
 - **Files**:
-  - `03_technical/implementation/training_utils/INTERNAL/` - Implementation summary
 
 **Key Features**:
 - ✅ Canonical representation: Everything becomes `Duration` before comparison
@@ -35,7 +34,6 @@ For other dates, see the [changelog index](README.md).
 - **Summary Lines**: `❌ AUDIT STATUS: NON-AUDITABLE` in training output
 - **Downstream Helpers**: `is_auditable()`, `require_auditable()` functions for components
 - **Files**:
-  - `03_technical/implementation/training_utils/INTERNAL/` - Public statement of documentation review
 - **Review Objectives**: Accuracy, realistic statements, removal of marketing language
 - **Key Changes**: Model count corrections, qualified language, consistency fixes
 - **Status**: Initial review completed, ongoing standards established
@@ -58,7 +56,6 @@ For other dates, see the [changelog index](README.md).
   2. Explicit time suffixes (`_15m`, `_30m`, `_1d`, `_24h`) - **checked first**
   3. Keyword heuristics (`.*day.*`) - **fallback only**
 - **Impact**: Eliminates false positives for features with explicit short lookbacks
-- **Documentation**: `03_technical/implementation/training_utils/INTERNAL/`
 
 ### Audit Rule Enforcement
 
@@ -125,7 +122,6 @@ For other dates, see the [changelog index](README.md).
 ### New Documentation Files
 
 - `DOCUMENTATION_REVIEW.md` - Documentation review statement
-- `03_technical/implementation/training_utils/INTERNAL/` - Lookback detection precedence fix details
 
 ### Updated Documentation
 

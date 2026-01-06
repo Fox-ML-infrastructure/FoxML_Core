@@ -160,7 +160,6 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 ### Research
 - [Intelligence Layer Overview](03_technical/research/INTELLIGENCE_LAYER.md) - Complete overview of intelligent training pipeline decision-making and automation
 - [Leakage Controls Evaluation](03_technical/architecture/LEAKAGE_CONTROLS_EVALUATION.md) - Leakage controls structural evaluation
-- [SST Enforcement Design](03_technical/implementation/training_utils/INTERNAL/SST_ENFORCEMENT_DESIGN.md) - **NEW**: EnforcedFeatureSet contract eliminates split-brain across all training paths
 - [Leakage Canary Test Guide](03_technical/testing/LEAKAGE_CANARY_TEST_GUIDE.md) - Pipeline integrity validation
 - [Feature Importance Methodology](03_technical/research/FEATURE_IMPORTANCE_METHODOLOGY.md) - Feature importance research
 - [Feature Importance Stability](03_technical/implementation/FEATURE_IMPORTANCE_STABILITY.md) - Feature importance stability tracking and analysis (see also Systems Reference)
@@ -169,15 +168,7 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 
 ### Design
 - [Architecture Deep Dive](03_technical/design/ARCHITECTURE_DEEP_DIVE.md) - System architecture
-- [CLI vs Config Separation](03_technical/design/CLI_CONFIG_SEPARATION.md) - **NEW**: Policy for CLI/Config separation, SST compliance
-
-### Internal Documentation
-- [Data Overlap Analysis](03_technical/internal/DATA_OVERLAP_ANALYSIS.md) - Analysis of data overlap between target_rankings and REPRODUCIBILITY
-- [Reorganization Plan](03_technical/internal/REORGANIZATION_PLAN.md) - Plan for reorganizing results directory structure
-- [Reorganization Issues Check](03_technical/internal/REORGANIZATION_ISSUES_CHECK.md) - Verification of reorganization changes
-- [Mathematical Foundations](03_technical/internal/MATHEMATICAL_FOUNDATIONS.md) - Math background (internal)
-- [Optimization Engine](03_technical/internal/OPTIMIZATION_ENGINE.md) - Optimization design (internal)
-- [C++ Integration](03_technical/internal/C++_INTEGRATION.md) - C++ components (internal)
+- [CLI vs Config Separation](03_technical/design/CLI_CONFIG_SEPARATION.md) - Policy for CLI/Config separation, SST compliance
 
 ### Benchmarks
 - [Performance Metrics](03_technical/benchmarks/PERFORMANCE_METRICS.md) - Performance data
@@ -223,14 +214,12 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 - ⚠️ **Legacy**: [Experiments Implementation](LEGACY/EXPERIMENTS_IMPLEMENTATION.md) - **DEPRECATED**: See [Intelligent Training Tutorial](01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) instead
 - [Pressure Test Plan](03_technical/implementation/PRESSURE_TEST_PLAN.md) - Testing plan
 - [Performance Optimization](03_technical/implementation/PERFORMANCE_OPTIMIZATION.md) - Optimization work
-- [Adding Proprietary Models](03_technical/implementation/ADDING_PROPRIETARY_MODELS.md) - Using BaseModelTrainer to add custom models
-- [Decision Engine](03_technical/implementation/decisioning/DECISION_ENGINE.md) - ⚠️ **EXPERIMENTAL**: Automated decision-making system with configurable policies
+- [Decision Engine](03_technical/implementation/decisioning/DECISION_ENGINE.md) - **EXPERIMENTAL**: Automated decision-making system with configurable policies
 - [Bayesian Policy](03_technical/implementation/decisioning/BAYESIAN_POLICY.md) - ⚠️ **EXPERIMENTAL**: Thompson sampling for adaptive config tuning
 - [Decision Verification Checklist](03_technical/implementation/decisioning/VERIFICATION_CHECKLIST.md) - ⚠️ **EXPERIMENTAL**: How to verify decision application works correctly
 
 ### Refactoring
-- **[Refactoring & Wrappers](01_tutorials/REFACTORING_AND_WRAPPERS.md)** - **NEW**: User-facing guide explaining wrapper mechanism, import patterns, and backward compatibility
-- [Refactoring Summary](INTERNAL/REFACTORING_SUMMARY_INTERNAL.md) - Internal technical details of large file refactoring (2025-12-09)
+- **[Refactoring & Wrappers](01_tutorials/REFACTORING_AND_WRAPPERS.md)** - User-facing guide explaining wrapper mechanism, import patterns, and backward compatibility
 - [Specialized Models Module](03_technical/refactoring/SPECIALIZED_MODELS.md) - Detailed documentation for `models/specialized/` module
 - [Target Predictability Ranking Module](03_technical/refactoring/TARGET_PREDICTABILITY_RANKING.md) - Detailed documentation for `ranking/predictability/` module
 - [Training Strategies Module](03_technical/refactoring/TRAINING_STRATEGIES.md) - Detailed documentation for `training_strategies/` module

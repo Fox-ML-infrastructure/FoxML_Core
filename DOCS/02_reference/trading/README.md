@@ -32,7 +32,7 @@ This directory contains reference documentation for the trading execution module
 ## Technical Documentation
 
 For deep technical documentation, see:
-- [Trading Technical Docs](../03_technical/trading/README.md) - Architecture, implementation, testing, operations
+- [Trading Technical Docs](../../03_technical/trading/README.md) - Architecture, implementation, testing, operations
 
 ## Legal and Compliance
 
@@ -42,7 +42,6 @@ For deep technical documentation, see:
 ## Related Documentation
 
 - [Trading Modules Overview](TRADING_MODULES.md) - Start here for overview
-- [Trading Technical Documentation](../03_technical/trading/README.md) - Deep technical docs
-- [ALPACA Module README](../../../ALPACA_trading/config/README.md) - Module-level docs
-- [IBKR Module README](../../../IBKR_trading/README.md) - Module-level docs
+- [Trading Technical Documentation](../../03_technical/trading/README.md) - Deep technical docs
+- [ALPACA Module Config](../../../ALPACA_trading/config/README.md) - Module configuration docs
 

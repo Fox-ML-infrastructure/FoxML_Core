@@ -225,7 +225,6 @@ Long format with one row per metric:
 ## Files Changed
 
 ### Modified Files
-- `03_technical/implementation/training_utils/INTERNAL/`)
 
 ---
 

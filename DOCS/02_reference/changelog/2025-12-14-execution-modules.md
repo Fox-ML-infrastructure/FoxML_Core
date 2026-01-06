@@ -12,14 +12,13 @@ Execution modules (`ALPACA_trading` and `IBKR_trading`) have been added back to 
   - ⚠️ **Status**: Has minor issues (needs testing and fixes)
   - Supports Alpaca Markets API and yfinance data sources
   - Paper trading engine with simulated execution
-  - See [`ALPACA_trading/README.md`](../../../ALPACA_trading/README.md)
+  - See `ALPACA_trading/README.md`
 
 - **IBKR_trading module** — Production live trading system for Interactive Brokers
   - ⚠️ **Status**: Untested (requires testing before production use)
   - Multi-horizon trading system (5m, 10m, 15m, 30m, 60m)
   - Comprehensive safety guards and risk management
   - C++ optimization components
-  - See [`IBKR_trading/README.md`](../../../IBKR_trading/README.md)
 
 ### Documentation Organization
 
@@ -100,8 +99,6 @@ See [`LEGAL/BROKER_INTEGRATION_COMPLIANCE.md`](../../../LEGAL/BROKER_INTEGRATION
 
 - [Trading Modules Overview](../../02_reference/trading/TRADING_MODULES.md)
 - [Broker Integration Compliance](../../../LEGAL/BROKER_INTEGRATION_COMPLIANCE.md)
-- [ALPACA Trading README](../../../ALPACA_trading/README.md)
-- [IBKR Trading README](../../../IBKR_trading/README.md)
 
 ---
 
