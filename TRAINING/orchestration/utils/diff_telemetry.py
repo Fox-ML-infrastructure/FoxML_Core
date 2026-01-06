@@ -749,7 +749,34 @@ class DiffTelemetry:
         predictions_sha256 = self._compute_predictions_digest(cohort_dir, stage, prediction_fingerprint)
         
         # Build fingerprint source descriptions (for auditability)
+        # These document what each fingerprint represents for reproducibility tracking
         fingerprint_sources = {}
+        
+        # Document config fingerprint source
+        if config_fp:
+            fingerprint_sources['config_fingerprint'] = (
+                "hash of pipeline.determinism and safety.output_layout config sections"
+            )
+        
+        # Document data fingerprint source
+        if data_fp:
+            fingerprint_sources['data_fingerprint'] = (
+                "hash of n_samples, symbols list, and date_range (start/end)"
+            )
+        
+        # Document feature fingerprint source
+        if feature_fp:
+            fingerprint_sources['feature_fingerprint'] = (
+                "hash of sorted feature spec list resolved from registry"
+            )
+        
+        # Document target fingerprint source
+        if target_fp:
+            fingerprint_sources['target_fingerprint'] = (
+                "hash of target name, view, horizon_minutes, and labeling_impl_hash"
+            )
+        
+        # Document fold assignment hash source (if available)
         if ctx.fold_assignment_hash:
             fingerprint_sources['fold_assignment_hash'] = (
                 (additional_data.get('fold_assignment_hash_source') if additional_data else None) or
