@@ -175,3 +175,112 @@ def get_excluded_metrics(task_type: TaskType) -> List[str]:
     """
     schema = get_task_metrics_schema(task_type)
     return schema.get("exclude", [])
+
+
+def get_canonical_metric_name(task_type: TaskType, view: str, metric_type: str = "primary") -> str:
+    """
+    Get canonical metric name for a task type and view combination.
+    
+    This is the single source of truth for metric naming, replacing the
+    overloaded 'auc' field that stored different metrics depending on task type.
+    
+    Format: <metric_base>__<view>__<aggregation>
+    
+    Args:
+        task_type: TaskType enum (REGRESSION, BINARY_CLASSIFICATION, etc.)
+        view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
+        metric_type: "primary" or "std" (default: "primary")
+    
+    Returns:
+        Canonical metric name, e.g.:
+        - REGRESSION + CROSS_SECTIONAL -> "spearman_ic__cs__mean"
+        - BINARY_CLASSIFICATION + CROSS_SECTIONAL -> "roc_auc__cs__mean"
+        - REGRESSION + SYMBOL_SPECIFIC -> "r2__sym__mean"
+    
+    Examples:
+        >>> get_canonical_metric_name(TaskType.REGRESSION, "CROSS_SECTIONAL")
+        'spearman_ic__cs__mean'
+        >>> get_canonical_metric_name(TaskType.BINARY_CLASSIFICATION, "SYMBOL_SPECIFIC", "std")
+        'roc_auc__sym__std'
+    """
+    schema = _load_metrics_schema()
+    canonical = schema.get("canonical_names", {})
+    
+    # Map TaskType to schema key
+    task_key = {
+        TaskType.REGRESSION: "regression",
+        TaskType.BINARY_CLASSIFICATION: "binary_classification",
+        TaskType.MULTICLASS_CLASSIFICATION: "multiclass_classification",
+    }.get(task_type, "regression")
+    
+    # Map view to schema key
+    view_key = "cross_sectional" if view.upper() == "CROSS_SECTIONAL" else "symbol_specific"
+    
+    # Get canonical names for this task + view combination
+    task_canonical = canonical.get(task_key, {})
+    view_canonical = task_canonical.get(view_key, {})
+    
+    # Get requested metric type (primary or std)
+    metric_name = view_canonical.get(metric_type)
+    
+    if metric_name:
+        return metric_name
+    
+    # Fallback: construct a reasonable default
+    fallback_map = {
+        ("regression", "cross_sectional", "primary"): "spearman_ic__cs__mean",
+        ("regression", "cross_sectional", "std"): "spearman_ic__cs__std",
+        ("regression", "symbol_specific", "primary"): "r2__sym__mean",
+        ("regression", "symbol_specific", "std"): "r2__sym__std",
+        ("binary_classification", "cross_sectional", "primary"): "roc_auc__cs__mean",
+        ("binary_classification", "cross_sectional", "std"): "roc_auc__cs__std",
+        ("binary_classification", "symbol_specific", "primary"): "roc_auc__sym__mean",
+        ("binary_classification", "symbol_specific", "std"): "roc_auc__sym__std",
+        ("multiclass_classification", "cross_sectional", "primary"): "accuracy__cs__mean",
+        ("multiclass_classification", "cross_sectional", "std"): "accuracy__cs__std",
+        ("multiclass_classification", "symbol_specific", "primary"): "accuracy__sym__mean",
+        ("multiclass_classification", "symbol_specific", "std"): "accuracy__sym__std",
+    }
+    
+    fallback = fallback_map.get((task_key, view_key, metric_type))
+    if fallback:
+        logger.debug(f"Using fallback canonical name: {fallback}")
+        return fallback
+    
+    # Ultimate fallback
+    logger.warning(f"No canonical name found for {task_key}/{view_key}/{metric_type}, using 'primary_score'")
+    return "primary_score"
+
+
+def get_canonical_metric_names_for_output(task_type: TaskType, view: str, primary_value: float, std_value: float) -> Dict[str, float]:
+    """
+    Get a dict of canonical metric names populated with values.
+    
+    Use this when building metrics output for snapshots.
+    Includes deprecated 'auc' field for backward compatibility.
+    
+    Args:
+        task_type: TaskType enum
+        view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
+        primary_value: The primary metric value (e.g., mean score)
+        std_value: The standard deviation of the metric
+    
+    Returns:
+        Dict with canonical names and backward-compat 'auc':
+        {
+            "spearman_ic__cs__mean": 0.058,
+            "spearman_ic__cs__std": 0.103,
+            "auc": 0.058,  # DEPRECATED
+            "std_score": 0.103  # DEPRECATED
+        }
+    """
+    primary_name = get_canonical_metric_name(task_type, view, "primary")
+    std_name = get_canonical_metric_name(task_type, view, "std")
+    
+    return {
+        primary_name: primary_value,
+        std_name: std_value,
+        # Backward compatibility fields (deprecated)
+        "auc": primary_value,
+        "std_score": std_value,
+    }

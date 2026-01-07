@@ -6,12 +6,13 @@
 
 ## Summary
 
-Five major improvements:
+Six major improvements:
 1. Fixed Feature Selection loading entire data history instead of respecting sample limits
 2. Added full parity tracking for TRAINING stage (Stage 3)
 3. Completed FS snapshot parity with TARGET_RANKING snapshots
 4. **NEW**: Task-type filtering prevents incompatible model families from polluting aggregations
 5. **NEW**: Task-aware metrics schema - no more `pos_rate: 0.0` on regression targets
+6. **NEW**: Canonical metric naming - unambiguous metric names across all stages
 
 ## Problem
 
@@ -178,6 +179,49 @@ Fixes `pos_rate: 0.0` appearing on regression targets.
 | Binary | `pos_rate: 0.35` | `pos_rate: 0.35`, `class_balance: {0: 650, 1: 350}` |
 | Multiclass | `pos_rate: 0.0` (garbage) | `class_balance: {...}`, `n_classes: 3` |
 
+### Canonical Metric Naming
+
+**Problem:**
+The `auc` field in `TargetPredictabilityScore` was overloaded:
+- Regression: stored R²
+- Binary: stored ROC-AUC
+- Multiclass: stored accuracy
+
+This caused confusion when comparing metrics across task types.
+
+**Solution:**
+Replace overloaded `auc` with task-specific, view-aware metric names.
+
+**Naming Convention:**
+```
+<metric_base>__<view>__<aggregation>
+```
+
+Where:
+- `view` = `cs` (cross-sectional) or `sym` (symbol-specific)
+- `aggregation` = `mean`, `std`, `pooled`
+
+**Examples:**
+| Task Type | View | Primary Metric Name |
+|-----------|------|---------------------|
+| REGRESSION | CROSS_SECTIONAL | `spearman_ic__cs__mean` |
+| REGRESSION | SYMBOL_SPECIFIC | `r2__sym__mean` |
+| BINARY_CLASSIFICATION | CROSS_SECTIONAL | `roc_auc__cs__mean` |
+| BINARY_CLASSIFICATION | SYMBOL_SPECIFIC | `roc_auc__sym__mean` |
+| MULTICLASS_CLASSIFICATION | CROSS_SECTIONAL | `accuracy__cs__mean` |
+
+**Files Modified:**
+- `CONFIG/ranking/metrics_schema.yaml` - Added `canonical_names` section
+- `TRAINING/ranking/predictability/metrics_schema.py` - Added `get_canonical_metric_name()`, `get_canonical_metric_names_for_output()`
+- `TRAINING/ranking/predictability/scoring.py` - Added `view` field, `primary_metric_name` property
+- `TRAINING/ranking/predictability/model_evaluation.py` - Use canonical names in metrics output
+- `TRAINING/training_strategies/reproducibility/schema.py` - Use canonical names in TrainingSnapshot
+
+**Backward Compatibility:**
+- Deprecated `auc` field kept for backward compat
+- Old code reading `auc` continues to work
+- New code should use `primary_metric_name` property
+
 ## Determinism Impact
 
 **None.** Changes are:
@@ -185,6 +229,7 @@ Fixes `pos_rate: 0.0` appearing on regression targets.
 - Observational (new tracking)
 - Metadata enrichment
 - Routing (task-type filtering - skips incompatible families before training)
+- Naming (canonical metrics are cosmetic, same values)
 
 Model computation unchanged when inputs are correct.
 
@@ -201,7 +246,8 @@ Model computation unchanged when inputs are correct.
 | `TRAINING/training_strategies/reproducibility/*` | New TRAINING snapshot module |
 | `TRAINING/training_strategies/execution/training.py` | Create training snapshots, task-type filter |
 | `TRAINING/training_strategies/utils.py` | `supported_tasks` in FAMILY_CAPS, `is_family_compatible()` |
-| `TRAINING/ranking/predictability/model_evaluation.py` | Task-type filter, task-aware metrics |
+| `TRAINING/ranking/predictability/model_evaluation.py` | Task-type filter, task-aware metrics, canonical names |
 | `TRAINING/ranking/multi_model_feature_selection.py` | Task-type filter before family loop |
-| `CONFIG/ranking/metrics_schema.yaml` | New - task-specific metric definitions |
-| `TRAINING/ranking/predictability/metrics_schema.py` | New - `compute_target_stats()` |
+| `CONFIG/ranking/metrics_schema.yaml` | New - task-specific metric definitions, canonical names |
+| `TRAINING/ranking/predictability/metrics_schema.py` | New - `compute_target_stats()`, `get_canonical_metric_name()` |
+| `TRAINING/ranking/predictability/scoring.py` | Added `view` field, `primary_metric_name` property |

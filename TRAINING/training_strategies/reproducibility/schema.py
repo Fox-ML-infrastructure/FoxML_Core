@@ -264,6 +264,29 @@ class TrainingSnapshot:
                     metrics[key] = model_result[key]
             if model_result.get("metrics"):
                 metrics.update(model_result["metrics"])
+            
+            # Add canonical metric names if task_type and primary score available
+            # This ensures consistent naming across stages
+            task_type = model_result.get("task_type")
+            if task_type and "val_auc" in metrics:
+                try:
+                    from TRAINING.ranking.predictability.metrics_schema import get_canonical_metric_names_for_output
+                    from TRAINING.common.utils.task_types import TaskType
+                    
+                    # Parse task_type if it's a string
+                    if isinstance(task_type, str):
+                        task_type = TaskType[task_type.upper()]
+                    
+                    primary_value = metrics.get("val_auc", metrics.get("r2", 0.0))
+                    std_value = metrics.get("val_auc_std", metrics.get("r2_std", 0.0))
+                    
+                    canonical = get_canonical_metric_names_for_output(
+                        task_type, view, primary_value, std_value
+                    )
+                    metrics.update(canonical)
+                except Exception:
+                    pass  # Keep existing metrics if canonical naming fails
+            
             outputs["metrics"] = metrics
             
             # Extract training info

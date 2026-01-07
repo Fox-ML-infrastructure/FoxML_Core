@@ -58,6 +58,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **FIX**: Multiclass emits `class_balance` dict, `n_classes` (no `pos_rate`)
 - Replaced 2 unconditional `pos_rate` writes in `model_evaluation.py`
 
+**Canonical Metric Naming** - Unambiguous metric names across all stages.
+- **NEW**: Naming scheme `<metric_base>__<view>__<aggregation>` (e.g., `spearman_ic__cs__mean`)
+- **NEW**: `canonical_names` section in `metrics_schema.yaml` with task+view mappings
+- **NEW**: `get_canonical_metric_name(task_type, view)` helper in `metrics_schema.py`
+- **NEW**: `get_canonical_metric_names_for_output()` for snapshot metrics population
+- **FIX**: `TargetPredictabilityScore` now includes `view` field and `primary_metric_name` property
+- **FIX**: All stages emit canonical names alongside deprecated `auc` field for backward compat
+  - Regression: `spearman_ic__cs__mean`, `r2__sym__mean`
+  - Binary: `roc_auc__cs__mean`, `roc_auc__sym__mean`
+  - Multiclass: `accuracy__cs__mean`, `accuracy__sym__mean`
+- **DEPRECATED**: `auc` field preserved for backward compatibility (will be removed in v2.0)
+
 **Sample Limit Consistency Across Stages** - Consistent data for TR/FS/TRAINING.
 - **FIX**: `cross_sectional_feature_ranker.py` now respects `max_rows_per_symbol`
   - Was loading ALL data (188k samples) instead of config limit (2k per symbol)

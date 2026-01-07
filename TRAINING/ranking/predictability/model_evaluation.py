@@ -7395,6 +7395,12 @@ def evaluate_target_predictability(
         if len(aggregated_fold_scores) == 0:
             aggregated_fold_scores = None
     
+    # Determine view for canonical metric naming
+    # SST-resolved view_for_writes is preferred (handles auto-flip from CS to SS)
+    result_view = view_for_writes if 'view_for_writes' in locals() and view_for_writes else (
+        view if 'view' in locals() and view else "CROSS_SECTIONAL"
+    )
+    
     result = TargetPredictabilityScore(
         target=target,
         target_column=target_column,
@@ -7415,7 +7421,8 @@ def evaluate_target_predictability(
         leakage_flags=leakage_flags,
         autofix_info=autofix_info if 'autofix_info' in locals() else None,
         status=final_status,
-        attempts=1
+        attempts=1,
+        view=result_view  # For canonical metric naming
     )
     
     # Log canonical summary block (one block that can be screenshot for PR comments)
@@ -7629,15 +7636,23 @@ def evaluate_target_predictability(
                 # FIX: Remove redundancy - use n_features_post_prune (more descriptive) and drop features_final
                 n_features_final = len(feature_names) if 'feature_names' in locals() and feature_names else None
                 
-                # Start with base metrics
+                # Get canonical metric names for this task/view combination
+                from TRAINING.ranking.predictability.metrics_schema import get_canonical_metric_names_for_output
+                canonical_metrics = get_canonical_metric_names_for_output(
+                    result.task_type, result.view, result.auc, result.std_score
+                )
+                
+                # Start with base metrics - includes canonical names + deprecated legacy names
                 metrics_dict = {
                     "metric_name": metric_name,
-                    "auc": result.auc,
-                    "std_score": result.std_score,
+                    "view": result.view,
+                    "task_type": result.task_type.name if hasattr(result.task_type, 'name') else str(result.task_type),
+                    # Canonical metric names (new, unambiguous)
+                    **canonical_metrics,
+                    # Additional metrics
                     "mean_importance": result.mean_importance,
                     "composite_score": result.composite_score,
                     "n_models": result.n_models,
-                    "task_type": result.task_type.name if hasattr(result.task_type, 'name') else str(result.task_type),
                     # Regression features: feature counts
                     "n_features_pre": features_safe if 'features_safe' in locals() else None,
                     "n_features_post_prune": n_features_final,  # Final feature count after pruning

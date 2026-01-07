@@ -110,7 +110,7 @@ class TargetPredictabilityScore:
     target: str
     target_column: str
     task_type: TaskType  # REGRESSION, BINARY_CLASSIFICATION, or MULTICLASS_CLASSIFICATION
-    auc: float  # Mean score (R² for regression, ROC-AUC for binary, accuracy for multiclass)
+    auc: float  # DEPRECATED: Use primary_score. Mean score (R² for regression, ROC-AUC for binary, accuracy for multiclass)
     std_score: float  # Std of scores
     mean_importance: float  # Mean absolute importance
     consistency: float  # 1 - CV(score) - lower is better
@@ -128,6 +128,8 @@ class TargetPredictabilityScore:
     leakage_flags: Dict[str, bool] = None  # Detailed leakage flags: {"perfect_train_acc": bool, "high_auc": bool, etc.}
     status: str = "OK"  # "OK", "SUSPICIOUS_STRONG", "LEAKAGE_UNRESOLVED", "LEAKAGE_UNRESOLVED_MAX_RETRIES"
     attempts: int = 1  # Number of evaluation attempts (for auto-rerun tracking)
+    # Canonical metric naming (new, unambiguous naming scheme)
+    view: str = "CROSS_SECTIONAL"  # "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
     
     # Backward compatibility: mean_r2 property
     @property
@@ -140,12 +142,44 @@ class TargetPredictabilityScore:
         """Backward compatibility: returns std_score"""
         return self.std_score
     
+    @property
+    def primary_score(self) -> float:
+        """Canonical alias for the primary metric value (replaces ambiguous 'auc')"""
+        return self.auc
+    
+    @property
+    def primary_metric_name(self) -> str:
+        """
+        Get canonical metric name based on task_type and view.
+        
+        Examples:
+            - REGRESSION + CROSS_SECTIONAL -> "spearman_ic__cs__mean"
+            - BINARY_CLASSIFICATION + CROSS_SECTIONAL -> "roc_auc__cs__mean"
+        """
+        from TRAINING.ranking.predictability.metrics_schema import get_canonical_metric_name
+        return get_canonical_metric_name(self.task_type, self.view)
+    
+    @property
+    def std_metric_name(self) -> str:
+        """Get canonical name for the std deviation of the primary metric."""
+        from TRAINING.ranking.predictability.metrics_schema import get_canonical_metric_name
+        return get_canonical_metric_name(self.task_type, self.view, "std")
+    
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
+        # Get canonical metric names (task-aware, view-aware)
+        primary_name = self.primary_metric_name
+        std_name = self.std_metric_name
+        
         result = {
             'target': self.target,
             'target_column': self.target_column,
             'task_type': self.task_type.name if hasattr(self, 'task_type') else 'REGRESSION',
+            'view': getattr(self, 'view', 'CROSS_SECTIONAL'),
+            # Canonical metric names (new, unambiguous)
+            primary_name: float(self.auc),
+            std_name: float(self.std_score),
+            # DEPRECATED: legacy fields for backward compatibility
             'auc': float(self.auc),
             'std_score': float(self.std_score),
             'mean_r2': float(self.auc),  # Backward compatibility

@@ -52,3 +52,55 @@ multiclass_classification:
     - r2
     - rmse
     - mae
+
+# =============================================================================
+# Canonical Metric Naming
+# =============================================================================
+# Format: <metric_base>__<view>__<aggregation>
+# - view: cs (cross-sectional) or sym (symbol-specific)
+# - aggregation: mean, std, pooled
+#
+# This eliminates the overloaded "auc" field that stored different metrics
+# depending on task type (R2 for regression, ROC-AUC for binary, etc.)
+
+canonical_names:
+  regression:
+    cross_sectional:
+      # Rank IC (Spearman correlation per timestamp, averaged over time)
+      primary: spearman_ic__cs__mean
+      std: spearman_ic__cs__std
+      secondary:
+        - r2__cs__pooled
+        - mae__cs__pooled
+    symbol_specific:
+      # R2 per symbol over time, averaged across symbols
+      primary: r2__sym__mean
+      std: r2__sym__std
+      secondary:
+        - spearman_corr__sym__mean
+        - rmse__sym__mean
+  
+  binary_classification:
+    cross_sectional:
+      # ROC-AUC per timestamp, averaged over time
+      primary: roc_auc__cs__mean
+      std: roc_auc__cs__std
+      secondary:
+        - pr_auc__cs__mean
+        - log_loss__cs__mean
+    symbol_specific:
+      # ROC-AUC per symbol over time, averaged across symbols
+      primary: roc_auc__sym__mean
+      std: roc_auc__sym__std
+      secondary:
+        - pr_auc__sym__mean
+  
+  multiclass_classification:
+    cross_sectional:
+      primary: accuracy__cs__mean
+      std: accuracy__cs__std
+      secondary:
+        - macro_f1__cs__mean
+    symbol_specific:
+      primary: accuracy__sym__mean
+      std: accuracy__sym__std
