@@ -521,10 +521,11 @@ def target_repro_dir(
     target: str, 
     view: str, 
     symbol: Optional[str] = None,
-    universe_sig: Optional[str] = None  # NEW: For cross-run reproducibility
+    universe_sig: Optional[str] = None,  # For cross-run reproducibility
+    stage: Optional[str] = None,  # Pipeline stage (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
 ) -> Path:
     """
-    Get reproducibility directory for target, scoped by view/universe/symbol.
+    Get reproducibility directory for target, scoped by stage/view/universe/symbol.
     
     Args:
         run_root: Run root directory
@@ -534,12 +535,15 @@ def target_repro_dir(
         universe_sig: Optional universe signature (hash of sorted symbols list).
                       When provided, adds universe={universe_sig}/ to path for
                       cross-run reproducibility and collision prevention.
+        stage: Pipeline stage for path scoping (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
     
     Returns:
-        - If view="CROSS_SECTIONAL" (no universe_sig): targets/{target}/reproducibility/CROSS_SECTIONAL/
-        - If view="CROSS_SECTIONAL" (with universe_sig): targets/{target}/reproducibility/CROSS_SECTIONAL/universe={universe_sig}/
-        - If view="SYMBOL_SPECIFIC" (no universe_sig): targets/{target}/reproducibility/SYMBOL_SPECIFIC/symbol={symbol}/
-        - If view="SYMBOL_SPECIFIC" (with universe_sig): targets/{target}/reproducibility/SYMBOL_SPECIFIC/universe={universe_sig}/symbol={symbol}/
+        With stage:
+        - targets/{target}/reproducibility/stage={stage}/CROSS_SECTIONAL/[universe={universe_sig}/]
+        - targets/{target}/reproducibility/stage={stage}/SYMBOL_SPECIFIC/[universe={universe_sig}/]symbol={symbol}/
+        Without stage (legacy):
+        - targets/{target}/reproducibility/CROSS_SECTIONAL/[universe={universe_sig}/]
+        - targets/{target}/reproducibility/SYMBOL_SPECIFIC/[universe={universe_sig}/]symbol={symbol}/
     
     Raises:
         ValueError: If view is None or invalid, or if SYMBOL_SPECIFIC without symbol
@@ -576,7 +580,8 @@ def target_repro_dir(
     except Exception:
         pass  # Silently ignore if run context not available
     
-    base_repro_dir = get_target_reproducibility_dir(Path(run_root), target)
+    # Pass stage to get_target_reproducibility_dir for stage-scoped paths
+    base_repro_dir = get_target_reproducibility_dir(Path(run_root), target, stage=stage)
     
     # Build path with optional universe_sig using path_mode (SST-derived)
     if path_mode == "CROSS_SECTIONAL":
@@ -597,13 +602,14 @@ def target_repro_file_path(
     filename: str, 
     view: str, 
     symbol: Optional[str] = None,
-    universe_sig: Optional[str] = None
+    universe_sig: Optional[str] = None,
+    stage: Optional[str] = None,  # Pipeline stage (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
 ) -> Path:
     """
-    Get file path in view-scoped reproducibility directory.
+    Get file path in stage/view-scoped reproducibility directory.
     
     This function constructs the path to a file in the reproducibility directory,
-    scoped by view/universe/symbol. For feature selection artifacts, view is REQUIRED.
+    scoped by stage/view/universe/symbol. For feature selection artifacts, view is REQUIRED.
     
     Args:
         run_root: Run root directory
@@ -612,14 +618,15 @@ def target_repro_file_path(
         view: REQUIRED view name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
         symbol: Optional symbol name (required if view is "SYMBOL_SPECIFIC")
         universe_sig: Optional universe signature for cross-run reproducibility
+        stage: Pipeline stage for path scoping (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
     
     Returns:
-        Path to file in view-scoped reproducibility directory
+        Path to file in stage/view-scoped reproducibility directory
     
     Raises:
         ValueError: If view is None or invalid, or if SYMBOL_SPECIFIC without symbol
     """
-    repro_dir = target_repro_dir(run_root, target, view, symbol, universe_sig)
+    repro_dir = target_repro_dir(run_root, target, view, symbol, universe_sig, stage=stage)
     return repro_dir / filename
 
 

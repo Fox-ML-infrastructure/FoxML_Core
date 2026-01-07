@@ -113,17 +113,19 @@ class OutputLayout:
         universe_sig: Optional[str] = None,
         symbol: Optional[str] = None,
         cohort_id: Optional[str] = None,
+        stage: Optional[str] = None,  # Pipeline stage (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
     ):
         """Initialize OutputLayout with either WriteScope (preferred) or loose args.
         
         Args:
             output_root: Base output directory for the run
             target: Target name
-            scope: WriteScope object (preferred - derives view, universe_sig, symbol, purpose)
+            scope: WriteScope object (preferred - derives view, universe_sig, symbol, purpose, stage)
             view: View string (deprecated - use scope instead)
             universe_sig: Universe signature (deprecated - use scope instead)
             symbol: Symbol for SYMBOL_SPECIFIC (deprecated - use scope instead)
             cohort_id: Optional cohort ID
+            stage: Pipeline stage for path scoping (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
         """
         self.output_root = Path(output_root) if isinstance(output_root, str) else output_root
         self.target = target
@@ -138,6 +140,8 @@ class OutputLayout:
             self.universe_sig = scope.universe_sig
             self.symbol = scope.symbol
             self._purpose = scope.purpose
+            # Get stage from scope if available
+            self.stage = scope.stage.value if hasattr(scope, 'stage') and scope.stage and hasattr(scope.stage, 'value') else (scope.stage if hasattr(scope, 'stage') else stage)
         else:
             # Deprecated path: loose args
             warnings.warn(
@@ -151,6 +155,7 @@ class OutputLayout:
             self.universe_sig = universe_sig
             self.symbol = symbol
             self._purpose = ScopePurpose.FINAL if _WRITE_SCOPE_AVAILABLE else None
+            self.stage = stage  # Use explicit stage parameter
         
         # Hard invariant: view must be valid canonical value
         if self.view not in {"CROSS_SECTIONAL", "SYMBOL_SPECIFIC"}:
@@ -188,22 +193,26 @@ class OutputLayout:
         return "/".join(parts)
     
     def repro_dir(self) -> Path:
-        """Get reproducibility directory for target, scoped by view/universe/symbol.
+        """Get reproducibility directory for target, scoped by stage/view/universe/symbol.
         
         Returns:
-            CROSS_SECTIONAL: targets/{target}/reproducibility/CROSS_SECTIONAL/universe={universe_sig}/
-            SYMBOL_SPECIFIC: targets/{target}/reproducibility/SYMBOL_SPECIFIC/symbol={symbol}/
-            ROUTING_EVAL: routing_evaluation/{view}/... (same pattern)
+            With stage: targets/{target}/reproducibility/stage={stage}/{view}/universe={universe_sig}/
+            Without stage (legacy): targets/{target}/reproducibility/{view}/universe={universe_sig}/
+            ROUTING_EVAL: routing_evaluation/{view}/... (same pattern, no stage)
         
         Note: SYMBOL_SPECIFIC uses symbol= only (no universe=) to match cohort path pattern
         and avoid redundant nesting. The symbol already uniquely identifies the scope.
         """
         if self.is_routing_eval:
-            # Routing evaluation artifacts go to separate root
+            # Routing evaluation artifacts go to separate root (no stage scoping)
             base = self.output_root / "routing_evaluation" / self.view
         else:
-            # Final artifacts go under target
-            base = self.output_root / "targets" / self.target / "reproducibility" / self.view
+            # Final artifacts go under target with stage scoping
+            repro_base = self.output_root / "targets" / self.target / "reproducibility"
+            if self.stage:
+                base = repro_base / f"stage={self.stage}" / self.view
+            else:
+                base = repro_base / self.view  # Legacy fallback
         
         # For SYMBOL_SPECIFIC: symbol= is sufficient (universe= is redundant)
         # For CROSS_SECTIONAL: universe= identifies the multi-symbol set

@@ -84,6 +84,7 @@ def save_feature_importances(
             view=view,
             universe_sig=universe_sig,
             symbol=symbol_for_layout,
+            stage="TARGET_RANKING",  # Explicit stage for proper path scoping
         )
         target_importances_dir = layout.feature_importance_dir()
         target_importances_dir.mkdir(parents=True, exist_ok=True)

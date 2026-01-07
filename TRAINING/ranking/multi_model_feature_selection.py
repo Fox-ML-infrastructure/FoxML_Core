@@ -4761,20 +4761,21 @@ def save_multi_model_results(
                     view=view,
                     universe_sig=universe_sig,
                     symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
+                    stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
                 )
                 repro_dir = layout.repro_dir()
                 target_importances_dir = layout.feature_importance_dir()
                 target_selected_features_path = repro_dir / "selected_features.txt"
             else:
-                # Legacy path resolution
+                # Legacy path resolution with stage
                 from TRAINING.orchestration.utils.target_first_paths import (
                     run_root, target_repro_dir, target_repro_file_path, ensure_target_structure
                 )
                 run_root_dir = run_root(base_output_dir)
                 ensure_target_structure(run_root_dir, target_clean)
-                repro_dir = target_repro_dir(run_root_dir, target_clean, view=view, symbol=symbol)
+                repro_dir = target_repro_dir(run_root_dir, target_clean, view=view, symbol=symbol, stage="FEATURE_SELECTION")
                 target_importances_dir = repro_dir / "feature_importances"
-                target_selected_features_path = target_repro_file_path(run_root_dir, target_clean, "selected_features.txt", view=view, symbol=symbol)
+                target_selected_features_path = target_repro_file_path(run_root_dir, target_clean, "selected_features.txt", view=view, symbol=symbol, stage="FEATURE_SELECTION")
             
             target_importances_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
@@ -4920,13 +4921,14 @@ def save_multi_model_results(
                     view=view,
                     universe_sig=universe_sig,
                     symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
+                    stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
                 )
                 target_summary_path = layout.repro_dir() / "feature_selection_summary.json"
             else:
-                # Legacy path resolution
+                # Legacy path resolution with stage
                 from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
                 run_root_dir = run_root(base_output_dir)
-                target_summary_path = target_repro_file_path(run_root_dir, target_clean, "feature_selection_summary.json", view=view, symbol=symbol)
+                target_summary_path = target_repro_file_path(run_root_dir, target_clean, "feature_selection_summary.json", view=view, symbol=symbol, stage="FEATURE_SELECTION")
             
             target_summary_path.parent.mkdir(parents=True, exist_ok=True)
             with open(target_summary_path, "w") as f:

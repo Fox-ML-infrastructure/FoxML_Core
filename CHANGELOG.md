@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights (Last 7 Days)
 
+#### 2026-01-07
+**OutputLayout & Path Functions Stage Support** - Complete stage-scoped path coverage.
+- **NEW**: `OutputLayout` now accepts `stage` parameter and includes `stage=` in `repro_dir()` paths
+- **NEW**: `target_repro_dir()` and `target_repro_file_path()` accept `stage` parameter
+- **FIX**: All 12 `OutputLayout` callers now pass explicit stage (TARGET_RANKING/FEATURE_SELECTION)
+- **FIX**: Dominance quarantine paths use stage-aware paths
+- **FIX**: `artifacts_manifest_sha256` now computes correctly (artifacts in expected stage-scoped paths)
+
 #### 2026-01-06 (Updated)
 **SST Stage Factory & Identity Passthrough** - Stage-aware reproducibility tracking.
 - **NEW**: SST stage factory in `run_context.py`: `save_stage_transition()`, `get_current_stage()`, `resolve_stage()`

@@ -231,14 +231,15 @@ def save_feature_selection_rankings(
                 view=view,
                 universe_sig=universe_sig,
                 symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
+                stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
             )
             repro_dir = layout.repro_dir()
             target_csv_path = repro_dir / "feature_selection_rankings.csv"
         else:
-            # Legacy path resolution
+            # Legacy path resolution with stage
             from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
             run_root_dir = run_root(base_output_dir)
-            target_csv_path = target_repro_file_path(run_root_dir, target_clean, "feature_selection_rankings.csv", view=view, symbol=symbol)
+            target_csv_path = target_repro_file_path(run_root_dir, target_clean, "feature_selection_rankings.csv", view=view, symbol=symbol, stage="FEATURE_SELECTION")
         
         target_csv_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(target_csv_path, index=False)
@@ -304,6 +305,7 @@ def save_feature_selection_rankings(
                 view=view,
                 universe_sig=universe_sig,
                 symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
+                stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
             )
             repro_dir = layout.repro_dir()
             target_selected_path = repro_dir / "selected_features.txt"
@@ -317,7 +319,7 @@ def save_feature_selection_rankings(
                 logger.warning(f"base_output_dir does not exist for selected features: {base_output_dir}, using output_dir: {output_dir}")
                 base_output_dir = output_dir
             run_root_dir = run_root(base_output_dir)
-            target_selected_path = target_repro_file_path(run_root_dir, target_clean, "selected_features.txt", view=view, symbol=symbol)
+            target_selected_path = target_repro_file_path(run_root_dir, target_clean, "selected_features.txt", view=view, symbol=symbol, stage="FEATURE_SELECTION")
         
         target_selected_path.parent.mkdir(parents=True, exist_ok=True)
         with open(target_selected_path, "w") as f:
@@ -493,10 +495,11 @@ def save_feature_importances_for_reproducibility(
                 view=view,
                 universe_sig=universe_sig,
                 symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
+                stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
             )
             importances_dir = layout.feature_importance_dir()
         else:
-            # Legacy path resolution
+            # Legacy path resolution with stage
             from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_dir, ensure_target_structure
             if not base_output_dir.exists():
                 logger.warning(f"base_output_dir does not exist for feature importances: {base_output_dir}, using output_dir: {output_dir}")
@@ -504,7 +507,7 @@ def save_feature_importances_for_reproducibility(
             
             run_root_dir = run_root(base_output_dir)
             ensure_target_structure(run_root_dir, target_clean)
-            repro_dir = target_repro_dir(run_root_dir, target_clean, view=view, symbol=symbol)
+            repro_dir = target_repro_dir(run_root_dir, target_clean, view=view, symbol=symbol, stage="FEATURE_SELECTION")
             importances_dir = repro_dir / "feature_importances"
         
         importances_dir.mkdir(parents=True, exist_ok=True)

@@ -1263,7 +1263,8 @@ class ReproducibilityTracker:
                         view=normalized_view,
                         universe_sig=universe_sig,
                         symbol=symbol_from_meta,
-                        cohort_id=cohort_id
+                        cohort_id=cohort_id,
+                        stage=stage_normalized,  # Pass stage from context for proper path scoping
                     )
                     # Validate cohort_id matches view using OutputLayout
                     layout.validate_cohort_id(cohort_id)
