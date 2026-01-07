@@ -251,6 +251,7 @@ class FeatureSelectionSnapshot:
     target: str = ""
     symbol: Optional[str] = None  # For SYMBOL_SPECIFIC views
     method: str = ""  # Model family: "xgboost", "lightgbm", "multi_model_aggregated", etc.
+    snapshot_seq: int = 0  # Sequence number for this run (matches TARGET_RANKING)
     
     # Fingerprints (for determinism verification)
     fingerprint_schema_version: str = "1.0"
@@ -260,7 +261,19 @@ class FeatureSelectionSnapshot:
     feature_fingerprint_input: Optional[str] = None  # Candidate feature universe entering FS
     feature_fingerprint_output: Optional[str] = None  # Selected features exiting FS
     target_fingerprint: Optional[str] = None
+    metrics_sha256: Optional[str] = None  # Hash of outputs.metrics for drift detection
+    artifacts_manifest_sha256: Optional[str] = None  # Hash of output artifacts for tampering detection
     predictions_sha256: Optional[str] = None  # Aggregated prediction hash
+    
+    # Fingerprint source documentation (what each fingerprint means)
+    fingerprint_sources: Dict[str, str] = field(default_factory=lambda: {
+        "config_fingerprint": "hash of FS model hyperparameters and config sections",
+        "data_fingerprint": "hash of n_samples, symbols list, and date_range (start/end)",
+        "feature_fingerprint": "hash of sorted feature spec list resolved from registry",
+        "feature_fingerprint_input": "hash of candidate features before selection",
+        "feature_fingerprint_output": "hash of selected features after selection",
+        "target_fingerprint": "hash of target name, view, horizon_minutes, and labeling_impl_hash",
+    })
     
     # Inputs (mirrors TARGET_RANKING)
     inputs: Dict[str, Any] = field(default_factory=dict)
@@ -285,13 +298,19 @@ class FeatureSelectionSnapshot:
     #   "top_features": ["low_vol_frac", "ret_zscore_15m", ...]
     # }
     
-    # Comparison group (for cross-run matching)
+    # Comparison group (for cross-run matching) - full parity with TARGET_RANKING
     comparison_group: Dict[str, Any] = field(default_factory=dict)
     # {
     #   "dataset_signature": "...",
     #   "split_signature": "...",
+    #   "target_signature": "...",
+    #   "routing_signature": "...",
+    #   "hyperparameters_signature": "...",  # FS model hyperparameters
     #   "train_seed": 42,
-    #   "universe_sig": "ef91e9db233a"
+    #   "universe_sig": "ef91e9db233a",
+    #   "n_effective": 1887790,  # Effective sample count from FS
+    #   "feature_registry_hash": "...",  # Hash of feature registry used
+    #   "comparable_key": "..."  # Pre-computed comparison key
     # }
     
     # Path to this snapshot (for global index)
@@ -307,6 +326,7 @@ class FeatureSelectionSnapshot:
             "target": self.target,
             "symbol": self.symbol,
             "method": self.method,
+            "snapshot_seq": self.snapshot_seq,
             "fingerprint_schema_version": self.fingerprint_schema_version,
             "config_fingerprint": self.config_fingerprint,
             "data_fingerprint": self.data_fingerprint,
@@ -314,7 +334,10 @@ class FeatureSelectionSnapshot:
             "feature_fingerprint_input": self.feature_fingerprint_input,
             "feature_fingerprint_output": self.feature_fingerprint_output,
             "target_fingerprint": self.target_fingerprint,
+            "metrics_sha256": self.metrics_sha256,
+            "artifacts_manifest_sha256": self.artifacts_manifest_sha256,
             "predictions_sha256": self.predictions_sha256,
+            "fingerprint_sources": self.fingerprint_sources,
             "inputs": self.inputs,
             "process": self.process,
             "outputs": self.outputs,
@@ -333,6 +356,7 @@ class FeatureSelectionSnapshot:
             target=data.get("target", ""),
             symbol=data.get("symbol"),
             method=data.get("method", ""),
+            snapshot_seq=data.get("snapshot_seq", 0),
             fingerprint_schema_version=data.get("fingerprint_schema_version", "1.0"),
             config_fingerprint=data.get("config_fingerprint"),
             data_fingerprint=data.get("data_fingerprint"),
@@ -340,7 +364,10 @@ class FeatureSelectionSnapshot:
             feature_fingerprint_input=data.get("feature_fingerprint_input"),
             feature_fingerprint_output=data.get("feature_fingerprint_output"),
             target_fingerprint=data.get("target_fingerprint"),
+            metrics_sha256=data.get("metrics_sha256"),
+            artifacts_manifest_sha256=data.get("artifacts_manifest_sha256"),
             predictions_sha256=data.get("predictions_sha256"),
+            fingerprint_sources=data.get("fingerprint_sources", {}),
             inputs=data.get("inputs", {}),
             process=data.get("process", {}),
             outputs=data.get("outputs", {}),
@@ -358,6 +385,10 @@ class FeatureSelectionSnapshot:
         process: Optional[Dict[str, Any]] = None,
         outputs: Optional[Dict[str, Any]] = None,
         stage: str = "FEATURE_SELECTION",  # Allow caller to specify stage
+        snapshot_seq: int = 0,  # Sequence number for this run
+        n_effective: Optional[int] = None,  # Effective sample count from FS
+        feature_registry_hash: Optional[str] = None,  # Hash of feature registry
+        comparable_key: Optional[str] = None,  # Pre-computed comparison key
     ) -> 'FeatureSelectionSnapshot':
         """
         Create from a FeatureImportanceSnapshot with additional context.
@@ -366,8 +397,15 @@ class FeatureSelectionSnapshot:
         
         Args:
             stage: Pipeline stage - "FEATURE_SELECTION" (default) or "TARGET_RANKING"
+            snapshot_seq: Sequence number for this run (matches TARGET_RANKING)
+            n_effective: Effective sample count from FS stage
+            feature_registry_hash: Hash of feature registry used
+            comparable_key: Pre-computed comparison key from cohort metadata
         """
-        # Build comparison group from importance snapshot signatures
+        import hashlib
+        import json
+        
+        # Build comparison group from importance snapshot signatures (full parity with TR)
         comparison_group = {}
         if importance_snapshot.dataset_signature:
             comparison_group["dataset_signature"] = importance_snapshot.dataset_signature
@@ -377,10 +415,19 @@ class FeatureSelectionSnapshot:
             comparison_group["target_signature"] = importance_snapshot.target_signature
         if importance_snapshot.routing_signature:
             comparison_group["routing_signature"] = importance_snapshot.routing_signature
+        if importance_snapshot.hparams_signature:
+            comparison_group["hyperparameters_signature"] = importance_snapshot.hparams_signature
         if importance_snapshot.train_seed is not None:
             comparison_group["train_seed"] = importance_snapshot.train_seed
         if importance_snapshot.universe_sig:
             comparison_group["universe_sig"] = importance_snapshot.universe_sig
+        # Additional fields for full parity
+        if n_effective is not None:
+            comparison_group["n_effective"] = n_effective
+        if feature_registry_hash:
+            comparison_group["feature_registry_hash"] = feature_registry_hash
+        if comparable_key:
+            comparison_group["comparable_key"] = comparable_key
         
         # Build outputs from importance data
         default_outputs = {
@@ -390,6 +437,16 @@ class FeatureSelectionSnapshot:
             },
             "top_features": importance_snapshot.features[:10],  # Top 10 features
         }
+        final_outputs = outputs or default_outputs
+        
+        # Compute metrics_sha256 for drift detection
+        metrics_sha256 = None
+        if final_outputs.get("metrics"):
+            try:
+                metrics_json = json.dumps(final_outputs["metrics"], sort_keys=True)
+                metrics_sha256 = hashlib.sha256(metrics_json.encode()).hexdigest()
+            except Exception:
+                pass
         
         # Extract feature_fingerprint_input from inputs if provided
         feature_input_hash = inputs.get("feature_fingerprint_input") if inputs else None
@@ -402,6 +459,7 @@ class FeatureSelectionSnapshot:
             target=importance_snapshot.target,
             symbol=symbol,
             method=importance_snapshot.method,
+            snapshot_seq=snapshot_seq,
             # Fingerprint mappings from FeatureImportanceSnapshot
             config_fingerprint=importance_snapshot.hparams_signature,  # Model config hash
             data_fingerprint=importance_snapshot.dataset_signature,  # Dataset signature
@@ -409,10 +467,11 @@ class FeatureSelectionSnapshot:
             feature_fingerprint_input=feature_input_hash,  # Candidate features before selection
             feature_fingerprint_output=importance_snapshot.feature_signature,  # Selected features
             target_fingerprint=importance_snapshot.target_signature,  # Target definition hash
+            metrics_sha256=metrics_sha256,  # Hash of outputs.metrics
             predictions_sha256=importance_snapshot.prediction_hash,  # Prediction determinism hash
             inputs=inputs or {},
             process=process or {},
-            outputs=outputs or default_outputs,
+            outputs=final_outputs,
             comparison_group=comparison_group,
         )
     

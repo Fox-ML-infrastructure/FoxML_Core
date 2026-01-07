@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Recent Highlights (Last 7 Days)
 
 #### 2026-01-07
+**FS Snapshot Full Parity with TARGET_RANKING** - Complete audit trail for FEATURE_SELECTION stage.
+- **FIX**: Seed derivation now uses `base_seed` (42) directly instead of deriving from `universe_sig`
+  - Ensures TR/FS/TRAINING stages have consistent seeds for determinism verification
+- **NEW**: `FeatureSelectionSnapshot` now includes full parity fields:
+  - `snapshot_seq`: Sequence number for this run
+  - `metrics_sha256`: Hash of outputs.metrics for drift detection
+  - `artifacts_manifest_sha256`: Hash of output artifacts for tampering detection
+  - `fingerprint_sources`: Documentation of what each fingerprint means
+  - Full `comparison_group` with `n_effective`, `hyperparameters_signature`, `feature_registry_hash`, `comparable_key`
+- **NEW**: Hooks (`save_snapshot_hook`, `save_snapshot_from_series_hook`) accept full parity fields
+- **NEW**: `create_fs_snapshot_from_importance` accepts and passes through all parity fields
+
 **OutputLayout & Path Functions Stage Support** - Complete stage-scoped path coverage.
 - **NEW**: `OutputLayout` now accepts `stage` parameter and includes `stage=` in `repro_dir()` paths
 - **NEW**: `target_repro_dir()` and `target_repro_file_path()` accept `stage` parameter

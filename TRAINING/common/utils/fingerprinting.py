@@ -426,14 +426,10 @@ def create_stage_identity(
         except Exception:
             base_seed = 42
     
-    # FIX: Derive final seed from base_seed + universe_sig for identity-based determinism
-    # This ensures different universes get different (but reproducible) seeds
-    if universe_sig:
-        # Combine base_seed with universe_sig for per-universe determinism
-        seed_input = f"{base_seed}:{universe_sig}"
-        train_seed = int(hashlib.sha256(seed_input.encode()).hexdigest()[:8], 16) % (2**31)
-    else:
-        train_seed = base_seed
+    # Use base_seed directly for TR/FS/TRAINING consistency
+    # Universe differentiation is already handled by universe_sig in comparison_group
+    # This ensures: same config seed = same train_seed across all stages
+    train_seed = base_seed
     
     return RunIdentity(
         dataset_signature=universe_sig,

@@ -446,6 +446,10 @@ def create_fs_snapshot_from_importance(
     inputs: Optional[Dict] = None,
     process: Optional[Dict] = None,
     stage: str = "FEATURE_SELECTION",  # Allow caller to specify stage
+    snapshot_seq: int = 0,  # Sequence number for this run
+    n_effective: Optional[int] = None,  # Effective sample count from FS
+    feature_registry_hash: Optional[str] = None,  # Hash of feature registry
+    comparable_key: Optional[str] = None,  # Pre-computed comparison key
 ) -> Optional['FeatureSelectionSnapshot']:
     """
     Create and save FeatureSelectionSnapshot from existing FeatureImportanceSnapshot.
@@ -462,6 +466,10 @@ def create_fs_snapshot_from_importance(
         inputs: Optional inputs dict (config, data, target info)
         process: Optional process dict (split info)
         stage: Pipeline stage - "FEATURE_SELECTION" (default) or "TARGET_RANKING"
+        snapshot_seq: Sequence number for this run (matches TARGET_RANKING)
+        n_effective: Effective sample count from FS stage
+        feature_registry_hash: Hash of feature registry used
+        comparable_key: Pre-computed comparison key from cohort metadata
     
     Returns:
         FeatureSelectionSnapshot if created successfully, None otherwise
@@ -469,7 +477,7 @@ def create_fs_snapshot_from_importance(
     from .schema import FeatureSelectionSnapshot
     
     try:
-        # Create snapshot from importance snapshot
+        # Create snapshot from importance snapshot with full parity fields
         fs_snapshot = FeatureSelectionSnapshot.from_importance_snapshot(
             importance_snapshot=importance_snapshot,
             view=view,
@@ -477,6 +485,10 @@ def create_fs_snapshot_from_importance(
             inputs=inputs,
             process=process,
             stage=stage,  # Pass stage to schema
+            snapshot_seq=snapshot_seq,
+            n_effective=n_effective,
+            feature_registry_hash=feature_registry_hash,
+            comparable_key=comparable_key,
         )
         
         # Set path relative to targets/

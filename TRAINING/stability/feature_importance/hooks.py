@@ -38,6 +38,11 @@ def save_snapshot_hook(
     process: Optional[Dict] = None,  # Optional process dict for fs_snapshot
     write_fs_snapshot: bool = True,  # If True, also write fs_snapshot.json and update global index
     stage: str = "FEATURE_SELECTION",  # Pipeline stage for fs_snapshot labeling
+    # Full parity with TARGET_RANKING fields (sourced from FS stage)
+    snapshot_seq: int = 0,  # Sequence number for this run
+    n_effective: Optional[int] = None,  # Effective sample count from FS
+    feature_registry_hash: Optional[str] = None,  # Hash of feature registry
+    comparable_key: Optional[str] = None,  # Pre-computed comparison key
 ) -> Optional[Path]:
     """
     Hook function to save feature importance snapshot.
@@ -212,6 +217,11 @@ def save_snapshot_hook(
                     inputs=inputs,
                     process=process,
                     stage=stage,  # Pass stage for correct labeling
+                    # Full parity fields (sourced from FS stage)
+                    snapshot_seq=snapshot_seq,
+                    n_effective=n_effective,
+                    feature_registry_hash=feature_registry_hash,
+                    comparable_key=comparable_key,
                 )
             except Exception as e:
                 logger.debug(f"Failed to create fs_snapshot (non-critical): {e}")
@@ -298,6 +308,11 @@ def save_snapshot_from_series_hook(
     process: Optional[Dict] = None,  # Optional process dict for fs_snapshot
     write_fs_snapshot: bool = True,  # If True, also write fs_snapshot.json
     stage: str = "FEATURE_SELECTION",  # Pipeline stage for fs_snapshot labeling
+    # Full parity with TARGET_RANKING fields (sourced from FS stage)
+    snapshot_seq: int = 0,  # Sequence number for this run
+    n_effective: Optional[int] = None,  # Effective sample count from FS
+    feature_registry_hash: Optional[str] = None,  # Hash of feature registry
+    comparable_key: Optional[str] = None,  # Pre-computed comparison key
 ) -> Optional[Path]:
     """
     Hook function to save snapshot from pandas Series.
@@ -345,6 +360,11 @@ def save_snapshot_from_series_hook(
         process=process,
         write_fs_snapshot=write_fs_snapshot,
         stage=stage,  # Pass stage for correct labeling
+        # Full parity fields
+        snapshot_seq=snapshot_seq,
+        n_effective=n_effective,
+        feature_registry_hash=feature_registry_hash,
+        comparable_key=comparable_key,
     )
 
 
