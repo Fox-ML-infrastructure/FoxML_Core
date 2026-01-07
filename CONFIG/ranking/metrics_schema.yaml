@@ -1,0 +1,54 @@
+# Task-Specific Metrics Schema
+# Defines which metrics are valid for each task type
+#
+# Keys are actual JSON field names persisted in metrics.json (not display names)
+# Schema loaded once and cached via @lru_cache
+
+regression:
+  # Distribution stats for continuous targets
+  target_stats:
+    - y_mean
+    - y_std
+    - y_min
+    - y_max
+    - y_finite_pct
+  # Fields that should NEVER appear for regression
+  exclude:
+    - pos_rate
+    - class_balance
+    - precision
+    - recall
+    - f1
+
+binary_classification:
+  # Class balance stats for binary targets
+  target_stats:
+    - pos_rate        # Fraction of samples with pos_label
+    - class_balance   # Dict of {label: count}
+  # Default positive label (override in TaskSpec if needed)
+  pos_label: 1
+  # Fields that should NEVER appear for binary classification
+  exclude:
+    - y_mean
+    - y_std
+    - y_min
+    - y_max
+    - r2
+    - rmse
+    - mae
+
+multiclass_classification:
+  # Class balance stats for multiclass targets
+  target_stats:
+    - class_balance   # Dict of {label: count}
+    - n_classes       # Number of unique classes
+  # pos_rate is NOT emitted for multiclass (use class_balance instead)
+  exclude:
+    - pos_rate
+    - y_mean
+    - y_std
+    - y_min
+    - y_max
+    - r2
+    - rmse
+    - mae

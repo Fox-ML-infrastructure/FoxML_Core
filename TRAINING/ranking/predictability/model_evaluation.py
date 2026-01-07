@@ -7605,17 +7605,14 @@ def evaluate_target_predictability(
                 # Also include legacy leakage_flag for backward compatibility
                 metrics_dict['leakage_flag'] = result.leakage_flag
                 
-                # Add pos_rate if available (from y)
-                if 'y' in locals() and y is not None:
+                # Add task-aware target stats (replaces unconditional pos_rate)
+                if 'y' in locals() and y is not None and 'result' in locals():
                     try:
-                        import numpy as np
-                        if len(y) > 0:
-                            pos_count = np.sum(y == 1) if hasattr(y, '__iter__') else 0
-                            pos_rate = pos_count / len(y) if len(y) > 0 else None
-                            if pos_rate is not None:
-                                metrics_dict["pos_rate"] = float(pos_rate)
-                    except Exception:
-                        pass
+                        from TRAINING.ranking.predictability.metrics_schema import compute_target_stats
+                        target_stats = compute_target_stats(result.task_type, y)
+                        metrics_dict.update(target_stats)
+                    except Exception as e:
+                        logger.debug(f"Failed to compute target stats: {e}")
                 
                 # Add view and symbol to RunContext if available (for dual-view target ranking)
                 if 'view' in locals():
@@ -7719,17 +7716,14 @@ def evaluate_target_predictability(
                     **cohort_metrics
                 }
                 
-                # Add pos_rate if available (from y)
-                if 'y' in locals() and y is not None:
+                # Add task-aware target stats (replaces unconditional pos_rate)
+                if 'y' in locals() and y is not None and 'result' in locals():
                     try:
-                        import numpy as np
-                        if len(y) > 0:
-                            pos_count = np.sum(y == 1) if hasattr(y, '__iter__') else 0
-                            pos_rate = pos_count / len(y) if len(y) > 0 else None
-                            if pos_rate is not None:
-                                metrics_with_cohort["pos_rate"] = float(pos_rate)
-                    except Exception:
-                        pass
+                        from TRAINING.ranking.predictability.metrics_schema import compute_target_stats
+                        target_stats = compute_target_stats(result.task_type, y)
+                        metrics_with_cohort.update(target_stats)
+                    except Exception as e:
+                        logger.debug(f"Failed to compute target stats: {e}")
                 
                 # NOTE: NaN drops are now tracked immediately after data prep (above), not here
                 
