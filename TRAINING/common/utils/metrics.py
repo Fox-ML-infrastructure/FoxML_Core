@@ -397,18 +397,50 @@ class MetricsWriter:
         metrics_file_json = cohort_dir / "metrics.json"
         metrics_file_parquet = cohort_dir / "metrics.parquet"
         
+        # Write JSON FIRST - it's more resilient and serves as fallback if Parquet fails
+        # This ensures we always have metrics even if Parquet serialization has issues
         try:
-            # SST Architecture (Option A): metrics.parquet is canonical, metrics.json is debug export
-            # Write Parquet FIRST (canonical format)
-            df_metrics = pd.DataFrame([metrics_data])
-            df_metrics.to_parquet(metrics_file_parquet, index=False, engine='pyarrow', compression='snappy')
-            
-            # Write JSON as debug export (derived from same data, human-readable)
             _write_atomic_json(metrics_file_json, metrics_data)
-            
-            logger.debug(f"✅ Wrote canonical metrics.parquet and debug metrics.json to {cohort_dir}")
+            logger.debug(f"✅ Wrote metrics.json to {cohort_dir}")
         except Exception as e:
-            logger.warning(f"Failed to write metrics to {cohort_dir}: {e}")
+            logger.warning(f"Failed to write metrics.json to {cohort_dir}: {e}")
+        
+        # Now try Parquet - may fail for complex nested types
+        try:
+            # Prepare data for Parquet: stringify dict keys (PyArrow doesn't support int keys)
+            parquet_data = self._prepare_for_parquet(metrics_data)
+            df_metrics = pd.DataFrame([parquet_data])
+            df_metrics.to_parquet(metrics_file_parquet, index=False, engine='pyarrow', compression='snappy')
+            logger.debug(f"✅ Wrote metrics.parquet to {cohort_dir}")
+        except Exception as e:
+            logger.warning(f"Failed to write metrics.parquet to {cohort_dir}: {e}")
+    
+    def _prepare_for_parquet(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Prepare data for Parquet serialization by converting non-string dict keys.
+        
+        PyArrow/Parquet doesn't support dicts with integer keys (e.g., class_balance).
+        This helper recursively converts all dict keys to strings.
+        
+        Args:
+            data: Dictionary to prepare
+            
+        Returns:
+            New dictionary with all nested dict keys converted to strings
+        """
+        result = {}
+        for key, value in data.items():
+            if isinstance(value, dict):
+                # Recursively convert nested dicts and stringify keys
+                result[key] = {str(k): self._prepare_for_parquet(v) if isinstance(v, dict) else v 
+                               for k, v in value.items()}
+            elif isinstance(value, list):
+                # Handle lists of dicts
+                result[key] = [self._prepare_for_parquet(item) if isinstance(item, dict) else item 
+                               for item in value]
+            else:
+                result[key] = value
+        return result
     
     def _write_metrics_reference(
         self,

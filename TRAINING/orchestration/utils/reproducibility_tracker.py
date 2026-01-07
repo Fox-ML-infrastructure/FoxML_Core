@@ -2017,33 +2017,33 @@ class ReproducibilityTracker:
         
         # Write metrics sidecar files (if enabled)
         if self.metrics:
-            # Determine view from view
-            view = None
-            if view:
-                if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
-                    view = view
+            # Normalize view - ensure it's one of the expected values
+            # FIX: Don't shadow the view parameter passed to the function
+            metrics_view = view.upper() if view else None
+            if metrics_view and metrics_view not in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+                metrics_view = None  # Invalid view, will use "UNKNOWN" in write call
             
-            # Determine target (for TARGET_RANKING and FEATURE_SELECTION stages, target is the target)
-            target = target if stage_normalized in ["TARGET_RANKING", "FEATURE_SELECTION"] else None
+            # Determine target for metrics (for TARGET_RANKING and FEATURE_SELECTION stages)
+            metrics_target = target if stage_normalized in ["TARGET_RANKING", "FEATURE_SELECTION"] else None
             
             # Generate baseline key for drift comparison: (stage, view, target[, symbol])
             # For FEATURE_SELECTION, use view as view (CROSS_SECTIONAL or INDIVIDUAL)
             baseline_key = None
-            if target:
-                # For TARGET_RANKING, view comes from view (CROSS_SECTIONAL, SYMBOL_SPECIFIC)
+            if metrics_target:
+                # For TARGET_RANKING, view comes from metrics_view (CROSS_SECTIONAL, SYMBOL_SPECIFIC)
                 # For FEATURE_SELECTION, view is CROSS_SECTIONAL or INDIVIDUAL (maps to view)
-                if stage_normalized == "TARGET_RANKING" and view:
-                    baseline_key = f"{stage_normalized}:{view}:{target}"
-                    if symbol and view == "SYMBOL_SPECIFIC":
+                if stage_normalized == "TARGET_RANKING" and metrics_view:
+                    baseline_key = f"{stage_normalized}:{metrics_view}:{metrics_target}"
+                    if symbol and metrics_view == "SYMBOL_SPECIFIC":
                         baseline_key += f":{symbol}"
-                elif stage_normalized == "FEATURE_SELECTION" and view:
+                elif stage_normalized == "FEATURE_SELECTION" and metrics_view:
                     # Map view to view for FEATURE_SELECTION
-                    fs_view = view if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
-                    baseline_key = f"{stage_normalized}:{fs_view}:{target}"
-                    if symbol and view == "SYMBOL_SPECIFIC":
+                    fs_view = metrics_view if metrics_view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
+                    baseline_key = f"{stage_normalized}:{fs_view}:{metrics_target}"
+                    if symbol and metrics_view == "SYMBOL_SPECIFIC":
                         baseline_key += f":{symbol}"
             
-            logger.debug(f"📊 Writing metrics for stage={stage_normalized}, target={target}, view={view}, target_cohort_dir={target_cohort_dir}")
+            logger.debug(f"📊 Writing metrics for stage={stage_normalized}, target={metrics_target}, view={metrics_view}, target_cohort_dir={target_cohort_dir}")
             
             # Write metrics sidecar files in cohort directory
             # Note: metrics will create target_cohort_dir if it doesn't exist, or fall back to target level
@@ -2059,8 +2059,8 @@ class ReproducibilityTracker:
                     self.metrics.write_cohort_metrics(
                         cohort_dir=target_cohort_dir,
                         stage=stage_normalized,
-                        view=view or "UNKNOWN",
-                        target=target,
+                        view=metrics_view or "UNKNOWN",
+                        target=metrics_target,
                         symbol=symbol,
                         run_id=run_id_clean,
                         metrics=run_data,
@@ -2069,22 +2069,22 @@ class ReproducibilityTracker:
                     )
                     metrics_written = True
                 else:
-                    logger.warning(f"Target cohort directory not available for metrics write: {target}/{stage_normalized}")
+                    logger.warning(f"Target cohort directory not available for metrics write: {metrics_target}/{stage_normalized}")
             except Exception as e:
                 logger.warning(f"⚠️  Failed to write metrics metadata to cohort directory: {e}")
                 import traceback
                 logger.debug(f"Metrics write traceback: {traceback.format_exc()}")
             
             # Safety fallback: If cohort-level write failed and we have target/view info, try target-level write
-            if not metrics_written and target and view:
+            if not metrics_written and metrics_target and metrics_view:
                 try:
-                    fallback_dir = self.metrics._get_fallback_metrics_dir(stage_normalized, view, target, symbol)
+                    fallback_dir = self.metrics._get_fallback_metrics_dir(stage_normalized, metrics_view, metrics_target, symbol)
                     if fallback_dir:
                         logger.info(f"📁 Attempting metrics fallback write to: {fallback_dir}")
                         self.metrics._write_metrics(fallback_dir, run_id_clean, run_data, stage=stage_normalized, reproducibility_mode="COHORT_AWARE")
                         if baseline_key:
                             self.metrics._write_drift(
-                                fallback_dir, stage_normalized, view, target, symbol, run_id_clean, run_data, baseline_key
+                                fallback_dir, stage_normalized, metrics_view, metrics_target, symbol, run_id_clean, run_data, baseline_key
                             )
                         logger.info(f"✅ Metrics written to fallback location: {fallback_dir}")
                 except Exception as e2:

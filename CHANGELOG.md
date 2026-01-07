@@ -70,6 +70,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Multiclass: `accuracy__cs__mean`, `accuracy__sym__mean`
 - **DEPRECATED**: `auc` field preserved for backward compatibility (will be removed in v2.0)
 
+**Classification Target Metrics Serialization Fix** - Fixes empty `outputs` for classification targets.
+- **FIX**: `class_balance` dict keys now use strings instead of integers
+  - PyArrow/Parquet doesn't support integer dict keys, causing silent serialization failures
+  - Affected: `compute_target_stats()` in `metrics_schema.py` for binary/multiclass classification
+- **FIX**: `_write_metrics()` now writes JSON first, then Parquet
+  - JSON is more resilient; ensures metrics.json exists even if Parquet fails
+- **NEW**: `_prepare_for_parquet()` helper recursively stringifies nested dict keys
+- **FIX**: Shadowed `view` variable bug in `reproducibility_tracker.py` `_save_to_cohort()`
+  - Was setting `view = None` then checking `if view:` (always False)
+  - Now uses `metrics_view` to avoid shadowing the function parameter
+
 **Sample Limit Consistency Across Stages** - Consistent data for TR/FS/TRAINING.
 - **FIX**: `cross_sectional_feature_ranker.py` now respects `max_rows_per_symbol`
   - Was loading ALL data (188k samples) instead of config limit (2k per symbol)

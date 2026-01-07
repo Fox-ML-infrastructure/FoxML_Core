@@ -141,14 +141,16 @@ def compute_target_stats(
         stats["pos_rate"] = float(np.mean(y_clean == pos_label))
         
         # class_balance = {label: count} for auditability
+        # NOTE: Use string keys for Parquet/PyArrow compatibility (int keys fail serialization)
         unique, counts = np.unique(y_clean, return_counts=True)
-        stats["class_balance"] = {int(u): int(c) for u, c in zip(unique, counts)}
+        stats["class_balance"] = {str(int(u)): int(c) for u, c in zip(unique, counts)}
         stats["y_finite_pct"] = y_finite_pct
         
     elif task_type == TaskType.MULTICLASS_CLASSIFICATION:
         # class_balance for multiclass (no pos_rate - it's meaningless)
+        # NOTE: Use string keys for Parquet/PyArrow compatibility (int keys fail serialization)
         unique, counts = np.unique(y_clean, return_counts=True)
-        stats["class_balance"] = {int(u): int(c) for u, c in zip(unique, counts)}
+        stats["class_balance"] = {str(int(u)): int(c) for u, c in zip(unique, counts)}
         stats["n_classes"] = len(unique)
         stats["y_finite_pct"] = y_finite_pct
         # NOTE: We intentionally do NOT emit pos_rate for multiclass
