@@ -47,8 +47,16 @@ FoxML Core provides:
 - **Leakage detection system** with pre-training leak detection and auto-fix
 - **Single Source of Truth (SST)** config system - all 20 model families use config-driven hyperparameters
 - **Multi-model training systems** with 20+ model families (GPU-accelerated)
-- **Reproducibility tracking** with end-to-end reproducibility verification and auditability
 - **Local metrics tracking** - Model performance metrics (ROC-AUC, R², feature importance) stored locally for reproducibility. No external data transmission, no user data collection.
+
+### Fingerprinting & Reproducibility
+
+- **SHA256 fingerprinting** for all pipeline components — data, config, features, targets, splits, hyperparameters, and routing decisions
+- **RunIdentity system** with two-phase construction (partial → finalized) and strict/replicate key separation for audit-grade traceability
+- **Diff telemetry** — automatic comparison with previous runs, distinguishing true regressions from acceptable nondeterminism
+- **Feature importance snapshots** with cross-run stability analysis and drift detection
+- **Stage-scoped output layout** — target-first directory organization with `stage=TARGET_RANKING/`, `stage=FEATURE_SELECTION/` separation for human-readable auditability
+- **Cohort-based reproducibility** — each (target, view, universe, cohort) combination gets its own snapshot with full fingerprint lineage
 
 **For detailed capabilities:** See [Architecture Overview](DOCS/00_executive/ARCHITECTURE_OVERVIEW.md)
 
