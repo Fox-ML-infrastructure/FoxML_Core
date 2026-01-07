@@ -2745,6 +2745,246 @@ def train_model_and_get_importance(
                     importance_values = importance_values / total
                 model = type('DummyModel', (), {'importance': importance_values})()
     
+    elif model_family == 'logistic_regression':
+        # Standalone Logistic Regression for classification (binary/multiclass only)
+        # Task-type filtering in process_single_symbol() prevents this from running on regression
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.pipeline import Pipeline
+        from sklearn.preprocessing import StandardScaler
+        from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
+        
+        # LogisticRegression doesn't handle NaNs - use sklearn-safe conversion
+        X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
+        
+        # Determine task type (should always be classification due to task-type filtering)
+        unique_vals = np.unique(y[~np.isnan(y)])
+        is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
+        is_multiclass = len(unique_vals) <= 10 and all(
+            isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer())
+            for v in unique_vals
+        )
+        
+        if not (is_binary or is_multiclass):
+            # This shouldn't happen due to task-type filtering, but handle gracefully
+            logger.warning(f"    logistic_regression: Target appears to be regression, returning empty importance")
+            importance_values = np.zeros(len(feature_names_dense))
+            model = type('DummyModel', (), {'coef_': importance_values, 'predict': lambda x: np.zeros(len(x))})()
+            feature_names = feature_names_dense
+        else:
+            # Build LogisticRegression config
+            lr_config = model_config.copy()
+            extra = {"random_state": model_seed}
+            
+            # Clean config for LogisticRegression
+            lr_config_clean = _clean_config_for_estimator(LogisticRegression, lr_config, extra, "logistic_regression")
+            
+            # Pipeline with scaling for proper convergence
+            steps = [
+                ('scaler', StandardScaler()),
+                ('model', LogisticRegression(**lr_config_clean, **extra))
+            ]
+            pipeline = Pipeline(steps)
+            
+            try:
+                pipeline.fit(X_dense, y)
+                train_score = pipeline.score(X_dense, y)
+                
+                # Extract coefficients
+                model = pipeline.named_steps['model']
+                coef = model.coef_
+                if len(coef.shape) > 1:
+                    # Multiclass: use max absolute coefficient across classes
+                    importance_values = np.abs(coef).max(axis=0)
+                else:
+                    # Binary: use absolute coefficients
+                    importance_values = np.abs(coef).ravel()
+                
+                # Update feature_names to match dense array
+                feature_names = feature_names_dense
+                
+                # Normalize importance to sum to 1.0
+                total = np.sum(importance_values)
+                if total > 0:
+                    importance_values = importance_values / total
+                
+                # Wrap model for consistent API
+                model = pipeline  # Use full pipeline for predict()
+                
+            except Exception as e:
+                logger.warning(f"    logistic_regression: Failed to fit: {e}")
+                importance_values = np.zeros(len(feature_names_dense))
+                model = type('DummyModel', (), {'coef_': importance_values, 'predict': lambda x: np.zeros(len(x))})()
+                feature_names = feature_names_dense
+    
+    elif model_family == 'ftrl_proximal':
+        # FTRL-Proximal approximation using SGDClassifier with elasticnet penalty
+        # True FTRL is online learning; we approximate with mini-batch SGD
+        # Task-type filtering ensures this only runs on binary classification
+        from sklearn.linear_model import SGDClassifier
+        from sklearn.pipeline import Pipeline
+        from sklearn.preprocessing import StandardScaler
+        from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
+        
+        # SGDClassifier doesn't handle NaNs - use sklearn-safe conversion
+        X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
+        
+        # Determine task type (should always be binary due to task-type filtering)
+        unique_vals = np.unique(y[~np.isnan(y)])
+        is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
+        
+        if not is_binary:
+            logger.warning(f"    ftrl_proximal: Target is not binary, returning empty importance")
+            importance_values = np.zeros(len(feature_names_dense))
+            model = type('DummyModel', (), {'coef_': importance_values, 'predict': lambda x: np.zeros(len(x))})()
+            feature_names = feature_names_dense
+        else:
+            # Build FTRL-like config using SGDClassifier
+            # FTRL uses L1+L2 regularization (elasticnet) with adaptive learning rate
+            ftrl_config = {
+                'loss': 'log_loss',  # Logistic regression loss
+                'penalty': 'elasticnet',  # L1 + L2 regularization (FTRL-like)
+                'alpha': model_config.get('alpha', 0.1),  # Regularization strength
+                'l1_ratio': model_config.get('l1_ratio', 0.5),  # L1 vs L2 balance
+                'max_iter': model_config.get('max_iter', 1000),
+                'tol': 1e-4,
+                'learning_rate': 'adaptive',  # FTRL uses adaptive learning
+                'eta0': 0.1,  # Initial learning rate
+                'early_stopping': True,
+                'validation_fraction': 0.1,
+                'n_iter_no_change': 5,
+            }
+            extra = {"random_state": model_seed}
+            
+            # Clean config for SGDClassifier
+            ftrl_config_clean = _clean_config_for_estimator(SGDClassifier, ftrl_config, extra, "ftrl_proximal")
+            
+            # Pipeline with scaling
+            steps = [
+                ('scaler', StandardScaler()),
+                ('model', SGDClassifier(**ftrl_config_clean, **extra))
+            ]
+            pipeline = Pipeline(steps)
+            
+            try:
+                pipeline.fit(X_dense, y)
+                train_score = pipeline.score(X_dense, y)
+                
+                # Extract coefficients
+                model = pipeline.named_steps['model']
+                coef = model.coef_
+                importance_values = np.abs(coef).ravel()
+                
+                # Update feature_names to match dense array
+                feature_names = feature_names_dense
+                
+                # Normalize importance to sum to 1.0
+                total = np.sum(importance_values)
+                if total > 0:
+                    importance_values = importance_values / total
+                
+                # Wrap model for consistent API
+                model = pipeline  # Use full pipeline for predict()
+                
+            except Exception as e:
+                logger.warning(f"    ftrl_proximal: Failed to fit: {e}")
+                importance_values = np.zeros(len(feature_names_dense))
+                model = type('DummyModel', (), {'coef_': importance_values, 'predict': lambda x: np.zeros(len(x))})()
+                feature_names = feature_names_dense
+    
+    elif model_family == 'ngboost':
+        # NGBoost - Probabilistic gradient boosting with uncertainty estimation
+        # Task-type filtering ensures this only runs on regression and binary
+        try:
+            from ngboost import NGBRegressor, NGBClassifier
+            from ngboost.distns import Normal, Bernoulli
+            NGBOOST_AVAILABLE = True
+        except ImportError:
+            NGBOOST_AVAILABLE = False
+            logger.warning("    ngboost: NGBoost not installed. Install with: pip install ngboost")
+        
+        if not NGBOOST_AVAILABLE:
+            importance_values = np.zeros(len(feature_names))
+            model = type('DummyModel', (), {'feature_importances_': importance_values, 'predict': lambda x: np.zeros(len(x))})()
+        else:
+            from sklearn.preprocessing import StandardScaler
+            from TRAINING.common.utils.sklearn_safe import make_sklearn_dense_X
+            
+            # NGBoost doesn't handle NaNs - use sklearn-safe conversion
+            X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
+            
+            # Scale features for better convergence
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(X_dense)
+            
+            # Determine task type
+            unique_vals = np.unique(y[~np.isnan(y)])
+            is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
+            
+            # Build NGBoost config
+            ngb_config = {
+                'n_estimators': model_config.get('n_estimators', 200),
+                'learning_rate': model_config.get('learning_rate', 0.05),
+                'minibatch_frac': model_config.get('minibatch_frac', 0.8),
+                'verbose': False,
+            }
+            
+            try:
+                if is_binary:
+                    # Binary classification with Bernoulli distribution
+                    ngb_model = NGBClassifier(
+                        Dist=Bernoulli,
+                        random_state=model_seed,
+                        **ngb_config
+                    )
+                    ngb_model.fit(X_scaled, y.astype(int))
+                    train_score = ngb_model.score(X_scaled, y.astype(int))
+                else:
+                    # Regression with Normal distribution
+                    ngb_model = NGBRegressor(
+                        Dist=Normal,
+                        random_state=model_seed,
+                        **ngb_config
+                    )
+                    ngb_model.fit(X_scaled, y)
+                    train_score = ngb_model.score(X_scaled, y)
+                
+                # Extract feature importance from base learner (DecisionTreeRegressor)
+                # NGBoost uses an ensemble of trees, so we aggregate importance
+                importance_values = ngb_model.feature_importances_
+                
+                # Update feature_names to match dense array
+                feature_names = feature_names_dense
+                
+                # Normalize importance to sum to 1.0
+                total = np.sum(importance_values)
+                if total > 0:
+                    importance_values = importance_values / total
+                
+                # Wrap model for consistent API (include scaler)
+                class NGBoostWrapper:
+                    def __init__(self, ngb_model, scaler):
+                        self.ngb_model = ngb_model
+                        self.scaler = scaler
+                        self.feature_importances_ = ngb_model.feature_importances_
+                    
+                    def predict(self, X):
+                        X_scaled = self.scaler.transform(X)
+                        return self.ngb_model.predict(X_scaled)
+                    
+                    def predict_proba(self, X):
+                        if hasattr(self.ngb_model, 'predict_proba'):
+                            X_scaled = self.scaler.transform(X)
+                            return self.ngb_model.predict_proba(X_scaled)
+                        return None
+                
+                model = NGBoostWrapper(ngb_model, scaler)
+                
+            except Exception as e:
+                logger.warning(f"    ngboost: Failed to fit: {e}")
+                importance_values = np.zeros(len(feature_names_dense))
+                model = type('DummyModel', (), {'feature_importances_': importance_values, 'predict': lambda x: np.zeros(len(x))})()
+                feature_names = feature_names_dense
+    
     elif model_family == 'mutual_information':
         # Mutual information doesn't train a model, just calculates information
         from sklearn.feature_selection import mutual_info_regression, mutual_info_classif

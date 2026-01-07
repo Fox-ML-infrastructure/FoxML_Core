@@ -365,7 +365,10 @@ FAMILY_CAPS = {
     
     # Feature selection methods (not trainers, but need compatibility for importance extraction)
     "mutual_information": {"nan_ok": True, "needs_tf": False, "experimental": False},
-    "univariate_selection": {"nan_ok": True, "needs_tf": False, "experimental": False}
+    "univariate_selection": {"nan_ok": True, "needs_tf": False, "experimental": False},
+    "rfe": {"nan_ok": True, "needs_tf": False, "experimental": False},
+    "boruta": {"nan_ok": True, "needs_tf": False, "experimental": False},
+    "stability_selection": {"nan_ok": True, "needs_tf": False, "experimental": False},
 }
 
 

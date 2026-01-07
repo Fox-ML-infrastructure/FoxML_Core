@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Recent Highlights (Last 7 Days)
 
 #### 2026-01-07
+**Expanded Model Families for TARGET_RANKING/FEATURE_SELECTION** - Full task-type coverage.
+- **NEW**: `logistic_regression` family - Standalone classification baseline (binary/multiclass)
+- **NEW**: `ftrl_proximal` family - Online learning approximation for binary classification
+- **NEW**: `ngboost` family - Probabilistic gradient boosting with uncertainty estimation
+- **ENABLED**: `ridge` and `elastic_net` families (were disabled, now enabled for regression)
+- All new families:
+  - Use `stable_seed_from()` for deterministic seeds (SST pattern)
+  - Integrate with existing fingerprinting (prediction, feature, hparams)
+  - Automatically populate `fs_snapshot_index.json` via wrapper code
+  - Support task-type filtering via `FAMILY_CAPS.supported_tasks`
+- **NEW**: Feature selection families added to `FAMILY_CAPS`: `rfe`, `boruta`, `stability_selection`
+
 **Task-Type Model Filtering** - Prevents incompatible families from polluting aggregations.
 - **NEW**: `supported_tasks` field in `FAMILY_CAPS` for constrained families
   - `elastic_net`, `ridge`, `lasso`: regression only
