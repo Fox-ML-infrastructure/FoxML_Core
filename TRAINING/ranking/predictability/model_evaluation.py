@@ -2065,6 +2065,21 @@ def train_and_evaluate_models(
                 # Sort for deterministic order (ensures reproducible aggregations)
                 model_families = sorted(model_families)
             logger.debug(f"Using {len(model_families)} models from config: {', '.join(model_families)}")
+    
+    # Filter families by task type compatibility (prevents garbage scores in aggregations)
+    from TRAINING.training_strategies.utils import is_family_compatible
+    compatible_families = []
+    skipped_families = []
+    for family in model_families:
+        compatible, skip_reason = is_family_compatible(family, task_type)
+        if compatible:
+            compatible_families.append(family)
+        else:
+            skipped_families.append((family, skip_reason))
+            logger.info(f"⏭️ Skipping {family} for target ranking: {skip_reason}")
+    if skipped_families:
+        logger.info(f"📋 Filtered {len(skipped_families)} incompatible families for task={task_type}")
+    model_families = compatible_families
         else:
             model_families = ['lightgbm', 'random_forest', 'neural_network']
     

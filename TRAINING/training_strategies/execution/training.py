@@ -1378,6 +1378,16 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                 caps = FAMILY_CAPS[normalized_family]
                 logger.info(f"📋 Family capabilities: {caps}")
                 
+                # Check task type compatibility (skip incompatible families)
+                if 'routing_meta' in locals() and routing_meta and routing_meta.get('spec'):
+                    from TRAINING.training_strategies.utils import is_family_compatible
+                    task_type = routing_meta['spec'].task
+                    compatible, skip_reason = is_family_compatible(normalized_family, task_type)
+                    if not compatible:
+                        logger.info(f"⏭️ Skipping {family}: {skip_reason} (task={task_type})")
+                        family_results['skipped'].append((family, normalized_family, skip_reason))
+                        continue
+                
                 # Check TensorFlow dependency (skip for torch families)
                 if caps.get("backend") == "torch":
                     pass  # never gate on TF for torch families

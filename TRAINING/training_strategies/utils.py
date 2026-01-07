@@ -309,9 +309,19 @@ def normalize_family_name(family: str) -> str:
 
 # Family capabilities map (from original script)
 # All keys must be canonical snake_case (enforced by _assert_canonical_keys)
+# 
+# supported_tasks: Optional list of task types this family supports.
+#   - If missing/None: family supports ALL task types (default-allow)
+#   - Values: "regression", "binary", "multiclass", "ranking"
+#   - Families are skipped if task_type not in supported_tasks
 FAMILY_CAPS = {
+    # Tree-based: support all tasks natively (no supported_tasks = all allowed)
     "lightgbm": {"nan_ok": True, "needs_tf": False, "experimental": False},
     "xgboost": {"nan_ok": True, "needs_tf": False, "experimental": False},
+    "catboost": {"nan_ok": True, "needs_tf": False, "experimental": False},
+    "random_forest": {"nan_ok": True, "needs_tf": False, "experimental": False},
+    
+    # Neural nets: support all tasks (with proper objective selection)
     "mlp": {"nan_ok": False, "needs_tf": True, "experimental": False, "preprocess_in_family": True},
     "cnn1d": {"nan_ok": False, "needs_tf": False, "backend": "torch", "experimental": False, "preprocess_in_family": True},
     "lstm": {"nan_ok": False, "needs_tf": False, "backend": "torch", "experimental": False, "preprocess_in_family": True},
@@ -319,25 +329,87 @@ FAMILY_CAPS = {
     "tabcnn": {"nan_ok": False, "needs_tf": False, "backend": "torch", "experimental": False, "preprocess_in_family": True},
     "tablstm": {"nan_ok": False, "needs_tf": False, "backend": "torch", "experimental": False, "preprocess_in_family": True},
     "tabtransformer": {"nan_ok": False, "needs_tf": False, "backend": "torch", "experimental": False, "preprocess_in_family": True},
+    "neural_network": {"nan_ok": False, "needs_tf": True, "experimental": False, "preprocess_in_family": True},
+    
+    # Linear models: regression only (no classification API)
+    "lasso": {"nan_ok": False, "needs_tf": False, "experimental": False,
+              "supported_tasks": ["regression"]},
+    "ridge": {"nan_ok": False, "needs_tf": False, "experimental": False,
+              "supported_tasks": ["regression"]},
+    "elastic_net": {"nan_ok": False, "needs_tf": False, "experimental": False,
+                    "supported_tasks": ["regression"]},
+    
+    # Logistic regression: classification only
+    "logistic_regression": {"nan_ok": False, "needs_tf": False, "experimental": False,
+                            "supported_tasks": ["binary", "multiclass"]},
+    
+    # NGBoost: regression + binary (multiclass not well-supported)
+    "ngboost": {"nan_ok": False, "needs_tf": False, "experimental": True,
+                "supported_tasks": ["regression", "binary"]},
+    
+    # Quantile models: regression only (quantile prediction)
+    "quantile_lightgbm": {"nan_ok": True, "needs_tf": False, "experimental": False,
+                         "supported_tasks": ["regression"]},
+    
+    # Specialized models
     "reward_based": {"nan_ok": False, "needs_tf": False, "experimental": False},
-    "quantile_lightgbm": {"nan_ok": True, "needs_tf": False, "experimental": False},
-    "ngboost": {"nan_ok": False, "needs_tf": False, "experimental": True},
     "gmm_regime": {"nan_ok": False, "needs_tf": False, "experimental": True, "feature_emitter": False},
     "change_point": {"nan_ok": False, "needs_tf": False, "experimental": True, "feature_emitter": False},
-    "ftrl_proximal": {"nan_ok": False, "needs_tf": False, "experimental": False},
+    "ftrl_proximal": {"nan_ok": False, "needs_tf": False, "experimental": False,
+                      "supported_tasks": ["binary"]},  # Online logistic regression
     "vae": {"nan_ok": False, "needs_tf": True, "experimental": True},
     "gan": {"nan_ok": False, "needs_tf": True, "experimental": True},
     "ensemble": {"nan_ok": False, "needs_tf": False, "experimental": False},
     "meta_learning": {"nan_ok": False, "needs_tf": True, "experimental": True},
     "multi_task": {"nan_ok": False, "needs_tf": True, "experimental": True},
-    # Additional families (feature selection methods - not trainers)
-    "lasso": {"nan_ok": False, "needs_tf": False, "experimental": False},
-    "random_forest": {"nan_ok": True, "needs_tf": False, "experimental": False},
-    "catboost": {"nan_ok": True, "needs_tf": False, "experimental": False},
-    "neural_network": {"nan_ok": False, "needs_tf": True, "experimental": False, "preprocess_in_family": True},
+    
+    # Feature selection methods (not trainers, but need compatibility for importance extraction)
     "mutual_information": {"nan_ok": True, "needs_tf": False, "experimental": False},
     "univariate_selection": {"nan_ok": True, "needs_tf": False, "experimental": False}
 }
+
+
+def is_family_compatible(family: str, task_type) -> tuple:
+    """
+    Check if family supports the given task type.
+    
+    This is the SINGLE SOURCE OF TRUTH for task-type filtering.
+    Used by all 3 stages: TARGET_RANKING, FEATURE_SELECTION, TRAINING.
+    
+    Args:
+        family: Model family name (will be normalized)
+        task_type: TaskType enum, string, or None
+    
+    Returns:
+        Tuple of (is_compatible: bool, skip_reason: Optional[str])
+        - (True, None) if compatible or no restriction
+        - (False, "unsupported_task:binary") if not compatible
+    """
+    if task_type is None:
+        return True, None  # No task type specified = allow all
+    
+    normalized = normalize_family_name(family)
+    caps = FAMILY_CAPS.get(normalized, {})
+    supported = caps.get("supported_tasks")
+    
+    if supported is None:
+        return True, None  # No restriction = all tasks allowed
+    
+    # Normalize task_type to string key
+    if hasattr(task_type, 'name'):
+        # TaskType enum: REGRESSION, BINARY_CLASSIFICATION, etc.
+        task_str = task_type.name.lower()
+    else:
+        task_str = str(task_type).lower()
+    
+    # Map enum names to config keys
+    # BINARY_CLASSIFICATION -> binary, MULTICLASS_CLASSIFICATION -> multiclass
+    task_key = task_str.replace("_classification", "")
+    
+    if task_key in supported:
+        return True, None
+    else:
+        return False, f"unsupported_task:{task_key}"
 
 
 def build_sequences_from_features(X, lookback=None):

@@ -3742,8 +3742,38 @@ def process_single_symbol(
         if detected_interval != 5:
             logger.info(f"  Detected data interval: {detected_interval}m (was assuming 5m)")
         
+        # Infer task type from target values (for task-type filtering)
+        unique_vals = np.unique(y_arr[~np.isnan(y_arr)])
+        is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
+        is_multiclass = len(unique_vals) <= 10 and len(unique_vals) > 2 and all(
+            isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer())
+            for v in unique_vals
+        )
+        if is_binary:
+            inferred_task_type = "binary"
+        elif is_multiclass:
+            inferred_task_type = "multiclass"
+        else:
+            inferred_task_type = "regression"
+        
         # Train each enabled model family with structured status tracking
-        enabled_families = [f for f, cfg in model_families_config.items() if cfg.get('enabled', False)]
+        # Filter by task type compatibility BEFORE training (prevents garbage importance scores)
+        from TRAINING.training_strategies.utils import is_family_compatible
+        enabled_families = []
+        for family_name, family_cfg in model_families_config.items():
+            if not family_cfg.get('enabled', False):
+                continue
+            compatible, skip_reason = is_family_compatible(family_name, inferred_task_type)
+            if compatible:
+                enabled_families.append(family_name)
+            else:
+                logger.info(f"  {symbol}: ⏭️ Skipping {family_name} for feature selection: {skip_reason}")
+                family_statuses.append({
+                    'family': family_name,
+                    'status': 'skipped',
+                    'skip_reason': skip_reason,
+                    'symbol': symbol
+                })
         
         # FIX: Create fallback identity using SST factory if run_identity wasn't passed
         # This ensures ALL model families can save snapshots (not just xgboost)
@@ -3772,9 +3802,9 @@ def process_single_symbol(
         # Track per-model reproducibility
         per_model_reproducibility = []
         
-        for family_name, family_config in model_families_config.items():
-            if not family_config.get('enabled', False):
-                continue
+        # Iterate only over compatible, enabled families (filtered above)
+        for family_name in enabled_families:
+            family_config = model_families_config[family_name]
             
             try:
                 logger.info(f"  {symbol}: Training {family_name}...")
