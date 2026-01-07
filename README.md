@@ -42,6 +42,7 @@ FoxML Core provides:
 - **Intelligent training pipeline** with automated target ranking and feature selection
 - **GPU acceleration** for target ranking, feature selection, and model training (LightGBM, XGBoost, CatBoost)
 - **Bitwise deterministic runs** via strict mode for financial audit compliance and regulatory requirements
+  - *Yes, outputs remain deterministic even while you're grinding OSRS, watching YouTube, or questioning your life choices at 3 AM. We tested it.*
 - **Config-based usage** with minimal command-line arguments
 - **Leakage detection system** with pre-training leak detection and auto-fix
 - **Single Source of Truth (SST)** config system - all 20 model families use config-driven hyperparameters

@@ -329,38 +329,27 @@ def get_metrics_path_from_cohort_dir(cohort_dir: Path, base_output_dir: Optional
             logger.warning(f"Could not find base_output_dir from cohort_dir: {cohort_dir}")
             return None
     
-    # Extract target, view, and symbol from cohort_dir path
-    parts = cohort_dir.parts
-    target = None
-    view = None
-    symbol = None
+    # Use parse_reproducibility_path which correctly handles stage= prefixes
+    parsed = parse_reproducibility_path(cohort_dir)
     
-    # Find target (should be after "targets")
-    for i, part in enumerate(parts):
-        if part == "targets" and i + 1 < len(parts):
-            target = parts[i + 1]
-            break
+    target = parsed.get("target")
+    stage = parsed.get("stage")
+    view = parsed.get("view")
+    symbol = parsed.get("symbol")
     
     if not target:
         logger.warning(f"Could not extract target from cohort_dir: {cohort_dir}")
         return None
     
-    # Find view (CROSS_SECTIONAL or SYMBOL_SPECIFIC) and symbol
-    for i, part in enumerate(parts):
-        if part == "reproducibility" and i + 1 < len(parts):
-            view = parts[i + 1]
-            if view == "SYMBOL_SPECIFIC" and i + 2 < len(parts):
-                symbol_part = parts[i + 2]
-                if symbol_part.startswith("symbol="):
-                    symbol = symbol_part.replace("symbol=", "")
-            break
-    
     if not view:
         logger.warning(f"Could not extract view from cohort_dir: {cohort_dir}")
         return None
     
-    # Build metrics path
-    metrics_dir = get_target_metrics_dir(base_output_dir, target) / f"view={view}"
+    # Build metrics path with stage (if present) for proper separation
+    metrics_dir = get_target_metrics_dir(base_output_dir, target)
+    if stage:
+        metrics_dir = metrics_dir / f"stage={stage}"
+    metrics_dir = metrics_dir / f"view={view}"
     if symbol:
         metrics_dir = metrics_dir / f"symbol={symbol}"
     
@@ -426,12 +415,25 @@ def get_cohort_dir_from_metrics_path(metrics_path: Path, base_output_dir: Option
         logger.warning(f"Could not extract target from metrics_path: {metrics_path}")
         return None
     
-    # Find view and symbol
+    # Find stage, view and symbol from metrics path
+    # Handle both new (stage=*/view=*/) and legacy (view=*/) structures
+    stage = None
     for i, part in enumerate(parts):
         if part == "metrics" and i + 1 < len(parts):
-            view_part = parts[i + 1]
-            if view_part.startswith("view="):
-                view = view_part.replace("view=", "")
+            next_part = parts[i + 1]
+            # Check if next part is stage= or view=
+            if next_part.startswith("stage="):
+                stage = next_part.replace("stage=", "")
+                if i + 2 < len(parts):
+                    view_part = parts[i + 2]
+                    if view_part.startswith("view="):
+                        view = view_part.replace("view=", "")
+                        if i + 3 < len(parts):
+                            symbol_part = parts[i + 3]
+                            if symbol_part.startswith("symbol="):
+                                symbol = symbol_part.replace("symbol=", "")
+            elif next_part.startswith("view="):
+                view = next_part.replace("view=", "")
                 if i + 2 < len(parts):
                     symbol_part = parts[i + 2]
                     if symbol_part.startswith("symbol="):
@@ -442,8 +444,8 @@ def get_cohort_dir_from_metrics_path(metrics_path: Path, base_output_dir: Option
         logger.warning(f"Could not extract view from metrics_path: {metrics_path}")
         return None
     
-    # Build reproducibility path
-    repro_dir = get_target_reproducibility_dir(base_output_dir, target) / view
+    # Build reproducibility path with stage if present
+    repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage) / view
     if symbol:
         repro_dir = repro_dir / f"symbol={symbol}"
     
