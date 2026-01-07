@@ -187,7 +187,7 @@ def save_feature_selection_rankings(
                 logger.warning(f"base_output_dir does not exist for CSV save: {base_output_dir}, using output_dir: {output_dir}")
                 base_output_dir = output_dir
             
-            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
+            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean, stage="FEATURE_SELECTION")
             target_repro_dir.mkdir(parents=True, exist_ok=True)
             empty_csv_path = target_repro_dir / "feature_selection_rankings.csv"
             empty_df.to_csv(empty_csv_path, index=False)

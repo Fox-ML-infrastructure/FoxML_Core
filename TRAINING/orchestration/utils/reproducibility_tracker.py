@@ -1817,10 +1817,10 @@ class ReproducibilityTracker:
                 # Ensure target structure exists
                 ensure_target_structure(base_output_dir, target)
                 
-                # Build target-first reproducibility path: 
-                # For CROSS_SECTIONAL: targets/<target>/reproducibility/CROSS_SECTIONAL/cohort=<cohort_id>/
-                # For SYMBOL_SPECIFIC: targets/<target>/reproducibility/SYMBOL_SPECIFIC/symbol=<symbol>/cohort=<cohort_id>/
-                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
+                # Build target-first reproducibility path with stage scoping:
+                # For CROSS_SECTIONAL: targets/<target>/reproducibility/stage=<stage>/CROSS_SECTIONAL/cohort=<cohort_id>/
+                # For SYMBOL_SPECIFIC: targets/<target>/reproducibility/stage=<stage>/SYMBOL_SPECIFIC/symbol=<symbol>/cohort=<cohort_id>/
+                target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage_normalized)
                 if view_for_target == "SYMBOL_SPECIFIC" and symbol:
                     # Include symbol in path to prevent overwriting
                     target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol}" / f"cohort={cohort_id}"
@@ -3754,7 +3754,7 @@ class ReproducibilityTracker:
                             )
                             base_output_dir = self._repro_base_dir
                             ensure_target_structure(base_output_dir, target)
-                            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
+                            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage)
                             
                             # Determine view
                             view = view.upper() if view else "CROSS_SECTIONAL"
@@ -4066,7 +4066,9 @@ class ReproducibilityTracker:
             )
             base_output_dir = self._repro_base_dir
             target = ctx.target or ctx.target_column or "unknown"
-            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
+            # Pass stage for stage-scoped path lookup (falls back to legacy if stage is None)
+            stage_for_path = ctx.stage if hasattr(ctx, 'stage') and ctx.stage else None
+            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage_for_path)
             
             # Determine view
             view = view_for_cohort.upper() if view_for_cohort else "CROSS_SECTIONAL"
@@ -4173,14 +4175,16 @@ class ReproducibilityTracker:
                 else:
                     view_for_cohort_dir = "SYMBOL_SPECIFIC"
             
-            # Use target-first structure
+            # Use target-first structure with stage scoping
             from TRAINING.orchestration.utils.target_first_paths import (
                 get_target_reproducibility_dir, ensure_target_structure
             )
             base_output_dir = self._repro_base_dir
             target = ctx.target or ctx.target_column or "unknown"
             ensure_target_structure(base_output_dir, target)
-            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
+            # Pass stage for stage-scoped path (falls back to legacy if stage is None)
+            stage_for_path = ctx.stage if hasattr(ctx, 'stage') and ctx.stage else None
+            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage_for_path)
             
             # Determine view - use view from run context (SST) if available
             view = view_for_cohort_dir.upper() if view_for_cohort_dir else "CROSS_SECTIONAL"

@@ -965,11 +965,11 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                 if symbol_successful:
                     logger.info(f"  ✅ {len(symbol_successful)} families saved for {target}:{symbol}: {symbol_successful}")
                     
-                    # Save basic metadata to target-first structure
+                    # Save basic metadata to target-first structure with stage scoping
                     from TRAINING.orchestration.utils.target_first_paths import (
                         get_target_reproducibility_dir
                     )
-                    repro_dir = get_target_reproducibility_dir(Path(output_dir), target)
+                    repro_dir = get_target_reproducibility_dir(Path(output_dir), target, stage="TRAINING")
                     repro_dir.mkdir(parents=True, exist_ok=True)
                     meta_path_repro = repro_dir / f"meta_{family}_{symbol}_b0.json"
                     meta_path_legacy = symbol_target_dir / "meta_b0.json"

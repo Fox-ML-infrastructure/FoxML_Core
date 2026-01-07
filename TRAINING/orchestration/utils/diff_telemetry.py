@@ -2315,8 +2315,8 @@ class DiffTelemetry:
                         # Ensure target structure exists
                         ensure_target_structure(base_output_dir, target)
                         
-                        # Build target-first reproducibility path
-                        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
+                        # Build target-first reproducibility path with stage scoping
+                        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage)
                         if view_for_target == "SYMBOL_SPECIFIC" and symbol_for_target_final:
                             # Include symbol in path to prevent overwriting
                             target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol_for_target_final}" / f"cohort={cohort_id}"
@@ -2498,8 +2498,8 @@ class DiffTelemetry:
                     # Ensure target structure exists
                     ensure_target_structure(base_output_dir, target)
                     
-                    # Build target-first reproducibility path
-                    target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
+                    # Build target-first reproducibility path with stage scoping
+                    target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage)
                     if view_for_target == "SYMBOL_SPECIFIC" and symbol_for_target:
                         # Include symbol in path to prevent overwriting
                         target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol_for_target}" / f"cohort={cohort_id}"
@@ -4196,10 +4196,10 @@ class DiffTelemetry:
                         # Ensure target structure exists
                         ensure_target_structure(base_output_dir, target)
                         
-                        # Build target-first reproducibility path
-                        # For CROSS_SECTIONAL: targets/<target>/reproducibility/CROSS_SECTIONAL/cohort=<cohort_id>/
-                        # For SYMBOL_SPECIFIC: targets/<target>/reproducibility/SYMBOL_SPECIFIC/symbol=<symbol>/cohort=<cohort_id>/
-                        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target)
+                        # Build target-first reproducibility path with stage scoping
+                        # For CROSS_SECTIONAL: targets/<target>/reproducibility/stage=<stage>/CROSS_SECTIONAL/cohort=<cohort_id>/
+                        # For SYMBOL_SPECIFIC: targets/<target>/reproducibility/stage=<stage>/SYMBOL_SPECIFIC/symbol=<symbol>/cohort=<cohort_id>/
+                        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage)
                         
                         if view_for_target == "SYMBOL_SPECIFIC" and symbol_for_target:
                             # Include symbol in path to prevent overwriting
