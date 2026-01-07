@@ -391,6 +391,9 @@ class FeatureSelectionSnapshot:
             "top_features": importance_snapshot.features[:10],  # Top 10 features
         }
         
+        # Extract feature_fingerprint_input from inputs if provided
+        feature_input_hash = inputs.get("feature_fingerprint_input") if inputs else None
+        
         return cls(
             run_id=importance_snapshot.run_id,
             timestamp=importance_snapshot.created_at.isoformat(),
@@ -403,6 +406,7 @@ class FeatureSelectionSnapshot:
             config_fingerprint=importance_snapshot.hparams_signature,  # Model config hash
             data_fingerprint=importance_snapshot.dataset_signature,  # Dataset signature
             feature_fingerprint=importance_snapshot.feature_signature,  # Feature set signature
+            feature_fingerprint_input=feature_input_hash,  # Candidate features before selection
             feature_fingerprint_output=importance_snapshot.feature_signature,  # Selected features
             target_fingerprint=importance_snapshot.target_signature,  # Target definition hash
             predictions_sha256=importance_snapshot.prediction_hash,  # Prediction determinism hash

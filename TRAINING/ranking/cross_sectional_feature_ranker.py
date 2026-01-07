@@ -583,12 +583,14 @@ def compute_cross_sectional_stability(
                 # Cross-sectional importance is always CROSS_SECTIONAL view
                 snapshot_base_dir = get_snapshot_base_dir(
                     output_dir, target=target_column,
-                    view="CROSS_SECTIONAL", symbol=None
+                    view="CROSS_SECTIONAL", symbol=None,
+                    stage="FEATURE_SELECTION"  # Explicit stage to prevent legacy path creation
                 )
         else:
             snapshot_base_dir = get_snapshot_base_dir(
                 output_dir, target=target_column,
-                view="CROSS_SECTIONAL", symbol=None
+                view="CROSS_SECTIONAL", symbol=None,
+                stage="FEATURE_SELECTION"  # Explicit stage to prevent legacy path creation
             )
         
         if snapshot_base_dir:
@@ -657,6 +659,20 @@ def compute_cross_sectional_stability(
             # FIX: If identity not finalized but we have partial signatures, pass them
             effective_identity = cs_identity if identity_is_finalized else partial_identity_dict
             
+            # Compute feature_fingerprint_input for cross-sectional panel snapshots
+            cs_candidate_features = list(cs_importance.index) if cs_importance is not None else []
+            cs_feature_input_hash = None
+            if cs_candidate_features:
+                import hashlib
+                import json as json_mod
+                sorted_features = sorted(cs_candidate_features)
+                cs_feature_input_hash = hashlib.sha256(json_mod.dumps(sorted_features).encode()).hexdigest()
+            
+            cs_inputs = {
+                "candidate_features": cs_candidate_features,
+                "feature_fingerprint_input": cs_feature_input_hash,
+            }
+            
             snapshot_path = save_snapshot_from_series_hook(
                 target=target_column,
                 method=method_name,
@@ -668,6 +684,8 @@ def compute_cross_sectional_stability(
                 allow_legacy=(not identity_is_finalized and partial_identity_dict is None),
                 view="CROSS_SECTIONAL",  # Cross-sectional ranker is always CROSS_SECTIONAL
                 symbol=None,  # No symbol for CROSS_SECTIONAL view
+                inputs=cs_inputs,  # Pass inputs with feature_fingerprint_input
+                stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
             )
         else:
             snapshot_path = None

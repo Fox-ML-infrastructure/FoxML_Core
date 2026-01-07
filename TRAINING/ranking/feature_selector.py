@@ -793,6 +793,20 @@ def select_features_for_target(
                                     # FIX: If identity not finalized but we have partial signatures, pass them
                                     effective_identity = final_identity if final_identity else partial_identity_dict
                                     
+                                    # Compute feature_fingerprint_input for per-model snapshots
+                                    per_model_candidate_features = list(importance_dict.keys()) if importance_dict else []
+                                    per_model_feature_input_hash = None
+                                    if per_model_candidate_features:
+                                        import hashlib
+                                        import json as json_mod
+                                        sorted_features = sorted(per_model_candidate_features)
+                                        per_model_feature_input_hash = hashlib.sha256(json_mod.dumps(sorted_features).encode()).hexdigest()
+                                    
+                                    per_model_inputs = {
+                                        "candidate_features": per_model_candidate_features,
+                                        "feature_fingerprint_input": per_model_feature_input_hash,
+                                    }
+                                    
                                     save_snapshot_hook(
                                         target=target_column,
                                         method=model_family,  # Use model_family as method identifier
@@ -804,6 +818,7 @@ def select_features_for_target(
                                         allow_legacy=(final_identity is None and partial_identity_dict is None),
                                         view=view,  # Pass view for proper scoping
                                         symbol=symbol_to_process,  # Pass symbol for SYMBOL_SPECIFIC view
+                                        inputs=per_model_inputs,  # Pass inputs with feature_fingerprint_input
                                         stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
                                     )
                         except ValueError as ve:
@@ -1619,9 +1634,20 @@ def select_features_for_target(
                 )
                 
                 # FIX: Build inputs dict with selected_targets (from FEATURE_SELECTION stage)
+                candidate_features = list(importance_dict.keys()) if importance_dict else []
+                
+                # Compute feature_fingerprint_input (hash of candidate features before selection)
+                feature_fingerprint_input = None
+                if candidate_features:
+                    import hashlib
+                    import json as json_mod
+                    sorted_features = sorted(candidate_features)
+                    feature_fingerprint_input = hashlib.sha256(json_mod.dumps(sorted_features).encode()).hexdigest()
+                
                 fs_inputs = {
                     "selected_targets": [target_column],  # This target passed TR
-                    "candidate_features": list(importance_dict.keys()) if importance_dict else [],
+                    "candidate_features": candidate_features,
+                    "feature_fingerprint_input": feature_fingerprint_input,  # Hash of candidate features
                 }
                 
                 # FIX: If identity not finalized but we have partial signatures, pass them

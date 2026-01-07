@@ -3785,6 +3785,43 @@ def process_single_symbol(
                     symbol=symbol  # Pass symbol for deterministic seed generation
                 )
                 
+                # Compute prediction fingerprint for determinism tracking (SST)
+                model_prediction_fp = None
+                if model is not None:
+                    try:
+                        from TRAINING.common.utils.prediction_hashing import compute_prediction_fingerprint_for_model
+                        from TRAINING.common.utils.fingerprinting import get_identity_mode
+                        strict_mode = get_identity_mode() == "strict"
+                        
+                        # Get predictions from trained model
+                        y_pred = model.predict(X_arr)
+                        
+                        # Determine task type from target values
+                        unique_vals = np.unique(y_arr[~np.isnan(y_arr)])
+                        is_binary = len(unique_vals) == 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0})
+                        task_type = "BINARY_CLASSIFICATION" if is_binary else "REGRESSION"
+                        
+                        # Get probabilities for classification if available
+                        y_proba = None
+                        if is_binary and hasattr(model, 'predict_proba'):
+                            try:
+                                y_proba = model.predict_proba(X_arr)
+                            except Exception:
+                                pass
+                        
+                        model_prediction_fp = compute_prediction_fingerprint_for_model(
+                            preds=y_pred,
+                            proba=y_proba,
+                            model=model,
+                            task_type=task_type,
+                            X=X_arr,
+                            strict_mode=strict_mode,
+                        )
+                        if model_prediction_fp:
+                            logger.debug(f"    {family_name}: prediction_fingerprint={model_prediction_fp.get('prediction_hash', '')[:12]}...")
+                    except Exception as fp_e:
+                        logger.debug(f"    {family_name}: prediction fingerprint failed: {fp_e}")
+                
                 if importance is not None and importance.sum() > 0:
                     result = ImportanceResult(
                         model_family=family_name,
@@ -3937,6 +3974,20 @@ def process_single_symbol(
                             # FIX: If identity not finalized but we have partial signatures, pass them
                             effective_identity = family_identity if family_identity else partial_identity_dict
                             
+                            # Compute feature_fingerprint_input for per-family snapshots
+                            family_candidate_features = list(importance.index) if importance is not None else []
+                            family_feature_input_hash = None
+                            if family_candidate_features:
+                                import hashlib
+                                import json as json_mod
+                                sorted_features = sorted(family_candidate_features)
+                                family_feature_input_hash = hashlib.sha256(json_mod.dumps(sorted_features).encode()).hexdigest()
+                            
+                            family_inputs = {
+                                "candidate_features": family_candidate_features,
+                                "feature_fingerprint_input": family_feature_input_hash,
+                            }
+                            
                             save_snapshot_from_series_hook(
                                 target=target_column if target_column else 'unknown',
                                 method=family_name,  # Use model_family, not importance_method
@@ -3946,8 +3997,11 @@ def process_single_symbol(
                                 auto_analyze=None,  # Load from config
                                 run_identity=effective_identity,  # Pass finalized identity or partial dict fallback
                                 allow_legacy=(family_identity is None and partial_identity_dict is None),
+                                prediction_fingerprint=model_prediction_fp,  # SST: prediction hash for determinism
                                 view="SYMBOL_SPECIFIC",  # process_single_symbol is always SYMBOL_SPECIFIC
                                 symbol=symbol,  # Pass symbol for proper scoping
+                                inputs=family_inputs,  # Pass inputs with feature_fingerprint_input
+                                stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
                             )
                         except Exception as e:
                             logger.debug(f"Stability snapshot save failed for {family_name} (non-critical): {e}")
@@ -5008,8 +5062,8 @@ def save_multi_model_results(
                 if view == "SYMBOL_SPECIFIC" and symbol is None:
                     raise ValueError("symbol required in metadata when view='SYMBOL_SPECIFIC'")
                 
-                # Use view/symbol-scoped path helper
-                status_path = target_repro_file_path(run_root_dir, target_clean, "model_family_status.json", view=view, symbol=symbol)
+                # Use view/symbol-scoped path helper with explicit stage
+                status_path = target_repro_file_path(run_root_dir, target_clean, "model_family_status.json", view=view, symbol=symbol, stage="FEATURE_SELECTION")
                 status_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(status_path, "w") as f:
                     json.dump({
@@ -5076,8 +5130,8 @@ def save_multi_model_results(
                     if view == "SYMBOL_SPECIFIC" and symbol is None:
                         raise ValueError("symbol required in metadata when view='SYMBOL_SPECIFIC'")
                     
-                    # Use view/symbol-scoped path helper
-                    confidence_path = target_repro_file_path(run_root_dir, target_clean, "target_confidence.json", view=view, symbol=symbol)
+                    # Use view/symbol-scoped path helper with explicit stage
+                    confidence_path = target_repro_file_path(run_root_dir, target_clean, "target_confidence.json", view=view, symbol=symbol, stage="FEATURE_SELECTION")
                     confidence_path.parent.mkdir(parents=True, exist_ok=True)
                     with open(confidence_path, "w") as f:
                         json.dump(confidence_metrics, f, indent=2)
