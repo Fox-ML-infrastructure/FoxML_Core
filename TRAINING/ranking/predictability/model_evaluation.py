@@ -3970,6 +3970,14 @@ def train_and_evaluate_models(
             # Get config values
             lasso_config = get_model_config('lasso', multi_model_config)
             
+            # FIX: Convert seed → random_state (sklearn uses random_state, config uses seed)
+            if 'seed' in lasso_config:
+                lasso_config = lasso_config.copy()
+                lasso_config['random_state'] = lasso_config.pop('seed')
+            elif 'random_state' not in lasso_config:
+                lasso_config = lasso_config.copy()
+                lasso_config['random_state'] = BASE_SEED
+            
             # Use sklearn-safe conversion (handles NaNs, dtypes, infs)
             X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
             
@@ -4062,6 +4070,14 @@ def train_and_evaluate_models(
             
             # Get config values
             ridge_config = get_model_config('ridge', multi_model_config)
+            
+            # FIX: Convert seed → random_state (sklearn uses random_state, config uses seed)
+            if 'seed' in ridge_config:
+                ridge_config = ridge_config.copy()
+                ridge_config['random_state'] = ridge_config.pop('seed')
+            elif 'random_state' not in ridge_config:
+                ridge_config = ridge_config.copy()
+                ridge_config['random_state'] = BASE_SEED
             
             # CRITICAL: Use correct estimator based on task type
             # For classification: RidgeClassifier (not Ridge regression)
@@ -4170,6 +4186,14 @@ def train_and_evaluate_models(
             
             # Get config values
             elastic_net_config = get_model_config('elastic_net', multi_model_config)
+            
+            # FIX: Convert seed → random_state (sklearn uses random_state, config uses seed)
+            if 'seed' in elastic_net_config:
+                elastic_net_config = elastic_net_config.copy()
+                elastic_net_config['random_state'] = elastic_net_config.pop('seed')
+            elif 'random_state' not in elastic_net_config:
+                elastic_net_config = elastic_net_config.copy()
+                elastic_net_config['random_state'] = BASE_SEED
             
             # CRITICAL: Use correct estimator based on task type
             # For classification: LogisticRegression with penalty='elasticnet' and solver='saga'
