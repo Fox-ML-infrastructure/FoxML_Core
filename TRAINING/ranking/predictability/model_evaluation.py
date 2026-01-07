@@ -126,6 +126,13 @@ try:
 except ImportError:
     _THREADING_UTILITIES_AVAILABLE = False
 
+# Initialize determinism system and get BASE_SEED
+try:
+    from TRAINING.common.determinism import init_determinism_from_config
+    BASE_SEED = init_determinism_from_config()
+except ImportError:
+    BASE_SEED = 42  # Fallback if determinism module not available
+
 def _enforce_final_safety_gate(
     X: np.ndarray,
     feature_names: List[str],
@@ -2674,6 +2681,14 @@ def train_and_evaluate_models(
             # Get config values
             rf_config = get_model_config('random_forest', multi_model_config)
             
+            # FIX: Convert seed → random_state (sklearn uses random_state, config uses seed)
+            if 'seed' in rf_config:
+                rf_config = rf_config.copy()
+                rf_config['random_state'] = rf_config.pop('seed')
+            elif 'random_state' not in rf_config:
+                rf_config = rf_config.copy()
+                rf_config['random_state'] = BASE_SEED
+            
             if is_binary or is_multiclass:
                 model = RandomForestClassifier(**rf_config)
             else:
@@ -2792,6 +2807,14 @@ def train_and_evaluate_models(
             
             # Get config values
             nn_config = get_model_config('neural_network', multi_model_config)
+            
+            # FIX: Convert seed → random_state (sklearn uses random_state, config uses seed)
+            if 'seed' in nn_config:
+                nn_config = nn_config.copy()
+                nn_config['random_state'] = nn_config.pop('seed')
+            elif 'random_state' not in nn_config:
+                nn_config = nn_config.copy()
+                nn_config['random_state'] = BASE_SEED
             
             if is_binary or is_multiclass:
                 # For classification: Pipeline handles imputation and scaling within CV folds

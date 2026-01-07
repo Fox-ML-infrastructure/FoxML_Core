@@ -88,6 +88,13 @@ except ImportError:
 from TRAINING.orchestration.utils.checkpoint import CheckpointManager
 from TRAINING.ranking.predictability.data_loading import get_model_config
 
+# Initialize determinism system and get BASE_SEED
+try:
+    from TRAINING.common.determinism import init_determinism_from_config
+    BASE_SEED = init_determinism_from_config()
+except ImportError:
+    BASE_SEED = 42  # Fallback if determinism module not available
+
 # Import unified task type system
 from TRAINING.common.utils.task_types import (
     TaskType, TargetConfig, ModelConfig, 
@@ -1173,6 +1180,14 @@ def train_and_evaluate_models(
             # Get config values
             rf_config = get_model_config('random_forest', multi_model_config)
             
+            # FIX: Convert seed → random_state (sklearn uses random_state, config uses seed)
+            if 'seed' in rf_config:
+                rf_config = rf_config.copy()
+                rf_config['random_state'] = rf_config.pop('seed')
+            elif 'random_state' not in rf_config:
+                rf_config = rf_config.copy()
+                rf_config['random_state'] = BASE_SEED
+            
             if is_binary or is_multiclass:
                 model = RandomForestClassifier(**rf_config)
             else:
@@ -1236,6 +1251,14 @@ def train_and_evaluate_models(
             
             # Get config values
             nn_config = get_model_config('neural_network', multi_model_config)
+            
+            # FIX: Convert seed → random_state (sklearn uses random_state, config uses seed)
+            if 'seed' in nn_config:
+                nn_config = nn_config.copy()
+                nn_config['random_state'] = nn_config.pop('seed')
+            elif 'random_state' not in nn_config:
+                nn_config = nn_config.copy()
+                nn_config['random_state'] = BASE_SEED
             
             if is_binary or is_multiclass:
                 # For classification: Pipeline handles imputation and scaling within CV folds
@@ -1539,6 +1562,14 @@ def train_and_evaluate_models(
             
             # Get config values
             lasso_config = get_model_config('lasso', multi_model_config)
+            
+            # FIX: Convert seed → random_state (sklearn uses random_state, config uses seed)
+            if 'seed' in lasso_config:
+                lasso_config = lasso_config.copy()
+                lasso_config['random_state'] = lasso_config.pop('seed')
+            elif 'random_state' not in lasso_config:
+                lasso_config = lasso_config.copy()
+                lasso_config['random_state'] = BASE_SEED
             
             # Use sklearn-safe conversion (handles NaNs, dtypes, infs)
             X_dense, feature_names_dense = make_sklearn_dense_X(X, feature_names)
