@@ -1,15 +1,17 @@
-# Stage Parity & Sample Limits
+# Stage Parity, Sample Limits & Task-Type Filtering
 
 **Date**: 2026-01-07  
-**Category**: Reproducibility, Determinism, Data Consistency  
-**Impact**: High (fixes data sampling bug, adds TRAINING stage tracking)
+**Category**: Reproducibility, Determinism, Data Consistency, Routing  
+**Impact**: High (fixes data sampling bug, adds TRAINING stage tracking, prevents garbage aggregations)
 
 ## Summary
 
-Three major improvements:
+Five major improvements:
 1. Fixed Feature Selection loading entire data history instead of respecting sample limits
 2. Added full parity tracking for TRAINING stage (Stage 3)
 3. Completed FS snapshot parity with TARGET_RANKING snapshots
+4. **NEW**: Task-type filtering prevents incompatible model families from polluting aggregations
+5. **NEW**: Task-aware metrics schema - no more `pos_rate: 0.0` on regression targets
 
 ## Problem
 
@@ -126,12 +128,63 @@ After next E2E run, check:
    }
    ```
 
+### Task-Type Model Filtering
+
+Prevents incompatible model families from training on wrong task types, avoiding garbage scores in aggregations.
+
+**New in `TRAINING/training_strategies/utils.py`:**
+
+```python
+# FAMILY_CAPS now includes supported_tasks
+FAMILY_CAPS = {
+    "lightgbm": {...},  # All tasks (no restriction)
+    "elastic_net": {..., "supported_tasks": ["regression"]},
+    "logistic_regression": {..., "supported_tasks": ["binary", "multiclass"]},
+    "ngboost": {..., "supported_tasks": ["regression", "binary"]},
+    ...
+}
+
+def is_family_compatible(family: str, task_type) -> tuple:
+    """SST single source of truth for task-type filtering."""
+    ...
+```
+
+**Filter Applied in All 3 Stages:**
+- `TRAINING/ranking/predictability/model_evaluation.py` - Stage 1 (TARGET_RANKING)
+- `TRAINING/ranking/multi_model_feature_selection.py` - Stage 2 (FEATURE_SELECTION)
+- `TRAINING/training_strategies/execution/training.py` - Stage 3 (TRAINING)
+
+**Families Constrained:**
+| Family | Supported Tasks |
+|--------|-----------------|
+| elastic_net, ridge, lasso | regression |
+| logistic_regression | binary, multiclass |
+| ngboost | regression, binary |
+| quantile_lightgbm | regression |
+
+### Task-Aware Metrics Schema
+
+Fixes `pos_rate: 0.0` appearing on regression targets.
+
+**New Files:**
+- `CONFIG/ranking/metrics_schema.yaml` - Task-specific metric definitions
+- `TRAINING/ranking/predictability/metrics_schema.py` - Cached loader + `compute_target_stats()`
+
+**Behavior Change:**
+
+| Task Type | Before | After |
+|-----------|--------|-------|
+| Regression | `pos_rate: 0.0` (garbage) | `y_mean`, `y_std`, `y_min`, `y_max`, `y_finite_pct` |
+| Binary | `pos_rate: 0.35` | `pos_rate: 0.35`, `class_balance: {0: 650, 1: 350}` |
+| Multiclass | `pos_rate: 0.0` (garbage) | `class_balance: {...}`, `n_classes: 3` |
+
 ## Determinism Impact
 
 **None.** Changes are:
 - Bug fix (sample limits - was loading wrong data)
 - Observational (new tracking)
 - Metadata enrichment
+- Routing (task-type filtering - skips incompatible families before training)
 
 Model computation unchanged when inputs are correct.
 
@@ -146,4 +199,9 @@ Model computation unchanged when inputs are correct.
 | `TRAINING/stability/feature_importance/io.py` | Pass parity fields through |
 | `TRAINING/stability/feature_importance/hooks.py` | Accept parity fields |
 | `TRAINING/training_strategies/reproducibility/*` | New TRAINING snapshot module |
-| `TRAINING/training_strategies/execution/training.py` | Create training snapshots |
+| `TRAINING/training_strategies/execution/training.py` | Create training snapshots, task-type filter |
+| `TRAINING/training_strategies/utils.py` | `supported_tasks` in FAMILY_CAPS, `is_family_compatible()` |
+| `TRAINING/ranking/predictability/model_evaluation.py` | Task-type filter, task-aware metrics |
+| `TRAINING/ranking/multi_model_feature_selection.py` | Task-type filter before family loop |
+| `CONFIG/ranking/metrics_schema.yaml` | New - task-specific metric definitions |
+| `TRAINING/ranking/predictability/metrics_schema.py` | New - `compute_target_stats()` |

@@ -17,6 +17,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Recent Highlights (Last 7 Days)
 
 #### 2026-01-07
+**Task-Type Model Filtering** - Prevents incompatible families from polluting aggregations.
+- **NEW**: `supported_tasks` field in `FAMILY_CAPS` for constrained families
+  - `elastic_net`, `ridge`, `lasso`: regression only
+  - `logistic_regression`: binary, multiclass only
+  - `ngboost`: regression, binary only
+  - `quantile_lightgbm`: regression only
+- **NEW**: `is_family_compatible()` helper in `utils.py` (SST single source of truth)
+- **FIX**: Filter applied in all 3 stages before training:
+  - Stage 1 (TARGET_RANKING): `model_evaluation.py`
+  - Stage 2 (FEATURE_SELECTION): `multi_model_feature_selection.py`
+  - Stage 3 (TRAINING): `training.py`
+- Tree families (lightgbm, xgboost, catboost) have no restriction - all tasks allowed
+
+**Task-Aware Metrics Schema** - No more `pos_rate: 0.0` on regression targets.
+- **NEW**: `CONFIG/ranking/metrics_schema.yaml` with task-specific metric definitions
+- **NEW**: `compute_target_stats()` in `metrics_schema.py` (cached schema loader)
+- **FIX**: Regression targets emit `y_mean`, `y_std`, `y_min`, `y_max`, `y_finite_pct`
+- **FIX**: Binary classification emits `pos_rate` (with configurable `pos_label`)
+- **FIX**: Multiclass emits `class_balance` dict, `n_classes` (no `pos_rate`)
+- Replaced 2 unconditional `pos_rate` writes in `model_evaluation.py`
+
 **Sample Limit Consistency Across Stages** - Consistent data for TR/FS/TRAINING.
 - **FIX**: `cross_sectional_feature_ranker.py` now respects `max_rows_per_symbol`
   - Was loading ALL data (188k samples) instead of config limit (2k per symbol)
