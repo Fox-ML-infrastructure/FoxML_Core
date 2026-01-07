@@ -420,171 +420,134 @@ def analyze_all_stability_hook(
                         all_metrics[f"{target}/{method_name}"] = metrics
         return all_metrics
     
-    # Search REPRODUCIBILITY structure
-    repro_dir = base_output_dir / "REPRODUCIBILITY"
-    if not repro_dir.exists():
-        logger.debug(f"No REPRODUCIBILITY directory found: {repro_dir}")
-        return {}
+    # Search target-first structure using iter_stage_dirs for dual-structure support
+    # This handles both new (stage=TARGET_RANKING/) and legacy (no stage prefix) paths
+    try:
+        from TRAINING.orchestration.utils.target_first_paths import iter_stage_dirs
+    except ImportError:
+        logger.debug("iter_stage_dirs not available, skipping target-first scanning")
+        return all_metrics
     
-    # Search both TARGET_RANKING and FEATURE_SELECTION
-    for stage in ["TARGET_RANKING", "FEATURE_SELECTION"]:
-        stage_dir = repro_dir / stage
-        if not stage_dir.exists():
-            continue
+    targets_dir = base_output_dir / "targets"
+    if not targets_dir.exists():
+        logger.debug(f"No targets directory found: {targets_dir}")
+        return all_metrics
+    
+    # Helper function to process snapshots and log stability
+    def _process_snapshots(snapshot_base_dir: Path, target_name: str, stage_name: str, method_filter: str = None):
+        """Process snapshots in a directory and compute stability metrics."""
+        from .io import load_snapshots
+        from .analysis import compute_stability_metrics
         
-        # Search both CROSS_SECTIONAL and SYMBOL_SPECIFIC views
-        for view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
-            view_dir = stage_dir / view
-            if not view_dir.exists():
+        # Look for replicate directories (hash-based snapshots)
+        replicate_dir = snapshot_base_dir / "replicate"
+        if replicate_dir.exists():
+            for replicate_key_dir in replicate_dir.iterdir():
+                if not replicate_key_dir.is_dir():
+                    continue
+                
+                replicate_key = replicate_key_dir.name
+                snapshots = load_snapshots(snapshot_base_dir, replicate_key=replicate_key)
+                if len(snapshots) < 2:
+                    continue
+                
+                # Determine method from first snapshot
+                method_name = snapshots[0].method if snapshots else "unknown"
+                if method_filter and method_name != method_filter:
+                    continue
+                
+                metrics = compute_stability_metrics(snapshots, top_k=20, filter_by_universe_sig=True)
+                if metrics:
+                    # Include stage in key for clear separation
+                    key = f"{stage_name or 'LEGACY'}/{target_name}/{method_name}"
+                    all_metrics[key] = metrics
+                    _log_stability(method_name, metrics, stage_name)
+        
+        # Also check legacy target/method structure
+        for method_path in snapshot_base_dir.iterdir():
+            if not method_path.is_dir() or method_path.name == "replicate":
                 continue
             
-            # Iterate through targets
-            for target_path in view_dir.iterdir():
-                if not target_path.is_dir():
+            method_name = method_path.name
+            if method_filter and method_name != method_filter:
+                continue
+            
+            snapshots = load_snapshots(snapshot_base_dir, target=target_name, method=method_name, allow_legacy=True)
+            if len(snapshots) < 2:
+                continue
+            
+            metrics = compute_stability_metrics(snapshots, top_k=20, filter_by_universe_sig=True)
+            if metrics:
+                key = f"{stage_name or 'LEGACY'}/{target_name}/{method_name}"
+                if key not in all_metrics:  # Don't overwrite replicate-based metrics
+                    all_metrics[key] = metrics
+                    _log_stability(method_name, metrics, stage_name)
+    
+    def _log_stability(method_name: str, metrics: dict, stage_name: str = None):
+        """Log stability metrics with appropriate thresholds."""
+        status = metrics.get('status', 'unknown')
+        mean_overlap = metrics.get('mean_overlap', 0.0)
+        mean_tau = metrics.get('mean_tau', None)
+        n_snapshots = metrics.get('n_snapshots', 0)
+        
+        # Adjust thresholds based on method type
+        high_variance_methods = {'stability_selection', 'boruta', 'rfe', 'neural_network'}
+        if method_name in high_variance_methods:
+            overlap_threshold = 0.5
+            tau_threshold = 0.4
+        else:
+            overlap_threshold = 0.7
+            tau_threshold = 0.6
+        
+        stage_prefix = f"[{stage_name}] " if stage_name else ""
+        
+        if status == 'stable':
+            logger.info(f"  {stage_prefix}[{method_name}] ✅ STABLE: overlap={mean_overlap:.3f}, tau={mean_tau:.3f if mean_tau else 'N/A'}, snapshots={n_snapshots}")
+        elif mean_overlap < overlap_threshold or (mean_tau is not None and mean_tau < tau_threshold):
+            logger.warning(
+                f"  {stage_prefix}[{method_name}] ⚠️  LOW STABILITY: overlap={mean_overlap:.3f} (threshold={overlap_threshold:.1f}), "
+                f"tau={mean_tau:.3f if mean_tau else 'N/A'} (threshold={tau_threshold:.1f}), snapshots={n_snapshots}. "
+                f"This is comparing {method_name} snapshots across runs - low overlap may indicate method variability or data changes."
+            )
+        else:
+            logger.info(f"  {stage_prefix}[{method_name}] ℹ️  DRIFTING: overlap={mean_overlap:.3f}, tau={mean_tau:.3f if mean_tau else 'N/A'}, snapshots={n_snapshots}")
+    
+    # Iterate through all targets
+    for target_path in targets_dir.iterdir():
+        if not target_path.is_dir():
+            continue
+        
+        target_name = target_path.name
+        if target and target_name != target:
+            continue
+        
+        # Use iter_stage_dirs to scan both new (stage=*/) and legacy structures
+        for stage_name, stage_path in iter_stage_dirs(base_output_dir, target_name):
+            # Search both views
+            for view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+                view_path = stage_path / view
+                if not view_path.exists():
                     continue
                 
-                target = target_path.name
-                if target and target != target:
-                    continue
-                
-                # For SYMBOL_SPECIFIC, iterate through symbol directories
-                if view == "SYMBOL_SPECIFIC":
-                    for symbol_path in target_path.iterdir():
-                        if not symbol_path.is_dir() or not symbol_path.name.startswith("symbol="):
-                            continue
-                        
-                        # Get snapshot base directory for this target/symbol
-                        snapshot_base_dir = get_snapshot_base_dir(symbol_path)
-                        if not snapshot_base_dir.exists():
-                            continue
-                        
-                        # Find all methods
-                        for method_path in snapshot_base_dir.iterdir():
-                            if not method_path.is_dir():
-                                continue
-                            
-                            method_name = method_path.name
-                            if method and method_name != method:
-                                continue
-                            
-                            # Load snapshots for this target/method
-                            from .io import load_snapshots
-                            snapshots = load_snapshots(snapshot_base_dir, target=target, method=method_name, allow_legacy=True)
-                            if len(snapshots) < 2:
-                                continue
-                            
-                            # Analyze stability (filter by universe_sig to avoid cross-symbol comparisons)
-                            # filter_mode defaults to "replicate" - silently ignores legacy snapshots without signatures
-                            from .analysis import compute_stability_metrics
-                            metrics = compute_stability_metrics(snapshots, top_k=20, filter_by_universe_sig=True)
-                            if metrics:
-                                all_metrics[f"{target}/{method_name}"] = metrics
-                                # Log per-method stability with context
-                                status = metrics.get('status', 'unknown')
-                                mean_overlap = metrics.get('mean_overlap', 0.0)
-                                mean_tau = metrics.get('mean_tau', None)
-                                n_snapshots = metrics.get('n_snapshots', 0)
-                                
-                                # Adjust warning thresholds based on method type
-                                high_variance_methods = {'stability_selection', 'boruta', 'rfe', 'neural_network'}
-                                if method_name in high_variance_methods:
-                                    overlap_threshold = 0.5
-                                    tau_threshold = 0.4
-                                else:
-                                    overlap_threshold = 0.7
-                                    tau_threshold = 0.6
-                                
-                                if status == 'stable':
-                                    logger.info(f"  [{method_name}] ✅ STABLE: overlap={mean_overlap:.3f}, tau={mean_tau:.3f if mean_tau else 'N/A'}, snapshots={n_snapshots}")
-                                elif mean_overlap < overlap_threshold or (mean_tau is not None and mean_tau < tau_threshold):
-                                    logger.warning(
-                                        f"  [{method_name}] ⚠️  LOW STABILITY: overlap={mean_overlap:.3f} (threshold={overlap_threshold:.1f}), "
-                                        f"tau={mean_tau:.3f if mean_tau else 'N/A'} (threshold={tau_threshold:.1f}), snapshots={n_snapshots}. "
-                                        f"This is comparing {method_name} snapshots across runs - low overlap may indicate method variability or data changes."
-                                    )
-                                else:
-                                    logger.info(f"  [{method_name}] ℹ️  DRIFTING: overlap={mean_overlap:.3f}, tau={mean_tau:.3f if mean_tau else 'N/A'}, snapshots={n_snapshots}")
-                else:
-                    # CROSS_SECTIONAL: target directory directly contains feature_importance_snapshots
-                    snapshot_base_dir = get_snapshot_base_dir(target_path)
-                    if not snapshot_base_dir.exists():
+                # Scan universe directories within view
+                for universe_or_symbol_path in view_path.iterdir():
+                    if not universe_or_symbol_path.is_dir():
                         continue
                     
-                    # Find all methods
-                    for method_path in snapshot_base_dir.iterdir():
-                        if not method_path.is_dir():
-                            continue
-                        
-                        method_name = method_path.name
-                        if method and method_name != method:
-                            continue
-                        
-                        # Load snapshots for this target/method
-                        from .io import load_snapshots
-                        snapshots = load_snapshots(snapshot_base_dir, target=target, method=method_name, allow_legacy=True)
-                        if len(snapshots) < 2:
-                            continue
-                        
-                        # Analyze stability (filter by universe_sig to avoid cross-symbol comparisons)
-                        # filter_mode defaults to "replicate" - silently ignores legacy snapshots without signatures
-                        from .analysis import compute_stability_metrics
-                        metrics = compute_stability_metrics(snapshots, top_k=20, filter_by_universe_sig=True)
-                        if metrics:
-                            all_metrics[f"{target}/{method_name}"] = metrics
-                            # Log per-method stability with context
-                            status = metrics.get('status', 'unknown')
-                            mean_overlap = metrics.get('mean_overlap', 0.0)
-                            mean_tau = metrics.get('mean_tau', None)
-                            n_snapshots = metrics.get('n_snapshots', 0)
-                            
-                            # Adjust warning thresholds based on method type
-                            # Some methods (stability_selection, boruta) are inherently more variable
-                            high_variance_methods = {'stability_selection', 'boruta', 'rfe', 'neural_network'}
-                            if method_name in high_variance_methods:
-                                # Lower thresholds for high-variance methods
-                                overlap_threshold = 0.5  # vs 0.7 default
-                                tau_threshold = 0.4  # vs 0.6 default
-                            else:
-                                overlap_threshold = 0.7
-                                tau_threshold = 0.6
-                            
-                            if status == 'stable':
-                                logger.info(f"  [{method_name}] ✅ STABLE: overlap={mean_overlap:.3f}, tau={mean_tau:.3f if mean_tau else 'N/A'}, snapshots={n_snapshots}")
-                            elif mean_overlap < overlap_threshold or (mean_tau is not None and mean_tau < tau_threshold):
-                                # Only warn if below threshold (not just "drifting" status)
-                                logger.warning(
-                                    f"  [{method_name}] ⚠️  LOW STABILITY: overlap={mean_overlap:.3f} (threshold={overlap_threshold:.1f}), "
-                                    f"tau={mean_tau:.3f if mean_tau else 'N/A'} (threshold={tau_threshold:.1f}), snapshots={n_snapshots}. "
-                                    f"This is comparing {method_name} snapshots across runs - low overlap may indicate method variability or data changes."
-                                )
-                            else:
-                                logger.info(f"  [{method_name}] ℹ️  DRIFTING: overlap={mean_overlap:.3f}, tau={mean_tau:.3f if mean_tau else 'N/A'}, snapshots={n_snapshots}")
-                        if metrics:
-                            all_metrics[f"{target}/{method_name}"] = metrics
-                            # Log per-method stability with context
-                            status = metrics.get('status', 'unknown')
-                            mean_overlap = metrics.get('mean_overlap', 0.0)
-                            mean_tau = metrics.get('mean_tau', None)
-                            n_snapshots = metrics.get('n_snapshots', 0)
-                            
-                            # Adjust warning thresholds based on method type
-                            high_variance_methods = {'stability_selection', 'boruta', 'rfe', 'neural_network'}
-                            if method_name in high_variance_methods:
-                                overlap_threshold = 0.5
-                                tau_threshold = 0.4
-                            else:
-                                overlap_threshold = 0.7
-                                tau_threshold = 0.6
-                            
-                            if status == 'stable':
-                                logger.info(f"  [{method_name}] ✅ STABLE: overlap={mean_overlap:.3f}, tau={mean_tau:.3f if mean_tau else 'N/A'}, snapshots={n_snapshots}")
-                            elif mean_overlap < overlap_threshold or (mean_tau is not None and mean_tau < tau_threshold):
-                                logger.warning(
-                                    f"  [{method_name}] ⚠️  LOW STABILITY: overlap={mean_overlap:.3f} (threshold={overlap_threshold:.1f}), "
-                                    f"tau={mean_tau:.3f if mean_tau else 'N/A'} (threshold={tau_threshold:.1f}), snapshots={n_snapshots}. "
-                                    f"This is comparing {method_name} snapshots across runs - low overlap may indicate method variability or data changes."
-                                )
-                            else:
-                                logger.info(f"  [{method_name}] ℹ️  DRIFTING: overlap={mean_overlap:.3f}, tau={mean_tau:.3f if mean_tau else 'N/A'}, snapshots={n_snapshots}")
+                    # Handle both universe= and symbol= prefixes
+                    if view == "SYMBOL_SPECIFIC" and not universe_or_symbol_path.name.startswith("symbol="):
+                        # For SYMBOL_SPECIFIC, we might have universe= then symbol= nested
+                        if universe_or_symbol_path.name.startswith("universe="):
+                            for symbol_path in universe_or_symbol_path.iterdir():
+                                if symbol_path.is_dir() and symbol_path.name.startswith("symbol="):
+                                    snapshot_dir = symbol_path / "feature_importance_snapshots"
+                                    if snapshot_dir.exists():
+                                        _process_snapshots(snapshot_dir, target_name, stage_name, method)
+                        continue
+                    
+                    # Direct universe= or symbol= directory
+                    snapshot_dir = universe_or_symbol_path / "feature_importance_snapshots"
+                    if snapshot_dir.exists():
+                        _process_snapshots(snapshot_dir, target_name, stage_name, method)
     
     return all_metrics
