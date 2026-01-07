@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **FIX**: `artifacts_manifest_sha256` now computes correctly (artifacts in expected stage-scoped paths)
 - **FIX**: `analyze_all_stability_hook` now uses `iter_stage_dirs()` for proper stage-aware scanning
 - **FIX**: Stability metrics now keyed by stage (`TARGET_RANKING/target/method` vs `FEATURE_SELECTION/target/method`)
+- **FIX**: `save_snapshot_hook` now passes `stage` to `get_snapshot_base_dir()` (was ignored)
+- **FIX**: `feature_selector.py` callers now pass `stage="FEATURE_SELECTION"` explicitly
 
 #### 2026-01-06 (Updated)
 **SST Stage Factory & Identity Passthrough** - Stage-aware reproducibility tracking.

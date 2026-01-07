@@ -804,6 +804,7 @@ def select_features_for_target(
                                         allow_legacy=(final_identity is None and partial_identity_dict is None),
                                         view=view,  # Pass view for proper scoping
                                         symbol=symbol_to_process,  # Pass symbol for SYMBOL_SPECIFIC view
+                                        stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
                                     )
                         except ValueError as ve:
                             # Identity validation failure - respect config mode
@@ -1639,6 +1640,7 @@ def select_features_for_target(
                     view=view,  # Pass view for proper scoping
                     symbol=symbol,  # Pass symbol for SYMBOL_SPECIFIC view
                     inputs=fs_inputs,  # Pass inputs with selected_targets
+                    stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
                 )
     except Exception as e:
         logger.debug(f"Stability snapshot save failed for aggregated selection (non-critical): {e}")
