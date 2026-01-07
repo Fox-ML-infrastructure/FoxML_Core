@@ -927,7 +927,8 @@ def train_and_evaluate_models(
                                 ensure_target_structure(base_output_dir, target_clean)
                                 target_artifact_dir = ensure_scoped_artifact_dir(
                                     base_output_dir, target_clean, "featureset_artifacts",
-                                    view=view, symbol=symbol, universe_sig=train_universe_sig
+                                    view=view, symbol=symbol, universe_sig=train_universe_sig,
+                                    stage="TARGET_RANKING"  # Explicit stage for proper scoping
                                 )
                                 post_prune_artifact.save(target_artifact_dir)
                                 logger.debug(f"Saved POST_PRUNE artifact to view-scoped location: {target_artifact_dir}")
@@ -5311,7 +5312,8 @@ def evaluate_target_predictability(
         ensure_target_structure(base_output_dir, target_clean)
         target_exclusion_dir = ensure_scoped_artifact_dir(
             base_output_dir, target_clean, "feature_exclusions",
-            view=view, symbol=symbol, universe_sig=early_universe_sig
+            view=view, symbol=symbol, universe_sig=early_universe_sig,
+            stage="TARGET_RANKING"  # Explicit stage for proper scoping
         )
         
         # Try to load existing exclusion list first (check target-first structure)
@@ -5939,7 +5941,8 @@ def evaluate_target_predictability(
                             ensure_target_structure(base_output_dir, target_clean)
                             target_artifact_dir = ensure_scoped_artifact_dir(
                                 base_output_dir, target_clean, "featureset_artifacts",
-                                view=view, symbol=symbol, universe_sig=early_universe_sig
+                                view=view, symbol=symbol, universe_sig=early_universe_sig,
+                                stage="TARGET_RANKING"  # Explicit stage for proper scoping
                             )
                             artifact.save(target_artifact_dir)
                             logger.debug(f"Saved POST_GATEKEEPER artifact to view-scoped location: {target_artifact_dir}")

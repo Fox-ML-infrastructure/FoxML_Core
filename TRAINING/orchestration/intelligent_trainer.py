@@ -1164,7 +1164,7 @@ class IntelligentTrainer:
             from TRAINING.orchestration.utils.run_context import save_stage_transition
             save_stage_transition(self.output_dir, "TARGET_RANKING", reason="Starting target ranking phase")
         except Exception as e:
-            logger.debug(f"Could not save stage transition: {e}")
+            logger.warning(f"Could not save TARGET_RANKING stage transition: {e}")
         
         # Create partial RunIdentity for TARGET_RANKING using SST factory
         target_ranking_identity = None
@@ -2045,7 +2045,7 @@ class IntelligentTrainer:
                 from TRAINING.orchestration.utils.run_context import save_stage_transition
                 save_stage_transition(self.output_dir, "FEATURE_SELECTION", reason="Starting feature selection phase")
             except Exception as e:
-                logger.debug(f"Could not save stage transition: {e}")
+                logger.warning(f"Could not save FEATURE_SELECTION stage transition: {e}")
             
             # Load routing decisions to determine view per target
             routing_decisions = {}
@@ -2602,7 +2602,7 @@ class IntelligentTrainer:
             from TRAINING.orchestration.utils.run_context import save_stage_transition
             save_stage_transition(self.output_dir, "TRAINING", reason="Starting model training phase")
         except Exception as e:
-            logger.debug(f"Could not save stage transition: {e}")
+            logger.warning(f"Could not save TRAINING stage transition: {e}")
         
         # SST: Create partial identity for TRAINING stage (mirrors FEATURE_SELECTION pattern)
         training_identity = None

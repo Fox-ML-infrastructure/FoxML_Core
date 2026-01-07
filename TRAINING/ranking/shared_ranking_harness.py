@@ -269,9 +269,12 @@ class RankingHarness:
                     ensure_scoped_artifact_dir, ensure_target_structure
                 )
                 ensure_target_structure(base_output_dir, target_clean)
+                # Determine stage based on job_type
+                stage = "FEATURE_SELECTION" if self.job_type == "rank_features" else "TARGET_RANKING"
                 target_exclusion_dir = ensure_scoped_artifact_dir(
                     base_output_dir, target_clean, "feature_exclusions",
-                    view=self.view, symbol=self.symbol, universe_sig=self.universe_sig
+                    view=self.view, symbol=self.symbol, universe_sig=self.universe_sig,
+                    stage=stage  # Explicit stage for proper scoping
                 )
             
             target_exclusion_dir.mkdir(parents=True, exist_ok=True)
