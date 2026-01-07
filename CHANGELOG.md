@@ -29,6 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Support task-type filtering via `FAMILY_CAPS.supported_tasks`
 - **NEW**: Feature selection families added to `FAMILY_CAPS`: `rfe`, `boruta`, `stability_selection`
 
+**Seed Parameter Normalization** - Fixes `unexpected keyword argument 'seed'` errors.
+- **FIX**: Convert `seed` → `random_state` for sklearn models in TARGET_RANKING (`model_evaluation.py`)
+  - Lasso, Ridge, Elastic Net, Random Forest, Neural Network
+- **FIX**: Convert `seed` → `random_state` for sklearn models in leakage detection (`leakage_detection.py`)
+  - Lasso, Random Forest, Neural Network
+- **FIX**: Add `BASE_SEED` initialization to both files via `init_determinism_from_config()`
+- FEATURE_SELECTION already correct (uses `_clean_config_for_estimator` which strips `seed`)
+
 **Task-Type Model Filtering** - Prevents incompatible families from polluting aggregations.
 - **NEW**: `supported_tasks` field in `FAMILY_CAPS` for constrained families
   - `elastic_net`, `ridge`, `lasso`: regression only
