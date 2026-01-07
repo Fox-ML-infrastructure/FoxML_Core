@@ -3883,7 +3883,18 @@ def process_single_symbol(
                             # Compute identity for this model family
                             # FIX: Use effective_run_identity (includes fallback) instead of run_identity
                             family_identity = None
+                            partial_identity_dict = None  # Fallback: extract signatures from partial identity
+                            
                             if effective_run_identity is not None:
+                                # Always extract partial identity signatures as fallback
+                                partial_identity_dict = {
+                                    "dataset_signature": getattr(effective_run_identity, 'dataset_signature', None),
+                                    "split_signature": getattr(effective_run_identity, 'split_signature', None),
+                                    "target_signature": getattr(effective_run_identity, 'target_signature', None),
+                                    "routing_signature": getattr(effective_run_identity, 'routing_signature', None),
+                                    "train_seed": getattr(effective_run_identity, 'train_seed', None),
+                                }
+                                
                                 try:
                                     from TRAINING.common.utils.fingerprinting import (
                                         RunIdentity, compute_hparams_fingerprint,
@@ -3898,6 +3909,11 @@ def process_single_symbol(
                                     from TRAINING.common.utils.fingerprinting import resolve_feature_specs_from_registry
                                     feature_specs = resolve_feature_specs_from_registry(list(importance.index))
                                     feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
+                                    
+                                    # Add computed signatures to fallback dict
+                                    partial_identity_dict["hparams_signature"] = hparams_signature
+                                    partial_identity_dict["feature_signature"] = feature_signature
+                                    
                                     # Create updated partial and finalize
                                     updated_partial = RunIdentity(
                                         dataset_signature=effective_run_identity.dataset_signature if hasattr(effective_run_identity, 'dataset_signature') else "",
@@ -3912,7 +3928,14 @@ def process_single_symbol(
                                     )
                                     family_identity = updated_partial.finalize(feature_signature)
                                 except Exception as e:
-                                    logger.debug(f"Failed to compute family identity for {family_name}: {e}")
+                                    # FIX: Log at WARNING level so failures are visible
+                                    logger.warning(
+                                        f"Failed to compute family identity for {family_name}: {e}. "
+                                        f"Using partial identity signatures as fallback."
+                                    )
+                            
+                            # FIX: If identity not finalized but we have partial signatures, pass them
+                            effective_identity = family_identity if family_identity else partial_identity_dict
                             
                             save_snapshot_from_series_hook(
                                 target=target_column if target_column else 'unknown',
@@ -3921,8 +3944,8 @@ def process_single_symbol(
                                 universe_sig=universe_sig,  # FIX: Use feature_universe_fingerprint (not just symbol)
                                 output_dir=output_dir,
                                 auto_analyze=None,  # Load from config
-                                run_identity=family_identity,
-                                allow_legacy=True,  # FIX: Ensure ALL families get snapshots even if identity fails
+                                run_identity=effective_identity,  # Pass finalized identity or partial dict fallback
+                                allow_legacy=(family_identity is None and partial_identity_dict is None),
                                 view="SYMBOL_SPECIFIC",  # process_single_symbol is always SYMBOL_SPECIFIC
                                 symbol=symbol,  # Pass symbol for proper scoping
                             )

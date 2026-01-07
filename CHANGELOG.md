@@ -16,7 +16,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights (Last 7 Days)
 
-#### 2026-01-06
+#### 2026-01-06 (Updated)
+**SST Stage Factory & Identity Passthrough** - Stage-aware reproducibility tracking.
+- **NEW**: SST stage factory in `run_context.py`: `save_stage_transition()`, `get_current_stage()`, `resolve_stage()`
+- **NEW**: Stage-aware reproducibility paths: `stage=TARGET_RANKING/`, `stage=FEATURE_SELECTION/`
+- **NEW**: Path scanning helpers for dual-structure support: `iter_stage_dirs()`, `find_cohort_dirs()`, `parse_reproducibility_path()`
+- **FIX**: Identity passthrough to `log_run()` in `reproducibility_tracker.py`
+- **FIX**: FEATURE_SELECTION identity finalization now logs at WARNING level (was silent DEBUG)
+- **FIX**: Partial identity signatures used as fallback when finalization fails
+- **FIX**: `fs_snapshot_index.json` fingerprints now populated from FEATURE_SELECTION stage data
+- **FIX**: `cross_sectional_panel` snapshots now use partial fallback (was silently failing)
+- **FIX**: `multi_model_feature_selection.py` per-family snapshots now use partial fallback
+- [Full details →](DOCS/02_reference/changelog/2026-01-06-sst-stage-factory-identity-passthrough.md)
+
 **Comprehensive Determinism Tracking** - Complete end-to-end tracking chain.
 - All 8 model families get snapshots (was only XGBoost)
 - Training stage now tracks prediction fingerprints

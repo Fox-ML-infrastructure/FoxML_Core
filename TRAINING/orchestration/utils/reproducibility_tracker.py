@@ -992,8 +992,11 @@ class ReproducibilityTracker:
         if scope.purpose is ScopePurpose.ROUTING_EVAL:
             repro_root = self._routing_eval_root
         else:
-            # FINAL: use target-first structure
-            repro_root = self._repro_base_dir / "targets" / target / "reproducibility"
+            # FINAL: use target-first structure with stage scoping
+            from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
+            repro_root = get_target_reproducibility_dir(
+                self._repro_base_dir, target, stage=scope.stage.value
+            )
         
         # Build path components
         path_parts = [scope.view.value]  # Use enum value for path
@@ -1364,6 +1367,17 @@ class ReproducibilityTracker:
             "git_commit": self._get_git_commit(),
             "created_at": datetime.now().isoformat()
         }
+        
+        # SST: Fallback extraction from run_identity if primary sources are null
+        # This ensures authoritative values from RunIdentity are used when cohort_metadata is incomplete
+        if run_identity is not None:
+            # universe_sig fallback from dataset_signature
+            if full_metadata.get('universe_sig') is None and hasattr(run_identity, 'dataset_signature') and run_identity.dataset_signature:
+                # dataset_signature is the full 64-char hash, extract first 12 chars for universe_sig format
+                full_metadata['universe_sig'] = run_identity.dataset_signature[:12]
+            # seed fallback from train_seed
+            if full_metadata.get('seed') is None and hasattr(run_identity, 'train_seed') and run_identity.train_seed is not None:
+                full_metadata['seed'] = run_identity.train_seed
         
         # Schema v2: Omit non-applicable fields instead of null
         # Only include symbol if view is SYMBOL_SPECIFIC
@@ -3868,7 +3882,8 @@ class ReproducibilityTracker:
         ctx: Any,  # RunContext (using Any to avoid circular import issues)
         metrics: Dict[str, Any],
         additional_data_override: Optional[Dict[str, Any]] = None,
-        prediction_fingerprint: Optional[Dict] = None  # NEW: Prediction fingerprint for predictions_sha256
+        prediction_fingerprint: Optional[Dict] = None,  # NEW: Prediction fingerprint for predictions_sha256
+        run_identity: Optional[Any] = None,  # NEW: SST RunIdentity passthrough for authoritative signatures
     ) -> Dict[str, Any]:
         """
         Automated audit-grade reproducibility tracking using RunContext.
@@ -3884,6 +3899,7 @@ class ReproducibilityTracker:
             metrics: Dictionary of metrics (auc, std_score, etc.)
             additional_data_override: Optional dict to merge into additional_data
             prediction_fingerprint: Optional prediction fingerprint dict for predictions_sha256
+            run_identity: Optional SST RunIdentity object for authoritative signatures
         
         Returns:
             Dict with audit_report and saved metadata paths
@@ -3898,7 +3914,8 @@ class ReproducibilityTracker:
                 stage=ctx.stage,
                 target=ctx.target or ctx.target_column or "unknown",
                 metrics=metrics,
-                additional_data=ctx.to_dict()
+                additional_data=ctx.to_dict(),
+                run_identity=run_identity,  # Pass through SST identity
             )
             return {"mode": "legacy_fallback"}
         
@@ -4129,7 +4146,8 @@ class ReproducibilityTracker:
                 view=view_for_log,  # SST: use view parameter
                 symbol=ctx.symbol,
                 cohort_metadata=cohort_metadata,  # Pass pre-extracted cohort_metadata from RunContext
-                prediction_fingerprint=prediction_fingerprint  # FIX: Pass through for predictions_sha256
+                prediction_fingerprint=prediction_fingerprint,  # FIX: Pass through for predictions_sha256
+                run_identity=run_identity,  # SST: Pass through authoritative identity
             )
         except Exception as e:
             # log_comparison should never raise (it has its own exception handling),

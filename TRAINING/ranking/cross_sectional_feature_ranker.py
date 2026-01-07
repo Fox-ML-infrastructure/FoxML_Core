@@ -256,6 +256,7 @@ def compute_cross_sectional_importance(
     model_configs: Optional[Dict[str, Dict]] = None,
     output_dir: Optional[Path] = None,  # Optional output directory for reproducibility tracking
     universe_sig: Optional[str] = None,  # FIX: Thread universe_sig for proper scope tracking
+    run_identity: Optional[Any] = None,  # SST RunIdentity for authoritative signatures
 ) -> pd.Series:
     """
     Compute cross-sectional feature importance using panel models.
@@ -477,7 +478,10 @@ def compute_cross_sectional_importance(
             }
             
             # Use automated log_run API (includes trend analysis)
-            audit_result = tracker.log_run(ctx, metrics_dict)
+            audit_result = tracker.log_run(
+                ctx, metrics_dict,
+                run_identity=run_identity,  # SST: Pass through authoritative identity
+            )
             
             # Log audit report summary if available
             if audit_result.get("audit_report"):
@@ -590,7 +594,19 @@ def compute_cross_sectional_stability(
         if snapshot_base_dir:
             # Compute CS identity from passed run_identity
             cs_identity = None
+            partial_identity_dict = None  # Fallback: extract signatures from partial identity
+            
             if run_identity is not None:
+                # Always extract partial identity signatures as fallback
+                # These are from FEATURE_SELECTION stage, not TARGET_RANKING
+                partial_identity_dict = {
+                    "dataset_signature": getattr(run_identity, 'dataset_signature', None),
+                    "split_signature": getattr(run_identity, 'split_signature', None),
+                    "target_signature": getattr(run_identity, 'target_signature', None),
+                    "routing_signature": getattr(run_identity, 'routing_signature', None),
+                    "train_seed": getattr(run_identity, 'train_seed', None),
+                }
+                
                 try:
                     from TRAINING.common.utils.fingerprinting import (
                         RunIdentity, compute_hparams_fingerprint,
@@ -605,6 +621,11 @@ def compute_cross_sectional_stability(
                     from TRAINING.common.utils.fingerprinting import resolve_feature_specs_from_registry
                     feature_specs = resolve_feature_specs_from_registry(list(cs_importance.index))
                     feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
+                    
+                    # Add computed signatures to fallback dict
+                    partial_identity_dict["hparams_signature"] = hparams_signature
+                    partial_identity_dict["feature_signature"] = feature_signature
+                    
                     # Create updated partial and finalize
                     updated_partial = RunIdentity(
                         dataset_signature=run_identity.dataset_signature if hasattr(run_identity, 'dataset_signature') else "",
@@ -619,7 +640,11 @@ def compute_cross_sectional_stability(
                     )
                     cs_identity = updated_partial.finalize(feature_signature)
                 except Exception as e:
-                    logger.debug(f"Failed to compute CS identity: {e}")
+                    # FIX: Log at WARNING level so failures are visible
+                    logger.warning(
+                        f"Failed to compute CS identity for cross_sectional_panel snapshot: {e}. "
+                        f"Using partial identity signatures as fallback."
+                    )
             
             # FIX: Check if identity is actually finalized before passing to snapshot hook
             # Partial identities (is_final=False) or None cannot be used in strict mode
@@ -629,6 +654,9 @@ def compute_cross_sectional_stability(
                 cs_identity.is_final
             )
             
+            # FIX: If identity not finalized but we have partial signatures, pass them
+            effective_identity = cs_identity if identity_is_finalized else partial_identity_dict
+            
             snapshot_path = save_snapshot_from_series_hook(
                 target=target_column,
                 method=method_name,
@@ -636,8 +664,8 @@ def compute_cross_sectional_stability(
                 universe_sig=universe_sig,
                 output_dir=snapshot_base_dir,  # Use target-first structure
                 auto_analyze=False,  # We'll analyze manually to get metrics
-                run_identity=cs_identity if identity_is_finalized else None,  # Only pass finalized identity
-                allow_legacy=(not identity_is_finalized),  # FIX: Allow legacy if identity not finalized
+                run_identity=effective_identity,  # Pass finalized identity or partial dict fallback
+                allow_legacy=(not identity_is_finalized and partial_identity_dict is None),
                 view="CROSS_SECTIONAL",  # Cross-sectional ranker is always CROSS_SECTIONAL
                 symbol=None,  # No symbol for CROSS_SECTIONAL view
             )

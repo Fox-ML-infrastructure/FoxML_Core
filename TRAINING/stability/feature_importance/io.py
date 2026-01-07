@@ -267,11 +267,12 @@ def get_snapshot_base_dir(
     view: str = "CROSS_SECTIONAL",
     symbol: Optional[str] = None,
     universe_sig: Optional[str] = None,
+    stage: Optional[str] = None,
 ) -> Path:
     """
     Get base directory for snapshots.
     
-    Uses target-first structure scoped by view and universe if output_dir and target are provided.
+    Uses target-first structure scoped by stage, view and universe if output_dir and target are provided.
     Never creates root-level feature_importance_snapshots directory.
     
     Args:
@@ -280,6 +281,7 @@ def get_snapshot_base_dir(
         view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC" for scoping
         symbol: Symbol name for SYMBOL_SPECIFIC view
         universe_sig: Universe signature for additional scoping within view
+        stage: Optional stage name (TARGET_RANKING, FEATURE_SELECTION, TRAINING) - uses SST if not provided
     
     Returns:
         Path to base snapshot directory
@@ -315,7 +317,7 @@ def get_snapshot_base_dir(
                 ensure_target_structure(base_output_dir, target_clean)
                 return ensure_scoped_artifact_dir(
                     base_output_dir, target_clean, "feature_importance_snapshots",
-                    view=view, symbol=symbol, universe_sig=universe_sig
+                    view=view, symbol=symbol, universe_sig=universe_sig, stage=stage
                 )
             except Exception as e:
                 # If target-first structure fails, raise error (no fallback to artifacts)

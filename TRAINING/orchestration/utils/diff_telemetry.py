@@ -4084,24 +4084,49 @@ class DiffTelemetry:
                 target = diff.target
                 parsed_from_path = True
             
-            # Priority 2: Try target-first path structure: targets/<target>/reproducibility/<VIEW>/...
+            # Priority 2: Try target-first path structure (with or without stage= prefix):
+            # New: targets/<target>/reproducibility/stage=<STAGE>/<VIEW>/universe=<u>/cohort=<id>/
+            # Legacy: targets/<target>/reproducibility/<VIEW>/universe=<u>/cohort=<id>/
             if not parsed_from_path and "targets" in parts:
-                for i, part in enumerate(parts):
-                    if part == "targets" and i + 1 < len(parts):
-                        target = parts[i + 1]  # Target name is right after "targets"
-                        # Find view after "reproducibility"
-                        for j in range(i + 2, len(parts)):
-                            if parts[j] == "reproducibility" and j + 1 < len(parts):
-                                if parts[j + 1] in VALID_VIEWS:
-                                    view = parts[j + 1]
-                                break
-                        # Find cohort_id
-                        for j in range(i, len(parts)):
-                            if parts[j].startswith('cohort='):
-                                cohort_id = parts[j].replace('cohort=', '')
-                                break
-                        parsed_from_path = True
-                        break
+                # Use SST-aware path parser for comprehensive handling
+                from TRAINING.orchestration.utils.target_first_paths import parse_reproducibility_path
+                parsed = parse_reproducibility_path(Path(cohort_dir))
+                if parsed.get("target"):
+                    target = parsed["target"]
+                    parsed_from_path = True
+                if parsed.get("stage"):
+                    stage = parsed["stage"]
+                if parsed.get("view"):
+                    view = parsed["view"]
+                if parsed.get("cohort_id"):
+                    cohort_id = parsed["cohort_id"]
+                
+                # Fallback: manual parsing if SST helper didn't find all fields
+                if not parsed_from_path:
+                    for i, part in enumerate(parts):
+                        if part == "targets" and i + 1 < len(parts):
+                            target = parts[i + 1]  # Target name is right after "targets"
+                            # Find view after "reproducibility", handling stage= if present
+                            for j in range(i + 2, len(parts)):
+                                if parts[j] == "reproducibility":
+                                    # Check next part - could be stage= or VIEW
+                                    if j + 1 < len(parts):
+                                        next_part = parts[j + 1]
+                                        if next_part.startswith("stage="):
+                                            stage = next_part.replace("stage=", "")
+                                            # VIEW is after stage=
+                                            if j + 2 < len(parts) and parts[j + 2] in VALID_VIEWS:
+                                                view = parts[j + 2]
+                                        elif next_part in VALID_VIEWS:
+                                            view = next_part
+                                    break
+                            # Find cohort_id
+                            for j in range(i, len(parts)):
+                                if parts[j].startswith('cohort='):
+                                    cohort_id = parts[j].replace('cohort=', '')
+                                    break
+                            parsed_from_path = True
+                            break
             
             # Priority 3: Legacy path structure: STAGE/VIEW/target/cohort=.../
             if not parsed_from_path:
@@ -4354,20 +4379,13 @@ class DiffTelemetry:
             else:
                 # Fallback: try to construct path manually
                 logger.warning(f"Could not map cohort_dir to metrics path, using fallback: {cohort_dir}")
-                # Extract target and view from cohort_dir
-                parts = Path(cohort_dir).parts
-                target = None
-                view = None
-                symbol = None
-                for i, part in enumerate(parts):
-                    if part == "targets" and i + 1 < len(parts):
-                        target = parts[i + 1]
-                    if part == "reproducibility" and i + 1 < len(parts):
-                        view = parts[i + 1]
-                        if view == "SYMBOL_SPECIFIC" and i + 2 < len(parts):
-                            symbol_part = parts[i + 2]
-                            if symbol_part.startswith("symbol="):
-                                symbol = symbol_part.replace("symbol=", "")
+                # Extract target and view from cohort_dir using SST-aware parser
+                from TRAINING.orchestration.utils.target_first_paths import parse_reproducibility_path
+                parsed = parse_reproducibility_path(Path(cohort_dir))
+                target = parsed.get("target")
+                view = parsed.get("view")
+                symbol = parsed.get("symbol")
+                # stage = parsed.get("stage")  # Available if needed
                 
                 if target and view:
                     # Find base_output_dir

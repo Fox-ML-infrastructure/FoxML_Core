@@ -7643,7 +7643,12 @@ def evaluate_target_predictability(
                     logger.warning("⚠️ model_metrics not available for prediction fingerprint aggregation")
                 
                 # Use automated log_run API with prediction fingerprint
-                audit_result = tracker.log_run(ctx, metrics_dict, prediction_fingerprint=aggregated_prediction_fingerprint)
+                # FIX: Pass partial_identity (computed with real data) for authoritative signatures
+                audit_result = tracker.log_run(
+                    ctx, metrics_dict,
+                    prediction_fingerprint=aggregated_prediction_fingerprint,
+                    run_identity=partial_identity,  # SST: Use locally-computed identity with real data
+                )
                 
                 # Log audit report summary if available
                 if audit_result.get("audit_report"):

@@ -102,18 +102,44 @@ def get_target_trends_dir(base_output_dir: Path, target: str) -> Path:
     return get_target_dir(base_output_dir, target) / "trends"
 
 
-def get_target_reproducibility_dir(base_output_dir: Path, target: str) -> Path:
+def get_target_reproducibility_dir(
+    base_output_dir: Path,
+    target: str,
+    stage: Optional[str] = None,
+) -> Path:
     """
-    Get reproducibility directory for a target.
+    Get reproducibility directory for a target, optionally scoped by stage.
+    
+    If stage is provided, returns stage-scoped path.
+    If stage is None, attempts SST lookup, then falls back to legacy path.
     
     Args:
         base_output_dir: Base run output directory
         target: Target name
+        stage: Optional stage name (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
     
     Returns:
-        Path to targets/<target>/reproducibility/
+        Path to targets/<target>/reproducibility/[stage={stage}/]
+    
+    Examples:
+        With stage: targets/fwd_ret_10m/reproducibility/stage=TARGET_RANKING/
+        Without stage (legacy): targets/fwd_ret_10m/reproducibility/
     """
-    return get_target_dir(base_output_dir, target) / "reproducibility"
+    base_repro = get_target_dir(base_output_dir, target) / "reproducibility"
+    
+    # Priority: explicit > SST > legacy
+    resolved_stage = stage
+    if resolved_stage is None:
+        try:
+            from TRAINING.orchestration.utils.run_context import get_current_stage
+            resolved_stage = get_current_stage(base_output_dir)
+        except Exception:
+            pass  # SST not available, use legacy
+    
+    if resolved_stage:
+        return base_repro / f"stage={resolved_stage}"
+    
+    return base_repro  # Legacy fallback
 
 
 def get_scoped_artifact_dir(
@@ -123,14 +149,15 @@ def get_scoped_artifact_dir(
     view: str = "CROSS_SECTIONAL",
     symbol: Optional[str] = None,
     universe_sig: Optional[str] = None,
+    stage: Optional[str] = None,
 ) -> Path:
     """
     Get view-scoped artifact directory for a target.
     
-    Artifacts are scoped by view and optionally by symbol to support:
-    - Different feature exclusions per view/symbol
-    - Different feature importance snapshots per view/symbol
-    - Different featureset artifacts per view/symbol
+    Artifacts are scoped by stage, view, and optionally by symbol to support:
+    - Different feature exclusions per stage/view/symbol
+    - Different feature importance snapshots per stage/view/symbol
+    - Different featureset artifacts per stage/view/symbol
     
     Args:
         base_output_dir: Base run output directory
@@ -139,15 +166,17 @@ def get_scoped_artifact_dir(
         view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
         symbol: Symbol name for SYMBOL_SPECIFIC view (required if view is SYMBOL_SPECIFIC)
         universe_sig: Optional universe signature for additional scoping
+        stage: Optional stage name (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
     
     Returns:
-        Path to targets/<target>/reproducibility/<VIEW>/[symbol=<symbol>/][universe=<universe>/]<artifact_type>/
+        Path to targets/<target>/reproducibility/[stage={stage}/]<VIEW>/[symbol=<symbol>/][universe=<universe>/]<artifact_type>/
     
     Examples:
-        CROSS_SECTIONAL: targets/fwd_ret_10m/reproducibility/CROSS_SECTIONAL/universe=abc123/feature_exclusions/
-        SYMBOL_SPECIFIC: targets/fwd_ret_10m/reproducibility/SYMBOL_SPECIFIC/symbol=AAPL/universe=abc123/feature_exclusions/
+        With stage: targets/fwd_ret_10m/reproducibility/stage=TARGET_RANKING/CROSS_SECTIONAL/universe=abc123/feature_exclusions/
+        Without stage (legacy): targets/fwd_ret_10m/reproducibility/CROSS_SECTIONAL/universe=abc123/feature_exclusions/
     """
-    repro_dir = get_target_reproducibility_dir(base_output_dir, target)
+    # Get reproducibility dir with stage scoping
+    repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage)
     
     # Normalize view
     view_upper = view.upper() if view else "CROSS_SECTIONAL"
@@ -178,14 +207,27 @@ def ensure_scoped_artifact_dir(
     view: str = "CROSS_SECTIONAL",
     symbol: Optional[str] = None,
     universe_sig: Optional[str] = None,
+    stage: Optional[str] = None,
 ) -> Path:
     """
     Get view-scoped artifact directory and ensure it exists.
     
     Same as get_scoped_artifact_dir but creates the directory if it doesn't exist.
+    
+    Args:
+        base_output_dir: Base run output directory
+        target: Target name
+        artifact_type: Type of artifact
+        view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
+        symbol: Symbol name for SYMBOL_SPECIFIC view
+        universe_sig: Optional universe signature for additional scoping
+        stage: Optional stage name (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
+    
+    Returns:
+        Path to artifact directory (created if needed)
     """
     artifact_dir = get_scoped_artifact_dir(
-        base_output_dir, target, artifact_type, view, symbol, universe_sig
+        base_output_dir, target, artifact_type, view, symbol, universe_sig, stage=stage
     )
     artifact_dir.mkdir(parents=True, exist_ok=True)
     return artifact_dir
@@ -617,4 +659,184 @@ def model_output_dir(
         if view == "SYMBOL_SPECIFIC" and not symbol:
             logger.warning(f"SYMBOL_SPECIFIC view requires symbol parameter, returning view directory without symbol")
         return view_dir
+
+
+# =============================================================================
+# SST-Aware Path Scanning Helpers
+# =============================================================================
+
+from typing import List, Iterator, Tuple
+
+
+def iter_stage_dirs(
+    base_output_dir: Path,
+    target: str,
+) -> Iterator[Tuple[Optional[str], Path]]:
+    """
+    Iterate over all stage directories for a target.
+    
+    Handles both new (stage=*/) and legacy (no stage prefix) structures.
+    
+    Yields:
+        Tuples of (stage_name, path) where:
+        - stage_name: Stage name (e.g., "TARGET_RANKING") or None for legacy
+        - path: Path to the stage-scoped or legacy reproducibility directory
+    
+    Examples:
+        ("TARGET_RANKING", .../stage=TARGET_RANKING/)
+        ("FEATURE_SELECTION", .../stage=FEATURE_SELECTION/)
+        (None, .../reproducibility/) for legacy structure
+    """
+    repro_base = get_target_dir(base_output_dir, target) / "reproducibility"
+    
+    if not repro_base.exists():
+        return
+    
+    has_stage_dirs = False
+    
+    # New structure: stage=* directories
+    for stage_dir in repro_base.glob("stage=*"):
+        if stage_dir.is_dir():
+            stage_name = stage_dir.name.replace("stage=", "")
+            has_stage_dirs = True
+            yield (stage_name, stage_dir)
+    
+    # Legacy structure: direct view directories (no stage= prefix)
+    # Only yield if no stage= directories found (pure legacy) or always for backward compat
+    if not has_stage_dirs:
+        # Check for view directories directly under reproducibility
+        for view_name in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
+            view_dir = repro_base / view_name
+            if view_dir.exists():
+                yield (None, repro_base)
+                break  # Only yield once for legacy
+
+
+def find_cohort_dirs(
+    base_output_dir: Path,
+    target: Optional[str] = None,
+    stage: Optional[str] = None,
+    view: Optional[str] = None,
+) -> List[Path]:
+    """
+    SST-aware cohort directory scanner.
+    
+    Scans for cohort directories in both new (stage=*/) and legacy structures.
+    
+    Priority:
+    1. If stage provided: targets/{target}/reproducibility/stage={stage}/{view}/*/cohort=*
+    2. If stage=None, try SST: get_current_stage() and scan new structure
+    3. Fallback: scan all structures (new + legacy)
+    
+    Args:
+        base_output_dir: Base run output directory
+        target: Optional target name (if None, scans all targets)
+        stage: Optional stage filter (if None, scans all stages)
+        view: Optional view filter ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
+    
+    Returns:
+        List of cohort directory paths found
+    """
+    cohort_dirs = []
+    
+    # Get targets to scan
+    targets_dir = base_output_dir / "targets"
+    if not targets_dir.exists():
+        return cohort_dirs
+    
+    if target:
+        target_names = [target]
+    else:
+        target_names = [d.name for d in targets_dir.iterdir() if d.is_dir()]
+    
+    # Resolve stage from SST if not provided
+    resolved_stage = stage
+    if resolved_stage is None:
+        try:
+            from TRAINING.orchestration.utils.run_context import get_current_stage
+            resolved_stage = get_current_stage(base_output_dir)
+        except Exception:
+            pass
+    
+    for target_name in target_names:
+        for stage_name, stage_path in iter_stage_dirs(base_output_dir, target_name):
+            # Filter by stage if specified
+            if resolved_stage and stage_name and stage_name != resolved_stage:
+                continue
+            
+            # Scan view directories
+            views_to_scan = [view] if view else ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]
+            for view_name in views_to_scan:
+                view_path = stage_path / view_name
+                if not view_path.exists():
+                    continue
+                
+                # Scan for cohort directories (may be nested under universe=* or symbol=*)
+                # Pattern: {view}/[universe=*]/[symbol=*]/cohort=*
+                for cohort_path in view_path.rglob("cohort=*"):
+                    if cohort_path.is_dir():
+                        cohort_dirs.append(cohort_path)
+    
+    return cohort_dirs
+
+
+def parse_reproducibility_path(path: Path) -> Dict[str, Optional[str]]:
+    """
+    Parse a reproducibility path and extract components.
+    
+    Handles both:
+    - New: targets/{target}/reproducibility/stage={stage}/{view}/universe={u}/cohort={id}
+    - Legacy: targets/{target}/reproducibility/{view}/universe={u}/cohort={id}
+    
+    Args:
+        path: Path to parse (can be cohort dir or any path within reproducibility structure)
+    
+    Returns:
+        Dict with extracted components:
+        {
+            "target": str or None,
+            "stage": str or None (None for legacy paths),
+            "view": str or None,
+            "universe_sig": str or None,
+            "cohort_id": str or None,
+            "symbol": str or None,
+        }
+    """
+    result: Dict[str, Optional[str]] = {
+        "target": None,
+        "stage": None,
+        "view": None,
+        "universe_sig": None,
+        "cohort_id": None,
+        "symbol": None,
+    }
+    
+    parts = path.parts
+    
+    for i, part in enumerate(parts):
+        # Extract target (after "targets")
+        if part == "targets" and i + 1 < len(parts):
+            result["target"] = parts[i + 1]
+        
+        # Extract stage (stage=*)
+        if part.startswith("stage="):
+            result["stage"] = part.replace("stage=", "")
+        
+        # Extract view
+        if part in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
+            result["view"] = part
+        
+        # Extract universe_sig (universe=*)
+        if part.startswith("universe="):
+            result["universe_sig"] = part.replace("universe=", "")
+        
+        # Extract symbol (symbol=*)
+        if part.startswith("symbol="):
+            result["symbol"] = part.replace("symbol=", "")
+        
+        # Extract cohort_id (cohort=*)
+        if part.startswith("cohort="):
+            result["cohort_id"] = part.replace("cohort=", "")
+    
+    return result
 

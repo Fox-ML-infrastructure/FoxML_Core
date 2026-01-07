@@ -399,8 +399,13 @@ class FeatureSelectionSnapshot:
             target=importance_snapshot.target,
             symbol=symbol,
             method=importance_snapshot.method,
-            feature_fingerprint=importance_snapshot.feature_signature,
-            predictions_sha256=importance_snapshot.prediction_hash,
+            # Fingerprint mappings from FeatureImportanceSnapshot
+            config_fingerprint=importance_snapshot.hparams_signature,  # Model config hash
+            data_fingerprint=importance_snapshot.dataset_signature,  # Dataset signature
+            feature_fingerprint=importance_snapshot.feature_signature,  # Feature set signature
+            feature_fingerprint_output=importance_snapshot.feature_signature,  # Selected features
+            target_fingerprint=importance_snapshot.target_signature,  # Target definition hash
+            predictions_sha256=importance_snapshot.prediction_hash,  # Prediction determinism hash
             inputs=inputs or {},
             process=process or {},
             outputs=outputs or default_outputs,

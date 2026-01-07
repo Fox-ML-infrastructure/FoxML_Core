@@ -710,7 +710,19 @@ def select_features_for_target(
                                 if importance_dict:
                                     # Finalize identity for this model family
                                     final_identity = None
+                                    partial_identity_dict = None  # Fallback: extract signatures from partial identity
+                                    
                                     if run_identity is not None:
+                                        # Always extract partial identity signatures as fallback
+                                        # These are from FEATURE_SELECTION stage, not TARGET_RANKING
+                                        partial_identity_dict = {
+                                            "dataset_signature": getattr(run_identity, 'dataset_signature', None),
+                                            "split_signature": split_signature or getattr(run_identity, 'split_signature', None),
+                                            "target_signature": getattr(run_identity, 'target_signature', None),
+                                            "routing_signature": getattr(run_identity, 'routing_signature', None),
+                                            "train_seed": getattr(run_identity, 'train_seed', None),
+                                        }
+                                        
                                         try:
                                             from TRAINING.common.utils.fingerprinting import (
                                                 RunIdentity, compute_hparams_fingerprint,
@@ -727,6 +739,10 @@ def select_features_for_target(
                                             from TRAINING.common.utils.fingerprinting import resolve_feature_specs_from_registry
                                             feature_specs = resolve_feature_specs_from_registry(list(importance_dict.keys()))
                                             feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
+                                            
+                                            # Add computed signatures to fallback dict
+                                            partial_identity_dict["hparams_signature"] = hparams_signature
+                                            partial_identity_dict["feature_signature"] = feature_signature
                                             
                                             # Create updated partial with split + hparams
                                             updated_partial = RunIdentity(
@@ -748,7 +764,11 @@ def select_features_for_target(
                                             logger.error(f"Identity finalization failed for {model_family}: {ve}")
                                             raise
                                         except Exception as e:
-                                            logger.debug(f"Failed to finalize identity for {model_family}: {e}")
+                                            # FIX: Log at WARNING level so failures are visible
+                                            logger.warning(
+                                                f"Failed to finalize identity for {model_family}: {e}. "
+                                                f"Using partial identity signatures as fallback."
+                                            )
                                     
                                     # FIX: Ensure method name is model_family (e.g., "lightgbm", "ridge")
                                     # NOT importance_method (e.g., "native") - stability must be per-family
@@ -769,6 +789,10 @@ def select_features_for_target(
                                             "NEVER falling back to view-as-universe. "
                                             f"target={target_column} view={view} symbol={symbol_to_process}"
                                         )
+                                    
+                                    # FIX: If identity not finalized but we have partial signatures, pass them
+                                    effective_identity = final_identity if final_identity else partial_identity_dict
+                                    
                                     save_snapshot_hook(
                                         target=target_column,
                                         method=model_family,  # Use model_family as method identifier
@@ -776,8 +800,8 @@ def select_features_for_target(
                                         universe_sig=snapshot_universe_sig,  # SST or None, NEVER view
                                         output_dir=base_output_dir,  # Pass run directory - will use target-first structure
                                         auto_analyze=None,  # Load from config
-                                        run_identity=final_identity,  # Pass FINALIZED identity
-                                        allow_legacy=True,  # FIX: Ensure ALL model families get snapshots
+                                        run_identity=effective_identity,  # Pass finalized identity or partial dict fallback
+                                        allow_legacy=(final_identity is None and partial_identity_dict is None),
                                         view=view,  # Pass view for proper scoping
                                         symbol=symbol_to_process,  # Pass symbol for SYMBOL_SPECIFIC view
                                     )
@@ -1528,7 +1552,19 @@ def select_features_for_target(
                 # Compute identity for aggregated snapshot
                 # Use "multi_model_aggregated" as hparams (hash of all enabled families)
                 aggregated_identity = None
+                partial_identity_dict = None  # Fallback: extract signatures from partial identity
+                
                 if run_identity is not None:
+                    # Always extract partial identity signatures as fallback
+                    # These are from FEATURE_SELECTION stage, not TARGET_RANKING
+                    partial_identity_dict = {
+                        "dataset_signature": getattr(run_identity, 'dataset_signature', None),
+                        "split_signature": getattr(run_identity, 'split_signature', None),
+                        "target_signature": getattr(run_identity, 'target_signature', None),
+                        "routing_signature": getattr(run_identity, 'routing_signature', None),
+                        "train_seed": getattr(run_identity, 'train_seed', None),
+                    }
+                    
                     try:
                         from TRAINING.common.utils.fingerprinting import (
                             RunIdentity, compute_hparams_fingerprint,
@@ -1544,6 +1580,11 @@ def select_features_for_target(
                         from TRAINING.common.utils.fingerprinting import resolve_feature_specs_from_registry
                         feature_specs = resolve_feature_specs_from_registry(list(importance_dict.keys()))
                         feature_signature = compute_feature_fingerprint_from_specs(feature_specs)
+                        
+                        # Add computed signatures to fallback dict
+                        partial_identity_dict["hparams_signature"] = hparams_signature
+                        partial_identity_dict["feature_signature"] = feature_signature
+                        
                         # Create updated partial with hparams and finalize
                         updated_partial = RunIdentity(
                             dataset_signature=run_identity.dataset_signature,
@@ -1558,7 +1599,11 @@ def select_features_for_target(
                         )
                         aggregated_identity = updated_partial.finalize(feature_signature)
                     except Exception as e:
-                        logger.debug(f"Failed to compute aggregated identity: {e}")
+                        # FIX: Log at WARNING level so failures are visible
+                        logger.warning(
+                            f"Failed to compute aggregated identity for FEATURE_SELECTION snapshot: {e}. "
+                            f"Using partial identity signatures as fallback."
+                        )
                 
                 # CRITICAL: Use passed-in run_identity as fallback if aggregated computation failed
                 # This ensures stability hooks get a valid identity for auditability
@@ -1572,11 +1617,15 @@ def select_features_for_target(
                     identity_for_snapshot.is_final
                 )
                 
-                # FIX: Build inputs dict with selected_targets (from TARGET_RANKING stage)
+                # FIX: Build inputs dict with selected_targets (from FEATURE_SELECTION stage)
                 fs_inputs = {
                     "selected_targets": [target_column],  # This target passed TR
                     "candidate_features": list(importance_dict.keys()) if importance_dict else [],
                 }
+                
+                # FIX: If identity not finalized but we have partial signatures, pass them
+                # This ensures fingerprints are populated even when finalization fails
+                effective_identity = identity_for_snapshot if identity_is_finalized else partial_identity_dict
                 
                 save_snapshot_hook(
                     target=target_column,
@@ -1585,11 +1634,11 @@ def select_features_for_target(
                     universe_sig=snapshot_universe_sig,  # SST or None, NEVER view
                     output_dir=target_repro_dir,  # Use target-first structure
                     auto_analyze=None,  # Load from config
-                    run_identity=identity_for_snapshot if identity_is_finalized else None,  # Only pass finalized identity
-                    allow_legacy=(not identity_is_finalized),  # Allow legacy if identity not finalized
+                    run_identity=effective_identity,  # Pass finalized identity or partial dict fallback
+                    allow_legacy=(not identity_is_finalized and partial_identity_dict is None),
                     view=view,  # Pass view for proper scoping
                     symbol=symbol,  # Pass symbol for SYMBOL_SPECIFIC view
-                    inputs=fs_inputs,  # FIX: Pass inputs with selected_targets
+                    inputs=fs_inputs,  # Pass inputs with selected_targets
                 )
     except Exception as e:
         logger.debug(f"Stability snapshot save failed for aggregated selection (non-critical): {e}")
@@ -1674,7 +1723,8 @@ def select_features_for_target(
                 normalization=cs_config.get('normalization'),
                 model_configs=cs_config.get('model_configs'),
                 output_dir=output_dir,  # Pass output_dir for reproducibility tracking
-                universe_sig=universe_sig  # FIX: Thread universe_sig for proper scope tracking
+                universe_sig=universe_sig,  # FIX: Thread universe_sig for proper scope tracking
+                run_identity=run_identity,  # SST: Pass through authoritative identity
             )
             
             # Merge CS scores into summary_df
@@ -2302,7 +2352,11 @@ def select_features_for_target(
                 # FIX: Pass RunContext to log_run (required for COHORT_AWARE mode)
                 # Pass hyperparameters via additional_data_override
                 try:
-                    audit_result = tracker.log_run(ctx_to_use, metrics_dict, additional_data_override=additional_data_override)
+                    audit_result = tracker.log_run(
+                        ctx_to_use, metrics_dict,
+                        additional_data_override=additional_data_override,
+                        run_identity=run_identity,  # SST: Pass through authoritative identity
+                    )
                 except Exception as e:
                     # If COHORT_AWARE fails due to missing fields, fall back to legacy mode
                     if "Missing required fields" in str(e) or "COHORT_AWARE" in str(e):
@@ -2341,7 +2395,10 @@ def select_features_for_target(
                             symbol=symbol_for_ctx,  # FIX: Set symbol for SYMBOL_SPECIFIC view only (None for CROSS_SECTIONAL)
                             universe_sig=universe_sig_fallback  # FIX: Pass universe_sig for proper scope tracking
                         )
-                        audit_result = tracker.log_run(ctx_minimal, metrics_dict)
+                        audit_result = tracker.log_run(
+                            ctx_minimal, metrics_dict,
+                            run_identity=run_identity,  # SST: Pass through authoritative identity
+                        )
                     else:
                         raise
                 

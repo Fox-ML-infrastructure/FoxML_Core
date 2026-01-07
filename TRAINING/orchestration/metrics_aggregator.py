@@ -165,10 +165,14 @@ class MetricsAggregator:
         metrics_data = None
         
         # 1. Try canonical location: find latest cohort in reproducibility/CROSS_SECTIONAL
-        if target_fs_dir.exists():
+        # Use SST-aware cohort scanner that handles stage= and universe= scoping
+        from TRAINING.orchestration.utils.target_first_paths import find_cohort_dirs
+        cohort_dirs = find_cohort_dirs(base_output_dir, target=target_clean, view="CROSS_SECTIONAL")
+        if not cohort_dirs and target_fs_dir.exists():
+            # Fallback: direct scan (legacy structure without universe= scoping)
             cohort_dirs = [d for d in target_fs_dir.iterdir() 
                           if d.is_dir() and d.name.startswith("cohort=")]
-            if cohort_dirs:
+        if cohort_dirs:
                 # Sort by cohort ID (assuming numeric or timestamp-based)
                 latest_cohort = sorted(cohort_dirs, key=lambda x: x.name, reverse=True)[0]
                 canonical_parquet = latest_cohort / "metrics.parquet"
@@ -305,11 +309,14 @@ class MetricsAggregator:
         # FIX: If sample_size still None, try to load from cohort metadata.json
         if sample_size is None or sample_size == 0:
             try:
-                # Look for latest cohort directory under CROSS_SECTIONAL
-                cohort_dirs = list(target_fs_dir.glob("cohort=*"))
-                if cohort_dirs:
+                # Look for latest cohort directory using SST-aware scanner
+                cohort_dirs_for_sample = find_cohort_dirs(base_output_dir, target=target_clean, view="CROSS_SECTIONAL")
+                if not cohort_dirs_for_sample:
+                    # Fallback: direct glob (legacy structure)
+                    cohort_dirs_for_sample = list(target_fs_dir.glob("cohort=*"))
+                if cohort_dirs_for_sample:
                     # Sort by modification time, use latest
-                    latest_cohort = sorted(cohort_dirs, key=lambda x: x.stat().st_mtime, reverse=True)[0]
+                    latest_cohort = sorted(cohort_dirs_for_sample, key=lambda x: x.stat().st_mtime, reverse=True)[0]
                     cohort_metadata_file = latest_cohort / "metadata.json"
                     if cohort_metadata_file.exists():
                         with open(cohort_metadata_file) as f:
@@ -396,26 +403,31 @@ class MetricsAggregator:
         cohort_used = None
         
         # NEW: Look for metrics in cohort subdirectories first (matches how metrics are actually written)
-        if target_fs_dir.exists():
-            cohort_dirs = [d for d in target_fs_dir.iterdir() 
-                          if d.is_dir() and d.name.startswith("cohort=")]
-            if cohort_dirs:
-                # DETERMINISTIC: Select by (metrics.json mtime, cohort dir name) for tie-breaking
-                def get_cohort_sort_key(cohort_dir):
-                    metrics_file = cohort_dir / "metrics.json"
-                    if metrics_file.exists():
-                        return (metrics_file.stat().st_mtime, cohort_dir.name)
-                    return (0, cohort_dir.name)  # Cohorts without metrics.json sort last
-                
-                # Log cohorts missing metrics.json (don't silently treat as mtime=0)
-                missing_metrics = [d.name for d in cohort_dirs if not (d / "metrics.json").exists()]
-                if missing_metrics:
-                    logger.debug(f"Cohorts missing metrics.json: {len(missing_metrics)} of {len(cohort_dirs)}")
-                
-                latest_cohort = max(cohort_dirs, key=get_cohort_sort_key)
-                cohort_metrics_path = latest_cohort / "metrics.json"
-                
-                if cohort_metrics_path.exists():
+        # Use SST-aware cohort scanner that handles stage= and universe= scoping
+        from TRAINING.orchestration.utils.target_first_paths import find_cohort_dirs
+        ss_cohort_dirs = find_cohort_dirs(base_output_dir, target=target_clean, view="SYMBOL_SPECIFIC")
+        if not ss_cohort_dirs and target_fs_dir.exists():
+            # Fallback: direct scan (legacy structure)
+            ss_cohort_dirs = [d for d in target_fs_dir.iterdir() 
+                              if d.is_dir() and d.name.startswith("cohort=")]
+        if ss_cohort_dirs:
+            cohort_dirs = ss_cohort_dirs
+            # DETERMINISTIC: Select by (metrics.json mtime, cohort dir name) for tie-breaking
+            def get_cohort_sort_key(cohort_dir):
+                metrics_file = cohort_dir / "metrics.json"
+                if metrics_file.exists():
+                    return (metrics_file.stat().st_mtime, cohort_dir.name)
+                return (0, cohort_dir.name)  # Cohorts without metrics.json sort last
+            
+            # Log cohorts missing metrics.json (don't silently treat as mtime=0)
+            missing_metrics = [d.name for d in cohort_dirs if not (d / "metrics.json").exists()]
+            if missing_metrics:
+                logger.debug(f"Cohorts missing metrics.json: {len(missing_metrics)} of {len(cohort_dirs)}")
+            
+            latest_cohort = max(cohort_dirs, key=get_cohort_sort_key)
+            cohort_metrics_path = latest_cohort / "metrics.json"
+            
+            if cohort_metrics_path.exists():
                     try:
                         with open(cohort_metrics_path) as f:
                             metrics_data = json.load(f)
@@ -463,24 +475,28 @@ class MetricsAggregator:
         
         # Fallback to CROSS_SECTIONAL cohort metadata for sample_size when symbol metrics missing
         if score is None and (not metadata_path or not metadata_path.exists()):
-            # Try to get sample_size from CROSS_SECTIONAL cohort metadata
-            cs_target_fs_dir = target_repro_dir / "CROSS_SECTIONAL"
-            if cs_target_fs_dir.exists():
-                cohort_dirs = [d for d in cs_target_fs_dir.iterdir() 
-                               if d.is_dir() and d.name.startswith("cohort=")]
-                if cohort_dirs:
-                    latest_cohort = max(cohort_dirs, key=lambda d: d.stat().st_mtime)
-                    metadata_file = latest_cohort / "metadata.json"
-                    if metadata_file.exists():
-                        try:
-                            with open(metadata_file) as f:
-                                cohort_meta = json.load(f)
-                                # Extract sample_size from cohort metadata
-                                sample_size = cohort_meta.get('n_samples', cohort_meta.get('N', None))
-                                if sample_size:
-                                    logger.debug(f"Using CROSS_SECTIONAL cohort metadata for sample_size: {sample_size}")
-                        except Exception as e:
-                            logger.debug(f"Failed to load CROSS_SECTIONAL cohort metadata: {e}")
+            # Try to get sample_size from CROSS_SECTIONAL cohort metadata using SST-aware scanner
+            cs_cohort_dirs = find_cohort_dirs(base_output_dir, target=target_clean, view="CROSS_SECTIONAL")
+            if not cs_cohort_dirs:
+                # Fallback: direct scan (legacy structure)
+                cs_target_fs_dir = target_repro_dir / "CROSS_SECTIONAL"
+                if cs_target_fs_dir.exists():
+                    cs_cohort_dirs = [d for d in cs_target_fs_dir.iterdir() 
+                                      if d.is_dir() and d.name.startswith("cohort=")]
+            if cs_cohort_dirs:
+                cohort_dirs = cs_cohort_dirs
+                latest_cohort = max(cohort_dirs, key=lambda d: d.stat().st_mtime)
+                metadata_file = latest_cohort / "metadata.json"
+                if metadata_file.exists():
+                    try:
+                        with open(metadata_file) as f:
+                            cohort_meta = json.load(f)
+                            # Extract sample_size from cohort metadata
+                            sample_size = cohort_meta.get('n_samples', cohort_meta.get('N', None))
+                            if sample_size:
+                                logger.debug(f"Using CROSS_SECTIONAL cohort metadata for sample_size: {sample_size}")
+                    except Exception as e:
+                        logger.debug(f"Failed to load CROSS_SECTIONAL cohort metadata: {e}")
         
         if score is None and metadata_path and metadata_path.exists():
             try:

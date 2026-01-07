@@ -561,3 +561,167 @@ def validate_mode_contract(
     Alias kept for backward compatibility during migration.
     """
     return validate_view_contract(view, requested_view, view_policy)
+
+
+# =============================================================================
+# SST Stage Tracking
+# =============================================================================
+
+def _validate_stage(stage_str: str) -> str:
+    """
+    Validate and normalize stage string using Stage enum.
+    
+    Args:
+        stage_str: Stage string to validate
+    
+    Returns:
+        Normalized stage value (uppercase)
+    
+    Raises:
+        ValueError: If stage is not a valid Stage enum value
+    """
+    from TRAINING.orchestration.utils.scope_resolution import Stage
+    return Stage.from_string(stage_str).value
+
+
+def save_stage_transition(
+    output_dir: Path,
+    stage: str,
+    reason: Optional[str] = None,
+) -> Path:
+    """
+    Record a stage transition to run_context.json (SST).
+    
+    Stage history is append-only. Current stage is always the most recent.
+    This creates a single source of truth for "what stage are we in?"
+    
+    Args:
+        output_dir: Run output directory (e.g., RESULTS/runs/.../intelligent_output_...)
+        stage: Stage name (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
+        reason: Optional reason for the transition
+    
+    Returns:
+        Path to run_context.json file
+    
+    Raises:
+        ValueError: If stage is not a valid Stage enum value
+    """
+    # Validate stage via Stage enum
+    stage_normalized = _validate_stage(stage)
+    
+    run_context_path = output_dir / "globals" / "run_context.json"
+    run_context_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Load existing context if it exists
+    existing_context = {}
+    if run_context_path.exists():
+        try:
+            with open(run_context_path, 'r') as f:
+                existing_context = json.load(f)
+        except Exception as e:
+            logger.warning(f"Could not load existing run_context.json: {e}, creating new one")
+    
+    # Get existing stage history (or create new)
+    stage_history = existing_context.get("stage_history", [])
+    
+    # Create new stage entry
+    stage_entry = {
+        "stage": stage_normalized,
+        "started_at": datetime.utcnow().isoformat() + "Z",
+    }
+    if reason:
+        stage_entry["reason"] = reason
+    
+    # Append to history (append-only, no overwrites)
+    stage_history.append(stage_entry)
+    
+    # Update context
+    existing_context["current_stage"] = stage_normalized
+    existing_context["stage_history"] = stage_history
+    
+    # Write to file
+    with open(run_context_path, 'w') as f:
+        json.dump(existing_context, f, indent=2)
+    
+    logger.info(f"🔄 Stage transition: {stage_normalized} (reason: {reason or 'N/A'})")
+    
+    return run_context_path
+
+
+def get_current_stage(output_dir: Path) -> Optional[str]:
+    """
+    Get current stage from SST run_context.json.
+    
+    Args:
+        output_dir: Run output directory
+    
+    Returns:
+        Current stage string (e.g., "TARGET_RANKING") or None if not found
+    """
+    context = load_run_context(output_dir)
+    if context:
+        return context.get("current_stage")
+    return None
+
+
+def get_stage_history(output_dir: Path) -> List[Dict[str, Any]]:
+    """
+    Get full stage transition history from SST run_context.json.
+    
+    Args:
+        output_dir: Run output directory
+    
+    Returns:
+        List of stage transition entries, each with:
+        - stage: Stage name
+        - started_at: ISO timestamp
+        - reason: Optional reason for transition
+    """
+    context = load_run_context(output_dir)
+    if context:
+        return context.get("stage_history", [])
+    return []
+
+
+def resolve_stage(
+    output_dir: Optional[Path] = None,
+    scope: Optional[Any] = None,
+    explicit_stage: Optional[str] = None,
+) -> Optional[str]:
+    """
+    SST stage resolution with priority chain.
+    
+    Priority:
+    1. explicit_stage parameter (if provided)
+    2. scope.stage (if WriteScope provided and has stage attribute)
+    3. get_current_stage(output_dir) from run_context.json
+    4. None (legacy fallback)
+    
+    Args:
+        output_dir: Run output directory for SST lookup
+        scope: Optional WriteScope object with stage attribute
+        explicit_stage: Explicit stage override
+    
+    Returns:
+        Resolved stage string or None
+    """
+    # Priority 1: Explicit parameter
+    if explicit_stage is not None:
+        return _validate_stage(explicit_stage)
+    
+    # Priority 2: WriteScope.stage
+    if scope is not None and hasattr(scope, 'stage') and scope.stage is not None:
+        # Handle both Stage enum and string
+        stage_val = scope.stage
+        if hasattr(stage_val, 'value'):
+            return stage_val.value  # It's an enum
+        return _validate_stage(str(stage_val))
+    
+    # Priority 3: SST run_context.json
+    if output_dir is not None:
+        sst_stage = get_current_stage(output_dir)
+        if sst_stage:
+            return sst_stage
+    
+    # Priority 4: None (legacy fallback)
+    return None
