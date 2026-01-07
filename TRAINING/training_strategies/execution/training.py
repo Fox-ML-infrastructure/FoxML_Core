@@ -942,6 +942,25 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     with open(meta_path, 'w') as f:
                                         json.dump(metadata, f, indent=2)
                                     logger.info(f"  💾 Metadata saved: {meta_path}")
+                                    
+                                    # SST: Create TrainingSnapshot for SYMBOL_SPECIFIC model
+                                    try:
+                                        from TRAINING.training_strategies.reproducibility import create_and_save_training_snapshot
+                                        saved_model_path = str(model_path) if 'model_path' in locals() else None
+                                        create_and_save_training_snapshot(
+                                            target=target,
+                                            model_family=family,
+                                            model_result=model_result,
+                                            output_dir=base_run_dir,
+                                            view="SYMBOL_SPECIFIC",
+                                            symbol=symbol,
+                                            run_identity=effective_run_identity,
+                                            model_path=saved_model_path,
+                                            features_used=list(feature_names) if feature_names is not None else None,
+                                            n_samples=len(X) if 'X' in locals() else None,
+                                        )
+                                    except Exception as ts_err:
+                                        logger.debug(f"Training snapshot failed for {target}:{symbol} (non-critical): {ts_err}")
                             else:
                                 # Fallback: save model directly if no strategy_manager
                                 model_path = ArtifactPaths.model_file(model_dir, family, extension='joblib')
@@ -1776,6 +1795,53 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                         # If no exception, mark as saved
                         family_status[family]["saved"] = True
                         logger.info(f"✅ {family} model saved successfully for {target}")
+                        
+                        # SST: Create and save TrainingSnapshot for full parity tracking
+                        try:
+                            from TRAINING.training_strategies.reproducibility import create_and_save_training_snapshot
+                            
+                            # Get model path that was just saved
+                            saved_model_path = str(model_path) if 'model_path' in locals() else None
+                            
+                            # Get features used from target_features
+                            training_features = None
+                            if target_features and target in target_features:
+                                tf = target_features[target]
+                                if isinstance(tf, dict) and 'features' in tf:
+                                    training_features = tf['features']
+                                elif isinstance(tf, (list, tuple)):
+                                    training_features = list(tf)
+                            
+                            # Get n_samples from X if available
+                            training_n_samples = X.shape[0] if 'X' in locals() and hasattr(X, 'shape') else None
+                            
+                            # Get train_seed from identity or config
+                            training_seed = 42
+                            if effective_run_identity and hasattr(effective_run_identity, 'train_seed'):
+                                training_seed = effective_run_identity.train_seed
+                            elif effective_run_identity and isinstance(effective_run_identity, dict):
+                                training_seed = effective_run_identity.get('train_seed', 42)
+                            
+                            # Merge prediction fingerprint into model_result for snapshot
+                            model_result_with_fp = model_result.copy() if model_result else {}
+                            if prediction_fingerprint_cs:
+                                model_result_with_fp['prediction_hash'] = prediction_fingerprint_cs.get('prediction_hash')
+                            
+                            create_and_save_training_snapshot(
+                                target=target,
+                                model_family=family,
+                                model_result=model_result_with_fp,
+                                output_dir=base_run_dir,
+                                view=view,
+                                symbol=None,  # CROSS_SECTIONAL doesn't have symbol
+                                run_identity=effective_run_identity,
+                                model_path=saved_model_path,
+                                features_used=training_features,
+                                n_samples=training_n_samples,
+                                train_seed=training_seed,
+                            )
+                        except Exception as ts_err:
+                            logger.debug(f"Training snapshot creation failed (non-critical): {ts_err}")
                     
                     logger.info(f"✅ {family} completed for {target}")
                     

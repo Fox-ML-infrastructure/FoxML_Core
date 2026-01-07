@@ -17,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Recent Highlights (Last 7 Days)
 
 #### 2026-01-07
+**TRAINING Stage Full Parity Tracking** - Complete audit trail for Stage 3.
+- **NEW**: `TrainingSnapshot` schema in `TRAINING/training_strategies/reproducibility/schema.py`
+  - Model artifact hash (`model_artifact_sha256`) for tamper detection
+  - Prediction fingerprint (`predictions_sha256`) for determinism verification
+  - Full comparison_group parity with TR/FS stages
+- **NEW**: `training_snapshot_index.json` global index for all training runs
+- **NEW**: `create_and_save_training_snapshot()` SST-compliant entry point
+- **FIX**: Training snapshots created for both CROSS_SECTIONAL and SYMBOL_SPECIFIC models
+- End-to-end chain: TR snapshot → FS snapshot → Training snapshot
+
 **FS Snapshot Full Parity with TARGET_RANKING** - Complete audit trail for FEATURE_SELECTION stage.
 - **FIX**: Seed derivation now uses `base_seed` (42) directly instead of deriving from `universe_sig`
   - Ensures TR/FS/TRAINING stages have consistent seeds for determinism verification
