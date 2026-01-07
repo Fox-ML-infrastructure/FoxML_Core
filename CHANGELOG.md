@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Recent Highlights (Last 7 Days)
 
 #### 2026-01-07
+**Sample Limit Consistency Across Stages** - Consistent data for TR/FS/TRAINING.
+- **FIX**: `cross_sectional_feature_ranker.py` now respects `max_rows_per_symbol`
+  - Was loading ALL data (188k samples) instead of config limit (2k per symbol)
+- **FIX**: `compute_cross_sectional_importance()` accepts `max_rows_per_symbol` parameter
+- **FIX**: `feature_selector.py` passes `max_samples_per_symbol` to CS ranker
+- All stages now use consistent `.tail(N)` sampling for reproducibility
+
 **TRAINING Stage Full Parity Tracking** - Complete audit trail for Stage 3.
 - **NEW**: `TrainingSnapshot` schema in `TRAINING/training_strategies/reproducibility/schema.py`
   - Model artifact hash (`model_artifact_sha256`) for tamper detection

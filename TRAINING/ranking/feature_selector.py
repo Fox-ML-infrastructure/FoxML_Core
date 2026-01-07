@@ -1748,6 +1748,7 @@ def select_features_for_target(
                 model_families=cs_config.get('model_families', ['lightgbm']),
                 min_cs=min_cs_required,
                 max_cs_samples=cs_config.get('max_cs_samples', 1000),
+                max_rows_per_symbol=max_samples_per_symbol,  # FIX: Consistent sample limit across stages
                 normalization=cs_config.get('normalization'),
                 model_configs=cs_config.get('model_configs'),
                 output_dir=output_dir,  # Pass output_dir for reproducibility tracking

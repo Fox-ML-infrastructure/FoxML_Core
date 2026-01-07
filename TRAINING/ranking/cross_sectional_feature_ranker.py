@@ -252,6 +252,7 @@ def compute_cross_sectional_importance(
     model_families: List[str] = None,
     min_cs: int = None,
     max_cs_samples: int = None,
+    max_rows_per_symbol: int = None,  # FIX: Sample limit for consistent data across stages
     normalization: Optional[str] = None,
     model_configs: Optional[Dict[str, Dict]] = None,
     output_dir: Optional[Path] = None,  # Optional output directory for reproducibility tracking
@@ -278,6 +279,14 @@ def compute_cross_sectional_importance(
             max_cs_samples = int(get_cfg("pipeline.data_limits.max_cs_samples", default=1000, config_name="pipeline_config"))
         except Exception:
             max_cs_samples = 1000
+    
+    # FIX: Load max_rows_per_symbol from config if not provided (ensures consistent data across stages)
+    if max_rows_per_symbol is None:
+        try:
+            from CONFIG.config_loader import get_cfg
+            max_rows_per_symbol = int(get_cfg("pipeline.data_limits.default_max_rows_per_symbol_ranking", default=2000, config_name="pipeline_config"))
+        except Exception:
+            max_rows_per_symbol = 2000
     Compute cross-sectional feature importance using panel model.
     
     This trains a single model across all symbols simultaneously (panel data)
@@ -307,8 +316,9 @@ def compute_cross_sectional_importance(
         prepare_cross_sectional_data_for_ranking
     )
     
-    # Load data
-    mtf_data = load_mtf_data_for_ranking(data_dir, symbols)
+    # Load data with consistent sample limit across stages
+    logger.info(f"   max_rows_per_symbol: {max_rows_per_symbol} (for stage consistency)")
+    mtf_data = load_mtf_data_for_ranking(data_dir, symbols, max_rows_per_symbol=max_rows_per_symbol)
     if not mtf_data:
         logger.warning("No data loaded, returning zero importance")
         return pd.Series(0.0, index=candidate_features)
