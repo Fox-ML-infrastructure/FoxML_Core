@@ -2065,6 +2065,8 @@ def train_and_evaluate_models(
                 # Sort for deterministic order (ensures reproducible aggregations)
                 model_families = sorted(model_families)
             logger.debug(f"Using {len(model_families)} models from config: {', '.join(model_families)}")
+        else:
+            model_families = ['lightgbm', 'random_forest', 'neural_network']
     
     # Filter families by task type compatibility (prevents garbage scores in aggregations)
     from TRAINING.training_strategies.utils import is_family_compatible
@@ -2080,8 +2082,6 @@ def train_and_evaluate_models(
     if skipped_families:
         logger.info(f"📋 Filtered {len(skipped_families)} incompatible families for task={task_type}")
     model_families = compatible_families
-        else:
-            model_families = ['lightgbm', 'random_forest', 'neural_network']
     
     # Create ModelConfig objects for this task type
     model_configs = create_model_configs_from_yaml(multi_model_config, task_type) if multi_model_config else []
