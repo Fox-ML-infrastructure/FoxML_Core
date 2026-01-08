@@ -7213,8 +7213,16 @@ def evaluate_target_predictability(
         # Extract primary_se from components if available
         if components and "primary_se" in components:
             primary_se = components["primary_se"]
+        # Log success for debugging
+        if scoring_signature:
+            logger.debug(f"Phase 3.1 composite score calculated successfully: version={composite_ver}, signature={scoring_signature[:16]}...")
+        else:
+            logger.warning(f"Phase 3.1 composite score calculated but scoring_signature is None")
     except Exception as e:
-        logger.warning(f"Phase 3.1 composite score calculation failed: {e}, falling back to legacy")
+        import traceback
+        # Use ERROR level so it's definitely visible - this is a critical failure
+        logger.error(f"❌ Phase 3.1 composite score calculation failed: {e}, falling back to legacy")
+        logger.error(f"Phase 3.1 failure traceback:\n{traceback.format_exc()}")
         # Fallback to legacy composite score
         composite, composite_def, composite_ver = calculate_composite_score(
             auc, std_score, mean_importance, len(all_scores_by_model), final_task_type

@@ -38,8 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **FIX**: Phase 3.1 metrics output - Canonical metric names now use centered values (`primary_metric_mean` instead of raw `auc`)
   - All Phase 3.1 fields (`primary_se`, `scoring_signature`, `auc_excess_mean`, etc.) now appear in `metrics.json`, `metrics.parquet`, and `snapshot.json`
   - Enables direct comparison of binary classification and regression targets via normalized composite scores
-- **FIX**: Phase 3.1 composite calculation error logging - Added explicit logging when scoring config loading fails
-  - Helps diagnose why Phase 3.1 composite calculation might fall back to legacy
+- **FIX**: Phase 3.1 composite calculation error logging - Added explicit error-level logging with traceback
+  - Changed from WARNING to ERROR level so failures are definitely visible
+  - Includes full traceback to diagnose why Phase 3.1 composite calculation falls back to legacy
+  - Added debug logging when Phase 3.1 succeeds to confirm scoring_signature is computed
 - **NEW**: Task-aware field filtering - Metrics output now excludes task-irrelevant fields
   - Regression targets: Excludes `auc_mean_raw` and `auc_excess_mean` (classification-only)
   - Classification targets: Includes all relevant fields
