@@ -255,6 +255,8 @@ class FeatureSelectionSnapshot:
     
     # Fingerprints (for determinism verification)
     fingerprint_schema_version: str = "1.0"
+    metrics_schema_version: str = "1.1"  # Bump when metrics structure changes (added 2026-01)
+    scoring_schema_version: str = "1.0"  # Bump when composite formula changes
     config_fingerprint: Optional[str] = None
     data_fingerprint: Optional[str] = None
     feature_fingerprint: Optional[str] = None  # Alias for feature_fingerprint_output (selected features)
@@ -264,6 +266,16 @@ class FeatureSelectionSnapshot:
     metrics_sha256: Optional[str] = None  # Hash of outputs.metrics for drift detection
     artifacts_manifest_sha256: Optional[str] = None  # Hash of output artifacts for tampering detection
     predictions_sha256: Optional[str] = None  # Aggregated prediction hash
+    
+    # Selection mode (P0 correctness: clarify whether actual selection happened)
+    # "rank_only" = full ranking, no selection (n_selected == n_candidates)
+    # "top_k" = selected top k features by importance
+    # "threshold" = selected features above importance threshold
+    # "importance_cutoff" = selected features above cumulative importance cutoff
+    selection_mode: str = "rank_only"
+    n_candidates: int = 0  # Number of candidate features entering selection
+    n_selected: int = 0  # Number of features after selection
+    selection_params: Dict[str, Any] = field(default_factory=dict)  # {"k": 50} or {"threshold": 0.01}
     
     # Fingerprint source documentation (what each fingerprint means)
     fingerprint_sources: Dict[str, str] = field(default_factory=lambda: {
@@ -328,6 +340,8 @@ class FeatureSelectionSnapshot:
             "method": self.method,
             "snapshot_seq": self.snapshot_seq,
             "fingerprint_schema_version": self.fingerprint_schema_version,
+            "metrics_schema_version": self.metrics_schema_version,
+            "scoring_schema_version": self.scoring_schema_version,
             "config_fingerprint": self.config_fingerprint,
             "data_fingerprint": self.data_fingerprint,
             "feature_fingerprint": self.feature_fingerprint,
@@ -343,6 +357,11 @@ class FeatureSelectionSnapshot:
             "outputs": self.outputs,
             "comparison_group": self.comparison_group,
             "path": self.path,
+            # Selection mode fields (P0 correctness)
+            "selection_mode": self.selection_mode,
+            "n_candidates": self.n_candidates,
+            "n_selected": self.n_selected,
+            "selection_params": self.selection_params,
         }
     
     @classmethod
@@ -358,6 +377,8 @@ class FeatureSelectionSnapshot:
             method=data.get("method", ""),
             snapshot_seq=data.get("snapshot_seq", 0),
             fingerprint_schema_version=data.get("fingerprint_schema_version", "1.0"),
+            metrics_schema_version=data.get("metrics_schema_version", "1.0"),  # Default to 1.0 for old snapshots
+            scoring_schema_version=data.get("scoring_schema_version", "1.0"),
             config_fingerprint=data.get("config_fingerprint"),
             data_fingerprint=data.get("data_fingerprint"),
             feature_fingerprint=data.get("feature_fingerprint"),
@@ -373,6 +394,11 @@ class FeatureSelectionSnapshot:
             outputs=data.get("outputs", {}),
             comparison_group=data.get("comparison_group", {}),
             path=data.get("path"),
+            # Selection mode fields (P0 correctness) - defaults for backward compat
+            selection_mode=data.get("selection_mode", "rank_only"),
+            n_candidates=data.get("n_candidates", 0),
+            n_selected=data.get("n_selected", 0),
+            selection_params=data.get("selection_params", {}),
         )
     
     @classmethod
@@ -389,6 +415,11 @@ class FeatureSelectionSnapshot:
         n_effective: Optional[int] = None,  # Effective sample count from FS
         feature_registry_hash: Optional[str] = None,  # Hash of feature registry
         comparable_key: Optional[str] = None,  # Pre-computed comparison key
+        # P0 correctness: selection mode fields
+        selection_mode: Optional[str] = None,  # "rank_only" | "top_k" | "threshold" | "importance_cutoff"
+        n_candidates: Optional[int] = None,  # Number of candidate features entering selection
+        n_selected: Optional[int] = None,  # Number of features after selection
+        selection_params: Optional[Dict[str, Any]] = None,  # {"k": 50} or {"threshold": 0.01}
     ) -> 'FeatureSelectionSnapshot':
         """
         Create from a FeatureImportanceSnapshot with additional context.
@@ -401,6 +432,10 @@ class FeatureSelectionSnapshot:
             n_effective: Effective sample count from FS stage
             feature_registry_hash: Hash of feature registry used
             comparable_key: Pre-computed comparison key from cohort metadata
+            selection_mode: P0 - How selection was performed ("rank_only", "top_k", etc.)
+            n_candidates: P0 - Number of candidate features before selection
+            n_selected: P0 - Number of features after selection
+            selection_params: P0 - Parameters for selection (e.g., {"k": 50})
         """
         import hashlib
         import json
@@ -451,6 +486,35 @@ class FeatureSelectionSnapshot:
         # Extract feature_fingerprint_input from inputs if provided
         feature_input_hash = inputs.get("feature_fingerprint_input") if inputs else None
         
+        # P0 correctness: Determine selection mode if not explicitly provided
+        # Infer n_candidates from inputs.candidate_features if available
+        actual_n_candidates = n_candidates
+        if actual_n_candidates is None and inputs:
+            candidate_features = inputs.get("candidate_features", [])
+            if candidate_features:
+                actual_n_candidates = len(candidate_features)
+        if actual_n_candidates is None:
+            actual_n_candidates = 0
+        
+        # Infer n_selected from importance_snapshot.features
+        actual_n_selected = n_selected
+        if actual_n_selected is None:
+            actual_n_selected = len(importance_snapshot.features)
+        
+        # Infer selection_mode if not explicitly provided
+        actual_selection_mode = selection_mode
+        if actual_selection_mode is None:
+            # If n_selected == n_candidates (or n_candidates not known), it's rank_only
+            if actual_n_candidates == 0 or actual_n_selected == actual_n_candidates:
+                actual_selection_mode = "rank_only"
+            elif selection_params and "k" in selection_params:
+                actual_selection_mode = "top_k"
+            elif selection_params and "threshold" in selection_params:
+                actual_selection_mode = "threshold"
+            else:
+                # Default: assume some selection happened if n_selected < n_candidates
+                actual_selection_mode = "top_k" if actual_n_selected < actual_n_candidates else "rank_only"
+        
         return cls(
             run_id=importance_snapshot.run_id,
             timestamp=importance_snapshot.created_at.isoformat(),
@@ -473,6 +537,11 @@ class FeatureSelectionSnapshot:
             process=process or {},
             outputs=final_outputs,
             comparison_group=comparison_group,
+            # P0 correctness: selection mode fields
+            selection_mode=actual_selection_mode,
+            n_candidates=actual_n_candidates,
+            n_selected=actual_n_selected,
+            selection_params=selection_params or {},
         )
     
     def get_index_key(self) -> str:

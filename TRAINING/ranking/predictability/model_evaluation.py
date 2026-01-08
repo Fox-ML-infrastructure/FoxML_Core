@@ -7139,6 +7139,36 @@ def evaluate_target_predictability(
     # Determine task type (already inferred from data above)
     final_task_type = task_type
     
+    # === P0 CORRECTNESS: Compute new snapshot contract fields ===
+    # Track n_cs_total/n_cs_valid (number of model evaluations)
+    # In this context, "cross-sections" are model evaluation opportunities
+    n_cs_total = len(all_scores_by_model)  # Total model families attempted
+    n_cs_valid = len([m for m in all_scores_by_model if len(all_scores_by_model[m]) > 0])  # Models with valid scores
+    
+    # Track invalid reasons (why model evaluations failed)
+    # Note: In current architecture, these are tracked per-model-family not per-timestamp
+    invalid_reason_counts = {}
+    invalid_count = n_cs_total - n_cs_valid
+    if invalid_count > 0:
+        invalid_reason_counts["model_evaluation_failed"] = invalid_count
+    
+    # Compute t-stat for skill normalization (universal signal-above-null metric)
+    primary_metric_tstat = None
+    if n_cs_valid > 1 and std_score > 0:
+        # t-stat = mean / (std / sqrt(n)) = mean * sqrt(n) / std
+        primary_metric_tstat = auc * np.sqrt(n_cs_valid) / std_score
+    elif n_cs_valid == 1:
+        # With only one model, can't compute t-stat (no variance estimate)
+        primary_metric_tstat = None
+    
+    # Classification-specific: compute centered AUC for proper aggregation
+    auc_mean_raw = None
+    auc_excess_mean = None
+    if final_task_type in (TaskType.BINARY_CLASSIFICATION, TaskType.MULTICLASS_CLASSIFICATION):
+        auc_mean_raw = auc  # Raw 0-1 scale
+        # Center around 0.5 (null baseline for random classifier)
+        auc_excess_mean = auc - 0.5
+    
     # Get metric name for logging
     if final_task_type == TaskType.REGRESSION:
         metric_name = "R²"
@@ -7422,7 +7452,16 @@ def evaluate_target_predictability(
         autofix_info=autofix_info if 'autofix_info' in locals() else None,
         status=final_status,
         attempts=1,
-        view=result_view  # For canonical metric naming
+        view=result_view,  # For canonical metric naming
+        # === P0 CORRECTNESS: New snapshot contract fields ===
+        primary_metric_mean=auc,  # Explicit (authoritative, same as auc for now)
+        primary_metric_std=std_score,  # Explicit (authoritative, same as std_score for now)
+        primary_metric_tstat=primary_metric_tstat,  # t-stat for skill normalization
+        n_cs_valid=n_cs_valid,  # Valid model evaluations
+        n_cs_total=n_cs_total,  # Total model evaluations attempted
+        invalid_reason_counts=invalid_reason_counts if invalid_reason_counts else None,
+        auc_mean_raw=auc_mean_raw,  # Classification only: raw 0-1 AUC
+        auc_excess_mean=auc_excess_mean,  # Classification only: centered AUC
     )
     
     # Log canonical summary block (one block that can be screenshot for PR comments)

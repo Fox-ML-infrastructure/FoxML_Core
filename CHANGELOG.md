@@ -16,6 +16,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recent Highlights (Last 7 Days)
 
+#### 2026-01-08
+**Snapshot Contract Unification** - P0/P1 correctness fixes for TARGET_RANKING and FEATURE_SELECTION.
+
+**P0: TARGET_RANKING - Explicit metrics and invalid slice tracking**
+- **NEW**: `primary_metric_mean`, `primary_metric_std` fields in `TargetPredictabilityScore`
+  - Explicit authoritative values (deprecates overloaded `auc` field)
+- **NEW**: `primary_metric_tstat` - t-statistic for universal skill normalization
+  - `tstat = mean * sqrt(n_cs_valid) / std` - signal above null baseline
+- **NEW**: `n_cs_valid`, `n_cs_total`, `invalid_reason_counts` for invalid slice tracking
+  - Tracks why model evaluations were excluded from aggregation
+- **NEW**: `auc_mean_raw`, `auc_excess_mean` for classification targets
+  - `auc_excess_mean = auc - 0.5` - centered around random classifier baseline
+- **NEW**: `metrics_schema_version`, `scoring_schema_version` in all snapshot schemas
+  - Enables schema migration and backward compatibility tracking
+
+**P0: FEATURE_SELECTION - Selection mode clarification**
+- **NEW**: `selection_mode` field in `FeatureSelectionSnapshot`
+  - Values: `"rank_only"` | `"top_k"` | `"threshold"` | `"importance_cutoff"`
+  - Auto-inferred from `n_candidates` vs `n_selected` if not explicit
+- **NEW**: `n_candidates`, `n_selected`, `selection_params` fields
+  - Makes "did selection actually happen?" unambiguous
+- Updated `from_importance_snapshot()` and `create_fs_snapshot_from_importance()` APIs
+
+**P1: T-Stat Based Composite Scoring**
+- **NEW**: `calculate_composite_score_tstat()` in `composite_score.py`
+  - Bounded [0,1] composite score using t-stat skill normalization
+  - Components: `skill_score_01`, `coverage`, `stability` (all bounded [0,1])
+  - Sigmoid squash: `skill = sigmoid(tstat / k)` with configurable k
+- **NEW**: `scoring` section in `CONFIG/ranking/metrics_schema.yaml`
+  - Versioned parameters: `skill_squash_k`, `std_ref`, component weights
+  - Per-task `std_ref` overrides
+  - `scoring_signature` hashable for reproducibility
+
 #### 2026-01-07
 **Expanded Model Families for TARGET_RANKING/FEATURE_SELECTION** - Full task-type coverage.
 - **NEW**: `logistic_regression` family - Standalone classification baseline (binary/multiclass)

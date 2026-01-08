@@ -104,3 +104,42 @@ canonical_names:
     symbol_specific:
       primary: accuracy__sym__mean
       std: accuracy__sym__std
+
+# =============================================================================
+# Scoring Configuration (P1)
+# =============================================================================
+# Versioned parameters for composite score calculation.
+# Hash of this section becomes scoring_signature for reproducibility.
+#
+# The t-stat based scoring provides a bounded [0,1] skill score that's
+# comparable across task types and aggregation methods.
+
+scoring:
+  version: "1.0"
+  
+  # Skill normalization via t-stat
+  # skill_tstat = mean / (std / sqrt(n))
+  # skill_score_01 = sigmoid(skill_tstat / skill_squash_k)
+  skill_squash_k: 3.0  # Higher = more compression toward 0.5
+  
+  # Stability normalization
+  # stability = 1 - clamp(std / std_ref, 0, 1)
+  std_ref: 0.2  # Reference std for normalization (task-type dependent override below)
+  
+  # Per-task std_ref overrides (if different from default)
+  std_ref_by_task:
+    regression: 0.2  # Typical std for R² / IC
+    binary_classification: 0.15  # Typical std for ROC-AUC
+    multiclass_classification: 0.2  # Typical std for accuracy
+  
+  # Component weights (must sum to 1.0)
+  weights:
+    performance: 0.50  # skill_score_01
+    coverage: 0.25     # n_cs_valid / n_cs_total
+    stability: 0.25    # 1 - clamp(std / std_ref, 0, 1)
+  
+  # Model bonus (multiplicative boost for model agreement)
+  model_bonus:
+    enabled: true
+    max_bonus: 0.10    # Maximum 10% boost
+    per_model: 0.02    # 2% per model

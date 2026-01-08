@@ -110,8 +110,8 @@ class TargetPredictabilityScore:
     target: str
     target_column: str
     task_type: TaskType  # REGRESSION, BINARY_CLASSIFICATION, or MULTICLASS_CLASSIFICATION
-    auc: float  # DEPRECATED: Use primary_score. Mean score (R² for regression, ROC-AUC for binary, accuracy for multiclass)
-    std_score: float  # Std of scores
+    auc: float  # DEPRECATED: Use primary_metric_mean. Mean score (R² for regression, ROC-AUC for binary, accuracy for multiclass)
+    std_score: float  # DEPRECATED: Use primary_metric_std. Std of scores
     mean_importance: float  # Mean absolute importance
     consistency: float  # 1 - CV(score) - lower is better
     n_models: int
@@ -131,6 +131,25 @@ class TargetPredictabilityScore:
     # Canonical metric naming (new, unambiguous naming scheme)
     view: str = "CROSS_SECTIONAL"  # "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
     
+    # === P0 CORRECTNESS FIELDS (2026-01 snapshot contract unification) ===
+    # Primary metric stats (explicit, not inferred from deprecated auc/std_score)
+    primary_metric_mean: Optional[float] = None  # Authoritative mean (falls back to auc if not set)
+    primary_metric_std: Optional[float] = None  # Authoritative std (falls back to std_score if not set)
+    primary_metric_tstat: Optional[float] = None  # t-stat: mean / (std / sqrt(n_cs_valid)) - universal skill signal
+    
+    # Invalid slice tracking (P0: track why cross-sections were excluded)
+    n_cs_valid: Optional[int] = None  # Number of valid cross-sections used in aggregation
+    n_cs_total: Optional[int] = None  # Total cross-sections before filtering
+    invalid_reason_counts: Optional[Dict[str, int]] = None  # {"single_class": 2, "insufficient_samples": 1, ...}
+    
+    # Classification-specific (P0: centered AUC for proper aggregation)
+    auc_mean_raw: Optional[float] = None  # Raw 0-1 AUC mean (classification only)
+    auc_excess_mean: Optional[float] = None  # Centered: auc - 0.5 (classification only, for aggregation)
+    
+    # Schema versioning (P1: track which schema produced this snapshot)
+    metrics_schema_version: str = "1.1"  # Bump when adding new fields
+    scoring_schema_version: str = "1.0"  # Bump when composite formula changes
+    
     # Backward compatibility: mean_r2 property
     @property
     def mean_r2(self) -> float:
@@ -145,6 +164,9 @@ class TargetPredictabilityScore:
     @property
     def primary_score(self) -> float:
         """Canonical alias for the primary metric value (replaces ambiguous 'auc')"""
+        # Prefer explicit primary_metric_mean if set, otherwise fall back to auc
+        if self.primary_metric_mean is not None:
+            return self.primary_metric_mean
         return self.auc
     
     @property
@@ -165,20 +187,44 @@ class TargetPredictabilityScore:
         from TRAINING.ranking.predictability.metrics_schema import get_canonical_metric_name
         return get_canonical_metric_name(self.task_type, self.view, "std")
     
+    @property
+    def effective_primary_std(self) -> float:
+        """Get effective primary std (prefers explicit, falls back to std_score)."""
+        if self.primary_metric_std is not None:
+            return self.primary_metric_std
+        return self.std_score
+    
+    @property
+    def coverage(self) -> float:
+        """Coverage ratio: n_cs_valid / n_cs_total (for composite scoring)."""
+        if self.n_cs_valid is not None and self.n_cs_total is not None and self.n_cs_total > 0:
+            return self.n_cs_valid / self.n_cs_total
+        return 1.0  # Assume full coverage if not tracked
+    
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         # Get canonical metric names (task-aware, view-aware)
         primary_name = self.primary_metric_name
         std_name = self.std_metric_name
         
+        # Use explicit primary_metric_mean/std if set, otherwise fall back to auc/std_score
+        effective_mean = self.primary_metric_mean if self.primary_metric_mean is not None else self.auc
+        effective_std = self.primary_metric_std if self.primary_metric_std is not None else self.std_score
+        
         result = {
             'target': self.target,
             'target_column': self.target_column,
             'task_type': self.task_type.name if hasattr(self, 'task_type') else 'REGRESSION',
             'view': getattr(self, 'view', 'CROSS_SECTIONAL'),
-            # Canonical metric names (new, unambiguous)
-            primary_name: float(self.auc),
-            std_name: float(self.std_score),
+            # Schema versions (P1)
+            'metrics_schema_version': getattr(self, 'metrics_schema_version', '1.1'),
+            'scoring_schema_version': getattr(self, 'scoring_schema_version', '1.0'),
+            # Canonical metric names (new, unambiguous) - use effective values
+            primary_name: float(effective_mean),
+            std_name: float(effective_std),
+            # P0: Explicit primary metric stats (authoritative)
+            'primary_metric_mean': float(effective_mean),
+            'primary_metric_std': float(effective_std),
             # DEPRECATED: legacy fields for backward compatibility
             'auc': float(self.auc),
             'std_score': float(self.std_score),
@@ -191,6 +237,24 @@ class TargetPredictabilityScore:
             'composite_score': float(self.composite_score),
             'leakage_flag': self.leakage_flag
         }
+        
+        # P0: Add t-stat if computed
+        if self.primary_metric_tstat is not None:
+            result['primary_metric_tstat'] = float(self.primary_metric_tstat)
+        
+        # P0: Add invalid slice tracking if available
+        if self.n_cs_valid is not None:
+            result['n_cs_valid'] = int(self.n_cs_valid)
+        if self.n_cs_total is not None:
+            result['n_cs_total'] = int(self.n_cs_total)
+        if self.invalid_reason_counts is not None:
+            result['invalid_reason_counts'] = self.invalid_reason_counts
+        
+        # P0: Add classification-specific centered AUC
+        if self.auc_mean_raw is not None:
+            result['auc_mean_raw'] = float(self.auc_mean_raw)
+        if self.auc_excess_mean is not None:
+            result['auc_excess_mean'] = float(self.auc_excess_mean)
         
         # Add composite score definition and version
         if self.composite_definition is not None:

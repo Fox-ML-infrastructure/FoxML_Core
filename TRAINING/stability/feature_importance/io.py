@@ -466,6 +466,11 @@ def create_fs_snapshot_from_importance(
     n_effective: Optional[int] = None,  # Effective sample count from FS
     feature_registry_hash: Optional[str] = None,  # Hash of feature registry
     comparable_key: Optional[str] = None,  # Pre-computed comparison key
+    # P0 correctness: selection mode fields
+    selection_mode: Optional[str] = None,  # "rank_only" | "top_k" | "threshold" | "importance_cutoff"
+    n_candidates: Optional[int] = None,  # Number of candidate features entering selection
+    n_selected: Optional[int] = None,  # Number of features after selection
+    selection_params: Optional[Dict] = None,  # {"k": 50} or {"threshold": 0.01}
 ) -> Optional['FeatureSelectionSnapshot']:
     """
     Create and save FeatureSelectionSnapshot from existing FeatureImportanceSnapshot.
@@ -505,6 +510,11 @@ def create_fs_snapshot_from_importance(
             n_effective=n_effective,
             feature_registry_hash=feature_registry_hash,
             comparable_key=comparable_key,
+            # P0 correctness: selection mode fields
+            selection_mode=selection_mode,
+            n_candidates=n_candidates,
+            n_selected=n_selected,
+            selection_params=selection_params,
         )
         
         # Set path relative to targets/
