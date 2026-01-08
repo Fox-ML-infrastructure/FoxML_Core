@@ -81,6 +81,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Was setting `view = None` then checking `if view:` (always False)
   - Now uses `metrics_view` to avoid shadowing the function parameter
 
+**FEATURE_SELECTION Stability Analysis and Diff Telemetry Fixes**
+- **FIX**: `io.py` now skips `manifest.json` when loading snapshots from `replicate/` directories
+  - `manifest.json` has different schema (no top-level `run_id`), causing KeyError during stability analysis
+  - Added to skip list alongside `fs_snapshot.json` in both `load_snapshots` functions
+- **FIX**: `feature_selector.py` now populates `library_versions` in `additional_data`
+  - Required for diff telemetry `ComparisonGroup` validation (FEATURE_SELECTION stage)
+  - Collects Python version, lightgbm, sklearn, numpy, pandas versions
+  - Fixes `ComparisonGroup missing required fields: ['hyperparameters_signature', 'library_versions_signature']` warning
+
 **Sample Limit Consistency Across Stages** - Consistent data for TR/FS/TRAINING.
 - **FIX**: `cross_sectional_feature_ranker.py` now respects `max_rows_per_symbol`
   - Was loading ALL data (188k samples) instead of config limit (2k per symbol)

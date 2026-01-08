@@ -189,8 +189,10 @@ def load_snapshots(
         
         # Load all snapshots in replicate group
         for path in sorted(replicate_dir.glob("*.json")):
-            # Skip fs_snapshot.json (different schema, not a FeatureImportanceSnapshot)
-            if path.name == "fs_snapshot.json":
+            # Skip files with different schemas (not FeatureImportanceSnapshot)
+            # - fs_snapshot.json: FeatureSelectionSnapshot schema
+            # - manifest.json: Per-replicate manifest with nested run_id (no top-level run_id)
+            if path.name in ("fs_snapshot.json", "manifest.json"):
                 continue
             try:
                 with path.open("r") as f:
@@ -229,8 +231,10 @@ def load_snapshots(
             return []
         
         for path in sorted(target_dir.glob("*.json")):
-            # Skip fs_snapshot.json (different schema, not a FeatureImportanceSnapshot)
-            if path.name == "fs_snapshot.json":
+            # Skip files with different schemas (not FeatureImportanceSnapshot)
+            # - fs_snapshot.json: FeatureSelectionSnapshot schema
+            # - manifest.json: Per-replicate manifest with nested run_id (no top-level run_id)
+            if path.name in ("fs_snapshot.json", "manifest.json"):
                 continue
             try:
                 with path.open("r") as f:

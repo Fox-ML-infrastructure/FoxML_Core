@@ -2558,7 +2558,43 @@ def select_features_for_target(
                     # If we have hyperparameters, add them to additional_data
                     if training_config:
                         additional_data_with_cohort['training'] = training_config
-                elif multi_model_config and isinstance(multi_model_config, dict):
+                
+                # Add library_versions for diff telemetry comparison group
+                # CRITICAL: Different library versions = different feature selection outcomes
+                try:
+                    from TRAINING.common.utils.config_hashing import get_library_versions
+                    library_versions = get_library_versions()
+                    if library_versions:
+                        additional_data_with_cohort['library_versions'] = library_versions
+                except ImportError:
+                    # Fallback: collect versions manually
+                    import sys
+                    library_versions = {'python_version': f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"}
+                    try:
+                        import lightgbm
+                        library_versions['lightgbm'] = lightgbm.__version__
+                    except ImportError:
+                        pass
+                    try:
+                        import sklearn
+                        library_versions['sklearn'] = sklearn.__version__
+                    except ImportError:
+                        pass
+                    try:
+                        import numpy
+                        library_versions['numpy'] = numpy.__version__
+                    except ImportError:
+                        pass
+                    try:
+                        import pandas
+                        library_versions['pandas'] = pandas.__version__
+                    except ImportError:
+                        pass
+                    additional_data_with_cohort['library_versions'] = library_versions
+                except Exception:
+                    pass  # Non-critical, diff telemetry will warn but continue
+                
+                if not model_families_config and multi_model_config and isinstance(multi_model_config, dict):
                     # Fallback: try to extract from multi_model_config
                     # This is a legacy format, but try to extract hyperparameters if available
                     if 'model_families' in multi_model_config:
