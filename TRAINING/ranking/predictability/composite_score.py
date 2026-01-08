@@ -268,7 +268,10 @@ def calculate_composite_score_tstat(
             from TRAINING.ranking.predictability.metrics_schema import _load_metrics_schema
             schema = _load_metrics_schema()
             scoring_config = schema.get("scoring", {})
-        except Exception:
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to load scoring config from metrics_schema.yaml: {e}, using defaults")
             scoring_config = {}
     
     # Extract params with defaults

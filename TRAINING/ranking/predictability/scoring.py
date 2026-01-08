@@ -205,8 +205,14 @@ class TargetPredictabilityScore:
             return self.n_cs_valid / self.n_cs_total
         return 1.0  # Assume full coverage if not tracked
     
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
+    def to_dict(self, filter_task_irrelevant: bool = False) -> Dict[str, Any]:
+        """
+        Convert to dictionary for JSON serialization.
+        
+        Args:
+            filter_task_irrelevant: If True, exclude fields not relevant to this task type
+                (e.g., auc_mean_raw/auc_excess_mean for regression, regression-specific fields for classification)
+        """
         # Get canonical metric names (task-aware, view-aware)
         primary_name = self.primary_metric_name
         std_name = self.std_metric_name
@@ -258,11 +264,32 @@ class TargetPredictabilityScore:
         if self.invalid_reason_counts is not None:
             result['invalid_reason_counts'] = self.invalid_reason_counts
         
-        # P0: Add classification-specific centered AUC
-        if self.auc_mean_raw is not None:
-            result['auc_mean_raw'] = float(self.auc_mean_raw)
-        if self.auc_excess_mean is not None:
-            result['auc_excess_mean'] = float(self.auc_excess_mean)
+        # P0: Add classification-specific centered AUC (only for classification tasks if filtering)
+        if filter_task_irrelevant:
+            # Only include classification-specific fields if this is a classification task
+            try:
+                from TRAINING.common.utils.task_types import TaskType
+                task_type = getattr(self, 'task_type', None)
+                is_classification = task_type and task_type in (
+                    TaskType.BINARY_CLASSIFICATION, TaskType.MULTICLASS_CLASSIFICATION
+                )
+                if is_classification:
+                    if self.auc_mean_raw is not None:
+                        result['auc_mean_raw'] = float(self.auc_mean_raw)
+                    if self.auc_excess_mean is not None:
+                        result['auc_excess_mean'] = float(self.auc_excess_mean)
+            except ImportError:
+                # If TaskType not available, include all fields (backward compatibility)
+                if self.auc_mean_raw is not None:
+                    result['auc_mean_raw'] = float(self.auc_mean_raw)
+                if self.auc_excess_mean is not None:
+                    result['auc_excess_mean'] = float(self.auc_excess_mean)
+        else:
+            # Include all fields (default behavior)
+            if self.auc_mean_raw is not None:
+                result['auc_mean_raw'] = float(self.auc_mean_raw)
+            if self.auc_excess_mean is not None:
+                result['auc_excess_mean'] = float(self.auc_excess_mean)
         
         # Phase 3.1: Add scoring signature for determinism
         if self.scoring_signature is not None:

@@ -7764,7 +7764,8 @@ def evaluate_target_predictability(
                         metrics_dict["median_score"] = float(np.median(valid_scores))
                 
                 # Add enhanced leakage info (use to_dict to get the structured format)
-                result_dict = result.to_dict()
+                # Phase 3.1: Enable task-aware field filtering (exclude task-irrelevant fields)
+                result_dict = result.to_dict(filter_task_irrelevant=True)
                 if 'leakage' in result_dict:
                     metrics_dict['leakage'] = result_dict['leakage']
                 # Also include legacy leakage_flag for backward compatibility
