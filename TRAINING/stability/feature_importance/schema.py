@@ -266,6 +266,7 @@ class FeatureSelectionSnapshot:
     metrics_sha256: Optional[str] = None  # Hash of outputs.metrics for drift detection
     artifacts_manifest_sha256: Optional[str] = None  # Hash of output artifacts for tampering detection
     predictions_sha256: Optional[str] = None  # Aggregated prediction hash
+    selection_signature: Optional[str] = None  # SHA256 hash of selection parameters for determinism
     
     # Selection mode (P0 correctness: clarify whether actual selection happened)
     # "rank_only" = full ranking, no selection (n_selected == n_candidates)
@@ -285,6 +286,7 @@ class FeatureSelectionSnapshot:
         "feature_fingerprint_input": "hash of candidate features before selection",
         "feature_fingerprint_output": "hash of selected features after selection",
         "target_fingerprint": "hash of target name, view, horizon_minutes, and labeling_impl_hash",
+        "selection_signature": "hash of selection parameters (mode, params, aggregation config) for determinism",
     })
     
     # Inputs (mirrors TARGET_RANKING)
@@ -351,6 +353,7 @@ class FeatureSelectionSnapshot:
             "metrics_sha256": self.metrics_sha256,
             "artifacts_manifest_sha256": self.artifacts_manifest_sha256,
             "predictions_sha256": self.predictions_sha256,
+            "selection_signature": self.selection_signature,  # Determinism hash of selection parameters
             "fingerprint_sources": self.fingerprint_sources,
             "inputs": self.inputs,
             "process": self.process,
@@ -388,6 +391,7 @@ class FeatureSelectionSnapshot:
             metrics_sha256=data.get("metrics_sha256"),
             artifacts_manifest_sha256=data.get("artifacts_manifest_sha256"),
             predictions_sha256=data.get("predictions_sha256"),
+            selection_signature=data.get("selection_signature"),  # Determinism hash of selection parameters
             fingerprint_sources=data.get("fingerprint_sources", {}),
             inputs=data.get("inputs", {}),
             process=data.get("process", {}),
@@ -515,6 +519,35 @@ class FeatureSelectionSnapshot:
                 # Default: assume some selection happened if n_selected < n_candidates
                 actual_selection_mode = "top_k" if actual_n_selected < actual_n_candidates else "rank_only"
         
+        # Compute selection_signature (hash of selection parameters for determinism)
+        # Similar to scoring_signature for TARGET_RANKING composite scoring
+        selection_signature = None
+        try:
+            # Extract aggregation config from inputs if available
+            aggregation_config = {}
+            if inputs:
+                # Try to get aggregation config from inputs.config or inputs.aggregation
+                config_section = inputs.get("config", {})
+                if "aggregation" in config_section:
+                    aggregation_config = config_section["aggregation"]
+                elif "aggregation" in inputs:
+                    aggregation_config = inputs["aggregation"]
+            
+            # Build selection params dict (all parameters that affect selection outcome)
+            selection_params_dict = {
+                "selection_mode": actual_selection_mode,
+                "selection_params": selection_params or {},
+                "aggregation": aggregation_config,  # Include aggregation method/config if available
+                "version": "1.0",  # Version for future schema changes
+            }
+            # Canonical JSON (sorted keys) for deterministic hashing
+            selection_params_json = json.dumps(selection_params_dict, sort_keys=True, separators=(',', ':'))
+            selection_signature = hashlib.sha256(selection_params_json.encode()).hexdigest()
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.debug(f"Failed to compute selection_signature: {e}")
+        
         return cls(
             run_id=importance_snapshot.run_id,
             timestamp=importance_snapshot.created_at.isoformat(),
@@ -542,6 +575,7 @@ class FeatureSelectionSnapshot:
             n_candidates=actual_n_candidates,
             n_selected=actual_n_selected,
             selection_params=selection_params or {},
+            selection_signature=selection_signature,  # Determinism hash of selection parameters
         )
     
     def get_index_key(self) -> str:

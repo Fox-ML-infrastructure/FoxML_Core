@@ -46,6 +46,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Regression targets: Excludes `auc_mean_raw` and `auc_excess_mean` (classification-only)
   - Classification targets: Includes all relevant fields
   - Cleaner, more focused metrics output per task type
+- **NEW**: Determinism tracking across all pipeline stages
+  - **TARGET_RANKING**: `scoring_signature` - SHA256 hash of composite scoring parameters
+  - **FEATURE_SELECTION**: `selection_signature` - SHA256 hash of selection parameters (mode, params, aggregation config)
+  - **TRAINING**: `hyperparameters_signature` - Already exists, hashes model hyperparameters
+  - Enables end-to-end determinism verification: TR → FS → Training
+  - Reuses existing fingerprint patterns for consistency
 
 **Snapshot Contract Unification** - P0/P1 correctness fixes for TARGET_RANKING and FEATURE_SELECTION.
 
