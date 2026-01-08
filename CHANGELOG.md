@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **NEW**: Guards in t-stat computation - `n_valid < 2` → `t = 0.0`, `se_floor`, `tcap` clamping
 - **UPDATE**: `scoring_schema_version` bumped to `1.1` in all snapshot schemas
 - **UPDATE**: `CONFIG/ranking/metrics_schema.yaml` scoring section with Phase 3.1 params
+- **FIX**: Phase 3.1 metrics output - Canonical metric names now use centered values (`primary_metric_mean` instead of raw `auc`)
+  - All Phase 3.1 fields (`primary_se`, `scoring_signature`, `auc_excess_mean`, etc.) now appear in `metrics.json`, `metrics.parquet`, and `snapshot.json`
+  - Enables direct comparison of binary classification and regression targets via normalized composite scores
 
 **Snapshot Contract Unification** - P0/P1 correctness fixes for TARGET_RANKING and FEATURE_SELECTION.
 

@@ -7722,9 +7722,12 @@ def evaluate_target_predictability(
                 n_features_final = len(feature_names) if 'feature_names' in locals() and feature_names else None
                 
                 # Get canonical metric names for this task/view combination
+                # Phase 3.1: Use centered primary_metric_mean instead of raw auc
                 from TRAINING.ranking.predictability.metrics_schema import get_canonical_metric_names_for_output
+                primary_value = result.primary_metric_mean if result.primary_metric_mean is not None else result.auc
+                primary_std_value = result.primary_metric_std if result.primary_metric_std is not None else result.std_score
                 canonical_metrics = get_canonical_metric_names_for_output(
-                    result.task_type, result.view, result.auc, result.std_score
+                    result.task_type, result.view, primary_value, primary_std_value
                 )
                 
                 # Start with base metrics - includes canonical names + deprecated legacy names
@@ -7766,6 +7769,13 @@ def evaluate_target_predictability(
                     metrics_dict['leakage'] = result_dict['leakage']
                 # Also include legacy leakage_flag for backward compatibility
                 metrics_dict['leakage_flag'] = result.leakage_flag
+                
+                # Phase 3.1: Merge all Phase 3.1 fields from result.to_dict() into metrics_dict
+                # Exclude fields already in metrics_dict to avoid overwriting
+                exclude_fields = {'leakage', 'target', 'target_column', 'task_type', 'view', 'metric_name'}
+                for key, value in result_dict.items():
+                    if key not in exclude_fields and key not in metrics_dict:
+                        metrics_dict[key] = value
                 
                 # Add task-aware target stats (replaces unconditional pos_rate)
                 if 'y' in locals() and y is not None and 'result' in locals():
