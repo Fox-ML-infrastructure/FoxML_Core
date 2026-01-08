@@ -610,9 +610,11 @@ class MetricsAggregator:
             target_clean = target.replace('/', '_').replace('\\', '_')
             
             # Try target-first structure with view scoping (new path)
+            # NOTE: ensure_exists=False to avoid creating empty directories when reading
             try:
                 snapshot_base_dir_scoped = get_snapshot_base_dir(
-                    base_output_dir, target=target_clean, view=view, symbol=symbol
+                    base_output_dir, target=target_clean, view=view, symbol=symbol,
+                    ensure_exists=False
                 )
             except Exception:
                 snapshot_base_dir_scoped = None

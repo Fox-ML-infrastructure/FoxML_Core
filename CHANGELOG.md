@@ -89,6 +89,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Required for diff telemetry `ComparisonGroup` validation (FEATURE_SELECTION stage)
   - Collects Python version, lightgbm, sklearn, numpy, pandas versions
   - Fixes `ComparisonGroup missing required fields: ['hyperparameters_signature', 'library_versions_signature']` warning
+- **FIX**: `get_snapshot_base_dir()` now accepts `ensure_exists` parameter (default True)
+  - When False, returns path without creating directories (for read operations)
+  - Prevents empty `reproducibility/CROSS_SECTIONAL/feature_importance_snapshots/` directories
+  - `metrics_aggregator.py` now passes `ensure_exists=False` when searching for snapshots
 
 **Sample Limit Consistency Across Stages** - Consistent data for TR/FS/TRAINING.
 - **FIX**: `cross_sectional_feature_ranker.py` now respects `max_rows_per_symbol`

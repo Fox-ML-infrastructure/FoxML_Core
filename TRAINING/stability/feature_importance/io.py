@@ -272,6 +272,7 @@ def get_snapshot_base_dir(
     symbol: Optional[str] = None,
     universe_sig: Optional[str] = None,
     stage: Optional[str] = None,
+    ensure_exists: bool = True,
 ) -> Path:
     """
     Get base directory for snapshots.
@@ -286,6 +287,8 @@ def get_snapshot_base_dir(
         symbol: Symbol name for SYMBOL_SPECIFIC view
         universe_sig: Universe signature for additional scoping within view
         stage: Optional stage name (TARGET_RANKING, FEATURE_SELECTION, TRAINING) - uses SST if not provided
+        ensure_exists: If True (default), create the directory if it doesn't exist.
+                       Set to False when reading to avoid creating empty directories.
     
     Returns:
         Path to base snapshot directory
@@ -315,14 +318,23 @@ def get_snapshot_base_dir(
         if base_output_dir.exists() and (base_output_dir / "targets").exists():
             try:
                 from TRAINING.orchestration.utils.target_first_paths import (
-                    ensure_scoped_artifact_dir, ensure_target_structure
+                    ensure_scoped_artifact_dir, get_scoped_artifact_dir, ensure_target_structure
                 )
                 target_clean = target.replace('/', '_').replace('\\', '_')
-                ensure_target_structure(base_output_dir, target_clean)
-                return ensure_scoped_artifact_dir(
-                    base_output_dir, target_clean, "feature_importance_snapshots",
-                    view=view, symbol=symbol, universe_sig=universe_sig, stage=stage
-                )
+                
+                if ensure_exists:
+                    # Writing: create directories
+                    ensure_target_structure(base_output_dir, target_clean)
+                    return ensure_scoped_artifact_dir(
+                        base_output_dir, target_clean, "feature_importance_snapshots",
+                        view=view, symbol=symbol, universe_sig=universe_sig, stage=stage
+                    )
+                else:
+                    # Reading: don't create directories (prevents empty dir pollution)
+                    return get_scoped_artifact_dir(
+                        base_output_dir, target_clean, "feature_importance_snapshots",
+                        view=view, symbol=symbol, universe_sig=universe_sig, stage=stage
+                    )
             except Exception as e:
                 # If target-first structure fails, raise error (no fallback to artifacts)
                 raise RuntimeError(
