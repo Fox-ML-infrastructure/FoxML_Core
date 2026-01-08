@@ -106,37 +106,52 @@ canonical_names:
       std: accuracy__sym__std
 
 # =============================================================================
-# Scoring Configuration (P1)
+# Scoring Configuration (P1 - Phase 3.1)
 # =============================================================================
 # Versioned parameters for composite score calculation.
 # Hash of this section becomes scoring_signature for reproducibility.
 #
-# The t-stat based scoring provides a bounded [0,1] skill score that's
-# comparable across task types and aggregation methods.
+# Phase 3.1 fixes:
+# - SE-based stability (not std-based) for cross-family comparability
+# - Skill-gated composite (skill * quality, not additive)
+# - Classification centering (AUC-excess, not raw AUC)
+# - Deterministic invalid slice filtering
 
 scoring:
-  version: "1.0"
+  version: "1.1"  # Bump for Phase 3.1 fixes
   
   # Skill normalization via t-stat
-  # skill_tstat = mean / (std / sqrt(n))
+  # skill_tstat = mean / (std / sqrt(n)) = mean / se
   # skill_score_01 = sigmoid(skill_tstat / skill_squash_k)
   skill_squash_k: 3.0  # Higher = more compression toward 0.5
+  tcap: 12.0  # Clamp t-stat to [-tcap, tcap] to prevent extreme values
+  se_floor: 1e-6  # Minimum SE to prevent division by zero
   
-  # Stability normalization
-  # stability = 1 - clamp(std / std_ref, 0, 1)
-  std_ref: 0.2  # Reference std for normalization (task-type dependent override below)
+  # Stability normalization (SE-based, not std-based for cross-family comparability)
+  # stability = 1 - clamp(se / se_ref, 0, 1)
+  se_ref: 0.02  # Reference SE for normalization
+  se_ref_by_task:
+    regression: 0.02
+    binary_classification: 0.015
+    multiclass_classification: 0.02
   
-  # Per-task std_ref overrides (if different from default)
-  std_ref_by_task:
-    regression: 0.2  # Typical std for R² / IC
-    binary_classification: 0.15  # Typical std for ROC-AUC
-    multiclass_classification: 0.2  # Typical std for accuracy
+  # Invalid slice filtering
+  min_samples_per_slice: 10  # Minimum samples per slice (timestamp or symbol)
   
-  # Component weights (must sum to 1.0)
+  # Component weights (for quality = w_cov * coverage + w_stab * stability)
+  # Composite form: skill * quality (multiplicative, not additive)
   weights:
-    performance: 0.50  # skill_score_01
-    coverage: 0.25     # n_cs_valid / n_cs_total
-    stability: 0.25    # 1 - clamp(std / std_ref, 0, 1)
+    w_cov: 0.3  # Coverage weight
+    w_stab: 0.7  # Stability weight
+  
+  # Composite form: skill * quality (prevents no-skill targets from ranking high)
+  composite_form: "skill_times_quality_v1"
+  
+  # Primary metric by task type (for t-stat computation)
+  # Both are centered at null baseline ≈ 0
+  primary_metric_by_type:
+    regression: "spearman_ic"  # Null baseline ≈ 0
+    classification: "auc_excess"  # Null baseline ≈ 0 (AUC - 0.5)
   
   # Model bonus (multiplicative boost for model agreement)
   model_bonus:

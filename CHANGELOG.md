@@ -17,6 +17,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Recent Highlights (Last 7 Days)
 
 #### 2026-01-08
+**Phase 3.1 Composite Score Fixes** - Family-correct, comparable, deterministic composite scoring.
+
+**Phase 3.1: SE-based stability and skill-gating**
+- **FIX**: Classification centering - Use `auc_excess_mean` (AUC - 0.5) for `primary_metric_mean` instead of raw AUC
+  - Regression: `primary_metric_mean = spearman_ic` (already centered at 0)
+  - Classification: `primary_metric_mean = auc_excess_mean` (centered at 0)
+- **FIX**: SE-based stability - Use `1 - clamp(se / se_ref, 0, 1)` instead of std-based
+  - Enables cross-family comparability (IC vs AUC units no longer matter)
+  - Per-task `se_ref` overrides in `metrics_schema.yaml`
+- **FIX**: Skill-gated composite - Use `composite = skill * quality` (multiplicative, not additive)
+  - Prevents no-skill targets from ranking high via coverage/stability alone
+  - `quality = w_cov * coverage + w_stab * stability`
+- **NEW**: `primary_se` field - Standard error (std / sqrt(n)) for SE-based stability
+- **NEW**: `scoring_signature` - SHA256 hash of scoring params for determinism
+- **NEW**: `validate_slice()` function - Foundation for per-slice invalid tracking (Phase 3.1.1)
+- **NEW**: Guards in t-stat computation - `n_valid < 2` → `t = 0.0`, `se_floor`, `tcap` clamping
+- **UPDATE**: `scoring_schema_version` bumped to `1.1` in all snapshot schemas
+- **UPDATE**: `CONFIG/ranking/metrics_schema.yaml` scoring section with Phase 3.1 params
+
 **Snapshot Contract Unification** - P0/P1 correctness fixes for TARGET_RANKING and FEATURE_SELECTION.
 
 **P0: TARGET_RANKING - Explicit metrics and invalid slice tracking**

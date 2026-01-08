@@ -133,9 +133,10 @@ class TargetPredictabilityScore:
     
     # === P0 CORRECTNESS FIELDS (2026-01 snapshot contract unification) ===
     # Primary metric stats (explicit, not inferred from deprecated auc/std_score)
-    primary_metric_mean: Optional[float] = None  # Authoritative mean (falls back to auc if not set)
+    primary_metric_mean: Optional[float] = None  # Authoritative mean (centered: IC for regression, AUC-excess for classification)
     primary_metric_std: Optional[float] = None  # Authoritative std (falls back to std_score if not set)
-    primary_metric_tstat: Optional[float] = None  # t-stat: mean / (std / sqrt(n_cs_valid)) - universal skill signal
+    primary_metric_tstat: Optional[float] = None  # t-stat: mean / se - universal skill signal
+    primary_se: Optional[float] = None  # Phase 3.1: Standard error (std / sqrt(n)) for SE-based stability
     
     # Invalid slice tracking (P0: track why cross-sections were excluded)
     n_cs_valid: Optional[int] = None  # Number of valid cross-sections used in aggregation
@@ -148,7 +149,10 @@ class TargetPredictabilityScore:
     
     # Schema versioning (P1: track which schema produced this snapshot)
     metrics_schema_version: str = "1.1"  # Bump when adding new fields
-    scoring_schema_version: str = "1.0"  # Bump when composite formula changes
+    scoring_schema_version: str = "1.1"  # Phase 3.1: Bump for SE-based stability, skill-gating, classification centering
+    
+    # Phase 3.1: Scoring signature for determinism
+    scoring_signature: Optional[str] = None  # SHA256 hash of scoring params
     
     # Backward compatibility: mean_r2 property
     @property
@@ -242,6 +246,10 @@ class TargetPredictabilityScore:
         if self.primary_metric_tstat is not None:
             result['primary_metric_tstat'] = float(self.primary_metric_tstat)
         
+        # Phase 3.1: Add primary_se (standard error) for SE-based stability
+        if self.primary_se is not None:
+            result['primary_se'] = float(self.primary_se)
+        
         # P0: Add invalid slice tracking if available
         if self.n_cs_valid is not None:
             result['n_cs_valid'] = int(self.n_cs_valid)
@@ -255,6 +263,10 @@ class TargetPredictabilityScore:
             result['auc_mean_raw'] = float(self.auc_mean_raw)
         if self.auc_excess_mean is not None:
             result['auc_excess_mean'] = float(self.auc_excess_mean)
+        
+        # Phase 3.1: Add scoring signature for determinism
+        if self.scoring_signature is not None:
+            result['scoring_signature'] = self.scoring_signature
         
         # Add composite score definition and version
         if self.composite_definition is not None:

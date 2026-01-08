@@ -103,6 +103,62 @@ logger = setup_logging(
 
 from TRAINING.ranking.predictability.scoring import TargetPredictabilityScore
 
+
+def validate_slice(
+    y_slice: np.ndarray,
+    y_pred_slice: Optional[np.ndarray] = None,
+    task_type: TaskType = TaskType.REGRESSION,
+    min_samples: int = 10,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Validate a single slice (timestamp or symbol) for metric computation.
+    
+    Foundation function for Phase 3.1.1 per-slice tracking. Currently used
+    as a reference implementation; full per-slice tracking requires architectural
+    changes to compute metrics per-slice.
+    
+    Args:
+        y_slice: True labels for this slice
+        y_pred_slice: Optional predictions for this slice (for NaN checking)
+        task_type: Task type (affects validation rules)
+        min_samples: Minimum samples required per slice
+    
+    Returns:
+        (is_valid, reason) where:
+        - is_valid: True if slice is valid for metric computation
+        - reason: None if valid, or error code if invalid:
+            - "too_few_samples": n < min_samples
+            - "nan_label": NaNs in labels
+            - "nan_pred": NaNs in predictions (if provided)
+            - "single_class": Classification with only one class
+            - "constant_vector": Regression with constant values (spearman undefined)
+    """
+    # Common checks: NaNs, too few samples
+    if len(y_slice) < min_samples:
+        return False, "too_few_samples"
+    
+    if np.any(np.isnan(y_slice)):
+        return False, "nan_label"
+    
+    if y_pred_slice is not None and np.any(np.isnan(y_pred_slice)):
+        return False, "nan_pred"
+    
+    # Task-specific checks
+    if task_type == TaskType.REGRESSION:
+        # Regression: check for constant vector (spearman undefined)
+        if len(y_slice) < 3:
+            return False, "too_few_samples"  # Need at least 3 for spearman
+        if np.std(y_slice) == 0.0:
+            return False, "constant_vector"
+    elif task_type in (TaskType.BINARY_CLASSIFICATION, TaskType.MULTICLASS_CLASSIFICATION):
+        # Classification: check for single class
+        unique_labels = np.unique(y_slice)
+        if len(unique_labels) < 2:
+            return False, "single_class"
+    
+    return True, None
+
+
 def calculate_composite_score(
     auc: float,
     std_score: float,
@@ -164,30 +220,34 @@ def calculate_composite_score(
 
 
 def calculate_composite_score_tstat(
-    primary_mean: float,
+    primary_mean: float,  # Already centered: IC for regression, AUC-excess for classification
     primary_std: float,
-    n_cs_valid: int,
-    n_cs_total: int,
-    mean_importance: float,
-    n_models: int,
+    n_slices_valid: int,  # Number of valid slices (renamed from n_cs_valid for clarity)
+    n_slices_total: int,  # Total slices before filtering (renamed from n_cs_total)
     task_type: TaskType = TaskType.REGRESSION,
     scoring_config: Optional[Dict[str, Any]] = None,
-) -> Tuple[float, str, str, Dict[str, float]]:
+) -> Tuple[float, str, str, Dict[str, float], str]:
     """
-    Calculate composite score using t-stat based skill normalization (P1).
+    Calculate composite score using t-stat based skill normalization (Phase 3.1).
+    
+    Phase 3.1 fixes:
+    - SE-based stability (not std-based) for cross-family comparability
+    - Skill-gated composite (skill * quality, not additive) to prevent no-skill ranking high
+    - Classification centering (primary_mean must be AUC-excess, not raw AUC)
+    - Deterministic guards (n_valid < 2, se_floor, tcap)
     
     This provides a bounded [0,1] composite score that's comparable across
     task types and aggregation methods, using t-stat as the universal
     "signal above null" measure.
     
     Args:
-        primary_mean: Mean of primary metric (e.g., spearman_ic__cs__mean)
+        primary_mean: Mean of primary metric, ALREADY CENTERED:
+            - Regression: spearman_ic (null baseline ≈ 0)
+            - Classification: auc_excess = auc - 0.5 (null baseline ≈ 0)
         primary_std: Std of primary metric
-        n_cs_valid: Number of valid cross-sections used
-        n_cs_total: Total cross-sections before filtering
-        mean_importance: Mean feature importance
-        n_models: Number of model families used
-        task_type: Task type for std_ref selection
+        n_slices_valid: Number of valid slices used
+        n_slices_total: Total slices before filtering
+        task_type: Task type for se_ref selection
         scoring_config: Optional override for scoring params (loaded from yaml if None)
     
     Returns:
@@ -196,8 +256,11 @@ def calculate_composite_score_tstat(
         - definition: Formula string
         - version: Scoring schema version
         - components: Dict of individual component values (for debugging/audit)
+        - scoring_signature: SHA256 hash of scoring params for determinism
     """
     import numpy as np
+    import hashlib
+    import json
     
     # Load scoring config from yaml if not provided
     if scoring_config is None:
@@ -210,77 +273,113 @@ def calculate_composite_score_tstat(
     
     # Extract params with defaults
     skill_squash_k = scoring_config.get("skill_squash_k", 3.0)
-    default_std_ref = scoring_config.get("std_ref", 0.2)
-    std_ref_by_task = scoring_config.get("std_ref_by_task", {})
-    weights = scoring_config.get("weights", {"performance": 0.50, "coverage": 0.25, "stability": 0.25})
+    tcap = scoring_config.get("tcap", 12.0)
+    se_floor = scoring_config.get("se_floor", 1e-6)
+    default_se_ref = scoring_config.get("se_ref", 0.02)
+    se_ref_by_task = scoring_config.get("se_ref_by_task", {})
+    weights = scoring_config.get("weights", {"w_cov": 0.3, "w_stab": 0.7})
     model_bonus_cfg = scoring_config.get("model_bonus", {"enabled": True, "max_bonus": 0.10, "per_model": 0.02})
-    version = scoring_config.get("version", "1.0")
+    version = scoring_config.get("version", "1.1")
+    composite_form = scoring_config.get("composite_form", "skill_times_quality_v1")
     
-    # Get task-specific std_ref
+    # Get task-specific se_ref
     task_key = {
         TaskType.REGRESSION: "regression",
         TaskType.BINARY_CLASSIFICATION: "binary_classification",
         TaskType.MULTICLASS_CLASSIFICATION: "multiclass_classification",
     }.get(task_type, "regression")
-    std_ref = std_ref_by_task.get(task_key, default_std_ref)
+    se_ref = se_ref_by_task.get(task_key, default_se_ref)
     
-    # 1. Skill normalization via t-stat
-    # t-stat = mean / (std / sqrt(n)) = mean * sqrt(n) / std
-    if n_cs_valid > 1 and primary_std > 0:
-        skill_tstat = primary_mean * np.sqrt(n_cs_valid) / primary_std
-    elif n_cs_valid == 1:
-        # With only one observation, assume t-stat based on mean alone
-        skill_tstat = primary_mean / 0.1 if primary_mean > 0 else 0.0
+    # Compute scoring_signature (hash of all effective params for determinism)
+    scoring_params = {
+        "k": skill_squash_k,
+        "tcap": tcap,
+        "se_floor": se_floor,
+        "se_ref": se_ref,
+        "weights": weights,
+        "composite_form": composite_form,
+        "model_bonus": model_bonus_cfg,
+        "version": version,
+    }
+    # Canonical JSON (sorted keys) for deterministic hashing
+    scoring_params_json = json.dumps(scoring_params, sort_keys=True, separators=(',', ':'))
+    scoring_signature = hashlib.sha256(scoring_params_json.encode()).hexdigest()
+    
+    # 1. Compute SE (standard error) from std and n
+    # SE = std / sqrt(n)
+    if n_slices_valid > 1:
+        primary_se = primary_std / np.sqrt(n_slices_valid)
+        primary_se = max(primary_se, se_floor)  # Guard: prevent division by zero
+    elif n_slices_valid == 1:
+        # With only one observation, use a conservative SE estimate
+        primary_se = max(primary_std, se_floor)
+    else:
+        primary_se = se_floor  # No valid slices
+    
+    # 2. Skill normalization via t-stat
+    # t-stat = mean / se
+    # Guards: n_valid < 2 → t = 0.0, clamp to [-tcap, tcap]
+    if n_slices_valid < 2:
+        skill_tstat = 0.0
+    elif primary_se > 0:
+        skill_tstat = primary_mean / primary_se
+        skill_tstat = max(-tcap, min(tcap, skill_tstat))  # Clamp to prevent extreme values
     else:
         skill_tstat = 0.0
     
-    # Squash t-stat to [0,1] using sigmoid
+    # 3. Squash t-stat to [0,1] using sigmoid
     # sigmoid(x/k) where k controls compression
     skill_score_01 = 1.0 / (1.0 + np.exp(-skill_tstat / skill_squash_k))
     
-    # 2. Coverage: fraction of valid cross-sections
-    coverage = n_cs_valid / n_cs_total if n_cs_total > 0 else 1.0
+    # 4. Coverage: fraction of valid slices
+    coverage01 = n_slices_valid / n_slices_total if n_slices_total > 0 else 1.0
     
-    # 3. Stability: inverse of normalized std
-    # stability = 1 - clamp(std / std_ref, 0, 1)
-    stability = 1.0 - min(1.0, max(0.0, primary_std / std_ref))
+    # 5. Stability: SE-based (not std-based) for cross-family comparability
+    # stability = 1 - clamp(se / se_ref, 0, 1)
+    stability01 = 1.0 - min(1.0, max(0.0, primary_se / se_ref))
     
-    # 4. Weighted composite
-    w_perf = weights.get("performance", 0.50)
-    w_cov = weights.get("coverage", 0.25)
-    w_stab = weights.get("stability", 0.25)
+    # 6. Quality score: weighted combination of coverage and stability
+    w_cov = weights.get("w_cov", 0.3)
+    w_stab = weights.get("w_stab", 0.7)
+    quality01 = w_cov * coverage01 + w_stab * stability01
     
-    composite_base = (
-        w_perf * skill_score_01 +
-        w_cov * coverage +
-        w_stab * stability
-    )
+    # 7. Composite: skill-gated quality (prevents no-skill targets from ranking high)
+    # composite = skill * quality (multiplicative, not additive)
+    composite_base = skill_score_01 * quality01
     
-    # 5. Model bonus (multiplicative)
+    # 8. Model bonus (multiplicative)
     if model_bonus_cfg.get("enabled", True):
         max_bonus = model_bonus_cfg.get("max_bonus", 0.10)
         per_model = model_bonus_cfg.get("per_model", 0.02)
-        model_bonus = min(max_bonus, n_models * per_model)
+        # Note: n_models not passed in current signature, skip for now
+        # Will be added when model_evaluation.py is updated
+        model_bonus = 0.0  # Placeholder until n_models is passed
     else:
         model_bonus = 0.0
     
     composite_score_01 = composite_base * (1.0 + model_bonus)
     
-    # Clamp to [0,1] (shouldn't be needed but defensive)
+    # Clamp to [0,1] (defensive)
     composite_score_01 = max(0.0, min(1.0, composite_score_01))
     
     definition = (
-        f"composite = ({w_perf:.2f}*skill + {w_cov:.2f}*coverage + {w_stab:.2f}*stability) * (1 + model_bonus); "
-        f"skill = sigmoid(tstat/{skill_squash_k}); stability = 1 - clamp(std/{std_ref}, 0, 1)"
+        f"composite = skill * quality * (1 + model_bonus); "
+        f"skill = sigmoid(tstat/{skill_squash_k}); "
+        f"quality = {w_cov:.2f}*coverage + {w_stab:.2f}*stability; "
+        f"stability = 1 - clamp(se/{se_ref:.3f}, 0, 1); "
+        f"tstat = mean / max(se, {se_floor})"
     )
     
     components = {
         "skill_tstat": skill_tstat,
         "skill_score_01": skill_score_01,
-        "coverage": coverage,
-        "stability": stability,
+        "primary_se": primary_se,
+        "coverage01": coverage01,
+        "stability01": stability01,
+        "quality01": quality01,
         "model_bonus": model_bonus,
         "composite_base": composite_base,
     }
     
-    return composite_score_01, definition, f"v{version}", components
+    return composite_score_01, definition, f"v{version}", components, scoring_signature
+

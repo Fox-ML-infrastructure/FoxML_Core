@@ -256,7 +256,7 @@ class FeatureSelectionSnapshot:
     # Fingerprints (for determinism verification)
     fingerprint_schema_version: str = "1.0"
     metrics_schema_version: str = "1.1"  # Bump when metrics structure changes (added 2026-01)
-    scoring_schema_version: str = "1.0"  # Bump when composite formula changes
+    scoring_schema_version: str = "1.1"  # Phase 3.1: SE-based stability, skill-gating, classification centering
     config_fingerprint: Optional[str] = None
     data_fingerprint: Optional[str] = None
     feature_fingerprint: Optional[str] = None  # Alias for feature_fingerprint_output (selected features)

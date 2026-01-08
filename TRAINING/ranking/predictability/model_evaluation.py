@@ -7153,10 +7153,16 @@ def evaluate_target_predictability(
         invalid_reason_counts["model_evaluation_failed"] = invalid_count
     
     # Compute t-stat for skill normalization (universal signal-above-null metric)
+    # Note: This will be recomputed in calculate_composite_score_tstat with proper guards,
+    # but we compute it here for backward compatibility in snapshot
     primary_metric_tstat = None
     if n_cs_valid > 1 and std_score > 0:
-        # t-stat = mean / (std / sqrt(n)) = mean * sqrt(n) / std
-        primary_metric_tstat = auc * np.sqrt(n_cs_valid) / std_score
+        # Use centered primary_mean for t-stat computation
+        # t-stat = mean / (std / sqrt(n)) = mean / se
+        primary_se_temp = std_score / np.sqrt(n_cs_valid)
+        if primary_se_temp > 0:
+            # Use centered mean (will be set below)
+            primary_metric_tstat = None  # Will be set after we compute centered mean
     elif n_cs_valid == 1:
         # With only one model, can't compute t-stat (no variance estimate)
         primary_metric_tstat = None
@@ -7169,6 +7175,22 @@ def evaluate_target_predictability(
         # Center around 0.5 (null baseline for random classifier)
         auc_excess_mean = auc - 0.5
     
+    # === Phase 3.1: Use centered primary_metric_mean for composite score ===
+    # Regression: IC already centered at 0 (null baseline)
+    # Classification: Use AUC-excess (centered at 0, null baseline)
+    if final_task_type == TaskType.REGRESSION:
+        primary_metric_mean_centered = auc  # IC already centered at 0
+    else:
+        primary_metric_mean_centered = auc_excess_mean  # AUC - 0.5, centered at 0
+    
+    # Compute primary_se (standard error) for SE-based stability
+    if n_cs_valid > 1:
+        primary_se = std_score / np.sqrt(n_cs_valid)
+    elif n_cs_valid == 1:
+        primary_se = std_score  # Conservative estimate with one observation
+    else:
+        primary_se = 0.0
+    
     # Get metric name for logging
     if final_task_type == TaskType.REGRESSION:
         metric_name = "R²"
@@ -7177,10 +7199,29 @@ def evaluate_target_predictability(
     else:  # MULTICLASS_CLASSIFICATION
         metric_name = "Accuracy"
     
-    # Composite score (normalize scores appropriately)
-    composite, composite_def, composite_ver = calculate_composite_score(
-        auc, std_score, mean_importance, len(all_scores_by_model), final_task_type
-    )
+    # Composite score using Phase 3.1 t-stat based normalization
+    # This uses centered primary_mean, SE-based stability, and skill-gated composite
+    try:
+        from TRAINING.ranking.predictability.composite_score import calculate_composite_score_tstat
+        composite, composite_def, composite_ver, components, scoring_signature = calculate_composite_score_tstat(
+            primary_mean=primary_metric_mean_centered,
+            primary_std=std_score,
+            n_slices_valid=n_cs_valid,  # Map n_cs_valid to n_slices_valid parameter
+            n_slices_total=n_cs_total,  # Map n_cs_total to n_slices_total parameter
+            task_type=final_task_type,
+        )
+        # Extract primary_se from components if available
+        if components and "primary_se" in components:
+            primary_se = components["primary_se"]
+    except Exception as e:
+        logger.warning(f"Phase 3.1 composite score calculation failed: {e}, falling back to legacy")
+        # Fallback to legacy composite score
+        composite, composite_def, composite_ver = calculate_composite_score(
+            auc, std_score, mean_importance, len(all_scores_by_model), final_task_type
+        )
+        scoring_signature = None
+        components = {}
+        # Use computed primary_se from above (or 0.0 if not computed)
     
     # Detect potential leakage (use task-appropriate thresholds)
     # Pass X, y, time_vals, symbols for triage checks if available
@@ -7453,16 +7494,21 @@ def evaluate_target_predictability(
         status=final_status,
         attempts=1,
         view=result_view,  # For canonical metric naming
-        # === P0 CORRECTNESS: New snapshot contract fields ===
-        primary_metric_mean=auc,  # Explicit (authoritative, same as auc for now)
+        # === Phase 3.1: Centered primary metric and SE-based stats ===
+        primary_metric_mean=primary_metric_mean_centered,  # Centered: IC for regression, AUC-excess for classification
         primary_metric_std=std_score,  # Explicit (authoritative, same as std_score for now)
-        primary_metric_tstat=primary_metric_tstat,  # t-stat for skill normalization
-        n_cs_valid=n_cs_valid,  # Valid model evaluations
-        n_cs_total=n_cs_total,  # Total model evaluations attempted
+        primary_metric_tstat=components.get("skill_tstat") if components else primary_metric_tstat,  # From Phase 3.1 calculation
+        n_cs_valid=n_cs_valid,  # Valid model evaluations (backward compat)
+        n_cs_total=n_cs_total,  # Total model evaluations attempted (backward compat)
         invalid_reason_counts=invalid_reason_counts if invalid_reason_counts else None,
         auc_mean_raw=auc_mean_raw,  # Classification only: raw 0-1 AUC
         auc_excess_mean=auc_excess_mean,  # Classification only: centered AUC
     )
+    
+    # Add Phase 3.1 fields to result object
+    result.primary_se = primary_se
+    result.scoring_signature = scoring_signature
+    result.scoring_schema_version = "1.1"  # Phase 3.1 version
     
     # Log canonical summary block (one block that can be screenshot for PR comments)
     # Use detected_interval from evaluate_target_predictability scope (defined at line ~2276)
