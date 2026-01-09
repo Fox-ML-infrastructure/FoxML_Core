@@ -154,6 +154,21 @@ class TargetPredictabilityScore:
     # Phase 3.1: Scoring signature for determinism
     scoring_signature: Optional[str] = None  # SHA256 hash of scoring params
     
+    # === DUAL RANKING FIELDS (2026-01 filtering mismatch fix) ===
+    # Screen rank: permissive (safe_family + registry) - for discovery
+    score_screen: Optional[float] = None  # Composite score using screen features (safe+registry)
+    # Strict rank: registry-only (exact training universe) - for promotion decision
+    score_strict: Optional[float] = None  # Composite score using strict features (registry-only)
+    strict_viability_flag: Optional[bool] = None  # True if score_strict clears promotion threshold
+    rank_delta: Optional[int] = None  # rank_screen - rank_strict (positive = screen ranks higher)
+    mismatch_telemetry: Optional[Dict[str, Any]] = None  # {
+    #   "n_feats_screen": int,  # Number of features in screen evaluation
+    #   "n_feats_strict": int,  # Number of features in strict evaluation
+    #   "topk_overlap": float,  # Importance overlap (Jaccard similarity of top-k features)
+    #   "unknown_feature_count": int,  # Count of features in screen but not in registry
+    #   "registry_coverage_rate": float  # n_feats_strict / n_feats_screen
+    # }
+    
     # Backward compatibility: mean_r2 property
     @property
     def mean_r2(self) -> float:
@@ -294,6 +309,18 @@ class TargetPredictabilityScore:
         # Phase 3.1: Add scoring signature for determinism
         if self.scoring_signature is not None:
             result['scoring_signature'] = self.scoring_signature
+        
+        # Dual ranking fields (2026-01 filtering mismatch fix)
+        if self.score_screen is not None:
+            result['score_screen'] = float(self.score_screen)
+        if self.score_strict is not None:
+            result['score_strict'] = float(self.score_strict)
+        if self.strict_viability_flag is not None:
+            result['strict_viability_flag'] = bool(self.strict_viability_flag)
+        if self.rank_delta is not None:
+            result['rank_delta'] = int(self.rank_delta)
+        if self.mismatch_telemetry is not None:
+            result['mismatch_telemetry'] = self.mismatch_telemetry
         
         # Add composite score definition and version
         if self.composite_definition is not None:

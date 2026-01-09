@@ -1243,8 +1243,49 @@ class IntelligentTrainer:
             cache_data = [r.to_dict() for r in rankings]
             self._save_cached_rankings(cache_key, cache_data)
         
-        # Return top N
-        top_targets = [r.target for r in rankings[:top_n]]
+        # === DUAL RANKING: Filter by strict_viability_flag before promotion ===
+        # Only promote targets where strict evaluation clears threshold (prevents false positives)
+        viable_rankings = []
+        for r in rankings:
+            # Check strict_viability_flag if available
+            if hasattr(r, 'strict_viability_flag') and r.strict_viability_flag is not None:
+                if r.strict_viability_flag:
+                    viable_rankings.append(r)
+                else:
+                    # Log warning for targets that failed strict evaluation
+                    logger.warning(
+                        f"⚠️  Target {r.target} failed strict viability check "
+                        f"(screen_score={r.score_screen:.4f}, strict_score={r.score_strict:.4f if r.score_strict else 'N/A'})"
+                    )
+            else:
+                # If strict evaluation not available, include target (backward compatibility)
+                viable_rankings.append(r)
+        
+        # Log mismatch telemetry warnings
+        for r in viable_rankings:
+            if hasattr(r, 'mismatch_telemetry') and r.mismatch_telemetry:
+                telemetry = r.mismatch_telemetry
+                unknown_count = telemetry.get('unknown_feature_count', 0)
+                rank_delta_val = r.rank_delta if hasattr(r, 'rank_delta') and r.rank_delta is not None else None
+                
+                if unknown_count > 0:
+                    logger.warning(
+                        f"⚠️  Target {r.target} has {unknown_count} unknown features in screen evaluation "
+                        f"(registry_coverage={telemetry.get('registry_coverage_rate', 0.0):.2%})"
+                    )
+                if rank_delta_val is not None and rank_delta_val > 5:
+                    logger.warning(
+                        f"⚠️  Target {r.target} has large rank_delta={rank_delta_val} "
+                        f"(screen ranks {rank_delta_val} positions higher than strict)"
+                    )
+        
+        # Return top N from viable rankings
+        top_targets = [r.target for r in viable_rankings[:top_n]]
+        if len(viable_rankings) < len(rankings):
+            logger.info(
+                f"📊 Filtered {len(rankings)} rankings → {len(viable_rankings)} viable "
+                f"(strict_viability_filter applied)"
+            )
         logger.info(f"✅ Top {len(top_targets)} targets: {', '.join(top_targets)}")
         
         return top_targets

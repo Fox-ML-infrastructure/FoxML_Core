@@ -217,6 +217,13 @@ def save_rankings(
         'consistency': r.consistency,
         'n_models': r.n_models,
         'leakage_flag': r.leakage_flag,
+        # Dual ranking fields (2026-01 filtering mismatch fix)
+        'score_screen': r.score_screen if hasattr(r, 'score_screen') and r.score_screen is not None else None,
+        'score_strict': r.score_strict if hasattr(r, 'score_strict') and r.score_strict is not None else None,
+        'strict_viability_flag': r.strict_viability_flag if hasattr(r, 'strict_viability_flag') and r.strict_viability_flag is not None else None,
+        'rank_delta': r.rank_delta if hasattr(r, 'rank_delta') and r.rank_delta is not None else None,
+        'unknown_feature_count': r.mismatch_telemetry.get('unknown_feature_count') if (hasattr(r, 'mismatch_telemetry') and r.mismatch_telemetry) else None,
+        'registry_coverage_rate': r.mismatch_telemetry.get('registry_coverage_rate') if (hasattr(r, 'mismatch_telemetry') and r.mismatch_telemetry) else None,
         **{f'{model}_r2': score for model, score in r.model_scores.items()},
         'recommendation': _get_recommendation(r)
     } for i, r in enumerate(results)])
@@ -253,6 +260,12 @@ def save_rankings(
             'auc': float(r.auc),
             'mean_r2': float(r.auc),  # Backward compatibility
             'leakage_flag': r.leakage_flag,
+            # Dual ranking fields (2026-01 filtering mismatch fix)
+            'score_screen': float(r.score_screen) if (hasattr(r, 'score_screen') and r.score_screen is not None) else None,
+            'score_strict': float(r.score_strict) if (hasattr(r, 'score_strict') and r.score_strict is not None) else None,
+            'strict_viability_flag': bool(r.strict_viability_flag) if (hasattr(r, 'strict_viability_flag') and r.strict_viability_flag is not None) else None,
+            'rank_delta': int(r.rank_delta) if (hasattr(r, 'rank_delta') and r.rank_delta is not None) else None,
+            'mismatch_telemetry': r.mismatch_telemetry if (hasattr(r, 'mismatch_telemetry') and r.mismatch_telemetry) else None,
             'recommendation': _get_recommendation(r)
             }
             for i, r in enumerate(results)
@@ -280,6 +293,12 @@ def save_rankings(
                 'task_type': r.task_type.name,
                 'auc': float(r.auc),
                 'leakage_flag': r.leakage_flag,
+                # Dual ranking fields (2026-01 filtering mismatch fix)
+                'score_screen': float(r.score_screen) if (hasattr(r, 'score_screen') and r.score_screen is not None) else None,
+                'score_strict': float(r.score_strict) if (hasattr(r, 'score_strict') and r.score_strict is not None) else None,
+                'strict_viability_flag': bool(r.strict_viability_flag) if (hasattr(r, 'strict_viability_flag') and r.strict_viability_flag is not None) else None,
+                'rank_delta': int(r.rank_delta) if (hasattr(r, 'rank_delta') and r.rank_delta is not None) else None,
+                'mismatch_telemetry': r.mismatch_telemetry if (hasattr(r, 'mismatch_telemetry') and r.mismatch_telemetry) else None,
                 'recommendation': _get_recommendation(r)
             }
             with open(target_yaml_path, 'w') as f:

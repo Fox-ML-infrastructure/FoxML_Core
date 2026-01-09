@@ -519,6 +519,20 @@ def build_clean_metrics_dict(
     if result.invalid_reason_counts:
         clean_metrics["coverage"]["invalid_reason_counts"] = result.invalid_reason_counts
     
+    # === DUAL RANKING: Add mismatch telemetry (2026-01 filtering mismatch fix) ===
+    if hasattr(result, 'score_screen') and result.score_screen is not None:
+        clean_metrics["score"] = clean_metrics.get("score", {})
+        clean_metrics["score"]["screen"] = float(result.score_screen)
+        if hasattr(result, 'score_strict') and result.score_strict is not None:
+            clean_metrics["score"]["strict"] = float(result.score_strict)
+        if hasattr(result, 'strict_viability_flag') and result.strict_viability_flag is not None:
+            clean_metrics["score"]["strict_viability"] = bool(result.strict_viability_flag)
+        if hasattr(result, 'rank_delta') and result.rank_delta is not None:
+            clean_metrics["score"]["rank_delta"] = int(result.rank_delta)
+    
+    if hasattr(result, 'mismatch_telemetry') and result.mismatch_telemetry:
+        clean_metrics["mismatch_telemetry"] = result.mismatch_telemetry
+    
     return clean_metrics
 
 

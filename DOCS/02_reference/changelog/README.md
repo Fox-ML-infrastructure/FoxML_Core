@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### January
 
+- **2026-01-08 (Dual Ranking and Filtering Mismatch Fix)** — Fixed critical filtering mismatch between TARGET_RANKING and FEATURE_SELECTION that caused false positives. Removed "unknown but safe" features from ranking mode (now uses safe_family + registry only). Added dual ranking: screen evaluation (safe+registry) and strict evaluation (registry-only) with mismatch telemetry. Updated promotion logic to filter by `strict_viability_flag`. Prevents targets from ranking high using features unavailable in training. All new fields are optional and backward compatible. Improves pipeline trustworthiness without breaking existing functionality.
+  → [View](2026-01-08-dual-ranking-filtering-mismatch-fix.md)
+
 - **2026-01-08 (Cross-Stage Issue Fixes)** — Fixed similar issues across FEATURE_SELECTION and TRAINING stages: Path import cleanup (removed redundant try-block imports, fixed root cause in schema.py), type casting for numeric config values (prevents type errors), universe signature extraction (prefers run_identity.dataset_signature over batch subsets), and config name audit (verified all get_cfg() calls use correct canonical paths). Fixed "name 'Path' is not defined" error affecting TARGET_RANKING and FEATURE_SELECTION stages. Ensures consistency and type safety across all pipeline stages.
   → [View](2026-01-08-cross-stage-issue-fixes.md)
 

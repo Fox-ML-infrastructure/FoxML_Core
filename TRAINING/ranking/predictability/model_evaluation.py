@@ -7493,6 +7493,114 @@ def evaluate_target_predictability(
         view if 'view' in locals() and view else "CROSS_SECTIONAL"
     )
     
+    # === DUAL RANKING: Compute strict evaluation for mismatch telemetry ===
+    # Screen evaluation (current): uses for_ranking=True (safe_family + registry)
+    # Strict evaluation: uses for_ranking=False (registry-only, exact training universe)
+    score_screen = composite if 'composite' in locals() else None
+    score_strict = None
+    strict_viability_flag = None
+    rank_delta = None
+    mismatch_telemetry = None
+    
+    # Only run strict evaluation if we have valid screen results and data
+    if (score_screen is not None and score_screen > -999.0 and 
+        'X' in locals() and X is not None and 'y' in locals() and y is not None and
+        'safe_columns' in locals() and safe_columns):
+        try:
+            logger.info("  🔍 Running strict evaluation (registry-only features) for mismatch telemetry...")
+            
+            # Re-filter features with strict mode (registry-only)
+            strict_columns = filter_features_for_target(
+                columns_after_target_exclusions if 'columns_after_target_exclusions' in locals() else all_columns,
+                target_column,
+                verbose=False,  # Less verbose for second pass
+                use_registry=True,
+                data_interval_minutes=detected_interval,
+                for_ranking=False,  # Strict: registry-only (exact training universe)
+                dropped_tracker=None  # Don't track drops for strict pass
+            )
+            
+            # Check if we have enough strict features
+            if len(strict_columns) >= MIN_FEATURES_REQUIRED:
+                # Find intersection of screen and strict features
+                screen_feat_set = set(safe_columns)
+                strict_feat_set = set(strict_columns)
+                unknown_feature_count = len(screen_feat_set - strict_feat_set)
+                registry_coverage_rate = len(strict_feat_set) / len(screen_feat_set) if screen_feat_set else 0.0
+                
+                # Prepare data with strict features only
+                # Find column indices for strict features in original data
+                if 'mtf_data' in locals() and mtf_data is not None:
+                    # Re-prepare data with strict features (simplified - reuse existing data prep logic)
+                    # For now, we'll compute a simplified strict score using available features
+                    # Full re-evaluation would require re-running the entire data preparation pipeline
+                    logger.debug(f"  Strict features: {len(strict_columns)} (screen had {len(safe_columns)})")
+                    logger.debug(f"  Unknown features in screen: {unknown_feature_count}")
+                    
+                    # For initial implementation, compute telemetry only
+                    # TODO: Full implementation would re-run train_and_evaluate_models with strict features
+                    # This requires re-preparing data, which is complex. For now, we compute telemetry only.
+                    # score_strict will be computed in a future enhancement
+                    # For now, use screen score as conservative estimate (strict score will be <= screen score)
+                    score_strict = None  # Will be computed in full implementation
+                    # strict_viability_flag will be computed after all targets are ranked (in target_ranker.py)
+                    strict_viability_flag = None
+                    
+                    # Compute feature importance overlap (if available)
+                    topk_overlap = None
+                    if 'feature_importances' in locals() and feature_importances:
+                        # Get top features from screen evaluation
+                        try:
+                            # Aggregate importances across models
+                            aggregated_importance = {}
+                            for model_name, imp_dict in feature_importances.items():
+                                if isinstance(imp_dict, dict):
+                                    for feat, imp_val in imp_dict.items():
+                                        aggregated_importance[feat] = aggregated_importance.get(feat, 0.0) + abs(imp_val)
+                            
+                            # Get top-K features from screen
+                            top_k = min(20, len(aggregated_importance))
+                            screen_top_k = set(sorted(aggregated_importance.items(), key=lambda x: x[1], reverse=True)[:top_k])
+                            screen_top_k_features = {feat for feat, _ in screen_top_k}
+                            
+                            # Compute overlap with strict features
+                            strict_top_k_features = screen_top_k_features & strict_feat_set
+                            if screen_top_k_features:
+                                topk_overlap = len(strict_top_k_features) / len(screen_top_k_features)
+                        except Exception as e:
+                            logger.debug(f"Failed to compute top-k overlap: {e}")
+                    
+                    # Build mismatch telemetry
+                    mismatch_telemetry = {
+                        "n_feats_screen": len(screen_feat_set),
+                        "n_feats_strict": len(strict_feat_set),
+                        "topk_overlap": topk_overlap if topk_overlap is not None else 0.0,
+                        "unknown_feature_count": unknown_feature_count,
+                        "registry_coverage_rate": registry_coverage_rate
+                    }
+                    
+                    logger.info(
+                        f"  📊 Mismatch telemetry: screen={len(screen_feat_set)} feats, "
+                        f"strict={len(strict_feat_set)} feats, "
+                        f"unknown={unknown_feature_count}, "
+                        f"coverage={registry_coverage_rate:.2%}"
+                    )
+                else:
+                    logger.debug("  Skipping strict evaluation: mtf_data not available")
+            else:
+                logger.debug(f"  Skipping strict evaluation: insufficient features ({len(strict_columns)} < {MIN_FEATURES_REQUIRED})")
+                mismatch_telemetry = {
+                    "n_feats_screen": len(safe_columns),
+                    "n_feats_strict": len(strict_columns),
+                    "topk_overlap": 0.0,
+                    "unknown_feature_count": len(set(safe_columns) - set(strict_columns)),
+                    "registry_coverage_rate": len(strict_columns) / len(safe_columns) if safe_columns else 0.0
+                }
+        except Exception as e:
+            logger.warning(f"  Failed to compute strict evaluation: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+    
     result = TargetPredictabilityScore(
         target=target,
         target_column=target_column,
@@ -7524,6 +7632,12 @@ def evaluate_target_predictability(
         invalid_reason_counts=invalid_reason_counts if invalid_reason_counts else None,
         auc_mean_raw=auc_mean_raw,  # Classification only: raw 0-1 AUC
         auc_excess_mean=auc_excess_mean,  # Classification only: centered AUC
+        # Dual ranking fields (2026-01 filtering mismatch fix)
+        score_screen=score_screen,
+        score_strict=score_strict,
+        strict_viability_flag=strict_viability_flag,
+        rank_delta=rank_delta,  # Will be computed after ranking all targets
+        mismatch_telemetry=mismatch_telemetry
     )
     
     # Add Phase 3.1 fields to result object

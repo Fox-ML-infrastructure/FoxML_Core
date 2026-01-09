@@ -837,15 +837,9 @@ def filter_features_for_target(
         # CRITICAL: Sort for deterministic ordering (set iteration order is non-deterministic)
         ranking_safe_features = sorted(set(schema_safe_features) | set(hardcoded_safe_features))
         
-        # If default_action is 'allow', also include unknown features that don't match leak patterns
-        # These are features that passed earlier filtering (not targets, not metadata, not obvious leaks)
-        # but weren't explicitly in schema families - we allow them for ranking
-        if default_action == 'allow':
-            # Features that are in all_available (passed basic filtering) but not in schema/hardcoded patterns
-            # These are "unknown but safe" features - allow them in ranking mode
-            unknown_safe = [f for f in all_available 
-                          if f not in ranking_safe_features]
-            ranking_safe_features.extend(unknown_safe)
+        # NOTE: Ranking mode now uses "safe_family + registry" only (no unknown features)
+        # This prevents false positives where targets rank high using features that won't be available in training.
+        # Unknown features are explicitly rejected to ensure TARGET_RANKING and FEATURE_SELECTION use compatible feature universes.
         
         # Merge: keep current safe_columns + add any ranking-safe features that were excluded
         safe_set = set(safe_columns)

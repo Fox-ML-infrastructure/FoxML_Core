@@ -1087,6 +1087,37 @@ def rank_targets(
     # Sort cross-sectional results by composite score (descending) for backward compatibility
     results.sort(key=lambda r: r.composite_score, reverse=True)
     
+    # === DUAL RANKING: Compute rank_delta after sorting ===
+    # rank_delta = rank_screen - rank_strict (positive = screen ranks higher)
+    # Compute ranks for both screen and strict scores
+    if results:
+        # Sort by screen score (composite_score is screen score)
+        screen_ranked = sorted(results, key=lambda r: r.score_screen if (hasattr(r, 'score_screen') and r.score_screen is not None) else r.composite_score, reverse=True)
+        screen_ranks = {r.target: idx for idx, r in enumerate(screen_ranked)}
+        
+        # Sort by strict score
+        strict_ranked = sorted(
+            [r for r in results if hasattr(r, 'score_strict') and r.score_strict is not None],
+            key=lambda r: r.score_strict,
+            reverse=True
+        )
+        strict_ranks = {r.target: idx for idx, r in enumerate(strict_ranked)}
+        
+        # Compute rank_delta and strict_viability_flag for each result
+        # strict_viability_flag: True if target would be in top N when ranked by strict score
+        top_n_for_viability = top_n if top_n is not None and top_n > 0 else len(results)
+        for r in results:
+            screen_rank = screen_ranks.get(r.target, len(results))
+            strict_rank = strict_ranks.get(r.target, len(results))
+            r.rank_delta = screen_rank - strict_rank
+            
+            # Set strict_viability_flag: True if strict rank is within top N
+            if hasattr(r, 'score_strict') and r.score_strict is not None:
+                r.strict_viability_flag = strict_rank < top_n_for_viability
+            else:
+                # If strict score not available, assume viable (backward compatibility)
+                r.strict_viability_flag = True
+    
     # Apply top_n limit if specified (to cross-sectional results)
     if top_n is not None and top_n > 0:
         results = results[:top_n]
