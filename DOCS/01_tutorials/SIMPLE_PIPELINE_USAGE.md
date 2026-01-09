@@ -2,6 +2,8 @@
 
 The intelligent training pipeline can now be run with minimal command-line arguments by using configuration files.
 
+**Pipeline Overview:** The system runs a 3-stage pipeline: (1) **Target Ranking** - ranks targets by predictability, (2) **Feature Selection** - selects optimal features per target, (3) **Training** - trains models with automatic routing decisions. Each stage evaluates targets in both **cross-sectional** (pooled across symbols) and **symbol-specific** (per-symbol) views for comprehensive analysis.
+
 ## Quick Start
 
 ### 1. Configure Once

@@ -32,6 +32,8 @@ See [Installation Guide](../01_tutorials/setup/INSTALLATION.md) for details.
 ## System Overview
 
 FoxML Core provides:
+- **3-stage intelligent pipeline**: Target ranking → feature selection → model training
+- **Dual-view evaluation**: Both cross-sectional (pooled) and symbol-specific (per-symbol) training modes
 - ML pipeline infrastructure
 - Multi-model training systems
 - Walk-forward validation
@@ -43,14 +45,18 @@ FoxML Core provides:
 ### System Flow
 
 ```
-Raw Data → Features → Targets → Models → Evaluation
+Raw Data → Features → Targets → [Target Ranking → Feature Selection → Training] → Models → Evaluation
 ```
 
 1. Raw Data: Panel/time-series data (currently tested with OHLCV market data)
 2. Features: 200+ engineered features (returns, volatility, technical indicators, domain-specific)
 3. Targets: Prediction labels (barrier, excess returns, forward returns, domain-specific)
-4. Models: 17+ model types (LightGBM, XGBoost, Deep Learning)
-5. Evaluation: Walk-forward validation, performance metrics
+4. **Pipeline Stages**: 
+   - **Target Ranking**: Ranks targets by predictability (evaluates in both cross-sectional and symbol-specific views)
+   - **Feature Selection**: Selects optimal features per target
+   - **Training**: Trains models with automatic routing decisions (cross-sectional, symbol-specific, or both)
+5. Models: 17+ model types (LightGBM, XGBoost, Deep Learning)
+6. Evaluation: Walk-forward validation, performance metrics
 
 See [Architecture Overview](ARCHITECTURE_OVERVIEW.md) for details.
 

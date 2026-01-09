@@ -25,7 +25,7 @@
 
 ---
 
-FoxML Core is an ML infrastructure stack for cross-sectional and panel data for any machine learning applications. It provides a config-driven ML pipeline architecture designed for ML infra teams, data scientists, and researchers.
+FoxML Core is an ML infrastructure stack for cross-sectional and panel data, supporting both pooled cross-sectional training and symbol-specific (per-symbol) training modes. Designed for any machine learning applications requiring temporal validation and reproducibility. It provides a config-driven ML pipeline architecture designed for ML infra teams, data scientists, and researchers.
 
 > **📊 Testing & Development:** All testing, validation, and development work is performed using **5-minute interval data**. The software supports various data intervals, but all tests, benchmarks, and development workflows use 5-minute bars as the standard reference.
 
@@ -39,7 +39,10 @@ Independent Contractor • ML Engineering • Cross-Sectional ML Systems • Sys
 
 FoxML Core provides:
 
-- **Intelligent training pipeline** with automated target ranking and feature selection
+- **3-stage intelligent pipeline**: Automated target ranking → feature selection → model training with config-driven routing decisions
+- **Dual-view evaluation**: Supports both cross-sectional (pooled across symbols) and symbol-specific (per-symbol) training modes for comprehensive target analysis
+- **Automatic routing**: Intelligently routes targets to cross-sectional, symbol-specific, or both training modes based on performance metrics and data characteristics
+- **Task-aware evaluation**: Unified handling of regression (IC-based) and classification (AUC-based) targets with normalized skill scores
 - **GPU acceleration** for target ranking, feature selection, and model training (LightGBM, XGBoost, CatBoost)
 - **Bitwise deterministic runs** via strict mode for financial audit compliance and regulatory requirements
   - *Yes, outputs remain deterministic even while you're grinding OSRS, watching YouTube, or questioning your life choices at 3 AM. We tested it.*
@@ -51,11 +54,13 @@ FoxML Core provides:
 
 ### Fingerprinting & Reproducibility
 
+- **3-stage pipeline architecture**: TARGET_RANKING (ranks targets by predictability) → FEATURE_SELECTION (selects optimal features) → TRAINING (trains models with routing decisions)
+- **Dual-view support**: Each stage evaluates targets in both CROSS_SECTIONAL (pooled) and SYMBOL_SPECIFIC (per-symbol) views for comprehensive analysis
 - **SHA256 fingerprinting** for all pipeline components — data, config, features, targets, splits, hyperparameters, and routing decisions
 - **RunIdentity system** with two-phase construction (partial → finalized) and strict/replicate key separation for audit-grade traceability
 - **Diff telemetry** — automatic comparison with previous runs, distinguishing true regressions from acceptable nondeterminism
 - **Feature importance snapshots** with cross-run stability analysis and drift detection
-- **Stage-scoped output layout** — target-first directory organization with `stage=TARGET_RANKING/`, `stage=FEATURE_SELECTION/` separation for human-readable auditability
+- **Stage-scoped output layout** — target-first directory organization with `stage=TARGET_RANKING/`, `stage=FEATURE_SELECTION/`, `stage=TRAINING/` separation for human-readable auditability
 - **Cohort-based reproducibility** — each (target, view, universe, cohort) combination gets its own snapshot with full fingerprint lineage
 
 **For detailed capabilities:** See [Architecture Overview](DOCS/00_executive/ARCHITECTURE_OVERVIEW.md)
