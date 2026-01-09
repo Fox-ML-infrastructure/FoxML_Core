@@ -53,6 +53,30 @@ FINGERPRINT_SCHEMA_VERSION = "1.0"
 # Import atomic JSON write from centralized utilities
 from TRAINING.common.utils.file_utils import write_atomic_json as _write_atomic_json
 
+
+def _sanitize_for_json(obj: Any) -> Any:
+    """
+    Recursively convert pandas Timestamp objects to ISO strings for JSON serialization.
+    
+    This ensures all Timestamp objects are converted to JSON-serializable ISO format strings
+    before writing to JSON files (metadata.json, snapshot.json, metrics.json).
+    
+    Args:
+        obj: Object to sanitize (can be dict, list, tuple, Timestamp, or other types)
+    
+    Returns:
+        Sanitized object with all Timestamp objects converted to ISO strings
+    """
+    if isinstance(obj, pd.Timestamp):
+        return obj.isoformat()
+    elif isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [_sanitize_for_json(v) for v in obj]
+    else:
+        return obj
+
+
 # DiffTelemetry class definition starts here
 class DiffTelemetry:
     """
@@ -238,7 +262,7 @@ class DiffTelemetry:
                 key = f"{snap.run_id}:{snap.stage}:{target_clean}:{view_clean}:{symbol_clean}"
                 run_snapshots[key] = snap.to_dict()
             
-            _write_atomic_json(self.snapshot_index, run_snapshots)
+            _write_atomic_json(self.snapshot_index, _sanitize_for_json(run_snapshots))
         except Exception as e:
             logger.warning(f"Failed to save snapshot index: {e}")
     
@@ -2688,7 +2712,7 @@ class DiffTelemetry:
         snapshot_file = cohort_dir / "snapshot.json"
         try:
             snapshot_dict = snapshot.to_dict()
-            _write_atomic_json(snapshot_file, snapshot_dict)
+            _write_atomic_json(snapshot_file, _sanitize_for_json(snapshot_dict))
             logger.debug(f"✅ Saved snapshot.json to {snapshot_file}")
         except Exception as e:
             logger.error(f"❌ Failed to save snapshot.json to {snapshot_file}: {e}")
@@ -2782,7 +2806,7 @@ class DiffTelemetry:
                     
                     # Write snapshot.json to target-first structure
                     target_snapshot_file = target_cohort_dir / "snapshot.json"
-                    _write_atomic_json(target_snapshot_file, snapshot_dict)
+                    _write_atomic_json(target_snapshot_file, _sanitize_for_json(snapshot_dict))
                     logger.debug(f"✅ Also saved snapshot.json to target-first structure")
         except Exception as e:
             logger.debug(f"Failed to save snapshot.json to target-first structure (non-critical): {e}")
@@ -4610,7 +4634,7 @@ class DiffTelemetry:
             # Write to target-first structure (cohort_dir is already set to target_cohort_dir above)
             try:
                 metric_deltas_file = cohort_dir / "metric_deltas.json"
-                _write_atomic_json(metric_deltas_file, metric_deltas_data)
+                _write_atomic_json(metric_deltas_file, _sanitize_for_json(metric_deltas_data))
                 logger.debug(f"✅ Saved metric_deltas.json to {metric_deltas_file}")
             except Exception as e:
                 logger.error(f"❌ Failed to save metric_deltas.json to {metric_deltas_file}: {e}")
@@ -4625,7 +4649,7 @@ class DiffTelemetry:
         # Write to target-first structure (cohort_dir is already set to target_cohort_dir above)
         try:
             prev_diff_file = cohort_dir / "diff_prev.json"
-            _write_atomic_json(prev_diff_file, prev_diff_dict)
+            _write_atomic_json(prev_diff_file, _sanitize_for_json(prev_diff_dict))
             logger.debug(f"✅ Saved diff_prev.json to {prev_diff_file}")
         except Exception as e:
             logger.error(f"❌ Failed to save diff_prev.json to {prev_diff_file}: {e}")
@@ -4640,7 +4664,7 @@ class DiffTelemetry:
             try:
                 baseline_diff_dict = baseline_diff.to_dict()
                 baseline_diff_file = cohort_dir / "diff_baseline.json"
-                _write_atomic_json(baseline_diff_file, baseline_diff_dict)
+                _write_atomic_json(baseline_diff_file, _sanitize_for_json(baseline_diff_dict))
                 logger.debug(f"✅ Saved diff_baseline.json to {baseline_diff_file}")
             except Exception as e:
                 logger.error(f"❌ Failed to save diff_baseline.json to {baseline_diff_file}: {e}")

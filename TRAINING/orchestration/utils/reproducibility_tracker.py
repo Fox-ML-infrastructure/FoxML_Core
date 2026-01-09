@@ -127,6 +127,31 @@ def _extract_horizon_minutes_sst(metadata, cv_details):
     return extract_horizon_minutes(metadata, cv_details)
 
 
+def _sanitize_for_json(obj: Any) -> Any:
+    """
+    Recursively convert pandas Timestamp objects to ISO strings for JSON serialization.
+    
+    This ensures all Timestamp objects are converted to JSON-serializable ISO format strings
+    before writing to JSON files (metadata.json, snapshot.json, metrics.json).
+    
+    Args:
+        obj: Object to sanitize (can be dict, list, tuple, Timestamp, or other types)
+    
+    Returns:
+        Sanitized object with all Timestamp objects converted to ISO strings
+    """
+    import pandas as pd
+    
+    if isinstance(obj, pd.Timestamp):
+        return obj.isoformat()
+    elif isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [_sanitize_for_json(v) for v in obj]
+    else:
+        return obj
+
+
 def _construct_comparison_group_key_from_dict(comparison_group: Dict[str, Any], stage: str = "TRAINING") -> Optional[str]:
     """
     Construct comparison_group_key from comparison_group dict.
@@ -1598,10 +1623,11 @@ class ReproducibilityTracker:
                 # Use fold_timestamps to compute hash
                 fold_timestamps = additional_data['fold_timestamps']
                 try:
-                    fold_timestamps_str = json.dumps(fold_timestamps, sort_keys=True)
+                    fold_timestamps_str = json.dumps(fold_timestamps, sort_keys=True, default=str)
                     cv_details['fold_boundaries_hash'] = hashlib.sha256(fold_timestamps_str.encode()).hexdigest()[:16]
-                    # Also store the timestamps (for debugging)
-                    cv_details['fold_timestamps'] = fold_timestamps
+                    # Also store the timestamps (for debugging) - convert Timestamps to ISO strings
+                    if fold_timestamps:
+                        cv_details['fold_timestamps'] = _sanitize_for_json(fold_timestamps)
                 except Exception:
                     pass
             
@@ -2067,7 +2093,7 @@ class ReproducibilityTracker:
         if target_cohort_dir:
             try:
                 target_metadata_file = target_cohort_dir / "metadata.json"
-                _write_atomic_json(target_metadata_file, full_metadata)
+                _write_atomic_json(target_metadata_file, _sanitize_for_json(full_metadata))
                 # Log at INFO level so it's visible
                 main_logger = _get_main_logger()
                 try:
@@ -2279,7 +2305,7 @@ class ReproducibilityTracker:
             # Fallback: write metrics.json using unified canonical schema (atomically)
             # Write directly to target-first structure (metrics_file is already target_cohort_dir / "metrics.json")
             try:
-                _write_atomic_json(metrics_file, metrics_data)
+                _write_atomic_json(metrics_file, _sanitize_for_json(metrics_data))
                 # Also write metrics.parquet for consistency
                 try:
                     import pandas as pd
@@ -4336,7 +4362,7 @@ class ReproducibilityTracker:
                     # Write metadata.json if missing (to target-first structure)
                     target_metadata_file = target_cohort_dir / "metadata.json"
                     if not target_metadata_file.exists():
-                        _write_atomic_json(target_metadata_file, minimal_metadata)
+                        _write_atomic_json(target_metadata_file, _sanitize_for_json(minimal_metadata))
                         logger.info(f"✅ Wrote metadata.json (fallback) to {target_cohort_dir.name}/")
                     
                     # Write metrics.json if missing (to target-first structure)
