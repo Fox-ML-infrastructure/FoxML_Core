@@ -1934,6 +1934,21 @@ class DiffTelemetry:
         if run_data.get('metrics'):
             metrics_data = run_data['metrics']
         
+        # Fallback: Reconstruct metrics from top-level keys (for backward compatibility)
+        # This handles cases where metrics were spread to top level instead of nested under 'metrics'
+        if not metrics_data:
+            known_metric_keys = {
+                'schema', 'scope', 'primary_metric', 'coverage', 'features', 
+                'y_stats', 'label_stats', 'models', 'score', 'fold_timestamps',
+                'leakage', 'mismatch_telemetry', 'metrics_schema_version', 
+                'scoring_schema_version', 'n_effective', 'metric_name'
+            }
+            # Check if any known metric keys exist at top level in run_data
+            top_level_metrics = {k: v for k, v in run_data.items() if k in known_metric_keys}
+            if top_level_metrics:
+                metrics_data = top_level_metrics
+                logger.debug(f"Reconstructed metrics from top-level keys in run_data: {list(top_level_metrics.keys())}")
+        
         # Check resolved_metadata if run_data doesn't have metrics
         if not metrics_data and resolved_metadata:
             metrics_data = resolved_metadata.get('metrics', {})

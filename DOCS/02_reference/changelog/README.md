@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### January
 
+- **2026-01-08 (Metrics SHA256 Structure Fix)** — Fixed misleading "metrics_sha256 cannot be computed" error logs. Root cause: metrics were spread as top-level keys in `run_data` instead of nested under `'metrics'` key. Fixed by adding `"metrics": metrics` to `run_data` in 3 locations, with fallback logic to reconstruct from top-level keys for backward compatibility. Metrics digest now computed correctly without error logs. All changes maintain backward compatibility.
+  → [View](2026-01-08-metrics-sha256-structure-fix.md)
+
 - **2026-01-08 (Task-Aware Routing Fix)** — Fixed critical bug where routing used fixed [0,1] thresholds on `auc` field, breaking regression targets (R² can be negative). Implemented unified `skill01` score that normalizes both regression IC and classification AUC-excess to [0,1] range. Fixed IC extraction bug (now extracts IC from model_metrics instead of using R²). Enhanced suspicious detection to be task-aware (uses tstat for stability check). Added routing and training plan hashes to manifest for fast change detection. All changes are backward compatible.
   → [View](2026-01-08-task-aware-routing-fix.md)
 

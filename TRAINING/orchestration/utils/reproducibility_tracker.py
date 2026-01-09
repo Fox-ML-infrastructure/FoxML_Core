@@ -1804,6 +1804,20 @@ class ReproducibilityTracker:
         elif additional_data and 'metrics' in additional_data:
             # Fallback: check additional_data
             full_metadata['metrics'] = additional_data['metrics']
+        else:
+            # Fallback: Reconstruct metrics from top-level keys (for backward compatibility)
+            # Known metric keys from build_clean_metrics_dict() structure
+            known_metric_keys = {
+                'schema', 'scope', 'primary_metric', 'coverage', 'features', 
+                'y_stats', 'label_stats', 'models', 'score', 'fold_timestamps',
+                'leakage', 'mismatch_telemetry', 'metrics_schema_version', 
+                'scoring_schema_version', 'n_effective', 'metric_name'
+            }
+            # Check if any known metric keys exist at top level
+            top_level_metrics = {k: v for k, v in run_data.items() if k in known_metric_keys}
+            if top_level_metrics:
+                full_metadata['metrics'] = top_level_metrics
+                logger.debug(f"Reconstructed metrics from top-level keys: {list(top_level_metrics.keys())}")
         
         # CRITICAL: Initialize telemetry if not already initialized
         # Telemetry is needed for diff tracking and should be available for all runs
@@ -2338,6 +2352,18 @@ class ReproducibilityTracker:
                 decision_result = engine.evaluate(cohort_id, run_id_clean, segment_id=segment_id_for_decision)
                 engine.persist(decision_result, self.output_dir.parent)
                 
+                # Extract metrics from run_data for decision engine (metrics may be nested or top-level)
+                current_metrics = run_data.get('metrics', {})
+                if not current_metrics:
+                    # Fallback: reconstruct from top-level keys if metrics were spread
+                    known_metric_keys = {
+                        'schema', 'scope', 'primary_metric', 'coverage', 'features', 
+                        'y_stats', 'label_stats', 'models', 'score', 'fold_timestamps',
+                        'leakage', 'mismatch_telemetry', 'metrics_schema_version', 
+                        'scoring_schema_version', 'n_effective', 'metric_name'
+                    }
+                    current_metrics = {k: v for k, v in run_data.items() if k in known_metric_keys}
+                
                 # Update Bayesian state if enabled
                 if use_bayesian and engine.bayesian_policy:
                     try:
@@ -2350,16 +2376,19 @@ class ReproducibilityTracker:
                         # Update Bayesian state with observed reward
                         engine.update_bayesian_state(
                             decision_result=decision_result,
-                            current_run_metrics=metrics,
+                            current_run_metrics=current_metrics,
                             applied_patch_template=applied_patch_template
                         )
                     except Exception as e:
                         logger.debug(f"Bayesian state update failed (non-critical): {e}")
                 
                 # Store decision fields in metrics for index update
-                metrics['decision_level'] = decision_result.decision_level
-                metrics['decision_action_mask'] = decision_result.decision_action_mask
-                metrics['decision_reason_codes'] = decision_result.decision_reason_codes
+                if current_metrics:
+                    current_metrics['decision_level'] = decision_result.decision_level
+                    current_metrics['decision_action_mask'] = decision_result.decision_action_mask
+                    current_metrics['decision_reason_codes'] = decision_result.decision_reason_codes
+                    # Update run_data with modified metrics
+                    run_data['metrics'] = current_metrics
                 if decision_result.decision_level > 0:
                     logger.info(f"📊 Decision: level={decision_result.decision_level}, actions={decision_result.decision_action_mask}, reasons={decision_result.decision_reason_codes}")
                     # Log Bayesian metadata if available
@@ -3393,8 +3422,9 @@ class ReproducibilityTracker:
                         "timestamp": datetime.now().isoformat(),
                         "stage": stage,
                         "target": target,
+                        "metrics": metrics,  # NEW: Add metrics key for _normalize_outputs() and _compute_metrics_digest()
                         **{k: float(v) if isinstance(v, (int, float)) else v 
-                           for k, v in metrics.items()},
+                           for k, v in metrics.items()},  # Keep top-level for backward compat
                         "cohort_metadata": cohort_metadata
                     }
                     if additional_data:
@@ -3722,8 +3752,9 @@ class ReproducibilityTracker:
                     "timestamp": datetime.now().isoformat(),
                     "stage": stage,
                     "target": target,
+                    "metrics": metrics,  # NEW: Add metrics key for _normalize_outputs() and _compute_metrics_digest()
                     **{k: float(v) if isinstance(v, (int, float)) else v 
-                       for k, v in metrics.items()},
+                       for k, v in metrics.items()},  # Keep top-level for backward compat
                     "cohort_metadata": cohort_metadata
                 }
                 if additional_data:
@@ -3741,13 +3772,15 @@ class ReproducibilityTracker:
                 self._increment_mode_counter("COHORT_AWARE")
                 
                 # Compute trend analysis for this series (if enough runs exist)
+                # NOTE: This code is in log_run() method, not _save_to_cohort()
+                # Variables available: stage, target, cohort_id, cohort_metadata, run_data, view, symbol, model_family
                 trend_metadata = None
                 try:
                     if _AUDIT_AVAILABLE:
                         from TRAINING.common.utils.trend_analyzer import TrendAnalyzer, SeriesView
                         
-                        # Get reproducibility base directory
-                        repro_base = cohort_dir.parent.parent.parent
+                        # Get reproducibility base directory from self._repro_base_dir
+                        repro_base = self._repro_base_dir
                         if repro_base.exists():
                             trend_analyzer = TrendAnalyzer(
                                 reproducibility_dir=repro_base,
@@ -3758,70 +3791,20 @@ class ReproducibilityTracker:
                             # Analyze STRICT series
                             all_trends = trend_analyzer.analyze_all_series(view=SeriesView.STRICT)
                             
+                            # Normalize stage for trend matching
+                            stage_for_trend = stage.upper().replace("MODEL_TRAINING", "TRAINING")
+                            
                             # Find trend for this series
                             for series_key_str, trend_list in all_trends.items():
                                 # Check if this series matches
                                 if any(t.series_key.target == target and 
-                                       t.series_key.stage == stage_normalized for t in trend_list):
-                                    # Write trend.json to cohort directory (similar to metadata.json and metrics.json)
-                                    if cohort_dir and cohort_dir.exists():
-                                        try:
-                                            trend_analyzer.write_cohort_trend(
-                                                cohort_dir=cohort_dir,
-                                                stage=stage_normalized,
-                                                target=target,
-                                                trends={series_key_str: trend_list}  # Pass pre-computed trends
-                                            )
-                                        except Exception as e:
-                                            logger.debug(f"Failed to write trend.json: {e}")
-                                    
-                                    # Find trend for primary metric
-                                    primary_metric = metrics.get("metric_name", "auc")
-                                    for trend in trend_list:
-                                        if trend.metric_name in ["auc_mean", "auc", primary_metric.lower()] if primary_metric else True:
-                                            if trend.status == "ok":
-                                                slope_str = f"{trend.slope_per_day:+.6f}" if trend.slope_per_day else "N/A"
-                                                main_logger = _get_main_logger()
-                                                trend_msg = (
-                                                    f"📈 Trend ({trend.metric_name}): "
-                                                    f"slope={slope_str}/day, "
-                                                    f"current={trend.current_estimate:.4f}, "
-                                                    f"ewma={trend.ewma_value:.4f}, "
-                                                    f"n={trend.n_runs} runs"
-                                                )
-                                                if main_logger != logger:
-                                                    main_logger.info(trend_msg)
-                                                else:
-                                                    logger.info(trend_msg)
-                                                
-                                                # Log trend alerts
-                                                if trend.alerts:
-                                                    for alert in trend.alerts:
-                                                        alert_msg = f"  {'⚠️' if alert.get('severity') == 'warning' else 'ℹ️'}  {alert['message']}"
-                                                        if main_logger != logger:
-                                                            (main_logger.warning if alert.get('severity') == 'warning' else main_logger.info)(alert_msg)
-                                                        else:
-                                                            (logger.warning if alert.get('severity') == 'warning' else logger.info)(alert_msg)
-                                                
-                                                # Store trend metadata for inclusion in metadata.json
-                                                trend_metadata = {
-                                                    "enabled": True,
-                                                    "view": "STRICT",
-                                                    "series_key": series_key_str[:100],  # Truncate for readability
-                                                    "metric_name": trend.metric_name,
-                                                    "n_runs": trend.n_runs,
-                                                    "status": trend.status,
-                                                    "slope_per_day": trend.slope_per_day,
-                                                    "current_estimate": trend.current_estimate,
-                                                    "ewma_value": trend.ewma_value,
-                                                    "residual_std": trend.residual_std,
-                                                    "half_life_days": trend.half_life_days,
-                                                    "n_alerts": len(trend.alerts),
-                                                    "applied": False  # Currently only logged, not used for decisions
-                                                }
-                                            break
+                                       t.series_key.stage == stage_for_trend for t in trend_list):
+                                    # NOTE: Trend writing happens in _save_to_cohort() where target_cohort_dir is available
+                                    # This code path is for analysis only, not writing
+                                    logger.debug(f"Found trend for {stage_for_trend}:{target} (trend writing happens in _save_to_cohort)")
                                     break
                 except Exception as e:
+                    logger.debug(f"Trend analysis failed (non-critical): {e}")
                     logger.debug(f"Could not compute trend analysis: {e}")
                 
                 # Compute and save drift.json if previous run exists
@@ -3926,8 +3909,9 @@ class ReproducibilityTracker:
                             "timestamp": datetime.now().isoformat(),
                             "stage": stage,
                             "target": target,
+                            "metrics": metrics,  # NEW: Add metrics key for _normalize_outputs() and _compute_metrics_digest()
                             **{k: float(v) if isinstance(v, (int, float)) else v 
-                               for k, v in metrics.items()},
+                               for k, v in metrics.items()},  # Keep top-level for backward compat
                             "cohort_metadata": minimal_cohort_metadata
                         }
                         if additional_data:
