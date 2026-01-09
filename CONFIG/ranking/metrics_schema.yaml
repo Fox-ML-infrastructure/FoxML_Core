@@ -118,7 +118,7 @@ canonical_names:
 # - Deterministic invalid slice filtering
 
 scoring:
-  version: "1.1"  # Bump for Phase 3.1 fixes
+  version: "1.2"  # Bump for eligibility gates and quality formula change (removed stability from quality)
   
   # Skill normalization via t-stat
   # skill_tstat = mean / (std / sqrt(n)) = mean / se
@@ -138,11 +138,12 @@ scoring:
   # Invalid slice filtering
   min_samples_per_slice: 10  # Minimum samples per slice (timestamp or symbol)
   
-  # Component weights (for quality = w_cov * coverage + w_stab * stability)
-  # Composite form: skill * quality (multiplicative, not additive)
+  # Component weights (for quality = coverage × registry × sample_size)
+  # w_stab removed: stability no longer in quality (SE already in t-stat)
+  # Quality is now: coverage × registry × sample_size (multiplicative, not weighted sum)
   weights:
-    w_cov: 0.3  # Coverage weight
-    w_stab: 0.7  # Stability weight
+    w_cov: 0.3  # Coverage weight (kept for backward compatibility, not used in new formula)
+    # w_stab removed: stability no longer in quality (SE already in t-stat)
   
   # Composite form: skill * quality (prevents no-skill targets from ranking high)
   composite_form: "skill_times_quality_v1"
@@ -158,3 +159,11 @@ scoring:
     enabled: true
     max_bonus: 0.10    # Maximum 10% boost
     per_model: 0.02    # 2% per model
+  
+  # Eligibility gates (hard requirements for ranking)
+  eligibility:
+    min_registry_coverage: 0.95  # Hard gate: coverage < this → invalid_for_ranking
+    require_registry_coverage_in_eval: true  # NEW: In eval mode, require registry_coverage_rate (None fails gate)
+    min_n_for_ranking: 20  # Hard gate: n_slices_valid < this → invalid_for_ranking
+    min_n_for_full_quality: 30  # Soft penalty threshold: n < this gets quality penalty (but still valid if >= min_n_for_ranking)
+    # Optional: Add min_n_effective_for_ranking or min_date_span_days for future enhancement

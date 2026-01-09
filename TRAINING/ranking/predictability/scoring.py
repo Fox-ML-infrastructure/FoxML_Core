@@ -38,7 +38,7 @@ import pandas as pd
 if TYPE_CHECKING:
     from TRAINING.common.leakage_auto_fixer import AutoFixInfo
 import numpy as np
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import yaml
 import json
 from collections import defaultdict
@@ -150,7 +150,12 @@ class TargetPredictabilityScore:
     
     # Schema versioning (P1: track which schema produced this snapshot)
     metrics_schema_version: str = "1.1"  # Bump when adding new fields
-    scoring_schema_version: str = "1.1"  # Phase 3.1: Bump for SE-based stability, skill-gating, classification centering
+    scoring_schema_version: str = "1.2"  # Phase 3.2: Bump for eligibility gates and quality formula change (removed stability from quality)
+    
+    # NEW: Eligibility gates
+    valid_for_ranking: bool = True  # Whether this target is eligible for ranking
+    invalid_reasons: List[str] = field(default_factory=list)  # List of reasons if not valid (e.g., ["LOW_REGISTRY_COVERAGE", "LOW_N_CS"])
+    run_intent: Optional[str] = None  # NEW: "smoke", "eval", or None - tracks run intent for eligibility
     
     # Phase 3.1: Scoring signature for determinism
     scoring_signature: Optional[str] = None  # SHA256 hash of scoring params
@@ -268,7 +273,7 @@ class TargetPredictabilityScore:
             'view': getattr(self, 'view', 'CROSS_SECTIONAL'),
             # Schema versions (P1)
             'metrics_schema_version': getattr(self, 'metrics_schema_version', '1.1'),
-            'scoring_schema_version': getattr(self, 'scoring_schema_version', '1.0'),
+            'scoring_schema_version': getattr(self, 'scoring_schema_version', '1.2'),
             # Canonical metric names (new, unambiguous) - use effective values
             primary_name: float(effective_mean),
             std_name: float(effective_std),
@@ -334,6 +339,13 @@ class TargetPredictabilityScore:
         # Phase 3.1: Add scoring signature for determinism
         if self.scoring_signature is not None:
             result['scoring_signature'] = self.scoring_signature
+        
+        # Eligibility gates (Phase 3.2)
+        result['valid_for_ranking'] = bool(getattr(self, 'valid_for_ranking', True))
+        if hasattr(self, 'invalid_reasons') and self.invalid_reasons:
+            result['invalid_reasons'] = list(self.invalid_reasons)
+        if hasattr(self, 'run_intent') and self.run_intent is not None:
+            result['run_intent'] = str(self.run_intent)
         
         # Dual ranking fields (2026-01 filtering mismatch fix)
         if self.score_screen is not None:

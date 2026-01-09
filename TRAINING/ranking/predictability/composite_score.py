@@ -227,7 +227,9 @@ def calculate_composite_score_tstat(
     n_slices_total: int,  # Total slices before filtering (renamed from n_cs_total)
     task_type: TaskType = TaskType.REGRESSION,
     scoring_config: Optional[Dict[str, Any]] = None,
-) -> Tuple[float, str, str, Dict[str, float], str]:
+    registry_coverage_rate: Optional[float] = None,  # NEW: Optional registry coverage
+    run_intent: Optional[str] = None,  # NEW: "smoke", "eval", or None (defaults to "eval")
+) -> Tuple[float, str, str, Dict[str, float], str, Dict[str, Any]]:  # NEW: Added eligibility dict
     """
     Calculate composite score using t-stat based skill normalization (Phase 3.1).
     
@@ -256,8 +258,9 @@ def calculate_composite_score_tstat(
         - composite_score_01: Bounded [0,1] composite score
         - definition: Formula string
         - version: Scoring schema version
-        - components: Dict of individual component values (for debugging/audit)
+        - components: Dict of individual component values (for debugging/audit) - strictly numeric
         - scoring_signature: SHA256 hash of scoring params for determinism
+        - eligibility: Dict with valid_for_ranking, invalid_reasons, run_intent (separate from numeric components)
     """
     import numpy as np
     import hashlib
@@ -283,8 +286,15 @@ def calculate_composite_score_tstat(
     se_ref_by_task = scoring_config.get("se_ref_by_task", {})
     weights = scoring_config.get("weights", {"w_cov": 0.3, "w_stab": 0.7})
     model_bonus_cfg = scoring_config.get("model_bonus", {"enabled": True, "max_bonus": 0.10, "per_model": 0.02})
-    version = scoring_config.get("version", "1.1")
+    version = scoring_config.get("version", "1.2")  # Bump to 1.2 for eligibility gates
     composite_form = scoring_config.get("composite_form", "skill_times_quality_v1")
+    
+    # Extract eligibility params from scoring_config (SST: all from config, no hardcoded defaults)
+    eligibility_config = scoring_config.get("eligibility", {})
+    min_registry_coverage = float(eligibility_config.get("min_registry_coverage", 0.95))
+    require_registry_coverage_in_eval = bool(eligibility_config.get("require_registry_coverage_in_eval", True))
+    min_n_for_ranking = int(eligibility_config.get("min_n_for_ranking", 20))
+    min_n_for_full_quality = int(eligibility_config.get("min_n_for_full_quality", 30))
     
     # Get task-specific se_ref
     task_key = {
@@ -305,8 +315,21 @@ def calculate_composite_score_tstat(
         "model_bonus": model_bonus_cfg,
         "version": version,
     }
-    # Canonical JSON (sorted keys) for deterministic hashing
-    scoring_params_json = json.dumps(scoring_params, sort_keys=True, separators=(',', ':'))
+    
+    # Include eligibility params in scoring signature for determinism (SST: canonical JSON with sorted keys)
+    # Note: Do NOT include observed registry_coverage_rate in signature (only config/logic)
+    scoring_params_with_eligibility = {
+        **scoring_params,
+        "eligibility": {
+            "min_registry_coverage": min_registry_coverage,
+            "require_registry_coverage_in_eval": require_registry_coverage_in_eval,
+            "min_n_for_ranking": min_n_for_ranking,
+            "min_n_for_full_quality": min_n_for_full_quality,
+        }
+    }
+    
+    # Canonical JSON (sorted keys) for deterministic hashing (SST pattern)
+    scoring_params_json = json.dumps(scoring_params_with_eligibility, sort_keys=True, separators=(',', ':'))
     scoring_signature = hashlib.sha256(scoring_params_json.encode()).hexdigest()
     
     # 1. Compute SE (standard error) from std and n
@@ -338,20 +361,56 @@ def calculate_composite_score_tstat(
     # 4. Coverage: fraction of valid slices
     coverage01 = n_slices_valid / n_slices_total if n_slices_total > 0 else 1.0
     
-    # 5. Stability: SE-based (not std-based) for cross-family comparability
-    # stability = 1 - clamp(se / se_ref, 0, 1)
-    stability01 = 1.0 - min(1.0, max(0.0, primary_se / se_ref))
+    # 5. Eligibility gates (computed before quality/score)
+    invalid_reasons = []
     
-    # 6. Quality score: weighted combination of coverage and stability
-    w_cov = weights.get("w_cov", 0.3)
-    w_stab = weights.get("w_stab", 0.7)
-    quality01 = w_cov * coverage01 + w_stab * stability01
+    # Determine effective run_intent (default to "eval" if None)
+    effective_run_intent = run_intent if run_intent is not None else "eval"
     
-    # 7. Composite: skill-gated quality (prevents no-skill targets from ranking high)
+    # Gate 1: Run intent
+    if effective_run_intent == "smoke":
+        invalid_reasons.append("SMOKE_INTENT")
+    
+    # Gate 2: Registry coverage (hard gate)
+    if effective_run_intent == "eval" and require_registry_coverage_in_eval:
+        # In eval mode: require registry coverage (None fails gate)
+        if registry_coverage_rate is None:
+            invalid_reasons.append("MISSING_REGISTRY_COVERAGE (required in eval mode)")
+        elif registry_coverage_rate < min_registry_coverage:
+            invalid_reasons.append(f"LOW_REGISTRY_COVERAGE (coverage={registry_coverage_rate:.2%} < {min_registry_coverage:.2%})")
+    elif registry_coverage_rate is not None and registry_coverage_rate < min_registry_coverage:
+        # In smoke mode: gate only if provided (None passes, but smoke gate will still invalidate)
+        invalid_reasons.append(f"LOW_REGISTRY_COVERAGE (coverage={registry_coverage_rate:.2%} < {min_registry_coverage:.2%})")
+    
+    # Gate 3: Sample size (hard gate)
+    if n_slices_valid < min_n_for_ranking:
+        invalid_reasons.append(f"LOW_N_CS (n={n_slices_valid} < {min_n_for_ranking})")
+    
+    valid_for_ranking = len(invalid_reasons) == 0
+    
+    # 6. Stability: SE-based (not std-based) for cross-family comparability
+    # stability = 1 / (1 + se/se_ref) - reciprocal decay (gentler than exp)
+    # Optional: still compute for debugging, but don't use in quality (SE already in t-stat)
+    stability01 = 1.0 / (1.0 + primary_se / se_ref)
+    
+    # 7. Quality score: coverage × registry × sample_size (no stability, SE already in skill)
+    reg_coverage01 = registry_coverage_rate if registry_coverage_rate is not None else 1.0
+    
+    # Sample size penalty (for near-threshold cases only, n >= min_n_for_ranking)
+    if n_slices_valid >= min_n_for_ranking and n_slices_valid < min_n_for_full_quality:
+        # Soft penalty for near-threshold: linear interpolation from 0.7 to 1.0
+        sample_size_penalty = 0.7 + 0.3 * (n_slices_valid - min_n_for_ranking) / (min_n_for_full_quality - min_n_for_ranking)
+    else:
+        sample_size_penalty = 1.0
+    
+    # Quality as product (multiplicative) - coverage × registry × sample_size
+    quality01 = coverage01 * reg_coverage01 * sample_size_penalty
+    
+    # 8. Composite: skill-gated quality (prevents no-skill targets from ranking high)
     # composite = skill * quality (multiplicative, not additive)
     composite_base = skill_score_01 * quality01
     
-    # 8. Model bonus (multiplicative)
+    # 9. Model bonus (multiplicative)
     if model_bonus_cfg.get("enabled", True):
         max_bonus = model_bonus_cfg.get("max_bonus", 0.10)
         per_model = model_bonus_cfg.get("per_model", 0.02)
@@ -368,22 +427,34 @@ def calculate_composite_score_tstat(
     
     definition = (
         f"composite = skill * quality * (1 + model_bonus); "
-        f"skill = sigmoid(tstat/{skill_squash_k}); "
-        f"quality = {w_cov:.2f}*coverage + {w_stab:.2f}*stability; "
-        f"stability = 1 - clamp(se/{se_ref:.3f}, 0, 1); "
+        f"skill = sigmoid(tstat/{skill_squash_k}); "  # SE already in t-stat
+        f"quality = coverage * registry_coverage * sample_size_penalty; "  # No stability (SE already in skill)
+        f"sample_size_penalty = linear_interp(n_valid, [{min_n_for_ranking}, {min_n_for_full_quality}], [0.7, 1.0]); "
+        f"eligibility_gates: registry_coverage >= {min_registry_coverage:.2%}, n_valid >= {min_n_for_ranking}; "
         f"tstat = mean / max(se, {se_floor})"
     )
     
+    # Components dict: strictly numeric (for JSON/typing compatibility)
     components = {
         "skill_tstat": skill_tstat,
         "skill_score_01": skill_score_01,
         "primary_se": primary_se,
         "coverage01": coverage01,
-        "stability01": stability01,
+        "stability01": stability01,  # Optional: still compute for debugging, but not in quality
+        "registry_coverage01": reg_coverage01,  # NEW
+        "sample_size_penalty": sample_size_penalty,  # NEW
         "quality01": quality01,
         "model_bonus": model_bonus,
         "composite_base": composite_base,
+        # Note: valid_for_ranking and invalid_reasons are in eligibility dict, not components
     }
     
-    return composite_score_01, definition, f"v{version}", components, scoring_signature
+    # Eligibility object: separate from numeric components (for type safety)
+    eligibility = {
+        "valid_for_ranking": valid_for_ranking,
+        "invalid_reasons": invalid_reasons,
+        "run_intent": effective_run_intent,
+    }
+    
+    return composite_score_01, definition, f"v{version}", components, scoring_signature, eligibility
 

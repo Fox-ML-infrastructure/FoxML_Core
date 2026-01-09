@@ -1095,13 +1095,23 @@ def rank_targets(
     # rank_delta = rank_screen - rank_strict (positive = screen ranks higher)
     # Compute ranks for both screen and strict scores
     if results:
-        # Sort by screen score (composite_score is screen score)
-        screen_ranked = sorted(results, key=lambda r: r.score_screen if (hasattr(r, 'score_screen') and r.score_screen is not None) else r.composite_score, reverse=True)
+        # Filter to only valid targets for ranking
+        valid_results = [r for r in results if getattr(r, 'valid_for_ranking', True)]
+        invalid_results = [r for r in results if not getattr(r, 'valid_for_ranking', True)]
+        
+        if invalid_results:
+            logger.warning(f"Excluding {len(invalid_results)} targets from ranking due to eligibility gates:")
+            for r in invalid_results:
+                invalid_reasons = getattr(r, 'invalid_reasons', [])
+                logger.warning(f"  {r.target}: {', '.join(invalid_reasons) if invalid_reasons else 'UNKNOWN_REASON'}")
+        
+        # Sort by screen score (composite_score is screen score) - only valid targets
+        screen_ranked = sorted(valid_results, key=lambda r: r.score_screen if (hasattr(r, 'score_screen') and r.score_screen is not None) else r.composite_score, reverse=True)
         screen_ranks = {r.target: idx for idx, r in enumerate(screen_ranked)}
         
-        # Sort by strict score
+        # Sort by strict score - only valid targets
         strict_ranked = sorted(
-            [r for r in results if hasattr(r, 'score_strict') and r.score_strict is not None],
+            [r for r in valid_results if hasattr(r, 'score_strict') and r.score_strict is not None],
             key=lambda r: r.score_strict,
             reverse=True
         )
@@ -1122,10 +1132,13 @@ def rank_targets(
                 # If strict score not available, assume viable (backward compatibility)
                 r.strict_viability_flag = True
     
+    # Update results to only include valid targets (for downstream processing)
+    results = valid_results
+    
     # Apply top_n limit if specified (to cross-sectional results)
     if top_n is not None and top_n > 0:
         results = results[:top_n]
-        logger.info(f"Returning top {len(results)} targets (cross-sectional)")
+        logger.info(f"Returning top {len(results)} targets (cross-sectional, after eligibility filtering)")
     
     # Save rankings if output_dir provided
     if output_dir:

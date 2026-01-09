@@ -7348,21 +7348,51 @@ def evaluate_target_predictability(
     # This uses centered primary_mean, SE-based stability, and skill-gated composite
     try:
         from TRAINING.ranking.predictability.composite_score import calculate_composite_score_tstat
-        composite, composite_def, composite_ver, components, scoring_signature = calculate_composite_score_tstat(
+        
+        # Load run_intent from config (SST style - same pattern as other config loading in this file)
+        run_intent = None
+        if _CONFIG_AVAILABLE:
+            try:
+                from CONFIG.config_loader import get_cfg
+                # Try experiment config first (highest priority)
+                if experiment_config and hasattr(experiment_config, 'run_intent'):
+                    run_intent = experiment_config.run_intent
+                else:
+                    # Fallback to pipeline config
+                    run_intent = get_cfg("pipeline.ranking.run_intent", default=None, config_name="pipeline_config")
+            except Exception:
+                pass  # Default to None (will default to "eval" in calculate_composite_score_tstat)
+        
+        # Extract registry_coverage_rate from mismatch_telemetry if available
+        registry_coverage_rate = None
+        if 'mismatch_telemetry' in locals() and mismatch_telemetry:
+            registry_coverage_rate = mismatch_telemetry.get("registry_coverage_rate")
+        
+        composite, composite_def, composite_ver, components, scoring_signature, eligibility = calculate_composite_score_tstat(
             primary_mean=primary_metric_mean_centered,
             primary_std=std_score,
             n_slices_valid=n_cs_valid,  # Map n_cs_valid to n_slices_valid parameter
             n_slices_total=n_cs_total,  # Map n_cs_total to n_slices_total parameter
             task_type=final_task_type,
+            scoring_config=None,  # Will load from metrics_schema.yaml (SST pattern)
+            registry_coverage_rate=registry_coverage_rate,  # NEW
+            run_intent=run_intent,  # Pass from config
         )
+        
+        # Extract eligibility fields
+        valid_for_ranking = eligibility.get("valid_for_ranking", True)
+        invalid_reasons = eligibility.get("invalid_reasons", [])
+        effective_run_intent = eligibility.get("run_intent", "eval")
         # Extract primary_se from components if available
         if components and "primary_se" in components:
             primary_se = components["primary_se"]
         # Log success for debugging
         if scoring_signature:
-            logger.debug(f"Phase 3.1 composite score calculated successfully: version={composite_ver}, signature={scoring_signature[:16]}...")
+            logger.debug(f"Phase 3.2 composite score calculated successfully: version={composite_ver}, signature={scoring_signature[:16]}...")
+            if not valid_for_ranking:
+                logger.warning(f"Target {target} marked as invalid_for_ranking: {', '.join(invalid_reasons)}")
         else:
-            logger.warning(f"Phase 3.1 composite score calculated but scoring_signature is None")
+            logger.warning(f"Phase 3.2 composite score calculated but scoring_signature is None")
     except Exception as e:
         import traceback
         # Use ERROR level so it's definitely visible - this is a critical failure
@@ -7757,6 +7787,9 @@ def evaluate_target_predictability(
         status=final_status,
         attempts=1,
         view=result_view,  # For canonical metric naming
+        valid_for_ranking=valid_for_ranking,  # NEW
+        invalid_reasons=invalid_reasons,  # NEW
+        run_intent=effective_run_intent,  # NEW
         # === Phase 3.1: Centered primary metric and SE-based stats ===
         primary_metric_mean=primary_metric_mean_centered,  # Centered: IC for regression, AUC-excess for classification
         primary_metric_std=std_score,  # Explicit (authoritative, same as std_score for now)

@@ -4,6 +4,26 @@ All notable changes to FoxML Core will be documented in this file.
 
 ## 2026-01-09
 
+### Scoring Calibration Fixes: Eligibility Gates and Quality Formula
+- **Fixed Double-Counting of Standard Error**: Removed stability from quality calculation since SE is already in t-stat. Quality now = coverage × registry_coverage × sample_size (multiplicative)
+- **Added Eligibility Gates**: Targets with registry_coverage < 0.95 or n_slices_valid < 20 are marked `valid_for_ranking = False` with explicit reasons. Prevents low-quality targets from ranking high
+- **Sample Size Penalty**: Targets with n_slices_valid between 20-30 get quality penalty (0.7-1.0), but still valid for ranking
+- **Scoring Version Bumped to 1.2**: Updated scoring signature to include eligibility params for determinism
+- **Files**: `composite_score.py`, `scoring.py`, `model_evaluation.py`, `target_ranker.py`, `metrics_schema.yaml`
+
+### View Cache Conflict Fix: SS→CS Promotion Root Cause
+- **Fixed View Cache Overriding Explicitly Requested Views**: Cache now only reused when requested_view matches cached view or is None (auto mode). On conflict, resolves fresh and logs warning
+- **Root Cause**: Cached CROSS_SECTIONAL view was unconditionally reused even when SYMBOL_SPECIFIC was explicitly requested, causing SS→CS promotion warnings
+- **Impact**: Explicit SYMBOL_SPECIFIC requests no longer overridden by cached CROSS_SECTIONAL. Cache still reused when appropriate
+- **Files**: `cross_sectional_data.py`
+
+### Multi-Symbol SYMBOL_SPECIFIC View Validation Fix
+- **Fixed Multi-Symbol Runs Routing to Wrong Directories**: Added validation to prevent SYMBOL_SPECIFIC view when `n_symbols > 1`. Multi-symbol runs (e.g., universe `f517a23ce02cdcad4887b95107f165cc69f15796ccfd07c3b8e1466fbd2102f5`) now correctly route to `CROSS_SECTIONAL/universe={universe_sig}/` instead of `SYMBOL_SPECIFIC/symbol=.../universe={universe_sig}/`
+- **Root Cause**: Auto-resolution logic didn't validate that `requested_view=SYMBOL_SPECIFIC` requires `n_symbols=1`. Multi-symbol runs incorrectly resolved to SYMBOL_SPECIFIC view
+- **Fix**: Added validation before auto-resolution to clear invalid SYMBOL_SPECIFIC requests for multi-symbol runs. Added cache compatibility check. Added single-symbol validation in FEATURE_SELECTION stage
+- **Impact**: Multi-symbol runs correctly route to CROSS_SECTIONAL directories. Files no longer incorrectly written to SYMBOL_SPECIFIC folders. Clear warnings when invalid requests are overridden
+- **Files**: `cross_sectional_data.py`, `feature_selector.py`, `multi_model_feature_selection.py`
+
 ### Fix CROSS_SECTIONAL View Detection for Feature Importances
 - **Fixed Incorrect SYMBOL_SPECIFIC Detection for Multi-Symbol CROSS_SECTIONAL Runs**: Resolved issue where CROSS_SECTIONAL runs (10 symbols) were incorrectly detected as SYMBOL_SPECIFIC when saving feature importances, causing "SYMBOL_SPECIFIC view requires symbol" errors
   - **Root Cause**: Auto-detection logic at function entry (line 5309-5313) converted CROSS_SECTIONAL to SYMBOL_SPECIFIC if `symbol` parameter was provided, without checking if it was actually a single-symbol run. For multi-symbol CROSS_SECTIONAL runs, `symbol` could be set from a previous target's state, causing incorrect auto-detection

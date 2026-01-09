@@ -387,37 +387,97 @@ def prepare_cross_sectional_data_for_ranking(
         logger.debug(f"Could not load view policy from config: {e}, using defaults")
     
     # Determine resolved view based on policy
-    # Only reuse if we have a cached entry for THIS universe
+    # Only reuse if we have a cached entry for THIS universe AND it doesn't conflict with requested_view
+    should_reuse_cache = False
     if existing_entry:
-        # Reuse cached view for this universe - reference stored original_reason directly (no nesting)
-        view = existing_entry.get('view')
+        cached_view = existing_entry.get('view')
         original_reason = existing_entry.get("original_reason", "N/A")
-        view_reason = f"reusing cached view for universe={universe_sig} (originally: {original_reason})"
-    elif view_policy == "force":
-        # Force view: use requested_view exactly (no auto-flip)
-        if effective_requested_view is None:
-            logger.warning("view_policy=force but requested_view not set, defaulting to CROSS_SECTIONAL")
-            effective_requested_view = View.CROSS_SECTIONAL.value
-        view = effective_requested_view
-        view_reason = f"view_policy=force, requested_view={effective_requested_view}"
-    else:
-        # Auto mode: resolve fresh based on panel size
-        if n_symbols_available == 1:
-            if effective_requested_view and effective_requested_view != "SINGLE_SYMBOL_TS":
-                view = effective_requested_view
-                view_reason = f"n_symbols=1, using requested_view={effective_requested_view} (per-symbol loop)"
+        
+        # SST: Check if requested_view conflicts with cached view
+        # Normalize both to View enum for comparison (SST pattern)
+        cached_view_enum = None
+        if cached_view:
+            try:
+                cached_view_enum = View.from_string(cached_view) if isinstance(cached_view, str) else cached_view
+            except (ValueError, AttributeError):
+                # Fallback: treat as string if View.from_string fails
+                cached_view_enum = cached_view
+        
+        requested_view_enum = None
+        if effective_requested_view:
+            try:
+                requested_view_enum = View.from_string(effective_requested_view) if isinstance(effective_requested_view, str) else effective_requested_view
+            except (ValueError, AttributeError):
+                # Fallback: treat as string if View.from_string fails
+                requested_view_enum = effective_requested_view
+        
+        # Reuse cache only if:
+        # 1. requested_view is None (auto mode), OR
+        # 2. requested_view matches cached view
+        # AND cached view is compatible with current n_symbols
+        if requested_view_enum is None or cached_view_enum == requested_view_enum:
+            # Additional validation: cached SYMBOL_SPECIFIC view requires n_symbols=1
+            if cached_view_enum == View.SYMBOL_SPECIFIC and n_symbols_available > 1:
+                logger.warning(
+                    f"⚠️  Cached view=SYMBOL_SPECIFIC incompatible with n_symbols={n_symbols_available}. "
+                    f"SYMBOL_SPECIFIC requires n_symbols=1. Resolving fresh."
+                )
+                should_reuse_cache = False
+                existing_entry = None
             else:
-                view = "SINGLE_SYMBOL_TS"
-                view_reason = "n_symbols=1"
-        elif n_symbols_available < auto_flip_min_symbols:
-            view = View.SYMBOL_SPECIFIC
-            view_reason = f"n_symbols={n_symbols_available} (small panel, < {auto_flip_min_symbols} recommended)"
+                # Safe to reuse: no conflict and compatible with n_symbols
+                should_reuse_cache = True
+                view = cached_view
+                view_reason = f"reusing cached view for universe={universe_sig} (originally: {original_reason})"
         else:
-            view = View.CROSS_SECTIONAL
-            view_reason = f"n_symbols={n_symbols_available} (full panel, >= {auto_flip_min_symbols})"
+            # Conflict: requested_view != cached view
+            # Resolve fresh based on requested_view and panel size (don't reuse cache)
+            logger.warning(
+                f"⚠️  View cache conflict: cached view={cached_view} for universe={universe_sig} "
+                f"conflicts with requested_view={effective_requested_view}. Resolving fresh."
+            )
+            should_reuse_cache = False
+            # Don't set view here - fall through to auto/force logic
+    
+    if not should_reuse_cache:
+        # Validate requested_view is compatible with n_symbols BEFORE resolution
+        # SYMBOL_SPECIFIC view requires n_symbols=1 (single symbol only)
+        if effective_requested_view == View.SYMBOL_SPECIFIC.value and n_symbols_available > 1:
+            logger.warning(
+                f"⚠️  Invalid requested_view=SYMBOL_SPECIFIC for multi-symbol run (n_symbols={n_symbols_available}). "
+                f"SYMBOL_SPECIFIC view requires n_symbols=1. Resolving to CROSS_SECTIONAL."
+            )
+            effective_requested_view = None  # Clear invalid request, let auto logic resolve to CROSS_SECTIONAL
+        
+        if view_policy == "force":
+            # Force view: use requested_view exactly (no auto-flip)
+            if effective_requested_view is None:
+                logger.warning("view_policy=force but requested_view not set, defaulting to CROSS_SECTIONAL")
+                effective_requested_view = View.CROSS_SECTIONAL.value
+            view = effective_requested_view
+            view_reason = f"view_policy=force, requested_view={effective_requested_view}"
+        else:
+            # Auto mode: resolve fresh based on panel size
+            if n_symbols_available == 1:
+                if effective_requested_view and effective_requested_view != "SINGLE_SYMBOL_TS":
+                    view = effective_requested_view
+                    view_reason = f"n_symbols=1, using requested_view={effective_requested_view} (per-symbol loop)"
+                else:
+                    view = "SINGLE_SYMBOL_TS"
+                    view_reason = "n_symbols=1"
+            elif n_symbols_available < auto_flip_min_symbols:
+                # Small panel: recommend SYMBOL_SPECIFIC, BUT only if single symbol
+                # For multi-symbol runs, must use CROSS_SECTIONAL (SYMBOL_SPECIFIC requires n_symbols=1)
+                # Note: effective_requested_view was already validated above, so if it was SYMBOL_SPECIFIC, it's now None
+                view = View.SYMBOL_SPECIFIC
+                view_reason = f"n_symbols={n_symbols_available} (small panel, < {auto_flip_min_symbols} recommended)"
+            else:
+                # Large panel: always CROSS_SECTIONAL
+                view = View.CROSS_SECTIONAL
+                view_reason = f"n_symbols={n_symbols_available} (full panel, >= {auto_flip_min_symbols})"
     
     # Validate view contract (only if we resolved a new view, not cached)
-    if not existing_entry:
+    if not should_reuse_cache:
         try:
             validate_view_contract(view, effective_requested_view, view_policy)
         except ValueError as e:
@@ -434,8 +494,12 @@ def prepare_cross_sectional_data_for_ranking(
     # view is immutable PER UNIVERSE, data_scope can be updated
     if output_dir is not None:
         try:
-            # For cached entries, pass the original_reason (not the "reusing..." message)
-            save_view_reason = existing_entry["original_reason"] if existing_entry else view_reason
+            # For cached entries that were reused, pass the original_reason (not the "reusing..." message)
+            # If we resolved fresh (conflict or no cache), use the new view_reason
+            if should_reuse_cache and existing_entry:
+                save_view_reason = existing_entry.get("original_reason", view_reason)
+            else:
+                save_view_reason = view_reason
             save_run_context(
                 output_dir=output_dir,
                 view=view,

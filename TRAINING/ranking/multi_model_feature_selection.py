@@ -5114,10 +5114,31 @@ def save_multi_model_results(
             view_enum = View.from_string(view) if isinstance(view, str) else view
             
             # Auto-detect SYMBOL_SPECIFIC view if symbol is provided (same pattern as other FEATURE_SELECTION fixes)
+            # CRITICAL: Only auto-detect if this is actually a single-symbol run
             if view_enum == View.CROSS_SECTIONAL and symbol is not None:
-                logger.info(f"Auto-detecting SYMBOL_SPECIFIC view for multi-model results (symbol={symbol} provided with CROSS_SECTIONAL)")
-                view = View.SYMBOL_SPECIFIC
-                view_enum = View.SYMBOL_SPECIFIC
+                # Check if metadata has symbols list to validate single-symbol
+                metadata_symbols = metadata.get('symbols') if metadata else None
+                is_single_symbol = False
+                if metadata_symbols:
+                    is_single_symbol = len(metadata_symbols) == 1
+                elif symbol:
+                    # If no symbols list in metadata, assume single-symbol if symbol is provided
+                    # (caller should have validated, but be defensive)
+                    is_single_symbol = True
+                    logger.debug(f"No symbols list in metadata, assuming single-symbol run based on symbol={symbol}")
+                
+                if is_single_symbol:
+                    logger.info(f"Auto-detecting SYMBOL_SPECIFIC view for multi-model results (symbol={symbol} provided with CROSS_SECTIONAL, single-symbol run)")
+                    view = View.SYMBOL_SPECIFIC
+                    view_enum = View.SYMBOL_SPECIFIC
+                else:
+                    # Multi-symbol CROSS_SECTIONAL run - clear symbol to prevent incorrect SYMBOL_SPECIFIC detection
+                    num_symbols = len(metadata_symbols) if metadata_symbols else 'unknown'
+                    logger.warning(
+                        f"CROSS_SECTIONAL run with {num_symbols} symbols - keeping CROSS_SECTIONAL view, "
+                        f"ignoring symbol={symbol} parameter to prevent incorrect SYMBOL_SPECIFIC detection"
+                    )
+                    symbol = None
             
             if view_enum not in (View.CROSS_SECTIONAL, View.SYMBOL_SPECIFIC):
                 raise ValueError(f"Invalid view in metadata: {view}. Must be View.CROSS_SECTIONAL or View.SYMBOL_SPECIFIC")
