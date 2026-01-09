@@ -434,6 +434,17 @@ def save_feature_importances_for_reproducibility(
     """
     # Normalize view to enum
     view_enum = View.from_string(view) if isinstance(view, str) else view
+    
+    # Auto-detect SYMBOL_SPECIFIC view if symbol is provided
+    if symbol and view_enum == View.CROSS_SECTIONAL:
+        view_enum = View.SYMBOL_SPECIFIC
+        logger.debug(f"Auto-detected SYMBOL_SPECIFIC view for feature importances (symbol={symbol})")
+    
+    # Validate symbol is provided for SYMBOL_SPECIFIC view
+    if view_enum == View.SYMBOL_SPECIFIC and not symbol:
+        logger.error(f"SYMBOL_SPECIFIC view requires symbol parameter for {target_column} feature importances. Cannot create OutputLayout.")
+        return  # Don't write to unscoped location
+    
     import pandas as pd
     
     from TRAINING.orchestration.utils.target_first_paths import normalize_target_name

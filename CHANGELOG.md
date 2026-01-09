@@ -4,6 +4,15 @@ All notable changes to FoxML Core will be documented in this file.
 
 ## 2026-01-09
 
+### Symbol Parameter Propagation Fix - All Stages (FEATURE_SELECTION and TRAINING)
+- **Fixed Symbol Parameter Propagation Across All Stages**: Applied comprehensive fixes to FEATURE_SELECTION and TRAINING stages to match TARGET_RANKING fixes
+  - **FEATURE_SELECTION - View Auto-Detection** (`feature_selector.py` line 264): Added auto-detection to convert `CROSS_SECTIONAL` to `SYMBOL_SPECIFIC` when symbol is provided, matching TARGET_RANKING behavior
+  - **FEATURE_SELECTION - OutputLayout Validation** (`feature_selection_reporting.py` lines 437-443): Added auto-detection and validation in `save_feature_importances_for_reproducibility()` to ensure symbol is provided before creating OutputLayout, preventing "SYMBOL_SPECIFIC view requires symbol" errors
+  - **TRAINING - Path Validation** (`training_strategies/reproducibility/io.py` lines 81-87): Added validation warning when `SYMBOL_SPECIFIC` view is used without symbol parameter in `get_training_snapshot_dir()`
+  - **TRAINING - Verified Symbol Parameter**: Confirmed `ArtifactPaths.model_dir()` correctly receives symbol parameter for SYMBOL_SPECIFIC routes (line 763) and None for CROSS_SECTIONAL routes (line 1832)
+  - **Impact**: All three stages now have consistent symbol parameter propagation, view auto-detection, and validation. FEATURE_SELECTION and TRAINING stages will correctly route symbol-specific data to `SYMBOL_SPECIFIC/symbol=.../` directories
+  - **Maintains SST Principles**: Uses same auto-detection and validation patterns as TARGET_RANKING, ensuring consistency across all stages
+
 ### Symbol Parameter Propagation Fix - Complete Path Construction
 - **Fixed Symbol Parameter Propagation for All Path Construction**: Resolved multiple issues where symbol parameter was not properly propagated, causing: 1) "SYMBOL_SPECIFIC view requires symbol" error in `save_feature_importances()`, 2) Universe directories created under `SYMBOL_SPECIFIC/` instead of `SYMBOL_SPECIFIC/symbol=.../`, 3) Missing feature importance snapshots per symbol
   - **Fix #1 - resolve_write_scope()** (`model_evaluation.py` line 5671): Pass `symbol` parameter to `resolve_write_scope()` instead of `None`, enabling proper symbol derivation from SST config

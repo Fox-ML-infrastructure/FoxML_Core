@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### January
 
+- **2026-01-09 (Symbol Parameter Propagation Fix - All Stages)** — Applied comprehensive fixes to FEATURE_SELECTION and TRAINING stages: added view auto-detection in feature_selector.py, added symbol validation in save_feature_importances_for_reproducibility(), added validation warning in get_training_snapshot_dir(), and verified ArtifactPaths.model_dir() symbol parameter. All three stages now have consistent symbol parameter propagation and validation. FEATURE_SELECTION and TRAINING stages will correctly route symbol-specific data to SYMBOL_SPECIFIC/symbol=.../ directories. Maintains SST principles with consistent patterns across all stages.
+  → [View](2026-01-09-sst-enum-migration.md)
+
 - **2026-01-09 (Symbol Parameter Propagation Fix - Complete Path Construction)** — Fixed multiple issues where symbol parameter was not properly propagated: 1) "SYMBOL_SPECIFIC view requires symbol" error in save_feature_importances(), 2) Universe directories created under SYMBOL_SPECIFIC/ instead of SYMBOL_SPECIFIC/symbol=.../, 3) Missing feature importance snapshots per symbol. Fixed by passing symbol to resolve_write_scope(), adding fallback logic for symbol_for_importances, ensuring symbol is derived for all ensure_scoped_artifact_dir() calls, and adding validation in get_scoped_artifact_dir(). All artifact directories now correctly route to SYMBOL_SPECIFIC/symbol=.../universe=.../ paths. Maintains SST principles.
   → [View](2026-01-09-sst-enum-migration.md)
 

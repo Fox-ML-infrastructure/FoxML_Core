@@ -79,7 +79,15 @@ def get_training_snapshot_dir(
     
     # SST: Use View enum for comparison
     view_enum = View.from_string(view_str) if isinstance(view_str, str) else view_str
-    if view_enum == View.SYMBOL_SPECIFIC and symbol:
+    
+    # CRITICAL: Validate symbol is provided for SYMBOL_SPECIFIC view
+    if view_enum == View.SYMBOL_SPECIFIC and not symbol:
+        logger.warning(
+            f"SYMBOL_SPECIFIC view but symbol is None for {target} training snapshot. "
+            f"Path will be created without symbol component: {base_path}"
+        )
+        # Continue without symbol (may need to fix caller)
+    elif view_enum == View.SYMBOL_SPECIFIC and symbol:
         base_path = base_path / f"symbol={symbol}"
     
     if cohort_id:

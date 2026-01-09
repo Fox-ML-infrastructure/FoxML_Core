@@ -263,12 +263,15 @@ def select_features_for_target(
     # Normalize view to enum for validation
     view_enum = View.from_string(view) if isinstance(view, str) else view
     
+    # Auto-detect SYMBOL_SPECIFIC view if symbol is provided (same logic as TARGET_RANKING line 5297-5301)
+    if view_enum == View.CROSS_SECTIONAL and symbol is not None:
+        logger.info(f"Auto-detecting SYMBOL_SPECIFIC view (symbol={symbol} provided with CROSS_SECTIONAL)")
+        view = View.SYMBOL_SPECIFIC
+        view_enum = View.SYMBOL_SPECIFIC
+    
     # Validate view and symbol parameters
     if view_enum == View.SYMBOL_SPECIFIC and symbol is None:
         raise ValueError(f"symbol parameter required for View.SYMBOL_SPECIFIC view")
-    if view_enum == View.CROSS_SECTIONAL and symbol is not None:
-        logger.warning(f"symbol={symbol} provided but view=View.CROSS_SECTIONAL, ignoring symbol")
-        symbol = None
     
     # Filter symbols based on view
     symbols_to_process = symbols
