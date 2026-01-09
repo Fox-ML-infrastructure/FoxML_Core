@@ -312,8 +312,10 @@ def update_manifest_with_plan_hashes(output_dir: Path) -> None:
         manifest["plan_hashes"] = plan_hashes
         
         # Write updated manifest
+        # SST: Use safe_json_dump to handle enums
+        from TRAINING.common.utils.file_utils import safe_json_dump
         with open(manifest_path, 'w') as f:
-            json.dump(manifest, f, indent=2, default=str)
+            safe_json_dump(manifest, f, indent=2, default=str)
         
         # Log which hashes were found
         if plan_hashes.get("routing_plan_hash"):
@@ -692,9 +694,11 @@ def create_target_metadata(
                         logger.debug(f"Failed to load metrics from {metrics_file}: {e}")
     
     # Write target metadata
+    # SST: Use safe_json_dump to handle enums
+    from TRAINING.common.utils.file_utils import safe_json_dump
     target_metadata_file = target_dir / "metadata.json"
     with open(target_metadata_file, 'w') as f:
-        json.dump(target_metadata, f, indent=2, default=str)
+        safe_json_dump(target_metadata, f, indent=2, default=str)
     
     logger.debug(f"Created target metadata: {target_metadata_file}")
     return target_metadata_file
@@ -1127,9 +1131,11 @@ def create_resolved_config(
     canonicalized["deterministic_config_fingerprint"] = deterministic_config_fingerprint
     
     # Save to globals/config.resolved.json
+    # SST: Use safe_json_dump to handle enums
+    from TRAINING.common.utils.file_utils import safe_json_dump
     resolved_config_path = globals_dir / "config.resolved.json"
     with open(resolved_config_path, 'w') as f:
-        json.dump(canonicalized, f, indent=2, default=str)
+        safe_json_dump(canonicalized, f, indent=2, default=str)
     
     logger.info(f"✅ Created resolved config: {resolved_config_path}")
     logger.info(f"   Full fingerprint: {config_fingerprint[:16]}...")
@@ -1209,9 +1215,11 @@ def save_overrides_config(
     
     try:
         # Canonicalize overrides
+        # SST: Use safe_json_dump to handle enums
+        from TRAINING.common.utils.file_utils import safe_json_dump
         canonicalized = canonicalize_json_for_config(overrides)
         with open(overrides_path, 'w') as f:
-            json.dump(canonicalized, f, indent=2, default=str)
+            safe_json_dump(canonicalized, f, indent=2, default=str)
         logger.info(f"✅ Saved overrides config: {overrides_path}")
         return overrides_path
     except Exception as e:

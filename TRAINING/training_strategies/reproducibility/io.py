@@ -395,12 +395,16 @@ def create_aggregated_training_snapshot(
             aggregated_outputs["training_time_seconds"] = float(np.sum(all_training_times))
             aggregated_outputs["training_time_mean"] = float(np.mean(all_training_times))
         
+        # SST: Normalize view to string (handle enum inputs)
+        from TRAINING.orchestration.utils.scope_resolution import View
+        view_str = view.value if isinstance(view, View) else (view if isinstance(view, str) else str(view))
+        
         # Create aggregated snapshot
         aggregated_snapshot = TrainingSnapshot(
             run_id=template.run_id,
             timestamp=template.timestamp,
             stage=template.stage,
-            view=view,
+            view=view_str,
             target=target,
             symbol=None,  # None indicates aggregated snapshot
             model_family=model_family,
@@ -498,15 +502,31 @@ def update_training_snapshot_index(
         key = snapshot.get_index_key()
         existing_index[key] = snapshot.to_dict()
         
+        # SST: Sanitize index data to normalize enums to strings before JSON serialization
+        from enum import Enum
+        import pandas as pd
+        def _sanitize_for_json(obj):
+            if isinstance(obj, pd.Timestamp):
+                return obj.isoformat()
+            elif isinstance(obj, Enum):
+                return obj.value
+            elif isinstance(obj, dict):
+                return {k: _sanitize_for_json(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [_sanitize_for_json(v) for v in obj]
+            else:
+                return obj
+        sanitized_index = _sanitize_for_json(existing_index)
+        
         # Write with file locking for concurrent safety
         with open(index_path, 'w') as f:
             try:
                 fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                json.dump(existing_index, f, indent=2, default=str)
+                json.dump(sanitized_index, f, indent=2, default=str)
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
             except BlockingIOError:
                 # Another process has the lock, try without exclusive lock
-                json.dump(existing_index, f, indent=2, default=str)
+                json.dump(sanitized_index, f, indent=2, default=str)
         
         logger.debug(f"Updated training snapshot index: {index_path} (key={key})")
         return index_path
@@ -744,11 +764,32 @@ def aggregate_training_summaries(output_dir: Path) -> None:
         "summary": summary_stats
     }
     
+    # SST: Sanitize summary data to normalize enums to strings before JSON serialization
+    from enum import Enum
+    try:
+        import pandas as pd
+        has_pandas = True
+    except ImportError:
+        has_pandas = False
+    
+    def _sanitize_for_json(obj):
+        if has_pandas and isinstance(obj, pd.Timestamp):
+            return obj.isoformat()
+        elif isinstance(obj, Enum):
+            return obj.value
+        elif isinstance(obj, dict):
+            return {k: _sanitize_for_json(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [_sanitize_for_json(v) for v in obj]
+        else:
+            return obj
+    sanitized_summary = _sanitize_for_json(training_summary)
+    
     # Write JSON summary
     summary_json_path = globals_dir / "training_summary.json"
     try:
         with open(summary_json_path, 'w') as f:
-            json.dump(training_summary, f, indent=2, default=str)
+            json.dump(sanitized_summary, f, indent=2, default=str)
         logger.info(f"✅ Saved training summary JSON: {summary_json_path}")
     except Exception as e:
         logger.warning(f"Failed to write training_summary.json: {e}")

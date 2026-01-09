@@ -104,7 +104,9 @@ def compute_cohort_id(
         parts.append(f"min_cs{min_cs}")
     if max_cs and max_cs != 100000:  # Only include if non-default
         parts.append(f"max{max_cs}")
-    parts.append(leak_ver.replace('.', '_'))
+    # Defensive: Ensure leak_ver is a string before calling .replace()
+    leak_ver_safe = (leak_ver or 'v1') if leak_ver else 'v1'
+    parts.append(leak_ver_safe.replace('.', '_'))
     
     cohort_id = "_".join(parts)
     

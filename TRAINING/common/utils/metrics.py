@@ -334,7 +334,15 @@ class MetricsWriter:
                 metrics_data["stage"] = str(stage)
         
         # Add all metrics as flat keys (exclude metadata fields)
-        for key, value in metrics.items():
+        # FIX: If metrics contains a nested 'metrics' key, extract it to prevent duplication
+        # This handles cases where run_data has both nested and top-level metrics
+        metrics_to_process = metrics
+        if isinstance(metrics, dict) and 'metrics' in metrics and isinstance(metrics['metrics'], dict):
+            # Extract nested metrics dict to prevent duplication
+            metrics_to_process = metrics['metrics']
+            logger.debug("Extracted nested 'metrics' dict to prevent duplication in metrics.json")
+        
+        for key, value in metrics_to_process.items():
             if key in ['timestamp', 'cohort_metadata', 'additional_data']:
                 continue
             

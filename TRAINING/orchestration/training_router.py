@@ -787,9 +787,27 @@ class TrainingRouter:
         
         dump_formats = self.config.get("dump_plan_as", ["JSON"])
         if "JSON" in dump_formats:
+            # SST: Sanitize plan data to normalize enums to strings before JSON serialization
+            from enum import Enum
+            import pandas as pd
+            def _sanitize_for_json(obj):
+                if isinstance(obj, pd.Timestamp):
+                    return obj.isoformat()
+                elif isinstance(obj, Enum):
+                    return obj.value
+                elif isinstance(obj, dict):
+                    return {k: _sanitize_for_json(v) for k, v in obj.items()}
+                elif isinstance(obj, (list, tuple)):
+                    return [_sanitize_for_json(v) for v in obj]
+                else:
+                    return obj
+            sanitized_plan = _sanitize_for_json(plan)
+            
+            # SST: Use safe_json_dump (sanitized_plan already sanitized above, but use helper for consistency)
+            from TRAINING.common.utils.file_utils import safe_json_dump
             json_path = output_dir / "routing_plan.json"
             with open(json_path, "w") as f:
-                json.dump(plan, f, indent=2)
+                safe_json_dump(sanitized_plan, f, indent=2)
             logger.info(f"✅ Saved routing plan JSON: {json_path}")
         
         if "YAML" in dump_formats:

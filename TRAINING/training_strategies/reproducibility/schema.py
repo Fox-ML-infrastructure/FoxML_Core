@@ -430,11 +430,16 @@ class TrainingSnapshot:
         if not predictions_sha256 and model_result:
             predictions_sha256 = model_result.get("prediction_hash")
         
+        # SST: Normalize stage and view to strings (handle enum inputs)
+        from TRAINING.orchestration.utils.scope_resolution import View, Stage
+        stage_str = Stage.TRAINING.value  # Always use string value
+        view_str = view.value if isinstance(view, View) else (view if isinstance(view, str) else str(view))
+        
         return cls(
             run_id=run_id,
             timestamp=timestamp,
-            stage=Stage.TRAINING,
-            view=view,
+            stage=stage_str,
+            view=view_str,
             target=target,
             symbol=symbol,
             model_family=model_family,

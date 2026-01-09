@@ -2336,6 +2336,14 @@ class ReproducibilityTracker:
                 
                 # Write metrics to target-first structure only
                 if target_cohort_dir:
+                    # FIX: Extract nested metrics if present, otherwise use run_data (but exclude non-metric keys)
+                    # This prevents duplication where metrics appear both nested and at root level
+                    metrics_to_write = run_data.get('metrics')
+                    if not metrics_to_write:
+                        # Fallback: use run_data but exclude non-metric keys to prevent duplication
+                        metrics_to_write = {k: v for k, v in run_data.items() 
+                                            if k not in ['timestamp', 'cohort_metadata', 'additional_data', 'stage', 'target']}
+                    
                     self.metrics.write_cohort_metrics(
                         cohort_dir=target_cohort_dir,
                         stage=stage_normalized,
@@ -2343,7 +2351,7 @@ class ReproducibilityTracker:
                         target=metrics_target,
                         symbol=symbol,
                         run_id=run_id_clean,
-                        metrics=run_data,
+                        metrics=metrics_to_write,
                         baseline_key=baseline_key,
                         diff_telemetry=diff_telemetry
                     )
@@ -4702,8 +4710,10 @@ class ReproducibilityTracker:
                 # Write audit report to target-first structure only
                 audit_report_path = target_cohort_dir / "audit_report.json"
                 try:
+                    # SST: Use safe_json_dump to handle enums
+                    from TRAINING.common.utils.file_utils import safe_json_dump
                     with open(audit_report_path, 'w') as f:
-                        json.dump(audit_report, f, indent=2)
+                        safe_json_dump(audit_report, f, indent=2)
                         f.flush()
                         os.fsync(f.fileno())
                 except Exception as e:

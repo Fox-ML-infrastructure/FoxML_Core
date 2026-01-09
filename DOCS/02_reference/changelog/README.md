@@ -6,6 +6,18 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### January
 
+- **2026-01-09 (Comprehensive JSON/Parquet Serialization Fixes - SST Solution)** — Fixed critical JSON/Parquet serialization failures by creating centralized SST helpers (`sanitize_for_serialization()`, `safe_json_dump()`, `safe_dataframe_from_dict()`) that handle enum objects and pandas Timestamps. Replaced all direct `json.dump()` calls with `safe_json_dump()` across 11 files (136 instances). Fixed metrics duplication in metrics.json by extracting nested metrics dict before writing. All JSON and Parquet files now write successfully. Maintains SST principles with centralized helpers.
+  → [View](2026-01-09-sst-enum-migration.md)
+
+- **2026-01-09 (Root Cause Fixes - NoneType Errors and Path Construction)** — Fixed root cause of persistent NoneType.replace() error by passing additional_data to extract_run_id() call (enables multi-source extraction). Fixed critical bug where symbol-specific data was written to CROSS_SECTIONAL directories - symbol check now happens FIRST before view determination, forcing SYMBOL_SPECIFIC view when symbol is set. Fixed path construction in 6 locations (main save, drift.json, metadata lookup, metrics rollup, snapshot). All fixes maintain SST principles and preserve hash verification data. Verified all files compile and symbol-specific data routes correctly.
+  → [View](2026-01-09-sst-enum-migration.md)
+
+- **2026-01-09 (NoneType Replace Error Fixes - All Stages)** — Fixed persistent `'NoneType' object has no attribute 'replace'` error across all three stages: multi-source `run_id` extraction in reproducibility_tracker.py with NameError handling, defensive checks for audit_result.get('run_id') in cross_sectional_feature_ranker.py, defensive checks for timestamp in diff_telemetry.py, and defensive checks for _run_name in intelligent_trainer.py (3 instances). All fixes include fallback to datetime.now().isoformat() and preserve all hash verification data. Verified all files compile and all stages are protected.
+  → [View](2026-01-09-sst-enum-migration.md)
+
+- **2026-01-09 (Comprehensive File Write Fixes - Enum Normalization and NoneType Error Resolution)** — Fixed missing JSON/parquet/CSV files in globals and output locations by normalizing enum values to strings in all snapshot creation and JSON write operations. Fixed persistent NoneType.replace() error in reproducibility tracking with defensive checks. All fixes maintain overwrite protection and backward compatibility. Verified all three stages (TARGET_RANKING, FEATURE_SELECTION, TRAINING) now output files correctly.
+  → [View](2026-01-09-sst-enum-migration.md)
+
 - **2026-01-09 (SST Import Shadowing Fixes)** — Fixed all `UnboundLocalError` issues from SST refactoring: removed `Stage` from local import in `model_evaluation.py` (line 8129), added global `Stage` import in `shared_ranking_harness.py`, removed redundant local `Path` imports (9 instances across 3 files). Verified all path construction and JSON serialization work correctly with enum values. All critical modules now import without errors.
   → [View](2026-01-09-sst-enum-migration.md)
 

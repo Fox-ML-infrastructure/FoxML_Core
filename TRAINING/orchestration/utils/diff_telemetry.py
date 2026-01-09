@@ -786,7 +786,9 @@ class DiffTelemetry:
         # Extract core identifiers
         run_id = run_data.get('run_id') or run_data.get('timestamp', datetime.now().isoformat())
         timestamp = run_data.get('timestamp', datetime.now().isoformat())
-        view = ctx.view
+        # SST: Normalize view to string (handle enum inputs)
+        view_raw = ctx.view
+        view = view_raw.value if isinstance(view_raw, View) else (view_raw if isinstance(view_raw, str) else str(view_raw))
         target = ctx.target
         symbol = additional_data.get('symbol') if additional_data else None
         
@@ -1016,11 +1018,14 @@ class DiffTelemetry:
         if not isinstance(scoring_schema_version, str):
             scoring_schema_version = "1.1"
         
+        # SST: Normalize stage to string (handle enum inputs)
+        stage_str = stage.value if isinstance(stage, Stage) else (stage if isinstance(stage, str) else str(stage))
+        
         return NormalizedSnapshot(
             run_id=run_id,
             timestamp=timestamp,
-            stage=stage,
-            view=view,
+            stage=stage_str,  # Normalized to string
+            view=view,  # Already normalized above
             target=target,
             symbol=symbol,
             config_fingerprint=full_config_fp,  # Full fingerprint (includes run_id/timestamp) - for metadata
@@ -2896,10 +2901,19 @@ class DiffTelemetry:
                     
                     # Build target-first reproducibility path with stage scoping
                     target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage)
-                    if view_for_target == "SYMBOL_SPECIFIC" and symbol_for_target:
-                        # Include symbol in path to prevent overwriting
+                    # CRITICAL FIX: Ensure symbol is included in path for SYMBOL_SPECIFIC view
+                    # Check symbol_for_target FIRST to prevent symbol-specific data going to CROSS_SECTIONAL
+                    if symbol_for_target:
+                        # If symbol is present, force SYMBOL_SPECIFIC view
+                        view_for_target = "SYMBOL_SPECIFIC"
                         target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol_for_target}" / f"cohort={cohort_id}"
+                    elif view_for_target == "SYMBOL_SPECIFIC":
+                        # SYMBOL_SPECIFIC view but no symbol - this is an error condition
+                        logger.warning(f"SYMBOL_SPECIFIC view but no symbol for snapshot {target}, using CROSS_SECTIONAL path")
+                        view_for_target = "CROSS_SECTIONAL"
+                        target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
                     else:
+                        # CROSS_SECTIONAL view - no symbol in path
                         target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
                     target_cohort_dir.mkdir(parents=True, exist_ok=True)
                     
@@ -4359,8 +4373,12 @@ class DiffTelemetry:
                 # Convert timestamp to numeric for comparison (ISO format)
                 try:
                     from datetime import datetime
-                    ts_dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                    seq = ts_dt.timestamp()
+                    # Defensive: Ensure timestamp is a string before calling .replace()
+                    if timestamp and isinstance(timestamp, str):
+                        ts_dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        seq = ts_dt.timestamp()
+                    else:
+                        seq = 0
                 except Exception:
                     seq = 0
             

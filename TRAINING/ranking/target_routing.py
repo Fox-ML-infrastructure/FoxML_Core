@@ -507,9 +507,25 @@ def _save_dual_view_rankings(
     # Save to globals/ (target-first primary location)
     globals_dir = get_globals_dir(base_output_dir)
     globals_dir.mkdir(parents=True, exist_ok=True)
+    # SST: Sanitize routing data to normalize enums to strings before JSON serialization
+    from enum import Enum
+    import pandas as pd
+    def _sanitize_for_json(obj):
+        if isinstance(obj, pd.Timestamp):
+            return obj.isoformat()
+        elif isinstance(obj, Enum):
+            return obj.value
+        elif isinstance(obj, dict):
+            return {k: _sanitize_for_json(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [_sanitize_for_json(v) for v in obj]
+        else:
+            return obj
+    sanitized_routing_data = _sanitize_for_json(routing_data)
+    
     globals_file = globals_dir / "routing_decisions.json"
     with open(globals_file, 'w') as f:
-        json.dump(routing_data, f, indent=2, default=str)
+        json.dump(sanitized_routing_data, f, indent=2, default=str)
     logger.info(f"Saved routing decisions to {globals_file}")
     
     # Save per-target slices for fast local inspection

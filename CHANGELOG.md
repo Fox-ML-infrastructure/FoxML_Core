@@ -4,6 +4,30 @@ All notable changes to FoxML Core will be documented in this file.
 
 ## 2026-01-09
 
+### Comprehensive JSON/Parquet Serialization Fixes - SST Solution
+- **Fixed JSON Serialization with Enum Objects**: Resolved critical issue where Stage/View enum objects were written directly to JSON, causing serialization failures and missing output files
+  - **New SST Helpers in `file_utils.py`**: Created centralized `sanitize_for_serialization()`, `safe_json_dump()`, and `safe_dataframe_from_dict()` helpers that recursively convert enum objects to strings and handle pandas Timestamps
+  - **Comprehensive Migration**: Replaced all direct `json.dump()` calls with `safe_json_dump()` across 11 files (136 total instances):
+    - `intelligent_trainer.py`: Feature selection summary, model family status, selected features summary, target ranking cache, decision files (decision_used.json, resolved_config.json, applied_patch.json)
+    - `target_routing.py`: Target confidence summary, routing path, feature routing file
+    - `training_plan_generator.py`: Master training plan, JSON views (by_target, by_symbol, by_type, by_route)
+    - `training_router.py`: Routing plan JSON
+    - `routing_candidates.py`: Routing candidates JSON
+    - `manifest.py`: Manifest updates, target metadata, resolved config, overrides config (4 locations)
+    - `run_context.py`: Run context JSON saves (2 locations)
+    - `reproducibility_tracker.py`: Audit report JSON
+    - `checkpoint.py`: Checkpoint JSON writes
+  - **Parquet Serialization**: Replaced `pd.DataFrame([data])` with `safe_dataframe_from_dict(data)` in `metrics.py` for drift_results, rollup_data, and metrics.parquet writes
+  - **Impact**: All JSON and Parquet files now write successfully, fixing broken outputs in globals/ directory and all stage outputs
+  - **Maintains SST Principles**: Centralized helpers ensure consistent enum handling across entire codebase
+
+### Metrics Duplication Fix
+- **Fixed Duplicate Metrics in metrics.json**: Resolved issue where metrics were written twice (nested under `'metrics'` key and at root level)
+  - `reproducibility_tracker.py` (lines 2339-2349): Modified `write_cohort_metrics()` call to extract nested `'metrics'` dict from `run_data` or filter out non-metric keys before passing to metrics writer
+  - `metrics.py` (lines 336-353): Enhanced `_write_metrics()` to detect and extract nested `'metrics'` dict as defensive safety net
+  - **Impact**: `metrics.json` files now contain clean, non-duplicated metric data
+  - **Backward Compatible**: Handles both nested and flat metric structures
+
 ### Symbol-Specific Routing Auto-Detection Fixes
 - **Fixed Symbol-Specific View Auto-Detection**: Fixed bug where symbol-specific runs were being labeled as CROSS_SECTIONAL instead of SYMBOL_SPECIFIC
   - `model_evaluation.py` (lines 5297-5300): Auto-detects SYMBOL_SPECIFIC view when symbol is provided instead of nullifying symbol

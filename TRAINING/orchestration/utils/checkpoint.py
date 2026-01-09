@@ -120,9 +120,11 @@ class CheckpointManager:
             }
             
             # Atomic write: write to temp file, then rename
+            # SST: Use safe_json_dump to handle enums
+            from TRAINING.common.utils.file_utils import safe_json_dump
             temp_file = self.checkpoint_file.with_suffix('.tmp')
             with open(temp_file, 'w') as f:
-                json.dump(data, f, indent=2, default=self._json_serializer)
+                safe_json_dump(data, f, indent=2, default=self._json_serializer)
             
             temp_file.replace(self.checkpoint_file)
             

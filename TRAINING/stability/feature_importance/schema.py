@@ -599,11 +599,16 @@ class FeatureSelectionSnapshot:
             logger = logging.getLogger(__name__)
             logger.debug(f"Failed to compute selection_signature: {e}")
         
+        # SST: Normalize stage and view to strings (handle enum inputs)
+        from TRAINING.orchestration.utils.scope_resolution import View, Stage
+        stage_str = stage.value if isinstance(stage, Stage) else (stage if isinstance(stage, str) else str(stage))
+        view_str = view.value if isinstance(view, View) else (view if isinstance(view, str) else str(view))
+        
         return cls(
             run_id=importance_snapshot.run_id,
             timestamp=importance_snapshot.created_at.isoformat(),
-            stage=stage,  # Use caller-provided stage
-            view=view,
+            stage=stage_str,  # Normalized to string
+            view=view_str,  # Normalized to string
             target=importance_snapshot.target,
             symbol=symbol,
             method=importance_snapshot.method,

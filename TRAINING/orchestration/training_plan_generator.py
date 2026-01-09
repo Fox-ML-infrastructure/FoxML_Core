@@ -401,9 +401,27 @@ class TrainingPlanGenerator:
         
         # Save master plan (canonical source of truth) - with error handling
         master_path = output_dir / "master_training_plan.json"
+        # SST: Sanitize plan data to normalize enums to strings before JSON serialization
+        from enum import Enum
+        import pandas as pd
+        def _sanitize_for_json(obj):
+            if isinstance(obj, pd.Timestamp):
+                return obj.isoformat()
+            elif isinstance(obj, Enum):
+                return obj.value
+            elif isinstance(obj, dict):
+                return {k: _sanitize_for_json(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [_sanitize_for_json(v) for v in obj]
+            else:
+                return obj
+        sanitized_plan = _sanitize_for_json(plan)
+        
         try:
+            # SST: Use safe_json_dump (sanitized_plan already sanitized above, but use helper for consistency)
+            from TRAINING.common.utils.file_utils import safe_json_dump
             with open(master_path, "w") as f:
-                json.dump(plan, f, indent=2)
+                safe_json_dump(sanitized_plan, f, indent=2)
             logger.info(f"✅ Saved master training plan: {master_path}")
         except Exception as e:
             logger.error(f"Failed to save master training plan: {e}", exc_info=True)
@@ -412,8 +430,10 @@ class TrainingPlanGenerator:
         # Save convenience mirror - with error handling
         json_path = output_dir / "training_plan.json"
         try:
+            # SST: Use safe_json_dump to handle enums
+            from TRAINING.common.utils.file_utils import safe_json_dump
             with open(json_path, "w") as f:
-                json.dump(plan, f, indent=2)
+                safe_json_dump(plan, f, indent=2)
             logger.info(f"✅ Saved training plan (convenience mirror): {json_path}")
         except Exception as e:
             logger.warning(f"Failed to save convenience mirror: {e}, continuing...")
@@ -712,8 +732,10 @@ class TrainingPlanGenerator:
                     "jobs": target_jobs
                 }
                 view_path = by_target_dir / f"{target}.json"
+                # SST: Use safe_json_dump to handle enums
+                from TRAINING.common.utils.file_utils import safe_json_dump
                 with open(view_path, "w") as f:
-                    json.dump(view, f, indent=2)
+                    safe_json_dump(view, f, indent=2)
             logger.info(f"✅ Generated {len(by_target)} by_target views")
         except Exception as e:
             logger.warning(f"Failed to generate by_target views: {e}")
@@ -728,8 +750,10 @@ class TrainingPlanGenerator:
                     "jobs": symbol_jobs
                 }
                 view_path = by_symbol_dir / f"{symbol}.json"
+                # SST: Use safe_json_dump to handle enums
+                from TRAINING.common.utils.file_utils import safe_json_dump
                 with open(view_path, "w") as f:
-                    json.dump(view, f, indent=2)
+                    safe_json_dump(view, f, indent=2)
             logger.info(f"✅ Generated {len(by_symbol)} by_symbol views")
         except Exception as e:
             logger.warning(f"Failed to generate by_symbol views: {e}")
@@ -744,8 +768,10 @@ class TrainingPlanGenerator:
                     "jobs": type_jobs
                 }
                 view_path = by_type_dir / f"{job_type}.json"
+                # SST: Use safe_json_dump to handle enums
+                from TRAINING.common.utils.file_utils import safe_json_dump
                 with open(view_path, "w") as f:
-                    json.dump(view, f, indent=2)
+                    safe_json_dump(view, f, indent=2)
             logger.info(f"✅ Generated {len(by_type)} by_type views")
         except Exception as e:
             logger.warning(f"Failed to generate by_type views: {e}")
@@ -762,8 +788,10 @@ class TrainingPlanGenerator:
                 # Sanitize route name for filename
                 route_safe = route.replace("ROUTE_", "").lower()
                 view_path = by_route_dir / f"{route_safe}.json"
+                # SST: Use safe_json_dump to handle enums
+                from TRAINING.common.utils.file_utils import safe_json_dump
                 with open(view_path, "w") as f:
-                    json.dump(view, f, indent=2)
+                    safe_json_dump(view, f, indent=2)
             logger.info(f"✅ Generated {len(by_route)} by_route views")
         except Exception as e:
             logger.warning(f"Failed to generate by_route views: {e}")

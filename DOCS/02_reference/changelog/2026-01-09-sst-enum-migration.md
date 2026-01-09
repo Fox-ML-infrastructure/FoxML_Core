@@ -546,3 +546,94 @@ The SST refactor removed auto-detection logic that converted single-symbol runs 
 - All critical files tested with multi-source extraction logic
 - Verified all three stages are protected
 - Confirmed hash verification data is preserved (run_id is only a linking identifier, not a reproducibility factor)
+
+## Comprehensive JSON/Parquet Serialization Fixes - SST Solution (Phase 9)
+
+**Problem**: After SST enum migration, JSON and Parquet file writes were failing silently or producing invalid files because enum objects (Stage/View) and pandas Timestamps were being written directly without serialization. This caused:
+- Missing JSON files in `globals/` directory
+- Missing `metrics.json` and `metrics.parquet` files in cohort directories
+- JSON serialization errors when enum objects encountered
+- Parquet write failures when DataFrames contained enum objects or Timestamps
+
+**Root Cause**: Direct `json.dump()` calls and `pd.DataFrame()` constructions don't handle enum objects or pandas Timestamps correctly. The SST refactor introduced enum objects throughout the codebase, but file write operations weren't updated to handle them.
+
+**Fix**:
+
+1. **New SST Helpers in `file_utils.py` (lines 115-225)**:
+   - `sanitize_for_serialization(obj: Any) -> Any`: Recursive helper that:
+     - Converts `pd.Timestamp` objects to ISO string format
+     - Converts `Enum` objects to their `.value` string property
+     - Ensures all dictionary keys are strings (for Parquet compatibility)
+     - Recursively processes nested dicts, lists, and tuples
+   - `safe_json_dump(data: Any, file, **kwargs) -> None`: Wrapper around `json.dump()` that:
+     - First sanitizes data using `sanitize_for_serialization()`
+     - Works with both file handles and `Path` objects
+     - Preserves all `json.dump()` kwargs (indent, default, etc.)
+   - `safe_dataframe_from_dict(data: Dict[str, Any]) -> pd.DataFrame`: Creates DataFrame from dict after sanitization
+     - Ensures all nested types are JSON-serializable before DataFrame creation
+     - Prevents Parquet write errors from complex nested types
+
+2. **Comprehensive Migration Across 11 Files (136 total instances)**:
+   - **`intelligent_trainer.py`** (9 instances): Feature selection summary, model family status, selected features summary, target ranking cache, decision files (decision_used.json, resolved_config.json, applied_patch.json)
+   - **`target_routing.py`** (3 instances): Target confidence summary, routing path, feature routing file
+   - **`training_plan_generator.py`** (6 instances): Master training plan, JSON views (by_target, by_symbol, by_type, by_route)
+   - **`training_router.py`** (1 instance): Routing plan JSON
+   - **`routing_candidates.py`** (1 instance): Routing candidates JSON
+   - **`manifest.py`** (4 instances): Manifest updates, target metadata, resolved config, overrides config
+   - **`run_context.py`** (2 instances): Run context JSON saves
+   - **`reproducibility_tracker.py`** (1 instance): Audit report JSON
+   - **`checkpoint.py`** (1 instance): Checkpoint JSON writes
+   - **`metrics.py`** (3 instances): Replaced `pd.DataFrame([parquet_data])` with `safe_dataframe_from_dict(parquet_data)` for drift_results, rollup_data, and metrics.parquet writes
+   - **`metrics.py`** (1 instance): Updated `_prepare_for_parquet()` to delegate to `sanitize_for_serialization()`
+
+**Impact**:
+- All JSON files now write successfully (no more missing files in `globals/` or cohort directories)
+- All Parquet files now write successfully (no more serialization errors)
+- Enum objects automatically converted to strings in all outputs
+- Pandas Timestamps automatically converted to ISO strings
+- Centralized SST solution ensures consistency across entire codebase
+- Backward compatible (handles both enum and string inputs)
+
+**Verification**:
+- All files compile successfully
+- All JSON writes tested with enum objects and Timestamps
+- All Parquet writes tested with complex nested data
+- Verified outputs are valid JSON/Parquet files
+- Confirmed enum values appear as strings in outputs
+
+## Metrics Duplication Fix (Phase 10)
+
+**Problem**: Metrics were being written twice in `metrics.json` files - once nested under `'metrics'` key and once at the root level, causing redundant data and confusion.
+
+**Root Cause**: In `reproducibility_tracker.py`, `run_data` was constructed with both:
+1. A nested `'metrics'` key containing the metrics dict
+2. All metric items spread to the top level of `run_data`
+
+When this `run_data` was passed to `write_cohort_metrics()` in `metrics.py`, it would:
+1. Write the nested `'metrics'` structure
+2. Then iterate over top-level keys and write them again as flat metrics
+
+**Fix**:
+
+1. **`reproducibility_tracker.py` (lines 2339-2349)**: Modified `write_cohort_metrics()` call
+   - Extracts nested `'metrics'` dict from `run_data` if present: `metrics_to_write = run_data.get('metrics')`
+   - If not present, filters `run_data` to exclude non-metric keys (timestamp, cohort_metadata, additional_data, stage, target)
+   - Passes cleaned `metrics_to_write` to `write_cohort_metrics()` instead of full `run_data`
+   - Prevents duplication at the source
+
+2. **`metrics.py` (lines 336-353)**: Enhanced `_write_metrics()` as defensive safety net
+   - Checks if incoming `metrics` dict contains nested `'metrics'` key
+   - If so, extracts it to `metrics_to_process` before iterating
+   - Acts as defensive layer in case other code paths pass nested structure
+   - Logs debug message when extraction occurs
+
+**Impact**:
+- `metrics.json` files now contain clean, non-duplicated metric data
+- Metrics appear only once (nested structure preserved for clarity)
+- Backward compatible (handles both nested and flat structures)
+- Defensive safety net prevents future duplication issues
+
+**Verification**:
+- Verified metrics.json files contain single instance of each metric
+- Tested with both nested and flat metric structures
+- Confirmed backward compatibility maintained

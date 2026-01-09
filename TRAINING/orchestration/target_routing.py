@@ -206,10 +206,28 @@ def collect_run_level_confidence_summary(
     globals_dir = get_globals_dir(output_dir)
     globals_dir.mkdir(parents=True, exist_ok=True)
     
+    # SST: Sanitize confidence data to normalize enums to strings before JSON serialization
+    from enum import Enum
+    import pandas as pd
+    def _sanitize_for_json(obj):
+        if isinstance(obj, pd.Timestamp):
+            return obj.isoformat()
+        elif isinstance(obj, Enum):
+            return obj.value
+        elif isinstance(obj, dict):
+            return {k: _sanitize_for_json(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [_sanitize_for_json(v) for v in obj]
+        else:
+            return obj
+    sanitized_confidence = _sanitize_for_json(all_confidence)
+    
     # Write run-level JSON (list of all targets) to globals/
+    # SST: Use safe_json_dump (sanitized_confidence already sanitized above, but use helper for consistency)
+    from TRAINING.common.utils.file_utils import safe_json_dump
     run_summary_path = globals_dir / "target_confidence_summary.json"
     with open(run_summary_path, "w") as f:
-        json.dump(all_confidence, f, indent=2)
+        safe_json_dump(sanitized_confidence, f, indent=2)
     logger.info(f"✅ Saved run-level confidence summary: {len(all_confidence)} targets to {run_summary_path}")
     
     # Write CSV summary for easy inspection to globals/ (target-first only)
@@ -303,8 +321,10 @@ def save_target_routing_metadata(
         }
     }
     
+    # SST: Use safe_json_dump to handle enums
+    from TRAINING.common.utils.file_utils import safe_json_dump
     with open(routing_path, "w") as f:
-        json.dump(routing_data, f, indent=2)
+        safe_json_dump(routing_data, f, indent=2)
     
     logger.debug(f"Saved per-target routing decision for {target} to {routing_path}")
     
@@ -357,8 +377,10 @@ def save_target_routing_metadata(
         }
     }
     
+    # SST: Use safe_json_dump to handle enums
+    from TRAINING.common.utils.file_utils import safe_json_dump
     with open(feature_routing_file, "w") as f:
-        json.dump(routing_data_globals, f, indent=2, default=str)
+        safe_json_dump(routing_data_globals, f, indent=2, default=str)
     
     logger.info(f"Updated feature selection routing summary in {feature_routing_file}")
 

@@ -742,20 +742,24 @@ def extract_run_id(
         additional_data: Optional secondary dict to check
     
     Returns:
-        Run ID string, or None if not found
+        Run ID string, or None if not found (never returns empty string)
     """
     keys = ['run_id', 'timestamp']
     
     for key in keys:
         val = data.get(key)
         if val:
-            return str(val)
+            val_str = str(val).strip()  # Strip whitespace
+            if val_str:  # Only return if non-empty after stripping
+                return val_str
     
     if additional_data:
         for key in keys:
             val = additional_data.get(key)
             if val:
-                return str(val)
+                val_str = str(val).strip()  # Strip whitespace
+                if val_str:  # Only return if non-empty after stripping
+                    return val_str
     
     return None
 

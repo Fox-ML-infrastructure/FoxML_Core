@@ -539,10 +539,26 @@ def update_fs_snapshot_index(
     key = snapshot.get_index_key()
     index[key] = snapshot.to_dict()
     
+    # SST: Sanitize index data to normalize enums to strings before JSON serialization
+    from enum import Enum
+    import pandas as pd
+    def _sanitize_for_json(obj):
+        if isinstance(obj, pd.Timestamp):
+            return obj.isoformat()
+        elif isinstance(obj, Enum):
+            return obj.value
+        elif isinstance(obj, dict):
+            return {k: _sanitize_for_json(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [_sanitize_for_json(v) for v in obj]
+        else:
+            return obj
+    sanitized_index = _sanitize_for_json(index)
+    
     # Write updated index
     try:
         with index_path.open("w") as f:
-            json.dump(index, f, indent=2, default=str)
+            json.dump(sanitized_index, f, indent=2, default=str)
         logger.debug(f"Updated fs_snapshot_index.json with key: {key}")
         return index_path
     except Exception as e:

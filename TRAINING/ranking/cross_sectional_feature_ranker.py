@@ -613,7 +613,13 @@ def compute_cross_sectional_importance(
                 # FIX: Update run_id in cs_panel_metrics if we wrote it earlier and now have audit_result
                 if cohort_id and audit_result and audit_result.get('run_id'):
                     # Update run_id format to match main metrics
-                    run_id_clean = audit_result['run_id'].replace(':', '-').replace('.', '-').replace('T', '_')
+                    # Defensive: Ensure run_id is a string before calling .replace()
+                    run_id_raw = audit_result.get('run_id')
+                    if run_id_raw and isinstance(run_id_raw, str):
+                        run_id_clean = run_id_raw.replace(':', '-').replace('.', '-').replace('T', '_')
+                    else:
+                        # Skip if run_id is None or not a string
+                        run_id_clean = None
                     # Note: cs_panel_metrics was already written, but this ensures consistency for future writes
                     # The run_id in the file will be updated on next write
                 
