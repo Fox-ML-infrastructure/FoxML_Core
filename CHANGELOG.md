@@ -4,6 +4,70 @@ All notable changes to FoxML Core will be documented in this file.
 
 ## 2026-01-09
 
+### Symbol-Specific Routing Auto-Detection Fixes
+- **Fixed Symbol-Specific View Auto-Detection**: Fixed bug where symbol-specific runs were being labeled as CROSS_SECTIONAL instead of SYMBOL_SPECIFIC
+  - `model_evaluation.py` (lines 5297-5300): Auto-detects SYMBOL_SPECIFIC view when symbol is provided instead of nullifying symbol
+  - `model_evaluation/reporting.py` (lines 180-184): Auto-detects SYMBOL_SPECIFIC view in `save_feature_importances()` when symbol is provided
+  - `reproducibility_tracker.py` (line 2016): Fixed logic bug where FEATURE_SELECTION view determination happened after default CROSS_SECTIONAL assignment
+  - Single-symbol runs now automatically route to SYMBOL_SPECIFIC directories instead of CROSS_SECTIONAL
+  - Feature importances and other artifacts now correctly written to `SYMBOL_SPECIFIC/symbol=.../` paths
+  - All fixes maintain SST principles and preserve backward compatibility
+
+### Root Cause Fixes - NoneType Errors and Path Construction
+- **Fixed NoneType.replace() Error - Root Cause**: Resolved persistent `'NoneType' object has no attribute 'replace'` error by passing `additional_data` parameter to `extract_run_id()` call at line 1196, enabling multi-source extraction from `run_data`, `additional_data`, and `metrics` dictionaries
+- **Fixed Symbol-Specific Data Path Construction**: Fixed critical bug where symbol-specific data was being written to CROSS_SECTIONAL directories instead of SYMBOL_SPECIFIC/symbol=<symbol>/ directories
+  - `reproducibility_tracker.py` (lines 1984-2029): Symbol check now happens FIRST before any view determination - if `symbol` is set, forces `SYMBOL_SPECIFIC` view immediately
+  - `reproducibility_tracker.py` (lines 2048-2060): Path construction ensures symbol is included in path for SYMBOL_SPECIFIC view
+  - `reproducibility_tracker.py` (lines 4078-4082, 4409-4419, 4562-4572): Fixed drift.json, metadata lookup, and metrics rollup path construction
+  - `diff_telemetry.py` (lines 2904-2908): Fixed snapshot path construction to prioritize symbol presence
+- **Additional NoneType Safety**: Added defensive check in `cohort_id.py` (line 107) to ensure `leak_ver` is never None before calling `.replace()` method
+- All fixes maintain SST principles (enum usage, centralized helpers) and preserve hash verification data
+- Verified all files compile successfully and symbol-specific data now goes to correct directories
+
+### NoneType Replace Error Fixes - All Stages
+- **Fixed Persistent NoneType Replace Error**: Resolved `'NoneType' object has no attribute 'replace'` error across all three stages (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
+  - `reproducibility_tracker.py` (line 4002-4026): Multi-source `run_id` extraction from `run_data`, `additional_data`, and `metrics` with `NameError` handling
+  - `cross_sectional_feature_ranker.py` (line 613-622): Defensive check for `audit_result.get('run_id')` before `.replace()` in TARGET_RANKING stage
+  - `diff_telemetry.py` (line 4362-4370): Defensive check for `timestamp` before `.replace('Z', '+00:00')` across all stages
+  - `intelligent_trainer.py` (lines 1239, 2411, 4030): Defensive checks for `_run_name` before `.replace()` in all three stages
+  - All fixes include fallback to `datetime.now().isoformat()` if extraction fails
+  - Preserves all hash verification data and determinism tracking (no impact on reproducibility)
+  - Verified all files compile successfully and all stages are protected
+
+### Comprehensive File Write Fixes - Enum Normalization and NoneType Error Resolution
+- **Fixed Snapshot Creation Enum Normalization**: All snapshot creation functions now normalize Stage and View enums to strings before storing in dataclass fields
+  - `TrainingSnapshot.from_training_result()`: Normalizes Stage.TRAINING and View enum inputs to strings
+  - `FeatureSelectionSnapshot.from_importance_snapshot()`: Normalizes Stage and View enum inputs to strings
+  - `NormalizedSnapshot` creation in `diff_telemetry.py`: Normalizes Stage enum to string
+  - `create_aggregated_training_snapshot()`: Normalizes View enum to string
+  - Prevents enum objects from being stored in snapshot dataclasses, ensuring JSON serialization works correctly
+
+- **Fixed JSON Write Sanitization**: Added enum sanitization to all JSON write operations across the codebase
+  - `write_atomic_json()` in `file_utils.py`: Now sanitizes data to normalize enums before JSON serialization
+  - `manifest.py`: All manifest.json writes now sanitize enum values
+  - `target_routing.py`: Confidence summary JSON writes sanitize enums
+  - `ranking/target_routing.py`: Routing decisions JSON writes sanitize enums
+  - `stability/feature_importance/io.py`: Snapshot index JSON writes sanitize enums
+  - `training_strategies/reproducibility/io.py`: Training snapshot index and summary JSON writes sanitize enums
+  - `routing_candidates.py`: Routing candidates JSON writes sanitize enums
+  - `training_plan_generator.py`: Training plan JSON writes sanitize enums
+  - `training_router.py`: Routing plan JSON writes sanitize enums
+  - `run_context.py`: Run context JSON writes sanitize enums
+  - All JSON writes now use local `_sanitize_for_json()` helper that recursively converts Enum objects to their `.value` property
+  - Fixes missing JSON files in globals directory and other output locations
+
+- **Fixed NoneType Replace Error**: Resolved persistent `'NoneType' object has no attribute 'replace'` error in reproducibility tracking
+  - `reproducibility_tracker.py` (line 4004-4016): Added comprehensive defensive checks for run_id/timestamp extraction
+  - Handles cases where `run_data` is not a dict, `run_id`/`timestamp` are None/empty, or values are not strings
+  - Always falls back to `datetime.now().isoformat()` if extraction fails
+  - Prevents crashes when run data is malformed or missing required fields
+
+- **Overwrite Protection Verified**: Confirmed all fixes maintain existing overwrite protection mechanisms
+  - Idempotency checks in `_update_index()` still deduplicate by (run_id, phase)
+  - File locking in `_write_atomic_json_with_lock()` still prevents concurrent writes
+  - Atomic writes ensure crash consistency
+  - No overwriting issues reintroduced
+
 ### Comprehensive SST Path Construction Fixes - All Stages
 - **Fixed Path Construction with Enum Values**: Resolved enum-to-string conversion issues in path construction across all three stages
   - `target_first_paths.py`: Fixed `get_target_reproducibility_dir()`, `find_cohort_dir_by_id()`, and `target_repro_dir()` to normalize Stage/View enums to strings before path construction

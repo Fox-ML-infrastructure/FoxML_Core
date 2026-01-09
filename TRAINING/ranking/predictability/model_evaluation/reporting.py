@@ -177,6 +177,13 @@ def save_feature_importances(
         )
         return  # Don't write to unscoped location
     
+    # Auto-detect SYMBOL_SPECIFIC view if symbol is provided
+    if symbol and view == "CROSS_SECTIONAL":
+        # If symbol is provided but view is default CROSS_SECTIONAL, 
+        # this is likely a single-symbol run that should be SYMBOL_SPECIFIC
+        view = View.SYMBOL_SPECIFIC.value
+        logger.debug(f"Auto-detected SYMBOL_SPECIFIC view for single-symbol run (symbol={symbol})")
+    
     if output_dir is None:
         output_dir = _REPO_ROOT / "results"
     

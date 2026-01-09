@@ -5295,8 +5295,10 @@ def evaluate_target_predictability(
     if isinstance(view, str) and view == "LOSO" and symbol is None:
         raise ValueError(f"symbol parameter required for LOSO view")
     if view_enum == View.CROSS_SECTIONAL and symbol is not None:
-        logger.warning(f"symbol={symbol} provided but view=View.CROSS_SECTIONAL, ignoring symbol")
-        symbol = None
+        # Auto-detect: if symbol is provided, this should be SYMBOL_SPECIFIC view
+        logger.info(f"Auto-detecting SYMBOL_SPECIFIC view (symbol={symbol} provided with CROSS_SECTIONAL)")
+        view = View.SYMBOL_SPECIFIC
+        view_enum = View.SYMBOL_SPECIFIC
     
     # Load view from run context (SST) if available
     # For per-symbol loops, use cached view as requested_view to prevent view contract violations

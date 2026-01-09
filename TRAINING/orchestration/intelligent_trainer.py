@@ -965,8 +965,10 @@ class IntelligentTrainer:
                     cache_data = json.load(f)
             
             cache_data[cache_key] = rankings
+            # SST: Use safe_json_dump to handle enums
+            from TRAINING.common.utils.file_utils import safe_json_dump
             with open(self.target_ranking_cache, 'w') as f:
-                json.dump(cache_data, f, indent=2, default=_json_default)
+                safe_json_dump(cache_data, f, indent=2, default=_json_default)
         except Exception as e:
             logger.warning(f"Failed to save ranking cache: {e}")
     
@@ -1236,7 +1238,11 @@ class IntelligentTrainer:
         try:
             from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
             tracker = ReproducibilityTracker(output_dir=self.output_dir / "target_rankings")
-            run_id = self._run_name.replace("_", "-")  # Use run name as run_id
+            # Defensive: Ensure _run_name is a string before calling .replace()
+            run_id = self._run_name.replace("_", "-") if self._run_name and isinstance(self._run_name, str) else None
+            if not run_id:
+                from datetime import datetime
+                run_id = datetime.now().isoformat()
             tracker.generate_metrics_rollups(stage=Stage.TARGET_RANKING, run_id=run_id)
             logger.debug("✅ Generated metrics rollups for TARGET_RANKING")
         except Exception as e:
@@ -1660,8 +1666,10 @@ class IntelligentTrainer:
             summaries_dir = globals_dir(run_root_dir, "summaries")
             summaries_dir.mkdir(parents=True, exist_ok=True)
             summary_path = summaries_dir / "feature_selection_summary.json"
+            # SST: Use safe_json_dump to handle enums
+            from TRAINING.common.utils.file_utils import safe_json_dump
             with open(summary_path, "w") as f:
-                json.dump(aggregated_summary, f, indent=2, default=str)
+                safe_json_dump(aggregated_summary, f, indent=2, default=str)
             logger.info(f"✅ Aggregated feature selection summaries to {summary_path}")
         
         # Write aggregated model_family_status_summary.json
@@ -1701,8 +1709,10 @@ class IntelligentTrainer:
             summaries_dir = globals_dir(run_root_dir, "summaries")
             summaries_dir.mkdir(parents=True, exist_ok=True)
             status_path = summaries_dir / "model_family_status_summary.json"
+            # SST: Use safe_json_dump to handle enums
+            from TRAINING.common.utils.file_utils import safe_json_dump
             with open(status_path, "w") as f:
-                json.dump(aggregated_family_status, f, indent=2, default=str)
+                safe_json_dump(aggregated_family_status, f, indent=2, default=str)
             logger.info(f"✅ Aggregated model family status summaries to {status_path}")
         
         # NEW: Write selected_features_summary.json with actual feature lists
@@ -1727,8 +1737,10 @@ class IntelligentTrainer:
             summaries_dir = globals_dir(run_root_dir, "summaries")
             summaries_dir.mkdir(parents=True, exist_ok=True)
             summary_path = summaries_dir / "selected_features_summary.json"
+            # SST: Use safe_json_dump to handle enums
+            from TRAINING.common.utils.file_utils import safe_json_dump
             with open(summary_path, "w") as f:
-                json.dump(selected_features_summary, f, indent=2, default=str)
+                safe_json_dump(selected_features_summary, f, indent=2, default=str)
             logger.info(f"✅ Aggregated selected features summary to {summary_path} ({len(feature_selections)} target/view combinations)")
     
     def train_with_intelligence(
@@ -1876,8 +1888,10 @@ class IntelligentTrainer:
                                 
                                 # Receipt 1: Decision used (always)
                                 decision_used_file = decision_artifact_dir / "decision_used.json"
+                                # SST: Use safe_json_dump to handle enums
+                                from TRAINING.common.utils.file_utils import safe_json_dump
                                 with open(decision_used_file, 'w') as f:
-                                    json.dump(latest_decision.to_dict(), f, indent=2, default=str)
+                                    safe_json_dump(latest_decision.to_dict(), f, indent=2, default=str)
                                 
                                 # Receipt 2: Resolved config baseline (always)
                                 try:
@@ -1887,16 +1901,20 @@ class IntelligentTrainer:
                                         yaml.dump(train_kwargs.copy(), f, default_flow_style=False, sort_keys=False)
                                 except ImportError:
                                     resolved_config_file = decision_artifact_dir / "resolved_config.json"
+                                    # SST: Use safe_json_dump to handle enums
+                                    from TRAINING.common.utils.file_utils import safe_json_dump
                                     with open(resolved_config_file, 'w') as f:
-                                        json.dump(train_kwargs.copy(), f, indent=2, default=str)
+                                        safe_json_dump(train_kwargs.copy(), f, indent=2, default=str)
                                 
                                 # Receipt 3: Applied patch (or "none" if no patch)
                                 patch_file = decision_artifact_dir / "applied_patch.json"
                                 
                                 if decision_dry_run:
                                     # Dry-run: show patch without applying
+                                    # SST: Use safe_json_dump to handle enums
+                                    from TRAINING.common.utils.file_utils import safe_json_dump
                                     with open(patch_file, 'w') as f:
-                                        json.dump({
+                                        safe_json_dump({
                                             "mode": "dry_run",
                                             "decision_run_id": latest_decision.run_id,
                                             "cohort_id": cohort_id,
@@ -1942,8 +1960,10 @@ class IntelligentTrainer:
                                             yaml.dump(patched_config, f, default_flow_style=False, sort_keys=False)
                                     except ImportError:
                                         patched_config_file = decision_artifact_dir / "resolved_config.json"
+                                        # SST: Use safe_json_dump to handle enums
+                                        from TRAINING.common.utils.file_utils import safe_json_dump
                                         with open(patched_config_file, 'w') as f:
-                                            json.dump(patched_config, f, indent=2, default=str)
+                                            safe_json_dump(patched_config, f, indent=2, default=str)
                                     
                                     # Update config_hash to reflect patch
                                     import hashlib
@@ -2403,7 +2423,11 @@ class IntelligentTrainer:
             try:
                 from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
                 tracker = ReproducibilityTracker(output_dir=self.output_dir)
-                run_id = self._run_name.replace("_", "-")  # Use run name as run_id
+                # Defensive: Ensure _run_name is a string before calling .replace()
+                run_id = self._run_name.replace("_", "-") if self._run_name and isinstance(self._run_name, str) else None
+                if not run_id:
+                    from datetime import datetime
+                    run_id = datetime.now().isoformat()
                 tracker.generate_metrics_rollups(stage=Stage.FEATURE_SELECTION, run_id=run_id)
                 logger.debug("✅ Generated metrics rollups for FEATURE_SELECTION")
             except Exception as e:
@@ -4019,16 +4043,18 @@ Examples:
             # Compute and save run hash
             # Use run_name if available, otherwise try to extract from output_dir
             run_id = None
-            if hasattr(trainer, '_run_name') and trainer._run_name:
+            if hasattr(trainer, '_run_name') and trainer._run_name and isinstance(trainer._run_name, str):
                 run_id = trainer._run_name.replace("_", "-")
             elif hasattr(trainer, 'output_dir') and trainer.output_dir:
                 # Try to extract from directory name
                 dir_name = trainer.output_dir.name
-                if dir_name.startswith("run_"):
+                if dir_name and isinstance(dir_name, str) and dir_name.startswith("run_"):
                     run_id = dir_name.replace("_", "-")
-                else:
+                elif dir_name and isinstance(dir_name, str):
                     # Fallback: use directory name as-is (may contain timestamp or other identifiers)
                     run_id = dir_name
+                else:
+                    run_id = None
             
             # If still no run_id, generate one from timestamp
             if not run_id:

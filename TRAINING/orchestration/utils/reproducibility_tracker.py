@@ -644,8 +644,10 @@ class ReproducibilityTracker:
         # Save back to file
         try:
             self.output_dir.mkdir(parents=True, exist_ok=True)
+            # SST: Use safe_json_dump to handle enums
+            from TRAINING.common.utils.file_utils import safe_json_dump
             with open(self.log_file, 'w') as f:
-                json.dump(all_runs, f, indent=2)
+                safe_json_dump(all_runs, f, indent=2)
                 f.flush()  # Ensure immediate write
                 os.fsync(f.fileno())  # Force write to disk
         except IOError as e:
@@ -1188,17 +1190,22 @@ class ReproducibilityTracker:
         
         # Generate run_id - use SST accessor
         # Defensive: Ensure run_data is a dict before calling extract_run_id
+        # CRITICAL FIX: Pass additional_data to extract_run_id() so it can check multiple sources
+        # After the SST refactor, run_id should be in additional_data (extracted from run_identity in log_comparison)
         if not isinstance(run_data, dict):
             run_id = datetime.now().isoformat()
         else:
-            run_id = extract_run_id(run_data)
-            if not run_id:  # Handles None, empty string, or other falsy values
+            # Pass additional_data as second parameter to allow multi-source extraction
+            run_id = extract_run_id(run_data, additional_data)
+            # Handle None, empty string, or other falsy values
+            if not run_id or not isinstance(run_id, str) or not run_id.strip():
                 run_id = datetime.now().isoformat()
         
-        # Final safety check before .replace() - ensure run_id is a string
-        if not run_id or not isinstance(run_id, str):
+        # Final safety check before .replace() - ensure run_id is a non-empty string
+        if not run_id or not isinstance(run_id, str) or not run_id.strip():
             run_id = datetime.now().isoformat()
         
+        # Now guaranteed to be a non-empty string - safe to call .replace()
         run_id_clean = run_id.replace(':', '-').replace('.', '-').replace('T', '_')
         
         # Normalize stage to enum, then to string for comparisons
@@ -1975,51 +1982,62 @@ class ReproducibilityTracker:
                     get_target_reproducibility_dir, ensure_target_structure
                 )
                 
-                # Determine view from view or additional_data
-                view_for_target = None
-                if stage_enum == Stage.TARGET_RANKING:
-                    # For TARGET_RANKING, view comes from view or additional_data
-                    # Normalize view to enum for comparison
-                    if view:
-                        try:
-                            view_enum = View.from_string(view) if isinstance(view, str) else view
-                            view_for_target = view_enum.value  # Use enum value
-                        except ValueError:
-                            # Handle LOSO (not a View enum value)
-                            if isinstance(view, str) and view.upper() == "LOSO":
-                                view_for_target = View.SYMBOL_SPECIFIC.value
-                            else:
+                # CRITICAL FIX: Check symbol FIRST - if symbol is set, ALWAYS use SYMBOL_SPECIFIC
+                # This must happen before any view determination to prevent symbol-specific data
+                # from being written to CROSS_SECTIONAL directories
+                if symbol:
+                    view_for_target = View.SYMBOL_SPECIFIC.value
+                    logger.debug(f"Symbol-specific data detected (symbol={symbol}), forcing SYMBOL_SPECIFIC view")
+                elif cohort_id and cohort_id.startswith("sy_"):
+                    view_for_target = View.SYMBOL_SPECIFIC.value
+                    logger.debug(f"Detected symbol-specific cohort from cohort_id prefix: {cohort_id}")
+                else:
+                    # Only determine view from parameters if symbol is NOT set
+                    view_for_target = None
+                    if stage_enum == Stage.TARGET_RANKING:
+                        # For TARGET_RANKING, view comes from view or additional_data
+                        # Normalize view to enum for comparison
+                        if view:
+                            try:
                                 view_enum = View.from_string(view) if isinstance(view, str) else view
-                                view_for_target = view_enum.value
-                    elif additional_data and 'view' in additional_data:
-                        # Normalize view from additional_data
-                        view_from_data = additional_data['view']
-                        view_enum = View.from_string(view_from_data) if isinstance(view_from_data, str) else view_from_data
-                        view_for_target = view_enum.value if isinstance(view_enum, View) else str(view_enum).upper()
+                                view_for_target = view_enum.value  # Use enum value
+                            except ValueError:
+                                # Handle LOSO (not a View enum value)
+                                if isinstance(view, str) and view.upper() == "LOSO":
+                                    view_for_target = View.SYMBOL_SPECIFIC.value
+                                else:
+                                    view_enum = View.from_string(view) if isinstance(view, str) else view
+                                    view_for_target = view_enum.value
+                        elif additional_data and 'view' in additional_data:
+                            # Normalize view from additional_data
+                            view_from_data = additional_data['view']
+                            view_enum = View.from_string(view_from_data) if isinstance(view_from_data, str) else view_from_data
+                            view_for_target = view_enum.value if isinstance(view_enum, View) else str(view_enum).upper()
+                    elif stage_enum == Stage.FEATURE_SELECTION:
+                        # For FEATURE_SELECTION, map view to view
+                        if view:
+                            # Normalize view to enum
+                            view_enum = View.from_string(view) if isinstance(view, str) else view
+                            if view_enum == View.CROSS_SECTIONAL:
+                                view_for_target = View.CROSS_SECTIONAL.value
+                            elif view_enum == View.SYMBOL_SPECIFIC:
+                                view_for_target = View.SYMBOL_SPECIFIC.value
+                        elif additional_data and 'view' in additional_data:
+                            view_for_target = additional_data['view'].upper()
+                    
+                    # Default to CROSS_SECTIONAL only if still None after all stage-specific checks
                     if not view_for_target:
                         view_for_target = View.CROSS_SECTIONAL.value  # Default
-                elif stage_enum == Stage.FEATURE_SELECTION:
-                    # For FEATURE_SELECTION, map view to view
-                    if view:
-                        # Normalize view to enum
-                        view_enum = View.from_string(view) if isinstance(view, str) else view
-                        if view_enum == View.CROSS_SECTIONAL:
-                            view_for_target = View.CROSS_SECTIONAL.value
-                        elif view_enum == View.SYMBOL_SPECIFIC:
-                            view_for_target = View.SYMBOL_SPECIFIC.value
-                    elif additional_data and 'view' in additional_data:
-                        view_for_target = additional_data['view'].upper()
-                    if not view_for_target:
-                        view_for_target = "CROSS_SECTIONAL"  # Default
                 
-                # CRITICAL FIX: If symbol is set, force SYMBOL_SPECIFIC regardless of view parameter
-                # This prevents symbol-specific cohorts being written to CROSS_SECTIONAL directory
-                if symbol:
-                    view_for_target = "SYMBOL_SPECIFIC"
-                # Also check cohort_id prefix as backup indicator
-                elif cohort_id and cohort_id.startswith("sy_"):
-                    view_for_target = "SYMBOL_SPECIFIC"
-                    logger.debug(f"Detected symbol-specific cohort from cohort_id prefix: {cohort_id}")
+                # CRITICAL VALIDATION: Ensure view_for_target is never None before path construction
+                if not view_for_target:
+                    logger.warning(f"view_for_target is None for {stage}:{target}, defaulting to CROSS_SECTIONAL")
+                    view_for_target = View.CROSS_SECTIONAL.value
+                
+                # Additional validation: ensure it's a valid View enum value
+                if view_for_target not in (View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value):
+                    logger.warning(f"Invalid view_for_target={view_for_target}, normalizing to CROSS_SECTIONAL")
+                    view_for_target = View.CROSS_SECTIONAL.value
                 
                 # Get base output directory (run directory, not REPRODUCIBILITY subdirectory)
                 base_output_dir = self._repro_base_dir
@@ -2031,14 +2049,23 @@ class ReproducibilityTracker:
                 # For CROSS_SECTIONAL: targets/<target>/reproducibility/stage=<stage>/CROSS_SECTIONAL/cohort=<cohort_id>/
                 # For SYMBOL_SPECIFIC: targets/<target>/reproducibility/stage=<stage>/SYMBOL_SPECIFIC/symbol=<symbol>/cohort=<cohort_id>/
                 target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage_normalized)
-                # Normalize view_for_target to enum for comparison, then convert to string for path construction
-                view_for_target_enum = View.from_string(view_for_target) if isinstance(view_for_target, str) else view_for_target
-                # SST: Explicitly convert enum to string for path construction (defensive)
-                view_for_target_str = view_for_target_enum.value if isinstance(view_for_target_enum, View) else str(view_for_target_enum)
-                if view_for_target_enum == View.SYMBOL_SPECIFIC and symbol:
-                    # Include symbol in path to prevent overwriting
-                    target_cohort_dir = target_repro_dir / view_for_target_str / f"symbol={symbol}" / f"cohort={cohort_id}"
+                # CRITICAL: view_for_target is already validated above to be a valid View enum value string
+                # No need to normalize again - use it directly for path construction
+                view_for_target_str = view_for_target
+                
+                # CRITICAL FIX: Ensure symbol is included in path for SYMBOL_SPECIFIC view
+                # This prevents symbol-specific data from being written to CROSS_SECTIONAL directories
+                if view_for_target_str == View.SYMBOL_SPECIFIC.value:
+                    if symbol:
+                        # Include symbol in path to prevent overwriting
+                        target_cohort_dir = target_repro_dir / view_for_target_str / f"symbol={symbol}" / f"cohort={cohort_id}"
+                    else:
+                        # SYMBOL_SPECIFIC view but no symbol - this is an error condition
+                        logger.warning(f"SYMBOL_SPECIFIC view but no symbol provided for {stage}:{target}, using CROSS_SECTIONAL path")
+                        view_for_target_str = View.CROSS_SECTIONAL.value
+                        target_cohort_dir = target_repro_dir / view_for_target_str / f"cohort={cohort_id}"
                 else:
+                    # CROSS_SECTIONAL view - no symbol in path
                     target_cohort_dir = target_repro_dir / view_for_target_str / f"cohort={cohort_id}"
                 target_cohort_dir.mkdir(parents=True, exist_ok=True)
                 logger.debug(f"Created target-first cohort directory: {target_cohort_dir}")
@@ -2453,8 +2480,9 @@ class ReproducibilityTracker:
                 _write_atomic_json_with_lock(metrics_file, metrics_data)
                 # Also write metrics.parquet for consistency
                 try:
-                    import pandas as pd
-                    df_metrics = pd.DataFrame([metrics_data])
+                    # SST: Use safe_dataframe_from_dict to handle enums
+                    from TRAINING.common.utils.file_utils import safe_dataframe_from_dict
+                    df_metrics = safe_dataframe_from_dict(metrics_data)
                     metrics_parquet = target_cohort_dir / "metrics.parquet"
                     df_metrics.to_parquet(metrics_parquet, index=False, engine='pyarrow', compression='snappy')
                     logger.debug(f"✅ Saved metrics.json/parquet to target-first structure")
@@ -2653,8 +2681,10 @@ class ReproducibilityTracker:
             
             # Save
             self.stats_file.parent.mkdir(parents=True, exist_ok=True)
+            # SST: Use safe_json_dump to handle enums
+            from TRAINING.common.utils.file_utils import safe_json_dump
             with open(self.stats_file, 'w') as f:
-                json.dump(stats, f, indent=2)
+                safe_json_dump(stats, f, indent=2)
                 f.flush()  # Ensure immediate write
                 os.fsync(f.fileno())  # Force write to disk
         except Exception as e:
@@ -2682,8 +2712,10 @@ class ReproducibilityTracker:
             stats["last_updated"] = datetime.now().isoformat()
             
             self.stats_file.parent.mkdir(parents=True, exist_ok=True)
+            # SST: Use safe_json_dump to handle enums
+            from TRAINING.common.utils.file_utils import safe_json_dump
             with open(self.stats_file, 'w') as f:
-                json.dump(stats, f, indent=2)
+                safe_json_dump(stats, f, indent=2)
         except Exception:
             pass  # Best-effort stats
     
@@ -3513,6 +3545,26 @@ class ReproducibilityTracker:
             run_identity: Optional RunIdentity SST object with authoritative signatures
             prediction_fingerprint: Optional prediction fingerprint dict for predictions_sha256
         """
+        # CRITICAL FIX: Extract run_id from run_identity (SST canonical source) and ensure it's in additional_data
+        # This ensures all downstream code (extract_run_id, _save_to_cohort) can find it
+        if run_identity is not None:
+            run_id_from_identity = None
+            # Try multiple ways to extract run_id from run_identity object
+            if hasattr(run_identity, 'run_id'):
+                run_id_from_identity = getattr(run_identity, 'run_id', None)
+            elif hasattr(run_identity, 'timestamp'):
+                run_id_from_identity = getattr(run_identity, 'timestamp', None)
+            elif isinstance(run_identity, dict):
+                run_id_from_identity = run_identity.get('run_id') or run_identity.get('timestamp')
+            
+            # Ensure additional_data exists and has run_id/timestamp
+            if run_id_from_identity:
+                if additional_data is None:
+                    additional_data = {}
+                # Only add if not already present (don't overwrite existing)
+                if 'run_id' not in additional_data and 'timestamp' not in additional_data:
+                    additional_data['run_id'] = str(run_id_from_identity)
+        
         # Normalize stage to enum for internal use
         stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
         
@@ -4001,10 +4053,28 @@ class ReproducibilityTracker:
                 
                 # Compute and save drift.json if previous run exists
                 if previous:
-                    # FIX: Handle None case for run_id/timestamp
-                    run_id_or_timestamp = run_data.get('run_id') or run_data.get('timestamp')
-                    if run_id_or_timestamp is None:
+                    # FIX: Extract run_id from multiple sources (run_data, additional_data, metrics) to handle scoping issues
+                    # This avoids relying solely on run_data which may not be constructed in all code paths
+                    run_id_or_timestamp = None
+                    # Try run_data first (if it exists and is a dict)
+                    try:
+                        if 'run_data' in locals() and isinstance(run_data, dict):
+                            run_id_or_timestamp = run_data.get('run_id') or run_data.get('timestamp')
+                    except (NameError, TypeError):
+                        pass  # run_data not defined or not accessible
+                    # Fallback to additional_data
+                    if not run_id_or_timestamp and additional_data:
+                        run_id_or_timestamp = additional_data.get('run_id') or additional_data.get('timestamp')
+                    # Fallback to metrics dict
+                    if not run_id_or_timestamp and isinstance(metrics, dict):
+                        run_id_or_timestamp = metrics.get('run_id') or metrics.get('timestamp')
+                    # Final fallback: generate new timestamp
+                    if not run_id_or_timestamp or not isinstance(run_id_or_timestamp, str) or not run_id_or_timestamp.strip():
                         run_id_or_timestamp = datetime.now().isoformat()
+                    # Ensure it's a non-empty string before .replace()
+                    if not run_id_or_timestamp or not isinstance(run_id_or_timestamp, str) or not run_id_or_timestamp.strip():
+                        run_id_or_timestamp = datetime.now().isoformat()
+                    # Now guaranteed to be a non-empty string - safe to call .replace()
                     run_id_clean = run_id_or_timestamp.replace(':', '-').replace('.', '-').replace('T', '_')
                     try:
                         drift_data = self._compute_drift(
@@ -4029,20 +4099,37 @@ class ReproducibilityTracker:
                                 view = View.CROSS_SECTIONAL if view_str == View.CROSS_SECTIONAL.value else View.SYMBOL_SPECIFIC
 
                             # CRITICAL FIX: If symbol is set, force SYMBOL_SPECIFIC
+                            # This must happen before path construction to prevent wrong directory
                             if symbol:
                                 view = View.SYMBOL_SPECIFIC
+                                view_str = View.SYMBOL_SPECIFIC.value
                             elif cohort_id and cohort_id.startswith("sy_"):
                                 view = View.SYMBOL_SPECIFIC
-
-                            if _normalize_view_for_comparison(view) == View.SYMBOL_SPECIFIC.value and symbol:
-                                target_cohort_dir = target_repro_dir / view / f"symbol={symbol}" / f"cohort={cohort_id}"
+                                view_str = View.SYMBOL_SPECIFIC.value
                             else:
-                                target_cohort_dir = target_repro_dir / view / f"cohort={cohort_id}"
+                                # Normalize view to string for path construction
+                                view_str = view.value if isinstance(view, View) else (view if isinstance(view, str) else View.CROSS_SECTIONAL.value)
+
+                            # CRITICAL: Ensure symbol is included in path for SYMBOL_SPECIFIC view
+                            # Use view_str (string) for path construction, not view (enum)
+                            if view_str == View.SYMBOL_SPECIFIC.value:
+                                if symbol:
+                                    target_cohort_dir = target_repro_dir / view_str / f"symbol={symbol}" / f"cohort={cohort_id}"
+                                else:
+                                    # SYMBOL_SPECIFIC view but no symbol - fallback to CROSS_SECTIONAL
+                                    logger.warning(f"SYMBOL_SPECIFIC view but no symbol for drift.json {target}, using CROSS_SECTIONAL path")
+                                    view_str = View.CROSS_SECTIONAL.value
+                                    target_cohort_dir = target_repro_dir / view_str / f"cohort={cohort_id}"
+                            else:
+                                # CROSS_SECTIONAL view - no symbol in path
+                                target_cohort_dir = target_repro_dir / view_str / f"cohort={cohort_id}"
                             
                             drift_file = target_cohort_dir / "drift.json"
                             target_cohort_dir.mkdir(parents=True, exist_ok=True)
+                            # SST: Use safe_json_dump to handle enums
+                            from TRAINING.common.utils.file_utils import safe_json_dump
                             with open(drift_file, 'w') as f:
-                                json.dump(drift_data, f, indent=2)
+                                safe_json_dump(drift_data, f, indent=2)
                                 f.flush()  # Ensure immediate write
                                 os.fsync(f.fileno())  # Force write to disk
                         except (IOError, OSError) as e:
@@ -4353,16 +4440,28 @@ class ReproducibilityTracker:
             target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage_for_path)
             
             # Determine view
-            view_str = _normalize_view_for_comparison(view_for_cohort) if view_for_cohort else View.CROSS_SECTIONAL.value
-            if view_str not in [View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value]:
-                view = View.SYMBOL_SPECIFIC  # Normalize legacy values
+            # CRITICAL FIX: Check symbol FIRST - if symbol is set, ALWAYS use SYMBOL_SPECIFIC
+            if ctx.symbol:
+                view_str = View.SYMBOL_SPECIFIC.value
+            elif view_for_cohort:
+                view_str = _normalize_view_for_comparison(view_for_cohort)
+                if view_str not in [View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value]:
+                    view_str = View.SYMBOL_SPECIFIC.value  # Normalize legacy values
             else:
-                view = View.CROSS_SECTIONAL if view_str == View.CROSS_SECTIONAL.value else View.SYMBOL_SPECIFIC
+                view_str = View.CROSS_SECTIONAL.value  # Default
             
-            if _normalize_view_for_comparison(view) == View.SYMBOL_SPECIFIC.value and ctx.symbol:
-                target_cohort_dir = target_repro_dir / view / f"symbol={ctx.symbol}" / f"cohort={cohort_id}"
+            # CRITICAL: Ensure symbol is included in path for SYMBOL_SPECIFIC view
+            if view_str == View.SYMBOL_SPECIFIC.value:
+                if ctx.symbol:
+                    target_cohort_dir = target_repro_dir / view_str / f"symbol={ctx.symbol}" / f"cohort={cohort_id}"
+                else:
+                    # SYMBOL_SPECIFIC view but no symbol - fallback to CROSS_SECTIONAL
+                    logger.warning(f"SYMBOL_SPECIFIC view but no symbol in ctx for {target}, using CROSS_SECTIONAL path")
+                    view_str = View.CROSS_SECTIONAL.value
+                    target_cohort_dir = target_repro_dir / view_str / f"cohort={cohort_id}"
             else:
-                target_cohort_dir = target_repro_dir / view / f"cohort={cohort_id}"
+                # CROSS_SECTIONAL view - no symbol in path
+                target_cohort_dir = target_repro_dir / view_str / f"cohort={cohort_id}"
             
             # Fallback to legacy structure if target-first doesn't exist
             legacy_cohort_dir = self._get_cohort_dir(
@@ -4490,15 +4589,32 @@ class ReproducibilityTracker:
                 logger.debug(f"Could not load view from run context: {e}, using inferred view={view}")
             
             # CRITICAL FIX: If symbol is set, force SYMBOL_SPECIFIC
+            # This must happen before path construction to prevent wrong directory
             if ctx.symbol:
-                view = View.SYMBOL_SPECIFIC
+                view_str = View.SYMBOL_SPECIFIC.value
             elif cohort_id and cohort_id.startswith("sy_"):
-                view = View.SYMBOL_SPECIFIC
-
-            if _normalize_view_for_comparison(view) == View.SYMBOL_SPECIFIC.value and ctx.symbol:
-                target_cohort_dir = target_repro_dir / view / f"symbol={ctx.symbol}" / f"cohort={cohort_id}"
+                view_str = View.SYMBOL_SPECIFIC.value
             else:
-                target_cohort_dir = target_repro_dir / view / f"cohort={cohort_id}"
+                # Normalize view to string for path construction
+                view_str = _normalize_view_for_comparison(view_for_cohort_dir) if view_for_cohort_dir else View.CROSS_SECTIONAL.value
+                if view_str not in [View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value]:
+                    view_str = View.SYMBOL_SPECIFIC.value  # Normalize legacy values
+                else:
+                    # Ensure it's a valid View enum value string
+                    view_str = view_str  # Already validated above
+            
+            # CRITICAL: Ensure symbol is included in path for SYMBOL_SPECIFIC view
+            if view_str == View.SYMBOL_SPECIFIC.value:
+                if ctx.symbol:
+                    target_cohort_dir = target_repro_dir / view_str / f"symbol={ctx.symbol}" / f"cohort={cohort_id}"
+                else:
+                    # SYMBOL_SPECIFIC view but no symbol - fallback to CROSS_SECTIONAL
+                    logger.warning(f"SYMBOL_SPECIFIC view but no symbol in ctx for {target}, using CROSS_SECTIONAL path")
+                    view_str = View.CROSS_SECTIONAL.value
+                    target_cohort_dir = target_repro_dir / view_str / f"cohort={cohort_id}"
+            else:
+                # CROSS_SECTIONAL view - no symbol in path
+                target_cohort_dir = target_repro_dir / view_str / f"cohort={cohort_id}"
             
             # Fallback to legacy for reading only
             legacy_cohort_dir = self._get_cohort_dir(

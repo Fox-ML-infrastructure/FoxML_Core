@@ -455,9 +455,32 @@ def save_run_context(
         **additional_data
     }
     
+    # SST: Sanitize context data to normalize enums to strings before JSON serialization
+    from enum import Enum
+    try:
+        import pandas as pd
+        has_pandas = True
+    except ImportError:
+        has_pandas = False
+    
+    def _sanitize_for_json(obj):
+        if has_pandas and isinstance(obj, pd.Timestamp):
+            return obj.isoformat()
+        elif isinstance(obj, Enum):
+            return obj.value
+        elif isinstance(obj, dict):
+            return {k: _sanitize_for_json(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [_sanitize_for_json(v) for v in obj]
+        else:
+            return obj
+    sanitized_context = _sanitize_for_json(context)
+    
     # Write to file
+    # SST: Use safe_json_dump (sanitized_context already sanitized above, but use helper for consistency)
+    from TRAINING.common.utils.file_utils import safe_json_dump
     with open(run_context_path, 'w') as f:
-        json.dump(context, f, indent=2)
+        safe_json_dump(sanitized_context, f, indent=2)
     
     logger.debug(f"✅ Saved run context: universe={universe_signature}, view={view}")
     
@@ -647,9 +670,15 @@ def save_stage_transition(
     existing_context["current_stage"] = stage_normalized
     existing_context["stage_history"] = stage_history
     
+    # SST: Sanitize context data to normalize enums to strings before JSON serialization
+    from TRAINING.orchestration.utils.diff_telemetry import _sanitize_for_json
+    sanitized_context = _sanitize_for_json(existing_context)
+    
     # Write to file
+    # SST: Use safe_json_dump (sanitized_context already sanitized above, but use helper for consistency)
+    from TRAINING.common.utils.file_utils import safe_json_dump
     with open(run_context_path, 'w') as f:
-        json.dump(existing_context, f, indent=2)
+        safe_json_dump(sanitized_context, f, indent=2)
     
     logger.info(f"🔄 Stage transition: {stage_normalized} (reason: {reason or 'N/A'})")
     

@@ -186,9 +186,15 @@ def create_manifest(
             logger.debug(f"Failed to load run hash: {e}")
     
     # Write manifest
+    # SST: Sanitize manifest data to normalize enums to strings before JSON serialization
+    from TRAINING.orchestration.utils.diff_telemetry import _sanitize_for_json
+    sanitized_manifest = _sanitize_for_json(manifest)
+    
     manifest_path = output_dir / "manifest.json"
+    # SST: Use safe_json_dump (sanitized_manifest already sanitized above, but use helper for consistency)
+    from TRAINING.common.utils.file_utils import safe_json_dump
     with open(manifest_path, 'w') as f:
-        json.dump(manifest, f, indent=2, default=str)
+        safe_json_dump(sanitized_manifest, f, indent=2, default=str)
     
     logger.info(f"✅ Created manifest.json: {manifest_path}")
     return manifest_path
@@ -249,9 +255,32 @@ def update_manifest(
     # Update timestamp
     manifest["updated_at"] = datetime.now().isoformat()
     
+    # SST: Sanitize manifest data to normalize enums to strings before JSON serialization
+    from enum import Enum
+    try:
+        import pandas as pd
+        has_pandas = True
+    except ImportError:
+        has_pandas = False
+    
+    def _sanitize_for_json(obj):
+        if has_pandas and isinstance(obj, pd.Timestamp):
+            return obj.isoformat()
+        elif isinstance(obj, Enum):
+            return obj.value
+        elif isinstance(obj, dict):
+            return {k: _sanitize_for_json(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [_sanitize_for_json(v) for v in obj]
+        else:
+            return obj
+    sanitized_manifest = _sanitize_for_json(manifest)
+    
     # Write updated manifest
+    # SST: Use safe_json_dump (sanitized_manifest already sanitized above, but use helper for consistency)
+    from TRAINING.common.utils.file_utils import safe_json_dump
     with open(manifest_path, 'w') as f:
-        json.dump(manifest, f, indent=2, default=str)
+        safe_json_dump(sanitized_manifest, f, indent=2, default=str)
     
     logger.debug(f"Updated manifest.json for target {target_clean}")
 
@@ -380,9 +409,32 @@ def update_manifest_with_run_hash(output_dir: Path) -> None:
         # Update timestamp
         manifest["updated_at"] = datetime.now().isoformat()
         
+        # SST: Sanitize manifest data to normalize enums to strings before JSON serialization
+        from enum import Enum
+        try:
+            import pandas as pd
+            has_pandas = True
+        except ImportError:
+            has_pandas = False
+        
+        def _sanitize_for_json(obj):
+            if has_pandas and isinstance(obj, pd.Timestamp):
+                return obj.isoformat()
+            elif isinstance(obj, Enum):
+                return obj.value
+            elif isinstance(obj, dict):
+                return {k: _sanitize_for_json(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [_sanitize_for_json(v) for v in obj]
+            else:
+                return obj
+        sanitized_manifest = _sanitize_for_json(manifest)
+        
         # Write updated manifest
+        # SST: Use safe_json_dump (sanitized_manifest already sanitized above, but use helper for consistency)
+        from TRAINING.common.utils.file_utils import safe_json_dump
         with open(manifest_path, 'w') as f:
-            json.dump(manifest, f, indent=2, default=str)
+            safe_json_dump(sanitized_manifest, f, indent=2, default=str)
         
         logger.debug("Updated manifest.json with run_hash and refreshed target_index")
     except Exception as e:

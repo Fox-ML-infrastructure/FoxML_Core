@@ -422,9 +422,9 @@ class MetricsWriter:
         
         # Now try Parquet - may fail for complex nested types
         try:
-            # Prepare data for Parquet: stringify dict keys (PyArrow doesn't support int keys)
-            parquet_data = self._prepare_for_parquet(metrics_data)
-            df_metrics = pd.DataFrame([parquet_data])
+            # SST: Use safe_dataframe_from_dict to handle enums and stringify keys
+            from TRAINING.common.utils.file_utils import safe_dataframe_from_dict
+            df_metrics = safe_dataframe_from_dict(metrics_data)
             df_metrics.to_parquet(metrics_file_parquet, index=False, engine='pyarrow', compression='snappy')
             logger.debug(f"✅ Wrote metrics.parquet to {cohort_dir}")
         except Exception as e:
@@ -434,28 +434,21 @@ class MetricsWriter:
         """
         Prepare data for Parquet serialization by converting non-string dict keys.
         
-        PyArrow/Parquet doesn't support dicts with integer keys (e.g., class_balance).
-        This helper recursively converts all dict keys to strings.
+        DEPRECATED: Use safe_dataframe_from_dict() instead, which handles both
+        enum sanitization and key stringification.
+        
+        This method is kept for backward compatibility but delegates to
+        the SST sanitization function.
         
         Args:
             data: Dictionary to prepare
             
         Returns:
-            New dictionary with all nested dict keys converted to strings
+            New dictionary with all nested dict keys converted to strings and enums to values
         """
-        result = {}
-        for key, value in data.items():
-            if isinstance(value, dict):
-                # Recursively convert nested dicts and stringify keys
-                result[key] = {str(k): self._prepare_for_parquet(v) if isinstance(v, dict) else v 
-                               for k, v in value.items()}
-            elif isinstance(value, list):
-                # Handle lists of dicts
-                result[key] = [self._prepare_for_parquet(item) if isinstance(item, dict) else item 
-                               for item in value]
-            else:
-                result[key] = value
-        return result
+        # SST: Use shared sanitization function
+        from TRAINING.common.utils.file_utils import sanitize_for_serialization
+        return sanitize_for_serialization(data)
     
     def _write_metrics_reference(
         self,
@@ -866,8 +859,10 @@ class MetricsWriter:
             drift_file_parquet = cohort_dir / "metrics_drift.parquet"
             try:
                 # Write JSON (human-readable)
+                # SST: Use safe_json_dump to handle enums
+                from TRAINING.common.utils.file_utils import safe_json_dump
                 with open(drift_file_json, 'w') as f:
-                    json.dump(drift_results, f, indent=2)
+                    safe_json_dump(drift_results, f, indent=2)
                 
                 # Write Parquet (queryable, long format)
                 # Flatten drift_metrics dict into DataFrame
@@ -909,7 +904,10 @@ class MetricsWriter:
                         parquet_rows.append(row)
                 
                 if parquet_rows:
-                    df_drift = pd.DataFrame(parquet_rows)
+                    # SST: Sanitize each row before creating DataFrame (handles enums)
+                    from TRAINING.common.utils.file_utils import sanitize_for_serialization
+                    sanitized_rows = [sanitize_for_serialization(row) for row in parquet_rows]
+                    df_drift = pd.DataFrame(sanitized_rows)
                     df_drift.to_parquet(drift_file_parquet, index=False, engine='pyarrow', compression='snappy')
             except Exception as e:
                 logger.warning(f"Failed to write metrics_drift files to {cohort_dir}: {e}")
@@ -1316,8 +1314,10 @@ class MetricsWriter:
         rollup_file_parquet = view_dir / "metrics_rollup.parquet"
         try:
             # Write JSON rollup
+            # SST: Use safe_json_dump to handle enums
+            from TRAINING.common.utils.file_utils import safe_json_dump
             with open(rollup_file_json, 'w') as f:
-                json.dump(rollup_data, f, indent=2)
+                safe_json_dump(rollup_data, f, indent=2)
             
             # Write Parquet rollup (flattened, queryable format)
             # Convert rollup_data to DataFrame with one row per target/symbol
@@ -1364,7 +1364,10 @@ class MetricsWriter:
                 parquet_rows.append(agg_row)
             
             if parquet_rows:
-                df_rollup = pd.DataFrame(parquet_rows)
+                # SST: Sanitize each row before creating DataFrame (handles enums)
+                from TRAINING.common.utils.file_utils import sanitize_for_serialization
+                sanitized_rows = [sanitize_for_serialization(row) for row in parquet_rows]
+                df_rollup = pd.DataFrame(sanitized_rows)
                 df_rollup.to_parquet(rollup_file_parquet, index=False, engine='pyarrow', compression='snappy')
                 logger.debug(f"✅ Wrote view rollup: {rollup_file_json.name} and {rollup_file_parquet.name}")
         except Exception as e:
@@ -1421,8 +1424,10 @@ class MetricsWriter:
         rollup_file_parquet = stage_dir / "metrics_rollup.parquet"
         try:
             # Write JSON rollup
+            # SST: Use safe_json_dump to handle enums
+            from TRAINING.common.utils.file_utils import safe_json_dump
             with open(rollup_file_json, 'w') as f:
-                json.dump(rollup_data, f, indent=2)
+                safe_json_dump(rollup_data, f, indent=2)
             
             # Write Parquet rollup (flattened from view-level rollups)
             parquet_rows = []
@@ -1456,7 +1461,10 @@ class MetricsWriter:
                             parquet_rows.append(row)
             
             if parquet_rows:
-                df_rollup = pd.DataFrame(parquet_rows)
+                # SST: Sanitize each row before creating DataFrame (handles enums)
+                from TRAINING.common.utils.file_utils import sanitize_for_serialization
+                sanitized_rows = [sanitize_for_serialization(row) for row in parquet_rows]
+                df_rollup = pd.DataFrame(sanitized_rows)
                 df_rollup.to_parquet(rollup_file_parquet, index=False, engine='pyarrow', compression='snappy')
                 logger.debug(f"✅ Wrote stage rollup: {rollup_file_json.name} and {rollup_file_parquet.name}")
         except Exception as e:

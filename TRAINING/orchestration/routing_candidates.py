@@ -329,9 +329,27 @@ def build_routing_candidates(
         
         # Save as JSON for humans
         json_path = output_dir / "routing_candidates.json"
+        # SST: Sanitize routing candidates data to normalize enums to strings before JSON serialization
+        from enum import Enum
+        import pandas as pd
+        def _sanitize_for_json(obj):
+            if isinstance(obj, pd.Timestamp):
+                return obj.isoformat()
+            elif isinstance(obj, Enum):
+                return obj.value
+            elif isinstance(obj, dict):
+                return {k: _sanitize_for_json(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [_sanitize_for_json(v) for v in obj]
+            else:
+                return obj
         df_dict = df.to_dict(orient='records')
+        sanitized_dict = _sanitize_for_json(df_dict)
+        
+        # SST: Use safe_json_dump (sanitized_dict already sanitized above, but use helper for consistency)
+        from TRAINING.common.utils.file_utils import safe_json_dump
         with open(json_path, 'w') as f:
-            json.dump(df_dict, f, indent=2, default=str)
+            safe_json_dump(sanitized_dict, f, indent=2, default=str)
         logger.info(f"✅ Saved routing candidates JSON: {json_path}")
     
     return df
