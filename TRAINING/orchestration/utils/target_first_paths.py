@@ -183,8 +183,8 @@ def get_target_reproducibility_dir(
             pass  # SST not available, use legacy
     
     if resolved_stage:
-        # Convert stage enum to string for path construction
-        stage_str = str(resolved_stage) if isinstance(resolved_stage, Stage) else resolved_stage
+        # SST: Explicitly convert stage enum to string for path construction (defensive)
+        stage_str = resolved_stage.value if isinstance(resolved_stage, Stage) else str(resolved_stage)
         return base_repro / f"stage={stage_str}"
     
     return base_repro  # Legacy fallback
@@ -447,7 +447,9 @@ def find_cohort_dir_by_id(
     """
     try:
         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage)
-        view_dir = target_repro_dir / view
+        # SST: Normalize view to string for path construction (defensive)
+        view_str = view.value if isinstance(view, View) else str(view)
+        view_dir = target_repro_dir / view_str
         
         # FIX: Add directory existence check before iterating
         if not view_dir.exists() or not view_dir.is_dir():
@@ -563,7 +565,9 @@ def get_cohort_dir_from_metrics_path(metrics_path: Path, base_output_dir: Option
         return None
     
     # Build reproducibility path with stage if present
-    repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage) / view
+    # SST: Normalize view to string for path construction (defensive)
+    view_str = view.value if isinstance(view, View) else str(view)
+    repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage) / view_str
     if symbol:
         repro_dir = repro_dir / f"symbol={symbol}"
     
@@ -791,13 +795,15 @@ def model_output_dir(
         view = View.CROSS_SECTIONAL
     
     family_dir = Path(training_results_root) / family
-    view_dir = family_dir / f"view={view}"
+    # SST: Explicitly convert enum to string for path construction (defensive)
+    view_str = view.value if isinstance(view, View) else (view if isinstance(view, str) else str(view))
+    view_dir = family_dir / f"view={view_str}"
     
     # Add universe scoping if provided
     if universe_sig:
         view_dir = view_dir / f"universe={universe_sig}"
     
-    view_str = str(view) if hasattr(view, 'value') else str(view)
+    # Use normalized view_str for comparisons
     if view_str == View.SYMBOL_SPECIFIC.value and symbol:
         return view_dir / f"symbol={symbol}"
     elif view_str == View.CROSS_SECTIONAL.value:

@@ -2709,8 +2709,8 @@ class DiffTelemetry:
                         
                         # Build target-first reproducibility path with stage scoping
                         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage)
-                        # Use string value for path construction
-                        view_for_target_str = str(view_for_target_enum) if isinstance(view_for_target_enum, View) else view_for_target
+                        # SST: Explicitly convert enum to string for path construction (defensive)
+                        view_for_target_str = view_for_target_enum.value if isinstance(view_for_target_enum, View) else str(view_for_target_enum)
                         if view_for_target_enum == View.SYMBOL_SPECIFIC and symbol_for_target_final:
                             # Include symbol in path to prevent overwriting
                             target_cohort_dir = target_repro_dir / view_for_target_str / f"symbol={symbol_for_target_final}" / f"cohort={cohort_id}"

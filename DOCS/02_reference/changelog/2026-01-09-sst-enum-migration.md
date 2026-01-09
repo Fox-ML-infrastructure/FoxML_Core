@@ -305,3 +305,36 @@ Complete migration to SST (Single Source of Truth) architecture with View/Stage 
 - All rollup functions handle enum inputs correctly (verified with test scripts)
 - All JSON outputs contain string values (verified with JSON parsing tests)
 - Backward compatibility maintained (string inputs still work)
+
+## Comprehensive SST Path Construction Fixes - All Stages (Phase 7)
+
+**Problem**: Enum values were being used directly in path construction without explicit `.value` conversion, causing file writes to fail silently or create incorrect paths. This affected all three stages (TARGET_RANKING, FEATURE_SELECTION, TRAINING) where SST refactoring touched path construction.
+
+**Root Cause**: After SST enum migration, functions accepted enum inputs but didn't normalize them to strings before path construction. While `str(enum)` should work (returns `.value`), explicit conversion is required for robust path construction and to prevent edge cases.
+
+**Fix**:
+- **`target_first_paths.py`**: 
+  - `get_target_reproducibility_dir()`: Added explicit Stage enum-to-string conversion before path construction (lines 177-194)
+  - `find_cohort_dir_by_id()`: Added explicit View enum-to-string conversion (line 451)
+  - `target_repro_dir()`: Added explicit View enum-to-string conversion (line 572)
+
+- **`output_layout.py`**: 
+  - `__init__()`: Added explicit View and Stage enum-to-string conversion when using deprecated loose args (lines 155-159)
+  - `repro_dir()`: Added explicit Stage enum-to-string conversion before path construction (line 223)
+
+- **`training_strategies/reproducibility/io.py`**: 
+  - `get_training_snapshot_dir()`: Added explicit View and Stage enum-to-string conversion before path construction (lines 74-79)
+
+**Impact**:
+- All path constructions now use string values (not enum objects)
+- Fixes missing metric artifacts (metrics.json, metrics.parquet) across all stages
+- Fixes missing JSON files (metadata.json, snapshot.json) across all stages
+- All three stages (TARGET_RANKING, FEATURE_SELECTION, TRAINING) now correctly handle enum inputs
+- File writes succeed with correct directory paths
+- No silent failures from enum-to-string conversion issues
+
+**Verification**:
+- All files compile successfully
+- All path construction functions tested with enum inputs for all three stages
+- Verified TARGET_RANKING, FEATURE_SELECTION, and TRAINING stages work correctly
+- Backward compatibility maintained (string inputs still work)

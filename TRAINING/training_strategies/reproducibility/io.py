@@ -71,10 +71,14 @@ def get_training_snapshot_dir(
     Returns:
         Path to training snapshot directory
     """
-    base_path = output_dir / "targets" / target / "reproducibility" / f"stage={stage}" / view
+    # SST: Normalize stage and view to strings for path construction (defensive)
+    stage_str = stage.value if isinstance(stage, Stage) else str(stage)
+    view_str = view.value if isinstance(view, View) else str(view)
+    
+    base_path = output_dir / "targets" / target / "reproducibility" / f"stage={stage_str}" / view_str
     
     # SST: Use View enum for comparison
-    view_enum = View.from_string(view) if isinstance(view, str) else view
+    view_enum = View.from_string(view_str) if isinstance(view_str, str) else view_str
     if view_enum == View.SYMBOL_SPECIFIC and symbol:
         base_path = base_path / f"symbol={symbol}"
     

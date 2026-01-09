@@ -1187,10 +1187,18 @@ class ReproducibilityTracker:
         main_logger = _get_main_logger()
         
         # Generate run_id - use SST accessor
-        run_id = extract_run_id(run_data) or datetime.now().isoformat()
-        # FIX: Handle None case (extract_run_id might return None)
-        if run_id is None:
+        # Defensive: Ensure run_data is a dict before calling extract_run_id
+        if not isinstance(run_data, dict):
             run_id = datetime.now().isoformat()
+        else:
+            run_id = extract_run_id(run_data)
+            if not run_id:  # Handles None, empty string, or other falsy values
+                run_id = datetime.now().isoformat()
+        
+        # Final safety check before .replace() - ensure run_id is a string
+        if not run_id or not isinstance(run_id, str):
+            run_id = datetime.now().isoformat()
+        
         run_id_clean = run_id.replace(':', '-').replace('.', '-').replace('T', '_')
         
         # Normalize stage to enum, then to string for comparisons
@@ -2023,13 +2031,15 @@ class ReproducibilityTracker:
                 # For CROSS_SECTIONAL: targets/<target>/reproducibility/stage=<stage>/CROSS_SECTIONAL/cohort=<cohort_id>/
                 # For SYMBOL_SPECIFIC: targets/<target>/reproducibility/stage=<stage>/SYMBOL_SPECIFIC/symbol=<symbol>/cohort=<cohort_id>/
                 target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage_normalized)
-                # Normalize view_for_target to enum for comparison
+                # Normalize view_for_target to enum for comparison, then convert to string for path construction
                 view_for_target_enum = View.from_string(view_for_target) if isinstance(view_for_target, str) else view_for_target
+                # SST: Explicitly convert enum to string for path construction (defensive)
+                view_for_target_str = view_for_target_enum.value if isinstance(view_for_target_enum, View) else str(view_for_target_enum)
                 if view_for_target_enum == View.SYMBOL_SPECIFIC and symbol:
                     # Include symbol in path to prevent overwriting
-                    target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol}" / f"cohort={cohort_id}"
+                    target_cohort_dir = target_repro_dir / view_for_target_str / f"symbol={symbol}" / f"cohort={cohort_id}"
                 else:
-                    target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
+                    target_cohort_dir = target_repro_dir / view_for_target_str / f"cohort={cohort_id}"
                 target_cohort_dir.mkdir(parents=True, exist_ok=True)
                 logger.debug(f"Created target-first cohort directory: {target_cohort_dir}")
             except Exception as e:
@@ -2257,25 +2267,36 @@ class ReproducibilityTracker:
             # Determine target for metrics (for TARGET_RANKING and FEATURE_SELECTION stages)
             metrics_target = target if stage_enum in (Stage.TARGET_RANKING, Stage.FEATURE_SELECTION) else None
             
+            # SST: Normalize metrics_view to string (handle enum inputs) before using in baseline_key or write_cohort_metrics
+            metrics_view_str = None
+            if metrics_view:
+                if isinstance(metrics_view, View):
+                    metrics_view_str = metrics_view.value
+                elif hasattr(metrics_view, 'value'):
+                    metrics_view_str = metrics_view.value
+                else:
+                    metrics_view_str = str(metrics_view)
+            else:
+                metrics_view_str = "UNKNOWN"
+            
             # Generate baseline key for drift comparison: (stage, view, target[, symbol])
             # For FEATURE_SELECTION, use view as view (CROSS_SECTIONAL or INDIVIDUAL)
             baseline_key = None
             if metrics_target:
                 # For TARGET_RANKING, view comes from metrics_view (CROSS_SECTIONAL, SYMBOL_SPECIFIC)
                 # For FEATURE_SELECTION, view is CROSS_SECTIONAL or INDIVIDUAL (maps to view)
-                if stage_enum == Stage.TARGET_RANKING and metrics_view:
-                    baseline_key = f"{stage_normalized}:{metrics_view}:{metrics_target}"
-                    if symbol and _normalize_view_for_comparison(metrics_view) == View.SYMBOL_SPECIFIC.value:
+                if stage_enum == Stage.TARGET_RANKING and metrics_view_str:
+                    baseline_key = f"{stage_normalized}:{metrics_view_str}:{metrics_target}"
+                    if symbol and metrics_view_str == View.SYMBOL_SPECIFIC.value:
                         baseline_key += f":{symbol}"
-                elif stage_enum == Stage.FEATURE_SELECTION and metrics_view:
+                elif stage_enum == Stage.FEATURE_SELECTION and metrics_view_str:
                     # Map view to view for FEATURE_SELECTION
-                    metrics_view_str = _normalize_view_for_comparison(metrics_view)
                     fs_view = metrics_view_str if metrics_view_str in [View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value] else View.CROSS_SECTIONAL.value
                     baseline_key = f"{stage_normalized}:{fs_view}:{metrics_target}"
-                    if symbol and _normalize_view_for_comparison(metrics_view) == View.SYMBOL_SPECIFIC.value:
+                    if symbol and metrics_view_str == View.SYMBOL_SPECIFIC.value:
                         baseline_key += f":{symbol}"
             
-            logger.debug(f"📊 Writing metrics for stage={stage_normalized}, target={metrics_target}, view={metrics_view}, target_cohort_dir={target_cohort_dir}")
+            logger.debug(f"📊 Writing metrics for stage={stage_normalized}, target={metrics_target}, view={metrics_view_str}, target_cohort_dir={target_cohort_dir}")
             
             # Write metrics sidecar files in cohort directory
             # Note: metrics will create target_cohort_dir if it doesn't exist, or fall back to target level
@@ -2291,7 +2312,7 @@ class ReproducibilityTracker:
                     self.metrics.write_cohort_metrics(
                         cohort_dir=target_cohort_dir,
                         stage=stage_normalized,
-                        view=metrics_view or "UNKNOWN",
+                        view=metrics_view_str,  # Now guaranteed to be string
                         target=metrics_target,
                         symbol=symbol,
                         run_id=run_id_clean,

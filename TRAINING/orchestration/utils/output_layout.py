@@ -152,11 +152,13 @@ class OutputLayout:
                 stacklevel=2
             )
             self.scope = None
-            self.view = view
+            # SST: Normalize view and stage to strings (handle enum inputs)
+            self.view = view.value if isinstance(view, ScopeView) else (view if isinstance(view, str) else str(view))
             self.universe_sig = universe_sig
             self.symbol = symbol
             self._purpose = ScopePurpose.FINAL if _WRITE_SCOPE_AVAILABLE else None
-            self.stage = stage  # Use explicit stage parameter
+            # SST: Normalize stage to string (handle enum inputs)
+            self.stage = stage.value if isinstance(stage, ScopeStage) else (stage if isinstance(stage, str) else str(stage) if stage else None)
         
         # Normalize view to enum for validation (handles both enum and string)
         view_enum = ScopeView.from_string(self.view) if isinstance(self.view, str) else self.view
@@ -220,7 +222,9 @@ class OutputLayout:
             # Final artifacts go under target with stage scoping
             repro_base = self.output_root / "targets" / self.target / "reproducibility"
             if self.stage:
-                base = repro_base / f"stage={self.stage}" / self.view
+                # SST: Ensure stage is string for path construction (defensive)
+                stage_str = self.stage.value if isinstance(self.stage, ScopeStage) else str(self.stage)
+                base = repro_base / f"stage={stage_str}" / self.view
             else:
                 base = repro_base / self.view  # Legacy fallback
         

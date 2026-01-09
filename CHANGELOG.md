@@ -4,6 +4,16 @@ All notable changes to FoxML Core will be documented in this file.
 
 ## 2026-01-09
 
+### Comprehensive SST Path Construction Fixes - All Stages
+- **Fixed Path Construction with Enum Values**: Resolved enum-to-string conversion issues in path construction across all three stages
+  - `target_first_paths.py`: Fixed `get_target_reproducibility_dir()`, `find_cohort_dir_by_id()`, and `target_repro_dir()` to normalize Stage/View enums to strings before path construction
+  - `output_layout.py`: Fixed `__init__()` and `repro_dir()` to normalize View and Stage enums to strings
+  - `training_strategies/reproducibility/io.py`: Fixed `get_training_snapshot_dir()` to normalize View and Stage enums to strings
+  - All path construction functions now explicitly convert enum values to strings using `.value` property before building paths
+  - Fixes missing metric artifacts and JSON files across TARGET_RANKING, FEATURE_SELECTION, and TRAINING stages
+  - Maintains backward compatibility with string inputs
+  - Verified all three stages work correctly with enum inputs
+
 ### Metric Output JSON Serialization Fixes
 - **Fixed Broken Metric Outputs**: Resolved JSON serialization issues where Stage/View enum objects were written directly to JSON
   - `metrics.py`: Updated `write_cohort_metrics()`, `_write_metrics()`, `_write_drift()`, `generate_view_rollup()`, and `generate_stage_rollup()` to normalize enum inputs to strings before JSON serialization
