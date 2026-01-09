@@ -421,3 +421,35 @@ RESULTS/
 # Data processing (now tracked)
 # DATA_PROCESSING/
 .cursor/
+
+# ============================================
+# File Locking (from concurrent write protection)
+# ============================================
+*.lock
+
+# ============================================
+# Utility and Verification Scripts
+# ============================================
+# Trend analysis and verification tools (development/debugging)
+TRAINING/common/utils/verify_trend_analyzer.py
+TRAINING/common/utils/analyze_trends.py
+
+# Standalone analysis/audit tools (not imported by pipeline)
+TRAINING/common/importance_diff_analyzer.py
+
+# Test/verification scripts
+TRAINING/utils/test_xd_pattern_inference.py
+DATA_PROCESSING/targets/test_time_contract.py
+
+# Example scripts (users can create their own)
+TRAINING/examples/
+
+# Migration and utility scripts (development tools)
+CONFIG/migrate_structure.py
+CONFIG/find_hardcoded_paths.py
+
+# ============================================
+# Verification and Analysis Reports
+# ============================================
+# One-time verification reports (not needed for pipeline execution)
+CONFIG/CONFIG_SST_VERIFICATION.md

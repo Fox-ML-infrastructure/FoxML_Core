@@ -8,8 +8,11 @@ Save and load feature importance snapshots for stability analysis.
 
 import json
 import logging
+import fcntl
+import time
+import os
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from datetime import datetime
 
 from .schema import FeatureImportanceSnapshot, FeatureSelectionSnapshot
@@ -364,6 +367,99 @@ def get_snapshot_base_dir(
         return repo_root / "artifacts" / "feature_importance"
 
 
+def _write_atomic_json_with_lock(
+    file_path: Path,
+    data: Dict[str, Any],
+    lock_timeout: float = 30.0
+) -> None:
+    """
+    Write JSON file atomically with file locking to prevent race conditions.
+    
+    Uses fcntl.flock with LOCK_EX to ensure exclusive access during write.
+    This prevents concurrent writes from multiple processes/threads.
+    
+    Args:
+        file_path: Target file path
+        data: Data to write (will use default=str for serialization)
+        lock_timeout: Maximum time to wait for lock (seconds)
+    
+    Raises:
+        IOError: If write fails or lock cannot be acquired
+    """
+    # Create lock file (same directory, .lock extension)
+    lock_file = file_path.with_suffix('.lock')
+    
+    # Ensure parent directory exists
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Write to temp file first
+    temp_file = file_path.with_suffix('.tmp')
+    
+    start_time = time.time()
+    lock_acquired = False
+    
+    try:
+        # Try to acquire lock with timeout
+        with open(lock_file, 'w') as lock_f:
+            # Non-blocking attempt first
+            try:
+                fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                lock_acquired = True
+            except BlockingIOError:
+                # Lock is held, wait for it with timeout
+                elapsed = 0
+                while elapsed < lock_timeout:
+                    try:
+                        fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        lock_acquired = True
+                        break
+                    except BlockingIOError:
+                        time.sleep(0.1)  # Wait 100ms before retry
+                        elapsed = time.time() - start_time
+                
+                if not lock_acquired:
+                    raise IOError(f"Could not acquire lock for {file_path} within {lock_timeout}s")
+            
+            # Lock acquired - perform atomic write
+            try:
+                with open(temp_file, 'w') as f:
+                    json.dump(data, f, indent=2, default=str)
+                    f.flush()
+                    os.fsync(f.fileno())
+                
+                # Atomic rename
+                os.replace(temp_file, file_path)
+                
+                # Sync directory entry
+                try:
+                    dir_fd = os.open(file_path.parent, os.O_RDONLY)
+                    try:
+                        os.fsync(dir_fd)
+                    finally:
+                        os.close(dir_fd)
+                except (OSError, AttributeError):
+                    pass
+            except Exception as e:
+                # Cleanup temp file on failure
+                if temp_file.exists():
+                    try:
+                        temp_file.unlink()
+                    except Exception:
+                        pass
+                raise
+            
+            # Lock is automatically released when file is closed
+    except Exception as e:
+        if lock_acquired:
+            # Release lock on error (if we had it)
+            try:
+                with open(lock_file, 'w') as lock_f:
+                    fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
+            except Exception:
+                pass
+        raise IOError(f"Failed to write locked JSON to {file_path}: {e}") from e
+
+
 def save_fs_snapshot(
     snapshot: 'FeatureSelectionSnapshot',
     cohort_dir: Path,
@@ -388,8 +484,8 @@ def save_fs_snapshot(
     path = cohort_dir / "fs_snapshot.json"
     
     try:
-        with path.open("w") as f:
-            json.dump(snapshot.to_dict(), f, indent=2, default=str)
+        # Use atomic write with locking for safety (prevents race conditions)
+        _write_atomic_json_with_lock(path, snapshot.to_dict())
         logger.debug(f"Saved fs_snapshot.json: {path}")
     except Exception as e:
         logger.error(f"Failed to save fs_snapshot.json to {path}: {e}")
