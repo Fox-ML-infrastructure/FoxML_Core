@@ -97,7 +97,7 @@ variants:
 ### Logging Config (NEW)
 
 ```yaml
-# CONFIG/logging_config.yaml
+# CONFIG/core/logging.yaml
 logging:
   global_level: INFO
   

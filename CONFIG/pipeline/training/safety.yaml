@@ -310,6 +310,10 @@ safety:
     model_evaluation:
       # Binary classification threshold
       binary_classification_threshold: 0.5  # Probability threshold for binary classification
+      # Feature count threshold for pruning (only prune if feature count exceeds this)
+      feature_count_pruning_threshold: 100
+      # Epsilon for threshold comparisons (prevents false positives from rounding)
+      comparison_epsilon: 1e-6
       # Consistency check thresholds
       composite_score_high_threshold: 0.5  # High composite score threshold
       regression_score_low_threshold: 0.2  # Low score threshold for regression

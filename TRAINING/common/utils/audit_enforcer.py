@@ -341,7 +341,8 @@ class AuditEnforcer:
     def _validate_suspicious_scores(self, metrics: Dict[str, Any]) -> None:
         """Warn on suspiciously high scores (potential leakage)."""
         metric_name = metrics.get("metric_name", "").upper()
-        auc = metrics.get("auc")
+        from TRAINING.orchestration.utils.reproducibility.utils import extract_auc
+        auc = extract_auc(metrics)  # Handles both old and new structures
         
         if auc is None:
             return

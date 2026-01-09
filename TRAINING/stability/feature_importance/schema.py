@@ -257,7 +257,8 @@ class FeatureSelectionSnapshot:
     fingerprint_schema_version: str = "1.0"
     metrics_schema_version: str = "1.1"  # Bump when metrics structure changes (added 2026-01)
     scoring_schema_version: str = "1.1"  # Phase 3.1: SE-based stability, skill-gating, classification centering
-    config_fingerprint: Optional[str] = None
+    config_fingerprint: Optional[str] = None  # Full hash (includes run_id/timestamp) - for metadata
+    deterministic_config_fingerprint: Optional[str] = None  # Deterministic hash (excludes run_id/timestamp) - for comparison
     data_fingerprint: Optional[str] = None
     feature_fingerprint: Optional[str] = None  # Alias for feature_fingerprint_output (selected features)
     feature_fingerprint_input: Optional[str] = None  # Candidate feature universe entering FS
@@ -345,6 +346,7 @@ class FeatureSelectionSnapshot:
             "metrics_schema_version": self.metrics_schema_version,
             "scoring_schema_version": self.scoring_schema_version,
             "config_fingerprint": self.config_fingerprint,
+            "deterministic_config_fingerprint": self.deterministic_config_fingerprint,
             "data_fingerprint": self.data_fingerprint,
             "feature_fingerprint": self.feature_fingerprint,
             "feature_fingerprint_input": self.feature_fingerprint_input,
@@ -383,6 +385,7 @@ class FeatureSelectionSnapshot:
             metrics_schema_version=data.get("metrics_schema_version", "1.0"),  # Default to 1.0 for old snapshots
             scoring_schema_version=data.get("scoring_schema_version", "1.0"),
             config_fingerprint=data.get("config_fingerprint"),
+            deterministic_config_fingerprint=data.get("deterministic_config_fingerprint"),
             data_fingerprint=data.get("data_fingerprint"),
             feature_fingerprint=data.get("feature_fingerprint"),
             feature_fingerprint_input=data.get("feature_fingerprint_input"),
@@ -419,6 +422,7 @@ class FeatureSelectionSnapshot:
         n_effective: Optional[int] = None,  # Effective sample count from FS
         feature_registry_hash: Optional[str] = None,  # Hash of feature registry
         comparable_key: Optional[str] = None,  # Pre-computed comparison key
+        output_dir: Optional[Path] = None,  # Output directory for loading config.resolved.json
         # P0 correctness: selection mode fields
         selection_mode: Optional[str] = None,  # "rank_only" | "top_k" | "threshold" | "importance_cutoff"
         n_candidates: Optional[int] = None,  # Number of candidate features entering selection
@@ -499,6 +503,33 @@ class FeatureSelectionSnapshot:
         # Extract feature_fingerprint_input from inputs if provided
         feature_input_hash = inputs.get("feature_fingerprint_input") if inputs else None
         
+        # CRITICAL: Extract config fingerprints from inputs or load from config.resolved.json
+        # This ensures deterministic_config_fingerprint is populated for run hash computation
+        config_fp = importance_snapshot.hparams_signature  # Model config hash (fallback)
+        deterministic_config_fp = None
+        
+        # Try to get both fingerprints from inputs (passed from diff_telemetry or reproducibility_tracker)
+        if inputs:
+            deterministic_config_fp = inputs.get("deterministic_config_fingerprint")
+            if inputs.get("config_fingerprint") and not config_fp:
+                config_fp = inputs.get("config_fingerprint")
+        
+        # If deterministic fingerprint not in inputs, try to load from config.resolved.json
+        if not deterministic_config_fp and output_dir:
+            try:
+                import json
+                from pathlib import Path
+                globals_dir = Path(output_dir) / "globals"
+                resolved_config_path = globals_dir / "config.resolved.json"
+                if resolved_config_path.exists():
+                    with open(resolved_config_path, 'r') as f:
+                        resolved_config = json.load(f)
+                    deterministic_config_fp = resolved_config.get('deterministic_config_fingerprint')
+                    if not config_fp:
+                        config_fp = resolved_config.get('config_fingerprint')
+            except Exception:
+                pass  # Fallback to hparams_signature only
+        
         # P0 correctness: Determine selection mode if not explicitly provided
         # Infer n_candidates from inputs.candidate_features if available
         actual_n_candidates = n_candidates
@@ -567,7 +598,8 @@ class FeatureSelectionSnapshot:
             method=importance_snapshot.method,
             snapshot_seq=snapshot_seq,
             # Fingerprint mappings from FeatureImportanceSnapshot
-            config_fingerprint=importance_snapshot.hparams_signature,  # Model config hash
+            config_fingerprint=config_fp,  # Full config fingerprint (includes run_id/timestamp) - for metadata
+            deterministic_config_fingerprint=deterministic_config_fp,  # Deterministic fingerprint (excludes run_id/timestamp) - for comparison
             data_fingerprint=importance_snapshot.dataset_signature,  # Dataset signature
             feature_fingerprint=importance_snapshot.feature_signature,  # Feature set signature
             feature_fingerprint_input=feature_input_hash,  # Candidate features before selection

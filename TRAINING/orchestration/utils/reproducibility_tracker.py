@@ -1401,6 +1401,64 @@ class ReproducibilityTracker:
         if cohort_metadata.get('per_symbol_stats'):
             full_metadata['per_symbol_stats'] = cohort_metadata['per_symbol_stats']
         
+        # CRITICAL: Add config fingerprints from resolved config for SST consistency
+        # This ensures resolved_metadata has config fingerprints available for snapshot creation
+        # Try to load from config.resolved.json (SST source of truth)
+        # Use retry logic with timeout to handle race conditions where file might not exist immediately
+        try:
+            import time
+            from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+            globals_dir = get_globals_dir(self._repro_base_dir)
+            resolved_config_path = globals_dir / "config.resolved.json"
+            
+            # Retry logic: wait up to 5 seconds for file to appear (handles concurrent creation)
+            max_retries = 10
+            retry_delay = 0.5  # 500ms between retries
+            resolved_config = None
+            
+            for attempt in range(max_retries):
+                if resolved_config_path.exists():
+                    try:
+                        with open(resolved_config_path, 'r') as f:
+                            resolved_config = json.load(f)
+                        # Successfully loaded, break retry loop
+                        break
+                    except (json.JSONDecodeError, IOError) as e:
+                        # File exists but not readable yet (might be being written)
+                        if attempt < max_retries - 1:
+                            time.sleep(retry_delay)
+                            continue
+                        else:
+                            logger.warning(
+                                f"Could not read config.resolved.json after {max_retries} attempts: {e}. "
+                                f"File may be corrupted or locked."
+                            )
+                            resolved_config = None
+                            break
+                else:
+                    # File doesn't exist yet, wait and retry
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        continue
+                    else:
+                        logger.debug(
+                            f"config.resolved.json not found after {max_retries} attempts "
+                            f"(waited {max_retries * retry_delay:.1f}s). "
+                            f"Fallback to loading in diff_telemetry will handle this."
+                        )
+                        resolved_config = None
+                        break
+            
+            # Add both fingerprints to full_metadata for SST consistency
+            if resolved_config:
+                if 'config_fingerprint' in resolved_config:
+                    full_metadata['config_fingerprint'] = resolved_config['config_fingerprint']
+                if 'deterministic_config_fingerprint' in resolved_config:
+                    full_metadata['deterministic_config_fingerprint'] = resolved_config['deterministic_config_fingerprint']
+        except Exception as e:
+            # Non-critical: fallback to loading in diff_telemetry will handle this
+            logger.debug(f"Could not load config fingerprints from config.resolved.json: {e}")
+        
         # Add CV details from additional_data
         if additional_data:
             cv_details = {}
@@ -2146,6 +2204,10 @@ class ReproducibilityTracker:
                 # full_metadata is already built above with all outcome-influencing fields
                 # We just haven't added diff_telemetry to it yet (that happens after finalize_run())
                 
+                # Ensure data_dir is in cohort_metadata if available (for fallback path)
+                if additional_data and 'data_dir' in additional_data and 'data_dir' not in cohort_metadata:
+                    cohort_metadata['data_dir'] = additional_data['data_dir']
+                
                 # Finalize run with diff telemetry (pass resolved_metadata for SST consistency)
                 # Use target_cohort_dir instead of legacy cohort_dir
                 diff_telemetry_data = telemetry.finalize_run(
@@ -2497,8 +2559,9 @@ class ReproducibilityTracker:
         cv_details = metadata.get("cv_details", {})
         
         # Extract regression features for cohort-based tracking
-        # Target ranking metrics
-        auc = metrics.get("auc")
+        # Target ranking metrics - use SST accessors to handle both old and new structures
+        from TRAINING.orchestration.utils.reproducibility.utils import extract_auc
+        auc = extract_auc(metrics)  # Handles both old and new structures
         logloss = metrics.get("logloss")
         pr_auc = metrics.get("pr_auc")
         
@@ -3389,11 +3452,17 @@ class ReproducibilityTracker:
                 
                 # Extract metrics for comparison (only reached if previous exists)
                 metric_name = metrics.get("metric_name", "Score")
-                current_mean = float(metrics.get("auc", 0.0))
-                previous_mean = float(previous.get("auc", 0.0))
+                from TRAINING.orchestration.utils.reproducibility.utils import extract_auc
+                current_mean = float(extract_auc(metrics) or 0.0)  # Handles both old and new structures
+                previous_mean = float(extract_auc(previous) or 0.0)  # Handles both old and new structures
                 
-                current_std = float(metrics.get("std_score", 0.0))
-                previous_std = float(previous.get("std_score", 0.0))
+                # Try new structure first, then fallback to old
+                current_std = float((metrics.get("primary_metric", {}).get("std") or 
+                                   metrics.get("primary_metric", {}).get("skill_se") or 
+                                   metrics.get("std_score")) or 0.0)
+                previous_std = float((previous.get("primary_metric", {}).get("std") or 
+                                     previous.get("primary_metric", {}).get("skill_se") or 
+                                     previous.get("std_score")) or 0.0)
                 
                 # Compare importance if present
                 current_importance = float(metrics.get("mean_importance", 0.0))
@@ -3502,11 +3571,17 @@ class ReproducibilityTracker:
                 
                 # Extract metrics for comparison (only reached if previous exists)
                 metric_name = metrics.get("metric_name", "Score")
-                current_mean = float(metrics.get("auc", 0.0))
-                previous_mean = float(previous.get("auc", 0.0))
+                from TRAINING.orchestration.utils.reproducibility.utils import extract_auc
+                current_mean = float(extract_auc(metrics) or 0.0)  # Handles both old and new structures
+                previous_mean = float(extract_auc(previous) or 0.0)  # Handles both old and new structures
                 
-                current_std = float(metrics.get("std_score", 0.0))
-                previous_std = float(previous.get("std_score", 0.0))
+                # Try new structure first, then fallback to old
+                current_std = float((metrics.get("primary_metric", {}).get("std") or 
+                                   metrics.get("primary_metric", {}).get("skill_se") or 
+                                   metrics.get("std_score")) or 0.0)
+                previous_std = float((previous.get("primary_metric", {}).get("std") or 
+                                     previous.get("primary_metric", {}).get("skill_se") or 
+                                     previous.get("std_score")) or 0.0)
                 
                 # Compare importance if present
                 current_importance = float(metrics.get("mean_importance", 0.0))

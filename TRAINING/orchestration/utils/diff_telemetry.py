@@ -20,7 +20,7 @@ import hashlib
 import fcntl
 import os
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple, Set
+from typing import Dict, Any, Optional, List, Tuple, Set, Union
 from datetime import datetime
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -301,6 +301,7 @@ class DiffTelemetry:
             metrics_schema_version=data.get('metrics_schema_version', '1.0'),  # Default to 1.0 for old snapshots
             scoring_schema_version=data.get('scoring_schema_version', '1.0'),  # Default to 1.0 for old snapshots
             config_fingerprint=data.get('config_fingerprint'),
+            deterministic_config_fingerprint=data.get('deterministic_config_fingerprint'),
             data_fingerprint=data.get('data_fingerprint'),
             feature_fingerprint=data.get('feature_fingerprint'),
             target_fingerprint=data.get('target_fingerprint'),
@@ -396,6 +397,12 @@ class DiffTelemetry:
             metadata.get('n_effective') or
             cohort_metadata.get('n_effective_cs') if cohort_metadata else None
         )
+        ctx.data_dir = (
+            metadata.get('data_dir') or
+            cohort_metadata.get('data_dir') if cohort_metadata else None or
+            (additional_data.get('data_dir') if additional_data else None) or
+            (resolved_metadata.get('data_dir') if resolved_metadata else None)
+        )
         ctx.min_cs = (
             metadata.get('min_cs') or
             cohort_metadata.get('min_cs') if cohort_metadata else None
@@ -488,9 +495,30 @@ class DiffTelemetry:
         ctx.model_family = (
             additional_data.get('model_family') if additional_data else None
         )
+        ctx.model_families = (
+            additional_data.get('model_families') if additional_data else None
+        )
+        ctx.feature_selection = (
+            additional_data.get('feature_selection') if additional_data else None
+        )
         ctx.trainer_strategy = (
             additional_data.get('strategy') if additional_data else None
         )
+        
+        # Hyperparameters (extract from training data if available)
+        hyperparameters = None
+        if additional_data and 'training' in additional_data:
+            training_data = additional_data['training']
+            # Extract hyperparameters (exclude strategy, model_family, seeds - handled separately)
+            excluded_keys = {'strategy', 'model_family', 'split_seed', 'train_seed', 'seed'}
+            hyperparameters = {k: v for k, v in training_data.items() 
+                              if k not in excluded_keys and v is not None}
+        elif run_data.get('training'):
+            training_data = run_data['training']
+            excluded_keys = {'strategy', 'model_family', 'split_seed', 'train_seed', 'seed'}
+            hyperparameters = {k: v for k, v in training_data.items() 
+                              if k not in excluded_keys and v is not None}
+        ctx.hyperparameters = hyperparameters if hyperparameters else None
         
         # Environment
         ctx.python_version = (
@@ -647,7 +675,26 @@ class DiffTelemetry:
                 universe_sig = additional_data['cs_config'].get('universe_sig')
         
         # Build fingerprints (using resolved context)
-        config_fp = self._compute_config_fingerprint_from_context(ctx, additional_data)
+        # Extract both deterministic and full config fingerprints
+        config_fp_result = self._compute_config_fingerprint_from_context(ctx, additional_data, resolved_metadata, cohort_dir)
+        
+        # Initialize variables to handle all code paths
+        deterministic_config_fp = None
+        full_config_fp = None
+        config_fp = None
+        
+        if isinstance(config_fp_result, dict):
+            # New format: returns dict with both fingerprints
+            deterministic_config_fp = config_fp_result.get('deterministic_config_fingerprint')
+            full_config_fp = config_fp_result.get('config_fingerprint')
+            # Use deterministic for comparison, fallback to full if deterministic not available
+            config_fp = deterministic_config_fp or full_config_fp
+        else:
+            # Legacy format: single fingerprint
+            config_fp = config_fp_result
+            full_config_fp = config_fp_result
+            deterministic_config_fp = config_fp_result  # Legacy: same fingerprint for both
+        
         data_fp = self._compute_data_fingerprint_from_context(ctx)
         feature_fp = self._compute_feature_fingerprint_from_context(ctx)
         target_fp = self._compute_target_fingerprint_from_context(ctx)
@@ -747,6 +794,17 @@ class DiffTelemetry:
         # CRITICAL: Compute output digests for artifact/metric reproducibility verification
         # These enable comparison of outputs across reruns for reproducibility tracking
         metrics_sha256 = self._compute_metrics_digest(outputs, resolved_metadata, cohort_dir)
+        
+        # CRITICAL: Validate that metrics exist for stages that require them
+        stages_requiring_metrics = ["TARGET_RANKING", "FEATURE_SELECTION"]
+        if stage in stages_requiring_metrics and not metrics_sha256:
+            logger.error(
+                f"❌ CRITICAL: metrics_sha256 cannot be computed for {stage} stage "
+                f"(target={target}, view={view}). Metrics are required for reproducibility verification. "
+                f"Snapshot will be saved but reproducibility verification will be incomplete."
+            )
+            # Don't fail snapshot creation, but log error for visibility
+        
         artifacts_manifest_sha256 = self._compute_artifacts_manifest_digest(cohort_dir, stage)
         # NEW: Pass prediction_fingerprint for authoritative prediction hash
         predictions_sha256 = self._compute_predictions_digest(cohort_dir, stage, prediction_fingerprint)
@@ -818,7 +876,8 @@ class DiffTelemetry:
             view=view,
             target=target,
             symbol=symbol,
-            config_fingerprint=config_fp,
+            config_fingerprint=full_config_fp,  # Full fingerprint (includes run_id/timestamp) - for metadata
+            deterministic_config_fingerprint=deterministic_config_fp,  # Deterministic fingerprint (excludes run_id/timestamp) - for comparison
             data_fingerprint=data_fp,
             feature_fingerprint=feature_fp,
             target_fingerprint=target_fp,
@@ -837,9 +896,67 @@ class DiffTelemetry:
     def _compute_config_fingerprint_from_context(
         self,
         ctx: ResolvedRunContext,
-        additional_data: Optional[Dict[str, Any]]
-    ) -> Optional[str]:
-        """Compute config fingerprint from resolved context."""
+        additional_data: Optional[Dict[str, Any]],
+        resolved_metadata: Optional[Dict[str, Any]] = None,
+        cohort_dir: Optional[Path] = None
+    ) -> Optional[Union[str, Dict[str, str]]]:
+        """Compute config fingerprint from resolved context.
+        
+        Returns:
+            If both fingerprints available: dict with 'config_fingerprint' and 'deterministic_config_fingerprint'
+            Otherwise: single fingerprint string (for backward compatibility)
+        
+        Priority:
+        1. deterministic_config_fingerprint from resolved_metadata (if available)
+        2. config_fingerprint from resolved_metadata (if available)
+        3. Load from config.resolved.json (if cohort_dir or output_dir available)
+        4. Compute from context fields (fallback)
+        """
+        # Try to extract both fingerprints from resolved_metadata first
+        if resolved_metadata:
+            deterministic_fp = resolved_metadata.get('deterministic_config_fingerprint')
+            full_fp = resolved_metadata.get('config_fingerprint')
+            
+            # If both available, return dict
+            if deterministic_fp and full_fp:
+                return {
+                    'config_fingerprint': full_fp,
+                    'deterministic_config_fingerprint': deterministic_fp
+                }
+            
+            # If only deterministic available, return it
+            if deterministic_fp:
+                return deterministic_fp
+            
+            # If only full available, return it
+            if full_fp:
+                return full_fp
+        
+        # Fallback: Try to load from config.resolved.json if available
+        # This ensures we get deterministic fingerprint even if resolved_metadata doesn't have it
+        if cohort_dir is None and self.output_dir:
+            # Try to find globals/config.resolved.json from output_dir
+            resolved_config_path = self.output_dir / "globals" / "config.resolved.json"
+            if resolved_config_path.exists():
+                try:
+                    with open(resolved_config_path, 'r') as f:
+                        resolved_config = json.load(f)
+                    deterministic_fp = resolved_config.get('deterministic_config_fingerprint')
+                    full_fp = resolved_config.get('config_fingerprint')
+                    
+                    if deterministic_fp and full_fp:
+                        return {
+                            'config_fingerprint': full_fp,
+                            'deterministic_config_fingerprint': deterministic_fp
+                        }
+                    if deterministic_fp:
+                        return deterministic_fp
+                    if full_fp:
+                        return full_fp
+                except Exception as e:
+                    logger.debug(f"Could not load deterministic fingerprint from {resolved_config_path}: {e}")
+        
+        # Fallback: compute from context fields (legacy behavior)
         config_parts = []
         
         # Strategy and model_family (if applicable)
@@ -1546,6 +1663,14 @@ class DiffTelemetry:
                 config['model_family'] = ctx.model_family
             if ctx.trainer_strategy:
                 config['strategy'] = ctx.trainer_strategy
+        if stage in ["TARGET_RANKING", "FEATURE_SELECTION"]:
+            if ctx.model_families:
+                config['model_families'] = sorted(ctx.model_families)  # Sort for determinism
+        if stage == "FEATURE_SELECTION" and ctx.feature_selection:
+            # Add feature selection parameters to config
+            if 'feature_selection' not in config:
+                config['feature_selection'] = {}
+            config['feature_selection'].update(ctx.feature_selection)
         if config:
             inputs['config'] = config
         
@@ -1557,6 +1682,10 @@ class DiffTelemetry:
         }
         if ctx.n_rows_total is not None:
             inputs['data']['n_rows_total'] = ctx.n_rows_total
+        if ctx.symbols:
+            inputs['data']['symbols'] = ctx.symbols
+        if ctx.data_dir:
+            inputs['data']['data_dir'] = ctx.data_dir
         
         # Target (required, should be non-null)
         inputs['target'] = {
@@ -1593,22 +1722,45 @@ class DiffTelemetry:
         
         # Config fingerprint tree
         if additional_data:
-            inputs['config'] = {
+            config = {
                 'strategy': additional_data.get('strategy'),
                 'model_family': additional_data.get('model_family'),
                 'n_features': additional_data.get('n_features'),
                 'min_cs': additional_data.get('min_cs'),
                 'max_cs_samples': additional_data.get('max_cs_samples')
             }
+            # Add model_families for TARGET_RANKING/FEATURE_SELECTION
+            if additional_data.get('model_families'):
+                config['model_families'] = sorted(additional_data.get('model_families'))
+            # Add feature_selection parameters for FEATURE_SELECTION stage
+            if additional_data.get('feature_selection'):
+                if 'feature_selection' not in config:
+                    config['feature_selection'] = {}
+                config['feature_selection'].update(additional_data.get('feature_selection'))
+            # Remove None values
+            config = {k: v for k, v in config.items() if v is not None}
+            if config:
+                inputs['config'] = config
         
         # Data fingerprint tree
         if cohort_metadata:
-            inputs['data'] = {
+            data = {
                 'n_symbols': cohort_metadata.get('n_symbols'),
                 'date_start': cohort_metadata.get('date_start'),
                 'date_end': cohort_metadata.get('date_end'),
                 'n_samples': cohort_metadata.get('n_samples')
             }
+            # Add symbols and data_dir if available
+            if cohort_metadata.get('symbols'):
+                data['symbols'] = cohort_metadata.get('symbols')
+            if cohort_metadata.get('data_dir'):
+                data['data_dir'] = cohort_metadata.get('data_dir')
+            elif additional_data and additional_data.get('data_dir'):
+                data['data_dir'] = additional_data.get('data_dir')
+            # Remove None values
+            data = {k: v for k, v in data.items() if v is not None}
+            if data:
+                inputs['data'] = data
         
         # Target provenance
         target = None
@@ -1666,6 +1818,8 @@ class DiffTelemetry:
                 training['strategy'] = ctx.trainer_strategy
             if ctx.model_family:
                 training['model_family'] = ctx.model_family
+            if ctx.hyperparameters:
+                training['hyperparameters'] = ctx.hyperparameters
             if training:
                 process['training'] = training
         
@@ -1698,11 +1852,32 @@ class DiffTelemetry:
             }
         
         # Training regime
-        if additional_data:
-            process['training'] = {
+        if additional_data and 'training' in additional_data:
+            training_data = additional_data['training']
+            training = {
+                'strategy': training_data.get('strategy'),
+                'model_family': training_data.get('model_family')
+            }
+            # Add hyperparameters (exclude strategy, model_family, seeds - handled separately)
+            excluded_keys = {'strategy', 'model_family', 'split_seed', 'train_seed', 'seed'}
+            hyperparameters = {k: v for k, v in training_data.items() 
+                              if k not in excluded_keys and v is not None}
+            if hyperparameters:
+                training['hyperparameters'] = hyperparameters
+            # Remove None values
+            training = {k: v for k, v in training.items() if v is not None}
+            if training:
+                process['training'] = training
+        elif additional_data:
+            # Fallback: try to extract from top-level additional_data
+            training = {
                 'strategy': additional_data.get('strategy'),
                 'model_family': additional_data.get('model_family')
             }
+            # Remove None values
+            training = {k: v for k, v in training.items() if v is not None}
+            if training:
+                process['training'] = training
         
         # Compute environment (if available)
         process['environment'] = {
@@ -3103,6 +3278,12 @@ class DiffTelemetry:
             Flattened dict with dot-notation keys
         """
         flattened = {}
+        if not isinstance(metrics, dict):
+            # Not a dict - return as-is with prefix
+            if prefix:
+                flattened[prefix] = metrics
+            return flattened
+        
         for key, value in metrics.items():
             full_key = f"{prefix}.{key}" if prefix else key
             if isinstance(value, dict):
@@ -3111,9 +3292,17 @@ class DiffTelemetry:
             elif isinstance(value, (int, float, str, bool, type(None))):
                 # Primitive value - add to flattened dict
                 flattened[full_key] = value
-            elif isinstance(value, list):
-                # Lists are kept as-is (for now)
-                flattened[full_key] = value
+            elif isinstance(value, (list, tuple)):
+                # Lists and tuples: convert to list and keep as-is
+                # For metrics, lists are typically small (e.g., fold timestamps)
+                flattened[full_key] = list(value) if isinstance(value, tuple) else value
+            elif isinstance(value, set):
+                # Sets: convert to sorted list for deterministic flattening
+                flattened[full_key] = sorted(value)
+            else:
+                # Unknown type - convert to string representation
+                # This handles edge cases like numpy types, etc.
+                flattened[full_key] = str(value)
         return flattened
     
     def _compute_metric_deltas(
@@ -4992,14 +5181,24 @@ def compute_full_run_hash(output_dir: Path, run_id: Optional[str] = None) -> Opt
                 continue
             
             # Extract deterministic fields only (exclude run_id, timestamp, snapshot_seq)
+            # CRITICAL: Validate that at least one config fingerprint exists
+            config_fp = snapshot.get('deterministic_config_fingerprint') or snapshot.get('config_fingerprint')
+            if not config_fp:
+                logger.warning(
+                    f"Snapshot missing config fingerprint (stage={snapshot.get('stage')}, "
+                    f"target={snapshot.get('target')}, run_id={snapshot.get('run_id')}). "
+                    f"Run hash may be invalid. Skipping this snapshot."
+                )
+                continue  # Skip snapshots without fingerprints to avoid invalid hash
+            
             deterministic = {
                 'stage': snapshot.get('stage'),
                 'target': snapshot.get('target'),
                 'view': snapshot.get('view'),
                 'symbol': snapshot.get('symbol'),
                 'model_family': snapshot.get('model_family'),
-                # Fingerprints
-                'config_fingerprint': snapshot.get('config_fingerprint'),
+                # Fingerprints - use deterministic_config_fingerprint if available, fallback to config_fingerprint
+                'config_fingerprint': config_fp,
                 'data_fingerprint': snapshot.get('data_fingerprint'),
                 'feature_fingerprint': snapshot.get('feature_fingerprint'),
                 'target_fingerprint': snapshot.get('target_fingerprint'),
@@ -5030,6 +5229,14 @@ def compute_full_run_hash(output_dir: Path, run_id: Optional[str] = None) -> Opt
                 }
             
             run_state.append(deterministic)
+    
+    # Validate that we have at least one snapshot with valid fingerprints
+    if not run_state:
+        logger.warning(
+            f"No valid snapshots found for run hash computation (output_dir={output_dir}, run_id={run_id}). "
+            f"This may indicate all snapshots are missing fingerprints or no snapshots exist."
+        )
+        return None
     
     # Sort for deterministic ordering
     run_state.sort(key=lambda x: (

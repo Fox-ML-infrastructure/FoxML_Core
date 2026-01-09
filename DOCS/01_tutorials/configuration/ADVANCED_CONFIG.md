@@ -15,11 +15,11 @@ import yaml
 from pathlib import Path
 
 # Load base config (example - adjust path as needed)
-with open("CONFIG/training_config/pipeline_config.yaml") as f:
+with open("CONFIG/pipeline/pipeline.yaml") as f:
     base_config = yaml.safe_load(f)
 
 # Load overlay (example - adjust path as needed)
-with open("CONFIG/training_config/gpu_config.yaml") as f:
+with open("CONFIG/pipeline/gpu.yaml") as f:
     overlay_config = yaml.safe_load(f)
 
 # Merge (overlay takes precedence)

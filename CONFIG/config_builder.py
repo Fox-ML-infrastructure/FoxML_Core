@@ -439,13 +439,11 @@ def build_training_config(
     Returns:
         TrainingConfig object
     """
-    # Load module configs - try new locations first
+    # Load module configs from canonical locations
     if module_cfg_path is None:
         models_path = CONFIG_DIR / "training" / "models.yaml"
-        # Try new location first (pipeline/), then old (training_config/)
+        # Use canonical pipeline path
         pipeline_path = CONFIG_DIR / "pipeline" / "pipeline.yaml"
-        if not pipeline_path.exists():
-            pipeline_path = CONFIG_DIR / "training_config" / "pipeline_config.yaml"
     else:
         models_path = module_cfg_path
         pipeline_path = None
@@ -454,19 +452,12 @@ def build_training_config(
     pipeline_data = load_yaml(pipeline_path) if pipeline_path and pipeline_path.exists() else {}
     
     # For training, model_families might come from feature_selection config (shared)
-    # Try to load from feature_selection config as fallback
+    # Load from canonical ranking/features/ location
     if not models_data.get('model_families'):
-        # Try new location first (ranking/features/), then old (feature_selection/)
         feature_selection_path = CONFIG_DIR / "ranking" / "features" / "multi_model.yaml"
-        if not feature_selection_path.exists():
-            feature_selection_path = CONFIG_DIR / "feature_selection" / "multi_model.yaml"
-        legacy_path = CONFIG_DIR / "multi_model_feature_selection.yaml"
         
         if feature_selection_path.exists():
             fs_data = load_yaml(feature_selection_path)
-            models_data['model_families'] = fs_data.get('model_families', {})
-        elif legacy_path.exists():
-            fs_data = load_yaml(legacy_path)
             models_data['model_families'] = fs_data.get('model_families', {})
     
     # Apply experiment overrides

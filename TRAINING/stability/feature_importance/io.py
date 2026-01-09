@@ -510,6 +510,7 @@ def create_fs_snapshot_from_importance(
             n_effective=n_effective,
             feature_registry_hash=feature_registry_hash,
             comparable_key=comparable_key,
+            output_dir=output_dir,  # Pass output_dir for config.resolved.json loading
             # P0 correctness: selection mode fields
             selection_mode=selection_mode,
             n_candidates=n_candidates,

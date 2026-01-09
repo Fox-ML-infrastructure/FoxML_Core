@@ -56,7 +56,7 @@ def main():
         "--routing-config",
         type=Path,
         default=None,
-        help="Path to routing config YAML (default: CONFIG/training_config/routing_config.yaml)"
+        help="Path to routing config YAML (default: CONFIG/pipeline/training/routing.yaml)"
     )
     parser.add_argument(
         "--metrics-output",

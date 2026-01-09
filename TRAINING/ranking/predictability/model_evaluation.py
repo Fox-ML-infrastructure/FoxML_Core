@@ -131,7 +131,12 @@ try:
     from TRAINING.common.determinism import init_determinism_from_config
     BASE_SEED = init_determinism_from_config()
 except ImportError:
-    BASE_SEED = 42  # Fallback if determinism module not available
+    # Fallback: load from config directly if determinism module not available
+    try:
+        from CONFIG.config_loader import get_cfg
+        BASE_SEED = int(get_cfg("pipeline.determinism.base_seed", default=42, config_name="pipeline_config"))
+    except Exception:
+        BASE_SEED = 42  # Final fallback matches pipeline.yaml default
 
 def _enforce_final_safety_gate(
     X: np.ndarray,
@@ -2174,8 +2179,12 @@ def train_and_evaluate_models(
                 if len(y_true) == len(y_pred):
                     accuracy = np.mean(y_true == y_pred)
                     # Use > with epsilon to prevent false triggers from rounding
-                    # Default epsilon: 1e-6 (prevents 0.9990 == 0.9990 false positives)
-                    epsilon = 1e-6
+                    # Load epsilon from config (default: 1e-6)
+                    try:
+                        from CONFIG.config_loader import get_cfg
+                        epsilon = float(get_cfg("safety.leakage_detection.model_evaluation.comparison_epsilon", default=1e-6, config_name="safety_config"))
+                    except Exception:
+                        epsilon = 1e-6  # FALLBACK_DEFAULT_OK
                     if accuracy > (_correlation_threshold + epsilon):  # Configurable threshold (default: 99.9%)
                         metric_name = "training accuracy"
                         
@@ -2203,8 +2212,12 @@ def train_and_evaluate_models(
                 if len(y_true) == len(y_pred):
                     corr = np.corrcoef(y_true, y_pred)[0, 1]
                     # Use > with epsilon to prevent false triggers from rounding
-                    # Default epsilon: 1e-6 (prevents 0.9990 == 0.9990 false positives)
-                    epsilon = 1e-6
+                    # Load epsilon from config (default: 1e-6)
+                    try:
+                        from CONFIG.config_loader import get_cfg
+                        epsilon = float(get_cfg("safety.leakage_detection.model_evaluation.comparison_epsilon", default=1e-6, config_name="safety_config"))
+                    except Exception:
+                        epsilon = 1e-6  # FALLBACK_DEFAULT_OK
                     if not np.isnan(corr) and abs(corr) > (_correlation_threshold + epsilon):
                         if is_tree_model:
                             logger.warning(
@@ -7902,6 +7915,14 @@ def evaluate_target_predictability(
                     "task_type": result.task_type.name if hasattr(result.task_type, 'name') else str(result.task_type),
                     **cohort_additional_data
                 }
+                
+                # Add model_families for run recreation (already sorted at line 2073)
+                if 'model_families' in locals() and model_families:
+                    additional_data_with_cohort['model_families'] = model_families
+                
+                # Add data_dir for run recreation
+                if 'data_dir' in locals() and data_dir:
+                    additional_data_with_cohort['data_dir'] = str(data_dir)
                 
                 # Add view and symbol for dual-view target ranking
                 if 'view' in locals():

@@ -6,7 +6,7 @@ The intelligent training pipeline can now be run with minimal command-line argum
 
 ### 1. Configure Once
 
-Edit `CONFIG/training_config/intelligent_training_config.yaml`:
+Edit `CONFIG/pipeline/training/intelligent.yaml`:
 
 ```yaml
 data:
@@ -95,7 +95,7 @@ python -m TRAINING.orchestration.intelligent_trainer \
 
 ## Configuration File Structure
 
-The config file (`CONFIG/training_config/intelligent_training_config.yaml`) supports:
+The config file (`CONFIG/pipeline/training/intelligent.yaml`) supports:
 
 ### Data Configuration
 - `data.data_dir`: Default data directory
@@ -187,7 +187,7 @@ python -m TRAINING.orchestration.intelligent_trainer \
 
 ### New Way (Recommended)
 
-1. Edit `CONFIG/training_config/intelligent_training_config.yaml`
+1. Edit `CONFIG/pipeline/training/intelligent.yaml`
 2. Run: `python -m TRAINING.orchestration.intelligent_trainer --output-dir "test_e2e_ranking_unified"`
 
 ## Tips

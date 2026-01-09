@@ -228,7 +228,7 @@ threading:
 ## Configuration Precedence
 
 1. **Experiment config** (`--experiment-config`) - Highest priority
-2. **Intelligent training config** (`intelligent_training_config.yaml`) - Defaults
+2. **Intelligent training config** (`pipeline/training/intelligent.yaml`) - Defaults
 3. **Command-line arguments** - Override config when specified
 
 ## Validation Rules

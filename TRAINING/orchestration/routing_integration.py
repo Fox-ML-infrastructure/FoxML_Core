@@ -36,7 +36,7 @@ def generate_routing_plan_after_feature_selection(
         output_dir: Base output directory (should contain feature_selections/)
         targets: List of target names that were processed
         symbols: List of symbol names
-        routing_config_path: Optional path to routing config (defaults to CONFIG/training_config/routing_config.yaml)
+        routing_config_path: Optional path to routing config (defaults to CONFIG/pipeline/training/routing.yaml)
     
     Returns:
         Routing plan dict or None if generation failed

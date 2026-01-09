@@ -547,6 +547,7 @@ def create_and_save_training_snapshot(
             n_samples=n_samples,
             train_seed=train_seed,
             snapshot_seq=snapshot_seq,
+            output_dir=output_dir,  # Pass output_dir for config.resolved.json loading
         )
         
         # Get snapshot directory (now with cohort support)

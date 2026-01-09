@@ -52,7 +52,8 @@ class TrainingSnapshot:
     fingerprint_schema_version: str = "1.0"
     metrics_schema_version: str = "1.1"  # Bump when metrics structure changes (added 2026-01)
     scoring_schema_version: str = "1.1"  # Phase 3.1: SE-based stability, skill-gating, classification centering
-    config_fingerprint: Optional[str] = None  # Hash of training config
+    config_fingerprint: Optional[str] = None  # Full hash of training config (includes run_id/timestamp) - for metadata
+    deterministic_config_fingerprint: Optional[str] = None  # Deterministic hash (excludes run_id/timestamp) - for comparison
     data_fingerprint: Optional[str] = None  # Dataset signature
     feature_fingerprint: Optional[str] = None  # Selected features from FS stage
     target_fingerprint: Optional[str] = None  # Target definition hash
@@ -209,6 +210,7 @@ class TrainingSnapshot:
         n_samples: Optional[int] = None,
         train_seed: int = 42,
         snapshot_seq: int = 0,
+        output_dir: Optional[Path] = None,  # Output directory for loading config.resolved.json
     ) -> 'TrainingSnapshot':
         """
         Create from training result dictionary.
@@ -246,6 +248,27 @@ class TrainingSnapshot:
             elif isinstance(run_identity, dict):
                 identity = run_identity
         
+        # CRITICAL: Extract config fingerprints from identity or load from config.resolved.json
+        # This ensures deterministic_config_fingerprint is populated for run hash computation
+        config_fp = identity.get("config_fingerprint")
+        deterministic_config_fp = identity.get("deterministic_config_fingerprint")
+        
+        # If deterministic fingerprint not in identity, try to load from config.resolved.json
+        if not deterministic_config_fp and output_dir:
+            try:
+                import json
+                from pathlib import Path
+                globals_dir = Path(output_dir) / "globals"
+                resolved_config_path = globals_dir / "config.resolved.json"
+                if resolved_config_path.exists():
+                    with open(resolved_config_path, 'r') as f:
+                        resolved_config = json.load(f)
+                    deterministic_config_fp = resolved_config.get('deterministic_config_fingerprint')
+                    if not config_fp:
+                        config_fp = resolved_config.get('config_fingerprint')
+            except Exception:
+                pass  # Fallback to identity only
+        
         # Build comparison group from identity (full parity with TARGET_RANKING)
         comparison_group = {}
         if identity.get("experiment_id"):
@@ -262,8 +285,11 @@ class TrainingSnapshot:
         if identity.get("hparams_signature"):
             comparison_group["hyperparameters_signature"] = identity["hparams_signature"]
         comparison_group["train_seed"] = identity.get("train_seed", train_seed)
-        if identity.get("universe_sig"):
-            comparison_group["universe_sig"] = identity["universe_sig"]
+        # Extract universe_sig from identity (RunIdentity stores it as dataset_signature)
+        # Reuse pattern from reproducibility_tracker.py:1376-1378
+        universe_sig = identity.get("universe_sig") or identity.get("dataset_signature")
+        if universe_sig:
+            comparison_group["universe_sig"] = universe_sig
         if identity.get("feature_signature"):
             comparison_group["feature_signature"] = identity["feature_signature"]
         if identity.get("library_versions_signature"):
@@ -411,7 +437,8 @@ class TrainingSnapshot:
             symbol=symbol,
             model_family=model_family,
             snapshot_seq=snapshot_seq,
-            config_fingerprint=identity.get("config_fingerprint"),
+            config_fingerprint=config_fp,  # Full config fingerprint (includes run_id/timestamp) - for metadata
+            deterministic_config_fingerprint=deterministic_config_fp,  # Deterministic fingerprint (excludes run_id/timestamp) - for comparison
             data_fingerprint=identity.get("dataset_signature"),
             feature_fingerprint=identity.get("feature_signature"),
             target_fingerprint=identity.get("target_signature"),

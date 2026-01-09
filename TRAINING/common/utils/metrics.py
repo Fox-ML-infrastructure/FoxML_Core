@@ -95,7 +95,7 @@ class MetricsWriter:
     
     Structure:
     - Sidecar files in each cohort folder: 
-      * metrics.json (canonical flat schema, human-readable)
+      * metrics.json (canonical schema, human-readable - supports both flat and nested structures)
       * metrics.parquet (same schema, wide format, queryable)
       * metrics_drift.json (comparison to baseline)
       * metrics_trend.json (temporal trends)
@@ -103,16 +103,11 @@ class MetricsWriter:
     - Stage-level container: TARGET_RANKING/metrics_rollup.json
     
     Canonical schema (metrics.json/parquet):
-    {
-      "run_id": "...",
-      "timestamp": "...",
-      "stage": "...",
-      "reproducibility_mode": "COHORT_AWARE",
-      "target": "...",
-      "metric_name": "...",
-      "auc": ...,
-      ... (all metrics as flat keys)
-    }
+    Supports both old flat structure and new grouped structure:
+    - Old flat: {"auc": 0.5, "std_score": 0.1, ...}
+    - New grouped: {"primary_metric": {"mean": 0.5, "std": 0.1}, "coverage": {"n_cs_valid": 11}, ...}
+    
+    Nested structures (dicts, lists) are stored as-is for backward compatibility.
     
     Privacy: All metrics are stored locally in REPRODUCIBILITY/ directory.
     No network calls, no external transmission, no user data collection.
@@ -291,21 +286,15 @@ class MetricsWriter:
         Write metrics.json and metrics.parquet with unified canonical schema.
         
         PHASE 2: Unified schema - single source of truth for metrics.
-        - metrics.json: Human-readable JSON (flat structure)
+        - metrics.json: Human-readable JSON (supports both flat and nested structures)
         - metrics.parquet: Queryable Parquet (same schema, wide format)
         
         Schema (canonical):
-        {
-          "run_id": "...",
-          "timestamp": "...",
-          "stage": "...",
-          "reproducibility_mode": "COHORT_AWARE",
-          "target": "...",
-          "metric_name": "...",
-          "auc": ...,
-          "std_score": ...,
-          ... (all other metrics as flat keys)
-        }
+        Supports both old flat structure and new grouped structure:
+        - Old flat: {"auc": 0.5, "std_score": 0.1, ...}
+        - New grouped: {"primary_metric": {"mean": 0.5, "std": 0.1}, "coverage": {"n_cs_valid": 11}, ...}
+        
+        Nested structures (dicts, lists) are stored as-is for backward compatibility.
         """
         # Build canonical flat schema (same as reproducibility_tracker metrics.json)
         metrics_data = {

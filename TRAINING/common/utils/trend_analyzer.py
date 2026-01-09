@@ -567,17 +567,27 @@ class TrendAnalyzer:
             row['metrics_path'] = str(metrics_file_path) if metrics_file_path and metrics_file_path.exists() else None
             
             # Extract stage-specific metric fields
+            # Use SST accessors to handle both old flat and new grouped structures
+            from TRAINING.orchestration.utils.reproducibility.utils import extract_auc, extract_n_effective
+            
             if stage == "TARGET_RANKING":
-                row['auc_mean'] = metrics.get('auc')
-                row['auc_std'] = metrics.get('std_score')
-                row['composite_score'] = metrics.get('composite_score')
-                row['importance_mean'] = metrics.get('mean_importance')
-                row['n_effective'] = metrics.get('n_effective_cs') or metadata.get('n_effective')
+                row['auc_mean'] = extract_auc(metrics)  # Handles both old and new structures
+                # Try new structure first, then fallback to old
+                row['auc_std'] = (metrics.get('primary_metric', {}).get('std') or 
+                                 metrics.get('primary_metric', {}).get('skill_se') or 
+                                 metrics.get('std_score'))
+                row['composite_score'] = (metrics.get('score', {}).get('composite') or 
+                                         metrics.get('composite_score'))
+                row['importance_mean'] = (metrics.get('score', {}).get('components', {}).get('mean_importance') or 
+                                         metrics.get('mean_importance'))
+                row['n_effective'] = extract_n_effective(metrics) or metadata.get('n_effective')
             elif stage == "FEATURE_SELECTION":
                 # Feature selection metrics (to be defined based on actual structure)
-                row['n_selected'] = metrics.get('n_selected') or metrics.get('n_features')
+                row['n_selected'] = (metrics.get('features', {}).get('selected') or 
+                                   metrics.get('n_selected') or 
+                                   metrics.get('n_features'))
             elif stage == "TRAINING" or stage == "MODEL_TRAINING":
-                row['primary_metric'] = metrics.get('auc')
+                row['primary_metric'] = extract_auc(metrics)  # Handles both old and new structures
                 row['train_time_sec'] = metrics.get('train_time_sec')
             
             return row

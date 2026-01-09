@@ -74,6 +74,28 @@ model_families:
 # Training strategy
 strategy: "single_task"  # Options: "single_task", "multi_task", "ensemble"
 
+# Strategy-specific configurations
+strategy_configs:
+  multi_task:
+    shared_dim: 128
+    head_dims: {}
+    loss_weights: {}
+    batch_size: 32
+    learning_rate: 0.001
+    n_epochs: 100
+  
+  cascade:
+    gate_threshold: 0.5
+    # Probability threshold for gating decisions
+    calibration_method: "isotonic"  # "isotonic" or "platt"
+    gating_rules:
+      will_peak_5m:
+        action: "reduce"  # "reduce", "boost", or "hold"
+        factor: 0.5  # Multiplier for action
+      will_valley_5m:
+        action: "boost"
+        factor: 1.2
+
 # Output configuration
 output:
   # Default output directory (can be overridden via --output-dir)

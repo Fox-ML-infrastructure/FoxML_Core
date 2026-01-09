@@ -370,13 +370,16 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
     if effective_run_identity is None:
         try:
             from TRAINING.common.utils.fingerprinting import create_stage_identity
+            # NOTE: mtf_data.keys() may be a batch subset, not full universe
+            # This fallback should only be used when run_identity is not provided
+            # (which should be rare - intelligent_trainer always provides it)
             symbols = list(mtf_data.keys()) if mtf_data else []
             effective_run_identity = create_stage_identity(
                 stage="TRAINING",
                 symbols=symbols,
                 experiment_config=experiment_config,
             )
-            logger.debug(f"Created fallback TRAINING identity with train_seed={effective_run_identity.train_seed}")
+            logger.debug(f"Created fallback TRAINING identity with train_seed={effective_run_identity.train_seed} (universe from mtf_data, may be batch subset)")
         except Exception as e:
             logger.debug(f"Failed to create fallback identity for TRAINING: {e}")
     
@@ -974,7 +977,12 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                             cohort_metadata=symbol_cohort_metadata,
                                         )
                                     except Exception as ts_err:
-                                        logger.debug(f"Training snapshot failed for {target}:{symbol} (non-critical): {ts_err}")
+                                        logger.warning(
+                                            f"⚠️ Training snapshot failed for {target}:{symbol} (model={family}): {ts_err}. "
+                                            f"This may break reproducibility tracking for this model."
+                                        )
+                                        import traceback
+                                        logger.debug(f"Training snapshot traceback: {traceback.format_exc()}")
                             else:
                                 # Fallback: save model directly if no strategy_manager
                                 model_path = ArtifactPaths.model_file(model_dir, family, extension='joblib')
@@ -1104,14 +1112,26 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 )
                                 cohort_metrics, cohort_additional_data = format_for_reproducibility_tracker(cohort_metadata)
                                 
-                                # Compute universe_sig from FULL universe (mtf_data.keys()), NOT [symbol]
-                                # This ensures consistent universe_sig across all writes in this run
-                                from TRAINING.orchestration.utils.run_context import compute_universe_signature
+                                # CRITICAL: Prefer universe_sig from run_identity (full run universe), not mtf_data (batch subset)
+                                # Reuse pattern from reproducibility_tracker.py:1376-1378
                                 from TRAINING.orchestration.utils.scope_resolution import (
                                     WriteScope, ScopePurpose, Stage
                                 )
-                                full_universe = list(mtf_data.keys()) if mtf_data else [symbol]
-                                universe_sig = compute_universe_signature(full_universe)
+                                universe_sig = None
+                                if effective_run_identity is not None:
+                                    # Extract from RunIdentity object (SST pattern)
+                                    if hasattr(effective_run_identity, 'dataset_signature') and effective_run_identity.dataset_signature:
+                                        universe_sig = effective_run_identity.dataset_signature
+                                    elif hasattr(effective_run_identity, 'to_dict'):
+                                        identity_dict = effective_run_identity.to_dict()
+                                        universe_sig = identity_dict.get("universe_sig") or identity_dict.get("dataset_signature")
+                                
+                                # Fallback: compute from mtf_data.keys() (may be batch subset, but better than nothing)
+                                if not universe_sig:
+                                    from TRAINING.orchestration.utils.run_context import compute_universe_signature
+                                    full_universe = list(mtf_data.keys()) if mtf_data else [symbol]
+                                    universe_sig = compute_universe_signature(full_universe)
+                                    logger.debug(f"Computed universe_sig from mtf_data.keys() (fallback - may be batch subset)")
                                 
                                 # Create WriteScope for type-safe scope handling
                                 scope = WriteScope.for_symbol_specific(
@@ -1646,15 +1666,27 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     **cohort_metrics  # Adds n_effective_cs if available
                                 }
                                 
-                                # Compute universe_sig from FULL universe (mtf_data.keys())
-                                from TRAINING.orchestration.utils.run_context import compute_universe_signature
+                                # CRITICAL: Prefer universe_sig from run_identity (full run universe), not mtf_data (batch subset)
+                                # Reuse pattern from reproducibility_tracker.py:1376-1378
                                 from TRAINING.orchestration.utils.scope_resolution import (
                                     WriteScope, ScopePurpose, Stage
                                 )
+                                universe_sig = None
+                                if effective_run_identity is not None:
+                                    # Extract from RunIdentity object (SST pattern)
+                                    if hasattr(effective_run_identity, 'dataset_signature') and effective_run_identity.dataset_signature:
+                                        universe_sig = effective_run_identity.dataset_signature
+                                    elif hasattr(effective_run_identity, 'to_dict'):
+                                        identity_dict = effective_run_identity.to_dict()
+                                        universe_sig = identity_dict.get("universe_sig") or identity_dict.get("dataset_signature")
                                 
-                                # Get symbols from mtf_data for universe_sig computation
-                                tracking_symbols = list(mtf_data.keys()) if mtf_data else []
-                                universe_sig = compute_universe_signature(tracking_symbols) if tracking_symbols else None
+                                # Fallback: compute from mtf_data.keys() (may be batch subset, but better than nothing)
+                                if not universe_sig:
+                                    from TRAINING.orchestration.utils.run_context import compute_universe_signature
+                                    tracking_symbols = list(mtf_data.keys()) if mtf_data else []
+                                    universe_sig = compute_universe_signature(tracking_symbols) if tracking_symbols else None
+                                    if universe_sig:
+                                        logger.debug(f"Computed universe_sig from mtf_data.keys() (fallback - may be batch subset)")
                                 
                                 # Create WriteScope for type-safe scope handling
                                 # This enforces CS has no symbol and validates invariants

@@ -316,8 +316,19 @@ def select_features_for_target(
             if harness_max_cs_samples is None:
                 harness_max_cs_samples = int(get_cfg("pipeline.data_limits.max_cs_samples", default=1000, config_name="pipeline_config"))
         except Exception:
-            harness_min_cs = 10
-            harness_max_cs_samples = 1000
+            # Fallback: use same defaults as in pipeline.yaml (try config one more time)
+            try:
+                from CONFIG.config_loader import get_cfg
+                if harness_min_cs is None:
+                    harness_min_cs = int(get_cfg("pipeline.data_limits.min_cross_sectional_samples", default=10, config_name="pipeline_config"))
+                if harness_max_cs_samples is None:
+                    harness_max_cs_samples = int(get_cfg("pipeline.data_limits.max_cs_samples", default=1000, config_name="pipeline_config"))
+            except Exception:
+                # Final fallback matches pipeline.yaml defaults
+                if harness_min_cs is None:
+                    harness_min_cs = 10
+                if harness_max_cs_samples is None:
+                    harness_max_cs_samples = 1000
     
     # Compute config hash for cache key
     config_hash = _compute_feature_selection_config_hash(
@@ -1694,11 +1705,19 @@ def select_features_for_target(
         cohort_min_cs = harness_min_cs
     if cohort_max_cs is None and 'harness_max_cs_samples' in dir() and harness_max_cs_samples is not None:
         cohort_max_cs = harness_max_cs_samples
-    # Ultimate fallback to defaults
+    # Ultimate fallback to defaults (from config)
     if cohort_min_cs is None:
-        cohort_min_cs = 10
+        try:
+            from CONFIG.config_loader import get_cfg
+            cohort_min_cs = int(get_cfg("pipeline.data_limits.min_cross_sectional_samples", default=10, config_name="pipeline_config"))
+        except Exception:
+            cohort_min_cs = 10  # Final fallback matches pipeline.yaml default
     if cohort_max_cs is None:
-        cohort_max_cs = 1000
+        try:
+            from CONFIG.config_loader import get_cfg
+            cohort_max_cs = int(get_cfg("pipeline.data_limits.max_cs_samples", default=1000, config_name="pipeline_config"))
+        except Exception:
+            cohort_max_cs = 1000  # Final fallback matches pipeline.yaml default
     
     cohort_context = {
         'symbols': symbols,
@@ -2549,9 +2568,14 @@ def select_features_for_target(
                     additional_data_with_cohort['seed'] = seed
                     additional_data_with_cohort['train_seed'] = seed  # Also pass as train_seed for FEATURE_SELECTION
                 except Exception:
-                    # Fallback to default if config not available
-                    additional_data_with_cohort['seed'] = 42
-                    additional_data_with_cohort['train_seed'] = 42
+                    # Fallback to default if config not available (from pipeline.yaml)
+                    try:
+                        from CONFIG.config_loader import get_cfg
+                        fallback_seed = int(get_cfg("pipeline.determinism.base_seed", default=42, config_name="pipeline_config"))
+                    except Exception:
+                        fallback_seed = 42  # Final fallback matches pipeline.yaml default
+                    additional_data_with_cohort['seed'] = fallback_seed
+                    additional_data_with_cohort['train_seed'] = fallback_seed
                 
                 # Extract hyperparameters from model_families_config for reproducibility tracking
                 # CRITICAL: Different hyperparameters = different features selected
@@ -2693,6 +2717,17 @@ def select_features_for_target(
                 if selected_features:
                     additional_data_with_cohort['feature_names'] = selected_features
                     additional_data_with_cohort['n_features'] = len(selected_features)  # Required for diff_telemetry validation
+                
+                # Add feature selection parameters for run recreation
+                if feature_selection_config:
+                    additional_data_with_cohort['feature_selection'] = {
+                        'selection_mode': getattr(feature_selection_config, 'selection_mode', None),
+                        'selection_params': getattr(feature_selection_config, 'selection_params', {}),
+                        'aggregation': getattr(feature_selection_config, 'aggregation', None)
+                    }
+                
+                # Add data_dir for run recreation
+                additional_data_with_cohort['data_dir'] = str(data_dir)
                 
                 # Add data interval for data_source metadata
                 if 'detected_interval' in locals() and detected_interval is not None:

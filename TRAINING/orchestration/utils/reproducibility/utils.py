@@ -915,26 +915,51 @@ def extract_view(
 
 def extract_auc(data: Dict[str, Any]) -> Optional[float]:
     """
-    Extract AUC using SST field name 'auc'.
+    Extract AUC/primary metric value using SST field names.
     
-    Accepts legacy names for backward compatibility:
-    - auc (SST canonical)
-    - auc
-    - auc
+    Accepts both old flat structure and new grouped structure:
+    - Old: 'auc' (deprecated but still supported)
+    - New: 'primary_metric.mean' (nested path)
+    - New: 'primary_metric.skill_mean' (nested path)
+    - Also checks nested structure if data has 'primary_metric' key
     
     Args:
         data: Dict to extract from (metrics, etc.)
     
     Returns:
-        AUC as float, or None if not found
+        Primary metric value as float, or None if not found
     """
-    for key in ['auc', 'auc', 'auc']:
+    # Try old flat key first (backward compatibility)
+    if 'auc' in data:
+        val = data.get('auc')
+        if val is not None:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                pass
+    
+    # Try new nested structure
+    if 'primary_metric' in data and isinstance(data['primary_metric'], dict):
+        pm = data['primary_metric']
+        # Try mean first, then skill_mean
+        for key in ['mean', 'skill_mean']:
+            if key in pm:
+                val = pm[key]
+                if val is not None:
+                    try:
+                        return float(val)
+                    except (ValueError, TypeError):
+                        continue
+    
+    # Try flattened dot-notation keys (if already flattened)
+    for key in ['primary_metric.mean', 'primary_metric.skill_mean']:
         val = data.get(key)
         if val is not None:
             try:
                 return float(val)
             except (ValueError, TypeError):
                 continue
+    
     return None
 
 

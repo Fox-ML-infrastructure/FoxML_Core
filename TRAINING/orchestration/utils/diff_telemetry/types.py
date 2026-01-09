@@ -92,6 +92,7 @@ class ResolvedRunContext:
     n_rows_total: Optional[int] = None
     n_effective: Optional[int] = None
     data_fingerprint: Optional[str] = None
+    data_dir: Optional[str] = None  # Data directory path for run recreation
     
     # Task provenance (required for all stages)
     target: Optional[str] = None
@@ -122,6 +123,9 @@ class ResolvedRunContext:
     feature_selection_strategy: Optional[str] = None  # For FEATURE_SELECTION
     trainer_strategy: Optional[str] = None  # For TRAINING
     model_family: Optional[str] = None  # For TRAINING (required)
+    model_families: Optional[List[str]] = None  # For TARGET_RANKING/FEATURE_SELECTION (list of families used)
+    hyperparameters: Optional[Dict[str, Any]] = None  # Hyperparameters dict for run recreation
+    feature_selection: Optional[Dict[str, Any]] = None  # Feature selection parameters (selection_mode, selection_params, aggregation)
     
     # Config provenance
     min_cs: Optional[int] = None
@@ -444,7 +448,8 @@ class NormalizedSnapshot:
     scoring_schema_version: str = "1.1"  # Phase 3.1: SE-based stability, skill-gating, classification centering
     
     # Fingerprints (for change detection)
-    config_fingerprint: Optional[str] = None
+    config_fingerprint: Optional[str] = None  # Full fingerprint (includes run_id/timestamp) - for metadata
+    deterministic_config_fingerprint: Optional[str] = None  # Deterministic fingerprint (excludes run_id/timestamp) - for comparison
     data_fingerprint: Optional[str] = None
     feature_fingerprint: Optional[str] = None
     target_fingerprint: Optional[str] = None

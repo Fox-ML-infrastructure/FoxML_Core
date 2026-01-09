@@ -185,8 +185,8 @@ class MetricsAggregator:
                         df = pd.read_parquet(canonical_parquet)
                         if len(df) > 0:
                             metrics_data = df.iloc[0].to_dict()
-                            from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective
-                            score = metrics_data.get('auc')
+                            from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective, extract_auc
+                            score = extract_auc(metrics_data)  # SST accessor - handles both old and new structures
                             sample_size = extract_n_effective(metrics_data)  # SST accessor
                             logger.debug(f"✅ Loaded metrics from canonical location: {canonical_parquet}")
                     except Exception as e:
@@ -197,8 +197,8 @@ class MetricsAggregator:
                     try:
                         with open(canonical_json, 'r') as f:
                             metrics_data = json.load(f)
-                            from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective
-                            score = metrics_data.get('auc')
+                            from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective, extract_auc
+                            score = extract_auc(metrics_data)  # SST accessor - handles both old and new structures
                             sample_size = extract_n_effective(metrics_data)  # SST accessor
                             logger.debug(f"✅ Loaded metrics from canonical JSON: {canonical_json}")
                     except Exception as e:
@@ -219,7 +219,8 @@ class MetricsAggregator:
                         from TRAINING.common.utils.metrics import MetricsWriter
                         metrics_data = MetricsWriter.export_metrics_json_from_parquet(canonical_path)
                         from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective
-                        score = metrics_data.get('auc')
+                        from TRAINING.orchestration.utils.reproducibility.utils import extract_auc
+                        score = extract_auc(metrics_data)  # SST accessor - handles both old and new structures
                         sample_size = extract_n_effective(metrics_data)  # SST accessor
                         logger.debug(f"✅ Loaded metrics via reference pointer: {canonical_path}")
                 except Exception as e:
@@ -236,8 +237,8 @@ class MetricsAggregator:
                         df = pd.read_parquet(metrics_parquet)
                         if len(df) > 0:
                             metrics_data = df.iloc[0].to_dict()
-                            from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective
-                            score = metrics_data.get('auc')
+                            from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective, extract_auc
+                            score = extract_auc(metrics_data)  # SST accessor - handles both old and new structures
                             sample_size = extract_n_effective(metrics_data)  # SST accessor
                     except Exception as e:
                         logger.debug(f"Failed to load metrics from parquet: {e}")
@@ -245,8 +246,8 @@ class MetricsAggregator:
                     try:
                         with open(metrics_file, 'r') as f:
                             metrics_data = json.load(f)
-                            from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective
-                            score = metrics_data.get('auc')
+                            from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective, extract_auc
+                            score = extract_auc(metrics_data)  # SST accessor - handles both old and new structures
                             sample_size = extract_n_effective(metrics_data)  # SST accessor
                     except Exception as e:
                         logger.debug(f"Failed to load metrics from JSON: {e}")
@@ -260,7 +261,8 @@ class MetricsAggregator:
                     with open(legacy_metrics_file, 'r') as f:
                         metrics_data = json.load(f)
                         from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective
-                        score = metrics_data.get('auc')
+                        from TRAINING.orchestration.utils.reproducibility.utils import extract_auc
+                        score = extract_auc(metrics_data)  # SST accessor - handles both old and new structures
                         sample_size = extract_n_effective(metrics_data)  # SST accessor
                 except Exception as e:
                     logger.debug(f"Failed to load metrics from legacy location: {e}")
@@ -433,8 +435,11 @@ class MetricsAggregator:
                             metrics_data = json.load(f)
                         
                         # DEFENSIVE: Try multiple key names, log what we found
-                        from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective
-                        score = metrics_data.get('auc') or metrics_data.get('score') or metrics_data.get('composite_score')
+                        from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective, extract_auc
+                        score = extract_auc(metrics_data)  # SST accessor - handles both old and new structures
+                        if score is None:
+                            # Fallback to other score keys
+                            score = metrics_data.get('score') or metrics_data.get('composite_score')
                         sample_size = extract_n_effective(metrics_data)  # SST accessor
                         cohort_used = latest_cohort.name
                         

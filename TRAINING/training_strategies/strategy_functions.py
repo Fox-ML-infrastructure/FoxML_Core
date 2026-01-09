@@ -315,32 +315,51 @@ def prepare_training_data(mtf_data: Dict[str, pd.DataFrame],
 
 def create_strategy_config(strategy: str, targets: List[str], 
                           model_config: Dict[str, Any] = None) -> Dict[str, Any]:
-    """Create configuration for training strategy"""
+    """Create configuration for training strategy
     
+    SST: Loads strategy-specific configs from CONFIG/pipeline/training/intelligent.yaml
+    Falls back to hardcoded defaults if config not available.
+    """
     base_config = {
         'strategy': strategy,
         'targets': targets,
         'models': model_config or {}
     }
     
+    # Try to load strategy config from intelligent.yaml
+    strategy_config = None
+    try:
+        from CONFIG.config_loader import get_cfg
+        strategy_config = get_cfg(f"strategy_configs.{strategy}", default=None, config_name="intelligent_training_config")
+    except Exception:
+        pass  # Fall through to hardcoded defaults
+    
     if strategy == 'multi_task':
-        base_config.update({
-            'shared_dim': 128,
-            'head_dims': {},
-            'loss_weights': {},
-            'batch_size': 32,
-            'learning_rate': 0.001,
-            'n_epochs': 100
-        })
+        if strategy_config:
+            base_config.update(strategy_config)
+        else:
+            # Fallback to hardcoded defaults (matches intelligent.yaml)
+            base_config.update({
+                'shared_dim': 128,
+                'head_dims': {},
+                'loss_weights': {},
+                'batch_size': 32,
+                'learning_rate': 0.001,
+                'n_epochs': 100
+            })
     elif strategy == 'cascade':
-        base_config.update({
-            'gate_threshold': 0.5,
-            'calibration_method': 'isotonic',
-            'gating_rules': {
-                'will_peak_5m': {'action': 'reduce', 'factor': 0.5},
-                'will_valley_5m': {'action': 'boost', 'factor': 1.2}
-            }
-        })
+        if strategy_config:
+            base_config.update(strategy_config)
+        else:
+            # Fallback to hardcoded defaults (matches intelligent.yaml)
+            base_config.update({
+                'gate_threshold': 0.5,
+                'calibration_method': 'isotonic',
+                'gating_rules': {
+                    'will_peak_5m': {'action': 'reduce', 'factor': 0.5},
+                    'will_valley_5m': {'action': 'boost', 'factor': 1.2}
+                }
+            })
     
     return base_config
 

@@ -32,7 +32,7 @@ _IDENTITY_CONFIG_CACHE: Optional[Dict[str, Any]] = None
 
 def get_identity_config() -> Dict[str, Any]:
     """
-    Load identity configuration from CONFIG/identity_config.yaml.
+    Load identity configuration from CONFIG/core/identity_config.yaml.
     
     Returns cached config after first load.
     
@@ -58,10 +58,15 @@ def get_identity_config() -> Dict[str, Any]:
         "feature_identity": {"mode": "registry_resolved"},
     }
     
-    # Try to load from file
+    # Try to load from file (new location: core/identity_config.yaml)
     try:
         import yaml
-        config_path = Path(__file__).resolve().parents[3] / "CONFIG" / "identity_config.yaml"
+        # Try new location first (core/), then fallback to root for backward compatibility
+        config_path = Path(__file__).resolve().parents[3] / "CONFIG" / "core" / "identity_config.yaml"
+        if not config_path.exists():
+            # Fallback to old root location for backward compatibility
+            config_path = Path(__file__).resolve().parents[3] / "CONFIG" / "identity_config.yaml"
+        
         if config_path.exists():
             with open(config_path, 'r') as f:
                 loaded = yaml.safe_load(f) or {}

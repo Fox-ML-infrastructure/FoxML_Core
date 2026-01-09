@@ -4,12 +4,19 @@
 
 This directory contains all configuration files for the trading system. The structure has been organized to eliminate duplication and provide clear separation of concerns.
 
-## Recent Changes (2025-12-18)
+## Recent Changes (2026-01-08)
 
-### Config Cleanup
-- ✅ **Removed duplicate file**: `multi_model_feature_selection.yaml` (duplicate of `ranking/features/multi_model.yaml`)
-- ✅ **Symlink audit**: All symlinks documented and verified for backward compatibility
+### Config Cleanup and SST Compliance
+- ✅ **Moved `identity_config.yaml`** → `core/identity_config.yaml` (better organization)
+- ✅ **Removed duplicate `feature_selection_config.yaml`** (duplicate of `ranking/features/config.yaml`)
+- ✅ **Added strategy configs** to `pipeline/training/intelligent.yaml` (multi_task, cascade)
+- ✅ **Added missing config entries**: `comparison_epsilon`, `feature_count_pruning_threshold` to `safety.yaml`
+- ✅ **Enhanced config loader**: Added validation, canonical path resolution, improved error messages
+- ✅ **Removed all symlinks**: All symlinks removed, code now uses canonical paths directly
 - ✅ **Path migration**: All hardcoded config paths in TRAINING replaced with centralized config loader API
+
+### Previous Changes (2025-12-18)
+- ✅ **Removed duplicate file**: `multi_model_feature_selection.yaml` (duplicate of `ranking/features/multi_model.yaml`)
 
 ### New Config Loader Functions
 - ✅ `get_experiment_config_path(exp_name)` - Get path to experiment config file
@@ -63,13 +70,13 @@ Controls:
 - Default target/feature selection settings
 - Training defaults
 
-**Note:** `training_config/intelligent_training_config.yaml` is a symlink to this file.
+**Canonical path:** `pipeline/training/intelligent.yaml`
 
 ### 3. Pipeline Configs (`pipeline/training/*.yaml`)
 Training workflow configs:
-- `safety.yaml` - Safety checks and reproducibility
+- `safety.yaml` - Safety checks, leakage detection, model evaluation thresholds (`comparison_epsilon`, `feature_count_pruning_threshold`, `binary_classification_threshold`)
 - `routing.yaml` - Target routing decisions
-- `preprocessing.yaml` - Data preprocessing
+- `preprocessing.yaml` - Data preprocessing, validation splits (`time_aware_split_ratio`, `min_samples_for_split`)
 - `optimizer.yaml` - Optimization settings
 - `stability.yaml` - Stability analysis
 - `decisions.yaml` - Decision policies
@@ -77,6 +84,12 @@ Training workflow configs:
 - `callbacks.yaml` - Training callbacks
 - `sequential.yaml` - Sequential training
 - `first_batch.yaml` - First batch specs
+
+### 3a. Pipeline Root Configs (`pipeline/*.yaml`)
+- `pipeline.yaml` - Main pipeline config: determinism (`base_seed`), data limits (`min_cross_sectional_samples`, `max_cs_samples`), timeouts
+- `gpu.yaml` - GPU settings
+- `memory.yaml` - Memory management
+- `threading.yaml` - Threading configuration
 
 ### 4. Ranking Configs (`ranking/*/`)
 - `ranking/targets/configs.yaml` - Target definitions
@@ -110,46 +123,48 @@ Model-specific hyperparameters (LightGBM, XGBoost, etc.)
 3. **Intelligent training config** (`pipeline/training/intelligent.yaml`)
    - Used when experiment config is not specified
    - Missing values fall back to defaults
-4. **Pipeline configs** (`pipeline/training/*.yaml`)
+4. **Pipeline configs** (`pipeline/training/*.yaml`, `pipeline/pipeline.yaml`)
 5. **Defaults** (`defaults.yaml`) - lowest priority, injected automatically
 
-## Symlinks (Legacy Compatibility)
+## Single Source of Truth (SST) Priority Rules
 
-The following symlinks exist for backward compatibility but point to the organized structure:
+**CRITICAL**: CONFIG files are **always prioritized** over hardcoded defaults/fallbacks.
 
-### Root-Level Symlinks
-- `excluded_features.yaml` → `data/excluded_features.yaml`
-- `feature_registry.yaml` → `data/feature_registry.yaml`
-- `feature_groups.yaml` → `data/feature_groups.yaml`
-- `feature_target_schema.yaml` → `data/feature_target_schema.yaml`
-- `logging_config.yaml` → `core/logging.yaml`
-- `target_configs.yaml` → `ranking/targets/configs.yaml`
-- `feature_selection_config.yaml` → `ranking/features/config.yaml`
+### Code Pattern (Required)
 
-### Legacy Directory Symlinks
-- `feature_selection/multi_model.yaml` → `ranking/features/multi_model.yaml`
-- `target_ranking/multi_model.yaml` → `ranking/targets/multi_model.yaml`
+```python
+# ✅ CORRECT: Config first, then fallback
+try:
+    from CONFIG.config_loader import get_cfg
+    value = get_cfg("path.to.config", default=fallback_value, config_name="config_name")
+except Exception:
+    # Only use hardcoded if config system completely unavailable
+    value = fallback_value  # Should match config file default
+```
 
-### Training Config Symlinks (`training_config/`)
-All files in `training_config/` are symlinks to the organized structure:
-- `intelligent_training_config.yaml` → `pipeline/training/intelligent.yaml`
-- `safety_config.yaml` → `pipeline/training/safety.yaml`
-- `preprocessing_config.yaml` → `pipeline/training/preprocessing.yaml`
-- `optimizer_config.yaml` → `pipeline/training/optimizer.yaml`
-- `callbacks_config.yaml` → `pipeline/training/callbacks.yaml`
-- `routing_config.yaml` → `pipeline/training/routing.yaml`
-- `stability_config.yaml` → `pipeline/training/stability.yaml`
-- `decision_policies.yaml` → `pipeline/training/decisions.yaml`
-- `family_config.yaml` → `pipeline/training/families.yaml`
-- `sequential_config.yaml` → `pipeline/training/sequential.yaml`
-- `first_batch_specs.yaml` → `pipeline/training/first_batch.yaml`
-- `gpu_config.yaml` → `pipeline/gpu.yaml`
-- `memory_config.yaml` → `pipeline/memory.yaml`
-- `threading_config.yaml` → `pipeline/threading.yaml`
-- `pipeline_config.yaml` → `pipeline/pipeline.yaml`
-- `system_config.yaml` → `core/system.yaml`
+### Rules
 
-**Recommendation:** Use the organized paths directly in new code. The config loader API (`CONFIG.config_loader`) automatically resolves these paths, so you should use the loader functions instead of hardcoded paths.
+1. **Config loading always happens FIRST** - Never use hardcoded values before attempting to load from config
+2. **Fallback values must match config defaults** - If `get_cfg("path", default=42)`, then `42` should be the default in the config file
+3. **Config paths are canonical** - All config paths use canonical locations (no symlinks)
+4. **All configurable settings must have CONFIG entries** - No orphaned hardcoded values in production code
+
+### Verification
+
+Run the verification script to check for SST compliance:
+```bash
+python CONFIG/tools/verify_config_sst.py
+```
+
+## Path Resolution
+
+All config paths are now canonical (no symlinks). The config loader API (`CONFIG.config_loader`) provides a centralized way to resolve config file paths:
+
+- Use `get_config_path(config_name)` to get the canonical path to any config file
+- Use `load_training_config(config_name)` to load training configs
+- Use `load_model_config(model_family)` to load model configs
+
+**All code should use the config loader API instead of hardcoded paths.**
 
 ## Quick Reference
 
@@ -177,8 +192,7 @@ All files in `training_config/` are symlinks to the organized structure:
 
 **Config Cleanup:**
 - Removed duplicate `multi_model_feature_selection.yaml` (now only in `ranking/features/`)
-- Documented all symlinks for backward compatibility
-- Verified all symlinks are valid
+- Removed all symlinks (2026-01-08) - code now uses canonical paths directly
 
 **Path Migration:**
 - Replaced all hardcoded `Path("CONFIG/...")` patterns in TRAINING with config loader API
@@ -229,14 +243,14 @@ exp_config = load_experiment_config("my_experiment")
 intel_config = load_training_config("intelligent_training_config")
 ```
 
-### Legacy Path Compatibility
+### Path Migration
 
-Old paths that still work (via symlinks):
-- `training_config/intelligent_training_config.yaml` → `pipeline/training/intelligent.yaml`
-- `training_config/routing_config.yaml` → `pipeline/training/routing.yaml`
-- `excluded_features.yaml` → `data/excluded_features.yaml`
-- `feature_selection/multi_model.yaml` → `ranking/features/multi_model.yaml`
+All symlinks have been removed. Code now uses canonical paths directly:
+- `pipeline/training/intelligent.yaml` (not `training_config/intelligent_training_config.yaml`)
+- `pipeline/training/routing.yaml` (not `training_config/routing_config.yaml`)
+- `data/excluded_features.yaml` (not root-level `excluded_features.yaml`)
+- `ranking/features/multi_model.yaml` (not `feature_selection/multi_model.yaml`)
 - etc.
 
-**But prefer using the new organized paths in `pipeline/training/`, `data/`, `ranking/` directly, or better yet, use the config loader API.**
+**Always use the config loader API (`CONFIG.config_loader`) instead of hardcoded paths.**
 
