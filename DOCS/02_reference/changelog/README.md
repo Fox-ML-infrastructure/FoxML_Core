@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### January
 
+- **2026-01-08 (README Improvements for Credibility)** — Comprehensive README improvements: reorganized structure for better funnel, qualified claims (bitwise determinism scope, data transmission), added quick start snippet, concepts glossary, licensing TL;DR, and "why this exists" positioning. Resolved internal contradictions (production vs active development). Moved OSRS joke to maintain credibility. Makes README read like "infra, not a notebook" with clear positioning.
+  → [View](2026-01-08-readme-improvements-for-credibility.md)
+
 - **2026-01-08 (Comprehensive Config Dump and Hardware Docs)** — Added automatic copying of all CONFIG files to `globals/configs/` when runs are created, preserving directory structure. Enables easy run recreation without needing original CONFIG folder access. Updated README with detailed CPU/GPU recommendations for optimal performance and stability. All changes maintain backward compatibility.
   → [View](2026-01-08-comprehensive-config-dump-and-hardware-docs.md)
 
