@@ -252,6 +252,52 @@ def update_manifest(
     logger.debug(f"Updated manifest.json for target {target_clean}")
 
 
+def update_manifest_with_plan_hashes(output_dir: Path) -> None:
+    """
+    Update manifest.json with routing and training plan hashes.
+    
+    This should be called after routing and training plans are generated and saved.
+    
+    Args:
+        output_dir: Base run output directory
+    """
+    manifest_path = output_dir / "manifest.json"
+    
+    if not manifest_path.exists():
+        logger.debug("Manifest not found, skipping plan_hashes update")
+        return
+    
+    try:
+        # Load existing manifest
+        with open(manifest_path, 'r') as f:
+            manifest = json.load(f)
+        
+        # Compute plan hashes (may be null if plans don't exist yet)
+        plan_hashes = _compute_plan_hashes(output_dir)
+        
+        # Update manifest with plan hashes
+        manifest["plan_hashes"] = plan_hashes
+        
+        # Write updated manifest
+        with open(manifest_path, 'w') as f:
+            json.dump(manifest, f, indent=2, default=str)
+        
+        # Log which hashes were found
+        if plan_hashes.get("routing_plan_hash"):
+            logger.debug(f"Updated manifest with routing_plan_hash: {plan_hashes['routing_plan_hash'][:16]}...")
+        else:
+            logger.debug("routing_plan_hash is null (routing plan may not exist yet)")
+        
+        if plan_hashes.get("training_plan_hash"):
+            logger.debug(f"Updated manifest with training_plan_hash: {plan_hashes['training_plan_hash'][:16]}...")
+        else:
+            logger.debug("training_plan_hash is null (training plan may not exist yet)")
+        
+        logger.debug("Updated manifest.json with plan_hashes")
+    except Exception as e:
+        logger.warning(f"Failed to update manifest with plan_hashes: {e}")
+
+
 def update_manifest_with_run_hash(output_dir: Path) -> None:
     """
     Update manifest.json with run_hash and run_changes from globals/run_hash.json.

@@ -2451,8 +2451,27 @@ class IntelligentTrainer:
                     # Set training plan directory for filtering
                     from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
                     training_plan_dir = get_globals_dir(self.output_dir) / "training_plan"
+                    
+                    # FIX: Verify plans were actually saved
+                    routing_plan_path = get_globals_dir(self.output_dir) / "routing_plan" / "routing_plan.json"
+                    training_plan_path = training_plan_dir / "master_training_plan.json"
+                    if not routing_plan_path.exists():
+                        logger.warning(f"⚠️ Routing plan was generated but file not found at {routing_plan_path}")
+                    if not training_plan_path.exists() and not (training_plan_dir / "training_plan.json").exists():
+                        logger.warning(f"⚠️ Training plan was generated but file not found at {training_plan_path}")
+                    
+                    # FIX: Update manifest with plan hashes after plans are created
+                    try:
+                        from TRAINING.orchestration.utils.manifest import update_manifest_with_plan_hashes
+                        update_manifest_with_plan_hashes(self.output_dir)
+                    except Exception as e:
+                        logger.debug(f"Failed to update manifest with plan_hashes: {e}")
+                else:
+                    logger.warning("⚠️ Routing plan generation returned None - plans may not have been created")
             except Exception as e:
-                logger.debug(f"Failed to generate routing plan (non-critical): {e}")
+                # FIX: Log at WARNING level so failures are visible (not hidden at debug level)
+                logger.warning(f"⚠️ Failed to generate routing plan: {e}")
+                logger.debug(f"Routing plan generation traceback:", exc_info=True)
         
         # Step 3: Training
         logger.info("="*80)
@@ -3937,18 +3956,55 @@ Examples:
             from TRAINING.orchestration.utils.diff_telemetry import save_run_hash, DiffTelemetry
             from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
             
-            # Find previous run ID by looking for most recent run_hash.json in current or parent directories
+            # FIX: Find previous run ID by searching parent/sibling directories for previous runs
+            # Don't look in current run's run_hash.json (it doesn't exist yet on first run)
             prev_run_id = None
-            globals_dir = get_globals_dir(trainer.output_dir)
-            run_hash_file = globals_dir / "run_hash.json"
-            if run_hash_file.exists():
-                try:
-                    import json
-                    with open(run_hash_file, 'r') as f:
-                        prev_data = json.load(f)
-                        prev_run_id = prev_data.get('run_id')
-                except Exception:
-                    pass
+            try:
+                from pathlib import Path
+                import json
+                
+                # Find RESULTS directory by walking up from output_dir
+                results_dir = trainer.output_dir
+                for _ in range(10):
+                    if results_dir.name == "RESULTS":
+                        break
+                    if not results_dir.parent.exists():
+                        break
+                    results_dir = results_dir.parent
+                
+                # Search for previous runs in RESULTS/runs/cg-*/ or RESULTS/sample_*/
+                if results_dir.name == "RESULTS":
+                    runs_dir = results_dir / "runs"
+                    if runs_dir.exists():
+                        # New structure: RESULTS/runs/cg-*/
+                        search_base = runs_dir
+                    else:
+                        # Old structure: RESULTS/sample_*/
+                        search_base = results_dir
+                    
+                    # Find all intelligent_output_* directories (sorted by modification time, most recent first)
+                    prev_runs = []
+                    for cg_dir in search_base.iterdir():
+                        if not cg_dir.is_dir():
+                            continue
+                        for run_dir in cg_dir.iterdir():
+                            if run_dir.is_dir() and run_dir.name.startswith("intelligent_output_"):
+                                prev_hash_file = run_dir / "globals" / "run_hash.json"
+                                if prev_hash_file.exists() and prev_hash_file != (get_globals_dir(trainer.output_dir) / "run_hash.json"):
+                                    try:
+                                        with open(prev_hash_file, 'r') as f:
+                                            prev_data = json.load(f)
+                                            prev_runs.append((prev_hash_file.stat().st_mtime, prev_data.get('run_id'), prev_data.get('run_hash')))
+                                    except Exception:
+                                        continue
+                    
+                    # Use most recent previous run
+                    if prev_runs:
+                        prev_runs.sort(reverse=True)  # Most recent first
+                        prev_run_id = prev_runs[0][1]
+                        logger.debug(f"Found previous run ID: {prev_run_id} from {len(prev_runs)} previous runs")
+            except Exception as e:
+                logger.debug(f"Failed to find previous run ID: {e}")
             
             # Create DiffTelemetry instance for change detection
             diff_telemetry = DiffTelemetry(output_dir=trainer.output_dir)

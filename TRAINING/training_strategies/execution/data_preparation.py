@@ -252,6 +252,13 @@ def _prepare_training_data_polars(mtf_data: Dict[str, pd.DataFrame],
             # Keep only features that are both in feature_names and validated
             feature_names = [f for f in feature_names if f in validated_features]
             
+            # FIX: Ensure basic OHLCV features are always included (they're always safe - current bar only)
+            ohlcv_features = ['open', 'high', 'low', 'close', 'volume']
+            for ohlcv_feat in ohlcv_features:
+                if ohlcv_feat in all_columns and ohlcv_feat not in feature_names:
+                    feature_names.append(ohlcv_feat)
+                    logger.debug(f"  Added missing OHLCV feature: {ohlcv_feat}")
+            
             if len(feature_names) < len([f for f in feature_names if f in validated_features]):
                 logger.info(f"  Feature registry: Validated {len(feature_names)} features for target {target}")
         except Exception as e:
@@ -446,6 +453,13 @@ def _prepare_training_data_pandas(mtf_data: Dict[str, pd.DataFrame],
             
             # Keep only features that are both in feature_names and validated
             feature_names = [f for f in feature_names if f in validated_features]
+            
+            # FIX: Ensure basic OHLCV features are always included (they're always safe - current bar only)
+            ohlcv_features = ['open', 'high', 'low', 'close', 'volume']
+            for ohlcv_feat in ohlcv_features:
+                if ohlcv_feat in all_columns and ohlcv_feat not in feature_names:
+                    feature_names.append(ohlcv_feat)
+                    logger.debug(f"  Added missing OHLCV feature: {ohlcv_feat}")
             
             if len(feature_names) > 0:
                 logger.info(f"  Feature registry: Validated {len(feature_names)} features for target {target}")

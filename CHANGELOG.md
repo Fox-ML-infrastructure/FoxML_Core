@@ -4,6 +4,12 @@ All notable changes to FoxML Core will be documented in this file.
 
 ## 2026-01-08
 
+### File Overwrite and Plan Creation Fixes
+- **run_context.json:** Fixed stage history loss - now preserves `current_stage` and `stage_history` when `save_run_context()` is called after `save_stage_transition()`
+- **run_hash.json:** Fixed creation issues - improved error logging, fixed previous run lookup to search parent directories, added validation for missing snapshot indices
+- **Routing/Training Plans:** Fixed plan creation - improved error logging (visible warnings instead of debug), added plan save verification, fixed manifest update to occur after plans are created
+- See [detailed changelog](DOCS/02_reference/changelog/2026-01-08-file-overwrite-and-plan-creation-fixes.md) for full details
+
 ### Commercial License Clarity and Support Documentation
 - **README:** Clarified commercial license requirements - now explicitly states "required for proprietary/closed deployments or to avoid AGPL obligations (especially SaaS/network use)"
 - **SUPPORT.md:** Added root-level support documentation for easier discovery

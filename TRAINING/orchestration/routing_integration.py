@@ -162,6 +162,13 @@ def generate_routing_plan_after_feature_selection(
         logger.info(f"   Total targets: {len(plan['targets'])}")
         logger.info(f"   Total symbol decisions: {total_symbols}")
         
+        # FIX: Verify routing plan was actually saved
+        routing_plan_file = plan_output / "routing_plan.json"
+        if not routing_plan_file.exists():
+            logger.error(f"❌ Routing plan file not found at {routing_plan_file} - plan generation may have failed silently")
+        else:
+            logger.debug(f"✅ Verified routing plan file exists: {routing_plan_file}")
+        
         # Step 4: Generate training plan (if requested)
         if generate_training_plan:
             try:
@@ -216,6 +223,14 @@ def generate_routing_plan_after_feature_selection(
                             logger.info(f"   CS jobs: {cs_jobs}")
                             logger.info(f"   Symbol jobs: {symbol_jobs}")
                             
+                            # FIX: Verify training plan was actually saved
+                            master_plan_file = training_plan_dir / "master_training_plan.json"
+                            convenience_plan_file = training_plan_dir / "training_plan.json"
+                            if not master_plan_file.exists() and not convenience_plan_file.exists():
+                                logger.error(f"❌ Training plan file not found at {master_plan_file} or {convenience_plan_file} - plan generation may have failed silently")
+                            else:
+                                logger.debug(f"✅ Verified training plan file exists: {master_plan_file if master_plan_file.exists() else convenience_plan_file}")
+                            
                             # Fail-fast: 0 jobs is a critical routing failure
                             if total_jobs == 0:
                                 logger.error(
@@ -245,6 +260,13 @@ def generate_routing_plan_after_feature_selection(
                 logger.warning(f"Failed to generate training plan: {e}", exc_info=True)
         
         logger.info("="*80)
+        
+        # FIX: Update manifest with plan hashes after plans are created
+        try:
+            from TRAINING.orchestration.utils.manifest import update_manifest_with_plan_hashes
+            update_manifest_with_plan_hashes(output_dir)
+        except Exception as e:
+            logger.debug(f"Failed to update manifest with plan_hashes: {e}")
         
         return plan
         

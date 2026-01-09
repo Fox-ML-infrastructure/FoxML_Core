@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### January
 
+- **2026-01-08 (File Overwrite and Plan Creation Fixes)** — Fixed critical bugs causing data loss in `globals/` directory files and missing routing/training plan creation. Fixed `run_context.json` stage history loss, `run_hash.json` creation issues (previous run lookup, error logging), and routing/training plan creation (error visibility, save verification, manifest update). All fixes maintain backward compatibility.
+  → [View](2026-01-08-file-overwrite-and-plan-creation-fixes.md)
+
 - **2026-01-08 (Commercial License Clarity and Support Documentation)** — Clarified commercial license requirements in README - now explicitly states "required for proprietary/closed deployments or to avoid AGPL obligations (especially SaaS/network use)". Added root-level SUPPORT.md for easier discovery without navigating LEGAL folder. Makes commercial license trigger crystal clear to legal teams and improves discoverability of support information.
   → [View](2026-01-08-commercial-license-clarity-and-support.md)
 

@@ -2462,6 +2462,21 @@ def _legacy_train_fallback(family: str, X: np.ndarray, y: np.ndarray, target: st
         
         # Import TensorFlow trainers
         if family == 'CNN1D':
+            # FIX: CNN1D requires minimum sequence length for MaxPooling1D (pool_size=2)
+            # With very few features, the sequence dimension becomes too small
+            # Minimum: 4-8 features (conservative, accounts for pooling requirements)
+            MIN_FEATURES_FOR_CNN1D = 4
+            if X.shape[1] < MIN_FEATURES_FOR_CNN1D:
+                logger.warning(
+                    f"⚠️ Skipping CNN1D for {target}: insufficient features "
+                    f"({X.shape[1]} < {MIN_FEATURES_FOR_CNN1D}). "
+                    f"CNN1D requires minimum sequence length for pooling layers. "
+                    f"Other models (LightGBM, XGBoost) are more appropriate for small feature sets."
+                )
+                raise ValueError(
+                    f"CNN1D requires at least {MIN_FEATURES_FOR_CNN1D} features, "
+                    f"but only {X.shape[1]} features available"
+                )
             from model_fun.cnn1d_trainer import CNN1DTrainer
             trainer = CNN1DTrainer()
         elif family == 'LSTM':
@@ -2540,6 +2555,21 @@ def _legacy_train_fallback(family: str, X: np.ndarray, y: np.ndarray, target: st
             except Exception:
                 pass
         elif family == 'CNN1D':
+            # FIX: CNN1D requires minimum sequence length for MaxPooling1D (pool_size=2)
+            # With very few features, the sequence dimension becomes too small
+            # Minimum: 4-8 features (conservative, accounts for pooling requirements)
+            MIN_FEATURES_FOR_CNN1D = 4
+            if X.shape[1] < MIN_FEATURES_FOR_CNN1D:
+                logger.warning(
+                    f"⚠️ Skipping CNN1D for {target}: insufficient features "
+                    f"({X.shape[1]} < {MIN_FEATURES_FOR_CNN1D}). "
+                    f"CNN1D requires minimum sequence length for pooling layers. "
+                    f"Other models (LightGBM, XGBoost) are more appropriate for small feature sets."
+                )
+                raise ValueError(
+                    f"CNN1D requires at least {MIN_FEATURES_FOR_CNN1D} features, "
+                    f"but only {X.shape[1]} features available"
+                )
             from model_fun.cnn1d_trainer import CNN1DTrainer
             trainer = CNN1DTrainer()
             # Configure TF threading based on CPU_ONLY

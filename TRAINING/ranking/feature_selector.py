@@ -717,6 +717,19 @@ def select_features_for_target(
                                 except Exception as e:
                                     logger.debug(f"Failed to compute split_signature: {e}")
                             
+                            # FIX: Update run_identity with split_signature before passing to log_run
+                            # This ensures split_signature is available for diff telemetry comparison_group
+                            if run_identity is not None and split_signature:
+                                try:
+                                    from TRAINING.common.utils.fingerprinting import RunIdentity
+                                    # Create updated RunIdentity with split_signature
+                                    # Use dataclasses.replace to create a new instance with updated field
+                                    from dataclasses import replace
+                                    run_identity = replace(run_identity, split_signature=split_signature)
+                                    logger.debug(f"Updated run_identity with split_signature: {split_signature[:16]}...")
+                                except Exception as e:
+                                    logger.warning(f"Failed to update run_identity with split_signature: {e}")
+                            
                             # Use base run directory - save_snapshot_hook will use target-first structure
                             for model_family, importance_dict in all_feature_importances.items():
                                 if importance_dict:
@@ -2264,6 +2277,41 @@ def select_features_for_target(
                                                   if k not in excluded_keys and v is not None}
                                 if training_config:
                                     additional_data_override['training'] = training_config
+                
+                # FIX: Add library_versions to additional_data_override for diff telemetry
+                # CRITICAL: Different library versions = different feature selection outcomes
+                try:
+                    from TRAINING.common.utils.config_hashing import get_library_versions
+                    library_versions = get_library_versions()
+                    if library_versions:
+                        additional_data_override['library_versions'] = library_versions
+                except ImportError:
+                    # Fallback: collect versions manually
+                    import sys
+                    library_versions = {'python_version': f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"}
+                    try:
+                        import lightgbm
+                        library_versions['lightgbm'] = lightgbm.__version__
+                    except ImportError:
+                        pass
+                    try:
+                        import sklearn
+                        library_versions['sklearn'] = sklearn.__version__
+                    except ImportError:
+                        pass
+                    try:
+                        import numpy
+                        library_versions['numpy'] = numpy.__version__
+                    except ImportError:
+                        pass
+                    try:
+                        import pandas
+                        library_versions['pandas'] = pandas.__version__
+                    except ImportError:
+                        pass
+                    additional_data_override['library_versions'] = library_versions
+                except Exception as e:
+                    logger.debug(f"Failed to add library_versions to additional_data_override: {e}")
                 
                 # Use RunContext from shared harness if available, otherwise build from available data
                 # CRITICAL: ctx is created inside the use_shared_harness block, so check both conditions

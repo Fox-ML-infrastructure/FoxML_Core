@@ -437,6 +437,8 @@ def save_run_context(
             )
     
     # Build context dict
+    # FIX: Preserve current_stage and stage_history from existing_context
+    # These are only updated by save_stage_transition(), not overwritten here
     context = {
         "requested_view": requested_view or existing_context.get("requested_view"),
         "views": views,  # Dict keyed by universe signature
@@ -447,6 +449,9 @@ def save_run_context(
         "view_reason": view_reason or existing_context.get("view_reason"),
         "n_symbols": n_symbols or existing_context.get("n_symbols"),
         "resolved_at": existing_context.get("resolved_at") or datetime.utcnow().isoformat() + "Z",
+        # FIX: Preserve stage information (only updated by save_stage_transition)
+        "current_stage": existing_context.get("current_stage"),
+        "stage_history": existing_context.get("stage_history", []),
         **additional_data
     }
     

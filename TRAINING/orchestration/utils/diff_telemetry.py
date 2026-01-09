@@ -5314,17 +5314,29 @@ def compute_full_run_hash(output_dir: Path, run_id: Optional[str] = None) -> Opt
     
     # Load all snapshot indices
     snapshot_indices = {}
+    missing_indices = []
     for index_file in ["snapshot_index.json", "fs_snapshot_index.json", "training_snapshot_index.json"]:
         index_path = globals_dir / index_file
         if index_path.exists():
             try:
                 with open(index_path, 'r') as f:
                     snapshot_indices[index_file] = json.load(f)
-            except Exception:
-                continue
+            except Exception as e:
+                logger.debug(f"Failed to load {index_file}: {e}")
+                missing_indices.append(index_file)
+        else:
+            missing_indices.append(index_file)
     
     if not snapshot_indices:
+        # FIX: Log which indices are missing for better debugging
+        logger.warning(
+            f"⚠️ No snapshot indices found in {globals_dir}. Missing: {', '.join(missing_indices)}. "
+            f"Run hash cannot be computed. This may indicate snapshots were not saved correctly."
+        )
         return None
+    elif missing_indices:
+        # Some indices missing but at least one exists - log warning but continue
+        logger.debug(f"Some snapshot indices missing (non-critical): {', '.join(missing_indices)}")
     
     # Extract deterministic fields from all snapshots
     run_state = []
@@ -5339,10 +5351,11 @@ def compute_full_run_hash(output_dir: Path, run_id: Optional[str] = None) -> Opt
             # CRITICAL: Validate that at least one config fingerprint exists
             config_fp = snapshot.get('deterministic_config_fingerprint') or snapshot.get('config_fingerprint')
             if not config_fp:
+                # FIX: Log which snapshots are missing fingerprints for better debugging
                 logger.warning(
-                    f"Snapshot missing config fingerprint (stage={snapshot.get('stage')}, "
-                    f"target={snapshot.get('target')}, run_id={snapshot.get('run_id')}). "
-                    f"Run hash may be invalid. Skipping this snapshot."
+                    f"⚠️ Snapshot missing config fingerprint (stage={snapshot.get('stage')}, "
+                    f"target={snapshot.get('target')}, run_id={snapshot.get('run_id')}, "
+                    f"index={index_name}). Run hash may be invalid. Skipping this snapshot."
                 )
                 continue  # Skip snapshots without fingerprints to avoid invalid hash
             
@@ -5454,17 +5467,50 @@ def compute_run_hash_with_changes(
     changes = None
     if prev_run_id and diff_telemetry:
         try:
-            # Load previous run hash file
-            prev_hash_file = globals_dir / "run_hash.json"
+            # FIX: Find previous run hash file by searching parent/sibling directories
+            # Don't look in same globals_dir (that's the current run)
             prev_run_hash = None
-            if prev_hash_file.exists():
-                try:
-                    with open(prev_hash_file, 'r') as f:
-                        prev_data = json.load(f)
-                        if prev_data.get('run_id') == prev_run_id:
-                            prev_run_hash = prev_data.get('run_hash')
-                except Exception:
-                    pass
+            try:
+                from pathlib import Path
+                
+                # Find RESULTS directory by walking up from output_dir
+                results_dir = output_dir
+                for _ in range(10):
+                    if results_dir.name == "RESULTS":
+                        break
+                    if not results_dir.parent.exists():
+                        break
+                    results_dir = results_dir.parent
+                
+                # Search for previous run's run_hash.json
+                if results_dir.name == "RESULTS":
+                    runs_dir = results_dir / "runs"
+                    if runs_dir.exists():
+                        search_base = runs_dir
+                    else:
+                        search_base = results_dir
+                    
+                    # Find all intelligent_output_* directories
+                    for cg_dir in search_base.iterdir():
+                        if not cg_dir.is_dir():
+                            continue
+                        for run_dir in cg_dir.iterdir():
+                            if run_dir.is_dir() and run_dir.name.startswith("intelligent_output_"):
+                                prev_hash_file = run_dir / "globals" / "run_hash.json"
+                                if prev_hash_file.exists() and prev_hash_file != (globals_dir / "run_hash.json"):
+                                    try:
+                                        with open(prev_hash_file, 'r') as f:
+                                            prev_data = json.load(f)
+                                            if prev_data.get('run_id') == prev_run_id:
+                                                prev_run_hash = prev_data.get('run_hash')
+                                                logger.debug(f"Found previous run hash for {prev_run_id}: {prev_run_hash[:16]}...")
+                                                break
+                                    except Exception:
+                                        continue
+                        if prev_run_hash:
+                            break
+            except Exception as e:
+                logger.debug(f"Failed to find previous run hash file: {e}")
             
             # Aggregate change information from all snapshots
             changed_snapshots = []
@@ -5606,6 +5652,13 @@ def save_run_hash(
         )
         
         if run_hash_data is None:
+            # FIX: Log why computation returned None (not just "no snapshots found")
+            logger.warning(
+                f"⚠️ Run hash computation returned None. This may indicate: "
+                f"(1) No snapshot indices found in {output_dir / 'globals'}, "
+                f"(2) All snapshots were skipped due to missing fingerprints, or "
+                f"(3) globals_dir does not exist. Check logs above for details."
+            )
             return None
         
         globals_dir = output_dir / "globals"
