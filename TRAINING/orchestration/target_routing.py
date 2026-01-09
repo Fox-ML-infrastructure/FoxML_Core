@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 import pandas as pd
 
+# SST: Import View enum for consistent view handling
+from TRAINING.orchestration.utils.scope_resolution import View
+
 logger = logging.getLogger(__name__)
 
 
@@ -119,7 +122,8 @@ def load_target_confidence(output_dir: Path, target: str, view: Optional[str] = 
         views_to_check = [view]
     else:
         # Check both views if view not specified
-        views_to_check = ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]
+        # SST: Use View enum values
+        views_to_check = [View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value]
     
     for check_view in views_to_check:
         view_dir = target_repro_dir / check_view
@@ -133,7 +137,8 @@ def load_target_confidence(output_dir: Path, target: str, view: Optional[str] = 
                 logger.debug(f"Failed to load confidence from {check_view}: {e}")
         
         # Also check symbol-specific subdirectories if SYMBOL_SPECIFIC
-        if check_view == "SYMBOL_SPECIFIC" and view_dir.exists():
+        # SST: Use View enum for comparison
+        if check_view == View.SYMBOL_SPECIFIC.value and view_dir.exists():
             for sym_dir in view_dir.iterdir():
                 if sym_dir.is_dir() and sym_dir.name.startswith("symbol="):
                     sym_conf_path = sym_dir / "target_confidence.json"
@@ -320,9 +325,11 @@ def save_target_routing_metadata(
             logger.warning(f"Failed to load existing feature selection routing: {e}")
     
     # Normalize view (default to CROSS_SECTIONAL if not provided)
-    view_normalized = (view or "CROSS_SECTIONAL").upper()
-    if view_normalized not in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
-        view_normalized = "CROSS_SECTIONAL"
+    # SST: Use View.from_string() for consistent normalization
+    try:
+        view_normalized = View.from_string(view).value if view else View.CROSS_SECTIONAL.value
+    except (ValueError, AttributeError):
+        view_normalized = View.CROSS_SECTIONAL.value
     
     # Create key with view: target:view (e.g., "fwd_ret_5d:CROSS_SECTIONAL")
     routing_key = f"{target}:{view_normalized}"

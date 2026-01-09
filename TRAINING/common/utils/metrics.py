@@ -29,6 +29,9 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 
+# SST: Import View and Stage enums for consistent view/stage handling
+from TRAINING.orchestration.utils.scope_resolution import View, Stage
+
 
 def _write_atomic_json(file_path: Path, data: Dict[str, Any]) -> None:
     """
@@ -155,8 +158,8 @@ class MetricsWriter:
     def write_cohort_metrics(
         self,
         cohort_dir: Path,
-        stage: str,
-        view: str,
+        stage: Union[str, Stage],  # SST: Accept both string and Stage enum
+        view: Union[str, View],  # SST: Accept both string and View enum
         target: Optional[str],
         symbol: Optional[str],
         run_id: str,
@@ -182,6 +185,22 @@ class MetricsWriter:
             return
         
         cohort_dir = Path(cohort_dir)
+        
+        # SST: Normalize stage and view to strings for JSON serialization
+        if isinstance(stage, Stage):
+            stage = stage.value
+        elif hasattr(stage, 'value'):
+            stage = stage.value
+        else:
+            stage = str(stage)
+        
+        if isinstance(view, View):
+            view = view.value
+        elif hasattr(view, 'value'):
+            view = view.value
+        else:
+            view = str(view)
+        
         # Create cohort directory if it doesn't exist (metrics should still work even if
         # _save_to_cohort didn't create it yet, or if there's a race condition)
         if not cohort_dir.exists():
@@ -241,12 +260,14 @@ class MetricsWriter:
                     target_metrics_dir = get_target_metrics_dir(base_output_dir, target_clean)
                     
                     # Organize by view if multiple views exist
-                    if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
-                        view_metrics_dir = target_metrics_dir / f"view={view}"
+                    # SST: Use View enum for comparison
+                    view_enum = View.from_string(view) if isinstance(view, str) else view
+                    if view_enum in (View.CROSS_SECTIONAL, View.SYMBOL_SPECIFIC):
+                        view_metrics_dir = target_metrics_dir / f"view={view_enum.value}"
                         view_metrics_dir.mkdir(parents=True, exist_ok=True)
                         
                         # For SYMBOL_SPECIFIC, organize by symbol
-                        if view == "SYMBOL_SPECIFIC" and symbol:
+                        if view_enum == View.SYMBOL_SPECIFIC and symbol:
                             symbol_metrics_dir = view_metrics_dir / f"symbol={symbol}"
                             symbol_metrics_dir.mkdir(parents=True, exist_ok=True)
                             ref_dir = symbol_metrics_dir
@@ -277,7 +298,7 @@ class MetricsWriter:
         cohort_dir: Path,
         run_id: str,
         metrics: Dict[str, Any],
-        stage: Optional[str] = None,
+        stage: Optional[Union[str, Stage]] = None,  # SST: Accept both string and Stage enum
         reproducibility_mode: str = "COHORT_AWARE",
         diff_telemetry: Optional[Dict[str, Any]] = None
     ) -> None:
@@ -303,8 +324,14 @@ class MetricsWriter:
         }
         
         # Add stage if provided
+        # SST: Ensure stage is a string (handle enum inputs)
         if stage:
-            metrics_data["stage"] = stage
+            if isinstance(stage, Stage):
+                metrics_data["stage"] = stage.value
+            elif hasattr(stage, 'value'):
+                metrics_data["stage"] = stage.value
+            else:
+                metrics_data["stage"] = str(stage)
         
         # Add all metrics as flat keys (exclude metadata fields)
         for key, value in metrics.items():
@@ -541,8 +568,8 @@ class MetricsWriter:
     def _write_drift(
         self,
         cohort_dir: Path,
-        stage: str,
-        view: str,
+        stage: Union[str, Stage],  # SST: Accept both string and Stage enum
+        view: Union[str, View],  # SST: Accept both string and View enum
         target: Optional[str],
         symbol: Optional[str],
         run_id: str,
@@ -551,14 +578,28 @@ class MetricsWriter:
     ) -> None:
         """
         Write metrics_drift.json comparing current run to baseline.
-        
+
         Enhanced with fingerprints, drift tiers, critical metrics, and sanity checks.
         Baseline key format: (stage, view, target[, symbol])
         This ensures view isolation: CS only compares to CS, SS only compares to SS.
-        
+
         IMPORTANT: Only compares runs with matching fingerprints (seed, config_hash, data_fingerprint)
         to ensure we're checking determinism (same inputs) rather than comparing different configurations.
         """
+        # SST: Normalize stage and view to strings for JSON serialization
+        if isinstance(stage, Stage):
+            stage = stage.value
+        elif hasattr(stage, 'value'):
+            stage = stage.value
+        else:
+            stage = str(stage)
+        
+        if isinstance(view, View):
+            view = view.value
+        elif hasattr(view, 'value'):
+            view = view.value
+        else:
+            view = str(view)
         # Load current metadata for fingerprints FIRST (needed for baseline matching)
         current_metadata_file = cohort_dir / "metadata.json"
         current_metadata = {}
@@ -617,9 +658,11 @@ class MetricsWriter:
                     from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
                     target_clean = normalize_target_name(target)
                     target_metrics_dir = get_target_metrics_dir(base_output_dir, target_clean)
-                    if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
-                        view_metrics_dir = target_metrics_dir / f"view={view}"
-                        if view == "SYMBOL_SPECIFIC" and symbol:
+                    # SST: Use View enum for comparison
+                    view_enum = View.from_string(view) if isinstance(view, str) else view
+                    if view_enum in (View.CROSS_SECTIONAL, View.SYMBOL_SPECIFIC):
+                        view_metrics_dir = target_metrics_dir / f"view={view_enum.value}"
+                        if view_enum == View.SYMBOL_SPECIFIC and symbol:
                             ref_dir = view_metrics_dir / f"symbol={symbol}"
                         else:
                             ref_dir = view_metrics_dir
@@ -920,7 +963,9 @@ class MetricsWriter:
             target_dir = view_dir
         
         # Find symbol directory (for SYMBOL_SPECIFIC)
-        if baseline_symbol and view == "SYMBOL_SPECIFIC":
+        # SST: Use View enum for comparison
+        view_enum = View.from_string(view) if isinstance(view, str) else view
+        if baseline_symbol and view_enum == View.SYMBOL_SPECIFIC:
             symbol_dir = target_dir / f"symbol={baseline_symbol}"
             if not symbol_dir.exists():
                 return None
@@ -1110,7 +1155,9 @@ class MetricsWriter:
             
             # Create metrics subdirectory at target level
             metrics_dir = target_dir / "metrics"
-            if symbol and view == "SYMBOL_SPECIFIC":
+            # SST: Use View enum for comparison
+            view_enum = View.from_string(view) if isinstance(view, str) else view
+            if symbol and view_enum == View.SYMBOL_SPECIFIC:
                 metrics_dir = target_dir / f"symbol={symbol}" / "metrics"
             
             metrics_dir.mkdir(parents=True, exist_ok=True)
@@ -1122,26 +1169,41 @@ class MetricsWriter:
     def generate_view_rollup(
         self,
         view_dir: Path,
-        stage: str,
-        view: str,
+        stage: Union[str, Stage],  # SST: Accept both string and Stage enum
+        view: Union[str, View],  # SST: Accept both string and View enum
         run_id: str
     ) -> None:
         """
         Generate view-level rollup (CROSS_SECTIONAL/metrics_rollup.json or SYMBOL_SPECIFIC/metrics_rollup.json).
-        
+
         Args:
             view_dir: Path to view directory (CROSS_SECTIONAL or SYMBOL_SPECIFIC)
-            stage: Pipeline stage
-            view: View type
+            stage: Pipeline stage - string or Stage enum
+            view: View type - string or View enum
             run_id: Current run identifier
         """
         if not self.enabled:
             return
-        
+
         view_dir = Path(view_dir)
         if not view_dir.exists():
             return
+
+        # SST: Normalize stage and view enums to strings for JSON serialization
+        if isinstance(stage, Stage):
+            stage = stage.value
+        elif hasattr(stage, 'value'):
+            stage = stage.value
+        else:
+            stage = str(stage)
         
+        if isinstance(view, View):
+            view = view.value
+        elif hasattr(view, 'value'):
+            view = view.value
+        else:
+            view = str(view)
+
         rollup_data = {
             "run_id": run_id,
             "stage": stage,
@@ -1156,7 +1218,9 @@ class MetricsWriter:
         all_metrics = []
         
         # For CROSS_SECTIONAL: iterate per-target directories
-        if view == "CROSS_SECTIONAL":
+        # SST: Use View enum for comparison
+        view_enum = View.from_string(view) if isinstance(view, str) else view
+        if view_enum == View.CROSS_SECTIONAL:
             for target_dir in view_dir.iterdir():
                 if not target_dir.is_dir() or target_dir.name.startswith("metrics"):
                     continue
@@ -1187,7 +1251,7 @@ class MetricsWriter:
                             logger.debug(f"Failed to load metrics for {target}: {e}")
         
         # For SYMBOL_SPECIFIC: iterate per-target, then per-symbol
-        elif view == "SYMBOL_SPECIFIC":
+        elif view_enum == View.SYMBOL_SPECIFIC:
             for target_dir in view_dir.iterdir():
                 if not target_dir.is_dir() or target_dir.name.startswith("metrics"):
                     continue
@@ -1309,21 +1373,29 @@ class MetricsWriter:
     def generate_stage_rollup(
         self,
         stage_dir: Path,
-        stage: str,
+        stage: Union[str, Stage],  # SST: Accept both string and Stage enum
         run_id: str
     ) -> None:
         """
         Generate stage-level container rollup (TARGET_RANKING/metrics_rollup.json).
-        
+
         This is a container that references view-level rollups, no drift mixing.
         """
         if not self.enabled:
             return
-        
+
         stage_dir = Path(stage_dir)
         if not stage_dir.exists():
             return
-        
+
+        # SST: Normalize stage enum to string for JSON serialization
+        if isinstance(stage, Stage):
+            stage = stage.value
+        elif hasattr(stage, 'value'):
+            stage = stage.value
+        else:
+            stage = str(stage)
+
         rollup_data = {
             "run_id": run_id,
             "stage": stage,
@@ -1332,7 +1404,8 @@ class MetricsWriter:
         }
         
         # Load view-level rollups
-        for view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+        # SST: Use View enum values
+        for view in [View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value]:
             view_dir = stage_dir / view
             if view_dir.exists():
                 view_rollup_file = view_dir / "metrics_rollup.json"
@@ -1555,7 +1628,9 @@ def aggregate_metrics_facts(
                 universe_sig = None
                 
                 # Check if this is a symbol directory (SYMBOL_SPECIFIC view)
-                if view == "SYMBOL_SPECIFIC":
+                # SST: Use View enum for comparison
+                view_enum = View.from_string(view) if isinstance(view, str) else view
+                if view_enum == View.SYMBOL_SPECIFIC:
                     for symbol_path in target_path.iterdir():
                         if not symbol_path.is_dir():
                             continue

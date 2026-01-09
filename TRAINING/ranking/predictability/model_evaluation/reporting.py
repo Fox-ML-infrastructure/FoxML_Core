@@ -13,8 +13,8 @@ import pandas as pd
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
-# SST: Import Stage enum for consistent stage handling
-from TRAINING.orchestration.utils.scope_resolution import Stage
+# SST: Import Stage and View enums for consistent stage/view handling
+from TRAINING.orchestration.utils.scope_resolution import Stage, View
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +195,9 @@ def save_feature_importances(
         ensure_target_structure(base_output_dir, target_clean)
         
         # Only pass symbol if view is SYMBOL_SPECIFIC
-        symbol_for_layout = symbol if view == "SYMBOL_SPECIFIC" else None
+        # SST: Use View enum for comparison
+        view_enum = View.from_string(view) if isinstance(view, str) else view
+        symbol_for_layout = symbol if view_enum == View.SYMBOL_SPECIFIC else None
         
         layout = OutputLayout(
             output_root=base_output_dir,

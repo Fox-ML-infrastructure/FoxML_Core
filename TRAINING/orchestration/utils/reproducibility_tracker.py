@@ -1188,6 +1188,9 @@ class ReproducibilityTracker:
         
         # Generate run_id - use SST accessor
         run_id = extract_run_id(run_data) or datetime.now().isoformat()
+        # FIX: Handle None case (extract_run_id might return None)
+        if run_id is None:
+            run_id = datetime.now().isoformat()
         run_id_clean = run_id.replace(':', '-').replace('.', '-').replace('T', '_')
         
         # Normalize stage to enum, then to string for comparisons
@@ -3977,7 +3980,11 @@ class ReproducibilityTracker:
                 
                 # Compute and save drift.json if previous run exists
                 if previous:
-                    run_id_clean = run_data.get('run_id') or run_data.get('timestamp', datetime.now().isoformat()).replace(':', '-').replace('.', '-').replace('T', '_')
+                    # FIX: Handle None case for run_id/timestamp
+                    run_id_or_timestamp = run_data.get('run_id') or run_data.get('timestamp')
+                    if run_id_or_timestamp is None:
+                        run_id_or_timestamp = datetime.now().isoformat()
+                    run_id_clean = run_id_or_timestamp.replace(':', '-').replace('.', '-').replace('T', '_')
                     try:
                         drift_data = self._compute_drift(
                             previous, run_data, cohort_metadata,
@@ -4538,10 +4545,13 @@ class ReproducibilityTracker:
                             **{k: v for k, v in metrics_with_cohort.items() if k not in ['timestamp', 'cohort_metadata', 'additional_data']}
                         }
                         # Write metrics to target-first structure
+                        # SST: Normalize stage and view to strings (handle enum inputs)
+                        stage_str = ctx.stage.value if isinstance(ctx.stage, Stage) else (ctx.stage if hasattr(ctx, 'stage') else "UNKNOWN")
+                        view_str = ctx.view.value if hasattr(ctx, 'view') and isinstance(ctx.view, View) else (ctx.view if hasattr(ctx, 'view') else "UNKNOWN")
                         self.metrics.write_cohort_metrics(
                             cohort_dir=target_cohort_dir,  # Use target-first, not legacy
-                            stage=ctx.stage,
-                            view=ctx.view if hasattr(ctx, 'view') else "UNKNOWN",
+                            stage=stage_str,
+                            view=view_str,
                             target=ctx.target or ctx.target_column or "unknown",
                             symbol=ctx.symbol if hasattr(ctx, 'symbol') else None,
                             run_id=minimal_metadata.get("run_id") or datetime.now().isoformat(),
@@ -4834,20 +4844,28 @@ class ReproducibilityTracker:
     
     def generate_metrics_rollups(
         self,
-        stage: str,
+        stage: Union[str, Stage],  # SST: Accept both string and Stage enum
         run_id: str
     ) -> None:
         """
         Generate view-level and stage-level metrics rollups.
-        
+
         Should be called after all cohorts for a stage are saved.
-        
+
         Args:
-            stage: Pipeline stage (TARGET_RANKING, FEATURE_SELECTION, etc.)
+            stage: Pipeline stage (TARGET_RANKING, FEATURE_SELECTION, etc.) - string or Stage enum
             run_id: Current run identifier
         """
         if not self.metrics:
             return
+        
+        # SST: Normalize stage enum to string for JSON serialization
+        if isinstance(stage, Stage):
+            stage = stage.value
+        elif hasattr(stage, 'value'):
+            stage = stage.value
+        else:
+            stage = str(stage)
         
         # Rollups are now generated per-target in targets/<target>/metrics/
         # This method is kept for backward compatibility but does nothing

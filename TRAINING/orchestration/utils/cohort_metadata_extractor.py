@@ -289,7 +289,9 @@ def extract_cohort_metadata(
             
             if fingerprint_components:
                 fingerprint_str = "|".join(fingerprint_components)
-                metadata['data_fingerprint'] = hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]
+                # SST: Use sha256_short for consistent hashing
+                from TRAINING.common.utils.config_hashing import sha256_short
+                metadata['data_fingerprint'] = sha256_short(fingerprint_str, 16)
         except Exception as e:
             logger.debug(f"Failed to compute data fingerprint: {e}")
     

@@ -9,6 +9,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 - **2026-01-09 (SST Import Shadowing Fixes)** — Fixed all `UnboundLocalError` issues from SST refactoring: removed `Stage` from local import in `model_evaluation.py` (line 8129), added global `Stage` import in `shared_ranking_harness.py`, removed redundant local `Path` imports (9 instances across 3 files). Verified all path construction and JSON serialization work correctly with enum values. All critical modules now import without errors.
   → [View](2026-01-09-sst-enum-migration.md)
 
+- **2026-01-09 (Additional SST Improvements)** — Completed additional SST improvements: migrated remaining string literal comparisons to enum comparisons (10 files, 20+ instances), standardized config hashing to use canonical_json/sha256 helpers (4 files), verified all changes maintain JSON output format and metric tracking. All enum comparisons use `View.from_string()` / `Stage.from_string()` for backward compatibility. All test suites pass. Rollback point created at tag `sst-import-fixes-complete`.
+  → [View](2026-01-09-sst-enum-migration.md)
+
 - **2026-01-09 (SST Enum Migration and WriteScope Adoption)** — Complete migration to SST architecture: View/Stage enum adoption (29 files), WriteScope function migration (4 functions), unified helper functions (cohort ID, config hashing, scope resolution, universe signatures). Fixed syntax errors (indentation issues in model_evaluation.py, cross_sectional_feature_ranker.py, multi_model_feature_selection.py). All changes maintain backward compatibility with existing JSON files, snapshots, and metrics.
   → [View](2026-01-09-sst-enum-migration.md)
 

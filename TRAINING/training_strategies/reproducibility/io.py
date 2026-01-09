@@ -19,8 +19,8 @@ from typing import Dict, Optional, Any, List
 
 from .schema import TrainingSnapshot
 
-# SST: Import Stage enum for consistent stage handling
-from TRAINING.orchestration.utils.scope_resolution import Stage
+# SST: Import Stage and View enums for consistent stage/view handling
+from TRAINING.orchestration.utils.scope_resolution import Stage, View
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,9 @@ def get_training_snapshot_dir(
     """
     base_path = output_dir / "targets" / target / "reproducibility" / f"stage={stage}" / view
     
-    if view == "SYMBOL_SPECIFIC" and symbol:
+    # SST: Use View enum for comparison
+    view_enum = View.from_string(view) if isinstance(view, str) else view
+    if view_enum == View.SYMBOL_SPECIFIC and symbol:
         base_path = base_path / f"symbol={symbol}"
     
     if cohort_id:

@@ -220,8 +220,10 @@ def compute_comparable_key(
         parts.append(f"label={label_definition_hash}")
     
     # Compute hash
+    # SST: Use sha256_short for consistent hashing
+    from TRAINING.common.utils.config_hashing import sha256_short
     key_str = "|".join(parts)
-    return hashlib.sha256(key_str.encode()).hexdigest()[:16]
+    return sha256_short(key_str, 16)
 
 
 # Import canonical enums from scope_resolution (single source of truth)

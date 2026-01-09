@@ -39,6 +39,9 @@ import pandas as pd
 # Import SST for comparison group key construction
 from TRAINING.common.utils.fingerprinting import construct_comparison_group_key_from_dict
 
+# SST: Import View and Stage enums for consistent view/stage handling
+from TRAINING.orchestration.utils.scope_resolution import View, Stage
+
 logger = logging.getLogger(__name__)
 
 
@@ -221,7 +224,9 @@ class TrendAnalyzer:
                             view = view_dir.name
                             
                             # For SYMBOL_SPECIFIC, need to check symbol subdirectories
-                            if view == "SYMBOL_SPECIFIC":
+                            # SST: Use View enum for comparison
+                            view_enum = View.from_string(view) if isinstance(view, str) else view
+                            if view_enum == View.SYMBOL_SPECIFIC:
                                 for symbol_dir in view_dir.iterdir():
                                     if not symbol_dir.is_dir() or not symbol_dir.name.startswith("symbol="):
                                         continue
@@ -573,7 +578,9 @@ class TrendAnalyzer:
             # Use SST accessors to handle both old flat and new grouped structures
             from TRAINING.orchestration.utils.reproducibility.utils import extract_auc, extract_n_effective
             
-            if stage == "TARGET_RANKING":
+            # SST: Use Stage enum for comparison
+            stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
+            if stage_enum == Stage.TARGET_RANKING:
                 row['auc_mean'] = extract_auc(metrics)  # Handles both old and new structures
                 # Try new structure first, then fallback to old
                 row['auc_std'] = (metrics.get('primary_metric', {}).get('std') or 
@@ -584,12 +591,12 @@ class TrendAnalyzer:
                 row['importance_mean'] = (metrics.get('score', {}).get('components', {}).get('mean_importance') or 
                                          metrics.get('mean_importance'))
                 row['n_effective'] = extract_n_effective(metrics) or metadata.get('n_effective')
-            elif stage == "FEATURE_SELECTION":
+            elif stage_enum == Stage.FEATURE_SELECTION:
                 # Feature selection metrics (to be defined based on actual structure)
                 row['n_selected'] = (metrics.get('features', {}).get('selected') or 
                                    metrics.get('n_selected') or 
                                    metrics.get('n_features'))
-            elif stage == "TRAINING" or stage == "MODEL_TRAINING":
+            elif stage_enum == Stage.TRAINING:
                 row['primary_metric'] = extract_auc(metrics)  # Handles both old and new structures
                 row['train_time_sec'] = metrics.get('train_time_sec')
             

@@ -28,8 +28,8 @@ from enum import Enum
 import numpy as np
 import pandas as pd
 
-# SST: Import View enum for consistent view handling
-from TRAINING.orchestration.utils.scope_resolution import View
+# SST: Import View and Stage enums for consistent view/stage handling
+from TRAINING.orchestration.utils.scope_resolution import View, Stage
 
 logger = logging.getLogger(__name__)
 
@@ -670,17 +670,19 @@ class DiffTelemetry:
         """
         base_required = ['stage', 'run_id', 'cohort_id']
         
-        if stage == 'TARGET_RANKING':
+        # SST: Use Stage enum for comparison
+        stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
+        if stage_enum == Stage.TARGET_RANKING:
             return base_required + [
                 'date_start', 'date_end', 'n_symbols', 'n_effective',
                 'target', 'view', 'min_cs', 'max_cs_samples'
             ]
-        elif stage == 'FEATURE_SELECTION':
+        elif stage_enum == Stage.FEATURE_SELECTION:
             return base_required + [
                 'date_start', 'date_end', 'n_symbols', 'n_effective',
                 'target', 'view', 'min_cs', 'max_cs_samples'
             ]
-        elif stage == 'TRAINING':
+        elif stage_enum == Stage.TRAINING:
             return base_required + [
                 'date_start', 'date_end', 'n_symbols', 'n_effective',
                 'target', 'view', 'model_family', 'min_cs', 'max_cs_samples'
@@ -714,14 +716,16 @@ class DiffTelemetry:
             missing.append("date_end")
         
         # Stage-specific requirements
-        if stage == "TARGET_RANKING":
+        # SST: Use Stage enum for comparison
+        stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
+        if stage_enum == Stage.TARGET_RANKING:
             # TARGET_RANKING does NOT require model_family or feature_signature
             pass
-        elif stage == "FEATURE_SELECTION":
+        elif stage_enum == Stage.FEATURE_SELECTION:
             # FEATURE_SELECTION requires feature pipeline info
             if ctx.n_features is None:
                 missing.append("n_features")
-        elif stage == "TRAINING":
+        elif stage_enum == Stage.TRAINING:
             # TRAINING requires model_family and feature info
             if ctx.model_family is None:
                 missing.append("model_family")
@@ -1531,7 +1535,9 @@ class DiffTelemetry:
             if hasattr(run_identity, 'routing_signature') and run_identity.routing_signature:
                 routing_signature = run_identity.routing_signature
             # Model family from context (not in RunIdentity)
-            if stage == "TRAINING":
+            # SST: Use Stage enum for comparison
+            stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
+            if stage_enum == Stage.TRAINING:
                 model_family = ctx.model_family
         
         # SST fallback: Always populate train_seed for traceability (all stages)

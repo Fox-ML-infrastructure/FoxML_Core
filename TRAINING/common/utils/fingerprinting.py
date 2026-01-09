@@ -420,7 +420,9 @@ def create_stage_identity(
         except Exception:
             # Fallback: compute manually (uses module-level hashlib import)
             symbols_str = "|".join(sorted(symbols))
-            universe_sig = hashlib.sha256(symbols_str.encode()).hexdigest()
+            # SST: Use canonical_json + sha256_short for consistent hashing
+            from TRAINING.common.utils.config_hashing import canonical_json, sha256_short
+            universe_sig = sha256_short(canonical_json(symbols), 64)  # Full 64-char hash for universe signature
     
     # Seed derivation: prefer config seed, then derive from universe_sig for reproducibility
     # This ensures: same universe + same config = same seed

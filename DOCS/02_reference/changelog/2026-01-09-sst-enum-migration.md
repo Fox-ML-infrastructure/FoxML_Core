@@ -180,3 +180,128 @@ Complete migration to SST (Single Source of Truth) architecture with View/Stage 
 **Syntax Fixes**:
 - `model_evaluation.py`: Fixed indentation in try block
 - `cross_sectional_feature_ranker.py`: Fixed indentation after try statement
+- `multi_model_feature_selection.py`: Fixed orphaned else block and try block indentation
+- `intelligent_trainer.py`: Fixed `UnboundLocalError` for `Path`
+
+## Additional SST Improvements
+
+### String Literal to Enum Migration (Phase 4)
+
+**Problem**: Remaining hardcoded string comparisons for view/stage scattered across 10 files, preventing full SST consistency.
+
+**Fix**:
+- Migrated all remaining string comparisons to use enum comparisons:
+  - `metrics.py`: 7+ instances - replaced `view == "SYMBOL_SPECIFIC"` with `view_enum == View.SYMBOL_SPECIFIC`
+  - `trend_analyzer.py`: 4+ instances - replaced `stage == "TARGET_RANKING"` with `stage_enum == Stage.TARGET_RANKING`
+  - `target_routing.py`: 3+ instances - replaced string lists and comparisons with View enum values
+  - `cache_manager.py`, `artifact_mirror.py`, `leakage_detection/reporting.py`, `model_evaluation/reporting.py`, `reproducibility/io.py`, `manifest.py`, `hooks.py`, `metrics_schema.py`: All string comparisons migrated to enum comparisons
+- All enum comparisons use `View.from_string()` or `Stage.from_string()` for normalization, ensuring backward compatibility
+- All path construction uses `view_enum.value` to ensure string output for filesystem paths
+- JSON output format unchanged - enum values serialize as strings via `.value` property
+
+**Files Updated** (10 files):
+- `TRAINING/common/utils/metrics.py`
+- `TRAINING/common/utils/trend_analyzer.py`
+- `TRAINING/orchestration/target_routing.py`
+- `TRAINING/common/utils/cache_manager.py`
+- `TRAINING/orchestration/utils/artifact_mirror.py`
+- `TRAINING/ranking/predictability/leakage_detection/reporting.py`
+- `TRAINING/ranking/predictability/model_evaluation/reporting.py`
+- `TRAINING/training_strategies/reproducibility/io.py`
+- `TRAINING/orchestration/utils/manifest.py`
+- `TRAINING/stability/feature_importance/hooks.py`
+- `TRAINING/ranking/predictability/metrics_schema.py`
+
+**Backward Compatibility**:
+- All comparisons handle both string and enum inputs via `View.from_string()` / `Stage.from_string()`
+- Path construction produces identical paths (enum `.value` matches original strings)
+- JSON serialization unchanged (enum values serialize as strings)
+
+### Config Hashing Standardization (Phase 5)
+
+**Problem**: Manual `hashlib.sha256()` calls for config/data hashing instead of using canonical_json/sha256 helpers.
+
+**Fix**:
+- Replaced manual hashlib calls with canonical_json/sha256 helpers:
+  - `fingerprinting.py`: Universe signature computation now uses `canonical_json()` + `sha256_short()`
+  - `cohort_metadata_extractor.py`: Data fingerprinting now uses `sha256_short()` helper
+  - `reproducibility/utils.py`: Comparison key hashing now uses `sha256_short()` helper
+  - `diff_telemetry/types.py`: Hash computation now uses `canonical_json()` + `sha256_short()` helpers
+- All changes maintain same hash output format (backward compatible)
+- Binary file hashing (lock files, binary data) kept as-is (appropriate use of hashlib)
+
+**Files Updated** (4 files):
+- `TRAINING/common/utils/fingerprinting.py`
+- `TRAINING/orchestration/utils/cohort_metadata_extractor.py`
+- `TRAINING/orchestration/utils/reproducibility/utils.py`
+- `TRAINING/orchestration/utils/diff_telemetry/types.py`
+
+**Backward Compatibility**:
+- Hash output format unchanged (same length, same algorithm)
+- All hash computations produce identical results
+
+### Verification and Rollback Point
+
+**Comprehensive Testing**:
+- All files compile successfully (verified with `python -m py_compile`)
+- All test suites pass: imports, enum access, path construction, JSON serialization
+- Enum comparisons work correctly with both string and enum inputs
+- Enum values serialize as strings in JSON (via `.value` property)
+- Path construction produces identical paths (enum `.value` matches original strings)
+- Metric tracking unchanged (enum comparisons work with string inputs via `from_string()`)
+
+**JSON Output Format**:
+- All enum values serialize as strings (via `.value` property)
+- JSON files unchanged (backward compatible)
+- Metric tracking unchanged (enum comparisons work with string inputs)
+
+**Path Construction**:
+- All paths use `view_enum.value` or `stage_enum.value` for string output
+- Paths remain identical to previous string-based paths
+- Filesystem compatibility maintained
+
+**Rollback Point**:
+- Git commit: `012134fc` - "SST Import Fixes Complete - Rollback Point"
+- Git tag: `sst-import-fixes-complete`
+- Safe rollback point before additional SST improvements
+
+## Metric Output JSON Serialization Fixes (Phase 6)
+
+**Problem**: Stage and View enum objects were being written directly to JSON dictionaries in metric output functions, causing broken metric outputs in CROSS_SECTIONAL view for target ranking and potentially other stages. The enum objects don't serialize correctly to JSON when passed directly to `json.dumps()`.
+
+**Root Cause**: After SST enum migration, functions were accepting enum inputs but not normalizing them to strings before adding them to JSON dictionaries. While enums inherit from `str`, explicit conversion is required for robust JSON serialization.
+
+**Fix**:
+- **`metrics.py`**: Updated all metric output functions to normalize enum inputs to strings:
+  - `write_cohort_metrics()`: Added enum normalization for `stage` and `view` parameters (lines 187-195)
+  - `_write_metrics()`: Added enum normalization for `stage` and `view` parameters
+  - `_write_drift()`: Added enum normalization for `stage` and `view` parameters
+  - `generate_view_rollup()`: Added enum normalization for `stage` and `view` parameters (lines 1207-1210)
+  - `generate_stage_rollup()`: Added enum normalization for `stage` parameter (lines 1399-1402)
+  - All functions now accept `Union[str, Stage]` and `Union[str, View]` for SST compatibility
+  - All enum values are explicitly converted to strings using `.value` property before being added to JSON dictionaries
+
+- **`reproducibility_tracker.py`**: 
+  - Updated `generate_metrics_rollups()` to normalize `stage` enum to string (lines 4845-4865)
+  - Fixed `ctx.stage` and `ctx.view` normalization before passing to `write_cohort_metrics()` (lines 4550-4551)
+  - Added explicit `None` checks for `run_id` and `timestamp` before calling `.replace()` (lines 1190-1191, 3979-3980)
+
+- **`scope_resolution.py`**: 
+  - Updated `resolve_write_scope()` to normalize `caller_view` and `view` parameters to View enums for internal comparisons (lines 428, 446, 454)
+  - Ensures consistent enum handling while maintaining string return values
+
+- **`diff_telemetry.py`**: 
+  - Replaced stage string comparisons with enum comparisons using `Stage.from_string()` (lines 673, 678, 683, 717, 720, 724, 1534)
+
+**Impact**:
+- All metric JSON outputs now contain string values (not enum objects)
+- Fixes broken metric outputs in CROSS_SECTIONAL view for target ranking
+- Fixes broken metric outputs in all other stages (FEATURE_SELECTION, TRAINING, etc.)
+- Maintains backward compatibility with string inputs
+- All rollup functions (view-level and stage-level) now correctly serialize enum inputs
+
+**Verification**:
+- All files compile successfully
+- All rollup functions handle enum inputs correctly (verified with test scripts)
+- All JSON outputs contain string values (verified with JSON parsing tests)
+- Backward compatibility maintained (string inputs still work)

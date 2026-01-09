@@ -425,7 +425,10 @@ def resolve_write_scope(
     # Asymmetric mode resolution
     # SS → CS promotion is a BUG (min_cs=1 made CS "valid" for single symbol)
     # CS → SS fallback is ALLOWED (insufficient symbols to run cross-sectional)
-    if caller_view == "SYMBOL_SPECIFIC" and sst_view == "CROSS_SECTIONAL":
+    # SST: Use View enum for comparison
+    caller_view_enum = View.from_string(caller_view) if isinstance(caller_view, str) else caller_view
+    sst_view_enum = View.from_string(sst_view) if sst_view and isinstance(sst_view, str) else sst_view
+    if caller_view_enum == View.SYMBOL_SPECIFIC and sst_view_enum == View.CROSS_SECTIONAL:
         # SS → CS promotion detected - this is a bug
         if strict:
             raise ValueError(
@@ -443,15 +446,19 @@ def resolve_write_scope(
         view = sst_view or caller_view
     
     # Strict mode: don't silently drop symbol in CS (makes caller bugs visible)
-    if strict and view == "CROSS_SECTIONAL" and caller_symbol is not None:
+    # SST: Use View enum for comparison
+    # Normalize view to enum for consistent comparison
+    view_enum = View.from_string(view) if isinstance(view, str) else view
+    if strict and view_enum == View.CROSS_SECTIONAL and caller_symbol is not None:
         raise ValueError(
             f"SCOPE BUG: caller_symbol={caller_symbol} provided but view=CROSS_SECTIONAL. "
             f"Caller should not pass symbol for CS writes. This hides a routing bug."
         )
     
     # Symbol resolution for SYMBOL_SPECIFIC
+    # SST: Use View enum for comparison (view_enum already computed above)
     symbol = None
-    if view == "SYMBOL_SPECIFIC":
+    if view_enum == View.SYMBOL_SPECIFIC:
         if caller_symbol:
             symbol = caller_symbol
         elif len(sst_symbols) == 1:
@@ -472,7 +479,9 @@ def resolve_write_scope(
             f"Cannot write artifacts without universe scoping."
         )
     
-    return view, symbol, universe_sig
+    # Return string values (function signature requires Tuple[str, Optional[str], Optional[str]])
+    view_str = view_enum.value if isinstance(view_enum, View) else str(view)
+    return view_str, symbol, universe_sig
 
 
 def populate_additional_data(

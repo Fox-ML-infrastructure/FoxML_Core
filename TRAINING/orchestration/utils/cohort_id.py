@@ -110,6 +110,8 @@ def compute_cohort_id(
     
     # Add short hash for uniqueness
     # Create deterministic hash for final uniqueness check
+    # SST: Use sha256_short helper for consistent hashing
+    from TRAINING.common.utils.config_hashing import sha256_short
     hash_str = "|".join([
         str(cohort_metadata.get('n_effective_cs', '')),
         str(cohort_metadata.get('n_symbols', '')),
@@ -117,6 +119,6 @@ def compute_cohort_id(
         date_end,
         json.dumps(cs_config, sort_keys=True)
     ])
-    short_hash = hashlib.sha256(hash_str.encode()).hexdigest()[:8]
+    short_hash = sha256_short(hash_str, 8)
     
     return f"{cohort_id}_{short_hash}"

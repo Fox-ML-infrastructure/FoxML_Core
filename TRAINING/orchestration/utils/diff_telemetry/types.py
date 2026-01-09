@@ -392,7 +392,9 @@ class ComparisonGroup:
         key = "|".join(parts)
         
         # Generate a single compact hash from the full key
-        key_hash = hashlib.sha256(key.encode()).hexdigest()[:12]  # 12 chars for uniqueness
+        # SST: Use sha256_short for consistent hashing
+        from TRAINING.common.utils.config_hashing import sha256_short
+        key_hash = sha256_short(key, 12)  # 12 chars for uniqueness
         
         # Extract human-readable components for readability
         parts = []
@@ -502,8 +504,10 @@ class NormalizedSnapshot:
             'process': self._normalize_for_hash(self.process),
             'outputs': self._normalize_for_hash(self.outputs)
         }
-        json_str = json.dumps(hashable, sort_keys=True, default=str)
-        return hashlib.sha256(json_str.encode()).hexdigest()[:16]
+        # SST: Use canonical_json + sha256_short for consistent hashing
+        from TRAINING.common.utils.config_hashing import canonical_json, sha256_short
+        json_str = canonical_json(hashable)
+        return sha256_short(json_str, 16)
     
     @staticmethod
     def _normalize_for_hash(obj: Any) -> Any:

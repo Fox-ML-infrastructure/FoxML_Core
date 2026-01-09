@@ -16,6 +16,9 @@ import logging
 
 from TRAINING.common.utils.task_types import TaskType
 
+# SST: Import View enum for consistent view handling
+from TRAINING.orchestration.utils.scope_resolution import View
+
 logger = logging.getLogger(__name__)
 
 
@@ -217,7 +220,9 @@ def get_canonical_metric_name(task_type: TaskType, view: str, metric_type: str =
     }.get(task_type, "regression")
     
     # Map view to schema key
-    view_key = "cross_sectional" if view.upper() == "CROSS_SECTIONAL" else "symbol_specific"
+    # SST: Use View enum for comparison
+    view_enum = View.from_string(view) if isinstance(view, str) else view
+    view_key = "cross_sectional" if view_enum == View.CROSS_SECTIONAL else "symbol_specific"
     
     # Get canonical names for this task + view combination
     task_canonical = canonical.get(task_key, {})

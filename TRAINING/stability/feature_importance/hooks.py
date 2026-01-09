@@ -19,6 +19,9 @@ from .schema import FeatureImportanceSnapshot
 from .io import save_importance_snapshot, get_snapshot_base_dir
 from .analysis import analyze_stability_auto
 
+# SST: Import View enum for consistent view handling
+from TRAINING.orchestration.utils.scope_resolution import View
+
 logger = logging.getLogger(__name__)
 
 
@@ -557,7 +560,9 @@ def analyze_all_stability_hook(
                         continue
                     
                     # Handle both universe= and symbol= prefixes
-                    if view == "SYMBOL_SPECIFIC" and not universe_or_symbol_path.name.startswith("symbol="):
+                    # SST: Use View enum for comparison
+                    view_enum = View.from_string(view) if isinstance(view, str) else view
+                    if view_enum == View.SYMBOL_SPECIFIC and not universe_or_symbol_path.name.startswith("symbol="):
                         # For SYMBOL_SPECIFIC, we might have universe= then symbol= nested
                         if universe_or_symbol_path.name.startswith("universe="):
                             for symbol_path in universe_or_symbol_path.iterdir():

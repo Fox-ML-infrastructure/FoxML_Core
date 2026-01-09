@@ -15,6 +15,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from TRAINING.common.utils.file_utils import write_atomic_json, read_atomic_json
 
+# SST: Import View enum for consistent view handling
+from TRAINING.orchestration.utils.scope_resolution import View
+
 logger = logging.getLogger(__name__)
 
 
@@ -48,7 +51,9 @@ def build_cache_key_with_symbol(target: str, config_hash: str, view: str, symbol
         Cache key string
     """
     cache_key_parts = [target, config_hash, view]
-    if view == "SYMBOL_SPECIFIC" and symbol:
+    # SST: Use View enum for comparison
+    view_enum = View.from_string(view) if isinstance(view, str) else view
+    if view_enum == View.SYMBOL_SPECIFIC and symbol:
         cache_key_parts.append(f"symbol={symbol}")
     return build_cache_key(*cache_key_parts)
 

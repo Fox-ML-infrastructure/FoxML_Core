@@ -13,6 +13,9 @@ from typing import Optional, Dict, List
 import logging
 import pandas as pd
 
+# SST: Import View enum for consistent view handling
+from TRAINING.orchestration.utils.scope_resolution import View
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,7 +58,9 @@ def generate_family_first_mirrors(
             view = view_dir.name.replace("view=", "")
             
             # Handle SYMBOL_SPECIFIC
-            if view == "SYMBOL_SPECIFIC":
+            # SST: Use View enum for comparison
+            view_enum = View.from_string(view) if isinstance(view, str) else view
+            if view_enum == View.SYMBOL_SPECIFIC:
                 for symbol_dir in view_dir.iterdir():
                     if not symbol_dir.is_dir() or not symbol_dir.name.startswith("symbol="):
                         continue

@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 # Import git utilities from SST module
 from TRAINING.common.utils.git_utils import get_git_commit as get_git_sha
 
+# SST: Import View enum for consistent view handling
+from TRAINING.orchestration.utils.scope_resolution import View
+
 # Import SST accessor functions
 from TRAINING.orchestration.utils.reproducibility.utils import (
     extract_auc,
@@ -516,7 +519,9 @@ def create_target_metadata(
                 }
                 
                 # For SYMBOL_SPECIFIC, need to check symbol subdirectories
-                if view_name == "SYMBOL_SPECIFIC":
+                # SST: Use View enum for comparison
+                view_enum = View.from_string(view_name) if isinstance(view_name, str) else view_name
+                if view_enum == View.SYMBOL_SPECIFIC:
                     for symbol_dir in view_dir.iterdir():
                         if symbol_dir.is_dir() and symbol_dir.name.startswith("symbol="):
                             symbol = symbol_dir.name.replace("symbol=", "")
