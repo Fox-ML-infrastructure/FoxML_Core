@@ -9,9 +9,14 @@ Installation, setup, and first pipeline run.
 ### Prerequisites
 
 - Python 3.11+
-- 8GB+ RAM (16GB+ recommended)
+- **RAM**: 
+  - **Small experiments**: 16-32GB minimum (laptop-friendly for limited sample/universe sizes)
+  - **Production/ideal**: 128GB+ minimum, 512GB-1TB recommended for best performance
+  - Requirements scale with sample count, universe size, and feature count
 - GPU optional (CUDA 11.8+ if using GPU)
 - Conda or pip
+
+**Note on Universe Batching:** The pipeline supports batching large universes across multiple runs. While batching works, running with as few batches as possible is ideal for best results (enables better cross-sectional analysis and comprehensive feature selection).
 
 ### Install
 

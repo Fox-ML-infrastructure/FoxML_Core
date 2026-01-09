@@ -67,6 +67,30 @@ FoxML Core provides:
 
 ---
 
+## System Requirements
+
+FoxML Core is designed to scale from laptop experiments to production-scale deployments. Hardware requirements scale with your data size and pipeline configuration.
+
+**Small Experiments (Laptop-Friendly):**
+- **RAM**: 16-32GB minimum
+- **Use Cases**: Small sample sizes, limited universe sizes, reduced feature counts
+- Suitable for development, testing, and small-scale research
+
+**Production / Ideal Configuration:**
+- **RAM**: 128GB minimum, 512GB-1TB recommended for best performance
+- **Use Cases**: Large sample counts, extensive universe sizes, full feature sets
+- Enables full pipeline execution without memory constraints
+
+**Scaling Factors:**
+- **Sample count**: More samples require more memory for data loading and model training
+- **Universe size**: Larger symbol universes increase memory usage proportionally
+- **Feature count**: Feature count directly affects hardware usage (more features = more memory and compute)
+
+**Universe Batching:**
+The pipeline supports batching large universes across multiple runs. While batching works, **running with as few batches as possible is ideal for best results** - it enables better cross-sectional analysis and more comprehensive feature selection across the full universe.
+
+---
+
 ## Domain Focus
 
 FoxML Core is **general-purpose ML cross-sectional infrastructure** for panel data and time-series workflows. The architecture provides domain-agnostic primitives with built-in safeguards (leakage detection, temporal validation, feature registry systems).
