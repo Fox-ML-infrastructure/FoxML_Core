@@ -1369,7 +1369,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         # Load threshold from config (default: 0.5 = 50%)
         try:
             from CONFIG.config_loader import get_cfg
-            collapse_threshold = get_cfg("training.feature_collapse_threshold", default=0.5, config_name="training_config")
+            collapse_threshold = float(get_cfg("training.feature_collapse_threshold", default=0.5, config_name="training_config"))
         except Exception:
             collapse_threshold = 0.5  # Default: 50%
         

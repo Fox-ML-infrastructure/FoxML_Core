@@ -210,7 +210,10 @@ def save_training_snapshot(
         Path to saved snapshot, or None if failed
     """
     try:
-        output_path = Path(output_dir) / filename
+        # Ensure output_dir is a Path object (Path is imported at module level)
+        if not isinstance(output_dir, Path):
+            output_dir = Path(output_dir)
+        output_path = output_dir / filename
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Use atomic write for safety

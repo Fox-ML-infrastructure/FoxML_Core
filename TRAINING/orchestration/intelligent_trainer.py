@@ -2061,7 +2061,7 @@ class IntelligentTrainer:
                     from TRAINING.orchestration.utils.manifest import create_manifest
                     create_manifest(
                         output_dir=self.output_dir,
-                        config_digest=resolved_config['config_fingerprint'],
+                        config_digest=resolved_config.get('deterministic_config_fingerprint') or resolved_config.get('config_fingerprint'),
                         experiment_config=experiment_config_dict
                     )
                     # Validate manifest was created

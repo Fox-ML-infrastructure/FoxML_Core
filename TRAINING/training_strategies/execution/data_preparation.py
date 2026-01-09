@@ -135,7 +135,7 @@ def prepare_training_data_cross_sectional(mtf_data: Dict[str, pd.DataFrame],
     if max_cs_samples is None:
         # Load from config if available, otherwise use default
         if _CONFIG_AVAILABLE:
-            max_cs_samples = get_cfg("pipeline.data_limits.max_cross_sectional_samples", default=1000)
+            max_cs_samples = int(get_cfg("pipeline.data_limits.max_cross_sectional_samples", default=1000))
             if max_cs_samples is None:
                 max_cs_samples = 1000  # Config has null, use default
         else:

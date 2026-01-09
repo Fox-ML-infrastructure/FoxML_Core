@@ -9,6 +9,7 @@ Standardized format for storing feature importance snapshots for stability analy
 from dataclasses import dataclass, field
 from typing import Dict, Optional, List, Any
 from datetime import datetime
+from pathlib import Path
 import uuid
 
 
@@ -518,7 +519,6 @@ class FeatureSelectionSnapshot:
         if not deterministic_config_fp and output_dir:
             try:
                 import json
-                from pathlib import Path
                 globals_dir = Path(output_dir) / "globals"
                 resolved_config_path = globals_dir / "config.resolved.json"
                 if resolved_config_path.exists():

@@ -37,6 +37,10 @@ def save_importance_snapshot(
     Returns:
         Path to saved snapshot file
     """
+    # Ensure base_dir is a Path object (Path is imported at module level)
+    if not isinstance(base_dir, Path):
+        base_dir = Path(base_dir)
+    
     if use_hash_path:
         # Hash-based path: replicate/<replicate_key>/<strict_key>.json
         replicate_key = snapshot.replicate_key
@@ -276,10 +280,10 @@ def get_snapshot_base_dir(
 ) -> Path:
     """
     Get base directory for snapshots.
-    
+
     Uses target-first structure scoped by stage, view and universe if output_dir and target are provided.
     Never creates root-level feature_importance_snapshots directory.
-    
+
     Args:
         output_dir: Optional output directory (snapshots go in target-first structure)
         target: Optional target name for target-first structure
@@ -289,10 +293,15 @@ def get_snapshot_base_dir(
         stage: Optional stage name (TARGET_RANKING, FEATURE_SELECTION, TRAINING) - uses SST if not provided
         ensure_exists: If True (default), create the directory if it doesn't exist.
                        Set to False when reading to avoid creating empty directories.
-    
+
     Returns:
         Path to base snapshot directory
     """
+    # Convert string to Path if needed
+    # Path is imported at module level, so it's always available
+    if output_dir is not None and not isinstance(output_dir, Path):
+        output_dir = Path(output_dir)
+    
     if output_dir is not None:
         # REQUIRE target when output_dir is provided (saving case)
         # This ensures snapshots are written to the SST directory structure that aggregators scan
@@ -350,7 +359,7 @@ def get_snapshot_base_dir(
         )
     else:
         # Default: artifacts/feature_importance
-        from pathlib import Path
+        # Path is already imported at module level
         repo_root = Path(__file__).resolve().parents[4]  # TRAINING/stability/feature_importance/io.py -> repo root
         return repo_root / "artifacts" / "feature_importance"
 

@@ -17,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Recent Highlights (Last 7 Days)
 
 #### 2026-01-08
+**Cross-Stage Issue Fixes** - Fixed similar issues across FEATURE_SELECTION and TRAINING stages for consistency and type safety.
+
+**Cross-Stage Consistency Fixes**
+- **UPDATED**: Path import cleanup - Removed redundant `Path` imports in try blocks, added module-level imports
+- **FIXED**: Path import root cause - Fixed "name 'Path' is not defined" error in `schema.py` by adding module-level import (affects TARGET_RANKING and FEATURE_SELECTION stages)
+- **UPDATED**: Type casting - Added explicit `float()`/`int()` casts for all numeric config values used in comparisons
+- **UPDATED**: Universe signature extraction - FEATURE_SELECTION now prefers `run_identity.dataset_signature` over batch subsets
+- **AUDITED**: Config loading paths - Verified all `get_cfg()` calls use correct canonical paths
+- **BENEFIT**: Consistent patterns across all stages, preventing type errors and incorrect scoping
+
 **Manifest and Determinism Fixes** - Fixed manifest.json schema consistency and deterministic fingerprint computation.
 
 **Manifest.json Schema Fixes**

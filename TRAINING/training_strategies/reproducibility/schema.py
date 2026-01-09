@@ -13,6 +13,7 @@ This enables end-to-end determinism verification:
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Any, Optional, List
+from pathlib import Path
 import uuid
 import logging
 
@@ -257,7 +258,6 @@ class TrainingSnapshot:
         if not deterministic_config_fp and output_dir:
             try:
                 import json
-                from pathlib import Path
                 globals_dir = Path(output_dir) / "globals"
                 resolved_config_path = globals_dir / "config.resolved.json"
                 if resolved_config_path.exists():
@@ -383,7 +383,6 @@ class TrainingSnapshot:
         model_artifact_sha256 = None
         if model_path:
             try:
-                from pathlib import Path
                 model_file = Path(model_path)
                 if model_file.exists():
                     with open(model_file, 'rb') as f:
@@ -395,7 +394,6 @@ class TrainingSnapshot:
         artifacts_manifest_sha256 = None
         if model_path:
             try:
-                from pathlib import Path
                 artifact_hashes = []
                 model_file = Path(model_path)
                 if model_file.exists():

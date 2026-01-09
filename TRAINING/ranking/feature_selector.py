@@ -1366,19 +1366,33 @@ def select_features_for_target(
         
         # FIX: Compute universe_sig in fallback path for proper scope tracking
         # This ensures reproducibility tracking has universe_sig even when shared harness fails
-        if (universe_sig_for_writes is None or universe_sig is None) and symbols_to_process:
-            try:
-                from TRAINING.orchestration.utils.run_context import compute_universe_signature
-                computed_sig = compute_universe_signature(symbols_to_process)
+        # CRITICAL: Prefer run_identity.dataset_signature (full run universe) over computing from symbols_to_process
+        # (which could be a batch subset for SYMBOL_SPECIFIC view)
+        if (universe_sig_for_writes is None or universe_sig is None):
+            # First try to extract from run_identity (full run universe)
+            if run_identity is not None and hasattr(run_identity, 'dataset_signature') and run_identity.dataset_signature:
+                extracted_sig = run_identity.dataset_signature
                 if universe_sig is None:
-                    universe_sig = computed_sig
+                    universe_sig = extracted_sig
                 if universe_sig_for_writes is None:
-                    universe_sig_for_writes = computed_sig
+                    universe_sig_for_writes = extracted_sig
                     view_for_writes = view
                     symbol_for_writes = symbol
-                logger.debug(f"Computed universe_sig={computed_sig[:8]}... in fallback path")
-            except Exception as e:
-                logger.debug(f"Failed to compute universe_sig in fallback path: {e}")
+                logger.debug(f"Extracted universe_sig={extracted_sig[:8]}... from run_identity.dataset_signature")
+            elif symbols_to_process:
+                # Fallback: compute from symbols_to_process (may be subset for SYMBOL_SPECIFIC, but better than nothing)
+                try:
+                    from TRAINING.orchestration.utils.run_context import compute_universe_signature
+                    computed_sig = compute_universe_signature(symbols_to_process)
+                    if universe_sig is None:
+                        universe_sig = computed_sig
+                    if universe_sig_for_writes is None:
+                        universe_sig_for_writes = computed_sig
+                        view_for_writes = view
+                        symbol_for_writes = symbol
+                    logger.debug(f"Computed universe_sig={computed_sig[:8]}... in fallback path (from symbols_to_process)")
+                except Exception as e:
+                    logger.debug(f"Failed to compute universe_sig in fallback path: {e}")
     else:
         # Shared harness was used - all_results and all_family_statuses already populated
         # Statuses were collected in the shared harness block (lines 684-693 for SYMBOL_SPECIFIC or 913-942 for CROSS_SECTIONAL)
@@ -2357,7 +2371,7 @@ def select_features_for_target(
                     # Get seed from config for reproducibility
                     try:
                         from CONFIG.config_loader import get_cfg
-                        seed_value = get_cfg("pipeline.determinism.base_seed", default=42)
+                        seed_value = int(get_cfg("pipeline.determinism.base_seed", default=42))
                     except Exception:
                         seed_value = 42
                     
@@ -2448,7 +2462,7 @@ def select_features_for_target(
                         # Get seed from config for reproducibility (same as above)
                         try:
                             from CONFIG.config_loader import get_cfg
-                            seed_value = get_cfg("pipeline.determinism.base_seed", default=42)
+                            seed_value = int(get_cfg("pipeline.determinism.base_seed", default=42))
                         except Exception:
                             seed_value = 42
                         
@@ -2564,7 +2578,7 @@ def select_features_for_target(
                 # Add seed for reproducibility tracking
                 try:
                     from CONFIG.config_loader import get_cfg
-                    seed = get_cfg("pipeline.determinism.base_seed", default=42)
+                    seed = int(get_cfg("pipeline.determinism.base_seed", default=42))
                     additional_data_with_cohort['seed'] = seed
                     additional_data_with_cohort['train_seed'] = seed  # Also pass as train_seed for FEATURE_SELECTION
                 except Exception:

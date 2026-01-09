@@ -122,7 +122,7 @@ if _CONFIG_AVAILABLE:
         THREADS = max(1, (os.cpu_count() or 2) - 1)
     else:
         THREADS = threading_cfg if isinstance(threading_cfg, int) else max(1, (os.cpu_count() or 2) - 1)
-    MKL_THREADS_DEFAULT = get_cfg("threading.defaults.mkl_threads", default=1, config_name="threading_config")
+    MKL_THREADS_DEFAULT = int(get_cfg("threading.defaults.mkl_threads", default=1, config_name="threading_config"))
 else:
     THREADS = max(1, (os.cpu_count() or 2) - 1)
     MKL_THREADS_DEFAULT = 1
@@ -429,7 +429,7 @@ def build_sequences_from_features(X, lookback=None):
     # Load lookback from config if not provided
     if lookback is None:
         if _CONFIG_AVAILABLE:
-            lookback = get_cfg("pipeline.sequential.default_lookback", default=64)
+            lookback = int(get_cfg("pipeline.sequential.default_lookback", default=64))
         else:
             lookback = 64
     N, F = X.shape

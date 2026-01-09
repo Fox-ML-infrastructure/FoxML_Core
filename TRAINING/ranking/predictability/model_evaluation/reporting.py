@@ -282,7 +282,9 @@ def save_feature_importances(
                 )
             except Exception as e:
                 # FIX: Log at WARNING level to diagnose why non-xgboost models fail
+                import traceback
                 logger.warning(f"Stability snapshot save failed for {model_name}: {e}")
+                logger.debug(f"Traceback for {model_name}: {traceback.format_exc()}")
         
         logger.info(f"  💾 Saved feature importances to: {target_importances_dir}")
     except Exception as e:

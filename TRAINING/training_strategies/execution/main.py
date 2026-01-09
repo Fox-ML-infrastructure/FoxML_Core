@@ -179,7 +179,7 @@ def main():
     default_lookback = 64
     if _CONFIG_AVAILABLE:
         try:
-            default_lookback = get_cfg("pipeline.sequential.default_lookback", default=64)
+            default_lookback = int(get_cfg("pipeline.sequential.default_lookback", default=64))
         except Exception:
             pass
     parser.add_argument('--seq-lookback', type=int, default=default_lookback, 

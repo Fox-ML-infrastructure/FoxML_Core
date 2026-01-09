@@ -37,7 +37,7 @@ class DominanceConfig:
         """Load configuration from safety.yaml."""
         try:
             from CONFIG.config_loader import get_cfg
-            cfg = get_cfg("safety.leakage_detection.dominance_quarantine", default={}, config_name="pipeline/training/safety")
+            cfg = get_cfg("safety.leakage_detection.dominance_quarantine", default={}, config_name="safety")
             
             if not cfg.get("enabled", False):
                 # Return disabled config

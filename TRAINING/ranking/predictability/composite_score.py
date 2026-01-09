@@ -274,11 +274,11 @@ def calculate_composite_score_tstat(
             logger.warning(f"Failed to load scoring config from metrics_schema.yaml: {e}, using defaults")
             scoring_config = {}
     
-    # Extract params with defaults
-    skill_squash_k = scoring_config.get("skill_squash_k", 3.0)
-    tcap = scoring_config.get("tcap", 12.0)
-    se_floor = scoring_config.get("se_floor", 1e-6)
-    default_se_ref = scoring_config.get("se_ref", 0.02)
+    # Extract params with defaults (ensure numeric types)
+    skill_squash_k = float(scoring_config.get("skill_squash_k", 3.0))
+    tcap = float(scoring_config.get("tcap", 12.0))
+    se_floor = float(scoring_config.get("se_floor", 1e-6))  # Ensure float, not string
+    default_se_ref = float(scoring_config.get("se_ref", 0.02))
     se_ref_by_task = scoring_config.get("se_ref_by_task", {})
     weights = scoring_config.get("weights", {"w_cov": 0.3, "w_stab": 0.7})
     model_bonus_cfg = scoring_config.get("model_bonus", {"enabled": True, "max_bonus": 0.10, "per_model": 0.02})
