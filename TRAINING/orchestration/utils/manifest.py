@@ -148,6 +148,23 @@ def create_manifest(
             if trend_index:
                 manifest["trend_reports"] = trend_index
     
+    # Add run hash if available
+    globals_dir = output_dir / "globals"
+    run_hash_file = globals_dir / "run_hash.json"
+    if run_hash_file.exists():
+        try:
+            with open(run_hash_file, 'r') as f:
+                run_hash_data = json.load(f)
+                manifest["run_hash"] = run_hash_data.get("run_hash")
+                manifest["run_id"] = run_hash_data.get("run_id")
+                if run_hash_data.get("changes"):
+                    manifest["run_changes"] = {
+                        "severity": run_hash_data["changes"].get("severity_summary"),
+                        "changed_snapshots_count": len(run_hash_data["changes"].get("changed_snapshots", [])),
+                    }
+        except Exception as e:
+            logger.debug(f"Failed to load run hash: {e}")
+    
     # Write manifest
     manifest_path = output_dir / "manifest.json"
     with open(manifest_path, 'w') as f:

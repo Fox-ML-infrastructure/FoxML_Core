@@ -440,6 +440,8 @@ class NormalizedSnapshot:
     
     # Fingerprint schema version (for compatibility checking)
     fingerprint_schema_version: str = "1.0"  # FINGERPRINT_SCHEMA_VERSION
+    metrics_schema_version: str = "1.1"  # Bump when metrics structure changes (added 2026-01)
+    scoring_schema_version: str = "1.1"  # Phase 3.1: SE-based stability, skill-gating, classification centering
     
     # Fingerprints (for change detection)
     config_fingerprint: Optional[str] = None

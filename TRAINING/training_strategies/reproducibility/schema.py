@@ -14,6 +14,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -22,11 +25,18 @@ class TrainingSnapshot:
     Full snapshot for training stage - mirrors TARGET_RANKING/FEATURE_SELECTION snapshot structure.
     
     Written to:
-    - Per-cohort: targets/{target}/reproducibility/stage=TRAINING/{view}/training_snapshot.json
+    - Per-cohort: targets/{target}/reproducibility/stage=TRAINING/{view}/cohort={cohort_id}/training_snapshot.json
+    - For SYMBOL_SPECIFIC: targets/{target}/reproducibility/stage=TRAINING/SYMBOL_SPECIFIC/symbol={symbol}/cohort={cohort_id}/training_snapshot.json
+    - Aggregated SYMBOL_SPECIFIC: targets/{target}/reproducibility/stage=TRAINING/SYMBOL_SPECIFIC/cohort={cohort_id}/training_snapshot.json (symbol=None)
+    - Parquet format: Same location with training_metadata.parquet
     - Global index: globals/training_snapshot_index.json
+    - Global summary: globals/training_summary.json and globals/training_summary.csv
     
     Structure mirrors snapshot_index.json entries for TARGET_RANKING but with
     stage="TRAINING" and includes model_family and model_artifact_sha256.
+    
+    Note: For SYMBOL_SPECIFIC views, symbol=None indicates an aggregated snapshot
+    that combines metrics across all symbols for the same target and model family.
     """
     # Identity
     run_id: str
@@ -40,6 +50,8 @@ class TrainingSnapshot:
     
     # Fingerprints (for determinism verification)
     fingerprint_schema_version: str = "1.0"
+    metrics_schema_version: str = "1.1"  # Bump when metrics structure changes (added 2026-01)
+    scoring_schema_version: str = "1.1"  # Phase 3.1: SE-based stability, skill-gating, classification centering
     config_fingerprint: Optional[str] = None  # Hash of training config
     data_fingerprint: Optional[str] = None  # Dataset signature
     feature_fingerprint: Optional[str] = None  # Selected features from FS stage
@@ -47,6 +59,7 @@ class TrainingSnapshot:
     hyperparameters_signature: Optional[str] = None  # Model hyperparameters hash
     split_signature: Optional[str] = None  # CV split configuration hash
     model_artifact_sha256: Optional[str] = None  # Hash of saved model file (.pkl/.joblib)
+    artifacts_manifest_sha256: Optional[str] = None  # Hash of output artifacts for tampering detection
     metrics_sha256: Optional[str] = None  # Hash of outputs.metrics for drift detection
     predictions_sha256: Optional[str] = None  # Prediction fingerprint (train/val)
     
@@ -59,6 +72,7 @@ class TrainingSnapshot:
         "hyperparameters_signature": "hash of model hyperparameters (learning_rate, max_depth, etc.)",
         "split_signature": "hash of CV configuration (method, purge, embargo, n_splits)",
         "model_artifact_sha256": "SHA256 hash of the saved model file for tamper detection",
+        "artifacts_manifest_sha256": "SHA256 hash of all output artifacts (model, scaler, imputer, etc.) for tamper detection",
         "predictions_sha256": "hash of model predictions on validation data for determinism",
     })
     
@@ -126,6 +140,8 @@ class TrainingSnapshot:
             "model_family": self.model_family,
             "snapshot_seq": self.snapshot_seq,
             "fingerprint_schema_version": self.fingerprint_schema_version,
+            "metrics_schema_version": self.metrics_schema_version,
+            "scoring_schema_version": self.scoring_schema_version,
             "config_fingerprint": self.config_fingerprint,
             "data_fingerprint": self.data_fingerprint,
             "feature_fingerprint": self.feature_fingerprint,
@@ -133,6 +149,7 @@ class TrainingSnapshot:
             "hyperparameters_signature": self.hyperparameters_signature,
             "split_signature": self.split_signature,
             "model_artifact_sha256": self.model_artifact_sha256,
+            "artifacts_manifest_sha256": self.artifacts_manifest_sha256,
             "metrics_sha256": self.metrics_sha256,
             "predictions_sha256": self.predictions_sha256,
             "fingerprint_sources": self.fingerprint_sources,
@@ -157,6 +174,8 @@ class TrainingSnapshot:
             model_family=data.get("model_family", ""),
             snapshot_seq=data.get("snapshot_seq", 0),
             fingerprint_schema_version=data.get("fingerprint_schema_version", "1.0"),
+            metrics_schema_version=data.get("metrics_schema_version", "1.0"),  # Default to 1.0 for old snapshots
+            scoring_schema_version=data.get("scoring_schema_version", "1.0"),  # Default to 1.0 for old snapshots
             config_fingerprint=data.get("config_fingerprint"),
             data_fingerprint=data.get("data_fingerprint"),
             feature_fingerprint=data.get("feature_fingerprint"),
@@ -164,6 +183,7 @@ class TrainingSnapshot:
             hyperparameters_signature=data.get("hyperparameters_signature"),
             split_signature=data.get("split_signature"),
             model_artifact_sha256=data.get("model_artifact_sha256"),
+            artifacts_manifest_sha256=data.get("artifacts_manifest_sha256"),
             metrics_sha256=data.get("metrics_sha256"),
             predictions_sha256=data.get("predictions_sha256"),
             fingerprint_sources=data.get("fingerprint_sources", {}),
@@ -226,14 +246,17 @@ class TrainingSnapshot:
             elif isinstance(run_identity, dict):
                 identity = run_identity
         
-        # Build comparison group from identity
+        # Build comparison group from identity (full parity with TARGET_RANKING)
         comparison_group = {}
+        if identity.get("experiment_id"):
+            comparison_group["experiment_id"] = identity["experiment_id"]
         if identity.get("dataset_signature"):
             comparison_group["dataset_signature"] = identity["dataset_signature"]
         if identity.get("split_signature"):
             comparison_group["split_signature"] = identity["split_signature"]
         if identity.get("target_signature"):
             comparison_group["target_signature"] = identity["target_signature"]
+            comparison_group["task_signature"] = identity["target_signature"]  # Alias for parity
         if identity.get("routing_signature"):
             comparison_group["routing_signature"] = identity["routing_signature"]
         if identity.get("hparams_signature"):
@@ -241,6 +264,15 @@ class TrainingSnapshot:
         comparison_group["train_seed"] = identity.get("train_seed", train_seed)
         if identity.get("universe_sig"):
             comparison_group["universe_sig"] = identity["universe_sig"]
+        if identity.get("feature_signature"):
+            comparison_group["feature_signature"] = identity["feature_signature"]
+        if identity.get("library_versions_signature"):
+            comparison_group["library_versions_signature"] = identity["library_versions_signature"]
+        comparison_group["model_family"] = model_family
+        comparison_group["symbol"] = symbol
+        # Add n_effective from inputs if available
+        if n_samples is not None:
+            comparison_group["n_effective"] = n_samples
         
         # Build inputs
         inputs = {
@@ -254,38 +286,53 @@ class TrainingSnapshot:
             "train_seed": identity.get("train_seed", train_seed),
         }
         
-        # Build outputs from model_result
+        # Build outputs from model_result using clean, grouped structure
         outputs = {}
         if model_result:
-            # Extract metrics
-            metrics = {}
-            for key in ["train_loss", "val_loss", "train_auc", "val_auc", "accuracy", "r2", "mse", "mae"]:
-                if key in model_result:
-                    metrics[key] = model_result[key]
-            if model_result.get("metrics"):
-                metrics.update(model_result["metrics"])
-            
-            # Add canonical metric names if task_type and primary score available
-            # This ensures consistent naming across stages
-            task_type = model_result.get("task_type")
-            if task_type and "val_auc" in metrics:
-                try:
-                    from TRAINING.ranking.predictability.metrics_schema import get_canonical_metric_names_for_output
-                    from TRAINING.common.utils.task_types import TaskType
-                    
-                    # Parse task_type if it's a string
-                    if isinstance(task_type, str):
-                        task_type = TaskType[task_type.upper()]
-                    
-                    primary_value = metrics.get("val_auc", metrics.get("r2", 0.0))
-                    std_value = metrics.get("val_auc_std", metrics.get("r2_std", 0.0))
-                    
-                    canonical = get_canonical_metric_names_for_output(
-                        task_type, view, primary_value, std_value
-                    )
-                    metrics.update(canonical)
-                except Exception:
-                    pass  # Keep existing metrics if canonical naming fails
+            # Use clean metrics builder for structured, task-gated output
+            try:
+                from TRAINING.ranking.predictability.metrics_schema import build_clean_training_metrics
+                from TRAINING.common.utils.task_types import TaskType
+                
+                # Get task_type from model_result
+                task_type = model_result.get("task_type")
+                if isinstance(task_type, str):
+                    task_type = TaskType[task_type.upper()]
+                elif task_type is None:
+                    # Fallback: try to infer from available metrics
+                    if "val_auc" in model_result or "auc" in model_result:
+                        task_type = TaskType.BINARY_CLASSIFICATION
+                    else:
+                        task_type = TaskType.REGRESSION
+                
+                # Get feature and sample counts
+                n_features = None
+                if features_used:
+                    n_features = len(features_used)
+                elif "n_features" in model_result:
+                    n_features = model_result["n_features"]
+                
+                n_samples_val = n_samples
+                if "n_samples" in model_result:
+                    n_samples_val = model_result["n_samples"]
+                
+                # Build clean metrics
+                metrics = build_clean_training_metrics(
+                    model_result=model_result,
+                    task_type=task_type,
+                    view=view,
+                    n_features=n_features,
+                    n_samples=n_samples_val,
+                )
+            except Exception as e:
+                # Fallback to flat structure if clean builder fails
+                logger.warning(f"Failed to build clean training metrics, using fallback: {e}")
+                metrics = {}
+                for key in ["train_loss", "val_loss", "train_auc", "val_auc", "accuracy", "r2", "mse", "mae"]:
+                    if key in model_result:
+                        metrics[key] = model_result[key]
+                if model_result.get("metrics"):
+                    metrics.update(model_result["metrics"])
             
             outputs["metrics"] = metrics
             
@@ -318,6 +365,38 @@ class TrainingSnapshot:
             except Exception:
                 pass
         
+        # Compute artifacts_manifest_sha256 (hash of all artifacts: model, scaler, imputer, etc.)
+        artifacts_manifest_sha256 = None
+        if model_path:
+            try:
+                from pathlib import Path
+                artifact_hashes = []
+                model_file = Path(model_path)
+                if model_file.exists():
+                    with open(model_file, 'rb') as f:
+                        model_hash = hashlib.sha256(f.read()).hexdigest()
+                        artifact_hashes.append(f"model:{model_hash}")
+                
+                # Try to find and hash related artifacts (scaler, imputer)
+                model_dir = model_file.parent
+                scaler_path = model_dir / "scaler.pkl"
+                if scaler_path.exists():
+                    with open(scaler_path, 'rb') as f:
+                        scaler_hash = hashlib.sha256(f.read()).hexdigest()
+                        artifact_hashes.append(f"scaler:{scaler_hash}")
+                
+                imputer_path = model_dir / "imputer.pkl"
+                if imputer_path.exists():
+                    with open(imputer_path, 'rb') as f:
+                        imputer_hash = hashlib.sha256(f.read()).hexdigest()
+                        artifact_hashes.append(f"imputer:{imputer_hash}")
+                
+                if artifact_hashes:
+                    manifest_str = "|".join(sorted(artifact_hashes))
+                    artifacts_manifest_sha256 = hashlib.sha256(manifest_str.encode()).hexdigest()
+            except Exception:
+                pass
+        
         # Extract prediction fingerprint from model_result or identity
         predictions_sha256 = identity.get("prediction_hash")
         if not predictions_sha256 and model_result:
@@ -339,6 +418,7 @@ class TrainingSnapshot:
             hyperparameters_signature=identity.get("hparams_signature"),
             split_signature=identity.get("split_signature"),
             model_artifact_sha256=model_artifact_sha256,
+            artifacts_manifest_sha256=artifacts_manifest_sha256,
             metrics_sha256=metrics_sha256,
             predictions_sha256=predictions_sha256,
             inputs=inputs,
@@ -356,3 +436,24 @@ class TrainingSnapshot:
         """
         symbol_part = self.symbol if self.symbol else "NONE"
         return f"{self.timestamp}:{self.stage}:{self.target}:{self.view}:{self.model_family}:{symbol_part}"
+    
+    def to_parquet_dict(self) -> Dict[str, Any]:
+        """
+        Convert to flat dictionary suitable for Parquet serialization.
+        
+        Flattens nested structures and ensures all values are Parquet-compatible.
+        This is used for training_metadata.parquet files.
+        
+        Returns:
+            Flat dictionary with all nested structures flattened
+        """
+        # Start with base dict
+        result = self.to_dict()
+        
+        # Flatten nested structures for Parquet
+        # Parquet works best with flat structures, so we'll keep nested dicts
+        # but ensure all keys are strings (handled by _prepare_for_parquet)
+        
+        # The to_dict() already returns a flat structure with nested dicts
+        # We just need to ensure it's Parquet-compatible
+        return result

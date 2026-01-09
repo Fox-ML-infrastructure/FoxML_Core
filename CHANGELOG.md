@@ -17,6 +17,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Recent Highlights (Last 7 Days)
 
 #### 2026-01-08
+**Metrics JSON Cleanup and Restructuring** - Smaller, non-redundant, semantically unambiguous metrics output.
+
+**Metrics Structure Overhaul**
+- **NEW**: Grouped metrics structure - All metrics now use logical grouping:
+  - `schema`: Version info (`metrics_schema_version`, `scoring_schema_version`)
+  - `scope`: View and task family
+  - `primary_metric`: Single source of truth (name, mean, std, se, skill_mean, skill_se, baseline)
+  - `coverage`: Counts as ints (n_cs_valid, n_cs_total, n_effective)
+  - `features`: Feature counts as ints (pre, post_prune, safe)
+  - `y_stats` or `label_stats`: Task-specific target stats
+  - `models`: Model scores (n as int, scores dict)
+  - `score`: Composite score and components
+- **FIX**: Removed duplicate fields - No more `auc`, `mean_r2`, `primary_metric_mean` aliases
+  - Single canonical path for each metric value
+  - Backward compatibility maintained via MetricsWriter handling nested structures
+- **FIX**: Count fields as ints - All count-like fields (`n_models`, `n_cs_valid`, `n_features_*`, etc.) are now integers, not floats
+- **FIX**: Task-gating - Hard validation prevents wrong metrics from appearing:
+  - Regression: No `auc`, `pos_rate`, `class_balance` (unless multiclass)
+  - Classification: No `r2`, `spearman_ic`, `y_stats`
+- **NEW**: Clean metrics builders for all stages:
+  - `build_clean_metrics_dict()` for TARGET_RANKING
+  - `build_clean_feature_selection_metrics()` for FEATURE_SELECTION
+  - `build_clean_training_metrics()` for TRAINING
+- **UPDATE**: All stages now output clean, grouped metrics:
+  - TARGET_RANKING: Uses `build_clean_metrics_dict()` in `model_evaluation.py`
+  - FEATURE_SELECTION: Uses `build_clean_feature_selection_metrics()` in `feature_selector.py` and `cross_sectional_feature_ranker.py`
+  - TRAINING: Uses `build_clean_training_metrics()` in `TrainingSnapshot.from_training_result()` and `training.py`
+
+**Delta Computation Updates** - Support for grouped metrics structure.
+
+- **NEW**: `_flatten_metrics_dict()` helper - Recursively flattens nested metrics with dot-notation keys
+  - Handles both old flat structure and new grouped structure
+  - Preserves backward compatibility
+- **UPDATE**: `_compute_metric_deltas()` - Now handles nested paths:
+  - Uses flattened metrics before comparison
+  - Supports paths like `primary_metric.mean`, `models.n`, `score.composite`
+  - Backward compatibility mapping for old flat keys (`auc` → `primary_metric.mean`, etc.)
+- **UPDATE**: Z-score computation - Uses new paths:
+  - `primary_metric.std` or `primary_metric.skill_se` instead of `std_score`
+  - `models.n` instead of `n_models`
+- **UPDATE**: Score metrics set - Includes both old flat keys and new nested paths
+
+**Full Run Hash with Change Detection** - Deterministic run identifier with change summary.
+
+- **NEW**: `compute_full_run_hash()` - Aggregates all global snapshots and computes deterministic SHA256 hash
+  - Loads all snapshot indices (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
+  - Extracts deterministic fields only (fingerprints, signatures, digests, schema versions)
+  - Excludes non-deterministic fields (run_id, timestamp, snapshot_seq)
+  - Returns 16-character hex digest
+- **NEW**: `compute_run_hash_with_changes()` - Includes change detection and aggregation:
+  - Computes run hash (same as above)
+  - If previous run exists, computes diffs for all snapshots
+  - Aggregates change information:
+    - `changed_snapshots`: List of snapshots that changed (with stage, target, view, symbol, severity)
+    - `changed_keys_summary`: Aggregated list of all changed keys across all snapshots
+    - `severity_summary`: Highest severity level across all changes
+    - `metric_deltas_summary`: Summary of metric changes (counts by severity: noise, minor, major, none)
+    - `excluded_factors_summary`: Summary of excluded factors that changed
+- **NEW**: `save_run_hash()` - Saves run hash with changes to `globals/run_hash.json`
+  - Includes run_id, prev_run_id, snapshot_count, changes summary
+  - Automatically computed after pipeline completion
+- **NEW**: `get_run_hash_with_changes()` method in `DiffTelemetry` class
+- **INTEGRATION**: Run hash computation integrated into `intelligent_trainer.py`:
+  - Automatically computed after full pipeline completes
+  - Logs run hash and change summary
+  - Finds previous run ID for change detection
+- **INTEGRATION**: Run hash included in `manifest.json`:
+  - `run_hash`: 16-char hex digest
+  - `run_id`: Current run identifier
+  - `run_changes`: Change summary (severity, changed_snapshots_count)
+
 **Phase 3.1 Composite Score Fixes** - Family-correct, comparable, deterministic composite scoring.
 
 **Phase 3.1: SE-based stability and skill-gating**

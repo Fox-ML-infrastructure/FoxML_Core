@@ -3731,6 +3731,61 @@ Examples:
         logger.info(f"Strategy: {results['strategy']}")
         logger.info(f"Status: {results['status']}")
         
+        # Compute and save run hash with change detection
+        try:
+            from TRAINING.orchestration.utils.diff_telemetry import save_run_hash, DiffTelemetry
+            from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
+            
+            # Find previous run ID by looking for most recent run_hash.json in current or parent directories
+            prev_run_id = None
+            globals_dir = get_globals_dir(trainer.output_dir)
+            run_hash_file = globals_dir / "run_hash.json"
+            if run_hash_file.exists():
+                try:
+                    import json
+                    with open(run_hash_file, 'r') as f:
+                        prev_data = json.load(f)
+                        prev_run_id = prev_data.get('run_id')
+                except Exception:
+                    pass
+            
+            # Create DiffTelemetry instance for change detection
+            diff_telemetry = DiffTelemetry(output_dir=trainer.output_dir)
+            
+            # Compute and save run hash
+            # Use run_name if available, otherwise try to extract from output_dir
+            run_id = None
+            if hasattr(trainer, '_run_name') and trainer._run_name:
+                run_id = trainer._run_name.replace("_", "-")
+            elif hasattr(trainer, 'output_dir') and trainer.output_dir:
+                # Try to extract from directory name
+                dir_name = trainer.output_dir.name
+                if dir_name.startswith("run_"):
+                    run_id = dir_name.replace("_", "-")
+            
+            saved_path = save_run_hash(
+                output_dir=trainer.output_dir,
+                run_id=run_id,
+                prev_run_id=prev_run_id,
+                diff_telemetry=diff_telemetry
+            )
+            
+            if saved_path:
+                logger.info(f"✅ Run hash saved to: {saved_path}")
+                # Log change summary if available
+                try:
+                    import json
+                    with open(saved_path, 'r') as f:
+                        run_hash_data = json.load(f)
+                        if run_hash_data.get('changes'):
+                            changes = run_hash_data['changes']
+                            logger.info(f"   Changes: {changes.get('severity_summary', 'none')} severity, "
+                                      f"{len(changes.get('changed_snapshots', []))} snapshots changed")
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.debug(f"Failed to compute run hash: {e}")
+        
         return 0
     
     except Exception as e:

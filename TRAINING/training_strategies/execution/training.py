@@ -947,6 +947,18 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     try:
                                         from TRAINING.training_strategies.reproducibility import create_and_save_training_snapshot
                                         saved_model_path = str(model_path) if 'model_path' in locals() else None
+                                        
+                                        # Extract cohort_id from cohort_metadata if available
+                                        symbol_cohort_id = None
+                                        symbol_cohort_metadata = None
+                                        if 'cohort_metadata' in locals() and cohort_metadata:
+                                            symbol_cohort_metadata = cohort_metadata
+                                            try:
+                                                from TRAINING.training_strategies.reproducibility.io import compute_cohort_id_from_metadata
+                                                symbol_cohort_id = compute_cohort_id_from_metadata(cohort_metadata, view="SYMBOL_SPECIFIC")
+                                            except Exception as e:
+                                                logger.debug(f"Failed to compute cohort_id for {symbol}: {e}")
+                                        
                                         create_and_save_training_snapshot(
                                             target=target,
                                             model_family=family,
@@ -958,6 +970,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                             model_path=saved_model_path,
                                             features_used=list(feature_names) if feature_names is not None else None,
                                             n_samples=len(X) if 'X' in locals() else None,
+                                            cohort_id=symbol_cohort_id,
+                                            cohort_metadata=symbol_cohort_metadata,
                                         )
                                     except Exception as ts_err:
                                         logger.debug(f"Training snapshot failed for {target}:{symbol} (non-critical): {ts_err}")
@@ -1033,18 +1047,51 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 search_previous_runs=True
                             )
                             
-                            # Extract metrics
+                            # Extract metrics using clean structure
                             strategy_manager = model_result.get('strategy_manager')
                             metrics = {}
                             if strategy_manager and hasattr(strategy_manager, 'cv_scores'):
                                 cv_scores = strategy_manager.cv_scores
                                 if cv_scores and len(cv_scores) > 0:
-                                    metrics = {
-                                        "metric_name": "CV Score",
-                                        "auc": float(np.mean(cv_scores)),
-                                        "std_score": float(np.std(cv_scores)),
-                                        "composite_score": float(np.mean(cv_scores))
-                                    }
+                                    # Build clean training metrics for CV scores
+                                    try:
+                                        from TRAINING.ranking.predictability.metrics_schema import build_clean_training_metrics
+                                        from TRAINING.common.utils.task_types import TaskType
+                                        
+                                        # Determine task type from model_result or route
+                                        task_type = TaskType.REGRESSION  # Default
+                                        if model_result.get('task_type'):
+                                            task_type_str = model_result.get('task_type')
+                                            if isinstance(task_type_str, str):
+                                                task_type = TaskType[task_type_str.upper()]
+                                        elif 'route' in locals() and route:
+                                            # Infer from route if available
+                                            if 'classification' in str(route).lower():
+                                                task_type = TaskType.BINARY_CLASSIFICATION
+                                        
+                                        # Build clean metrics dict
+                                        cv_metrics_result = {
+                                            "val_auc": float(np.mean(cv_scores)),
+                                            "val_auc_std": float(np.std(cv_scores)),
+                                        }
+                                        
+                                        metrics = build_clean_training_metrics(
+                                            model_result=cv_metrics_result,
+                                            task_type=task_type,
+                                            view="SYMBOL_SPECIFIC",  # Per-symbol training
+                                            n_features=len(feature_names) if feature_names else None,
+                                            n_samples=len(X) if 'X' in locals() else None,
+                                        )
+                                        metrics["metric_name"] = "CV Score"  # Add metadata field
+                                    except Exception as e:
+                                        # Fallback to flat structure if clean builder fails
+                                        logger.debug(f"Failed to build clean training metrics, using fallback: {e}")
+                                        metrics = {
+                                            "metric_name": "CV Score",
+                                            "auc": float(np.mean(cv_scores)),
+                                            "std_score": float(np.std(cv_scores)),
+                                            "composite_score": float(np.mean(cv_scores))
+                                        }
                             
                             if metrics:
                                 cohort_metadata = extract_cohort_metadata(
@@ -1142,6 +1189,92 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                     logger.info(f"  ✅ Completed {symbol}: {len(symbol_results)} models trained")
                 else:
                     logger.warning(f"  ⚠️ No models trained for {target}:{symbol}")
+            
+            # After all symbols processed, create aggregated snapshots per model family
+            try:
+                from TRAINING.training_strategies.reproducibility.io import (
+                    create_aggregated_training_snapshot,
+                    load_training_snapshot,
+                    get_training_snapshot_dir,
+                    compute_cohort_id_from_metadata
+                )
+                from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata
+                
+                # Collect all per-symbol snapshots by model family
+                per_family_snapshots = {}
+                aggregated_cohort_id = None
+                
+                # Try to compute cohort_id from first symbol's metadata
+                if target_feat_data and len(target_feat_data) > 0:
+                    first_symbol = list(target_feat_data.keys())[0]
+                    if first_symbol in mtf_data:
+                        try:
+                            symbol_mtf_data = {first_symbol: mtf_data[first_symbol]}
+                            # Use a representative sample to compute cohort metadata
+                            # We'll use the first symbol's data as a proxy
+                            temp_X, temp_y, _, _, _, _, temp_time_vals, _ = prepare_training_data_cross_sectional(
+                                symbol_mtf_data, target, feature_names=list(target_feat_data[first_symbol])[:10] if target_feat_data[first_symbol] else None,
+                                min_cs=1, max_cs_samples=max_cs_samples, routing_decisions=routing_decisions
+                            )
+                            if temp_X is not None and len(temp_X) > 0:
+                                # Compute cohort metadata for aggregation
+                                temp_cohort_metadata = extract_cohort_metadata(
+                                    X=temp_X,
+                                    symbols=list(target_feat_data.keys()),
+                                    time_vals=temp_time_vals,
+                                    mtf_data=mtf_data,
+                                    min_cs=1,
+                                    max_cs_samples=max_cs_samples
+                                )
+                                aggregated_cohort_id = compute_cohort_id_from_metadata(temp_cohort_metadata, view="SYMBOL_SPECIFIC")
+                        except Exception as e:
+                            logger.debug(f"Failed to compute aggregated cohort_id: {e}")
+                
+                # Load all per-symbol snapshots
+                for symbol in target_feat_data.keys():
+                    # Find snapshots for this symbol
+                    symbol_snapshot_dir = get_training_snapshot_dir(
+                        output_dir=base_run_dir,
+                        target=target,
+                        view="SYMBOL_SPECIFIC",
+                        symbol=symbol,
+                        stage="TRAINING",
+                    )
+                    
+                    # Look for cohort directories
+                    if symbol_snapshot_dir.exists():
+                        for cohort_dir in symbol_snapshot_dir.iterdir():
+                            if cohort_dir.is_dir() and cohort_dir.name.startswith("cohort="):
+                                snapshot_path = cohort_dir / "training_snapshot.json"
+                                if snapshot_path.exists():
+                                    snapshot = load_training_snapshot(snapshot_path)
+                                    if snapshot:
+                                        family = snapshot.model_family
+                                        if family not in per_family_snapshots:
+                                            per_family_snapshots[family] = []
+                                        per_family_snapshots[family].append(snapshot)
+                                        # Use cohort_id from first snapshot if not computed
+                                        if aggregated_cohort_id is None:
+                                            aggregated_cohort_id = cohort_dir.name.replace("cohort=", "")
+                
+                # Create aggregated snapshots for each model family
+                for family, snapshots in per_family_snapshots.items():
+                    if len(snapshots) > 0:
+                        try:
+                            aggregated = create_aggregated_training_snapshot(
+                                snapshots=snapshots,
+                                target=target,
+                                model_family=family,
+                                output_dir=base_run_dir,
+                                view="SYMBOL_SPECIFIC",
+                                cohort_id=aggregated_cohort_id,
+                            )
+                            if aggregated:
+                                logger.info(f"✅ Created aggregated snapshot for {target}/{family} ({len(snapshots)} symbols)")
+                        except Exception as e:
+                            logger.debug(f"Failed to create aggregated snapshot for {target}/{family}: {e}")
+            except Exception as e:
+                logger.debug(f"Failed to create aggregated snapshots for {target}: {e}")
             
             # Skip the cross-sectional training path for SYMBOL_SPECIFIC
             continue
@@ -1837,6 +1970,15 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                             if prediction_fingerprint_cs:
                                 model_result_with_fp['prediction_hash'] = prediction_fingerprint_cs.get('prediction_hash')
                             
+                            # Extract cohort_id from cohort_metadata
+                            cohort_id = None
+                            if 'cohort_metadata' in locals() and cohort_metadata:
+                                try:
+                                    from TRAINING.training_strategies.reproducibility.io import compute_cohort_id_from_metadata
+                                    cohort_id = compute_cohort_id_from_metadata(cohort_metadata, view=view)
+                                except Exception as e:
+                                    logger.debug(f"Failed to compute cohort_id: {e}")
+                            
                             create_and_save_training_snapshot(
                                 target=target,
                                 model_family=family,
@@ -1849,6 +1991,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 features_used=training_features,
                                 n_samples=training_n_samples,
                                 train_seed=training_seed,
+                                cohort_id=cohort_id,
+                                cohort_metadata=cohort_metadata if 'cohort_metadata' in locals() else None,
                             )
                         except Exception as ts_err:
                             logger.debug(f"Training snapshot creation failed (non-critical): {ts_err}")
@@ -2070,6 +2214,13 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
             logger.debug(f"[Cleanup] Minor cleanup issue after target {target}: {e}")
             pass
     
+    # Create global training summary aggregate
+    try:
+        from TRAINING.training_strategies.reproducibility.io import aggregate_training_summaries
+        aggregate_training_summaries(Path(output_dir))
+    except Exception as e:
+        logger.debug(f"Failed to create global training summary aggregate: {e}")
+    
     # Summary of family status (if family_status was defined)
     if 'family_status' in locals():
         failed_families = [f for f, s in family_status.items() if not s["saved"] and s["attempted"]]
@@ -2085,6 +2236,13 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         successful_families = [f for f, s in family_status.items() if s["saved"]]
         if successful_families:
             logger.info(f"✅ {len(successful_families)} families saved successfully: {successful_families}")
+    
+    # Create global training summary aggregate
+    try:
+        from TRAINING.training_strategies.reproducibility.io import aggregate_training_summaries
+        aggregate_training_summaries(Path(output_dir))
+    except Exception as e:
+        logger.debug(f"Failed to create global training summary aggregate: {e}")
     
     # Count and log saved models with detailed summary
     # CRITICAL: Use consistent counting logic (single source of truth)

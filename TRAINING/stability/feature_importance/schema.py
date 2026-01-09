@@ -446,12 +446,16 @@ class FeatureSelectionSnapshot:
         
         # Build comparison group from importance snapshot signatures (full parity with TR)
         comparison_group = {}
+        # experiment_id (if available from identity/context)
+        if hasattr(importance_snapshot, 'experiment_id') and importance_snapshot.experiment_id:
+            comparison_group["experiment_id"] = importance_snapshot.experiment_id
         if importance_snapshot.dataset_signature:
             comparison_group["dataset_signature"] = importance_snapshot.dataset_signature
         if importance_snapshot.split_signature:
             comparison_group["split_signature"] = importance_snapshot.split_signature
         if importance_snapshot.target_signature:
             comparison_group["target_signature"] = importance_snapshot.target_signature
+            comparison_group["task_signature"] = importance_snapshot.target_signature  # Alias for parity
         if importance_snapshot.routing_signature:
             comparison_group["routing_signature"] = importance_snapshot.routing_signature
         if importance_snapshot.hparams_signature:
@@ -460,6 +464,11 @@ class FeatureSelectionSnapshot:
             comparison_group["train_seed"] = importance_snapshot.train_seed
         if importance_snapshot.universe_sig:
             comparison_group["universe_sig"] = importance_snapshot.universe_sig
+        if importance_snapshot.feature_signature:
+            comparison_group["feature_signature"] = importance_snapshot.feature_signature
+        # library_versions_signature (if available from identity/context)
+        if hasattr(importance_snapshot, 'library_versions_signature') and importance_snapshot.library_versions_signature:
+            comparison_group["library_versions_signature"] = importance_snapshot.library_versions_signature
         # Additional fields for full parity
         if n_effective is not None:
             comparison_group["n_effective"] = n_effective

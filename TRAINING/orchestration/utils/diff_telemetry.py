@@ -297,6 +297,9 @@ class DiffTelemetry:
             target=data.get('target'),
             symbol=data.get('symbol'),
             snapshot_seq=data.get('snapshot_seq'),  # May be None for old snapshots
+            fingerprint_schema_version=data.get('fingerprint_schema_version', '1.0'),  # Default for old snapshots
+            metrics_schema_version=data.get('metrics_schema_version', '1.0'),  # Default to 1.0 for old snapshots
+            scoring_schema_version=data.get('scoring_schema_version', '1.0'),  # Default to 1.0 for old snapshots
             config_fingerprint=data.get('config_fingerprint'),
             data_fingerprint=data.get('data_fingerprint'),
             feature_fingerprint=data.get('feature_fingerprint'),
@@ -783,6 +786,31 @@ class DiffTelemetry:
                 "hash over row_id→fold_id mapping"
             )
         
+        # Extract schema versions from metrics (for full parity with TrainingSnapshot/FeatureSelectionSnapshot)
+        metrics_schema_version = "1.1"  # Default to current version
+        scoring_schema_version = "1.1"  # Default to current version
+        
+        # Try to extract from outputs.metrics first (most common)
+        if outputs.get('metrics'):
+            metrics_schema_version = outputs['metrics'].get('metrics_schema_version', metrics_schema_version)
+            scoring_schema_version = outputs['metrics'].get('scoring_schema_version', scoring_schema_version)
+        
+        # Fallback to run_data metrics
+        if metrics_schema_version == "1.1" and run_data.get('metrics'):
+            metrics_schema_version = run_data['metrics'].get('metrics_schema_version', metrics_schema_version)
+            scoring_schema_version = run_data['metrics'].get('scoring_schema_version', scoring_schema_version)
+        
+        # Fallback to additional_data metrics
+        if metrics_schema_version == "1.1" and additional_data and additional_data.get('metrics'):
+            metrics_schema_version = additional_data['metrics'].get('metrics_schema_version', metrics_schema_version)
+            scoring_schema_version = additional_data['metrics'].get('scoring_schema_version', scoring_schema_version)
+        
+        # Ensure string type and valid defaults
+        if not isinstance(metrics_schema_version, str):
+            metrics_schema_version = "1.1"
+        if not isinstance(scoring_schema_version, str):
+            scoring_schema_version = "1.1"
+        
         return NormalizedSnapshot(
             run_id=run_id,
             timestamp=timestamp,
@@ -801,7 +829,9 @@ class DiffTelemetry:
             inputs=inputs,
             process=process,
             outputs=outputs,
-            comparison_group=comparison_group
+            comparison_group=comparison_group,
+            metrics_schema_version=metrics_schema_version,
+            scoring_schema_version=scoring_schema_version
         )
     
     def _compute_config_fingerprint_from_context(
@@ -1723,13 +1753,15 @@ class DiffTelemetry:
                     df_metrics = pd.read_parquet(metrics_parquet)
                     if len(df_metrics) > 0:
                         metrics_dict = df_metrics.iloc[0].to_dict()
-                        # Extract all numeric metrics (exclude metadata fields)
+                        # Extract all numeric metrics (exclude metadata fields, but preserve schema versions)
                         metrics_data = {
                             k: v for k, v in metrics_dict.items()
                             if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode', 
                                        'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                        'composite_version', 'leakage', 'leakage_flag']
-                            and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
+                            and (isinstance(v, (int, float, str)) or (isinstance(v, (list, dict)) and v))
+                            # Preserve schema versions (strings)
+                            or k in ['metrics_schema_version', 'scoring_schema_version']
                         }
                         logger.debug(f"✅ Loaded metrics from canonical parquet: {metrics_parquet}")
                 except Exception as e:
@@ -1742,13 +1774,15 @@ class DiffTelemetry:
                     try:
                         with open(metrics_json_file, 'r') as f:
                             metrics_json = json.load(f)
-                        # Extract all numeric metrics (exclude metadata fields)
+                        # Extract all numeric metrics (exclude metadata fields, but preserve schema versions)
                         metrics_data = {
                             k: v for k, v in metrics_json.items()
                             if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
                                        'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                        'composite_version', 'leakage', 'leakage_flag']
-                            and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
+                            and (isinstance(v, (int, float, str)) or (isinstance(v, (list, dict)) and v))
+                            # Preserve schema versions (strings)
+                            or k in ['metrics_schema_version', 'scoring_schema_version']
                         }
                         logger.debug(f"✅ Loaded metrics from JSON: {metrics_json_file}")
                     except Exception as e:
@@ -1802,7 +1836,9 @@ class DiffTelemetry:
                                                 if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
                                                            'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                                            'composite_version', 'leakage', 'leakage_flag']
-                                                and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
+                                                and (isinstance(v, (int, float, str)) or (isinstance(v, (list, dict)) and v))
+                                                # Preserve schema versions (strings)
+                                                or k in ['metrics_schema_version', 'scoring_schema_version']
                                             }
                                             if metrics_data:
                                                 break
@@ -1817,7 +1853,9 @@ class DiffTelemetry:
                                             if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
                                                        'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                                        'composite_version', 'leakage', 'leakage_flag']
-                                            and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
+                                            and (isinstance(v, (int, float, str)) or (isinstance(v, (list, dict)) and v))
+                                            # Preserve schema versions (strings)
+                                            or k in ['metrics_schema_version', 'scoring_schema_version']
                                         }
                                         if metrics_data:
                                             break
@@ -3035,7 +3073,9 @@ class DiffTelemetry:
                                                 if k not in ['diff_telemetry', 'run_id', 'timestamp', 'reproducibility_mode',
                                                            'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                                            'composite_version', 'leakage', 'leakage_flag']
-                                                and (isinstance(v, (int, float)) or (isinstance(v, (list, dict)) and v))
+                                                and (isinstance(v, (int, float, str)) or (isinstance(v, (list, dict)) and v))
+                                                # Preserve schema versions (strings)
+                                                or k in ['metrics_schema_version', 'scoring_schema_version']
                                             }
                                             # Update snapshot's outputs.metrics
                                             if metrics_data:
@@ -3048,6 +3088,33 @@ class DiffTelemetry:
                             continue
         
         return snapshot  # Return original if we couldn't find/reload
+    
+    def _flatten_metrics_dict(self, metrics: Dict[str, Any], prefix: str = "") -> Dict[str, Any]:
+        """
+        Recursively flatten nested metrics dict, preserving dot-notation keys.
+        
+        Handles both old flat structure and new grouped structure.
+        
+        Args:
+            metrics: Metrics dict (may be nested)
+            prefix: Prefix for keys (for recursion)
+        
+        Returns:
+            Flattened dict with dot-notation keys
+        """
+        flattened = {}
+        for key, value in metrics.items():
+            full_key = f"{prefix}.{key}" if prefix else key
+            if isinstance(value, dict):
+                # Recursively flatten nested dicts
+                flattened.update(self._flatten_metrics_dict(value, full_key))
+            elif isinstance(value, (int, float, str, bool, type(None))):
+                # Primitive value - add to flattened dict
+                flattened[full_key] = value
+            elif isinstance(value, list):
+                # Lists are kept as-is (for now)
+                flattened[full_key] = value
+        return flattened
     
     def _compute_metric_deltas(
         self,
@@ -3079,14 +3146,40 @@ class DiffTelemetry:
         deltas = {}
         total_compared = 0
         
-        prev_metrics = prev_outputs.get('metrics', {})
-        current_metrics = current_outputs.get('metrics', {})
+        prev_metrics_raw = prev_outputs.get('metrics', {})
+        current_metrics_raw = current_outputs.get('metrics', {})
         
-        # Get context for z-score computation (std_score, n_models)
-        prev_std_score = prev_metrics.get('std_score')
-        prev_n_models = prev_metrics.get('n_models')
-        curr_std_score = current_metrics.get('std_score')
-        curr_n_models = current_metrics.get('n_models')
+        # Flatten nested metrics structures (handles both old flat and new grouped)
+        prev_metrics = self._flatten_metrics_dict(prev_metrics_raw)
+        current_metrics = self._flatten_metrics_dict(current_metrics_raw)
+        
+        # Map old flat keys to new paths for backward compatibility
+        # This allows old snapshots to work with new code
+        OLD_TO_NEW_MAP = {
+            'auc': 'primary_metric.mean',
+            'std_score': 'primary_metric.std',
+            'n_models': 'models.n',
+            'composite_score': 'score.composite',
+            'mean_importance': 'score.components.mean_importance',
+            'consistency': 'score.components.consistency_penalty',
+            'n_cs_valid': 'coverage.n_cs_valid',
+            'n_cs_total': 'coverage.n_cs_total',
+            'n_features_pre': 'features.pre',
+            'n_features_post_prune': 'features.post_prune',
+        }
+        
+        # Apply backward compatibility mapping (if old key exists and new key doesn't)
+        for old_key, new_key in OLD_TO_NEW_MAP.items():
+            if old_key in prev_metrics and new_key not in prev_metrics:
+                prev_metrics[new_key] = prev_metrics[old_key]
+            if old_key in current_metrics and new_key not in current_metrics:
+                current_metrics[new_key] = current_metrics[old_key]
+        
+        # Get context for z-score computation (try new paths first, fall back to old)
+        prev_std_score = prev_metrics.get('primary_metric.std') or prev_metrics.get('primary_metric.skill_se') or prev_metrics.get('std_score')
+        prev_n_models = prev_metrics.get('models.n') or prev_metrics.get('n_models')
+        curr_std_score = current_metrics.get('primary_metric.std') or current_metrics.get('primary_metric.skill_se') or current_metrics.get('std_score')
+        curr_n_models = current_metrics.get('models.n') or current_metrics.get('n_models')
         
         # Use average std_score and n_models for z-score computation
         avg_std_score = None
@@ -3112,7 +3205,13 @@ class DiffTelemetry:
         
         # Define tolerances (metric-dependent defaults)
         # For score-like metrics, use tighter tolerances
-        score_metrics = {'auc', 'composite_score', 'std_score'}
+        # Include both old flat keys and new nested paths
+        score_metrics = {
+            'auc', 'composite_score', 'std_score',  # Old flat keys
+            'primary_metric.mean', 'primary_metric.skill_mean',  # New nested paths
+            'score.composite',  # New nested path
+            'primary_metric.std', 'primary_metric.skill_se',  # New nested paths
+        }
         abs_tol_default = 1e-4  # Default absolute tolerance
         rel_tol_default = 1e-4  # Default relative tolerance (0.01%)
         
@@ -4821,4 +4920,348 @@ class DiffTelemetry:
                 logger.warning(f"   ⚠️  Excluded factors changed: {diff.summary['excluded_factors_summary']}")
         
         return diff_telemetry_data
+    
+    def get_run_hash_with_changes(
+        self,
+        run_id: Optional[str] = None,
+        prev_run_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get run hash with change detection for this run.
+        
+        Args:
+            run_id: Optional run ID to filter snapshots
+            prev_run_id: Optional previous run ID for change detection
+        
+        Returns:
+            Dict with run_hash, run_id, changes summary, or None if no snapshots found
+        """
+        return compute_run_hash_with_changes(
+            output_dir=self.output_dir,
+            run_id=run_id,
+            prev_run_id=prev_run_id,
+            diff_telemetry=self
+        )
+
+
+def compute_full_run_hash(output_dir: Path, run_id: Optional[str] = None) -> Optional[str]:
+    """
+    Compute deterministic hash of entire run across all stages.
+    
+    This hash represents the full state of a run and can be used for:
+    - Run comparison (same hash = identical run)
+    - Run deduplication
+    - Reproducibility verification
+    
+    Args:
+        output_dir: Base output directory (should contain globals/)
+        run_id: Optional run_id to filter snapshots
+    
+    Returns:
+        16-character hex digest of run hash, or None if no snapshots found
+    """
+    import hashlib
+    import json
+    from pathlib import Path
+    
+    globals_dir = output_dir / "globals"
+    if not globals_dir.exists():
+        return None
+    
+    # Load all snapshot indices
+    snapshot_indices = {}
+    for index_file in ["snapshot_index.json", "fs_snapshot_index.json", "training_snapshot_index.json"]:
+        index_path = globals_dir / index_file
+        if index_path.exists():
+            try:
+                with open(index_path, 'r') as f:
+                    snapshot_indices[index_file] = json.load(f)
+            except Exception:
+                continue
+    
+    if not snapshot_indices:
+        return None
+    
+    # Extract deterministic fields from all snapshots
+    run_state = []
+    
+    for index_name, index_data in snapshot_indices.items():
+        for key, snapshot in index_data.items():
+            # Filter by run_id if provided
+            if run_id and snapshot.get('run_id') != run_id:
+                continue
+            
+            # Extract deterministic fields only (exclude run_id, timestamp, snapshot_seq)
+            deterministic = {
+                'stage': snapshot.get('stage'),
+                'target': snapshot.get('target'),
+                'view': snapshot.get('view'),
+                'symbol': snapshot.get('symbol'),
+                'model_family': snapshot.get('model_family'),
+                # Fingerprints
+                'config_fingerprint': snapshot.get('config_fingerprint'),
+                'data_fingerprint': snapshot.get('data_fingerprint'),
+                'feature_fingerprint': snapshot.get('feature_fingerprint'),
+                'target_fingerprint': snapshot.get('target_fingerprint'),
+                # Signatures
+                'scoring_signature': snapshot.get('scoring_signature'),
+                'selection_signature': snapshot.get('selection_signature'),
+                'hyperparameters_signature': snapshot.get('hyperparameters_signature'),
+                'library_versions_signature': snapshot.get('library_versions_signature'),
+                # Output digests
+                'metrics_sha256': snapshot.get('metrics_sha256'),
+                'artifacts_manifest_sha256': snapshot.get('artifacts_manifest_sha256'),
+                'predictions_sha256': snapshot.get('predictions_sha256'),
+                # Schema versions
+                'metrics_schema_version': snapshot.get('metrics_schema_version'),
+                'scoring_schema_version': snapshot.get('scoring_schema_version'),
+            }
+            
+            # Add comparison_group key fields if available
+            if 'comparison_group' in snapshot:
+                cg = snapshot['comparison_group']
+                deterministic['comparison_group'] = {
+                    'task_signature': cg.get('task_signature'),
+                    'feature_signature': cg.get('feature_signature'),
+                    'split_signature': cg.get('split_signature'),
+                    'n_effective': cg.get('n_effective'),
+                    'dataset_signature': cg.get('dataset_signature'),
+                    'routing_signature': cg.get('routing_signature'),
+                }
+            
+            run_state.append(deterministic)
+    
+    # Sort for deterministic ordering
+    run_state.sort(key=lambda x: (
+        x.get('stage', ''),
+        x.get('target', ''),
+        x.get('view', ''),
+        x.get('symbol', ''),
+        x.get('model_family', ''),
+    ))
+    
+    # Compute hash
+    canonical_json = json.dumps(run_state, sort_keys=True)
+    full_hash = hashlib.sha256(canonical_json.encode()).hexdigest()
+    return full_hash[:16]  # Return 16-char digest
+
+
+def compute_run_hash_with_changes(
+    output_dir: Path,
+    run_id: Optional[str] = None,
+    prev_run_id: Optional[str] = None,
+    diff_telemetry: Optional['DiffTelemetry'] = None
+) -> Optional[Dict[str, Any]]:
+    """
+    Compute run hash and aggregate change information.
+    
+    Args:
+        output_dir: Base output directory
+        run_id: Current run ID
+        prev_run_id: Previous run ID for change detection
+        diff_telemetry: Optional DiffTelemetry instance for computing diffs
+    
+    Returns:
+        Dict with run_hash, run_id, changes summary, or None if no snapshots found
+    """
+    import json
+    from pathlib import Path
+    
+    # Compute base run hash
+    run_hash = compute_full_run_hash(output_dir, run_id)
+    if run_hash is None:
+        return None
+    
+    # Count snapshots
+    globals_dir = output_dir / "globals"
+    snapshot_count = 0
+    for index_file in ["snapshot_index.json", "fs_snapshot_index.json", "training_snapshot_index.json"]:
+        index_path = globals_dir / index_file
+        if index_path.exists():
+            try:
+                with open(index_path, 'r') as f:
+                    index_data = json.load(f)
+                    if run_id:
+                        snapshot_count += sum(1 for s in index_data.values() if s.get('run_id') == run_id)
+                    else:
+                        snapshot_count += len(index_data)
+            except Exception:
+                continue
+    
+    # If previous run exists, compute changes
+    changes = None
+    if prev_run_id and diff_telemetry:
+        try:
+            # Load previous run hash file
+            prev_hash_file = globals_dir / "run_hash.json"
+            prev_run_hash = None
+            if prev_hash_file.exists():
+                try:
+                    with open(prev_hash_file, 'r') as f:
+                        prev_data = json.load(f)
+                        if prev_data.get('run_id') == prev_run_id:
+                            prev_run_hash = prev_data.get('run_hash')
+                except Exception:
+                    pass
+            
+            # Aggregate change information from all snapshots
+            changed_snapshots = []
+            changed_keys_summary = []
+            severity_levels = []
+            metric_deltas_summary = {'noise': 0, 'minor': 0, 'major': 0, 'none': 0}
+            excluded_factors_summary = {}
+            
+            # Load all snapshot indices
+            snapshot_indices = {}
+            for index_file in ["snapshot_index.json", "fs_snapshot_index.json", "training_snapshot_index.json"]:
+                index_path = globals_dir / index_file
+                if index_path.exists():
+                    try:
+                        with open(index_path, 'r') as f:
+                            snapshot_indices[index_file] = json.load(f)
+                    except Exception:
+                        continue
+            
+            # Compute diffs for all snapshots
+            for index_name, index_data in snapshot_indices.items():
+                for key, snapshot in index_data.items():
+                    # Only process current run snapshots
+                    if snapshot.get('run_id') != run_id:
+                        continue
+                    
+                    # Try to find previous snapshot for comparison
+                    # Look for snapshot with same comparison_group key
+                    prev_snapshot_data = None
+                    for prev_key, prev_snap in index_data.items():
+                        if prev_snap.get('run_id') == prev_run_id:
+                            # Check if comparison groups match
+                            cg_curr = snapshot.get('comparison_group', {})
+                            cg_prev = prev_snap.get('comparison_group', {})
+                            if cg_curr and cg_prev:
+                                # Compare key fields
+                                if (cg_curr.get('task_signature') == cg_prev.get('task_signature') and
+                                    cg_curr.get('feature_signature') == cg_prev.get('feature_signature') and
+                                    cg_curr.get('split_signature') == cg_prev.get('split_signature') and
+                                    cg_curr.get('n_effective') == cg_prev.get('n_effective') and
+                                    cg_curr.get('model_family') == cg_prev.get('model_family') and
+                                    cg_curr.get('symbol') == cg_prev.get('symbol')):
+                                    prev_snapshot_data = prev_snap
+                                    break
+                    
+                    if prev_snapshot_data:
+                        # Normalize snapshots and compute diff
+                        try:
+                            from TRAINING.orchestration.utils.diff_telemetry.types import NormalizedSnapshot
+                            curr_norm = NormalizedSnapshot.from_dict(snapshot)
+                            prev_norm = NormalizedSnapshot.from_dict(prev_snapshot_data)
+                            
+                            diff_result = diff_telemetry.compute_diff(curr_norm, prev_norm)
+                            
+                            if diff_result.comparable and (diff_result.changed_keys or diff_result.metric_deltas):
+                                changed_snapshots.append({
+                                    'stage': snapshot.get('stage'),
+                                    'target': snapshot.get('target'),
+                                    'view': snapshot.get('view'),
+                                    'symbol': snapshot.get('symbol'),
+                                    'model_family': snapshot.get('model_family'),
+                                    'severity': diff_result.severity.value,
+                                    'changed_keys_count': len(diff_result.changed_keys),
+                                    'metric_deltas_count': len(diff_result.metric_deltas),
+                                })
+                                
+                                changed_keys_summary.extend(diff_result.changed_keys)
+                                severity_levels.append(diff_result.severity.value)
+                                
+                                # Aggregate metric deltas by severity
+                                for metric, delta in diff_result.metric_deltas.items():
+                                    impact = delta.get('impact_label', 'none')
+                                    metric_deltas_summary[impact] = metric_deltas_summary.get(impact, 0) + 1
+                                
+                                # Aggregate excluded factors
+                                if diff_result.excluded_factors_changed:
+                                    for factor, value in diff_result.excluded_factors_changed.items():
+                                        if factor not in excluded_factors_summary:
+                                            excluded_factors_summary[factor] = 0
+                                        excluded_factors_summary[factor] += 1
+                        except Exception as e:
+                            logger.debug(f"Failed to compute diff for snapshot {key}: {e}")
+            
+            # Determine highest severity
+            severity_summary = 'none'
+            if 'critical' in severity_levels:
+                severity_summary = 'critical'
+            elif 'major' in severity_levels:
+                severity_summary = 'major'
+            elif 'minor' in severity_levels:
+                severity_summary = 'minor'
+            elif 'noise' in severity_levels:
+                severity_summary = 'noise'
+            
+            changes = {
+                'changed_snapshots': changed_snapshots,
+                'changed_keys_summary': sorted(set(changed_keys_summary)),  # Unique, sorted
+                'severity_summary': severity_summary,
+                'metric_deltas_summary': metric_deltas_summary,
+                'excluded_factors_summary': excluded_factors_summary,
+            }
+        except Exception as e:
+            logger.warning(f"Failed to compute run changes: {e}")
+            changes = None
+    
+    return {
+        'run_hash': run_hash,
+        'run_id': run_id,
+        'prev_run_id': prev_run_id,
+        'changes': changes,
+        'snapshot_count': snapshot_count,
+    }
+
+
+def save_run_hash(
+    output_dir: Path,
+    run_id: Optional[str] = None,
+    prev_run_id: Optional[str] = None,
+    diff_telemetry: Optional['DiffTelemetry'] = None
+) -> Optional[Path]:
+    """
+    Compute and save run hash with changes to globals/run_hash.json.
+    
+    Args:
+        output_dir: Base output directory
+        run_id: Current run ID
+        prev_run_id: Previous run ID for change detection
+        diff_telemetry: Optional DiffTelemetry instance
+    
+    Returns:
+        Path to run_hash.json if saved successfully, None otherwise
+    """
+    try:
+        run_hash_data = compute_run_hash_with_changes(
+            output_dir=output_dir,
+            run_id=run_id,
+            prev_run_id=prev_run_id,
+            diff_telemetry=diff_telemetry
+        )
+        
+        if run_hash_data is None:
+            return None
+        
+        globals_dir = output_dir / "globals"
+        globals_dir.mkdir(parents=True, exist_ok=True)
+        run_hash_file = globals_dir / "run_hash.json"
+        
+        # Add timestamp
+        run_hash_data['computed_at'] = datetime.now().isoformat()
+        
+        # Write atomically
+        _write_atomic_json(run_hash_file, run_hash_data)
+        
+        logger.info(f"✅ Saved run hash: {run_hash_data['run_hash']} ({run_hash_data['snapshot_count']} snapshots)")
+        if run_hash_data.get('changes'):
+            logger.info(f"   Changes detected: {run_hash_data['changes']['severity_summary']} severity, {len(run_hash_data['changes']['changed_snapshots'])} snapshots changed")
+        
+        return run_hash_file
+    except Exception as e:
+        logger.warning(f"Failed to save run hash: {e}")
+        return None
 

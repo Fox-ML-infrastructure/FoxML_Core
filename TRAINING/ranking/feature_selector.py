@@ -2365,17 +2365,45 @@ def select_features_for_target(
                         universe_sig=universe_sig_for_ctx  # FIX: Pass universe_sig for proper scope tracking
                     )
                 
-                # Build metrics dict
-                metrics_dict = {
-                    "metric_name": "Consensus Score",
-                    "auc": mean_consensus,
-                    "std_score": std_consensus,
-                    "mean_importance": top_feature_score,
-                    "composite_score": mean_consensus,
-                    "n_features_selected": n_features_selected,
-                    "n_successful_families": n_successful_families,
-                    "n_selected": n_features_selected  # For trend analyzer
-                }
+                # Build clean, grouped metrics dict for feature selection
+                from TRAINING.ranking.predictability.metrics_schema import build_clean_feature_selection_metrics
+                from TRAINING.common.utils.task_types import TaskType
+                
+                # Determine task type if available from context
+                task_type = None
+                if 'target_config' in locals() and target_config:
+                    try:
+                        from TRAINING.orchestration.routing.target_router import get_task_spec
+                        task_spec = get_task_spec(target_column, target_config)
+                        if task_spec:
+                            task_type = task_spec.task_type
+                    except Exception:
+                        pass
+                
+                # Get selection info if available
+                selection_mode = None
+                selection_params = None
+                n_candidates = None
+                if 'selection_config' in locals() and selection_config:
+                    selection_mode = selection_config.get('mode', 'rank_only')
+                    selection_params = selection_config.get('params', {})
+                    n_candidates = selection_config.get('n_candidates')
+                
+                metrics_dict = build_clean_feature_selection_metrics(
+                    mean_consensus=mean_consensus,
+                    std_consensus=std_consensus,
+                    top_feature_score=top_feature_score,
+                    n_features_selected=n_features_selected,
+                    n_successful_families=n_successful_families,
+                    n_candidates=n_candidates,
+                    selection_mode=selection_mode,
+                    selection_params=selection_params,
+                    task_type=task_type,
+                    view=view if 'view' in locals() else None,
+                )
+                
+                # Add metadata field for backward compatibility
+                metrics_dict["metric_name"] = "Consensus Score"
                 
                 # Use automated log_run API (includes trend analysis)
                 # FIX: Pass RunContext to log_run (required for COHORT_AWARE mode)

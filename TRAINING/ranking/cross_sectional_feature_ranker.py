@@ -472,20 +472,40 @@ def compute_cross_sectional_importance(
                 universe_sig=universe_sig  # FIX: Pass universe_sig for proper scope tracking
             )
             
-            # Build metrics dict
+            # Build clean, grouped metrics dict for cross-sectional feature ranking
+            from TRAINING.ranking.predictability.metrics_schema import build_clean_feature_selection_metrics
+            from TRAINING.common.utils.task_types import TaskType
+            
             top_cs_score = cs_importance.max() if len(cs_importance) > 0 else 0.0
             mean_cs_score = cs_importance.mean() if len(cs_importance) > 0 else 0.0
             std_cs_score = cs_importance.std() if len(cs_importance) > 0 else 0.0
             
-            metrics_dict = {
-                "metric_name": "CS Importance Score",
-                "auc": mean_cs_score,
-                "std_score": std_cs_score,
-                "mean_importance": top_cs_score,
-                "composite_score": mean_cs_score,
-                "n_features_evaluated": len(candidate_features),
-                "n_selected": len(candidate_features)  # All candidates are "selected" for CS ranking
-            }
+            # Determine task type if available
+            task_type = None
+            if 'target_config' in locals() and target_config:
+                try:
+                    from TRAINING.orchestration.routing.target_router import get_task_spec
+                    task_spec = get_task_spec(target_column, target_config)
+                    if task_spec:
+                        task_type = task_spec.task_type
+                except Exception:
+                    pass
+            
+            metrics_dict = build_clean_feature_selection_metrics(
+                mean_consensus=mean_cs_score,
+                std_consensus=std_cs_score,
+                top_feature_score=top_cs_score,
+                n_features_selected=len(candidate_features),  # All candidates are "selected" for CS ranking
+                n_successful_families=1,  # CS ranking is single-method
+                n_candidates=len(candidate_features),
+                selection_mode="rank_only",  # CS ranking doesn't actually select
+                selection_params={},
+                task_type=task_type,
+                view="CROSS_SECTIONAL",
+            )
+            
+            # Add metadata field for backward compatibility
+            metrics_dict["metric_name"] = "CS Importance Score"
             
             # Use automated log_run API (includes trend analysis)
             audit_result = tracker.log_run(

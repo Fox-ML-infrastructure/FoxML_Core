@@ -7729,71 +7729,49 @@ def evaluate_target_predictability(
                 # FIX: Remove redundancy - use n_features_post_prune (more descriptive) and drop features_final
                 n_features_final = len(feature_names) if 'feature_names' in locals() and feature_names else None
                 
-                # Get canonical metric names for this task/view combination
-                # Phase 3.1: Use centered primary_metric_mean instead of raw auc
-                from TRAINING.ranking.predictability.metrics_schema import get_canonical_metric_names_for_output
-                primary_value = result.primary_metric_mean if result.primary_metric_mean is not None else result.auc
-                primary_std_value = result.primary_metric_std if result.primary_metric_std is not None else result.std_score
-                canonical_metrics = get_canonical_metric_names_for_output(
-                    result.task_type, result.view, primary_value, primary_std_value
-                )
+                # Build clean, grouped metrics dict (replaces flat, duplicate-heavy structure)
+                from TRAINING.ranking.predictability.metrics_schema import build_clean_metrics_dict, compute_target_stats
                 
-                # Start with base metrics - includes canonical names + deprecated legacy names
-                metrics_dict = {
-                    "metric_name": metric_name,
-                    "view": result.view,
-                    "task_type": result.task_type.name if hasattr(result.task_type, 'name') else str(result.task_type),
-                    # Canonical metric names (new, unambiguous)
-                    **canonical_metrics,
-                    # Additional metrics
-                    "mean_importance": result.mean_importance,
-                    "composite_score": result.composite_score,
-                    "n_models": result.n_models,
-                    # Regression features: feature counts
-                    "n_features_pre": features_safe if 'features_safe' in locals() else None,
-                    "n_features_post_prune": n_features_final,  # Final feature count after pruning
-                    "features_safe": features_safe if 'features_safe' in locals() else None,  # Count of safe features before pruning
-                }
-                
-                # Add composite score definition and version
-                if result.composite_definition:
-                    metrics_dict["composite_definition"] = result.composite_definition
-                if result.composite_version:
-                    metrics_dict["composite_version"] = result.composite_version
-                
-                # Add fold scores and distributional stats if available
-                if result.fold_scores and len(result.fold_scores) > 0:
-                    import numpy as np
-                    valid_scores = [s for s in result.fold_scores if s is not None and not (isinstance(s, float) and np.isnan(s))]
-                    if valid_scores:
-                        metrics_dict["fold_scores"] = [float(s) for s in valid_scores]
-                        metrics_dict["min_score"] = float(np.min(valid_scores))
-                        metrics_dict["max_score"] = float(np.max(valid_scores))
-                        metrics_dict["median_score"] = float(np.median(valid_scores))
-                
-                # Add enhanced leakage info (use to_dict to get the structured format)
-                # Phase 3.1: Enable task-aware field filtering (exclude task-irrelevant fields)
-                result_dict = result.to_dict(filter_task_irrelevant=True)
-                if 'leakage' in result_dict:
-                    metrics_dict['leakage'] = result_dict['leakage']
-                # Also include legacy leakage_flag for backward compatibility
-                metrics_dict['leakage_flag'] = result.leakage_flag
-                
-                # Phase 3.1: Merge all Phase 3.1 fields from result.to_dict() into metrics_dict
-                # Exclude fields already in metrics_dict to avoid overwriting
-                exclude_fields = {'leakage', 'target', 'target_column', 'task_type', 'view', 'metric_name'}
-                for key, value in result_dict.items():
-                    if key not in exclude_fields and key not in metrics_dict:
-                        metrics_dict[key] = value
-                
-                # Add task-aware target stats (replaces unconditional pos_rate)
-                if 'y' in locals() and y is not None and 'result' in locals():
+                # Compute target stats (task-aware)
+                target_stats = None
+                if 'y' in locals() and y is not None:
                     try:
-                        from TRAINING.ranking.predictability.metrics_schema import compute_target_stats
                         target_stats = compute_target_stats(result.task_type, y)
-                        metrics_dict.update(target_stats)
+                        # Add n_effective if available (from cohort_metadata or computed)
+                        n_effective_value = None
+                        if 'cohort_metadata' in locals() and cohort_metadata:
+                            n_effective_value = cohort_metadata.get('n_effective_cs') or cohort_metadata.get('n_effective')
+                        if n_effective_value is None and 'n_effective' in locals():
+                            n_effective_value = n_effective
+                        if n_effective_value is not None:
+                            target_stats['n_effective'] = int(n_effective_value)
                     except Exception as e:
                         logger.debug(f"Failed to compute target stats: {e}")
+                
+                # Get leakage info from result
+                leakage_info = None
+                result_dict = result.to_dict(filter_task_irrelevant=True)
+                if 'leakage' in result_dict:
+                    leakage_info = result_dict['leakage']
+                
+                # Get fold timestamps if available
+                fold_timestamps = result.fold_timestamps if hasattr(result, 'fold_timestamps') and result.fold_timestamps else None
+                
+                # Build clean metrics using new structured format
+                metrics_dict = build_clean_metrics_dict(
+                    result=result,
+                    target_stats=target_stats,
+                    n_features_pre=features_safe if 'features_safe' in locals() else None,
+                    n_features_post_prune=n_features_final,
+                    features_safe=features_safe if 'features_safe' in locals() else None,
+                    fold_timestamps=fold_timestamps,
+                    leakage_info=leakage_info,
+                )
+                
+                # Add metadata fields that MetricsWriter expects (these are added by MetricsWriter, but include for completeness)
+                # Note: run_id, timestamp, reproducibility_mode, stage are added by MetricsWriter
+                # We keep metric_name for backward compatibility in some contexts
+                metrics_dict["metric_name"] = metric_name
                 
                 # Add view and symbol to RunContext if available (for dual-view target ranking)
                 if 'view' in locals():
