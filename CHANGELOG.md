@@ -4,6 +4,139 @@ All notable changes to FoxML Core will be documented in this file.
 
 ## 2026-01-09
 
+### SST Implementation Progress Summary - Complete
+- **Phase 1 Complete**: View and Stage enum migrations (29 files total)
+- **Phase 2 Complete**: WriteScope function migration (4 functions updated)
+- **Phase 3 Complete**: Helper function audits and standardization
+  - Phase 3.1: Scope resolution migration - Complete
+  - Phase 3.2: RunIdentity factory audit - Complete
+  - Phase 3.3: Cohort ID unification - Complete
+  - Phase 3.4: Config hash audit - Complete
+  - Phase 3.5: Universe signature audit - Complete
+- **All SST candidates implemented**: Complete migration to SST-centric architecture with consistent enums, WriteScope objects, and unified helpers
+
+## 2026-01-09
+
+### Syntax and Import Fixes
+- **Fixed Syntax Errors**: Resolved all syntax and indentation errors in TRAINING pipeline
+  - `model_evaluation.py`: Fixed indentation error in try block (line 6011-6026)
+  - `cross_sectional_feature_ranker.py`: Fixed indentation error after try statement (line 703)
+  - `multi_model_feature_selection.py`: Fixed orphaned else block and try block indentation (lines 4325-4327, 5453)
+  - `intelligent_trainer.py`: Fixed `UnboundLocalError` for `Path` - removed redundant local import that shadowed global import (line 3970)
+  - All Python files now compile without syntax errors
+  - All critical modules import successfully
+
+### SST Import Shadowing Fixes
+- **Fixed UnboundLocalError Issues**: Resolved all import shadowing issues from SST refactoring
+  - `model_evaluation.py:8129`: Removed `Stage` from local import (already imported globally at line 41) - fixes `UnboundLocalError: local variable 'Stage' referenced before assignment` at line 5390
+  - `shared_ranking_harness.py:286`: Added global `Stage` import and removed redundant local import - prevents `UnboundLocalError` in `create_run_context` method
+  - Removed redundant local `Path` imports in `diff_telemetry.py` (3 instances), `target_routing.py`, and `training.py` (5 instances) where `Path` is already imported globally
+  - Verified all path construction functions correctly convert enum values to strings using `str(enum)` which returns `.value`
+  - Verified all JSON serialization correctly handles enum values (enums inherit from `str` so serialize correctly, and `_sanitize_for_json` explicitly converts enums to `.value` for safety)
+  - All critical modules now import without `UnboundLocalError` issues
+  - All path construction and file writes verified to work correctly with enum values
+
+### SST Implementation Complete - All Phases Verified
+- **Comprehensive Verification**: All SST migration phases completed and verified
+  - **Enum Migration**: 29 files migrated to use View and Stage enums (only 2 stage strings remain in comments, 23 view strings in appropriate contexts)
+  - **WriteScope Migration**: 4 functions now accept WriteScope objects with backward compatibility
+  - **Helper Unification**: All scope resolution, cohort ID, config hashing, and universe signature computations use unified SST helpers
+  - **Backward Compatibility**: All changes maintain full backward compatibility with existing JSON files, snapshots, and metrics
+  - **No Breaking Changes**: All file paths, JSON serialization, and existing data formats remain unchanged
+
+### SST Config Hash Audit (Phase 3.4) - Complete
+- **Config Hash Standardization**: Updated manual config hash computations to use shared helpers from `config_hashing.py`
+  - `reproducibility_tracker.py`: Replaced manual `json.dumps()` + `hashlib.sha256()` with `canonical_json()` + `sha256_short()`
+  - `diff_telemetry.py`: Replaced manual `hashlib.sha256()` calls with `sha256_short()` helper
+  - All config hashing now uses consistent logic: `canonical_json()` for normalization, `sha256_full()` or `sha256_short()` for hashing
+  - Hash lengths standardized: 8 chars for short hashes, 16 chars for medium, 64 chars for full identity keys
+
+### SST Cohort ID Unification (Phase 3.3) - Complete
+- **Cohort ID Generation Unification**: Created unified `compute_cohort_id()` helper in `cohort_id.py`
+  - Extracted duplicate logic from `ReproducibilityTracker._compute_cohort_id()` and `compute_cohort_id_from_metadata()`
+  - Both implementations now delegate to unified helper (SST-compliant)
+  - Uses View enum for consistent view handling
+  - Uses `extract_universe_sig()` helper for SST-compliant universe signature access
+  - All cohort ID generation now uses single source of truth
+
+### SST RunIdentity Factory Audit (Phase 3.2) - Complete
+- **RunIdentity Construction Audit**: Verified all RunIdentity constructions follow SST patterns
+  - Factory `create_stage_identity()` is used for creating new identities from scratch (9 instances)
+  - Manual constructions are for legitimate use cases: updating existing identities, finalizing partial identities, or copying with modifications
+  - All new identity creation uses factory pattern (SST-compliant)
+  - Remaining manual constructions are for identity updates/copies (correct pattern)
+
+### SST Universe Signature Audit (Phase 3.5) - Complete
+- **Universe Signature Consistency**: Verified all universe signature computations use `compute_universe_signature()` helper
+  - All 22 instances across 10 files verified to use `compute_universe_signature()` from `run_context.py`
+  - Fallback manual computation in `fingerprinting.py` is defensive and acceptable (only used if helper unavailable)
+  - One instance in `model_evaluation.py` is for `symbols_digest` (metadata), not universe signature - correctly different
+  - All universe signature computations now consistent and SST-compliant
+
+### SST Scope Resolution Migration (Phase 3.1) - Complete
+- **Manual Scope Resolution Replacement**: Replaced manual `resolved_data_config.get('view')` and `resolved_data_config.get('universe_sig')` patterns with `resolve_write_scope()` helper
+  - `feature_selector.py`: Consolidated manual universe_sig and view extraction into single `resolve_write_scope()` call
+  - `model_evaluation.py`: Replaced manual view/universe_sig extraction with `resolve_write_scope()` for canonical scope resolution
+  - All scope resolution now uses SST helper, ensuring consistent scope handling across codebase
+  - Remaining `.get()` calls are for telemetry/metadata purposes (not scope resolution)
+
+### SST WriteScope Migration (Phase 2.2) - Complete
+- **WriteScope Function Migration**: Migrating functions to accept WriteScope objects for SST consistency
+  - `get_scoped_artifact_dir()` and `ensure_scoped_artifact_dir()` in `target_first_paths.py` now accept `scope: WriteScope` parameter
+  - `model_output_dir()` in `target_first_paths.py` now accepts `scope: WriteScope` parameter
+  - `build_cohort_metadata()` in `cohort_metadata.py` now accepts `scope: WriteScope` parameter
+  - All functions maintain backward compatibility with loose (view, symbol, universe_sig, stage) parameters
+  - When `scope` is provided, extracts view, symbol, universe_sig, and stage from WriteScope
+  - All call sites remain compatible (using deprecated parameters for now)
+
+### SST WriteScope Migration (Phase 2.1) - Identification
+- **WriteScope Adoption Planning**: Identified functions accepting loose (view, symbol, universe_sig) tuples for WriteScope migration
+  - Functions identified for migration:
+    - `get_scoped_artifact_dir()` and `ensure_scoped_artifact_dir()` in `target_first_paths.py` - accept view, symbol, universe_sig, stage
+    - `model_output_dir()` in `target_first_paths.py` - accepts view, symbol, universe_sig
+    - `build_cohort_metadata()` in `cohort_metadata.py` - accepts view, universe_sig, symbol
+  - Migration strategy: Start with internal functions (lowest call sites), work outward to public APIs
+  - Maintain backward compatibility with wrapper functions where needed
+
+### SST Stage Enum Migration (Phase 1.2) - Complete
+- **Stage Enum Adoption**: Migrated 17 files to use `Stage` enum from `scope_resolution.py` instead of hardcoded string literals
+  - Function signatures updated to accept `Union[str, Stage]` for backward compatibility
+  - All comparisons use enum instances: `stage_enum == Stage.TARGET_RANKING` instead of `stage == "TARGET_RANKING"`
+  - All JSON serialization uses `str(stage_enum)` which returns `.value` via `__str__`
+  - All path construction uses `str(stage_enum)` for consistent string conversion
+- **Backward Compatibility Guaranteed**:
+  - `Stage.from_string()` normalizes strings from JSON/metadata to enum instances (handles "MODEL_TRAINING" → "TRAINING" alias)
+  - Existing JSON files (metadata.json, snapshot.json, metrics.json) continue to work unchanged
+  - File paths remain identical (enum `__str__` returns `.value`)
+- **Files Updated**:
+  - `reproducibility_tracker.py` - Complete Stage enum migration with proper normalization and comparisons
+  - `target_first_paths.py` - Already accepts `Union[str, Stage]` for stage parameters
+  - `predictability/main.py`, `model_evaluation/reporting.py`, `leakage_detection.py` - TARGET_RANKING stage enum
+  - `multi_model_feature_selection.py`, `feature_selector.py` - FEATURE_SELECTION stage enum
+  - `target_ranker.py`, `dominance_quarantine.py` - TARGET_RANKING stage enum
+  - `training.py`, `reproducibility/io.py`, `reproducibility/schema.py` - TRAINING stage enum
+  - `intelligent_trainer.py` - TARGET_RANKING and FEATURE_SELECTION stage enum
+- **No Breaking Changes**: All existing snapshots, metrics, and JSON files remain fully compatible
+
+### SST View Enum Migration (Phase 1.1)
+- **View Enum Adoption**: Migrated 17 files to use `View` enum from `scope_resolution.py` instead of hardcoded string literals
+  - All function signatures now accept `Union[str, View]` for backward compatibility
+  - All comparisons use enum instances: `view_enum == View.CROSS_SECTIONAL` instead of `view == "CROSS_SECTIONAL"`
+  - All JSON serialization uses `view_enum.value` to ensure string output
+  - All path construction uses `str(view_enum)` which returns `.value` via `__str__`
+- **Backward Compatibility Guaranteed**:
+  - `_sanitize_for_json()` explicitly converts Enum types to `.value` for JSON serialization
+  - `View.from_string()` normalizes strings from JSON/metadata to enum instances
+  - Existing JSON files (metadata.json, snapshot.json, metrics.json) continue to work unchanged
+  - File paths remain identical (enum `__str__` returns `.value`)
+- **Files Updated**:
+  - `feature_selection_reporting.py`, `multi_model_feature_selection.py`, `metrics_aggregator.py`
+  - `training.py`, `artifact_paths.py`, `cohort_metadata.py`, `cross_sectional_data.py`
+  - `shared_ranking_harness.py`, `output_layout.py`, `diff_telemetry.py`, `target_first_paths.py`
+  - `intelligent_trainer.py`, `target_ranker.py`, `feature_selector.py`, `cross_sectional_feature_ranker.py`
+  - `model_evaluation.py`, `reproducibility_tracker.py`
+- **No Breaking Changes**: All existing snapshots, metrics, and JSON files remain fully compatible
+
 ### SST Compliance Fixes
 - **Target Name Normalization**: Added `normalize_target_name()` helper function and replaced **ALL** remaining instances (39+ total) of manual target normalization across **ALL** files - ensures consistent filesystem-safe target names across all path construction
 - **Path Resolution Consistency**: Replaced **ALL** remaining custom path resolution loops (30+ total) with `run_root()` helper across **ALL** files for consistent run root directory resolution

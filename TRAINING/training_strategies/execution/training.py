@@ -108,6 +108,7 @@ from TRAINING.training_strategies.utils import (
 )
 # train_model_comprehensive is defined in this file, not in utils
 from TRAINING.orchestration.routing.target_router import TaskSpec
+from TRAINING.orchestration.utils.scope_resolution import View, Stage
 from TRAINING.training_strategies.strategies.single_task import SingleTaskStrategy
 from TRAINING.training_strategies.strategies.multi_task import MultiTaskStrategy
 from TRAINING.training_strategies.strategies.cascade import CascadeStrategy
@@ -376,7 +377,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
             # (which should be rare - intelligent_trainer always provides it)
             symbols = list(mtf_data.keys()) if mtf_data else []
             effective_run_identity = create_stage_identity(
-                stage="TRAINING",
+                stage=Stage.TRAINING,
                 symbols=symbols,
                 experiment_config=experiment_config,
             )
@@ -465,7 +466,9 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                 continue
             
             # Extract features based on route from normalized structure
-            if route == 'CROSS_SECTIONAL':
+            # Normalize route to View enum for comparison
+            route_enum = View.from_string(route) if isinstance(route, str) else route
+            if route_enum == View.CROSS_SECTIONAL or route == View.CROSS_SECTIONAL.value:
                 # CRITICAL FIX: Respect routing plan - skip CS training if DISABLED
                 if cs_route_status == 'DISABLED':
                     logger.warning(
@@ -640,7 +643,9 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         logger.info(f"✅ Preflight [{target}]: {len(validated_families)} valid trainer families, {len(skipped_families)} selectors skipped, {len(invalid_families)} invalid")
         
         # Handle SYMBOL_SPECIFIC route separately (per-symbol training)
-        if route == 'SYMBOL_SPECIFIC' and isinstance(target_feat_data, dict):
+        # Normalize route to View enum for comparison
+        route_enum = View.from_string(route) if isinstance(route, str) else route
+        if (route_enum == View.SYMBOL_SPECIFIC or route == View.SYMBOL_SPECIFIC.value) and isinstance(target_feat_data, dict):
             # Train separate models for each symbol
             logger.info(f"🔄 Training per-symbol models for {target} ({len(target_feat_data)} symbols)")
             
@@ -659,12 +664,12 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                 if symbol_features and output_dir:
                     try:
                         from TRAINING.ranking.utils.dominance_quarantine import load_confirmed_quarantine
-                        from pathlib import Path
+                        # Path is already imported globally at line 6
                         output_dir_path = Path(output_dir) if not isinstance(output_dir, Path) else output_dir
                         runtime_quarantine = load_confirmed_quarantine(
                             output_dir=output_dir_path,
                             target=target,
-                            view="SYMBOL_SPECIFIC",
+                            view=View.SYMBOL_SPECIFIC,
                             symbol=symbol
                         )
                         if runtime_quarantine:
@@ -753,7 +758,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                             model_dir = ArtifactPaths.model_dir(
                                 run_root=base_run_dir,
                                 target=target,
-                                view="SYMBOL_SPECIFIC",
+                                view=View.SYMBOL_SPECIFIC,
                                 family=family,
                                 symbol=symbol
                             )
@@ -850,8 +855,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                         "family": family,
                                         "target": target,
                                         "symbol": symbol,
-                                        "route": "SYMBOL_SPECIFIC",  # Add route indicator
-                                        "view": "SYMBOL_SPECIFIC",  # Add view indicator
+                                        "route": View.SYMBOL_SPECIFIC.value,  # Add route indicator
+                                        "view": View.SYMBOL_SPECIFIC.value,  # Add view indicator
                                         "min_cs": 1,  # Per-symbol training doesn't use min_cs
                                         "features": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
                                         "feature_names": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
@@ -919,8 +924,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                         "family": family,
                                         "target": target,
                                         "symbol": symbol,
-                                        "route": "SYMBOL_SPECIFIC",  # Add route indicator
-                                        "view": "SYMBOL_SPECIFIC",  # Add view indicator
+                                        "route": View.SYMBOL_SPECIFIC.value,  # Add route indicator
+                                        "view": View.SYMBOL_SPECIFIC.value,  # Add view indicator
                                         "min_cs": 1,
                                         "features": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
                                         "feature_names": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
@@ -959,7 +964,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                             symbol_cohort_metadata = cohort_metadata
                                             try:
                                                 from TRAINING.training_strategies.reproducibility.io import compute_cohort_id_from_metadata
-                                                symbol_cohort_id = compute_cohort_id_from_metadata(cohort_metadata, view="SYMBOL_SPECIFIC")
+                                                symbol_cohort_id = compute_cohort_id_from_metadata(cohort_metadata, view=View.SYMBOL_SPECIFIC)
                                             except Exception as e:
                                                 logger.debug(f"Failed to compute cohort_id for {symbol}: {e}")
                                         
@@ -968,7 +973,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                             model_family=family,
                                             model_result=model_result,
                                             output_dir=base_run_dir,
-                                            view="SYMBOL_SPECIFIC",
+                                            view=View.SYMBOL_SPECIFIC,
                                             symbol=symbol,
                                             run_identity=effective_run_identity,
                                             model_path=saved_model_path,
@@ -990,9 +995,9 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                             snapshot_dir = get_training_snapshot_dir(
                                                 output_dir=base_run_dir,
                                                 target=target,
-                                                view="SYMBOL_SPECIFIC",
+                                                view=View.SYMBOL_SPECIFIC,
                                                 symbol=symbol,
-                                                stage="TRAINING",
+                                                stage=Stage.TRAINING,
                                                 cohort_id=symbol_cohort_id,
                                             )
                                             snapshot_path = snapshot_dir / "training_snapshot.json"
@@ -1029,7 +1034,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                     from TRAINING.orchestration.utils.target_first_paths import (
                         get_target_reproducibility_dir
                     )
-                    repro_dir = get_target_reproducibility_dir(Path(output_dir), target, stage="TRAINING")
+                    repro_dir = get_target_reproducibility_dir(Path(output_dir), target, stage=Stage.TRAINING)
                     repro_dir.mkdir(parents=True, exist_ok=True)
                     meta_path_repro = repro_dir / f"meta_{family}_{symbol}_b0.json"
                     meta_path_legacy = symbol_target_dir / "meta_b0.json"
@@ -1105,7 +1110,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                         metrics = build_clean_training_metrics(
                                             model_result=cv_metrics_result,
                                             task_type=task_type,
-                                            view="SYMBOL_SPECIFIC",  # Per-symbol training
+                                            view=View.SYMBOL_SPECIFIC,  # Per-symbol training
                                             n_features=len(feature_names) if feature_names else None,
                                             n_samples=len(X) if 'X' in locals() else None,
                                         )
@@ -1265,7 +1270,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                     min_cs=1,
                                     max_cs_samples=max_cs_samples
                                 )
-                                aggregated_cohort_id = compute_cohort_id_from_metadata(temp_cohort_metadata, view="SYMBOL_SPECIFIC")
+                                aggregated_cohort_id = compute_cohort_id_from_metadata(temp_cohort_metadata, view=View.SYMBOL_SPECIFIC)
                         except Exception as e:
                             logger.debug(f"Failed to compute aggregated cohort_id: {e}")
                 
@@ -1275,9 +1280,9 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                     symbol_snapshot_dir = get_training_snapshot_dir(
                         output_dir=base_run_dir,
                         target=target,
-                        view="SYMBOL_SPECIFIC",
+                        view=View.SYMBOL_SPECIFIC,
                         symbol=symbol,
-                        stage="TRAINING",
+                        stage=Stage.TRAINING,
                     )
                     
                     # Look for cohort directories
@@ -1305,7 +1310,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 target=target,
                                 model_family=family,
                                 output_dir=base_run_dir,
-                                view="SYMBOL_SPECIFIC",
+                                view=View.SYMBOL_SPECIFIC,
                                 cohort_id=aggregated_cohort_id,
                             )
                             if aggregated:
@@ -1349,11 +1354,13 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
         if selected_features and output_dir:
             try:
                 from TRAINING.ranking.utils.dominance_quarantine import load_confirmed_quarantine
-                from pathlib import Path
+                # Path is already imported globally at line 6
                 # Determine view from route
                 route_info = routing_decisions.get(target, {}) if routing_decisions else {}
-                route = route_info.get('route', 'CROSS_SECTIONAL')
-                view_for_quarantine = "CROSS_SECTIONAL" if route in ['CROSS_SECTIONAL', 'BOTH'] else "SYMBOL_SPECIFIC"
+                route = route_info.get('route', View.CROSS_SECTIONAL.value)
+                # Normalize route to View enum for comparison
+                route_enum = View.from_string(route) if isinstance(route, str) else route
+                view_for_quarantine = View.CROSS_SECTIONAL if (route_enum == View.CROSS_SECTIONAL or route in [View.CROSS_SECTIONAL.value, 'BOTH']) else View.SYMBOL_SPECIFIC
                 
                 output_dir_path = Path(output_dir) if not isinstance(output_dir, Path) else output_dir
                 runtime_quarantine = load_confirmed_quarantine(
@@ -1400,7 +1407,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
             # Try to get more detailed breakdown from feature audit report if available
             audit_details = None
             try:
-                from pathlib import Path
+                # Path is already imported globally at line 6
                 audit_dir = Path(output_dir) / "artifacts" / "feature_audits"
                 audit_file = audit_dir / f"{target}_audit_summary.csv"
                 if audit_file.exists():
@@ -1799,11 +1806,13 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                     
                     # Determine view from route (route is defined earlier in function scope)
                     # For CROSS_SECTIONAL or BOTH routes, use CROSS_SECTIONAL view
-                    view = "CROSS_SECTIONAL"  # Default for CROSS_SECTIONAL route
-                    if route in ['CROSS_SECTIONAL', 'BOTH']:
-                        view = "CROSS_SECTIONAL"
-                    elif route == 'SYMBOL_SPECIFIC':
-                        view = "SYMBOL_SPECIFIC"
+                    # Normalize route to View enum for comparison
+                    route_enum = View.from_string(route) if isinstance(route, str) else route
+                    view = View.CROSS_SECTIONAL  # Default for CROSS_SECTIONAL route
+                    if route_enum == View.CROSS_SECTIONAL or route in [View.CROSS_SECTIONAL.value, 'BOTH']:
+                        view = View.CROSS_SECTIONAL
+                    elif route_enum == View.SYMBOL_SPECIFIC or route == View.SYMBOL_SPECIFIC.value:
+                        view = View.SYMBOL_SPECIFIC
                         logger.warning(f"SYMBOL_SPECIFIC route in CROSS_SECTIONAL saving block - this should not happen")
                     
                     # Find base run directory (parent of training_results/ if output_dir is training_results/)
@@ -1912,8 +1921,8 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                 metadata = {
                                     "family": family,
                                     "target": target,
-                                    "route": "CROSS_SECTIONAL",  # Add route indicator
-                                    "view": "CROSS_SECTIONAL",  # Add view indicator
+                                    "route": View.CROSS_SECTIONAL.value,  # Add route indicator
+                                    "view": View.CROSS_SECTIONAL.value,  # Add view indicator
                                     "min_cs": min_cs,
                                     "features": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
                                     "feature_names": feature_names.tolist() if hasattr(feature_names, 'tolist') else list(feature_names),
@@ -2344,7 +2353,7 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
     # Write training_results_summary.json to globals/summaries/
     # ========================================================================
     try:
-        from pathlib import Path
+        # Path is already imported globally at line 6
         from datetime import datetime
         import json
         from TRAINING.orchestration.utils.target_first_paths import run_root, globals_dir as get_globals_dir

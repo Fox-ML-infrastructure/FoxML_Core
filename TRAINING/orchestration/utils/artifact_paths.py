@@ -9,7 +9,10 @@ All model saves/loads should use these paths to ensure consistency.
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
+
+# SST: Import View enum for consistent view handling
+from TRAINING.orchestration.utils.scope_resolution import View
 
 
 def _get_default_extension(family: str) -> str:
@@ -34,7 +37,7 @@ class ArtifactPaths:
     def model_dir(
         run_root: Path, 
         target: str, 
-        view: str, 
+        view: Union[str, View], 
         family: str, 
         symbol: Optional[str] = None,
         universe_sig: Optional[str] = None
@@ -45,24 +48,28 @@ class ArtifactPaths:
         Args:
             run_root: Base run output directory
             target: Target name
-            view: View name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
+            view: View enum or "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC" string
             family: Model family name
-            symbol: Optional symbol name (required if view is "SYMBOL_SPECIFIC")
+            symbol: Optional symbol name (required if view is View.SYMBOL_SPECIFIC)
             universe_sig: Optional universe signature for cross-run reproducibility
         
         Returns:
             Path to targets/<target>/models/view=<view>/[universe=<universe_sig>/][symbol=<symbol>/]family=<family>/
         
         Raises:
-            ValueError: If view is "SYMBOL_SPECIFIC" but symbol is None
+            ValueError: If view is View.SYMBOL_SPECIFIC but symbol is None
         """
-        if view == "SYMBOL_SPECIFIC" and symbol is None:
-            raise ValueError("symbol parameter is required when view='SYMBOL_SPECIFIC'")
+        # Normalize view to enum for comparison and path construction
+        view_enum = View.from_string(view) if isinstance(view, str) else view
+        if view_enum == View.SYMBOL_SPECIFIC and symbol is None:
+            raise ValueError("symbol parameter is required when view=View.SYMBOL_SPECIFIC")
         
-        base = run_root / "targets" / target / "models" / f"view={view}"
+        # Use enum value for path construction (ensures consistent string representation)
+        view_str = str(view_enum)  # View enum's __str__ returns .value
+        base = run_root / "targets" / target / "models" / f"view={view_str}"
         if universe_sig:
             base = base / f"universe={universe_sig}"
-        if view == "SYMBOL_SPECIFIC" and symbol:
+        if view_enum == View.SYMBOL_SPECIFIC and symbol:
             base = base / f"symbol={symbol}"
         return base / f"family={family}"
     

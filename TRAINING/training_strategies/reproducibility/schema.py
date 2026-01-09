@@ -18,6 +18,9 @@ from pathlib import Path
 import uuid
 import logging
 
+# SST: Import Stage enum for consistent stage handling
+from TRAINING.orchestration.utils.scope_resolution import Stage
+
 logger = logging.getLogger(__name__)
 
 
@@ -430,7 +433,7 @@ class TrainingSnapshot:
         return cls(
             run_id=run_id,
             timestamp=timestamp,
-            stage="TRAINING",
+            stage=Stage.TRAINING,
             view=view,
             target=target,
             symbol=symbol,

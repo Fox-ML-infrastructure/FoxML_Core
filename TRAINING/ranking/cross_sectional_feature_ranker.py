@@ -25,6 +25,8 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Union, Any
 import logging
 
+from TRAINING.orchestration.utils.scope_resolution import View, Stage
+
 logger = logging.getLogger(__name__)
 
 
@@ -266,7 +268,8 @@ def compute_cross_sectional_importance(
     Compute cross-sectional feature importance using panel models.
     
     # FIX: Use passed view or fallback to CROSS_SECTIONAL (backward compatibility)
-    effective_view = view if view else "CROSS_SECTIONAL"
+    # Normalize view to enum, default to CROSS_SECTIONAL
+    effective_view = View.from_string(view) if isinstance(view, str) and view else (view if view else View.CROSS_SECTIONAL)
     
     # FIX: Add run_identity fallback using factory if None
     if run_identity is None:
@@ -287,7 +290,7 @@ def compute_cross_sectional_importance(
             except Exception:
                 pass
             run_identity = create_stage_identity(
-                stage="FEATURE_SELECTION",
+                stage=Stage.FEATURE_SELECTION,
                 symbols=symbols,
                 experiment_config=experiment_config,
             )
@@ -492,7 +495,7 @@ def compute_cross_sectional_importance(
                     target_clean = normalize_target_name(target_column)
                     cohort_dir = find_cohort_dir_by_id(
                         run_root, cohort_id, target_clean, 
-                        view=effective_view, stage="FEATURE_SELECTION"  # FIX: Use SST-resolved view
+                        view=effective_view, stage=Stage.FEATURE_SELECTION  # FIX: Use SST-resolved view
                     )
                     
                     # BUG FIX: Check if cohort_dir is not None before calling .exists()
@@ -581,7 +584,7 @@ def compute_cross_sectional_importance(
                 # FIX: Pass seed for train_seed in ComparisonGroup (required for FEATURE_SELECTION)
                 # FIX: Pass min_cs and max_cs_samples for resolved_metadata validation
                 ctx = RunContext(
-                    stage="FEATURE_SELECTION",
+                    stage=Stage.FEATURE_SELECTION,
                     target=target_column,
                     target_column=target_column,
                     X=X,  # Panel data
@@ -696,7 +699,8 @@ def compute_cross_sectional_stability(
     
     try:
         # FIX: Use passed view or fallback to CROSS_SECTIONAL (backward compatibility)
-        effective_view = view if view else "CROSS_SECTIONAL"
+        # Normalize view to enum, default to CROSS_SECTIONAL
+        effective_view = View.from_string(view) if isinstance(view, str) and view else (view if view else View.CROSS_SECTIONAL)
         
         # Save current snapshot
         method_name = "cross_sectional_panel"
@@ -734,13 +738,13 @@ def compute_cross_sectional_stability(
                 snapshot_base_dir = get_snapshot_base_dir(
                     output_dir, target=target_column,
                     view=effective_view, symbol=symbol,  # FIX: Use SST-resolved view and symbol
-                    stage="FEATURE_SELECTION"  # Explicit stage to prevent legacy path creation
+                    stage=Stage.FEATURE_SELECTION  # Explicit stage to prevent legacy path creation
                 )
         else:
             snapshot_base_dir = get_snapshot_base_dir(
                 output_dir, target=target_column,
                 view=effective_view, symbol=symbol,  # FIX: Use SST-resolved view and symbol
-                stage="FEATURE_SELECTION"  # Explicit stage to prevent legacy path creation
+                stage=Stage.FEATURE_SELECTION  # Explicit stage to prevent legacy path creation
             )
         
         if snapshot_base_dir:
@@ -835,7 +839,7 @@ def compute_cross_sectional_stability(
                 view=effective_view,  # FIX: Use SST-resolved view
                 symbol=symbol,  # FIX: Use passed symbol (None for CS, symbol name for SS)
                 inputs=cs_inputs,  # Pass inputs with feature_fingerprint_input
-                stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
+                stage=Stage.FEATURE_SELECTION,  # Explicit stage for proper path scoping
             )
         else:
             snapshot_path = None
@@ -958,7 +962,7 @@ def tag_features_by_importance(
     strong_cs = cs_aligned >= cs_threshold
     
     categories[strong_symbol & strong_cs] = 'CORE'
-    categories[strong_symbol & ~strong_cs] = 'SYMBOL_SPECIFIC'
+    categories[strong_symbol & ~strong_cs] = View.SYMBOL_SPECIFIC.value
     categories[~strong_symbol & strong_cs] = 'CS_SPECIFIC'
     categories[~strong_symbol & ~strong_cs] = 'WEAK'
     

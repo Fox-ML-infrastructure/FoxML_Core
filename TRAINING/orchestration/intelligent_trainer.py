@@ -40,7 +40,7 @@ import TRAINING.common.repro_bootstrap  # noqa: F401 - side effects only
 import os
 import argparse
 import logging
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Union
 import json
 import hashlib
 import time
@@ -149,6 +149,9 @@ except ImportError:
 
 # Import from modular components
 from TRAINING.orchestration.intelligent_trainer.utils import json_default as _json_default
+
+# SST: Import View enum for consistent view handling
+from TRAINING.orchestration.utils.scope_resolution import View, Stage
 
 
 class IntelligentTrainer:
@@ -679,7 +682,7 @@ class IntelligentTrainer:
                     repro_dir = target_dir / "reproducibility"
                     if repro_dir.exists():
                         # Check CROSS_SECTIONAL view first (most common)
-                        cs_dir = repro_dir / "CROSS_SECTIONAL"
+                        cs_dir = repro_dir / View.CROSS_SECTIONAL.value
                         if cs_dir.exists():
                             for cohort_dir in cs_dir.iterdir():
                                 if cohort_dir.is_dir() and cohort_dir.name.startswith("cohort="):
@@ -814,7 +817,7 @@ class IntelligentTrainer:
                         repro_dir = target_dir / "reproducibility"
                         if repro_dir.exists():
                             # Check CROSS_SECTIONAL view
-                            cs_dir = repro_dir / "CROSS_SECTIONAL"
+                            cs_dir = repro_dir / View.CROSS_SECTIONAL.value
                             if cs_dir.exists():
                                 for cohort_dir in cs_dir.iterdir():
                                     if cohort_dir.is_dir() and cohort_dir.name.startswith("cohort="):
@@ -1172,7 +1175,7 @@ class IntelligentTrainer:
         try:
             from TRAINING.common.utils.fingerprinting import create_stage_identity
             target_ranking_identity = create_stage_identity(
-                stage="TARGET_RANKING",
+                stage=Stage.TARGET_RANKING,
                 symbols=self.symbols,
                 experiment_config=experiment_config,
                 data_dir=self.data_dir,
@@ -1234,7 +1237,7 @@ class IntelligentTrainer:
             from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
             tracker = ReproducibilityTracker(output_dir=self.output_dir / "target_rankings")
             run_id = self._run_name.replace("_", "-")  # Use run name as run_id
-            tracker.generate_metrics_rollups(stage="TARGET_RANKING", run_id=run_id)
+            tracker.generate_metrics_rollups(stage=Stage.TARGET_RANKING, run_id=run_id)
             logger.debug("✅ Generated metrics rollups for TARGET_RANKING")
         except Exception as e:
             logger.debug(f"Failed to generate metrics rollups: {e}")
@@ -1300,7 +1303,7 @@ class IntelligentTrainer:
         force_refresh: bool = False,
         use_cache: bool = True,
         feature_selection_config: Optional['FeatureSelectionConfig'] = None,  # New typed config (optional)
-        view: str = "CROSS_SECTIONAL",  # Must match target ranking view
+        view: Union[str, View] = View.CROSS_SECTIONAL,  # Must match target ranking view
         symbol: Optional[str] = None  # Required for SYMBOL_SPECIFIC view
     ) -> List[str]:
         """
@@ -1374,7 +1377,9 @@ class IntelligentTrainer:
         
         # Filter symbols based on view
         symbols_to_use = self.symbols
-        if view == "SYMBOL_SPECIFIC" and symbol:
+        # Normalize view to enum for comparison
+        view_enum = View.from_string(view) if isinstance(view, str) else view
+        if view_enum == View.SYMBOL_SPECIFIC and symbol:
             symbols_to_use = [symbol]
         elif view == "LOSO" and symbol:
             # LOSO: train on all symbols except symbol
@@ -1401,7 +1406,7 @@ class IntelligentTrainer:
             
             # Use SST factory for base identity (handles seed fallback chain)
             base_identity = create_stage_identity(
-                stage="FEATURE_SELECTION",
+                stage=Stage.FEATURE_SELECTION,
                 symbols=symbols_to_use,
                 experiment_config=self.experiment_config,
                 data_dir=self.data_dir,
@@ -1548,38 +1553,38 @@ class IntelligentTrainer:
             
             # Determine view from routing decisions or check both views
             route_info = routing_decisions.get(target, {})
-            route = route_info.get('route', 'CROSS_SECTIONAL')
+            route = route_info.get('route', View.CROSS_SECTIONAL.value)
             
             # Check both CROSS_SECTIONAL and SYMBOL_SPECIFIC views (files are now view-scoped)
             views_to_check = []
-            if route in ['CROSS_SECTIONAL', 'BOTH']:
-                views_to_check.append('CROSS_SECTIONAL')
-            if route in ['SYMBOL_SPECIFIC', 'BOTH']:
+            if route in [View.CROSS_SECTIONAL.value, 'BOTH']:
+                views_to_check.append(View.CROSS_SECTIONAL.value)
+            if route in [View.SYMBOL_SPECIFIC.value, 'BOTH']:
                 # For SYMBOL_SPECIFIC, check all symbol subdirectories
-                sym_specific_dir = repro_dir / "SYMBOL_SPECIFIC"
+                sym_specific_dir = repro_dir / View.SYMBOL_SPECIFIC.value
                 if sym_specific_dir.exists():
                     for sym_dir in sym_specific_dir.iterdir():
                         if sym_dir.is_dir() and sym_dir.name.startswith("symbol="):
-                            views_to_check.append(('SYMBOL_SPECIFIC', sym_dir.name.replace("symbol=", "")))
+                            views_to_check.append((View.SYMBOL_SPECIFIC.value, sym_dir.name.replace("symbol=", "")))
             
             # If no routing info, check both views
             if not views_to_check:
-                views_to_check = ['CROSS_SECTIONAL']
-                sym_specific_dir = repro_dir / "SYMBOL_SPECIFIC"
+                views_to_check = [View.CROSS_SECTIONAL.value]
+                sym_specific_dir = repro_dir / View.SYMBOL_SPECIFIC.value
                 if sym_specific_dir.exists():
                     for sym_dir in sym_specific_dir.iterdir():
                         if sym_dir.is_dir() and sym_dir.name.startswith("symbol="):
-                            views_to_check.append(('SYMBOL_SPECIFIC', sym_dir.name.replace("symbol=", "")))
+                            views_to_check.append((View.SYMBOL_SPECIFIC.value, sym_dir.name.replace("symbol=", "")))
             
             # Load files from view-scoped locations
             for view_info in views_to_check:
                 if isinstance(view_info, tuple):
                     view, symbol = view_info
-                    view_dir = repro_dir / "SYMBOL_SPECIFIC" / f"symbol={symbol}"
+                    view_dir = repro_dir / View.SYMBOL_SPECIFIC.value / f"symbol={symbol}"
                 else:
                     view = view_info
                     symbol = None
-                    view_dir = repro_dir / "CROSS_SECTIONAL"
+                    view_dir = repro_dir / View.CROSS_SECTIONAL.value
                 
                 if not view_dir.exists():
                     continue
@@ -1816,7 +1821,9 @@ class IntelligentTrainer:
                     # Use view from metadata if available, default to CROSS_SECTIONAL
                     from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
                     temp_tracker = ReproducibilityTracker(output_dir=self.output_dir)
-                    approx_view = cohort_metadata.get('view', 'CROSS_SECTIONAL')
+                    # Normalize view from metadata (may be string from JSON)
+                    approx_view_str = cohort_metadata.get('view', View.CROSS_SECTIONAL.value)
+                    approx_view = View.from_string(approx_view_str) if isinstance(approx_view_str, str) else approx_view_str
                     cohort_id = temp_tracker._compute_cohort_id(cohort_metadata, view=approx_view)
                     
                     # Try to get segment_id from index (target-first structure first)
@@ -2280,18 +2287,18 @@ class IntelligentTrainer:
             for target in filtered_targets:
                 # Determine view from routing decision
                 route_info = routing_decisions.get(target, {})
-                route = route_info.get('route', 'CROSS_SECTIONAL')
+                route = route_info.get('route', View.CROSS_SECTIONAL.value)
                 
                 # Default to CROSS_SECTIONAL if no routing decision exists
                 if not routing_decisions or target not in routing_decisions:
-                    route = 'CROSS_SECTIONAL'
+                    route = View.CROSS_SECTIONAL.value
                 
                 # CRITICAL FIX: Check if cross-sectional is explicitly DISABLED in routing plan
                 cs_info = route_info.get('cross_sectional', {})
                 cs_route_status = cs_info.get('route', 'ENABLED') if isinstance(cs_info, dict) else 'ENABLED'
                 
                 # Handle different route types
-                if route == 'CROSS_SECTIONAL':
+                if route_enum == View.CROSS_SECTIONAL or route == View.CROSS_SECTIONAL.value:
                     # CRITICAL FIX: Respect routing plan - skip CS feature selection if DISABLED
                     if cs_route_status == 'DISABLED':
                         logger.warning(
@@ -2305,10 +2312,10 @@ class IntelligentTrainer:
                         target=target,
                         top_m=top_m_features,
                         use_cache=use_cache,
-                        view="CROSS_SECTIONAL",
+                        view=View.CROSS_SECTIONAL,
                         symbol=None
                     )
-                elif route == 'SYMBOL_SPECIFIC':
+                elif route_enum == View.SYMBOL_SPECIFIC or route == View.SYMBOL_SPECIFIC.value:
                     # Symbol-specific feature selection only
                     # CRITICAL FIX: winner_symbols should come from routing plan, but validate it's not empty
                     winner_symbols = route_info.get('winner_symbols', [])
@@ -2343,7 +2350,7 @@ class IntelligentTrainer:
                             target=target,
                             top_m=top_m_features,
                             use_cache=use_cache,
-                            view="SYMBOL_SPECIFIC",
+                            view=View.SYMBOL_SPECIFIC,
                             symbol=symbol
                         )
                 elif route == 'BOTH':
@@ -2353,7 +2360,7 @@ class IntelligentTrainer:
                         target=target,
                         top_m=top_m_features,
                         use_cache=use_cache,
-                        view="CROSS_SECTIONAL",
+                        view=View.CROSS_SECTIONAL,
                         symbol=None
                     )
                     winner_symbols = route_info.get('winner_symbols', self.symbols)
@@ -2365,7 +2372,7 @@ class IntelligentTrainer:
                             target=target,
                             top_m=top_m_features,
                             use_cache=use_cache,
-                            view="SYMBOL_SPECIFIC",
+                            view=View.SYMBOL_SPECIFIC,
                             symbol=symbol
                         )
                     target_features[target] = {
@@ -2397,7 +2404,7 @@ class IntelligentTrainer:
                 from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
                 tracker = ReproducibilityTracker(output_dir=self.output_dir)
                 run_id = self._run_name.replace("_", "-")  # Use run name as run_id
-                tracker.generate_metrics_rollups(stage="FEATURE_SELECTION", run_id=run_id)
+                tracker.generate_metrics_rollups(stage=Stage.FEATURE_SELECTION, run_id=run_id)
                 logger.debug("✅ Generated metrics rollups for FEATURE_SELECTION")
             except Exception as e:
                 logger.debug(f"Failed to generate metrics rollups for FEATURE_SELECTION: {e}")
@@ -2833,7 +2840,7 @@ class IntelligentTrainer:
         try:
             from TRAINING.common.utils.fingerprinting import create_stage_identity
             training_identity = create_stage_identity(
-                stage="TRAINING",
+                stage=Stage.TRAINING,
                 symbols=self.symbols,  # Full universe
                 experiment_config=self.experiment_config,
                 data_dir=self.data_dir,
@@ -3960,7 +3967,7 @@ Examples:
             # Don't look in current run's run_hash.json (it doesn't exist yet on first run)
             prev_run_id = None
             try:
-                from pathlib import Path
+                # Path is already imported at module level, no need to re-import
                 import json
                 
                 # Find RESULTS directory by walking up from output_dir

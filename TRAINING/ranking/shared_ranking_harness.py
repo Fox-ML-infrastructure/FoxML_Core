@@ -20,6 +20,9 @@ from typing import Dict, Any, Optional, List, Tuple, Union
 import numpy as np
 import pandas as pd
 
+# SST: Import View and Stage enums for consistent view/stage handling
+from TRAINING.orchestration.utils.scope_resolution import View, Stage
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,7 +47,7 @@ class RankingHarness:
         model_families: List[str],
         multi_model_config: Dict[str, Any] = None,
         output_dir: Optional[Path] = None,
-        view: str = "CROSS_SECTIONAL",  # "CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "LOSO"
+        view: Union[str, View] = View.CROSS_SECTIONAL,  # View enum or "CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "LOSO"
         symbol: Optional[str] = None,  # Required for SYMBOL_SPECIFIC and LOSO views
         explicit_interval: Optional[Union[int, str]] = None,
         experiment_config: Optional[Any] = None,
@@ -95,13 +98,18 @@ class RankingHarness:
             except Exception:
                 pass
         
+        # Normalize view to enum for validation
+        view_enum = View.from_string(view) if isinstance(view, str) else view
+        self.view = view_enum  # Store as enum internally
+        
         # Validate view and symbol parameters
-        if view == "SYMBOL_SPECIFIC" and symbol is None:
-            raise ValueError(f"symbol parameter required for SYMBOL_SPECIFIC view")
-        if view == "LOSO" and symbol is None:
+        if view_enum == View.SYMBOL_SPECIFIC and symbol is None:
+            raise ValueError(f"symbol parameter required for View.SYMBOL_SPECIFIC view")
+        # LOSO is not a View enum value, check as string
+        if isinstance(view, str) and view == "LOSO" and symbol is None:
             raise ValueError(f"symbol parameter required for LOSO view")
-        if view == "CROSS_SECTIONAL" and symbol is not None:
-            logger.warning(f"symbol={symbol} provided but view=CROSS_SECTIONAL, ignoring symbol")
+        if view_enum == View.CROSS_SECTIONAL and symbol is not None:
+            logger.warning(f"symbol={symbol} provided but view=View.CROSS_SECTIONAL, ignoring symbol")
             self.symbol = None
     
     def build_panel(
@@ -175,9 +183,10 @@ class RankingHarness:
         
         # Filter symbols based on view
         symbols_to_load = self.symbols
-        if self.view == "SYMBOL_SPECIFIC":
+        # self.view is now a View enum after normalization in __init__
+        if self.view == View.SYMBOL_SPECIFIC:
             symbols_to_load = [self.symbol]
-        elif self.view == "LOSO":
+        elif isinstance(self.view, str) and self.view == "LOSO":
             # LOSO: train on all symbols except symbol, validate on symbol
             symbols_to_load = [s for s in self.symbols if s != self.symbol]
             validation_symbol = self.symbol
@@ -185,7 +194,7 @@ class RankingHarness:
             validation_symbol = None
         
         logger.info(f"Loading data for {len(symbols_to_load)} symbol(s) (max {self.max_rows_per_symbol} rows per symbol)...")
-        if self.view == "LOSO":
+        if isinstance(self.view, str) and self.view == "LOSO":
             logger.info(f"  LOSO: Training on {len(symbols_to_load)} symbols, validating on {validation_symbol}")
         
         mtf_data = load_mtf_data_for_ranking(
@@ -202,7 +211,7 @@ class RankingHarness:
         n_symbols_loaded = len(mtf_data)
         MIN_SYMBOLS_FOR_CROSS_SECTIONAL = 3
         
-        if self.view == "CROSS_SECTIONAL" and n_symbols_loaded < MIN_SYMBOLS_FOR_CROSS_SECTIONAL:
+        if self.view == View.CROSS_SECTIONAL and n_symbols_loaded < MIN_SYMBOLS_FOR_CROSS_SECTIONAL:
             loaded_symbols_list = list(mtf_data.keys())
             if n_symbols_loaded == 1:
                 # Single symbol: automatically switch to SYMBOL_SPECIFIC mode
@@ -211,7 +220,7 @@ class RankingHarness:
                     f"but only {n_symbols_loaded} loaded ({loaded_symbols_list}). "
                     f"Automatically switching to SYMBOL_SPECIFIC mode for symbol {loaded_symbols_list[0]}."
                 )
-                self.view = "SYMBOL_SPECIFIC"
+                self.view = View.SYMBOL_SPECIFIC
                 self.symbol = loaded_symbols_list[0]
             else:
                 # 2 symbols: still insufficient, but log warning and proceed with allow_single_symbol=True
@@ -247,7 +256,7 @@ class RankingHarness:
             is_already_in_repro = "REPRODUCIBILITY" in str(base_output_dir)
             is_at_target_level = (
                 base_output_dir.name == target_clean or
-                (base_output_dir.parent.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] and
+                (base_output_dir.parent.name in [View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value] and
                  base_output_dir.parent.parent.name in ["FEATURE_SELECTION", "TARGET_RANKING"])
             )
             
@@ -273,8 +282,8 @@ class RankingHarness:
                     ensure_scoped_artifact_dir, ensure_target_structure
                 )
                 ensure_target_structure(base_output_dir, target_clean)
-                # Determine stage based on job_type
-                stage = "FEATURE_SELECTION" if self.job_type == "rank_features" else "TARGET_RANKING"
+                # Determine stage based on job_type - use Stage enum (already imported globally)
+                stage = Stage.FEATURE_SELECTION if self.job_type == "rank_features" else Stage.TARGET_RANKING
                 target_exclusion_dir = ensure_scoped_artifact_dir(
                     base_output_dir, target_clean, "feature_exclusions",
                     view=self.view, symbol=self.symbol, universe_sig=self.universe_sig,
@@ -293,11 +302,14 @@ class RankingHarness:
             if existing_exclusions is None:
                 # Fallback to legacy REPRODUCIBILITY location
                 if self.job_type == "rank_targets":
-                    legacy_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / self.view / target_clean / "feature_exclusions"
+                    # Convert view enum to string for path construction
+                    view_str = str(self.view) if isinstance(self.view, View) else self.view
+                    legacy_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / view_str / target_clean / "feature_exclusions"
                 elif self.job_type == "rank_features":
-                    view_subdir = self.view if self.view else "CROSS_SECTIONAL"
+                    # Convert view enum to string for path construction
+                    view_subdir = str(self.view) if isinstance(self.view, View) else (self.view if self.view else View.CROSS_SECTIONAL.value)
                     legacy_exclusion_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_subdir / target_clean / "feature_exclusions"
-                    if view_subdir == "SYMBOL_SPECIFIC" and self.symbol:
+                    if self.view == View.SYMBOL_SPECIFIC and self.symbol:
                         legacy_exclusion_dir = legacy_exclusion_dir.parent.parent / f"symbol={self.symbol}" / "feature_exclusions"
                 else:
                     legacy_exclusion_dir = base_output_dir / "feature_exclusions"
@@ -444,7 +456,7 @@ class RankingHarness:
         # We'll update feature counts after data prep
         n_symbols_available = len(mtf_data)
         resolved_config = create_resolved_config(
-            requested_min_cs=self.min_cs if self.view != "SYMBOL_SPECIFIC" else 1,
+            requested_min_cs=self.min_cs if self.view != View.SYMBOL_SPECIFIC else 1,
             n_symbols_available=n_symbols_available,
             max_cs_samples=self.max_cs_samples,
             interval_minutes=detected_interval,
@@ -455,7 +467,7 @@ class RankingHarness:
             features_safe=features_safe,
             features_dropped_nan=0,  # Will be updated after data prep
             features_final=features_safe,  # Will be updated after data prep
-            view=self.view,
+            view=str(self.view) if isinstance(self.view, View) else self.view,  # Convert enum to string for resolved_config
             symbol=self.symbol,
             feature_names=feature_names,  # Pass feature names for feature_time_meta_map building
             recompute_lookback=True,  # CRITICAL: Compute feature lookback to auto-adjust purge
@@ -466,7 +478,7 @@ class RankingHarness:
         # NOTE: view may have been changed to SYMBOL_SPECIFIC above if only 1 symbol loaded
         # Pass requested_view and output_dir for view resolution and persistence
         requested_view_for_prep = self.view  # Use current view as requested_view
-        if self.view == "SYMBOL_SPECIFIC":
+        if self.view == View.SYMBOL_SPECIFIC:
             # For symbol-specific, prepare single-symbol time series data
             X, y, feature_names_out, symbols_array, time_vals, resolved_data_config = prepare_cross_sectional_data_for_ranking(
                 mtf_data, target_column, min_cs=1, max_cs_samples=self.max_cs_samples, feature_names=feature_names,
@@ -740,7 +752,7 @@ class RankingHarness:
                     pass
         
         ctx = RunContext(
-            stage="FEATURE_SELECTION" if self.job_type == "rank_features" else "TARGET_RANKING",
+            stage=Stage.FEATURE_SELECTION if self.job_type == "rank_features" else Stage.TARGET_RANKING,
             target=self.target_column,
             target_column=self.target_column,
             X=X,

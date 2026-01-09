@@ -16,6 +16,9 @@ from typing import List, Dict, Any, Optional, Tuple, Union
 import pandas as pd
 import warnings
 
+# SST: Import View and Stage enums for consistent handling
+from TRAINING.orchestration.utils.scope_resolution import View, Stage
+
 # Add project root to path for imports
 # TRAINING/ranking/feature_selector.py -> parents[2] = repo root
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -156,7 +159,7 @@ def select_features_for_target(
     feature_selection_config: Optional['FeatureSelectionConfig'] = None,  # New typed config (optional)
     explicit_interval: Optional[Union[int, str]] = None,  # Optional explicit interval (e.g., "5m" or 5)
     experiment_config: Optional[Any] = None,  # Optional ExperimentConfig (for data.bar_interval)
-    view: str = "CROSS_SECTIONAL",  # "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC" - must match target ranking view
+    view: Union[str, View] = View.CROSS_SECTIONAL,  # View enum or "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC" - must match target ranking view
     symbol: Optional[str] = None,  # Required for SYMBOL_SPECIFIC view
     force_refresh: bool = False,  # If True, bypass cache and re-run Phase 2
     universe_sig: Optional[str] = None,  # Universe signature from SST (resolved_data_config)
@@ -257,16 +260,19 @@ def select_features_for_target(
         
         aggregation_config = multi_model_config.get('aggregation', {}) if multi_model_config else {}
     
+    # Normalize view to enum for validation
+    view_enum = View.from_string(view) if isinstance(view, str) else view
+    
     # Validate view and symbol parameters
-    if view == "SYMBOL_SPECIFIC" and symbol is None:
-        raise ValueError(f"symbol parameter required for SYMBOL_SPECIFIC view")
-    if view == "CROSS_SECTIONAL" and symbol is not None:
-        logger.warning(f"symbol={symbol} provided but view=CROSS_SECTIONAL, ignoring symbol")
+    if view_enum == View.SYMBOL_SPECIFIC and symbol is None:
+        raise ValueError(f"symbol parameter required for View.SYMBOL_SPECIFIC view")
+    if view_enum == View.CROSS_SECTIONAL and symbol is not None:
+        logger.warning(f"symbol={symbol} provided but view=View.CROSS_SECTIONAL, ignoring symbol")
         symbol = None
     
     # Filter symbols based on view
     symbols_to_process = symbols
-    if view == "SYMBOL_SPECIFIC" and symbol:
+    if view_enum == View.SYMBOL_SPECIFIC and symbol:
         symbols_to_process = [symbol]
         logger.info(f"SYMBOL_SPECIFIC view: Processing only symbol {symbol}")
     elif view == "LOSO" and symbol:
@@ -282,7 +288,7 @@ def select_features_for_target(
     # NEW: Use shared ranking harness for both CROSS_SECTIONAL and SYMBOL_SPECIFIC views
     # This reuses the same split policy, model runner, metrics, and telemetry as target ranking
     # Both views use the same evaluation contract, just with different data preparation
-    use_shared_harness = (view == "CROSS_SECTIONAL" or view == "SYMBOL_SPECIFIC")
+    use_shared_harness = (view_enum == View.CROSS_SECTIONAL or view_enum == View.SYMBOL_SPECIFIC)
     
     # Initialize lookback cap enforcement results at function scope for telemetry tracking
     pre_cap_result = None
@@ -417,7 +423,7 @@ def select_features_for_target(
             
             # For SYMBOL_SPECIFIC view, process each symbol separately (same as target ranking)
             # For CROSS_SECTIONAL view, process all symbols together
-            if view == "SYMBOL_SPECIFIC":
+            if view_enum == View.SYMBOL_SPECIFIC:
                 # Process each symbol separately with shared harness (maintains view differences)
                 for symbol_to_process in symbols_to_process:
                     logger.info(f"Processing {symbol_to_process} with shared harness (SYMBOL_SPECIFIC view)...")
@@ -471,20 +477,11 @@ def select_features_for_target(
                         mtf_data = None  # Not returned in 6-value signature
                         logger.debug(f"build_panel returned {actual_len} values (current signature with resolved_data_config)")
                     
-                    # Extract universe_sig from resolved_data_config (SST) if not passed by caller
-                    if not universe_sig and resolved_data_config:
-                        universe_sig = resolved_data_config.get('universe_sig')
-                        if universe_sig:
-                            logger.debug(f"Extracted universe_sig={universe_sig[:8]}... from resolved_data_config")
-                    
-                    # Also extract effective_view from resolved_data_config if available
-                    if resolved_data_config and resolved_data_config.get('view'):
-                        effective_view = resolved_data_config.get('view')
-                        if effective_view != view:
-                            logger.debug(f"Using effective_view={effective_view} from resolved_data_config (requested: {view})")
-                    
-                    # FIX: Call resolve_write_scope for SYMBOL_SPECIFIC to set universe_sig_for_writes
-                    # This ensures proper scope tracking for reproducibility
+                    # SST: Use resolve_write_scope for canonical scope resolution
+                    # This ensures proper scope tracking for reproducibility and eliminates manual .get() calls
+                    view_for_writes = view
+                    symbol_for_writes = symbol_to_process
+                    universe_sig_for_writes = universe_sig
                     try:
                         from TRAINING.orchestration.utils.scope_resolution import resolve_write_scope
                         strict_scope = False
@@ -500,10 +497,13 @@ def select_features_for_target(
                             caller_symbol=symbol_to_process,
                             strict=strict_scope
                         )
-                        if universe_sig_for_writes and not universe_sig:
+                        # Use resolved values (SST canonical)
+                        if universe_sig_for_writes:
                             universe_sig = universe_sig_for_writes
+                        if view_for_writes != view:
+                            logger.debug(f"Using resolved view={view_for_writes} from resolve_write_scope (requested: {view})")
                     except Exception as e:
-                        logger.debug(f"resolve_write_scope failed for {symbol_to_process}: {e}")
+                        logger.debug(f"resolve_write_scope failed for {symbol_to_process}: {e}, using caller-provided values")
                     
                     if X is None or y is None:
                         logger.warning(f"Failed to build panel data for {symbol_to_process}, skipping")
@@ -567,7 +567,7 @@ def select_features_for_target(
                             interval_minutes=detected_interval,
                             cap_minutes=lookback_cap,
                             policy=policy,
-                            stage=f"FS_PRE_{view}_{symbol_to_process}" if view == "SYMBOL_SPECIFIC" else f"FS_PRE_{view}",
+                            stage=f"FS_PRE_{str(view_enum)}_{symbol_to_process}" if view_enum == View.SYMBOL_SPECIFIC else f"FS_PRE_{str(view_enum)}",
                             registry=registry,
                             feature_time_meta_map=resolved_config.feature_time_meta_map if resolved_config and hasattr(resolved_config, 'feature_time_meta_map') else None,
                             base_interval_minutes=resolved_config.base_interval_minutes if resolved_config else None,
@@ -576,7 +576,7 @@ def select_features_for_target(
                         
                         # CRITICAL: Convert to EnforcedFeatureSet (SST contract)
                         enforced_fs_pre = pre_cap_result.to_enforced_set(
-                            stage=f"FS_PRE_{view}_{symbol_to_process}" if view == "SYMBOL_SPECIFIC" else f"FS_PRE_{view}",
+                            stage=f"FS_PRE_{str(view_enum)}_{symbol_to_process}" if view_enum == View.SYMBOL_SPECIFIC else f"FS_PRE_{str(view_enum)}",
                             cap_minutes=lookback_cap
                         )
                         
@@ -602,7 +602,7 @@ def select_features_for_target(
                         from TRAINING.ranking.utils.lookback_policy import assert_featureset_hash
                         try:
                             assert_featureset_hash(
-                                label=f"FS_PRE_{view}_{symbol_to_process}" if view == "SYMBOL_SPECIFIC" else f"FS_PRE_{view}",
+                                label=f"FS_PRE_{str(view_enum)}_{symbol_to_process}" if view_enum == View.SYMBOL_SPECIFIC else f"FS_PRE_{str(view_enum)}",
                                 expected=enforced_fs_pre,
                                 actual_features=feature_names,
                                 logger_instance=logger,
@@ -840,7 +840,7 @@ def select_features_for_target(
                                         view=view,  # Pass view for proper scoping
                                         symbol=symbol_to_process,  # Pass symbol for SYMBOL_SPECIFIC view
                                         inputs=per_model_inputs,  # Pass inputs with feature_fingerprint_input
-                                        stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
+                                        stage=Stage.FEATURE_SELECTION,  # Explicit stage for proper path scoping
                                     )
                         except ValueError as ve:
                             # Identity validation failure - respect config mode
@@ -1725,7 +1725,7 @@ def select_features_for_target(
                     view=view,  # Pass view for proper scoping
                     symbol=symbol,  # Pass symbol for SYMBOL_SPECIFIC view
                     inputs=fs_inputs,  # Pass inputs with selected_targets
-                    stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
+                    stage=Stage.FEATURE_SELECTION,  # Explicit stage for proper path scoping
                 )
     except Exception as e:
         logger.debug(f"Stability snapshot save failed for aggregated selection (non-critical): {e}")
@@ -1850,7 +1850,7 @@ def select_features_for_target(
             'model_families_config': model_families_config,  # Include for confidence computation
             'family_statuses': all_family_statuses,  # Include family status tracking for debugging
             'view': view,
-            'symbol': symbol if view == "SYMBOL_SPECIFIC" else None,
+            'symbol': symbol if view_enum == View.SYMBOL_SPECIFIC else None,
             'registry_filtering': registry_filtering_stats  # Add registry filtering metadata
         }
         
@@ -1892,18 +1892,18 @@ def select_features_for_target(
             # For CROSS_SECTIONAL: all_feature_importances is available from run_importance_producers
             # For SYMBOL_SPECIFIC: we need to collect from each symbol's results
             if use_shared_harness:
-                if view == "CROSS_SECTIONAL":
+                if view_enum == View.CROSS_SECTIONAL:
                     # Try to get from shared harness results (if available in scope)
                     if 'all_feature_importances' in locals() and all_feature_importances:
                         save_feature_importances_for_reproducibility(
                             all_feature_importances=all_feature_importances,
                             target_column=target_column,
                             output_dir=output_dir,
-                            view=view,
+                            view=view_enum,
                             symbol=None,
                             universe_sig=universe_sig,  # Pass universe_sig for canonical paths
                         )
-                elif view == "SYMBOL_SPECIFIC":
+                elif view_enum == View.SYMBOL_SPECIFIC:
                     # Collect importances from all_results (per-symbol results from shared harness)
                     symbol_importances = {}
                     for result in all_results:
@@ -1938,7 +1938,7 @@ def select_features_for_target(
                 
                 # CRITICAL: If view is CROSS_SECTIONAL, aggregate importances across symbols and save once
                 # If view is SYMBOL_SPECIFIC, save per-symbol
-                if view == "CROSS_SECTIONAL":
+                if view_enum == View.CROSS_SECTIONAL:
                     from TRAINING.ranking.feature_selection_reporting import aggregate_importances_cross_sectional
                     aggregated_importances = aggregate_importances_cross_sectional(symbol_importances)
                     # Save once to CROSS_SECTIONAL/feature_importances/
@@ -1946,7 +1946,7 @@ def select_features_for_target(
                         all_feature_importances=aggregated_importances,
                         target_column=target_column,
                         output_dir=output_dir,
-                        view="CROSS_SECTIONAL",
+                        view=View.CROSS_SECTIONAL,
                         symbol=None,
                         universe_sig=universe_sig,  # Pass universe_sig for canonical paths
                     )
@@ -1957,7 +1957,7 @@ def select_features_for_target(
                             all_feature_importances=importances_dict,
                             target_column=target_column,
                             output_dir=output_dir,
-                            view="SYMBOL_SPECIFIC",
+                            view=View.SYMBOL_SPECIFIC,
                             symbol=sym,
                             universe_sig=universe_sig,  # Pass universe_sig for canonical paths
                         )
@@ -1966,14 +1966,14 @@ def select_features_for_target(
             # Note: This function is called once per view, so we save what we have
             results_cs = None
             results_sym = None
-            if view == "CROSS_SECTIONAL":
+            if view_enum == View.CROSS_SECTIONAL:
                 results_cs = {
                     'target_column': target_column,
                     'selected_features': selected_features,
                     'n_features': len(selected_features),
                     'top_n': top_n or len(selected_features)
                 }
-            elif view == "SYMBOL_SPECIFIC" and symbol:
+            elif view_enum == View.SYMBOL_SPECIFIC and symbol:
                 results_sym = {
                     symbol: {
                         'target_column': target_column,
@@ -2005,11 +2005,11 @@ def select_features_for_target(
             # Collect from shared harness results (if used)
             if use_shared_harness:
                 # Check if we have suspicious features from the harness
-                if view == "CROSS_SECTIONAL" and 'all_suspicious_features' in locals():
+                if view_enum == View.CROSS_SECTIONAL and 'all_suspicious_features' in locals():
                     # all_suspicious_features is a dict from run_importance_producers
                     if all_suspicious_features:
                         all_suspicious_features[target_column] = all_suspicious_features
-                elif view == "SYMBOL_SPECIFIC":
+                elif view_enum == View.SYMBOL_SPECIFIC:
                     # Collect per-symbol suspicious features
                     symbol_suspicious = {}
                     for result in all_results:
@@ -2093,7 +2093,7 @@ def select_features_for_target(
             # Walk up to find the run-level directory
             module_output_dir = output_dir
             # For SYMBOL_SPECIFIC, also skip symbol= directories
-            while module_output_dir.name in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "feature_selections", "target_rankings"] or module_output_dir.name.startswith("symbol="):
+            while module_output_dir.name in [View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value, "FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "feature_selections", "target_rankings"] or module_output_dir.name.startswith("symbol="):
                 module_output_dir = module_output_dir.parent
                 if not module_output_dir.parent.exists() or module_output_dir.name == "RESULTS":
                     break
@@ -2224,10 +2224,10 @@ def select_features_for_target(
                     # For CROSS_SECTIONAL: ctx is created at function scope
                     # For SYMBOL_SPECIFIC: ctx is stored in symbol_ctx_map (use first symbol's ctx for aggregation-level tracking)
                     try:
-                        if view == "CROSS_SECTIONAL" and 'ctx' in locals() and ctx is not None:
+                        if view_enum == View.CROSS_SECTIONAL and 'ctx' in locals() and ctx is not None:
                             ctx_to_use = ctx
                             logger.debug("Using RunContext from shared harness (CROSS_SECTIONAL, has all required fields for COHORT_AWARE)")
-                        elif view == "SYMBOL_SPECIFIC" and 'symbol_ctx_map' in locals() and symbol_ctx_map:
+                        elif view_enum == View.SYMBOL_SPECIFIC and 'symbol_ctx_map' in locals() and symbol_ctx_map:
                             # For SYMBOL_SPECIFIC, use the first symbol's ctx (aggregation-level tracking)
                             # Individual symbol ctxs are already stored in symbol_ctx_map
                             first_symbol = next(iter(symbol_ctx_map.keys()))
@@ -2253,7 +2253,7 @@ def select_features_for_target(
                     # Try to get data from symbol_ctx_map (for SYMBOL_SPECIFIC view with per-symbol processing)
                     min_cs_for_ctx = None
                     max_cs_samples_for_ctx = None
-                    if view == "SYMBOL_SPECIFIC" and 'symbol_ctx_map' in locals() and symbol_ctx_map:
+                    if view_enum == View.SYMBOL_SPECIFIC and 'symbol_ctx_map' in locals() and symbol_ctx_map:
                         # Use first symbol's ctx data (aggregation-level tracking)
                         first_symbol = next(iter(symbol_ctx_map.keys()))
                         first_ctx = symbol_ctx_map[first_symbol]
@@ -2328,7 +2328,7 @@ def select_features_for_target(
                         seed_value = 42
                     
                     ctx_to_use = RunContext(
-                        stage="FEATURE_SELECTION",
+                        stage=Stage.FEATURE_SELECTION,
                         target=target_column,
                         target_column=target_column,
                         X=X_for_ctx,  # FIX: Populated from available sources (symbol_ctx_map, shared harness, or cohort_context)
@@ -2411,7 +2411,9 @@ def select_features_for_target(
                         # CRITICAL: For CROSS_SECTIONAL, symbol must be None to prevent history forking
                         # Use SST-resolved view_for_writes if available (handles auto-flip case)
                         effective_view_fallback = view_for_writes if 'view_for_writes' in locals() else view
-                        symbol_for_ctx = symbol if effective_view_fallback == "SYMBOL_SPECIFIC" else None
+                        # Normalize effective_view_fallback to enum for comparison
+                        effective_view_fallback_enum = View.from_string(effective_view_fallback) if isinstance(effective_view_fallback, str) else effective_view_fallback
+                        symbol_for_ctx = symbol if effective_view_fallback_enum == View.SYMBOL_SPECIFIC else None
                         # FIX: Get universe_sig from SST-resolved value (same as main path)
                         universe_sig_fallback = universe_sig_for_writes if 'universe_sig_for_writes' in locals() else (universe_sig if 'universe_sig' in locals() else None)
                         # Get seed from config for reproducibility (same as above)
@@ -2422,7 +2424,7 @@ def select_features_for_target(
                             seed_value = 42
                         
                         ctx_minimal = RunContext(
-                            stage="FEATURE_SELECTION",
+                            stage=Stage.FEATURE_SELECTION,
                             target=target_column,
                             target_column=target_column,
                             X=None,  # Not available in fallback
@@ -2613,10 +2615,12 @@ def select_features_for_target(
                 view_for_legacy = None
                 effective_view = view_for_writes if 'view_for_writes' in locals() else view
                 if effective_view:
-                    if effective_view.upper() == "CROSS_SECTIONAL":
-                        view_for_legacy = "CROSS_SECTIONAL"
+                    # Normalize effective_view to enum
+                    effective_view_enum = View.from_string(effective_view) if isinstance(effective_view, str) else effective_view
+                    if effective_view_enum == View.CROSS_SECTIONAL:
+                        view_for_legacy = View.CROSS_SECTIONAL.value
                     else:
-                        view_for_legacy = "SYMBOL_SPECIFIC"
+                        view_for_legacy = View.SYMBOL_SPECIFIC.value
                 
                 # Track lookback cap enforcement results (pre and post selection) in telemetry
                 lookback_cap_metadata = {}
@@ -2772,7 +2776,9 @@ def select_features_for_target(
                 scope = None
                 if scope_universe_sig:
                     try:
-                        if scope_view == "CROSS_SECTIONAL" or scope_symbol is None:
+                        # Normalize scope_view to enum for comparison
+                        scope_view_enum = View.from_string(scope_view) if isinstance(scope_view, str) else scope_view
+                        if scope_view_enum == View.CROSS_SECTIONAL or scope_symbol is None:
                             scope = WriteScope.for_cross_sectional(
                                 universe_sig=scope_universe_sig,
                                 stage=Stage.FEATURE_SELECTION,

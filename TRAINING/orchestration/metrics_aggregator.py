@@ -14,6 +14,9 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 import pandas as pd
 import numpy as np
+
+# SST: Import View enum for consistent view handling
+from TRAINING.orchestration.utils.scope_resolution import View
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -105,12 +108,14 @@ class MetricsAggregator:
                 logger.warning(f"⚠️  No symbol metrics found for {target}: {len(symbols_missing)}/{len(symbols)} symbols missing: {symbols_missing[:5]}{'...' if len(symbols_missing) > 5 else ''}")
             
             # Fallback: if SYMBOL_SPECIFIC view but no symbol metrics, try CS metrics (config-gated)
-            if symbols_found == 0 and symbols_missing and view == "SYMBOL_SPECIFIC" and _get_allow_mode_fallback():
+            # Normalize view to enum for comparison
+            view_enum = View.from_string(view) if isinstance(view, str) else view
+            if symbols_found == 0 and symbols_missing and view_enum == View.SYMBOL_SPECIFIC and _get_allow_mode_fallback():
                 # Check if CS metrics exist for this target (we may have already loaded them above)
                 if cs_metrics:
                     # Already loaded, add a fallback-tagged version for symbol routing
                     fallback_metrics = cs_metrics.copy()
-                    fallback_metrics["mode"] = "CROSS_SECTIONAL"  # Explicit mode for downstream
+                    fallback_metrics["mode"] = View.CROSS_SECTIONAL.value  # Explicit mode for downstream
                     fallback_metrics["mode_fallback"] = "SYMBOL_SPECIFIC->CROSS_SECTIONAL"
                     fallback_metrics["fallback_reason"] = f"No symbol metrics found ({len(symbols_missing)} missing)"
                     rows.append(fallback_metrics)
@@ -140,7 +145,7 @@ class MetricsAggregator:
         """
         # Determine base output directory (walk up from REPRODUCIBILITY/FEATURE_SELECTION)
         base_output_dir = self.output_dir
-        while base_output_dir.name in ["FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "CROSS_SECTIONAL", "feature_selections", "target_rankings"]:
+        while base_output_dir.name in ["FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", View.CROSS_SECTIONAL.value, "feature_selections", "target_rankings"]:
             base_output_dir = base_output_dir.parent
             if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
                 break
@@ -154,9 +159,10 @@ class MetricsAggregator:
             get_target_reproducibility_dir, get_target_metrics_dir
         )
         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
-        # Use view for path construction (SST)
-        view_for_path = view if view else "CROSS_SECTIONAL"
-        target_fs_dir = target_repro_dir / view_for_path
+        # Use view for path construction (SST) - normalize to enum
+        view_enum = View.from_string(view) if isinstance(view, str) else (view if view else View.CROSS_SECTIONAL)
+        view_for_path = view_enum if isinstance(view_enum, View) else View.CROSS_SECTIONAL
+        target_fs_dir = target_repro_dir / str(view_for_path)
         metadata_path = target_fs_dir / "multi_model_metadata.json"
         confidence_path = target_fs_dir / "target_confidence.json"
         
@@ -169,7 +175,7 @@ class MetricsAggregator:
         # 1. Try canonical location: find latest cohort in reproducibility/CROSS_SECTIONAL
         # Use SST-aware cohort scanner that handles stage= and universe= scoping
         from TRAINING.orchestration.utils.target_first_paths import find_cohort_dirs
-        cohort_dirs = find_cohort_dirs(base_output_dir, target=target_clean, view="CROSS_SECTIONAL")
+        cohort_dirs = find_cohort_dirs(base_output_dir, target=target_clean, view=View.CROSS_SECTIONAL)
         if not cohort_dirs and target_fs_dir.exists():
             # Fallback: direct scan (legacy structure without universe= scoping)
             cohort_dirs = [d for d in target_fs_dir.iterdir() 
@@ -256,7 +262,7 @@ class MetricsAggregator:
         
         # 3. Last resort: legacy structure
         if metrics_data is None:
-            legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_clean
+            legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / View.CROSS_SECTIONAL.value / target_clean
             legacy_metrics_file = legacy_fs_dir / "metrics.json"
             if legacy_metrics_file.exists():
                 try:
@@ -270,7 +276,7 @@ class MetricsAggregator:
                     logger.debug(f"Failed to load metrics from legacy location: {e}")
         
         if not metadata_path.exists() and not confidence_path.exists():
-            legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "CROSS_SECTIONAL" / target_clean
+            legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / View.CROSS_SECTIONAL.value / target_clean
             if not metadata_path.exists():
                 metadata_path = legacy_fs_dir / "multi_model_metadata.json"
             if not confidence_path.exists():
@@ -317,7 +323,7 @@ class MetricsAggregator:
         if sample_size is None or sample_size == 0:
             try:
                 # Look for latest cohort directory using SST-aware scanner
-                cohort_dirs_for_sample = find_cohort_dirs(base_output_dir, target=target_clean, view="CROSS_SECTIONAL")
+                cohort_dirs_for_sample = find_cohort_dirs(base_output_dir, target=target_clean, view=View.CROSS_SECTIONAL)
                 if not cohort_dirs_for_sample:
                     # Fallback: direct glob (legacy structure)
                     cohort_dirs_for_sample = list(target_fs_dir.glob("cohort=*"))
@@ -381,7 +387,7 @@ class MetricsAggregator:
         # CRITICAL: CS-equivalent rows always use mode=CROSS_SECTIONAL, never SYMBOL_SPECIFIC
         # Using mode=SYMBOL_SPECIFIC with symbol=None is semantically invalid and breaks routing
         # The view indicates the run's view, but this row is aggregate data
-        mode_for_row = "CROSS_SECTIONAL"  # Always CS for aggregate rows with symbol=None
+        mode_for_row = View.CROSS_SECTIONAL.value  # Always CS for aggregate rows with symbol=None
         
         # Extract task_type and metric_name for task-aware routing thresholds
         task_type = metrics_data.get("task_type") if metrics_data else None
@@ -418,7 +424,7 @@ class MetricsAggregator:
         """
         # Determine base output directory (walk up from REPRODUCIBILITY/FEATURE_SELECTION)
         base_output_dir = self.output_dir
-        while base_output_dir.name in ["FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", "SYMBOL_SPECIFIC", "CROSS_SECTIONAL", "feature_selections", "target_rankings"]:
+        while base_output_dir.name in ["FEATURE_SELECTION", "TARGET_RANKING", "REPRODUCIBILITY", View.SYMBOL_SPECIFIC.value, View.CROSS_SECTIONAL.value, "feature_selections", "target_rankings"]:
             base_output_dir = base_output_dir.parent
             if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
                 break
@@ -430,7 +436,9 @@ class MetricsAggregator:
         # Use view for path construction (SST)
         from TRAINING.orchestration.utils.target_first_paths import get_target_reproducibility_dir
         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean)
-        view_for_path = view if view else "SYMBOL_SPECIFIC"
+        # Normalize view to enum
+        view_enum = View.from_string(view) if isinstance(view, str) else (view if view else View.SYMBOL_SPECIFIC)
+        view_for_path = view_enum if isinstance(view_enum, View) else View.SYMBOL_SPECIFIC
         target_fs_dir = target_repro_dir / view_for_path / f"symbol={symbol}"
         
         score = None
@@ -444,7 +452,7 @@ class MetricsAggregator:
         # NEW: Look for metrics in cohort subdirectories first (matches how metrics are actually written)
         # Use SST-aware cohort scanner that handles stage= and universe= scoping
         from TRAINING.orchestration.utils.target_first_paths import find_cohort_dirs
-        ss_cohort_dirs = find_cohort_dirs(base_output_dir, target=target_clean, view="SYMBOL_SPECIFIC")
+        ss_cohort_dirs = find_cohort_dirs(base_output_dir, target=target_clean, view=View.SYMBOL_SPECIFIC)
         if not ss_cohort_dirs and target_fs_dir.exists():
             # Fallback: direct scan (legacy structure)
             ss_cohort_dirs = [d for d in target_fs_dir.iterdir() 
@@ -509,7 +517,7 @@ class MetricsAggregator:
             
             # Fallback to legacy structure if not found
             if not metadata_path.exists():
-                legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / "SYMBOL_SPECIFIC" / target_clean / f"symbol={symbol}"
+                legacy_fs_dir = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / View.SYMBOL_SPECIFIC.value / target_clean / f"symbol={symbol}"
                 if legacy_fs_dir.exists():
                     metadata_path = legacy_fs_dir / "multi_model_metadata.json"
                 else:
@@ -518,10 +526,10 @@ class MetricsAggregator:
         # Fallback to CROSS_SECTIONAL cohort metadata for sample_size when symbol metrics missing
         if score is None and (not metadata_path or not metadata_path.exists()):
             # Try to get sample_size from CROSS_SECTIONAL cohort metadata using SST-aware scanner
-            cs_cohort_dirs = find_cohort_dirs(base_output_dir, target=target_clean, view="CROSS_SECTIONAL")
+            cs_cohort_dirs = find_cohort_dirs(base_output_dir, target=target_clean, view=View.CROSS_SECTIONAL)
             if not cs_cohort_dirs:
                 # Fallback: direct scan (legacy structure)
-                cs_target_fs_dir = target_repro_dir / "CROSS_SECTIONAL"
+                cs_target_fs_dir = target_repro_dir / View.CROSS_SECTIONAL.value
                 if cs_target_fs_dir.exists():
                     cs_cohort_dirs = [d for d in cs_target_fs_dir.iterdir() 
                                       if d.is_dir() and d.name.startswith("cohort=")]
@@ -645,8 +653,8 @@ class MetricsAggregator:
             # Determine view and symbol from context
             # For metrics aggregator, we need to search both CROSS_SECTIONAL and SYMBOL_SPECIFIC
             # Try CROSS_SECTIONAL first (for universe_sig == "ALL" or None)
-            view = "CROSS_SECTIONAL" if (universe_sig == "ALL" or universe_sig is None) else "SYMBOL_SPECIFIC"
-            symbol = None if view == "CROSS_SECTIONAL" else universe_sig
+            view = View.CROSS_SECTIONAL if (universe_sig == "ALL" or universe_sig is None) else View.SYMBOL_SPECIFIC
+            symbol = None if view == View.CROSS_SECTIONAL else universe_sig
             
             # Build paths for snapshots (target-first with view scoping + legacy fallback)
             from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
@@ -670,13 +678,14 @@ class MetricsAggregator:
             except Exception:
                 snapshot_base_dir_unscoped = None
             
-            # Legacy REPRODUCIBILITY paths
-            if view == "SYMBOL_SPECIFIC" and symbol:
-                repro_base_fs = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view / target_clean / f"symbol={symbol}"
-                repro_base_tr = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / view / target_clean / f"symbol={symbol}"
+            # Legacy REPRODUCIBILITY paths - view is already View enum at this point (set at line 656)
+            view_str = str(view)  # Convert enum to string for path construction
+            if view == View.SYMBOL_SPECIFIC and symbol:
+                repro_base_fs = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_str / target_clean / f"symbol={symbol}"
+                repro_base_tr = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / view_str / target_clean / f"symbol={symbol}"
             else:
-                repro_base_fs = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view / target_clean
-                repro_base_tr = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / view / target_clean
+                repro_base_fs = base_output_dir / "REPRODUCIBILITY" / "FEATURE_SELECTION" / view_str / target_clean
+                repro_base_tr = base_output_dir / "REPRODUCIBILITY" / "TARGET_RANKING" / view_str / target_clean
             snapshot_base_dir_fs = repro_base_fs / "feature_importance_snapshots" if repro_base_fs.exists() else None
             snapshot_base_dir_tr = repro_base_tr / "feature_importance_snapshots" if repro_base_tr.exists() else None
             
@@ -697,7 +706,8 @@ class MetricsAggregator:
             
             # Filter snapshots by universe_sig (symbol) if in SYMBOL_SPECIFIC mode
             # This prevents comparing stability across different symbols (which is expected to have low overlap)
-            if view == "SYMBOL_SPECIFIC" and symbol:
+            # view is already View enum at this point (set at line 656)
+            if view == View.SYMBOL_SPECIFIC and symbol:
                 # Filter to snapshots with matching symbol in universe_sig
                 symbol_prefix = f"{symbol}:"
                 filtered_snapshots = [
@@ -840,7 +850,9 @@ class MetricsAggregator:
                 from TRAINING.ranking.utils.dominance_quarantine import load_confirmed_quarantine
                 
                 # Determine view for quarantine lookup, default to CROSS_SECTIONAL
-                quarantine_view = view if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
+                # Normalize view to enum
+                view_enum = View.from_string(view) if isinstance(view, str) else view
+                quarantine_view = view_enum if view_enum in (View.CROSS_SECTIONAL, View.SYMBOL_SPECIFIC) else View.CROSS_SECTIONAL
                 
                 confirmed_quarantine = load_confirmed_quarantine(
                     output_dir=self.output_dir,
@@ -901,7 +913,7 @@ class MetricsAggregator:
         if "mode" in candidates_df.columns and "symbol" in candidates_df.columns:
             # Invariant 1: No SYMBOL_SPECIFIC rows with symbol=None
             ss_null = candidates_df[
-                (candidates_df["mode"] == "SYMBOL_SPECIFIC") & 
+                (candidates_df["mode"] == View.SYMBOL_SPECIFIC.value) & 
                 (candidates_df["symbol"].isna())
             ]
             if len(ss_null) > 0:
@@ -923,7 +935,9 @@ class MetricsAggregator:
             except Exception:
                 pass
             
-            if run_view == "SYMBOL_SPECIFIC":
+            # Normalize run_view to enum for comparison
+            run_view_enum = View.from_string(run_view) if isinstance(run_view, str) else run_view
+            if run_view_enum == View.SYMBOL_SPECIFIC:
                 real_symbol_rows = candidates_df[
                     (candidates_df["symbol"].notna()) & 
                     (~candidates_df["symbol"].isin(["__AGG__"]))

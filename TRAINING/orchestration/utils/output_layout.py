@@ -12,7 +12,7 @@ Usage:
     layout = OutputLayout(
         output_root=run_dir,
         target="fwd_ret_5d",
-        view="CROSS_SECTIONAL",
+        view=ScopeView.CROSS_SECTIONAL,
         universe_sig="abc123",
         cohort_id="cs_2024Q1_..."
     )
@@ -98,7 +98,7 @@ class OutputLayout:
         layout = OutputLayout(
             output_root=run_dir,
             target="fwd_ret_5d",
-            view="CROSS_SECTIONAL",
+            view=ScopeView.CROSS_SECTIONAL,
             universe_sig="abc123"
         )
     """
@@ -158,15 +158,22 @@ class OutputLayout:
             self._purpose = ScopePurpose.FINAL if _WRITE_SCOPE_AVAILABLE else None
             self.stage = stage  # Use explicit stage parameter
         
-        # Hard invariant: view must be valid canonical value
-        if self.view not in {"CROSS_SECTIONAL", "SYMBOL_SPECIFIC"}:
-            raise ValueError(f"Invalid view: {self.view}. Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'")
+        # Normalize view to enum for validation (handles both enum and string)
+        view_enum = ScopeView.from_string(self.view) if isinstance(self.view, str) else self.view
+        if view_enum not in (ScopeView.CROSS_SECTIONAL, ScopeView.SYMBOL_SPECIFIC):
+            raise ValueError(f"Invalid view: {self.view}. Must be ScopeView.CROSS_SECTIONAL or ScopeView.SYMBOL_SPECIFIC")
         # Hard invariant: SYMBOL_SPECIFIC requires symbol
-        if self.view == "SYMBOL_SPECIFIC" and not self.symbol:
-            raise ValueError("SYMBOL_SPECIFIC view requires symbol")
+        if view_enum == ScopeView.SYMBOL_SPECIFIC and not self.symbol:
+            raise ValueError("ScopeView.SYMBOL_SPECIFIC view requires symbol")
         # Hard invariant: CROSS_SECTIONAL cannot have symbol
-        if self.view == "CROSS_SECTIONAL" and self.symbol:
-            raise ValueError("CROSS_SECTIONAL view cannot have symbol")
+        if view_enum == ScopeView.CROSS_SECTIONAL and self.symbol:
+            raise ValueError("ScopeView.CROSS_SECTIONAL view cannot have symbol")
+        
+        # Store as string for path construction (convert enum to string)
+        view_str = str(view_enum)  # View enum's __str__ returns .value
+        
+        # Store as string for path construction (from normalized enum)
+        self.view = view_str
         # Hard invariant: universe_sig is required
         if not self.universe_sig:
             raise ValueError("universe_sig is required for all scopes")
@@ -189,7 +196,9 @@ class OutputLayout:
         Returns: "view={view}/universe={universe_sig}/[symbol={symbol}]"
         """
         parts = [f"view={self.view}", f"universe={self.universe_sig}"]
-        if self.view == "SYMBOL_SPECIFIC" and self.symbol:
+        # Normalize view to enum for comparison
+        view_enum = ScopeView.from_string(self.view) if isinstance(self.view, str) else self.view
+        if view_enum == ScopeView.SYMBOL_SPECIFIC and self.symbol:
             parts.append(f"symbol={self.symbol}")
         return "/".join(parts)
     
@@ -217,7 +226,9 @@ class OutputLayout:
         
         # For SYMBOL_SPECIFIC: symbol= is sufficient (universe= is redundant)
         # For CROSS_SECTIONAL: universe= identifies the multi-symbol set
-        if self.view == "SYMBOL_SPECIFIC" and self.symbol:
+        # Normalize view to enum for comparison
+        view_enum = ScopeView.from_string(self.view) if isinstance(self.view, str) else self.view
+        if view_enum == ScopeView.SYMBOL_SPECIFIC and self.symbol:
             return base / f"symbol={self.symbol}"
         return base / f"universe={self.universe_sig}"
     
@@ -279,14 +290,16 @@ class OutputLayout:
         if not cohort_id:
             raise ValueError("cohort_id cannot be empty")
         
+        # Normalize view to enum for comparison
+        view_enum = ScopeView.from_string(self.view) if isinstance(self.view, str) else self.view
         # Explicit prefix check (not split-based)
-        if self.view == "CROSS_SECTIONAL":
+        if view_enum == ScopeView.CROSS_SECTIONAL:
             if not cohort_id.startswith("cs_"):
                 raise ValueError(
                     f"Cohort ID scope violation: cohort_id={cohort_id} does not start with 'cs_' "
                     f"for view={self.view}"
                 )
-        elif self.view == "SYMBOL_SPECIFIC":
+        elif view_enum == ScopeView.SYMBOL_SPECIFIC:
             if not cohort_id.startswith("sy_"):
                 raise ValueError(
                     f"Cohort ID scope violation: cohort_id={cohort_id} does not start with 'sy_' "
@@ -337,9 +350,10 @@ def validate_cohort_metadata(
         missing.append("target")
 
     # Required if SYMBOL_SPECIFIC
-    # Use normalized view (actual if available, else expected)
-    normalized_view = actual_view or expected_view
-    if normalized_view == "SYMBOL_SPECIFIC":
+    # Use normalized view (actual if available, else expected) - normalize to enum for comparison
+    normalized_view_str = actual_view or expected_view
+    normalized_view_enum = ScopeView.from_string(normalized_view_str) if normalized_view_str else None
+    if normalized_view_enum == ScopeView.SYMBOL_SPECIFIC:
         meta_symbol = cohort_metadata.get("symbol")
         if not symbol and not meta_symbol:
             missing.append("symbol (required for SYMBOL_SPECIFIC)")
@@ -358,7 +372,8 @@ def validate_cohort_metadata(
         )
 
     # Symbol mismatch check (only when symbol is provided AND meta has symbol)
-    if expected_view == "SYMBOL_SPECIFIC":
+    expected_view_enum = ScopeView.from_string(expected_view) if expected_view else None
+    if expected_view_enum == ScopeView.SYMBOL_SPECIFIC:
         meta_symbol = cohort_metadata.get("symbol")
         if symbol and meta_symbol and meta_symbol != symbol:
             raise ValueError(

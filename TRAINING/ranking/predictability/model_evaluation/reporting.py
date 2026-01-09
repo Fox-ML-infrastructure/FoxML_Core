@@ -13,6 +13,9 @@ import pandas as pd
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
+# SST: Import Stage enum for consistent stage handling
+from TRAINING.orchestration.utils.scope_resolution import Stage
+
 logger = logging.getLogger(__name__)
 
 # Add project root for _REPO_ROOT
@@ -200,7 +203,7 @@ def save_feature_importances(
             view=view,
             universe_sig=universe_sig,
             symbol=symbol_for_layout,
-            stage="TARGET_RANKING",  # Explicit stage for proper path scoping
+            stage=Stage.TARGET_RANKING,  # Explicit stage for proper path scoping
         )
         target_importances_dir = layout.feature_importance_dir()
         target_importances_dir.mkdir(parents=True, exist_ok=True)
@@ -272,7 +275,7 @@ def save_feature_importances(
                     run_identity=model_identity,  # FIX: Use per-model identity
                     allow_legacy=True,  # FIX: Ensure ALL model families get snapshots
                     prediction_fingerprint=prediction_fp,  # Pass prediction hash for determinism tracking
-                    stage="TARGET_RANKING",  # Correctly label as TARGET_RANKING stage
+                    stage=Stage.TARGET_RANKING,  # Correctly label as TARGET_RANKING stage
                     write_fs_snapshot=False,  # TARGET_RANKING uses snapshot.json, not fs_snapshot
                     view=view,  # Pass view for proper scoping
                     symbol=symbol,  # Pass symbol for SYMBOL_SPECIFIC view

@@ -87,6 +87,9 @@ except ImportError:
 
 # Import checkpoint utility (after path is set)
 from TRAINING.orchestration.utils.checkpoint import CheckpointManager
+
+# SST: Import Stage enum for consistent stage handling
+from TRAINING.orchestration.utils.scope_resolution import Stage
 from TRAINING.ranking.predictability.data_loading import get_model_config
 
 # Initialize determinism system and get BASE_SEED
@@ -2072,7 +2075,7 @@ def _save_feature_importances(
             view=view,
             universe_sig=universe_sig,
             symbol=symbol_for_layout,
-            stage="TARGET_RANKING",  # Explicit stage for proper path scoping
+            stage=Stage.TARGET_RANKING,  # Explicit stage for proper path scoping
         )
         importances_dir = layout.feature_importance_dir()
         importances_dir.mkdir(parents=True, exist_ok=True)

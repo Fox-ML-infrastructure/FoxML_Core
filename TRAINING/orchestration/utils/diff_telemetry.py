@@ -28,6 +28,9 @@ from enum import Enum
 import numpy as np
 import pandas as pd
 
+# SST: Import View enum for consistent view handling
+from TRAINING.orchestration.utils.scope_resolution import View
+
 logger = logging.getLogger(__name__)
 
 # Fingerprint schema version - increment when fingerprint computation changes
@@ -56,6 +59,32 @@ from TRAINING.common.utils.file_utils import write_atomic_json as _write_atomic_
 
 
 def _sanitize_for_json(obj: Any) -> Any:
+    """
+    Recursively convert pandas Timestamp objects and enums to JSON-serializable types.
+    
+    This ensures all Timestamp objects are converted to ISO format strings and enums
+    are converted to their string values before writing to JSON files.
+    
+    Args:
+        obj: Object to sanitize (can be dict, list, tuple, Timestamp, Enum, or other types)
+    
+    Returns:
+        Sanitized object with all Timestamp objects converted to ISO strings and enums to strings
+    """
+    import pandas as pd
+    from enum import Enum
+    
+    if isinstance(obj, pd.Timestamp):
+        return obj.isoformat()
+    elif isinstance(obj, Enum):
+        # Convert enum to string value for JSON serialization
+        return obj.value
+    elif isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [_sanitize_for_json(v) for v in obj]
+    else:
+        return obj
     """
     Recursively convert pandas Timestamp objects to ISO strings for JSON serialization.
     
@@ -1107,11 +1136,15 @@ class DiffTelemetry:
         
         if split_parts:
             split_str = "|".join(sorted(split_parts))
-            config_parts.append(f"split={hashlib.sha256(split_str.encode()).hexdigest()[:8]}")
+            # SST: Use sha256_short for consistent config hashing
+            from TRAINING.common.utils.config_hashing import sha256_short
+            config_parts.append(f"split={sha256_short(split_str, 8)}")
         
         if config_parts:
             config_str = "|".join(sorted(config_parts))
-            return hashlib.sha256(config_str.encode()).hexdigest()[:16]
+            # SST: Use sha256_short for consistent config hashing
+            from TRAINING.common.utils.config_hashing import sha256_short
+            return sha256_short(config_str, 16)
         return None
     
     def _compute_config_fingerprint(
@@ -1149,7 +1182,9 @@ class DiffTelemetry:
             
             if split_parts:
                 split_str = "|".join(sorted(split_parts))
-                config_parts.append(f"split={hashlib.sha256(split_str.encode()).hexdigest()[:8]}")
+                # SST: Use sha256_short for consistent config hashing
+                from TRAINING.common.utils.config_hashing import sha256_short
+                config_parts.append(f"split={sha256_short(split_str, 8)}")
         
         if run_data.get('additional_data'):
             for key in ['strategy', 'model_family']:
@@ -1159,7 +1194,9 @@ class DiffTelemetry:
         if config_parts:
             # Canonicalize: sorted keys, normalized values
             config_str = "|".join(sorted(config_parts))
-            return hashlib.sha256(config_str.encode()).hexdigest()[:16]
+            # SST: Use sha256_short for consistent config hashing
+            from TRAINING.common.utils.config_hashing import sha256_short
+            return sha256_short(config_str, 16)
         return None
     
     def _normalize_value_for_hash(self, val: Any) -> str:
@@ -2258,9 +2295,9 @@ class DiffTelemetry:
                         if current.name.startswith('cohort='):
                             # Walk up to find target
                             parent = current.parent
-                            if parent.name in ['CROSS_SECTIONAL', 'SYMBOL_SPECIFIC']:
+                            if parent.name in [View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value]:
                                 parent = parent.parent
-                            if parent.name not in ['reproducibility', 'CROSS_SECTIONAL', 'SYMBOL_SPECIFIC']:
+                            if parent.name not in ['reproducibility', View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value]:
                                 target = parent.name
                                 break
                         if not current.parent.exists():
@@ -2279,10 +2316,10 @@ class DiffTelemetry:
                             
                             # Try to find view from path
                             view = None
-                            if 'CROSS_SECTIONAL' in cohort_path.parts:
-                                view = 'CROSS_SECTIONAL'
-                            elif 'SYMBOL_SPECIFIC' in cohort_path.parts:
-                                view = 'SYMBOL_SPECIFIC'
+                            if View.CROSS_SECTIONAL.value in cohort_path.parts:
+                                view = View.CROSS_SECTIONAL
+                            elif View.SYMBOL_SPECIFIC.value in cohort_path.parts:
+                                view = View.SYMBOL_SPECIFIC
                             
                             if view:
                                 view_metrics_dir = target_metrics_dir / f"view={view}"
@@ -2653,7 +2690,10 @@ class DiffTelemetry:
                         
                         # Normalize view for FEATURE_SELECTION (INDIVIDUAL -> SYMBOL_SPECIFIC)
                         if stage == 'FEATURE_SELECTION' and view_for_target == 'INDIVIDUAL':
-                            view_for_target = 'SYMBOL_SPECIFIC'
+                            view_for_target = View.SYMBOL_SPECIFIC.value
+                        
+                        # Normalize view to enum for comparison
+                        view_for_target_enum = View.from_string(view_for_target) if isinstance(view_for_target, str) else view_for_target
                         
                         # Use snapshot's symbol if available, otherwise fallback to path-parsed symbol
                         symbol_for_target_final = snapshot_symbol if snapshot_symbol else symbol_for_target
@@ -2663,11 +2703,13 @@ class DiffTelemetry:
                         
                         # Build target-first reproducibility path with stage scoping
                         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage)
-                        if view_for_target == "SYMBOL_SPECIFIC" and symbol_for_target_final:
+                        # Use string value for path construction
+                        view_for_target_str = str(view_for_target_enum) if isinstance(view_for_target_enum, View) else view_for_target
+                        if view_for_target_enum == View.SYMBOL_SPECIFIC and symbol_for_target_final:
                             # Include symbol in path to prevent overwriting
-                            target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol_for_target_final}" / f"cohort={cohort_id}"
+                            target_cohort_dir = target_repro_dir / view_for_target_str / f"symbol={symbol_for_target_final}" / f"cohort={cohort_id}"
                         else:
-                            target_cohort_dir = target_repro_dir / view_for_target / f"cohort={cohort_id}"
+                            target_cohort_dir = target_repro_dir / view_for_target_str / f"cohort={cohort_id}"
                         target_cohort_dir.mkdir(parents=True, exist_ok=True)
                         logger.debug(f"✅ Created target-first cohort directory for snapshot: {target_cohort_dir}")
             except Exception as e:
@@ -5288,7 +5330,7 @@ def compute_full_run_hash(output_dir: Path, run_id: Optional[str] = None) -> Opt
     """
     import hashlib
     import json
-    from pathlib import Path
+    # Path is already imported globally at line 23
     
     globals_dir = output_dir / "globals"
     if not globals_dir.exists():
@@ -5422,7 +5464,7 @@ def compute_run_hash_with_changes(
         Dict with run_hash, run_id, changes summary, or None if no snapshots found
     """
     import json
-    from pathlib import Path
+    # Path is already imported globally at line 23
     
     # Compute base run hash
     run_hash = compute_full_run_hash(output_dir, run_id)
@@ -5453,7 +5495,7 @@ def compute_run_hash_with_changes(
             # Don't look in same globals_dir (that's the current run)
             prev_run_hash = None
             try:
-                from pathlib import Path
+                # Path is already imported globally at line 23
                 
                 # Find RESULTS directory by walking up from output_dir
                 results_dir = output_dir

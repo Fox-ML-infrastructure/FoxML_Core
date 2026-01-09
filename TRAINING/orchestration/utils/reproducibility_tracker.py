@@ -34,7 +34,7 @@ import platform
 import socket
 import fcntl
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, Union
 from datetime import datetime
 from enum import Enum
 import math
@@ -48,8 +48,27 @@ try:
 except ImportError:
     _AUDIT_AVAILABLE = False
     RunContext = None
-    AuditEnforcer = None
-    AuditMode = None
+
+# SST: Import View and Stage enums for consistent handling
+from TRAINING.orchestration.utils.scope_resolution import View, Stage
+
+# Helper function to normalize view for comparisons (handles both enum and string)
+def _normalize_view_for_comparison(view: Union[str, View, None]) -> str:
+    """Normalize view to string for safe comparisons."""
+    if view is None:
+        return View.CROSS_SECTIONAL.value
+    if isinstance(view, View):
+        return view.value
+    return str(view).upper()
+
+# Helper function to normalize stage for comparisons (handles both enum and string)
+def _normalize_stage_for_comparison(stage: Union[str, Stage, None]) -> str:
+    """Normalize stage to string for safe comparisons."""
+    if stage is None:
+        return None
+    if isinstance(stage, Stage):
+        return stage.value
+    return str(stage).upper()
 
 # Import OutputLayout for view+universe scoped paths
 try:
@@ -132,21 +151,26 @@ def _extract_horizon_minutes_sst(metadata, cv_details):
 
 def _sanitize_for_json(obj: Any) -> Any:
     """
-    Recursively convert pandas Timestamp objects to ISO strings for JSON serialization.
+    Recursively convert pandas Timestamp objects and enums to JSON-serializable types.
     
-    This ensures all Timestamp objects are converted to JSON-serializable ISO format strings
-    before writing to JSON files (metadata.json, snapshot.json, metrics.json).
+    This ensures all Timestamp objects are converted to ISO format strings and enums
+    are converted to their string values before writing to JSON files (metadata.json, 
+    snapshot.json, metrics.json).
     
     Args:
-        obj: Object to sanitize (can be dict, list, tuple, Timestamp, or other types)
+        obj: Object to sanitize (can be dict, list, tuple, Timestamp, Enum, or other types)
     
     Returns:
-        Sanitized object with all Timestamp objects converted to ISO strings
+        Sanitized object with all Timestamp objects converted to ISO strings and enums to strings
     """
     import pandas as pd
+    from enum import Enum
     
     if isinstance(obj, pd.Timestamp):
         return obj.isoformat()
+    elif isinstance(obj, Enum):
+        # Convert enum to string value for JSON serialization
+        return obj.value
     elif isinstance(obj, dict):
         return {k: _sanitize_for_json(v) for k, v in obj.items()}
     elif isinstance(obj, (list, tuple)):
@@ -225,7 +249,7 @@ def _write_atomic_json_with_lock(
         raise IOError(f"Failed to write locked JSON to {file_path}: {e}") from e
 
 
-def _construct_comparison_group_key_from_dict(comparison_group: Dict[str, Any], stage: str = "TRAINING") -> Optional[str]:
+def _construct_comparison_group_key_from_dict(comparison_group: Dict[str, Any], stage: Union[str, Stage] = Stage.TRAINING) -> Optional[str]:
     """
     Construct comparison_group_key from comparison_group dict.
     
@@ -569,7 +593,7 @@ class ReproducibilityTracker:
     
     def save_run(
         self,
-        stage: str,
+        stage: Union[str, Stage],
         target: str,
         metrics: Dict[str, Any],
         additional_data: Optional[Dict[str, Any]] = None
@@ -731,19 +755,25 @@ class ReproducibilityTracker:
         # This ensures proper scoping: features compared per-target, per-view, per-symbol
         view = additional_data.get('view')
         if view:
-            if view.upper() == "CROSS_SECTIONAL":
-                return "CROSS_SECTIONAL"
-            elif view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
-                return "SYMBOL_SPECIFIC"
+            # Normalize view to enum, then return string value
+            try:
+                view_enum = View.from_string(view)
+                return view_enum.value
+            except ValueError:
+                # Handle legacy values
+                if view.upper() == "CROSS_SECTIONAL":
+                    return View.CROSS_SECTIONAL.value
+                elif view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
+                    return View.SYMBOL_SPECIFIC.value
         
         # Infer from other fields (fallback)
         if additional_data.get('cross_sectional') or additional_data.get('is_cross_sectional'):
-            return "CROSS_SECTIONAL"
+            return View.CROSS_SECTIONAL.value
         elif additional_data.get('symbol_specific') or additional_data.get('is_symbol_specific'):
-            return "SYMBOL_SPECIFIC"
+            return View.SYMBOL_SPECIFIC.value
         
         # Default: assume CROSS_SECTIONAL if not specified
-        return "CROSS_SECTIONAL"
+        return View.CROSS_SECTIONAL.value
     
     def _extract_symbol(self, additional_data: Optional[Dict[str, Any]] = None) -> Optional[str]:
         """Extract symbol name from additional_data."""
@@ -836,8 +866,7 @@ class ReproducibilityTracker:
         """
         Compute readable cohort ID from metadata.
         
-        Format: {mode_prefix}_{date_range}_{universe}_{config}_{version}_{hash}
-        Example: cs_2023Q1_universeA_min_cs3_v1_abc12345
+        Delegates to unified compute_cohort_id() helper (SST).
         
         Args:
             cohort: Cohort metadata dict
@@ -850,77 +879,25 @@ class ReproducibilityTracker:
         Raises:
             ValueError: If view is invalid or mode doesn't match view
         """
-        # Map view to mode prefix
-        view_upper = (view or "").upper()
-        if view_upper == "CROSS_SECTIONAL":
-            mode_prefix = "cs"
-        elif view_upper == "SYMBOL_SPECIFIC":
-            mode_prefix = "sy"
-        else:
-            raise ValueError(f"Invalid view: {view}. Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'")
+        # SST: Use unified helper
+        from TRAINING.orchestration.utils.cohort_id import compute_cohort_id
         
         # If legacy mode provided, validate it matches view (explicit startswith check)
         if mode:
+            view_enum = View.from_string(view) if isinstance(view, str) else view
             mode_check = mode.lower()
-            if view_upper == "CROSS_SECTIONAL" and not mode_check.startswith("cs") and mode_check not in ("cross_sectional",):
+            if view_enum == View.CROSS_SECTIONAL and not mode_check.startswith("cs") and mode_check not in ("cross_sectional",):
                 logger.warning(
                     f"Mode/view mismatch: mode={mode} does not match view={view}. "
-                    f"Using view-derived prefix '{mode_prefix}'"
+                    f"Using view-derived prefix"
                 )
-            elif view_upper == "SYMBOL_SPECIFIC" and not mode_check.startswith("sy") and mode_check not in ("symbol_specific", "individual"):
+            elif view_enum == View.SYMBOL_SPECIFIC and not mode_check.startswith("sy") and mode_check not in ("symbol_specific", "individual"):
                 logger.warning(
                     f"Mode/view mismatch: mode={mode} does not match view={view}. "
-                    f"Using view-derived prefix '{mode_prefix}'"
+                    f"Using view-derived prefix"
                 )
         
-        # Extract date range
-        date_start = cohort.get('date_range', {}).get('start_ts', '')
-        date_end = cohort.get('date_range', {}).get('end_ts', '')
-        
-        # Convert to quarter format if possible
-        date_str = ""
-        if date_start:
-            try:
-                dt = pd.Timestamp(date_start)
-                date_str = f"{dt.year}Q{(dt.month-1)//3 + 1}"
-            except Exception as e:
-                logger.debug(f"Failed to parse date {date_start} for cohort ID: {e}, using YYYY-MM format")
-                date_str = date_start[:7] if len(date_start) >= 7 else date_start  # YYYY-MM
-        
-        # Extract universe/config
-        cs_config = cohort.get('cs_config', {})
-        # Use SST accessor for universe_sig
-        universe = extract_universe_sig(cohort, cs_config) or 'default'
-        min_cs = cs_config.get('min_cs', '')
-        max_cs = cs_config.get('max_cs_samples', '')
-        leak_ver = cs_config.get('leakage_filter_version', 'v1')
-        
-        # Build readable parts
-        parts = [mode_prefix]
-        if date_str:
-            parts.append(date_str)
-        if universe and universe != 'default':
-            parts.append(universe)
-        if min_cs:
-            parts.append(f"min_cs{min_cs}")
-        if max_cs and max_cs != 100000:  # Only include if non-default
-            parts.append(f"max{max_cs}")
-        parts.append(leak_ver.replace('.', '_'))
-        
-        cohort_id = "_".join(parts)
-        
-        # Add short hash for uniqueness if needed
-        # Create deterministic hash for final uniqueness check
-        hash_str = "|".join([
-            str(cohort.get('n_effective_cs', '')),
-            str(cohort.get('n_symbols', '')),
-            date_start,
-            date_end,
-            json.dumps(cs_config, sort_keys=True)
-        ])
-        short_hash = hashlib.sha256(hash_str.encode()).hexdigest()[:8]
-        
-        return f"{cohort_id}_{short_hash}"
+        return compute_cohort_id(cohort, view)
     
     def _calculate_cohort_relative_path(self, cohort_dir: Path) -> str:
         """
@@ -979,50 +956,74 @@ class ReproducibilityTracker:
         """
         repro_dir = self._repro_base_dir / "REPRODUCIBILITY"
         
-        # Normalize stage name to uppercase
-        stage_upper = stage.upper().replace("MODEL_TRAINING", "TRAINING")
+        # Normalize stage to enum, then to string for path construction
+        stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
+        stage_upper = str(stage_enum)  # Stage enum's __str__ returns .value
         
         # Build path components
         path_parts = [stage_upper]
         
         # For TARGET_RANKING, add view subdirectory (CROSS_SECTIONAL, SYMBOL_SPECIFIC, LOSO)
-        if stage_upper == "TARGET_RANKING":
+        if stage_enum == Stage.TARGET_RANKING:
             # Check if view is provided in additional_data or view
             view = None
-            if view and view.upper() in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "LOSO"]:
-                view = view.upper()
-            # If view not in view, check if we can infer from symbol presence
+            # Normalize view to enum if provided
+            if view:
+                try:
+                    view_enum = View.from_string(view) if isinstance(view, str) else view
+                    view = view_enum  # Store as enum
+                except ValueError:
+                    # Handle LOSO (not a View enum value)
+                    if isinstance(view, str) and view.upper() == "LOSO":
+                        view = View.SYMBOL_SPECIFIC  # LOSO maps to SYMBOL_SPECIFIC
+                    else:
+                        view_enum = View.from_string(view) if isinstance(view, str) else view
+                        view = view_enum
+            # If view not provided, check if we can infer from symbol presence
             if view is None and symbol:
-                view = "SYMBOL_SPECIFIC"  # Default for symbol-specific
+                view = View.SYMBOL_SPECIFIC  # Default for symbol-specific
             if view is None:
-                view = "CROSS_SECTIONAL"  # Default
-            path_parts.append(view)
+                view = View.CROSS_SECTIONAL  # Default
+            path_parts.append(str(view))  # Convert enum to string for path
         
         # Add mode subdirectory for FEATURE_SELECTION and TRAINING
-        elif stage_upper in ["FEATURE_SELECTION", "TRAINING"]:
+        elif stage_enum in (Stage.FEATURE_SELECTION, Stage.TRAINING):
             if view:
                 mode = view.upper()
                 # FIX: Accept SYMBOL_SPECIFIC as valid mode for FEATURE_SELECTION
-                if mode not in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
-                    mode = "SYMBOL_SPECIFIC"
+                # Normalize mode to View enum for validation
+                try:
+                    mode_enum = View.from_string(mode) if isinstance(mode, str) else mode
+                    mode = str(mode_enum)  # Convert back to string for path
+                except ValueError:
+                    # Invalid mode, default to SYMBOL_SPECIFIC
+                    mode = View.SYMBOL_SPECIFIC.value
             else:
-                mode = "CROSS_SECTIONAL"  # Default
+                mode = View.CROSS_SECTIONAL.value  # Default
             path_parts.append(mode)
         
         # Add target/target
         path_parts.append(target)
         
         # Add symbol for SYMBOL_SPECIFIC/LOSO views (TARGET_RANKING) or SYMBOL_SPECIFIC/INDIVIDUAL mode (FEATURE_SELECTION/TRAINING)
-        if stage_upper == "TARGET_RANKING":
-            if view in ["SYMBOL_SPECIFIC", "LOSO"] and symbol:
-                path_parts.append(f"symbol={symbol}")
-        elif stage_upper in ["FEATURE_SELECTION", "TRAINING"]:
+        if stage_enum == Stage.TARGET_RANKING:
+            # Normalize view to enum for comparison (handle LOSO as string)
+            if isinstance(view, str) and view == "LOSO":
+                if symbol:
+                    path_parts.append(f"symbol={symbol}")
+            else:
+                view_enum = View.from_string(view) if isinstance(view, str) else view
+                if view_enum == View.SYMBOL_SPECIFIC and symbol:
+                    path_parts.append(f"symbol={symbol}")
+        elif stage_enum in (Stage.FEATURE_SELECTION, Stage.TRAINING):
             # For FEATURE_SELECTION/TRAINING, add symbol if mode is SYMBOL_SPECIFIC
-            if symbol and (view and view.upper() == "SYMBOL_SPECIFIC"):
+            # Normalize view to enum for comparison
+            view_enum = View.from_string(view) if isinstance(view, str) else view
+            if symbol and view_enum == View.SYMBOL_SPECIFIC:
                 path_parts.append(f"symbol={symbol}")
         
         # Add model_family for TRAINING
-        if stage_upper == "TRAINING" and model_family:
+        if stage_enum == Stage.TRAINING and model_family:
             path_parts.append(f"model_family={model_family}")
         
         # Add cohort directory
@@ -1155,7 +1156,7 @@ class ReproducibilityTracker:
     
     def _save_to_cohort(
         self,
-        stage: str,
+        stage: Union[str, Stage],
         target: str,
         cohort_id: str,
         cohort_metadata: Dict[str, Any],
@@ -1189,15 +1190,13 @@ class ReproducibilityTracker:
         run_id = extract_run_id(run_data) or datetime.now().isoformat()
         run_id_clean = run_id.replace(':', '-').replace('.', '-').replace('T', '_')
         
-        # Normalize stage (accept both string and Stage enum)
-        if isinstance(stage, Stage):
-            stage_normalized = stage.value
-        else:
-            stage_normalized = stage.upper().replace("MODEL_TRAINING", "TRAINING")
+        # Normalize stage to enum, then to string for comparisons
+        stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
+        stage_normalized = str(stage_enum)  # Stage enum's __str__ returns .value
         
         # Normalize view (accept both string and RouteType enum)
         # For TARGET_RANKING, use view from additional_data if available
-        if stage_normalized == "TARGET_RANKING" and not view:
+        if stage_enum == Stage.TARGET_RANKING and not view:
             if additional_data and 'view' in additional_data:
                 view = additional_data['view']  # Use view as view for TARGET_RANKING
         elif view and isinstance(view, RouteType):
@@ -1214,7 +1213,7 @@ class ReproducibilityTracker:
             symbols_list = additional_data['symbol_list']
         
         # For TARGET_RANKING with SYMBOL_SPECIFIC/LOSO view, use symbol from additional_data if available
-        if stage_normalized == "TARGET_RANKING" and not symbol:
+        if stage_enum == Stage.TARGET_RANKING and not symbol:
             if additional_data and 'symbol' in additional_data:
                 symbol = additional_data['symbol']  # Override symbol from additional_data
         
@@ -1243,26 +1242,28 @@ class ReproducibilityTracker:
         
         # Extract view for stages that require it (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
         view_value = None
-        if stage_normalized in ["TARGET_RANKING", "FEATURE_SELECTION", "TRAINING"]:
+        if stage_enum in (Stage.TARGET_RANKING, Stage.FEATURE_SELECTION, Stage.TRAINING):
             # Try to get view from additional_data first
             if additional_data and 'view' in additional_data:
                 view_value = additional_data['view'].upper() if isinstance(additional_data['view'], str) else additional_data['view']
             # Fallback: derive from view
             elif view:
                 route_normalized = view.upper() if isinstance(view, str) else (view.value if hasattr(view, 'value') else str(view).upper() if view else None)
-                if route_normalized == "CROSS_SECTIONAL":
-                    view_value = "CROSS_SECTIONAL"
-                elif route_normalized == "SYMBOL_SPECIFIC":
-                    view_value = "SYMBOL_SPECIFIC"
+                # Normalize route_normalized to View enum
+                route_enum = View.from_string(route_normalized) if isinstance(route_normalized, str) else route_normalized
+                if route_enum == View.CROSS_SECTIONAL:
+                    view_value = View.CROSS_SECTIONAL.value
+                elif route_enum == View.SYMBOL_SPECIFIC:
+                    view_value = View.SYMBOL_SPECIFIC.value
             # Default to CROSS_SECTIONAL if not found
             if not view_value:
-                view_value = "CROSS_SECTIONAL"
+                view_value = View.CROSS_SECTIONAL.value
         
         # ========================================================================
         # PR1 FIREWALL: OutputLayout validation for view+universe scoping
         # This is the choke point that catches all writes and validates scope
         # ========================================================================
-        if _OUTPUT_LAYOUT_AVAILABLE and stage_normalized in ["TARGET_RANKING", "FEATURE_SELECTION", "TRAINING"]:
+        if _OUTPUT_LAYOUT_AVAILABLE and stage_enum in (Stage.TARGET_RANKING, Stage.FEATURE_SELECTION, Stage.TRAINING):
             # Extract and normalize metadata fields
             raw_view = cohort_metadata.get("view") or view_value
             normalized_view = _normalize_view({"view": raw_view}) if _normalize_view else None
@@ -1287,14 +1288,14 @@ class ReproducibilityTracker:
             
             # Invariant 1: cohort_id prefix must match view (ALWAYS enforced)
             if cohort_id and normalized_view:
-                if normalized_view == "CROSS_SECTIONAL" and cohort_id.startswith("sy_"):
+                if _normalize_view_for_comparison(normalized_view) == View.CROSS_SECTIONAL.value and cohort_id.startswith("sy_"):
                     raise ValueError(
                         f"SCOPE VIOLATION: Cannot write sy_ cohort to CROSS_SECTIONAL view. "
                         f"cohort_id={cohort_id}, view={normalized_view}, stage={stage_normalized}, "
                         f"target={target}, symbol={symbol_from_meta}, universe_sig={universe_sig}. "
                         f"Check that view_for_writes comes from resolved_data_config['view']."
                     )
-                if normalized_view == "SYMBOL_SPECIFIC" and cohort_id.startswith("cs_"):
+                if _normalize_view_for_comparison(normalized_view) == View.SYMBOL_SPECIFIC.value and cohort_id.startswith("cs_"):
                     raise ValueError(
                         f"SCOPE VIOLATION: Cannot write cs_ cohort to SYMBOL_SPECIFIC view. "
                         f"cohort_id={cohort_id}, view={normalized_view}, stage={stage_normalized}, "
@@ -1305,14 +1306,14 @@ class ReproducibilityTracker:
             # Invariant 2: symbol presence must match view (ALWAYS enforced when view is known)
             if normalized_view:
                 symbol_key_present = "symbol" in cohort_metadata or symbol is not None
-                if normalized_view == "CROSS_SECTIONAL" and symbol_key_present:
+                if _normalize_view_for_comparison(normalized_view) == View.CROSS_SECTIONAL.value and symbol_key_present:
                     raise ValueError(
                         f"SCOPE VIOLATION: symbol key present for CROSS_SECTIONAL view. "
                         f"symbol={symbol_from_meta}, view={normalized_view}, stage={stage_normalized}, "
                         f"target={target}, cohort_id={cohort_id}. "
                         f"CS metadata must not have symbol key at all (not even null)."
                     )
-                if normalized_view == "SYMBOL_SPECIFIC" and not symbol_from_meta:
+                if _normalize_view_for_comparison(normalized_view) == View.SYMBOL_SPECIFIC.value and not symbol_from_meta:
                     raise ValueError(
                         f"SCOPE VIOLATION: symbol required for SYMBOL_SPECIFIC view but was None/empty. "
                         f"view={normalized_view}, stage={stage_normalized}, target={target}, "
@@ -1388,7 +1389,7 @@ class ReproducibilityTracker:
                     missing.append("target")
                 
                 # If view is valid and symbol-specific, require symbol
-                if normalized_view == "SYMBOL_SPECIFIC" and not symbol_from_meta:
+                if _normalize_view_for_comparison(normalized_view) == View.SYMBOL_SPECIFIC.value and not symbol_from_meta:
                     missing.append("symbol")
                 
                 if strict_mode:
@@ -1413,8 +1414,8 @@ class ReproducibilityTracker:
                         prefix = "sy" if cohort_id.startswith("sy_") else "cs" if cohort_id.startswith("cs_") else "unknown"
                         # Check for prefix/view mismatch
                         prefix_view_mismatch = (
-                            (normalized_view == "CROSS_SECTIONAL" and prefix == "sy") or
-                            (normalized_view == "SYMBOL_SPECIFIC" and prefix == "cs")
+                            (_normalize_view_for_comparison(normalized_view) == View.CROSS_SECTIONAL.value and prefix == "sy") or
+                            (_normalize_view_for_comparison(normalized_view) == View.SYMBOL_SPECIFIC.value and prefix == "cs")
                         )
                         if prefix_view_mismatch and strict_mode:
                             raise ValueError(
@@ -1441,9 +1442,9 @@ class ReproducibilityTracker:
         for key in expected_keys:
             if key not in cs_config_for_hash:
                 cs_config_for_hash[key] = None
-        config_hash = hashlib.sha256(
-            json.dumps(cs_config_for_hash, sort_keys=True).encode()
-        ).hexdigest()[:8]
+        # SST: Use canonical_json and sha256_short for consistent config hashing
+        from TRAINING.common.utils.config_hashing import canonical_json, sha256_short
+        config_hash = sha256_short(canonical_json(cs_config_for_hash), 8)
         
         full_metadata = {
             "schema_version": REPRODUCIBILITY_SCHEMA_VERSION,
@@ -1482,9 +1483,14 @@ class ReproducibilityTracker:
         # Schema v2: Omit non-applicable fields instead of null
         # Only include symbol if view is SYMBOL_SPECIFIC
         route_normalized = view.upper() if view else None
-        if symbol and (route_normalized == "SYMBOL_SPECIFIC" or 
-                      (stage_normalized == "TARGET_RANKING" and additional_data and 
-                       additional_data.get('view') in ['SYMBOL_SPECIFIC', 'LOSO'])):
+        # Normalize route_normalized to enum for comparison
+        route_enum = View.from_string(route_normalized) if isinstance(route_normalized, str) else route_normalized
+        # Check additional_data view (may be string from JSON)
+        additional_view = additional_data.get('view') if additional_data else None
+        additional_view_enum = View.from_string(additional_view) if isinstance(additional_view, str) and additional_view else None
+        if symbol and (route_enum == View.SYMBOL_SPECIFIC or 
+                      (stage_enum == Stage.TARGET_RANKING and additional_data and 
+                       (additional_view_enum == View.SYMBOL_SPECIFIC or (isinstance(additional_view, str) and additional_view == 'LOSO')))):
             full_metadata["symbol"] = symbol
         # Otherwise omit (cross-sectional doesn't have a single symbol)
         
@@ -1807,8 +1813,9 @@ class ReproducibilityTracker:
                 try:
                     target_config = additional_data['target_config']
                     if isinstance(target_config, dict):
-                        target_config_str = json.dumps(target_config, sort_keys=True)
-                        evaluation_info['target_config_hash'] = hashlib.sha256(target_config_str.encode()).hexdigest()[:16]
+                        # SST: Use canonical_json and sha256_short for consistent config hashing
+                        from TRAINING.common.utils.config_hashing import canonical_json, sha256_short
+                        evaluation_info['target_config_hash'] = sha256_short(canonical_json(target_config), 16)
                 except Exception:
                     pass
             
@@ -1837,7 +1844,7 @@ class ReproducibilityTracker:
         # NEW: Add training information (hyperparameters, train_seed) for TRAINING and FEATURE_SELECTION stages
         # CRITICAL: This is needed for comparability - different HPs/seeds = different outcomes
         # FEATURE_SELECTION also uses models (LightGBM, etc.) with hyperparameters that affect feature selection
-        if stage_normalized in ["TRAINING", "FEATURE_SELECTION"] and additional_data:
+        if stage_enum in (Stage.TRAINING, Stage.FEATURE_SELECTION) and additional_data:
             training_info = {}
             
             # Extract train_seed (distinct from split_seed)
@@ -1951,7 +1958,7 @@ class ReproducibilityTracker:
         # Determine target-first directory (for TARGET_RANKING and FEATURE_SELECTION stages)
         # CRITICAL: Do this BEFORE finalize_run() so we can pass the correct cohort_dir
         target_cohort_dir = None
-        if stage_normalized in ["TARGET_RANKING", "FEATURE_SELECTION"]:
+        if stage_enum in (Stage.TARGET_RANKING, Stage.FEATURE_SELECTION):
             try:
                 from TRAINING.orchestration.utils.target_first_paths import (
                     get_target_reproducibility_dir, ensure_target_structure
@@ -1959,21 +1966,36 @@ class ReproducibilityTracker:
                 
                 # Determine view from view or additional_data
                 view_for_target = None
-                if stage_normalized == "TARGET_RANKING":
+                if stage_enum == Stage.TARGET_RANKING:
                     # For TARGET_RANKING, view comes from view or additional_data
-                    if view and view.upper() in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC", "LOSO"]:
-                        view_for_target = view.upper()
+                    # Normalize view to enum for comparison
+                    if view:
+                        try:
+                            view_enum = View.from_string(view) if isinstance(view, str) else view
+                            view_for_target = view_enum.value  # Use enum value
+                        except ValueError:
+                            # Handle LOSO (not a View enum value)
+                            if isinstance(view, str) and view.upper() == "LOSO":
+                                view_for_target = View.SYMBOL_SPECIFIC.value
+                            else:
+                                view_enum = View.from_string(view) if isinstance(view, str) else view
+                                view_for_target = view_enum.value
                     elif additional_data and 'view' in additional_data:
-                        view_for_target = additional_data['view'].upper()
+                        # Normalize view from additional_data
+                        view_from_data = additional_data['view']
+                        view_enum = View.from_string(view_from_data) if isinstance(view_from_data, str) else view_from_data
+                        view_for_target = view_enum.value if isinstance(view_enum, View) else str(view_enum).upper()
                     if not view_for_target:
-                        view_for_target = "CROSS_SECTIONAL"  # Default
-                elif stage_normalized == "FEATURE_SELECTION":
+                        view_for_target = View.CROSS_SECTIONAL.value  # Default
+                elif stage_enum == Stage.FEATURE_SELECTION:
                     # For FEATURE_SELECTION, map view to view
                     if view:
-                        if view.upper() == "CROSS_SECTIONAL":
-                            view_for_target = "CROSS_SECTIONAL"
-                        elif view.upper() == "SYMBOL_SPECIFIC":
-                            view_for_target = "SYMBOL_SPECIFIC"
+                        # Normalize view to enum
+                        view_enum = View.from_string(view) if isinstance(view, str) else view
+                        if view_enum == View.CROSS_SECTIONAL:
+                            view_for_target = View.CROSS_SECTIONAL.value
+                        elif view_enum == View.SYMBOL_SPECIFIC:
+                            view_for_target = View.SYMBOL_SPECIFIC.value
                     elif additional_data and 'view' in additional_data:
                         view_for_target = additional_data['view'].upper()
                     if not view_for_target:
@@ -1998,7 +2020,9 @@ class ReproducibilityTracker:
                 # For CROSS_SECTIONAL: targets/<target>/reproducibility/stage=<stage>/CROSS_SECTIONAL/cohort=<cohort_id>/
                 # For SYMBOL_SPECIFIC: targets/<target>/reproducibility/stage=<stage>/SYMBOL_SPECIFIC/symbol=<symbol>/cohort=<cohort_id>/
                 target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage_normalized)
-                if view_for_target == "SYMBOL_SPECIFIC" and symbol:
+                # Normalize view_for_target to enum for comparison
+                view_for_target_enum = View.from_string(view_for_target) if isinstance(view_for_target, str) else view_for_target
+                if view_for_target_enum == View.SYMBOL_SPECIFIC and symbol:
                     # Include symbol in path to prevent overwriting
                     target_cohort_dir = target_repro_dir / view_for_target / f"symbol={symbol}" / f"cohort={cohort_id}"
                 else:
@@ -2214,11 +2238,21 @@ class ReproducibilityTracker:
             # Normalize view - ensure it's one of the expected values
             # FIX: Don't shadow the view parameter passed to the function
             metrics_view = view.upper() if view else None
-            if metrics_view and metrics_view not in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
+            # Normalize metrics_view to enum for validation
+            if metrics_view:
+                try:
+                    metrics_view_enum = View.from_string(metrics_view) if isinstance(metrics_view, str) else metrics_view
+                    if metrics_view_enum not in (View.CROSS_SECTIONAL, View.SYMBOL_SPECIFIC):
+                        # Invalid view, will be handled below
+                        pass
+                except ValueError:
+                    # Invalid view, will be handled below
+                    pass
+            if metrics_view and metrics_view not in [View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value]:
                 metrics_view = None  # Invalid view, will use "UNKNOWN" in write call
             
             # Determine target for metrics (for TARGET_RANKING and FEATURE_SELECTION stages)
-            metrics_target = target if stage_normalized in ["TARGET_RANKING", "FEATURE_SELECTION"] else None
+            metrics_target = target if stage_enum in (Stage.TARGET_RANKING, Stage.FEATURE_SELECTION) else None
             
             # Generate baseline key for drift comparison: (stage, view, target[, symbol])
             # For FEATURE_SELECTION, use view as view (CROSS_SECTIONAL or INDIVIDUAL)
@@ -2226,15 +2260,16 @@ class ReproducibilityTracker:
             if metrics_target:
                 # For TARGET_RANKING, view comes from metrics_view (CROSS_SECTIONAL, SYMBOL_SPECIFIC)
                 # For FEATURE_SELECTION, view is CROSS_SECTIONAL or INDIVIDUAL (maps to view)
-                if stage_normalized == "TARGET_RANKING" and metrics_view:
+                if stage_enum == Stage.TARGET_RANKING and metrics_view:
                     baseline_key = f"{stage_normalized}:{metrics_view}:{metrics_target}"
-                    if symbol and metrics_view == "SYMBOL_SPECIFIC":
+                    if symbol and _normalize_view_for_comparison(metrics_view) == View.SYMBOL_SPECIFIC.value:
                         baseline_key += f":{symbol}"
-                elif stage_normalized == "FEATURE_SELECTION" and metrics_view:
+                elif stage_enum == Stage.FEATURE_SELECTION and metrics_view:
                     # Map view to view for FEATURE_SELECTION
-                    fs_view = metrics_view if metrics_view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"] else "CROSS_SECTIONAL"
+                    metrics_view_str = _normalize_view_for_comparison(metrics_view)
+                    fs_view = metrics_view_str if metrics_view_str in [View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value] else View.CROSS_SECTIONAL.value
                     baseline_key = f"{stage_normalized}:{fs_view}:{metrics_target}"
-                    if symbol and metrics_view == "SYMBOL_SPECIFIC":
+                    if symbol and _normalize_view_for_comparison(metrics_view) == View.SYMBOL_SPECIFIC.value:
                         baseline_key += f":{symbol}"
             
             logger.debug(f"📊 Writing metrics for stage={stage_normalized}, target={metrics_target}, view={metrics_view}, target_cohort_dir={target_cohort_dir}")
@@ -2652,7 +2687,9 @@ class ReproducibilityTracker:
         if isinstance(stage, Stage):
             phase = stage.value
         else:
-            phase = stage.upper().replace("MODEL_TRAINING", "TRAINING")
+            # Normalize stage to enum, then to string
+            stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
+            phase = str(stage_enum)  # Stage enum's __str__ returns .value
         
         # Normalize view
         # For TARGET_RANKING, view is actually the view (CROSS_SECTIONAL, SYMBOL_SPECIFIC, LOSO)
@@ -2966,7 +3003,9 @@ class ReproducibilityTracker:
         try:
             df = pd.read_parquet(index_file)
             
-            phase = stage.upper().replace("MODEL_TRAINING", "TRAINING")
+            # Normalize stage to enum, then to string
+            stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
+            phase = str(stage_enum)  # Stage enum's __str__ returns .value
             
             # Filter for same phase, target, mode, symbol, model_family
             mask = (df['phase'] == phase) & (df['target'] == target)
@@ -3152,7 +3191,9 @@ class ReproducibilityTracker:
         try:
             df = pd.read_parquet(index_file)
             
-            phase = stage.upper().replace("MODEL_TRAINING", "TRAINING")
+            # Normalize stage to enum, then to string
+            stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
+            phase = str(stage_enum)  # Stage enum's __str__ returns .value
             
             # Filter for matching stage, target, mode, symbol, model_family
             mask = (df['phase'] == phase) & (df['target'] == target)
@@ -3162,7 +3203,9 @@ class ReproducibilityTracker:
             # For other stages, allow nulls (backward compatibility)
             if view:
                 route_upper = view.upper()
-                if stage.upper() == "FEATURE_SELECTION":
+                # Normalize stage to enum for comparison
+                stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
+                if stage_enum == Stage.FEATURE_SELECTION:
                     # For FEATURE_SELECTION, require mode non-null (new runs must have mode)
                     mask &= (df['mode'].notna()) & (df['mode'] == route_upper)
                 else:
@@ -3173,15 +3216,20 @@ class ReproducibilityTracker:
             # For INDIVIDUAL mode, require symbol non-null
             # For CROSS_SECTIONAL, allow nulls (backward compatibility)
             if symbol:
-                if view and view.upper() == "SYMBOL_SPECIFIC":
+                # Normalize view to enum for comparison
+                view_enum = View.from_string(view) if isinstance(view, str) else view
+                if view_enum == View.SYMBOL_SPECIFIC:
                     # For SYMBOL_SPECIFIC mode, require symbol non-null
                     mask &= (df['symbol'].notna()) & (df['symbol'] == symbol)
                 else:
                     # For CROSS_SECTIONAL, allow nulls (backward compatibility)
                     mask &= ((df['symbol'].isna()) | (df['symbol'] == symbol))
-            elif view and view.upper() == "CROSS_SECTIONAL":
-                # For CROSS_SECTIONAL, require symbol is null (prevent history forking)
-                mask &= (df['symbol'].isna())
+            elif not symbol:
+                # If no symbol specified, normalize view to enum for comparison
+                view_enum = View.from_string(view) if isinstance(view, str) else view
+                if view_enum == View.CROSS_SECTIONAL:
+                    # For CROSS_SECTIONAL, require symbol is null (prevent history forking)
+                    mask &= (df['symbol'].isna())
             
             if model_family:
                 mask &= (df['model_family'] == model_family)
@@ -3260,7 +3308,7 @@ class ReproducibilityTracker:
         prev_run: Dict[str, Any],
         curr_run: Dict[str, Any],
         cohort_metadata: Dict[str, Any],
-        stage: str,
+        stage: Union[str, Stage],
         target: str,
         view: Optional[str],
         symbol: Optional[str],
@@ -3273,6 +3321,9 @@ class ReproducibilityTracker:
         
         Explicitly links both runs (current + previous) for self-contained drift.json.
         """
+        # Normalize stage to Stage enum
+        stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
+        
         # Use SST accessor for sample size
         prev_n = extract_n_effective(prev_run) or 0
         curr_n = cohort_metadata.get('n_effective_cs', 0)
@@ -3300,7 +3351,9 @@ class ReproducibilityTracker:
             
             stage_str = stage
             if isinstance(stage, str):
-                stage_str = stage.upper().replace("MODEL_TRAINING", "TRAINING")
+                # Normalize stage to enum, then to string
+                stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
+                stage_str = str(stage_enum)  # Stage enum's __str__ returns .value
             elif hasattr(stage, 'value'):
                 stage_str = stage.value.upper().replace("MODEL_TRAINING", "TRAINING") if isinstance(stage.value, str) else str(stage.value).upper()
             else:
@@ -3367,14 +3420,8 @@ class ReproducibilityTracker:
             else:
                 view_str = str(view).upper()
         
-        # Defensive: handle both string and Enum for stage
-        stage_str = stage
-        if isinstance(stage, str):
-            stage_str = stage.upper().replace("MODEL_TRAINING", "TRAINING")
-        elif hasattr(stage, 'value'):
-            stage_str = stage.value.upper().replace("MODEL_TRAINING", "TRAINING") if isinstance(stage.value, str) else str(stage.value).upper()
-        else:
-            stage_str = str(stage).upper().replace("MODEL_TRAINING", "TRAINING")
+        # Use normalized stage_enum for string conversion
+        stage_str = str(stage_enum).replace("MODEL_TRAINING", "TRAINING")
         
         return {
             "schema_version": REPRODUCIBILITY_SCHEMA_VERSION,
@@ -3408,7 +3455,7 @@ class ReproducibilityTracker:
     
     def log_comparison(
         self,
-        stage: str,
+        stage: Union[str, Stage],
         target: str,
         metrics: Dict[str, Any],
         additional_data: Optional[Dict[str, Any]] = None,
@@ -3442,6 +3489,9 @@ class ReproducibilityTracker:
             run_identity: Optional RunIdentity SST object with authoritative signatures
             prediction_fingerprint: Optional prediction fingerprint dict for predictions_sha256
         """
+        # Normalize stage to enum for internal use
+        stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
+        
         # SST: view takes precedence over view
         if view is not None:
             view = view
@@ -3486,23 +3536,29 @@ class ReproducibilityTracker:
             # For TARGET_RANKING, view comes from "view" field in additional_data
             # For FEATURE_SELECTION, map view to view (CROSS_SECTIONAL → CROSS_SECTIONAL, SYMBOL_SPECIFIC → INDIVIDUAL)
             if view is None:
-                if stage.upper() == "TARGET_RANKING":
+                # Normalize stage to enum for comparison
+                stage_enum = Stage.from_string(stage) if isinstance(stage, str) else stage
+                if stage_enum == Stage.TARGET_RANKING:
                     view = additional_data.get("view") if additional_data else None
                     if view:
                         view = view.upper()  # Normalize to uppercase
-                elif stage.upper() == "FEATURE_SELECTION":
+                elif stage_enum == Stage.FEATURE_SELECTION:
                     # FIX: Map view to view for FEATURE_SELECTION (ensures proper metrics scoping)
                     view = additional_data.get("view") if additional_data else None
                     if view:
-                        if view.upper() == "CROSS_SECTIONAL":
-                            view = "CROSS_SECTIONAL"
-                        elif view.upper() in ["SYMBOL_SPECIFIC", "INDIVIDUAL"]:
-                            view = "SYMBOL_SPECIFIC"
+                        view_str = _normalize_view_for_comparison(view)
+                        # Normalize view_str to enum
+                        view_enum = View.from_string(view_str) if isinstance(view_str, str) else view_str
+                        if view_enum == View.CROSS_SECTIONAL:
+                            view = View.CROSS_SECTIONAL
+                        elif view_enum == View.SYMBOL_SPECIFIC:
+                            view = View.SYMBOL_SPECIFIC
                     if not view:
                         # Fallback to extraction method
                         view = self._extract_view(additional_data)
                 else:
-                    view = self._extract_view(additional_data) if stage.lower() in ["feature_selection", "model_training", "training"] else None
+                    # Use normalized stage_enum for comparison
+                    view = self._extract_view(additional_data) if stage_enum in (Stage.FEATURE_SELECTION, Stage.TRAINING) else None
             
             if symbol is None:
                 symbol = self._extract_symbol(additional_data)
@@ -3903,8 +3959,8 @@ class ReproducibilityTracker:
                             # Analyze STRICT series
                             all_trends = trend_analyzer.analyze_all_series(view=SeriesView.STRICT)
                             
-                            # Normalize stage for trend matching
-                            stage_for_trend = stage.upper().replace("MODEL_TRAINING", "TRAINING")
+                            # Use normalized stage_enum for trend matching
+                            stage_for_trend = str(stage_enum).replace("MODEL_TRAINING", "TRAINING") if stage_enum else (str(stage).upper().replace("MODEL_TRAINING", "TRAINING") if stage else "UNKNOWN")
                             
                             # Find trend for this series
                             for series_key_str, trend_list in all_trends.items():
@@ -3938,17 +3994,19 @@ class ReproducibilityTracker:
                             target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage)
                             
                             # Determine view
-                            view = view.upper() if view else "CROSS_SECTIONAL"
-                            if view not in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
-                                view = "SYMBOL_SPECIFIC"  # Normalize legacy values
+                            view_str = _normalize_view_for_comparison(view) if view else View.CROSS_SECTIONAL.value
+                            if view_str not in [View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value]:
+                                view = View.SYMBOL_SPECIFIC  # Normalize legacy values
+                            else:
+                                view = View.CROSS_SECTIONAL if view_str == View.CROSS_SECTIONAL.value else View.SYMBOL_SPECIFIC
 
                             # CRITICAL FIX: If symbol is set, force SYMBOL_SPECIFIC
                             if symbol:
-                                view = "SYMBOL_SPECIFIC"
+                                view = View.SYMBOL_SPECIFIC
                             elif cohort_id and cohort_id.startswith("sy_"):
-                                view = "SYMBOL_SPECIFIC"
+                                view = View.SYMBOL_SPECIFIC
 
-                            if view == "SYMBOL_SPECIFIC" and symbol:
+                            if _normalize_view_for_comparison(view) == View.SYMBOL_SPECIFIC.value and symbol:
                                 target_cohort_dir = target_repro_dir / view / f"symbol={symbol}" / f"cohort={cohort_id}"
                             else:
                                 target_cohort_dir = target_repro_dir / view / f"cohort={cohort_id}"
@@ -4089,6 +4147,11 @@ class ReproducibilityTracker:
         Raises:
             ValueError: If required fields are missing (in COHORT_AWARE mode) or audit validation fails (in strict mode)
         """
+        # Normalize ctx.stage to Stage enum at the beginning
+        stage_enum = None
+        if hasattr(ctx, 'stage') and ctx.stage:
+            stage_enum = Stage.from_string(ctx.stage) if isinstance(ctx.stage, str) else ctx.stage
+        
         if not _AUDIT_AVAILABLE:
             # Fallback to legacy API
             logger.warning("RunContext not available, falling back to legacy log_comparison API")
@@ -4223,22 +4286,31 @@ class ReproducibilityTracker:
         # 4. Load previous run metadata for comparison
         # FIX: For FEATURE_SELECTION, map view to view (ensures proper metrics scoping)
         view_for_cohort = ctx.view if hasattr(ctx, 'view') else None
-        # FIX: Use case-insensitive comparison for stage (may be lowercase or uppercase)
-        stage_upper = ctx.stage.upper() if ctx.stage else ""
-        if stage_upper == "TARGET_RANKING" and hasattr(ctx, 'view') and ctx.view:
+        # Use normalized stage_enum for comparison
+        if stage_enum == Stage.TARGET_RANKING and hasattr(ctx, 'view') and ctx.view:
             view_for_cohort = ctx.view
-        elif stage_upper == "FEATURE_SELECTION" and hasattr(ctx, 'view') and ctx.view:
+        elif stage_enum == Stage.FEATURE_SELECTION and hasattr(ctx, 'view') and ctx.view:
             # Map view to view for FEATURE_SELECTION
             # FIX: Use SYMBOL_SPECIFIC directly (not INDIVIDUAL) to match directory structure
-            if ctx.view.upper() == "CROSS_SECTIONAL":
-                view_for_cohort = "CROSS_SECTIONAL"
+            # Normalize ctx.view to enum for comparison
+            ctx_view_enum = View.from_string(ctx.view) if isinstance(ctx.view, str) else ctx.view
+            if ctx_view_enum == View.CROSS_SECTIONAL:
+                view_for_cohort = View.CROSS_SECTIONAL.value
             else:
-                view_for_cohort = "SYMBOL_SPECIFIC"
+                view_for_cohort = View.SYMBOL_SPECIFIC.value
         
-        # Use view_for_cohort as view (it's already normalized to CROSS_SECTIONAL or SYMBOL_SPECIFIC)
-        view_for_cohort = view_for_cohort.upper() if view_for_cohort else "CROSS_SECTIONAL"
-        if view_for_cohort not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
-            view_for_cohort = "CROSS_SECTIONAL"  # Default if unexpected value
+        # Normalize view_for_cohort to enum (it may be string from JSON)
+        if view_for_cohort:
+            try:
+                view_for_cohort_enum = View.from_string(view_for_cohort) if isinstance(view_for_cohort, str) else view_for_cohort
+                view_for_cohort = view_for_cohort_enum.value if isinstance(view_for_cohort_enum, View) else str(view_for_cohort_enum).upper()
+            except ValueError:
+                view_for_cohort = View.CROSS_SECTIONAL.value  # Default if invalid
+        else:
+            view_for_cohort = View.CROSS_SECTIONAL.value  # Default if None
+        # Final validation
+        if view_for_cohort not in (View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value):
+            view_for_cohort = View.CROSS_SECTIONAL.value  # Default if unexpected value
         cohort_id = self._compute_cohort_id(cohort_metadata, view=view_for_cohort)
         previous_metadata = None
         try:
@@ -4253,11 +4325,13 @@ class ReproducibilityTracker:
             target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage_for_path)
             
             # Determine view
-            view = view_for_cohort.upper() if view_for_cohort else "CROSS_SECTIONAL"
-            if view not in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
-                view = "SYMBOL_SPECIFIC"  # Normalize legacy values
+            view_str = _normalize_view_for_comparison(view_for_cohort) if view_for_cohort else View.CROSS_SECTIONAL.value
+            if view_str not in [View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value]:
+                view = View.SYMBOL_SPECIFIC  # Normalize legacy values
+            else:
+                view = View.CROSS_SECTIONAL if view_str == View.CROSS_SECTIONAL.value else View.SYMBOL_SPECIFIC
             
-            if view == "SYMBOL_SPECIFIC" and ctx.symbol:
+            if _normalize_view_for_comparison(view) == View.SYMBOL_SPECIFIC.value and ctx.symbol:
                 target_cohort_dir = target_repro_dir / view / f"symbol={ctx.symbol}" / f"cohort={cohort_id}"
             else:
                 target_cohort_dir = target_repro_dir / view / f"cohort={cohort_id}"
@@ -4312,8 +4386,8 @@ class ReproducibilityTracker:
         # 6. Save using existing log_comparison (which handles cohort-aware saving)
         # For TARGET_RANKING, pass view as view
         view_for_log = ctx.view
-        # FIX: Use case-insensitive comparison for stage
-        if stage_upper == "TARGET_RANKING" and hasattr(ctx, 'view') and ctx.view:
+        # Use normalized stage_enum for comparison
+        if stage_enum == Stage.TARGET_RANKING and hasattr(ctx, 'view') and ctx.view:
             view_for_log = ctx.view
         
         # CRITICAL: Wrap log_comparison in try/except to ensure we can still write audit report
@@ -4346,16 +4420,17 @@ class ReproducibilityTracker:
         try:
             # FIX: Use view as view for TARGET_RANKING and FEATURE_SELECTION when getting cohort directory
             view_for_cohort_dir = view_for_log  # Use same as log_comparison
-            # FIX: Use case-insensitive comparison for stage (stage_upper computed earlier)
-            if stage_upper == "TARGET_RANKING" and hasattr(ctx, 'view') and ctx.view:
+            # Use normalized stage_enum for comparison
+            if stage_enum == Stage.TARGET_RANKING and hasattr(ctx, 'view') and ctx.view:
                 view_for_cohort_dir = ctx.view
-            elif stage_upper == "FEATURE_SELECTION" and hasattr(ctx, 'view') and ctx.view:
+            elif stage_enum == Stage.FEATURE_SELECTION and hasattr(ctx, 'view') and ctx.view:
                 # Map view to view for FEATURE_SELECTION
                 # FIX: Use SYMBOL_SPECIFIC directly (not INDIVIDUAL) to match directory structure
-                if ctx.view.upper() == "CROSS_SECTIONAL":
-                    view_for_cohort_dir = "CROSS_SECTIONAL"
+                ctx_view_str = _normalize_view_for_comparison(ctx.view) if hasattr(ctx, 'view') and ctx.view else View.CROSS_SECTIONAL.value
+                if ctx_view_str == View.CROSS_SECTIONAL.value:
+                    view_for_cohort_dir = View.CROSS_SECTIONAL
                 else:
-                    view_for_cohort_dir = "SYMBOL_SPECIFIC"
+                    view_for_cohort_dir = View.SYMBOL_SPECIFIC
             
             # Use target-first structure with stage scoping
             from TRAINING.orchestration.utils.target_first_paths import (
@@ -4369,9 +4444,11 @@ class ReproducibilityTracker:
             target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage_for_path)
             
             # Determine view - use view from run context (SST) if available
-            view = view_for_cohort_dir.upper() if view_for_cohort_dir else "CROSS_SECTIONAL"
-            if view not in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
-                view = "SYMBOL_SPECIFIC"  # Normalize legacy values
+            view_str = _normalize_view_for_comparison(view_for_cohort_dir) if view_for_cohort_dir else View.CROSS_SECTIONAL.value
+            if view_str not in [View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value]:
+                view = View.SYMBOL_SPECIFIC  # Normalize legacy values
+            else:
+                view = View.CROSS_SECTIONAL if view_str == View.CROSS_SECTIONAL.value else View.SYMBOL_SPECIFIC
             
             # Try to load view from run context (SST) and use it if available
             try:
@@ -4386,11 +4463,11 @@ class ReproducibilityTracker:
             
             # CRITICAL FIX: If symbol is set, force SYMBOL_SPECIFIC
             if ctx.symbol:
-                view = "SYMBOL_SPECIFIC"
+                view = View.SYMBOL_SPECIFIC
             elif cohort_id and cohort_id.startswith("sy_"):
-                view = "SYMBOL_SPECIFIC"
-            
-            if view == "SYMBOL_SPECIFIC" and ctx.symbol:
+                view = View.SYMBOL_SPECIFIC
+
+            if _normalize_view_for_comparison(view) == View.SYMBOL_SPECIFIC.value and ctx.symbol:
                 target_cohort_dir = target_repro_dir / view / f"symbol={ctx.symbol}" / f"cohort={cohort_id}"
             else:
                 target_cohort_dir = target_repro_dir / view / f"cohort={cohort_id}"
@@ -4518,12 +4595,15 @@ class ReproducibilityTracker:
                     # Analyze STRICT series for this specific target
                     all_trends = trend_analyzer.analyze_all_series(view=SeriesView.STRICT)
                     
+                    # Compute stage string for trend matching (reuse throughout this section)
+                    stage_str_for_trend = str(stage_enum) if stage_enum else (ctx.stage.upper() if hasattr(ctx, 'stage') and ctx.stage else "UNKNOWN")
+                    
                     # Find trend for this series
                     series_key_str = None
                     for sk, trend_list in all_trends.items():
                         # Check if this series matches
                         if any(t.series_key.target == (ctx.target or ctx.target_column) and 
-                               t.series_key.stage == ctx.stage.upper() for t in trend_list):
+                               t.series_key.stage == stage_str_for_trend for t in trend_list):
                             series_key_str = sk
                             break
                     
@@ -4536,7 +4616,7 @@ class ReproducibilityTracker:
                                 target = ctx.target or ctx.target_column or "unknown"
                                 trend_analyzer.write_cohort_trend(
                                     cohort_dir=cohort_dir,
-                                    stage=ctx.stage.upper(),
+                                    stage=stage_str_for_trend,
                                     target=target,
                                     trends={series_key_str: trends}  # Pass pre-computed trends
                                 )
@@ -4557,11 +4637,12 @@ class ReproducibilityTracker:
                                             current = current.parent
                                     
                                     if results_dir and results_dir.name == "RESULTS":
+                                        stage_str_for_trend = str(stage_enum) if stage_enum else (ctx.stage.upper() if hasattr(ctx, 'stage') and ctx.stage else "UNKNOWN")
                                         trend_analyzer.write_across_runs_timeseries(
                                             results_dir=results_dir,
                                             target=target,
-                                            stage=ctx.stage.upper(),
-                                            view=ctx.view if hasattr(ctx, 'view') else "CROSS_SECTIONAL"
+                                            stage=stage_str_for_trend,
+                                            view=str(ctx.view) if hasattr(ctx, 'view') and ctx.view else View.CROSS_SECTIONAL.value
                                         )
                                         
                                         # Write run snapshot

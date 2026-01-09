@@ -11,6 +11,9 @@ that matches the training pipeline's data structure.
 
 import numpy as np
 import pandas as pd
+
+# SST: Import View enum for consistent view handling
+from TRAINING.orchestration.utils.scope_resolution import View
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Set, Any
 import logging
@@ -394,7 +397,7 @@ def prepare_cross_sectional_data_for_ranking(
         # Force view: use requested_view exactly (no auto-flip)
         if effective_requested_view is None:
             logger.warning("view_policy=force but requested_view not set, defaulting to CROSS_SECTIONAL")
-            effective_requested_view = "CROSS_SECTIONAL"
+            effective_requested_view = View.CROSS_SECTIONAL.value
         view = effective_requested_view
         view_reason = f"view_policy=force, requested_view={effective_requested_view}"
     else:
@@ -407,10 +410,10 @@ def prepare_cross_sectional_data_for_ranking(
                 view = "SINGLE_SYMBOL_TS"
                 view_reason = "n_symbols=1"
         elif n_symbols_available < auto_flip_min_symbols:
-            view = "SYMBOL_SPECIFIC"
+            view = View.SYMBOL_SPECIFIC
             view_reason = f"n_symbols={n_symbols_available} (small panel, < {auto_flip_min_symbols} recommended)"
         else:
-            view = "CROSS_SECTIONAL"
+            view = View.CROSS_SECTIONAL
             view_reason = f"n_symbols={n_symbols_available} (full panel, >= {auto_flip_min_symbols})"
     
     # Validate view contract (only if we resolved a new view, not cached)
@@ -447,7 +450,9 @@ def prepare_cross_sectional_data_for_ranking(
             logger.warning(f"Could not save run context: {e}")
     
     # Log requested vs effective (single authoritative line)
-    data_type_label = "Cross-sectional sampling" if view == "CROSS_SECTIONAL" else "Panel data sampling"
+    # Normalize view to enum for comparison
+    view_enum = View.from_string(view) if isinstance(view, str) else view
+    data_type_label = "Cross-sectional sampling" if view_enum == View.CROSS_SECTIONAL else "Panel data sampling"
     logger.info(
         f"📊 {data_type_label}: "
         f"requested_min_cs={min_cs} → effective_min_cs={effective_min_cs} "

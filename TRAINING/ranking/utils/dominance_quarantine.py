@@ -17,6 +17,9 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
+# SST: Import Stage enum for consistent stage handling
+from TRAINING.orchestration.utils.scope_resolution import Stage
+
 logger = logging.getLogger(__name__)
 
 
@@ -203,7 +206,7 @@ def write_suspects_artifact(
     from TRAINING.orchestration.utils.target_first_paths import target_repro_dir
     
     symbol_str = symbol if symbol else "ALL"
-    repro_dir = target_repro_dir(output_dir, target, view, symbol=symbol, stage="TARGET_RANKING")
+    repro_dir = target_repro_dir(output_dir, target, view, symbol=symbol, stage=Stage.TARGET_RANKING)
     qdir = repro_dir / "feature_quarantine"
     qdir.mkdir(parents=True, exist_ok=True)
     
@@ -245,7 +248,7 @@ def write_suspects_artifact_with_data(
     from TRAINING.orchestration.utils.target_first_paths import target_repro_dir
     
     symbol_str = symbol if symbol else "ALL"
-    repro_dir = target_repro_dir(output_dir, target, view, symbol=symbol, stage="TARGET_RANKING")
+    repro_dir = target_repro_dir(output_dir, target, view, symbol=symbol, stage=Stage.TARGET_RANKING)
     qdir = repro_dir / "feature_quarantine"
     qdir.mkdir(parents=True, exist_ok=True)
     
@@ -347,7 +350,7 @@ def persist_confirmed_quarantine(
     from TRAINING.orchestration.utils.target_first_paths import target_repro_dir
     
     symbol_str = symbol if symbol else "ALL"
-    repro_dir = target_repro_dir(output_dir, target, view, symbol=symbol, stage="TARGET_RANKING")
+    repro_dir = target_repro_dir(output_dir, target, view, symbol=symbol, stage=Stage.TARGET_RANKING)
     qdir = repro_dir / "feature_quarantine"
     qdir.mkdir(parents=True, exist_ok=True)
     
@@ -387,7 +390,7 @@ def load_confirmed_quarantine(
     from TRAINING.orchestration.utils.target_first_paths import target_repro_dir
     
     try:
-        repro_dir = target_repro_dir(output_dir, target, view, symbol=symbol, stage="TARGET_RANKING")
+        repro_dir = target_repro_dir(output_dir, target, view, symbol=symbol, stage=Stage.TARGET_RANKING)
         qdir = repro_dir / "feature_quarantine"
         p = qdir / "confirmed_quarantine.json"
         

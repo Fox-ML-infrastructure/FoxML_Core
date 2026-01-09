@@ -46,6 +46,9 @@ except ImportError:
 from TRAINING.common.utils.task_types import TargetConfig, TaskType
 from TRAINING.ranking.utils.leakage_filtering import reload_feature_configs
 
+# SST: Import View enum for consistent view handling
+from TRAINING.orchestration.utils.scope_resolution import View, Stage
+
 # Import parallel execution utilities
 try:
     from TRAINING.common.parallel_exec import execute_parallel, get_max_workers
@@ -93,7 +96,7 @@ def evaluate_target_predictability(
     max_rows_per_symbol: Optional[int] = None,  # Load from config if None
     explicit_interval: Optional[Union[int, str]] = None,  # Explicit interval from config
     experiment_config: Optional[Any] = None,  # Optional ExperimentConfig (for data.bar_interval)
-    view: str = "CROSS_SECTIONAL",  # "CROSS_SECTIONAL", "SYMBOL_SPECIFIC", or "LOSO"
+    view: Union[str, View] = View.CROSS_SECTIONAL,  # View enum or "CROSS_SECTIONAL", "SYMBOL_SPECIFIC", or "LOSO"
     symbol: Optional[str] = None,  # Required for SYMBOL_SPECIFIC and LOSO views
     scope_purpose: str = "ROUTING_EVAL",  # Default to ROUTING_EVAL for target ranking
     run_identity: Optional[Any] = None,  # NEW: RunIdentity SST object for authoritative signatures
@@ -511,7 +514,7 @@ def rank_targets(
                         rerun_on_high_auc_only=rerun_on_high_auc_only,
                         explicit_interval=explicit_interval,
                         experiment_config=experiment_config,
-                        view="CROSS_SECTIONAL",
+                        view=View.CROSS_SECTIONAL,
                         symbol=None
                     )
                 except TypeError:
@@ -546,7 +549,7 @@ def rank_targets(
                     max_rows_per_symbol=max_rows_per_symbol,
                     explicit_interval=explicit_interval,
                     experiment_config=experiment_config,
-                    view="CROSS_SECTIONAL",
+                        view=View.CROSS_SECTIONAL,
                     symbol=None,
                     run_identity=run_identity,  # NEW: Pass RunIdentity
                 )
@@ -579,7 +582,7 @@ def rank_targets(
                                     rerun_on_high_auc_only=rerun_on_high_auc_only,
                                     explicit_interval=explicit_interval,
                                     experiment_config=experiment_config,
-                                    view="SYMBOL_SPECIFIC",
+                                    view=View.SYMBOL_SPECIFIC,
                                     symbol=symbol
                                 )
                             except TypeError:
@@ -614,7 +617,7 @@ def rank_targets(
                                 max_rows_per_symbol=max_rows_per_symbol,
                                 explicit_interval=explicit_interval,
                                 experiment_config=experiment_config,
-                                view="SYMBOL_SPECIFIC",
+                                view=View.SYMBOL_SPECIFIC,
                                 symbol=symbol,
                                 run_identity=run_identity,  # NEW: Pass RunIdentity
                             )
@@ -770,7 +773,7 @@ def rank_targets(
                             rerun_on_high_auc_only=rerun_on_high_auc_only,
                             explicit_interval=explicit_interval,
                             experiment_config=experiment_config,
-                            view="CROSS_SECTIONAL",
+                            view=View.CROSS_SECTIONAL,
                             symbol=None
                         )
                     except TypeError:
@@ -807,7 +810,7 @@ def rank_targets(
                         max_rows_per_symbol=max_rows_per_symbol,
                         explicit_interval=explicit_interval,
                         experiment_config=experiment_config,
-                        view="CROSS_SECTIONAL",
+                        view=View.CROSS_SECTIONAL,
                         symbol=None,
                         run_identity=run_identity,  # NEW: Pass RunIdentity
                     )
@@ -873,7 +876,7 @@ def rank_targets(
                                         rerun_on_high_auc_only=rerun_on_high_auc_only,
                                         explicit_interval=explicit_interval,
                                         experiment_config=experiment_config,
-                                        view="SYMBOL_SPECIFIC",
+                                        view=View.SYMBOL_SPECIFIC,
                                         symbol=symbol
                                     )
                                 except TypeError:
@@ -910,7 +913,7 @@ def rank_targets(
                                     max_rows_per_symbol=max_rows_per_symbol,
                                     explicit_interval=explicit_interval,
                                     experiment_config=experiment_config,
-                                    view="SYMBOL_SPECIFIC",
+                                    view=View.SYMBOL_SPECIFIC,
                                     symbol=symbol,
                                     run_identity=run_identity,  # NEW: Pass RunIdentity
                                 )
@@ -1079,8 +1082,8 @@ def rank_targets(
                 routing_decisions[target] = decision
     
     # Log routing summary
-    cs_only = sum(1 for r in routing_decisions.values() if r.get('route') == 'CROSS_SECTIONAL')
-    sym_only = sum(1 for r in routing_decisions.values() if r.get('route') == 'SYMBOL_SPECIFIC')
+    cs_only = sum(1 for r in routing_decisions.values() if r.get('route') == View.CROSS_SECTIONAL.value)
+    sym_only = sum(1 for r in routing_decisions.values() if r.get('route') == View.SYMBOL_SPECIFIC.value)
     both = sum(1 for r in routing_decisions.values() if r.get('route') == 'BOTH')
     blocked = sum(1 for r in routing_decisions.values() if r.get('route') == 'BLOCKED')
     logger.info(f"Routing decisions: {cs_only} CROSS_SECTIONAL, {sym_only} SYMBOL_SPECIFIC, {both} BOTH, {blocked} BLOCKED")
@@ -1154,7 +1157,7 @@ def rank_targets(
                 tracker = ReproducibilityTracker(output_dir=base_dir)
                 # Generate run_id from output_dir name or timestamp
                 run_id = output_dir.name if output_dir.name else datetime.now().strftime("%Y%m%d_%H%M%S")
-                tracker.generate_metrics_rollups(stage="TARGET_RANKING", run_id=run_id)
+                tracker.generate_metrics_rollups(stage=Stage.TARGET_RANKING, run_id=run_id)
                 logger.debug("✅ Generated metrics rollups for TARGET_RANKING")
         except Exception as e:
             logger.debug(f"Failed to generate metrics rollups: {e}")

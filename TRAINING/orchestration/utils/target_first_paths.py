@@ -9,8 +9,19 @@ Target is the stable join key - all per-target artifacts live together under tar
 """
 
 from pathlib import Path
-from typing import Optional, Dict, Any, Set
+from typing import Optional, Dict, Any, Set, Union
 import logging
+
+# SST: Import View and Stage enums for consistent handling
+from TRAINING.orchestration.utils.scope_resolution import View, Stage
+
+# SST: Import WriteScope for scope-aware path construction
+try:
+    from TRAINING.orchestration.utils.scope_resolution import WriteScope
+    _WRITE_SCOPE_AVAILABLE = True
+except ImportError:
+    _WRITE_SCOPE_AVAILABLE = False
+    WriteScope = None
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +143,7 @@ def get_target_trends_dir(base_output_dir: Path, target: str) -> Path:
 def get_target_reproducibility_dir(
     base_output_dir: Path,
     target: str,
-    stage: Optional[str] = None,
+    stage: Optional[Union[str, Stage]] = None,
 ) -> Path:
     """
     Get reproducibility directory for a target, optionally scoped by stage.
@@ -160,8 +171,10 @@ def get_target_reproducibility_dir(
     target_normalized = normalize_target_name(target)
     base_repro = get_target_dir(base_output_dir, target_normalized) / "reproducibility"
     
+    # Normalize stage to enum if provided, then convert to string for path
+    stage_enum = Stage.from_string(stage) if isinstance(stage, str) and stage else (stage if isinstance(stage, Stage) else None)
     # Priority: explicit > SST > legacy
-    resolved_stage = stage
+    resolved_stage = stage_enum
     if resolved_stage is None:
         try:
             from TRAINING.orchestration.utils.run_context import get_current_stage
@@ -170,7 +183,9 @@ def get_target_reproducibility_dir(
             pass  # SST not available, use legacy
     
     if resolved_stage:
-        return base_repro / f"stage={resolved_stage}"
+        # Convert stage enum to string for path construction
+        stage_str = str(resolved_stage) if isinstance(resolved_stage, Stage) else resolved_stage
+        return base_repro / f"stage={stage_str}"
     
     return base_repro  # Legacy fallback
 
@@ -179,10 +194,13 @@ def get_scoped_artifact_dir(
     base_output_dir: Path,
     target: str,
     artifact_type: str,
-    view: str = "CROSS_SECTIONAL",
+    # SST: Preferred - accept WriteScope directly
+    scope: Optional["WriteScope"] = None,
+    # DEPRECATED: Loose args (for backward compat)
+    view: Optional[Union[str, View]] = None,
     symbol: Optional[str] = None,
     universe_sig: Optional[str] = None,
-    stage: Optional[str] = None,
+    stage: Optional[Union[str, Stage]] = None,
 ) -> Path:
     """
     Get view-scoped artifact directory for a target.
@@ -196,10 +214,11 @@ def get_scoped_artifact_dir(
         base_output_dir: Base run output directory
         target: Target name
         artifact_type: Type of artifact ("feature_exclusions", "feature_importance_snapshots", "featureset_artifacts")
-        view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
-        symbol: Symbol name for SYMBOL_SPECIFIC view (required if view is SYMBOL_SPECIFIC)
-        universe_sig: Optional universe signature for additional scoping
-        stage: Optional stage name (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
+        scope: WriteScope object (preferred, SST-compliant)
+        view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC" (deprecated, use scope)
+        symbol: Symbol name for SYMBOL_SPECIFIC view (deprecated, use scope)
+        universe_sig: Optional universe signature for additional scoping (deprecated, use scope)
+        stage: Optional stage name (deprecated, use scope)
     
     Returns:
         Path to targets/<target>/reproducibility/[stage={stage}/]<VIEW>/[symbol=<symbol>/][universe=<universe>/]<artifact_type>/
@@ -208,19 +227,32 @@ def get_scoped_artifact_dir(
         With stage: targets/fwd_ret_10m/reproducibility/stage=TARGET_RANKING/CROSS_SECTIONAL/universe=abc123/feature_exclusions/
         Without stage (legacy): targets/fwd_ret_10m/reproducibility/CROSS_SECTIONAL/universe=abc123/feature_exclusions/
     """
+    # SST: Extract from WriteScope if provided
+    if scope is not None:
+        if not _WRITE_SCOPE_AVAILABLE:
+            raise ValueError("WriteScope not available but scope was passed")
+        view = scope.view
+        symbol = scope.symbol
+        universe_sig = scope.universe_sig
+        stage = scope.stage
+    elif view is None:
+        # Default to CROSS_SECTIONAL if neither scope nor view provided
+        view = View.CROSS_SECTIONAL
+    
     # Get reproducibility dir with stage scoping
     repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage)
     
-    # Normalize view
-    view_upper = view.upper() if view else "CROSS_SECTIONAL"
-    if view_upper not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
-        view_upper = "CROSS_SECTIONAL"
+    # Normalize view (handles both enum and string)
+    view_str = str(view) if hasattr(view, 'value') else str(view)
+    view_upper = view_str.upper() if view_str else View.CROSS_SECTIONAL.value
+    if view_upper not in (View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value):
+        view_upper = View.CROSS_SECTIONAL.value
     
     # Build path
     artifact_path = repro_dir / view_upper
     
     # Add symbol for SYMBOL_SPECIFIC view
-    if view_upper == "SYMBOL_SPECIFIC" and symbol:
+    if view_upper == View.SYMBOL_SPECIFIC.value and symbol:
         artifact_path = artifact_path / f"symbol={symbol}"
     
     # Add universe signature if provided
@@ -237,10 +269,13 @@ def ensure_scoped_artifact_dir(
     base_output_dir: Path,
     target: str,
     artifact_type: str,
-    view: str = "CROSS_SECTIONAL",
+    # SST: Preferred - accept WriteScope directly
+    scope: Optional["WriteScope"] = None,
+    # DEPRECATED: Loose args (for backward compat)
+    view: Optional[Union[str, View]] = None,
     symbol: Optional[str] = None,
     universe_sig: Optional[str] = None,
-    stage: Optional[str] = None,
+    stage: Optional[Union[str, Stage]] = None,
 ) -> Path:
     """
     Get view-scoped artifact directory and ensure it exists.
@@ -251,16 +286,17 @@ def ensure_scoped_artifact_dir(
         base_output_dir: Base run output directory
         target: Target name
         artifact_type: Type of artifact
-        view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
-        symbol: Symbol name for SYMBOL_SPECIFIC view
-        universe_sig: Optional universe signature for additional scoping
-        stage: Optional stage name (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
+        scope: WriteScope object (preferred, SST-compliant)
+        view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC" (deprecated, use scope)
+        symbol: Symbol name for SYMBOL_SPECIFIC view (deprecated, use scope)
+        universe_sig: Optional universe signature for additional scoping (deprecated, use scope)
+        stage: Optional stage name (deprecated, use scope)
     
     Returns:
         Path to artifact directory (created if needed)
     """
     artifact_dir = get_scoped_artifact_dir(
-        base_output_dir, target, artifact_type, view, symbol, universe_sig, stage=stage
+        base_output_dir, target, artifact_type, scope=scope, view=view, symbol=symbol, universe_sig=universe_sig, stage=stage
     )
     artifact_dir.mkdir(parents=True, exist_ok=True)
     return artifact_dir
@@ -393,7 +429,7 @@ def find_cohort_dir_by_id(
     base_output_dir: Path,
     cohort_id: str,
     target: str,
-    view: str = "CROSS_SECTIONAL",
+    view: Union[str, View] = View.CROSS_SECTIONAL,
     stage: Optional[str] = None
 ) -> Optional[Path]:
     """
@@ -418,7 +454,8 @@ def find_cohort_dir_by_id(
             return None
         
         # For SYMBOL_SPECIFIC, need to search in symbol= subdirectories
-        if view == "SYMBOL_SPECIFIC":
+        view_str = str(view) if hasattr(view, 'value') else str(view)
+        if view_str == View.SYMBOL_SPECIFIC.value:
             # Search all symbol= directories for the cohort
             for symbol_dir in view_dir.iterdir():
                 if symbol_dir.is_dir() and symbol_dir.name.startswith("symbol="):
@@ -602,10 +639,10 @@ def globals_dir(run_root: Path, kind: Optional[str] = None) -> Path:
 def target_repro_dir(
     run_root: Path, 
     target: str, 
-    view: str, 
+    view: Union[str, View], 
     symbol: Optional[str] = None,
     universe_sig: Optional[str] = None,  # For cross-run reproducibility
-    stage: Optional[str] = None,  # Pipeline stage (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
+    stage: Optional[Union[str, Stage]] = None,  # Pipeline stage (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
 ) -> Path:
     """
     Get reproducibility directory for target, scoped by stage/view/universe/symbol.
@@ -640,13 +677,17 @@ def target_repro_dir(
     """
     if view is None:
         raise ValueError("view parameter is required for feature selection artifacts")
-    if view not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
-        raise ValueError(f"Invalid view: {view}. Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'")
-    if view == "SYMBOL_SPECIFIC" and symbol is None:
+    # Normalize view for validation (handles both enum and string)
+    view_str = str(view) if hasattr(view, 'value') else str(view)
+    # Normalize view to enum for validation
+    view_enum = View.from_string(view) if isinstance(view, str) else view
+    if view_enum not in (View.CROSS_SECTIONAL, View.SYMBOL_SPECIFIC):
+        raise ValueError(f"Invalid view: {view}. Must be View.CROSS_SECTIONAL or View.SYMBOL_SPECIFIC")
+    if view_enum == View.SYMBOL_SPECIFIC and symbol is None:
         raise ValueError("symbol parameter is required when view='SYMBOL_SPECIFIC'")
     
-    # Derive path_mode from SST view (don't mutate view - callers may rely on it)
-    path_mode = view  # Default to caller's view
+    # Derive path_mode from SST view (convert enum to string for path construction)
+    path_mode = str(view_enum)  # View enum's __str__ returns .value
     try:
         from TRAINING.orchestration.utils.run_context import get_view
         view = get_view(run_root)
@@ -666,14 +707,15 @@ def target_repro_dir(
     # Pass stage to get_target_reproducibility_dir for stage-scoped paths
     base_repro_dir = get_target_reproducibility_dir(Path(run_root), target, stage=stage)
     
-    # Build path with optional universe_sig using path_mode (SST-derived)
-    if path_mode == "CROSS_SECTIONAL":
-        path = base_repro_dir / "CROSS_SECTIONAL"
+    # Build path with optional universe_sig using path_mode (SST-derived, already string)
+    # path_mode is already a string from view_enum conversion above
+    if path_mode == View.CROSS_SECTIONAL.value:
+        path = base_repro_dir / View.CROSS_SECTIONAL.value
         if universe_sig:
             path = path / f"universe={universe_sig}"
         return path
     else:  # SYMBOL_SPECIFIC
-        path = base_repro_dir / "SYMBOL_SPECIFIC"
+        path = base_repro_dir / View.SYMBOL_SPECIFIC.value
         if universe_sig:
             path = path / f"universe={universe_sig}"
         return path / f"symbol={symbol}"
@@ -683,10 +725,10 @@ def target_repro_file_path(
     run_root: Path, 
     target: str, 
     filename: str, 
-    view: str, 
+    view: Union[str, View],
     symbol: Optional[str] = None,
     universe_sig: Optional[str] = None,
-    stage: Optional[str] = None,  # Pipeline stage (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
+    stage: Optional[Union[str, Stage]] = None,  # Pipeline stage (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
 ) -> Path:
     """
     Get file path in stage/view-scoped reproducibility directory.
@@ -715,8 +757,11 @@ def target_repro_file_path(
 
 def model_output_dir(
     training_results_root: Path, 
-    family: str, 
-    view: str, 
+    family: str,
+    # SST: Preferred - accept WriteScope directly
+    scope: Optional["WriteScope"] = None,
+    # DEPRECATED: Loose args (for backward compat)
+    view: Optional[Union[str, View]] = None,
     symbol: Optional[str] = None,
     universe_sig: Optional[str] = None
 ) -> Path:
@@ -726,13 +771,25 @@ def model_output_dir(
     Args:
         training_results_root: Training results root directory
         family: Model family name (e.g., "lightgbm")
-        view: View name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
-        symbol: Optional symbol name (required if view is "SYMBOL_SPECIFIC")
-        universe_sig: Optional universe signature for cross-run reproducibility
+        scope: WriteScope object (preferred, SST-compliant)
+        view: View name ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC") (deprecated, use scope)
+        symbol: Optional symbol name (deprecated, use scope)
+        universe_sig: Optional universe signature for cross-run reproducibility (deprecated, use scope)
     
     Returns:
         Path to training_results/{family}/view={view}/[universe={universe_sig}/][symbol={symbol}/]
     """
+    # SST: Extract from WriteScope if provided
+    if scope is not None:
+        if not _WRITE_SCOPE_AVAILABLE:
+            raise ValueError("WriteScope not available but scope was passed")
+        view = scope.view
+        symbol = scope.symbol
+        universe_sig = scope.universe_sig
+    elif view is None:
+        # Default to CROSS_SECTIONAL if neither scope nor view provided
+        view = View.CROSS_SECTIONAL
+    
     family_dir = Path(training_results_root) / family
     view_dir = family_dir / f"view={view}"
     
@@ -740,13 +797,14 @@ def model_output_dir(
     if universe_sig:
         view_dir = view_dir / f"universe={universe_sig}"
     
-    if view == "SYMBOL_SPECIFIC" and symbol:
+    view_str = str(view) if hasattr(view, 'value') else str(view)
+    if view_str == View.SYMBOL_SPECIFIC.value and symbol:
         return view_dir / f"symbol={symbol}"
-    elif view == "CROSS_SECTIONAL":
+    elif view_str == View.CROSS_SECTIONAL.value:
         return view_dir
     else:
         # Invalid combination - log warning and return view_dir
-        if view == "SYMBOL_SPECIFIC" and not symbol:
+        if view_str == View.SYMBOL_SPECIFIC.value and not symbol:
             logger.warning(f"SYMBOL_SPECIFIC view requires symbol parameter, returning view directory without symbol")
         return view_dir
 
@@ -795,7 +853,7 @@ def iter_stage_dirs(
     # Only yield if no stage= directories found (pure legacy) or always for backward compat
     if not has_stage_dirs:
         # Check for view directories directly under reproducibility
-        for view_name in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
+        for view_name in (View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value):
             view_dir = repro_base / view_name
             if view_dir.exists():
                 yield (None, repro_base)
@@ -805,7 +863,7 @@ def iter_stage_dirs(
 def find_cohort_dirs(
     base_output_dir: Path,
     target: Optional[str] = None,
-    stage: Optional[str] = None,
+    stage: Optional[Union[str, Stage]] = None,
     view: Optional[str] = None,
 ) -> List[Path]:
     """
@@ -855,7 +913,9 @@ def find_cohort_dirs(
                 continue
             
             # Scan view directories
-            views_to_scan = [view] if view else ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]
+            # Normalize view to string for path scanning
+            view_str = str(view) if isinstance(view, View) or (view and hasattr(view, 'value')) else view
+            views_to_scan = [view_str] if view else [View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value]
             for view_name in views_to_scan:
                 view_path = stage_path / view_name
                 if not view_path.exists():
@@ -913,7 +973,7 @@ def parse_reproducibility_path(path: Path) -> Dict[str, Optional[str]]:
             result["stage"] = part.replace("stage=", "")
         
         # Extract view
-        if part in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
+        if part in (View.CROSS_SECTIONAL.value, View.SYMBOL_SPECIFIC.value):
             result["view"] = part
         
         # Extract universe_sig (universe=*)

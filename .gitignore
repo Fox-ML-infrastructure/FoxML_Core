@@ -447,6 +447,8 @@ TRAINING/examples/
 # Migration and utility scripts (development tools)
 CONFIG/migrate_structure.py
 CONFIG/find_hardcoded_paths.py
+INTERNAL_TOOLS/
+INTERNAL_TOOLS/**
 
 # ============================================
 # Verification and Analysis Reports

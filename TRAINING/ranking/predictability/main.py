@@ -92,6 +92,9 @@ except ImportError:
 # Import checkpoint utility (after path is set)
 from TRAINING.orchestration.utils.checkpoint import CheckpointManager
 
+# SST: Import Stage enum for consistent stage handling
+from TRAINING.orchestration.utils.scope_resolution import Stage
+
 # Import unified task type system
 from TRAINING.common.utils.task_types import (
     TaskType, TargetConfig, ModelConfig, 
@@ -240,7 +243,7 @@ def main():
     try:
         from TRAINING.common.utils.fingerprinting import create_stage_identity
         cli_run_identity = create_stage_identity(
-            stage="TARGET_RANKING",
+            stage=Stage.TARGET_RANKING,
             symbols=symbols,
             experiment_config=None,  # CLI has no experiment_config
             data_dir=args.data_dir,

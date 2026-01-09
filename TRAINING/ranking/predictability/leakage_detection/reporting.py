@@ -13,6 +13,8 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
+from TRAINING.orchestration.utils.scope_resolution import Stage
+
 logger = logging.getLogger(__name__)
 
 # Add project root for _REPO_ROOT
@@ -81,7 +83,7 @@ def save_feature_importances(
             view=view,
             universe_sig=universe_sig,
             symbol=symbol_for_layout,
-            stage="TARGET_RANKING",  # Explicit stage for proper path scoping
+            stage=Stage.TARGET_RANKING,  # Explicit stage for proper path scoping
         )
         target_importances_dir = layout.feature_importance_dir()
         target_importances_dir.mkdir(parents=True, exist_ok=True)

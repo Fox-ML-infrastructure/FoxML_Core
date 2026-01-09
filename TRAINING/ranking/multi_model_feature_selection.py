@@ -117,6 +117,9 @@ from TRAINING.ranking.multi_model_feature_selection.types import (
     ImportanceResult
 )
 
+# SST: Import View and Stage enums for consistent handling
+from TRAINING.orchestration.utils.scope_resolution import View, Stage
+
 
 def normalize_importance(
     raw_importance: Optional[Union[np.ndarray, pd.Series]],
@@ -3872,7 +3875,7 @@ def process_single_symbol(
                     runtime_quarantine = load_confirmed_quarantine(
                         output_dir=output_dir,
                         target=target_column,
-                        view="SYMBOL_SPECIFIC",  # process_single_symbol is always SYMBOL_SPECIFIC
+                        view=View.SYMBOL_SPECIFIC,  # process_single_symbol is always SYMBOL_SPECIFIC
                         symbol=symbol
                     )
                     if runtime_quarantine:
@@ -4024,7 +4027,7 @@ def process_single_symbol(
             try:
                 from TRAINING.common.utils.fingerprinting import create_stage_identity
                 effective_run_identity = create_stage_identity(
-                    stage="FEATURE_SELECTION",
+                    stage=Stage.FEATURE_SELECTION,
                     symbols=[symbol] if symbol else [],
                     experiment_config=experiment_config,
                 )
@@ -4284,10 +4287,10 @@ def process_single_symbol(
                                 run_identity=effective_identity,  # Pass finalized identity or partial dict fallback
                                 allow_legacy=(family_identity is None and partial_identity_dict is None),
                                 prediction_fingerprint=model_prediction_fp,  # SST: prediction hash for determinism
-                                view="SYMBOL_SPECIFIC",  # process_single_symbol is always SYMBOL_SPECIFIC
+                                view=View.SYMBOL_SPECIFIC,  # process_single_symbol is always SYMBOL_SPECIFIC
                                 symbol=symbol,  # Pass symbol for proper scoping
                                 inputs=family_inputs,  # Pass inputs with feature_fingerprint_input
-                                stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
+                                stage=Stage.FEATURE_SELECTION,  # Explicit stage for proper path scoping
                             )
                         except Exception as e:
                             logger.debug(f"Stability snapshot save failed for {family_name} (non-critical): {e}")
@@ -4319,29 +4322,9 @@ def process_single_symbol(
                             "error": None,
                             "error_type": None
                         })
-                else:
-                    # Model returned but importance is None or all zeros (hard failure)
-                    # FIX: Still create ImportanceResult with zero importance so it appears in results
-                    logger.warning(f"    ⚠️  {family_name}: Model trained but returned invalid importance (None or all zeros), creating zero importance result")
-                    importance = pd.Series(0.0, index=feature_names)
-                    result = ImportanceResult(
-                        model_family=family_name,
-                        symbol=symbol,
-                        importance_scores=importance,
-                        method=method,
-                        train_score=train_score
-                    )
-                    results.append(result)
-                    family_statuses.append({
-                        "status": "failed",
-                        "family": family_name,
-                        "symbol": symbol,
-                        "score": float(train_score) if not math.isnan(train_score) else None,
-                        "top_feature": None,
-                        "top_feature_score": None,
-                        "error": "Invalid importance (None or all zeros)",
-                        "error_type": "InvalidImportance"
-                    })
+                
+                # Note: The else block for importance.sum() > 0 case ends here
+                # If importance.sum() <= 0, the code above (lines 4125-4324) handles it
                 
             except Exception as e:
                 # Capture exception details for debugging
@@ -5127,10 +5110,12 @@ def save_multi_model_results(
                     f"view must be provided in metadata for save_multi_model_results. "
                     f"Metadata keys: {list(metadata.keys()) if metadata else 'None'}"
                 )
-            if view not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
-                raise ValueError(f"Invalid view in metadata: {view}. Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'")
-            if view == "SYMBOL_SPECIFIC" and symbol is None:
-                raise ValueError("symbol required in metadata when view='SYMBOL_SPECIFIC'")
+            # Normalize view to enum for validation
+            view_enum = View.from_string(view) if isinstance(view, str) else view
+            if view_enum not in (View.CROSS_SECTIONAL, View.SYMBOL_SPECIFIC):
+                raise ValueError(f"Invalid view in metadata: {view}. Must be View.CROSS_SECTIONAL or View.SYMBOL_SPECIFIC")
+            if view_enum == View.SYMBOL_SPECIFIC and symbol is None:
+                raise ValueError("symbol required in metadata when view=View.SYMBOL_SPECIFIC")
             
             if use_output_layout and universe_sig:
                 # Canonical path via OutputLayout (non-cohort write)
@@ -5138,10 +5123,10 @@ def save_multi_model_results(
                 layout = OutputLayout(
                     output_root=base_output_dir,
                     target=target_clean,
-                    view=view,
+                    view=view_enum,
                     universe_sig=universe_sig,
-                    symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
-                    stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
+                    symbol=symbol if view_enum == View.SYMBOL_SPECIFIC else None,
+                    stage=Stage.FEATURE_SELECTION,  # Explicit stage for proper path scoping
                 )
                 repro_dir = layout.repro_dir()
                 target_importances_dir = layout.feature_importance_dir()
@@ -5153,9 +5138,9 @@ def save_multi_model_results(
                 )
                 run_root_dir = run_root(base_output_dir)
                 ensure_target_structure(run_root_dir, target_clean)
-                repro_dir = target_repro_dir(run_root_dir, target_clean, view=view, symbol=symbol, stage="FEATURE_SELECTION")
+                repro_dir = target_repro_dir(run_root_dir, target_clean, view=view_enum, symbol=symbol, stage=Stage.FEATURE_SELECTION)
                 target_importances_dir = repro_dir / "feature_importances"
-                target_selected_features_path = target_repro_file_path(run_root_dir, target_clean, "selected_features.txt", view=view, symbol=symbol, stage="FEATURE_SELECTION")
+                target_selected_features_path = target_repro_file_path(run_root_dir, target_clean, "selected_features.txt", view=view_enum, symbol=symbol, stage=Stage.FEATURE_SELECTION)
             
             target_importances_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
@@ -5288,10 +5273,12 @@ def save_multi_model_results(
                     f"view must be provided in metadata for feature_selection_summary. "
                     f"Metadata keys: {list(metadata.keys()) if metadata else 'None'}"
                 )
-            if view not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
-                raise ValueError(f"Invalid view in metadata: {view}. Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'")
-            if view == "SYMBOL_SPECIFIC" and symbol is None:
-                raise ValueError("symbol required in metadata when view='SYMBOL_SPECIFIC'")
+            # Normalize view to enum
+            view_enum = View.from_string(view) if isinstance(view, str) else view
+            if view_enum not in (View.CROSS_SECTIONAL, View.SYMBOL_SPECIFIC):
+                raise ValueError(f"Invalid view in metadata: {view}. Must be View.CROSS_SECTIONAL or View.SYMBOL_SPECIFIC")
+            if view_enum == View.SYMBOL_SPECIFIC and symbol is None:
+                raise ValueError("symbol required in metadata when view=View.SYMBOL_SPECIFIC")
             
             if use_output_layout and universe_sig:
                 # Canonical path via OutputLayout (non-cohort write)
@@ -5299,17 +5286,17 @@ def save_multi_model_results(
                 layout = OutputLayout(
                     output_root=base_output_dir,
                     target=target_clean,
-                    view=view,
+                    view=view_enum,
                     universe_sig=universe_sig,
-                    symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
-                    stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
+                    symbol=symbol if view_enum == View.SYMBOL_SPECIFIC else None,
+                    stage=Stage.FEATURE_SELECTION,  # Explicit stage for proper path scoping
                 )
                 target_summary_path = layout.repro_dir() / "feature_selection_summary.json"
             else:
                 # Legacy path resolution with stage
                 from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
                 run_root_dir = run_root(base_output_dir)
-                target_summary_path = target_repro_file_path(run_root_dir, target_clean, "feature_selection_summary.json", view=view, symbol=symbol, stage="FEATURE_SELECTION")
+                target_summary_path = target_repro_file_path(run_root_dir, target_clean, "feature_selection_summary.json", view=view_enum, symbol=symbol, stage=Stage.FEATURE_SELECTION)
             
             target_summary_path.parent.mkdir(parents=True, exist_ok=True)
             with open(target_summary_path, "w") as f:
@@ -5373,7 +5360,7 @@ def save_multi_model_results(
             try:
                 from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
                 from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
-            target_clean = normalize_target_name(target)
+                target_clean = normalize_target_name(target)
                 run_root_dir = run_root(base_output_dir)
                 # Extract view and symbol from metadata (view is REQUIRED)
                 view = metadata.get('view') if metadata else None
@@ -5385,13 +5372,15 @@ def save_multi_model_results(
                         f"view must be provided in metadata for model_family_status. "
                         f"Metadata keys: {list(metadata.keys()) if metadata else 'None'}"
                     )
-                if view not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
-                    raise ValueError(f"Invalid view in metadata: {view}. Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'")
-                if view == "SYMBOL_SPECIFIC" and symbol is None:
-                    raise ValueError("symbol required in metadata when view='SYMBOL_SPECIFIC'")
+                # Normalize view to enum
+                view_enum = View.from_string(view) if isinstance(view, str) else view
+                if view_enum not in (View.CROSS_SECTIONAL, View.SYMBOL_SPECIFIC):
+                    raise ValueError(f"Invalid view in metadata: {view}. Must be View.CROSS_SECTIONAL or View.SYMBOL_SPECIFIC")
+                if view_enum == View.SYMBOL_SPECIFIC and symbol is None:
+                    raise ValueError("symbol required in metadata when view=View.SYMBOL_SPECIFIC")
                 
                 # Use view/symbol-scoped path helper with explicit stage
-                status_path = target_repro_file_path(run_root_dir, target_clean, "model_family_status.json", view=view, symbol=symbol, stage="FEATURE_SELECTION")
+                status_path = target_repro_file_path(run_root_dir, target_clean, "model_family_status.json", view=view_enum, symbol=symbol, stage=Stage.FEATURE_SELECTION)
                 status_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(status_path, "w") as f:
                     json.dump({
@@ -5442,7 +5431,7 @@ def save_multi_model_results(
                 try:
                     from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
                     from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
-            target_clean = normalize_target_name(target)
+                    target_clean = normalize_target_name(target)
                     run_root_dir = run_root(base_output_dir)
                     # Extract view and symbol from metadata (view is REQUIRED)
                     view = metadata.get('view') if metadata else None
@@ -5454,14 +5443,18 @@ def save_multi_model_results(
                             f"view must be provided in metadata for target_confidence. "
                             f"Metadata keys: {list(metadata.keys()) if metadata else 'None'}"
                         )
-                    if view not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
-                        raise ValueError(f"Invalid view in metadata: {view}. Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'")
-                    if view == "SYMBOL_SPECIFIC" and symbol is None:
-                        raise ValueError("symbol required in metadata when view='SYMBOL_SPECIFIC'")
+                    # Normalize view to enum
+                    view_enum = View.from_string(view) if isinstance(view, str) else view
+                    if view_enum not in (View.CROSS_SECTIONAL, View.SYMBOL_SPECIFIC):
+                        raise ValueError(f"Invalid view in metadata: {view}. Must be View.CROSS_SECTIONAL or View.SYMBOL_SPECIFIC")
+                    if view_enum == View.SYMBOL_SPECIFIC and symbol is None:
+                        raise ValueError("symbol required in metadata when view=View.SYMBOL_SPECIFIC")
                     
                     # Use view/symbol-scoped path helper with explicit stage
-                    confidence_path = target_repro_file_path(run_root_dir, target_clean, "target_confidence.json", view=view, symbol=symbol, stage="FEATURE_SELECTION")
+                    confidence_path = target_repro_file_path(run_root_dir, target_clean, "target_confidence.json", view=view_enum, symbol=symbol, stage=Stage.FEATURE_SELECTION)
                     confidence_path.parent.mkdir(parents=True, exist_ok=True)
+                except Exception as e:
+                    logger.debug(f"Failed to save target_confidence to target-first location: {e}")
                     with open(confidence_path, "w") as f:
                         json.dump(confidence_metrics, f, indent=2)
                     
@@ -5702,7 +5695,7 @@ def main():
             tracker = ReproducibilityTracker(output_dir=base_dir)
             # Generate run_id from output_dir name or timestamp
             run_id = args.output_dir.name if args.output_dir.name else datetime.now().strftime("%Y%m%d_%H%M%S")
-            tracker.generate_metrics_rollups(stage="FEATURE_SELECTION", run_id=run_id)
+            tracker.generate_metrics_rollups(stage=Stage.FEATURE_SELECTION, run_id=run_id)
             logger.debug("✅ Generated metrics rollups for FEATURE_SELECTION")
     except Exception as e:
         logger.debug(f"Failed to generate metrics rollups: {e}")

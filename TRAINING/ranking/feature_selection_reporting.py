@@ -35,10 +35,12 @@ those SHOULD go through _save_to_cohort.
 
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 import pandas as pd
 import yaml
 import json
+
+from TRAINING.orchestration.utils.scope_resolution import View, Stage
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +50,7 @@ def save_feature_selection_rankings(
     selected_features: List[str],
     target_column: str,
     output_dir: Path,
-    view: str,  # REQUIRED (no default)
+    view: Union[str, View],  # REQUIRED (no default)
     symbol: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
     universe_sig: Optional[str] = None,  # Phase A: optional for backward compat
@@ -71,17 +73,19 @@ def save_feature_selection_rankings(
         selected_features: List of selected feature names
         target_column: Target column name
         output_dir: Base output directory
-        view: REQUIRED - "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
+        view: REQUIRED - View enum or "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC" string
         symbol: Required if view="SYMBOL_SPECIFIC"
         metadata: Optional metadata dict
     
     Raises:
         ValueError: If view is None, invalid, or SYMBOL_SPECIFIC without symbol
     """
-    if view not in ("CROSS_SECTIONAL", "SYMBOL_SPECIFIC"):
-        raise ValueError(f"Invalid view: {view}. Must be 'CROSS_SECTIONAL' or 'SYMBOL_SPECIFIC'")
-    if view == "SYMBOL_SPECIFIC" and symbol is None:
-        raise ValueError("symbol required when view='SYMBOL_SPECIFIC'")
+    # Normalize view to enum
+    view_enum = View.from_string(view) if isinstance(view, str) else view
+    if view_enum not in (View.CROSS_SECTIONAL, View.SYMBOL_SPECIFIC):
+        raise ValueError(f"Invalid view: {view}. Must be View.CROSS_SECTIONAL or View.SYMBOL_SPECIFIC")
+    if view_enum == View.SYMBOL_SPECIFIC and symbol is None:
+        raise ValueError("symbol required when view=View.SYMBOL_SPECIFIC")
     
     # Clean target name for filesystem using SST helper
     from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
@@ -171,7 +175,7 @@ def save_feature_selection_rankings(
                 logger.warning(f"base_output_dir does not exist for CSV save: {base_output_dir}, using output_dir: {output_dir}")
                 base_output_dir = output_dir
             
-            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean, stage="FEATURE_SELECTION")
+            target_repro_dir = get_target_reproducibility_dir(base_output_dir, target_clean, stage=Stage.FEATURE_SELECTION)
             target_repro_dir.mkdir(parents=True, exist_ok=True)
             empty_csv_path = target_repro_dir / "feature_selection_rankings.csv"
             empty_df.to_csv(empty_csv_path, index=False)
@@ -212,10 +216,10 @@ def save_feature_selection_rankings(
             layout = OutputLayout(
                 output_root=base_output_dir,
                 target=target_clean,
-                view=view,
+                view=view_enum,
                 universe_sig=universe_sig,
-                symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
-                stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
+                symbol=symbol if view_enum == View.SYMBOL_SPECIFIC else None,
+                stage=Stage.FEATURE_SELECTION,  # Explicit stage for proper path scoping
             )
             repro_dir = layout.repro_dir()
             target_csv_path = repro_dir / "feature_selection_rankings.csv"
@@ -223,7 +227,7 @@ def save_feature_selection_rankings(
             # Legacy path resolution with stage
             from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
             run_root_dir = run_root(base_output_dir)
-            target_csv_path = target_repro_file_path(run_root_dir, target_clean, "feature_selection_rankings.csv", view=view, symbol=symbol, stage="FEATURE_SELECTION")
+            target_csv_path = target_repro_file_path(run_root_dir, target_clean, "feature_selection_rankings.csv", view=view_enum, symbol=symbol, stage=Stage.FEATURE_SELECTION)
         
         target_csv_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(target_csv_path, index=False)
@@ -247,11 +251,11 @@ def save_feature_selection_rankings(
             }
             for i, (_, row) in enumerate(summary_df_sorted.iterrows())
         ],
-        'summary': {
+            'summary': {
             'total_features': len(summary_df_sorted),
             'selected_features': len(selected_features),
             'target_column': target_column,
-            'view': view,
+            'view': str(view_enum),
             'symbol': symbol if symbol else None
         }
     }
@@ -286,10 +290,10 @@ def save_feature_selection_rankings(
             layout = OutputLayout(
                 output_root=base_output_dir,
                 target=target_clean,
-                view=view,
+                view=view_enum,
                 universe_sig=universe_sig,
-                symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
-                stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
+                symbol=symbol if view_enum == View.SYMBOL_SPECIFIC else None,
+                stage=Stage.FEATURE_SELECTION,  # Explicit stage for proper path scoping
             )
             repro_dir = layout.repro_dir()
             target_selected_path = repro_dir / "selected_features.txt"
@@ -303,7 +307,7 @@ def save_feature_selection_rankings(
                 logger.warning(f"base_output_dir does not exist for selected features: {base_output_dir}, using output_dir: {output_dir}")
                 base_output_dir = output_dir
             run_root_dir = run_root(base_output_dir)
-            target_selected_path = target_repro_file_path(run_root_dir, target_clean, "selected_features.txt", view=view, symbol=symbol, stage="FEATURE_SELECTION")
+            target_selected_path = target_repro_file_path(run_root_dir, target_clean, "selected_features.txt", view=view_enum, symbol=symbol, stage=Stage.FEATURE_SELECTION)
         
         target_selected_path.parent.mkdir(parents=True, exist_ok=True)
         with open(target_selected_path, "w") as f:
@@ -407,7 +411,7 @@ def save_feature_importances_for_reproducibility(
     all_feature_importances: Dict[str, Dict[str, float]],
     target_column: str,
     output_dir: Path,
-    view: str = "CROSS_SECTIONAL",
+    view: Union[str, View] = View.CROSS_SECTIONAL,
     symbol: Optional[str] = None,
     universe_sig: Optional[str] = None,  # Phase A: optional for backward compat
 ):
@@ -425,9 +429,11 @@ def save_feature_importances_for_reproducibility(
         all_feature_importances: Dict of {model_family: {feature: importance}}
         target_column: Target column name
         output_dir: Base output directory (REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/)
-        view: "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC"
+        view: View enum or "CROSS_SECTIONAL" or "SYMBOL_SPECIFIC" string
         symbol: Symbol name (for SYMBOL_SPECIFIC view)
     """
+    # Normalize view to enum
+    view_enum = View.from_string(view) if isinstance(view, str) else view
     import pandas as pd
     
     from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
@@ -464,10 +470,10 @@ def save_feature_importances_for_reproducibility(
             layout = OutputLayout(
                 output_root=base_output_dir,
                 target=target_clean,
-                view=view,
+                view=view_enum,
                 universe_sig=universe_sig,
-                symbol=symbol if view == "SYMBOL_SPECIFIC" else None,
-                stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
+                symbol=symbol if view_enum == View.SYMBOL_SPECIFIC else None,
+                stage=Stage.FEATURE_SELECTION,  # Explicit stage for proper path scoping
             )
             importances_dir = layout.feature_importance_dir()
         else:
@@ -479,7 +485,7 @@ def save_feature_importances_for_reproducibility(
             
             run_root_dir = run_root(base_output_dir)
             ensure_target_structure(run_root_dir, target_clean)
-            repro_dir = target_repro_dir(run_root_dir, target_clean, view=view, symbol=symbol, stage="FEATURE_SELECTION")
+            repro_dir = target_repro_dir(run_root_dir, target_clean, view=view_enum, symbol=symbol, stage=Stage.FEATURE_SELECTION)
             importances_dir = repro_dir / "feature_importances"
         
         importances_dir.mkdir(parents=True, exist_ok=True)

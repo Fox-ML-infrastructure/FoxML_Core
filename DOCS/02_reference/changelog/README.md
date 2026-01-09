@@ -6,6 +6,12 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### January
 
+- **2026-01-09 (SST Import Shadowing Fixes)** — Fixed all `UnboundLocalError` issues from SST refactoring: removed `Stage` from local import in `model_evaluation.py` (line 8129), added global `Stage` import in `shared_ranking_harness.py`, removed redundant local `Path` imports (9 instances across 3 files). Verified all path construction and JSON serialization work correctly with enum values. All critical modules now import without errors.
+  → [View](2026-01-09-sst-enum-migration.md)
+
+- **2026-01-09 (SST Enum Migration and WriteScope Adoption)** — Complete migration to SST architecture: View/Stage enum adoption (29 files), WriteScope function migration (4 functions), unified helper functions (cohort ID, config hashing, scope resolution, universe signatures). Fixed syntax errors (indentation issues in model_evaluation.py, cross_sectional_feature_ranker.py, multi_model_feature_selection.py). All changes maintain backward compatibility with existing JSON files, snapshots, and metrics.
+  → [View](2026-01-09-sst-enum-migration.md)
+
 - **2026-01-09 (SST Compliance Fixes - Complete Migration)** — Fixed SST (Single Source of Truth) inconsistencies: added `normalize_target_name()` helper and replaced **ALL** remaining instances (39+ total) of manual target normalization across **ALL** files (20 files), replaced **ALL** remaining custom path resolution loops (30+ total) with `run_root()` helper across **ALL** files (19 files), added `view` and `symbol` parameters to `compute_cross_sectional_stability()` to use SST-resolved values, fixed hardcoded `universe_sig="ALL"` in metrics aggregator (now extracts from cohort metadata), removed internal document references from public changelogs. **Complete migration** - the codebase now uses SST helpers consistently throughout. All changes verified to maintain functionality and determinism. All changes maintain backward compatibility.
   → [View](2026-01-09-sst-consistency-fixes.md)
 

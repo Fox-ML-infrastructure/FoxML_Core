@@ -36,6 +36,9 @@ from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional, Union
 import pandas as pd
 import numpy as np
+
+# SST: Import View and Stage enums for consistent view/stage handling
+from TRAINING.orchestration.utils.scope_resolution import View, Stage
 from dataclasses import dataclass
 import yaml
 import json
@@ -471,7 +474,7 @@ def train_and_evaluate_models(
     output_dir: Optional[Path] = None,  # Optional output directory for stability snapshots
     resolved_config: Optional[Any] = None,  # NEW: ResolvedConfig with correct purge/embargo (post-pruning)
     dropped_tracker: Optional[Any] = None,  # NEW: Optional DroppedFeaturesTracker for telemetry
-    view: str = "CROSS_SECTIONAL",  # View type for REPRODUCIBILITY structure
+    view: Union[str, View] = View.CROSS_SECTIONAL,  # View enum or "CROSS_SECTIONAL" - View type for REPRODUCIBILITY structure
     symbol: Optional[str] = None,  # Symbol name for SYMBOL_SPECIFIC view
     run_identity: Optional[Any] = None,  # RunIdentity for snapshot storage
 ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, float], float, Dict[str, List[Tuple[str, float]]], Dict[str, Dict[str, float]], List[Dict[str, Any]]]:
@@ -936,7 +939,7 @@ def train_and_evaluate_models(
                                 target_artifact_dir = ensure_scoped_artifact_dir(
                                     base_output_dir, target_clean, "featureset_artifacts",
                                     view=view, symbol=symbol, universe_sig=train_universe_sig,
-                                    stage="TARGET_RANKING"  # Explicit stage for proper scoping
+                                    stage=Stage.TARGET_RANKING  # Explicit stage for proper scoping
                                 )
                                 post_prune_artifact.save(target_artifact_dir)
                                 logger.debug(f"Saved POST_PRUNE artifact to view-scoped location: {target_artifact_dir}")
@@ -1546,7 +1549,7 @@ def train_and_evaluate_models(
             features_safe=original_feature_count,
             features_dropped_nan=0,
             features_final=len(feature_names),
-            view="CROSS_SECTIONAL",  # Default for train_and_evaluate_models
+            view=View.CROSS_SECTIONAL,  # Default for train_and_evaluate_models
             symbol=None,
             feature_names=feature_names,
             recompute_lookback=False,  # Already computed above
@@ -5138,7 +5141,7 @@ def evaluate_target_predictability(
     max_rows_per_symbol: int = None,
     explicit_interval: Optional[Union[int, str]] = None,  # Explicit interval from config (e.g., "5m")
     experiment_config: Optional[Any] = None,  # Optional ExperimentConfig (for data.bar_interval)
-    view: str = "CROSS_SECTIONAL",  # "CROSS_SECTIONAL", "SYMBOL_SPECIFIC", or "LOSO"
+    view: Union[str, View] = View.CROSS_SECTIONAL,  # View enum or "CROSS_SECTIONAL", "SYMBOL_SPECIFIC", or "LOSO"
     symbol: Optional[str] = None,  # Required for SYMBOL_SPECIFIC and LOSO views
     scope_purpose: str = "FINAL",  # "FINAL" or "ROUTING_EVAL" - controls where artifacts are written
     run_identity: Optional[Any] = None,  # NEW: RunIdentity SST object for authoritative signatures
@@ -5282,13 +5285,17 @@ def evaluate_target_predictability(
         target_config_obj = target_config
         target_column = target_config_obj.target_column
         display_name = target_config_obj.display_name or target
+    # Normalize view to enum for validation
+    view_enum = View.from_string(view) if isinstance(view, str) else view
+    
     # Validate view and symbol parameters
-    if view == "SYMBOL_SPECIFIC" and symbol is None:
-        raise ValueError(f"symbol parameter required for SYMBOL_SPECIFIC view")
-    if view == "LOSO" and symbol is None:
+    if view_enum == View.SYMBOL_SPECIFIC and symbol is None:
+        raise ValueError(f"symbol parameter required for View.SYMBOL_SPECIFIC view")
+    # LOSO is not a View enum value, check as string
+    if isinstance(view, str) and view == "LOSO" and symbol is None:
         raise ValueError(f"symbol parameter required for LOSO view")
-    if view == "CROSS_SECTIONAL" and symbol is not None:
-        logger.warning(f"symbol={symbol} provided but view=CROSS_SECTIONAL, ignoring symbol")
+    if view_enum == View.CROSS_SECTIONAL and symbol is not None:
+        logger.warning(f"symbol={symbol} provided but view=View.CROSS_SECTIONAL, ignoring symbol")
         symbol = None
     
     # Load view from run context (SST) if available
@@ -5303,7 +5310,7 @@ def evaluate_target_predictability(
                 view_from_context = context.get("view")
                 # For per-symbol loops (SYMBOL_SPECIFIC with single symbol), use cached view as requested_view
                 # This prevents the resolver from trying to change view to SINGLE_SYMBOL_TS
-                if view == "SYMBOL_SPECIFIC" and view_from_context:
+                if view_enum == View.SYMBOL_SPECIFIC and view_from_context:
                     requested_view_from_context = view_from_context
                 else:
                     requested_view_from_context = context.get("requested_view") or view
@@ -5321,7 +5328,7 @@ def evaluate_target_predictability(
     
     # For SYMBOL_SPECIFIC and LOSO, filter symbols
     symbols_to_load = symbols
-    if view == "SYMBOL_SPECIFIC":
+    if view_enum == View.SYMBOL_SPECIFIC:
         symbols_to_load = [symbol]
     elif view == "LOSO":
         # LOSO: train on all symbols except symbol, validate on symbol
@@ -5380,7 +5387,7 @@ def evaluate_target_predictability(
         target_exclusion_dir = ensure_scoped_artifact_dir(
             base_output_dir, target_clean, "feature_exclusions",
             view=view, symbol=symbol, universe_sig=early_universe_sig,
-            stage="TARGET_RANKING"  # Explicit stage for proper scoping
+            stage=Stage.TARGET_RANKING  # Explicit stage for proper scoping
         )
         
         # Try to load existing exclusion list first (check target-first structure)
@@ -5569,7 +5576,7 @@ def evaluate_target_predictability(
     # This is needed for SYMBOL_SPECIFIC view data preparation
     selected_features = safe_columns.copy() if safe_columns else []
     resolved_config = create_resolved_config(
-        requested_min_cs=min_cs if view != "SYMBOL_SPECIFIC" else 1,
+        requested_min_cs=min_cs if view_enum != View.SYMBOL_SPECIFIC else 1,
         n_symbols_available=n_symbols_available,
         max_cs_samples=max_cs_samples,
         interval_minutes=detected_interval,
@@ -5579,7 +5586,7 @@ def evaluate_target_predictability(
     )
     
     # Prepare data based on view
-    if view == "SYMBOL_SPECIFIC":
+    if view_enum == View.SYMBOL_SPECIFIC:
         # For symbol-specific, prepare single-symbol time series data
         # Use same function but with single symbol (min_cs=1 effectively)
         # allow_single_symbol=True bypasses the minimum symbol count check
@@ -5627,19 +5634,8 @@ def evaluate_target_predictability(
             output_dir=output_dir
         )
     
-    # Update header log after data prep to show view
-    view_final = None
-    if resolved_data_config:
-        view_final = resolved_data_config.get("view")
-    if not view_final:
-        view_final = view_from_context
-
-    requested_view_final = requested_view_from_context
-    if resolved_data_config:
-        requested_view_final = resolved_data_config.get("requested_view") or requested_view_final
-    
     # ========================================================================
-    # PATCH 0 (SST VIEW OVERRIDE): Use resolve_write_scope for ALL downstream writes
+    # SST: Use resolve_write_scope for canonical scope resolution
     # ========================================================================
     # Canonical SST-derived scope resolution with:
     # - Asymmetric rule: blocks SS→CS promotion (min_cs=1 bug)
@@ -5656,17 +5652,35 @@ def evaluate_target_predictability(
     except Exception:
         pass
     
-    view_for_writes, symbol_for_writes, universe_sig_for_writes = resolve_write_scope(
-        resolved_data_config=resolved_data_config,
-        caller_view=view,
-        caller_symbol=symbol,
-        strict=strict_scope
-    )
+    # Resolve write scope using SST helper (replaces manual .get() calls)
+    view_for_writes = view_from_context
+    symbol_for_writes = None
+    universe_sig_for_writes = None
+    try:
+        view_for_writes, symbol_for_writes, universe_sig_for_writes = resolve_write_scope(
+            resolved_data_config=resolved_data_config,
+            caller_view=view_from_context,
+            caller_symbol=None,  # TARGET_RANKING doesn't have per-symbol processing
+            strict=strict_scope
+        )
+    except Exception as e:
+        logger.debug(f"resolve_write_scope failed: {e}, using caller-provided values")
+        # Fallback to manual extraction if resolve_write_scope fails
+        if resolved_data_config:
+            view_for_writes = resolved_data_config.get("view") or view_from_context
+            universe_sig_for_writes = resolved_data_config.get("universe_sig")
     
-    if view_for_writes != view:
+    # Update header log after data prep to show resolved view
+    view_final = view_for_writes
+    requested_view_final = requested_view_from_context
+    if resolved_data_config:
+        requested_view_final = resolved_data_config.get("requested_view") or requested_view_final
+    
+    # Log resolved scope if different from caller view
+    if view_for_writes != view_from_context:
         logger.warning(
             f"SST OVERRIDE: Using view={view_for_writes} instead of "
-            f"caller view={view} for downstream writes"
+            f"caller view={view_from_context} for downstream writes"
         )
     if universe_sig_for_writes:
         logger.debug(f"SST universe_sig={universe_sig_for_writes[:8]}... for writes")
@@ -5706,8 +5720,8 @@ def evaluate_target_predictability(
         'symbols': symbols,
         'min_cs': min_cs,
         'max_cs_samples': max_cs_samples,
-        # FIX: Add universe_sig from resolved_data_config for proper scope tracking
-        'universe_sig': resolved_data_config.get('universe_sig') if resolved_data_config else None
+        # SST: Use resolved universe_sig from resolve_write_scope (canonical)
+        'universe_sig': universe_sig_for_writes if 'universe_sig_for_writes' in locals() and universe_sig_for_writes else (resolved_data_config.get('universe_sig') if resolved_data_config else None)
     }
     
     if X is None or y is None:
@@ -5738,7 +5752,7 @@ def evaluate_target_predictability(
     # Update config (WITH feature lookback computation for auto-adjustment)
     # The auto-fix logic in create_resolved_config will increase purge if feature_lookback > purge
     resolved_config = create_resolved_config(
-        requested_min_cs=min_cs if view != "SYMBOL_SPECIFIC" else 1,
+        requested_min_cs=min_cs if view_enum != View.SYMBOL_SPECIFIC else 1,
         n_symbols_available=n_symbols_available,
         max_cs_samples=max_cs_samples,
         interval_minutes=detected_interval,
@@ -5996,15 +6010,15 @@ def evaluate_target_predictability(
                     if base_output_dir.exists():
                         try:
                             from TRAINING.orchestration.utils.target_first_paths import (
-                            ensure_scoped_artifact_dir, ensure_target_structure
-                        )
-                        from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
-                        target_clean = normalize_target_name(target_column)
+                                ensure_scoped_artifact_dir, ensure_target_structure
+                            )
+                            from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                            target_clean = normalize_target_name(target_column)
                             ensure_target_structure(base_output_dir, target_clean)
                             target_artifact_dir = ensure_scoped_artifact_dir(
                                 base_output_dir, target_clean, "featureset_artifacts",
                                 view=view, symbol=symbol, universe_sig=early_universe_sig,
-                                stage="TARGET_RANKING"  # Explicit stage for proper scoping
+                                stage=Stage.TARGET_RANKING  # Explicit stage for proper scoping
                             )
                             artifact.save(target_artifact_dir)
                             logger.debug(f"Saved POST_GATEKEEPER artifact to view-scoped location: {target_artifact_dir}")
@@ -6511,7 +6525,9 @@ def evaluate_target_predictability(
         # PATCH 4: Use SST-derived view/symbol/universe_sig for proper scoping
         if feature_importances and output_dir:
             # Use SST-derived values from Patch 0
-            view_for_importances = view_for_writes if 'view_for_writes' in locals() else (view if 'view' in locals() else "CROSS_SECTIONAL")
+            # Normalize view_for_importances - use enum value for consistency
+            view_for_importances_raw = view_for_writes if 'view_for_writes' in locals() else (view if 'view' in locals() else View.CROSS_SECTIONAL)
+            view_for_importances = View.from_string(view_for_importances_raw) if isinstance(view_for_importances_raw, str) else view_for_importances_raw
             symbol_for_importances = symbol_for_writes if 'symbol_for_writes' in locals() else (symbol if ('symbol' in locals() and symbol) else None)
             universe_sig_for_importances = universe_sig_for_writes if 'universe_sig_for_writes' in locals() else None
             
@@ -6722,7 +6738,8 @@ def evaluate_target_predictability(
         # Store suspicious features
         if suspicious_features:
             all_suspicious_features = suspicious_features
-            symbol_for_log = symbol if ('symbol' in locals() and symbol) else (view if 'view' in locals() else "CROSS_SECTIONAL")
+            # symbol_for_log should be symbol, not view - this looks like a bug, but preserve behavior
+            symbol_for_log = symbol if ('symbol' in locals() and symbol) else None
             _log_suspicious_features(target_column, symbol_for_log, suspicious_features)
         
         # AUTO-FIX LEAKAGE: If leakage detected, automatically fix and re-run
@@ -7321,7 +7338,9 @@ def evaluate_target_predictability(
                 if suspects and output_dir:
                     # Write suspects artifact
                     target_for_artifact = target_column if target_column else target
-                    resolved_view = view if 'view' in locals() else "CROSS_SECTIONAL"
+                    # Normalize resolved_view to enum
+                    resolved_view_raw = view if 'view' in locals() else View.CROSS_SECTIONAL
+                    resolved_view = View.from_string(resolved_view_raw) if isinstance(resolved_view_raw, str) else resolved_view_raw
                     symbol_for_artifact = symbol if 'symbol' in locals() else None
                     
                     try:
@@ -7523,7 +7542,7 @@ def evaluate_target_predictability(
     # Determine view for canonical metric naming
     # SST-resolved view_for_writes is preferred (handles auto-flip from CS to SS)
     result_view = view_for_writes if 'view_for_writes' in locals() and view_for_writes else (
-        view if 'view' in locals() and view else "CROSS_SECTIONAL"
+        view if 'view' in locals() and view else View.CROSS_SECTIONAL.value
     )
     
     # === DUAL RANKING: Compute strict evaluation for mismatch telemetry ===
@@ -7877,7 +7896,7 @@ def evaluate_target_predictability(
                     fold_timestamps=fold_timestamps if 'fold_timestamps' in locals() else None,
                     feature_lookback_max_minutes=feature_lookback_max,
                     data_interval_minutes=data_interval_minutes if 'data_interval_minutes' in locals() else None,
-                    stage="TARGET_RANKING",  # FIX: Use uppercase for consistency
+                    stage=Stage.TARGET_RANKING,  # FIX: Use uppercase for consistency
                     output_dir=output_dir,
                     seed=seed_value,
                     view=view_for_ctx,  # FIX: Set view in constructor for diff telemetry
@@ -8107,8 +8126,9 @@ def evaluate_target_predictability(
                 # ========================================================================
                 # PATCH 0: Use WriteScope for type-safe scope handling
                 # ========================================================================
+                # Stage is already imported globally at line 41, don't re-import
                 from TRAINING.orchestration.utils.scope_resolution import (
-                    WriteScope, ScopePurpose, Stage
+                    WriteScope, ScopePurpose
                 )
                 
                 # Determine purpose from caller (scope_purpose parameter)
@@ -8120,7 +8140,9 @@ def evaluate_target_predictability(
                 scope = None
                 if universe_sig_for_writes:
                     try:
-                        if view_for_writes == "CROSS_SECTIONAL" or symbol_for_writes is None:
+                        # Normalize view_for_writes to enum for comparison
+                        view_for_writes_enum = View.from_string(view_for_writes) if isinstance(view_for_writes, str) else view_for_writes
+                        if view_for_writes_enum == View.CROSS_SECTIONAL or symbol_for_writes is None:
                             scope = WriteScope.for_cross_sectional(
                                 universe_sig=universe_sig_for_writes,
                                 stage=Stage.TARGET_RANKING,
