@@ -6,6 +6,15 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### January
 
+- **2026-01-08 (Manifest and Determinism Fixes)** — Fixed manifest.json schema consistency (always includes run_metadata and target_index fields) and deterministic fingerprint computation (excludes git.dirty field). Added update_manifest_with_run_hash() to ensure manifest completeness at end of run. Deterministic fingerprints are now truly stable across runs with identical settings.
+  → [View](2026-01-08-manifest-and-determinism-fixes.md)
+
+- **2026-01-08 (Config Cleanup and Symlink Removal)** — Removed all symlinks from CONFIG directory and updated all code to use canonical paths directly. Removed 23 symlinks (6 root-level, 17 in training_config/, legacy directories). Updated config loader to use canonical paths only (no fallback logic). Updated all code references and documentation. Verified run hash and config tracking unchanged (fingerprints based on content, not paths). All configurable settings now fully accessible via config files.
+  → [View](2026-01-08-config-cleanup-and-symlink-removal.md)
+
+- **2026-01-08 (Metrics Cleanup and Run Hash)** — Metrics JSON restructuring for smaller, non-redundant, semantically unambiguous output. Added full run hash with change detection. Updated delta computation for grouped metrics structure. All stages now output clean, grouped metrics with task-gating.
+  → [View](2026-01-08-metrics-cleanup-and-run-hash.md)
+
 - **2026-01-04 (Reproducibility File Output Fixes)** — Fixed critical bugs preventing reproducibility files from being written to cohort directories. Fixed path detection to handle target-first structure (`reproducibility/...` vs `REPRODUCIBILITY/...`). Fixed `snapshot.json`, `baseline.json`, and diff files (`diff_prev.json`, `metric_deltas.json`, `diff_baseline.json`) not being written. Fixed previous snapshot lookup to search in target-first structure instead of legacy `REPRODUCIBILITY/...`. Added error handling and logging for all writes. All files now correctly written to target-first structure for both CROSS_SECTIONAL and SYMBOL_SPECIFIC views.
   → [View](2026-01-04-reproducibility-file-output-fixes.md)
 

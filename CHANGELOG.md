@@ -17,6 +17,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Recent Highlights (Last 7 Days)
 
 #### 2026-01-08
+**Manifest and Determinism Fixes** - Fixed manifest.json schema consistency and deterministic fingerprint computation.
+
+**Manifest.json Schema Fixes**
+- **UPDATED**: `create_manifest()` - Always includes `run_metadata` and `target_index` fields (empty dicts if not populated) for consistent schema
+- **NEW**: `update_manifest_with_run_hash()` - Updates manifest after run_hash is computed, ensuring completeness at end of run
+- **BENEFIT**: Manifest.json now has consistent schema with all required fields present
+
+**Deterministic Fingerprint Fix**
+- **FIXED**: `compute_deterministic_config_fingerprint()` - Now excludes `git.dirty` field (working directory state)
+  - Excludes: `run.run_id`, `run.timestamp`, `git.dirty`
+  - Keeps: `run.seed_global`, `run.mode`, `git.commit` (code version), all other deterministic fields
+- **BENEFIT**: Deterministic fingerprints are now truly stable across runs with identical settings
+
+**Deterministic Run Hash Implementation** - Run hash now excludes run_id/timestamp for true determinism.
+
+**Deterministic Config Fingerprint**
+- **NEW**: `deterministic_config_fingerprint` - SHA256 hash of resolved config excluding `run_id` and `timestamp`
+  - Enables comparison between runs with identical settings (same hash = same config)
+  - Stored alongside full `config_fingerprint` (includes run_id/timestamp for metadata)
+- **UPDATED**: `create_resolved_config()` - Now computes both fingerprints and saves to `config.resolved.json`
+- **UPDATED**: All snapshot types - Added `deterministic_config_fingerprint` field:
+  - `NormalizedSnapshot` (diff telemetry)
+  - `TrainingSnapshot`
+  - `FeatureSelectionSnapshot`
+- **UPDATED**: `compute_full_run_hash()` - Now uses `deterministic_config_fingerprint` instead of `config_fingerprint`
+  - Ensures run hash is deterministic across runs with identical settings
+  - Full `config_fingerprint` still available for metadata/tracking
+- **UPDATED**: `_compute_config_fingerprint_from_context()` - Extracts both fingerprints from resolved_metadata or config.resolved.json
+- **BENEFIT**: Run hash is now truly deterministic - same settings/data produce same hash, enabling quick comparison
+
+**CONFIG Folder Cleanup and Symlink Removal** - Removed all symlinks, code now uses canonical paths directly.
+
+**CONFIG Structure Simplification**
+- **REMOVED**: All symlinks from CONFIG directory (23 total)
+  - Root-level symlinks: `excluded_features.yaml`, `feature_registry.yaml`, `feature_groups.yaml`, `feature_target_schema.yaml`, `logging_config.yaml`, `target_configs.yaml`
+  - `training_config/` directory (17 symlinks) - entire directory removed
+  - Legacy directory symlinks: `feature_selection/`, `target_ranking/`
+- **UPDATED**: Config loader now uses canonical paths only (no fallback logic)
+  - `get_config_path()` - Returns canonical paths directly
+  - `load_training_config()` - Loads from `pipeline/training/` or `pipeline/` only
+  - `list_available_configs()` - Lists from canonical locations only
+- **UPDATED**: All code references updated to canonical paths
+  - `intelligent_trainer.py` - Updated help text and fallback paths
+  - `config_builder.py` - Removed symlink fallback logic
+- **VERIFIED**: Run hash and config tracking unchanged - fingerprints based on config content, not paths
+- **DOCUMENTATION**: Updated `CONFIG/README.md` and user-facing docs to reflect canonical paths
+
 **Metrics JSON Cleanup and Restructuring** - Smaller, non-redundant, semantically unambiguous metrics output.
 
 **Metrics Structure Overhaul**

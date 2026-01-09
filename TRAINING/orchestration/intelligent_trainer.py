@@ -1932,6 +1932,156 @@ class IntelligentTrainer:
         except ImportError:
             logger.debug("Decision engine not available, skipping pre-run hook")
         
+        # Create resolved config for run reproduction (after all configs are loaded)
+        try:
+            from TRAINING.orchestration.utils.manifest import create_resolved_config
+            
+            # Load multi_model_config if not already loaded
+            multi_model_config_for_resolved = None
+            if 'multi_model_config' in locals():
+                multi_model_config_for_resolved = multi_model_config
+            else:
+                try:
+                    multi_model_config_for_resolved = load_multi_model_config()
+                except Exception as e:
+                    logger.debug(f"Could not load multi_model_config for resolved config: {e}")
+            
+            # Get base seed from config
+            base_seed = None
+            try:
+                from CONFIG.config_loader import get_cfg
+                base_seed = int(get_cfg("pipeline.determinism.base_seed", default=42))
+            except Exception:
+                base_seed = 42
+            
+            # Determine task type (default to regression, will be refined per-target)
+            task_type = "regression"  # Default, will be determined per-target
+            
+            # Get model families from config
+            model_families_for_resolved = None
+            if multi_model_config_for_resolved and 'model_families' in multi_model_config_for_resolved:
+                model_families_dict = multi_model_config_for_resolved.get('model_families', {})
+                if isinstance(model_families_dict, dict):
+                    model_families_for_resolved = sorted([
+                        name for name, config in model_families_dict.items()
+                        if isinstance(config, dict) and config.get('enabled', False)
+                    ])
+            
+            # Convert experiment_config to dict if it's an object
+            experiment_config_dict = None
+            if self.experiment_config:
+                if hasattr(self.experiment_config, '__dict__'):
+                    data_dir = None
+                    if hasattr(self.experiment_config, 'data_dir'):
+                        data_dir_val = getattr(self.experiment_config, 'data_dir')
+                        data_dir = str(data_dir_val) if data_dir_val else None
+                    
+                    interval = None
+                    if hasattr(self.experiment_config, 'data') and hasattr(self.experiment_config.data, 'bar_interval'):
+                        interval = self.experiment_config.data.bar_interval
+                    elif hasattr(self.experiment_config, 'bar_interval'):
+                        interval = getattr(self.experiment_config, 'bar_interval')
+                    elif hasattr(self.experiment_config, 'interval'):
+                        interval = getattr(self.experiment_config, 'interval')
+                    
+                    experiment_config_dict = {
+                        "name": getattr(self.experiment_config, 'name', None),
+                        "data_dir": data_dir,
+                        "symbols": getattr(self.experiment_config, 'symbols', None),
+                        "interval": interval,
+                    }
+                elif isinstance(self.experiment_config, dict):
+                    experiment_config_dict = self.experiment_config
+                elif self._exp_yaml_sst:
+                    # Use cached YAML if available
+                    experiment_config_dict = self._exp_yaml_sst
+            
+            # Create resolved config
+            resolved_config = create_resolved_config(
+                output_dir=self.output_dir,
+                run_id=None,  # Will be generated
+                experiment_config=experiment_config_dict,
+                multi_model_config=multi_model_config_for_resolved,
+                model_families=model_families_for_resolved,
+                task_type=task_type,
+                base_seed=base_seed,
+                overrides=resolved_config_patch if resolved_config_patch else None
+            )
+            
+            # CRITICAL: Validate that config.resolved.json was created successfully
+            resolved_config_path = self.output_dir / "globals" / "config.resolved.json"
+            if not resolved_config_path.exists():
+                logger.error(
+                    f"❌ CRITICAL: config.resolved.json was not created at {resolved_config_path}. "
+                    f"Run will continue but snapshots may lack config fingerprints, breaking determinism."
+                )
+            elif resolved_config and 'config_fingerprint' in resolved_config:
+                logger.info(f"✅ Resolved config created: {resolved_config_path}")
+                logger.debug(f"   Config fingerprint: {resolved_config['config_fingerprint'][:16]}...")
+                if 'deterministic_config_fingerprint' in resolved_config:
+                    logger.debug(f"   Deterministic fingerprint: {resolved_config['deterministic_config_fingerprint'][:16]}...")
+            else:
+                logger.warning(
+                    f"⚠️ Resolved config created but missing fingerprints. "
+                    f"This may break determinism tracking."
+                )
+            
+            # Save user config if available
+            try:
+                from TRAINING.orchestration.utils.manifest import save_user_config
+                experiment_config_path = None
+                if self.experiment_config and hasattr(self.experiment_config, 'name'):
+                    try:
+                        from TRAINING.orchestration.intelligent_trainer import _get_experiment_config_path
+                        experiment_config_path = _get_experiment_config_path(self.experiment_config.name)
+                    except Exception:
+                        pass
+                save_user_config(
+                    output_dir=self.output_dir,
+                    experiment_config_path=experiment_config_path,
+                    experiment_config_dict=experiment_config_dict
+                )
+            except Exception as e:
+                logger.debug(f"Could not save user config: {e}")
+            
+            # Save overrides if any were applied
+            if resolved_config_patch:
+                try:
+                    from TRAINING.orchestration.utils.manifest import save_overrides_config
+                    save_overrides_config(
+                        output_dir=self.output_dir,
+                        overrides=resolved_config_patch
+                    )
+                except Exception as e:
+                    logger.debug(f"Could not save overrides config: {e}")
+            
+            # Update manifest with config_fingerprint
+            if resolved_config and 'config_fingerprint' in resolved_config:
+                try:
+                    from TRAINING.orchestration.utils.manifest import create_manifest
+                    create_manifest(
+                        output_dir=self.output_dir,
+                        config_digest=resolved_config['config_fingerprint'],
+                        experiment_config=experiment_config_dict
+                    )
+                    # Validate manifest was created
+                    manifest_path = self.output_dir / "globals" / "manifest.json"
+                    if not manifest_path.exists():
+                        logger.warning(f"⚠️ Manifest creation reported success but manifest.json not found at {manifest_path}")
+                    else:
+                        logger.debug(f"✅ Manifest created: {manifest_path}")
+                except Exception as e:
+                    logger.warning(f"Could not update manifest with config fingerprint: {e}")
+                    import traceback
+                    logger.debug(traceback.format_exc())
+        except Exception as e:
+            logger.error(
+                f"❌ CRITICAL: Failed to create resolved config: {e}. "
+                f"Run will continue but snapshots may lack config fingerprints, breaking determinism and reproducibility."
+            )
+            import traceback
+            logger.debug(traceback.format_exc())
+        
         # Extract data limits from train_kwargs (passed from main, potentially patched by decisions)
         min_cs = train_kwargs.get('min_cs', 10)
         max_cs_samples = train_kwargs.get('max_cs_samples')
@@ -2610,7 +2760,7 @@ class IntelligentTrainer:
             from TRAINING.common.utils.fingerprinting import create_stage_identity
             training_identity = create_stage_identity(
                 stage="TRAINING",
-                symbols=symbols,  # Full universe
+                symbols=self.symbols,  # Full universe
                 experiment_config=self.experiment_config,
                 data_dir=self.data_dir,
             )
@@ -2902,7 +3052,7 @@ Examples:
     
     # Simple config-based mode
     parser.add_argument('--config', type=str,
-                       help='Config profile name (loads from CONFIG/training_config/intelligent_training_config.yaml)')
+                       help='Config profile name (loads from CONFIG/pipeline/training/intelligent.yaml)')
     
     # Target/feature selection (moved to config - CLI only for manual overrides)
     parser.add_argument('--targets', nargs='+',
@@ -2936,7 +3086,7 @@ Examples:
     
     # Config files
     parser.add_argument('--target-ranking-config', type=Path,
-                       help='Path to target ranking config YAML (default: CONFIG/training_config/target_ranking_config.yaml)')
+                       help='Path to target ranking config YAML (default: CONFIG/ranking/targets/configs.yaml)')
     parser.add_argument('--multi-model-config', type=Path,
                        help='Path to multi-model feature selection config YAML (default: CONFIG/multi_model_feature_selection.yaml)')
     parser.add_argument('--experiment-config', type=str,
@@ -2974,10 +3124,8 @@ Examples:
         except Exception as e:
             logger.warning(f"Could not load intelligent training config via loader: {e}")
     else:
-        # Fallback: Try new location first (pipeline/training/), then old (training_config/)
+        # Fallback: Use canonical path
         intel_config_file = Path("CONFIG/pipeline/training/intelligent.yaml")
-        if not intel_config_file.exists():
-            intel_config_file = Path("CONFIG/training_config/intelligent_training_config.yaml")
         if intel_config_file.exists():
             try:
                 import yaml
@@ -2996,8 +3144,6 @@ Examples:
             intel_config_file = Path("CONFIG/pipeline/training/intelligent.yaml")
     else:
         intel_config_file = Path("CONFIG/pipeline/training/intelligent.yaml")
-        if not intel_config_file.exists():
-            intel_config_file = Path("CONFIG/training_config/intelligent_training_config.yaml")
     
     # Apply config values if CLI args not provided
     if not args.data_dir and intel_config_data.get('data', {}).get('data_dir'):
@@ -3762,6 +3908,15 @@ Examples:
                 dir_name = trainer.output_dir.name
                 if dir_name.startswith("run_"):
                     run_id = dir_name.replace("_", "-")
+                else:
+                    # Fallback: use directory name as-is (may contain timestamp or other identifiers)
+                    run_id = dir_name
+            
+            # If still no run_id, generate one from timestamp
+            if not run_id:
+                from datetime import datetime
+                run_id = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+                logger.debug(f"Generated run_id from timestamp: {run_id}")
             
             saved_path = save_run_hash(
                 output_dir=trainer.output_dir,
@@ -3781,10 +3936,29 @@ Examples:
                             changes = run_hash_data['changes']
                             logger.info(f"   Changes: {changes.get('severity_summary', 'none')} severity, "
                                       f"{len(changes.get('changed_snapshots', []))} snapshots changed")
+                        if run_hash_data.get('run_hash'):
+                            logger.info(f"   Run hash: {run_hash_data['run_hash']}")
                 except Exception:
                     pass
+                
+                # Update manifest with run_hash (reuse existing function)
+                try:
+                    from TRAINING.orchestration.utils.manifest import update_manifest_with_run_hash
+                    update_manifest_with_run_hash(trainer.output_dir)
+                except Exception as e:
+                    logger.debug(f"Failed to update manifest with run_hash: {e}")
+            else:
+                logger.warning(
+                    "⚠️ Run hash computation returned None. This may indicate no snapshots were found. "
+                    "Run will continue but reproducibility tracking may be incomplete."
+                )
         except Exception as e:
-            logger.debug(f"Failed to compute run hash: {e}")
+            logger.warning(
+                f"⚠️ Failed to compute run hash: {e}. "
+                f"Run will continue but reproducibility tracking may be incomplete."
+            )
+            import traceback
+            logger.debug(f"Run hash computation traceback: {traceback.format_exc()}")
         
         return 0
     
