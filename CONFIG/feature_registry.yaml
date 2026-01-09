@@ -1,0 +1,283 @@
+features:
+  ret_zscore_60m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  ret_zscore_30m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  ret_zscore_15m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  ret_zscore_5m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  ret_zscore_10m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vol_30m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  ret_ord_60m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  ret_ord_30m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vol_60m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  macd_hist:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vol_over_vol_5m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vol_over_vol_60m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  bb_width_20:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  volume_roc_5:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  obv_ema:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vwap_dev_low:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  atr_14:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vwap_dev_high:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  mfi_14:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  volume_roc_20:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  rsi_7:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vol_over_vol_15m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  realized_vol_5:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  obv:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  cmf:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  adx_14:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  momentum_10:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  hull_ma_5:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  volume:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  volume_sma_5:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  rsi_x_vol:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  stoch_d_5:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  ret_oc:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vwap_dev:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  turnover_20:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  dollar_volume:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  ret_1m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  volume_roc_10:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  adx_x_vol:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  ad_line:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  turnover_5:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  hull_ma_20:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  close:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  rsi_5:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  volume_ema_5:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  stoch_x_vol:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'
+  vol_x_ret_15m:
+    lag_bars: 0
+    allowed_horizons: []
+    source: unknown
+    rejected: true
+    description: 'AUTO-REJECTED: Detected as leaky feature'

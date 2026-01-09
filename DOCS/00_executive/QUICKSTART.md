@@ -34,24 +34,54 @@ See [System Requirements](SYSTEM_REQUIREMENTS.md) for complete specifications.
 
 ## Installation
 
+### Quick Install (Recommended)
+
+Use the automated install script for the fastest setup:
+
+```bash
+git clone <repository-url>
+cd trader
+bash bin/install.sh
+conda activate <env-name>  # Name from environment.yml (typically foxml_env)
+```
+
+The install script will:
+- Create the conda environment from `environment.yml`
+- Display the correct environment name to activate
+- Handle existing environments gracefully
+
+### Verify Installation
+
+Test that everything is set up correctly:
+
+```bash
+bash bin/test_install.sh
+```
+
+This script verifies:
+- Python version
+- Critical library imports (numpy, pandas, polars, sklearn)
+- Model libraries (LightGBM)
+- Pipeline imports
+- Config system
+
+### Manual Install (Alternative)
+
+If you prefer manual setup or the script fails:
+
 ```bash
 git clone <repository-url>
 cd trader
 
 # Create environment
 conda env create -f environment.yml
-conda activate trader
+conda activate <env-name>  # Check environment.yml for the name (typically foxml_env)
 
-# Or use pip
+# Or use pip (not recommended - use environment.yml with conda)
 pip install -r requirements.txt
 ```
 
-## Verify Installation
-
-```bash
-python --version  # Should be 3.11+
-python -c "import torch; print(torch.cuda.is_available())"  # GPU check
-```
+**Note**: The environment name is specified in `environment.yml` (currently `foxml_env`). Always use the name from that file when activating.
 
 ## Data Pipeline
 

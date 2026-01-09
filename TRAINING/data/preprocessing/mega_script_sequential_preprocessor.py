@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later OR Commercial
+# Copyright (c) 2025-2026 Fox ML Infrastructure LLC
 
 """
 Mega Script Sequential Preprocessor - Handles both cross-sectional and sequential models.

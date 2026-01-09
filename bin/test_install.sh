@@ -1,5 +1,7 @@
 #!/bin/bash
-# SPDX-License-Identifier: AGPL-3.0-or-lative OR Commercial
+# SPDX-License-Identifier: AGPL-3.0-or-later OR Commercial
+# Copyright (c) 2025-2026 Fox ML Infrastructure LLC
+
 #
 # Quick Test Script for FoxML Core Installation
 #
@@ -16,14 +18,21 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 cd "$REPO_ROOT"
 
+# Parse environment name from environment.yml
+ENV_NAME=$(grep -E "^name:" environment.yml | sed 's/name:[[:space:]]*//' | tr -d '"' | tr -d "'" | xargs)
+if [[ -z "$ENV_NAME" ]]; then
+    echo "❌ Could not determine environment name from environment.yml"
+    exit 1
+fi
+
 # Check if environment is activated
-if [[ -z "$CONDA_DEFAULT_ENV" ]] || [[ "$CONDA_DEFAULT_ENV" != "trader" ]]; then
-    echo "⚠️  Conda environment 'trader' not activated."
+if [[ -z "$CONDA_DEFAULT_ENV" ]] || [[ "$CONDA_DEFAULT_ENV" != "$ENV_NAME" ]]; then
+    echo "⚠️  Conda environment '$ENV_NAME' not activated."
     echo "   Activating now..."
     eval "$(conda shell.bash hook)"
-    conda activate trader || {
-        echo "❌ Failed to activate 'trader' environment."
-        echo "   Run: conda activate trader"
+    conda activate "$ENV_NAME" || {
+        echo "❌ Failed to activate '$ENV_NAME' environment."
+        echo "   Run: conda activate $ENV_NAME"
         exit 1
     }
 fi

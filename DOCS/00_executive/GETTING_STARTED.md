@@ -20,19 +20,33 @@ Installation, setup, and first pipeline run.
 
 ### Install
 
+**Quick Install (Recommended):**
+
+```bash
+git clone <repository-url>
+cd trader
+bash bin/install.sh
+conda activate <env-name>  # Name from environment.yml (typically foxml_env)
+
+# Verify installation
+bash bin/test_install.sh
+```
+
+**Manual Install (Alternative):**
+
 ```bash
 git clone <repository-url>
 cd trader
 
 conda env create -f environment.yml
-conda activate trader
+conda activate <env-name>  # Check environment.yml for the name (typically foxml_env)
 
 # Verify
-python --version  # Should be 3.11+
+python --version  # Should be 3.10+
 python -c "import polars; print('Polars OK')"
 ```
 
-See [Installation Guide](../01_tutorials/setup/INSTALLATION.md) for details.
+See [Quick Start](QUICKSTART.md) for more details, or [Installation Guide](../01_tutorials/setup/INSTALLATION.md) for advanced setup.
 
 ## System Overview
 
