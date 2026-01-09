@@ -8,11 +8,11 @@
 
 > **License:**  
 > - **AGPL-3.0** (open source)  
-> - **Commercial License** (for proprietary or for-profit use)  
+> - **Commercial License** required for proprietary/closed deployments or to avoid AGPL obligations (especially SaaS/network use)
 >
 > **Licensing TL;DR:**
 > - **AGPL-3.0**: If you deploy as a service, AGPL obligations apply unless you have a commercial license
-> - **Commercial License**: Available for proprietary / closed deployments
+> - **Commercial License**: Required for proprietary/closed deployments or to avoid AGPL source disclosure obligations (especially SaaS/network use)
 > - See [LICENSE](LICENSE) and [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md) for full terms
 
 > **🔍 Reproducibility & Auditability:** This system supports **bitwise deterministic runs** via strict mode (`bin/run_deterministic.sh`) for financial audit compliance. Bitwise determinism requires CPU-only execution, pinned dependencies, fixed thread env vars, and deterministic data ordering. Note: Not guaranteed across different CPUs/BLAS versions/kernels/drivers/filesystem ordering. See [Deterministic Runs](DOCS/02_reference/configuration/DETERMINISTIC_RUNS.md).

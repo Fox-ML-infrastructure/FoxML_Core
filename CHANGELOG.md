@@ -2,6 +2,13 @@
 
 All notable changes to FoxML Core will be documented in this file.
 
+## 2026-01-08
+
+### Commercial License Clarity and Support Documentation
+- **README:** Clarified commercial license requirements - now explicitly states "required for proprietary/closed deployments or to avoid AGPL obligations (especially SaaS/network use)"
+- **SUPPORT.md:** Added root-level support documentation for easier discovery
+- See [detailed changelog](DOCS/02_reference/changelog/2026-01-08-commercial-license-clarity-and-support.md) for full details
+
 > **Note**: This project is under active development. See [NOTICE.md](NOTICE.md) for more information.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),

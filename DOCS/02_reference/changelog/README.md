@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### January
 
+- **2026-01-08 (Commercial License Clarity and Support Documentation)** — Clarified commercial license requirements in README - now explicitly states "required for proprietary/closed deployments or to avoid AGPL obligations (especially SaaS/network use)". Added root-level SUPPORT.md for easier discovery without navigating LEGAL folder. Makes commercial license trigger crystal clear to legal teams and improves discoverability of support information.
+  → [View](2026-01-08-commercial-license-clarity-and-support.md)
+
 - **2026-01-08 (README Improvements for Credibility)** — Comprehensive README improvements: reorganized structure for better funnel, qualified claims (bitwise determinism scope, data transmission), added quick start snippet, concepts glossary, licensing TL;DR, and "why this exists" positioning. Resolved internal contradictions (production vs active development). Moved OSRS joke to maintain credibility. Makes README read like "infra, not a notebook" with clear positioning.
   → [View](2026-01-08-readme-improvements-for-credibility.md)
 
