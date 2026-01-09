@@ -48,6 +48,7 @@ Independent Contractor • ML Engineering • Cross-Sectional ML Systems • Sys
 - **Task-aware evaluation**: Unified handling of regression (IC-based) and classification (AUC-based) targets with normalized skill scores
 - **GPU acceleration** for target ranking, feature selection, and model training (LightGBM, XGBoost, CatBoost)
 - **Bitwise deterministic runs** via strict mode (CPU-only, pinned dependencies, fixed thread env vars, deterministic data ordering) for financial audit compliance. Note: Not guaranteed across different CPUs/BLAS versions/kernels/drivers/filesystem ordering.
+  - *Yes, outputs remain deterministic even while you're grinding OSRS, watching YouTube, or questioning your life choices at 3 AM. We tested it.*
 - **Config-based usage** with minimal command-line arguments
 - **Leakage detection system** with pre-training leak detection and auto-fix
 - **Single Source of Truth (SST)** config system - all 20 model families use config-driven hyperparameters
@@ -59,17 +60,24 @@ Independent Contractor • ML Engineering • Cross-Sectional ML Systems • Sys
 ## Quick Start (30 Seconds)
 
 ```bash
-# Install
-conda env create -f environment.yml
+# One-line install
+bash bin/install.sh
+
+# Activate environment
 conda activate trader
 
-# Run with example config
+# Test installation
+bash bin/test_install.sh
+
+# Run a quick test
 python -m TRAINING.orchestration.intelligent_trainer \
-    --output-dir "my_first_run"
+    --output-dir "test_install"
 
 # Check results
 ls RESULTS/runs/*/globals/config.resolved.json
 ```
+
+**Manual install:** `conda env create -f environment.yml && conda activate trader`
 
 See [Quick Start Guide](DOCS/00_executive/QUICKSTART.md) for full setup.
 
@@ -140,7 +148,6 @@ The pipeline supports batching large universes across multiple runs. While batch
 - **Core count**: More cores are beneficial, but some operations are single-threaded, so core count only helps with parallel aspects of the pipeline
 - **Base clock speed**: Faster base clocks improve performance across all operations
 - **Best practice**: Disable turbo boost features and use stable, consistent clock speeds for reproducible results
-  - *Yes, outputs remain deterministic even while you're grinding OSRS, watching YouTube, or questioning your life choices at 3 AM. We tested it.*
 
 **GPU Considerations:**
 - **VRAM dependent**: GPU performance is primarily limited by available VRAM rather than compute cores
