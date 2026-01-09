@@ -469,8 +469,14 @@ def prepare_cross_sectional_data_for_ranking(
                 # Small panel: recommend SYMBOL_SPECIFIC, BUT only if single symbol
                 # For multi-symbol runs, must use CROSS_SECTIONAL (SYMBOL_SPECIFIC requires n_symbols=1)
                 # Note: effective_requested_view was already validated above, so if it was SYMBOL_SPECIFIC, it's now None
-                view = View.SYMBOL_SPECIFIC
-                view_reason = f"n_symbols={n_symbols_available} (small panel, < {auto_flip_min_symbols} recommended)"
+                if n_symbols_available == 1:
+                    # Single symbol: can use SYMBOL_SPECIFIC
+                    view = View.SYMBOL_SPECIFIC
+                    view_reason = f"n_symbols={n_symbols_available} (small panel, < {auto_flip_min_symbols} recommended)"
+                else:
+                    # Multi-symbol small panel: must use CROSS_SECTIONAL (SYMBOL_SPECIFIC requires n_symbols=1)
+                    view = View.CROSS_SECTIONAL
+                    view_reason = f"n_symbols={n_symbols_available} (small panel, < {auto_flip_min_symbols}, but multi-symbol so CROSS_SECTIONAL)"
             else:
                 # Large panel: always CROSS_SECTIONAL
                 view = View.CROSS_SECTIONAL
