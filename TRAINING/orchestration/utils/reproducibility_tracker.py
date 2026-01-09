@@ -1795,6 +1795,16 @@ class ReproducibilityTracker:
         except Exception as e:
             logger.debug(f"Failed to compute comparable_key: {e}")
         
+        # CRITICAL: Add metrics to full_metadata before finalize_run() is called
+        # This ensures _compute_metrics_digest() can find metrics via resolved_metadata['metrics']
+        # Extract metrics from run_data (metrics are passed in run_data for TARGET_RANKING/FEATURE_SELECTION)
+        if run_data.get('metrics'):
+            # Metrics are already in run_data - add to full_metadata for resolved_metadata
+            full_metadata['metrics'] = run_data['metrics']
+        elif additional_data and 'metrics' in additional_data:
+            # Fallback: check additional_data
+            full_metadata['metrics'] = additional_data['metrics']
+        
         # CRITICAL: Initialize telemetry if not already initialized
         # Telemetry is needed for diff tracking and should be available for all runs
         # Check if telemetry exists as instance variable or needs to be created

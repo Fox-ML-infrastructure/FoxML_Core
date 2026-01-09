@@ -796,14 +796,37 @@ class DiffTelemetry:
         metrics_sha256 = self._compute_metrics_digest(outputs, resolved_metadata, cohort_dir)
         
         # CRITICAL: Validate that metrics exist for stages that require them
+        # Only error if ALL paths failed (outputs, resolved_metadata, cohort_dir files, reference pointers, legacy)
+        # If metrics were found via any path, metrics_sha256 will be set and this check won't fire
         stages_requiring_metrics = ["TARGET_RANKING", "FEATURE_SELECTION"]
         if stage in stages_requiring_metrics and not metrics_sha256:
-            logger.error(
-                f"❌ CRITICAL: metrics_sha256 cannot be computed for {stage} stage "
-                f"(target={target}, view={view}). Metrics are required for reproducibility verification. "
-                f"Snapshot will be saved but reproducibility verification will be incomplete."
-            )
-            # Don't fail snapshot creation, but log error for visibility
+            # Check if metrics exist in outputs or resolved_metadata (even if digest computation failed)
+            has_metrics_in_outputs = bool(outputs.get('metrics'))
+            has_metrics_in_resolved = bool(resolved_metadata and resolved_metadata.get('metrics'))
+            has_metrics_files = False
+            if cohort_dir:
+                cohort_path = Path(cohort_dir)
+                has_metrics_files = (cohort_path / "metrics.json").exists() or (cohort_path / "metrics.parquet").exists()
+            
+            # Only error if truly no metrics found anywhere
+            if not has_metrics_in_outputs and not has_metrics_in_resolved and not has_metrics_files:
+                logger.error(
+                    f"❌ CRITICAL: metrics_sha256 cannot be computed for {stage} stage "
+                    f"(target={target}, view={view}). No metrics found in outputs, resolved_metadata, or cohort_dir. "
+                    f"Metrics are required for reproducibility verification. "
+                    f"Snapshot will be saved but reproducibility verification will be incomplete."
+                )
+            else:
+                # Metrics exist but digest computation failed - this is a bug, log as warning
+                logger.warning(
+                    f"⚠️  metrics_sha256 cannot be computed for {stage} stage "
+                    f"(target={target}, view={view}) despite metrics being available. "
+                    f"This may indicate a bug in _compute_metrics_digest(). "
+                    f"outputs.has_metrics={has_metrics_in_outputs}, "
+                    f"resolved_metadata.has_metrics={has_metrics_in_resolved}, "
+                    f"cohort_dir.has_files={has_metrics_files}"
+                )
+            # Don't fail snapshot creation, but log for visibility
         
         artifacts_manifest_sha256 = self._compute_artifacts_manifest_digest(cohort_dir, stage)
         # NEW: Pass prediction_fingerprint for authoritative prediction hash
@@ -2067,10 +2090,16 @@ class DiffTelemetry:
         3. metrics.json file in cohort_dir (most common for TARGET_RANKING/FEATURE_SELECTION)
         """
         metrics_data = outputs.get('metrics', {})
+        source_path = None  # Track which path successfully found metrics
+        
+        if metrics_data:
+            source_path = "outputs['metrics']"
         
         # Check resolved_metadata for metrics if outputs.metrics is empty
         if not metrics_data and resolved_metadata:
             metrics_data = resolved_metadata.get('metrics', {})
+            if metrics_data:
+                source_path = "resolved_metadata['metrics']"
         
         # SST Architecture: Read metrics from canonical location (cohort_dir) first
         # Then fall back to reference pointers, then legacy locations
@@ -2092,6 +2121,8 @@ class DiffTelemetry:
                                        'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                        'composite_version', 'leakage', 'leakage_flag']
                         }
+                        if metrics_data:
+                            source_path = f"cohort_dir/metrics.parquet ({metrics_parquet})"
                         logger.debug(f"✅ Loaded metrics from canonical parquet: {metrics_parquet}")
                 except Exception as e:
                     logger.debug(f"Failed to read metrics.parquet from {cohort_dir}: {e}")
@@ -2109,6 +2140,8 @@ class DiffTelemetry:
                                        'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                        'composite_version', 'leakage', 'leakage_flag']
                         }
+                        if metrics_data:
+                            source_path = f"cohort_dir/metrics.json ({metrics_json_file})"
                         logger.debug(f"✅ Loaded metrics from JSON: {metrics_json_file}")
                     except Exception as e:
                         logger.debug(f"Failed to read metrics.json from {cohort_dir}: {e}")
@@ -2171,6 +2204,8 @@ class DiffTelemetry:
                                                            'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                                            'composite_version', 'leakage', 'leakage_flag']
                                             }
+                                            if metrics_data:
+                                                source_path = f"reference pointer ({canonical_path})"
                                             logger.debug(f"✅ Loaded metrics via reference pointer: {canonical_path}")
                                     except Exception as e:
                                         logger.debug(f"Failed to follow reference pointer: {e}")
@@ -2195,6 +2230,8 @@ class DiffTelemetry:
                                                'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                                'composite_version', 'leakage', 'leakage_flag']
                                 }
+                                if metrics_data:
+                                    source_path = f"legacy location parquet ({metrics_dir})"
                         elif (metrics_dir / "metrics.json").exists():
                             with open(metrics_dir / "metrics.json", 'r') as f:
                                 metrics_json = json.load(f)
@@ -2204,11 +2241,19 @@ class DiffTelemetry:
                                                'stage', 'target', 'metric_name', 'task_type', 'composite_definition',
                                                'composite_version', 'leakage', 'leakage_flag']
                                 }
+                                if metrics_data:
+                                    source_path = f"legacy location json ({metrics_dir})"
                 except Exception as e:
                     logger.debug(f"Failed to load metrics from legacy location: {e}")
         
         if not metrics_data:
             return None
+        
+        # Log which path successfully found metrics (for debugging)
+        if source_path:
+            logger.debug(f"✅ metrics_sha256 computed from {source_path}")
+        else:
+            logger.debug(f"✅ metrics_sha256 computed (source path unknown)")
         
         # Normalize metrics dict for stable hashing (sort keys, round floats)
         normalized = self._normalize_value_for_hash(metrics_data)
