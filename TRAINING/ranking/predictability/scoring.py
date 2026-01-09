@@ -207,6 +207,30 @@ class TargetPredictabilityScore:
         return get_canonical_metric_name(self.task_type, self.view, "std")
     
     @property
+    def skill01(self) -> float:
+        """
+        Normalized skill score in [0,1] range for unified routing.
+        
+        Maps:
+        - Regression IC: [-1, 1] → [0, 1] (0.5 * (ic + 1.0))
+        - Classification AUC-excess: [-0.5, 0.5] → [0, 1] (0.5 * (auc_excess + 1.0))
+        
+        Both IC and AUC-excess are centered at 0 (null baseline), so the same
+        normalization formula works for both task types.
+        
+        Returns:
+            Normalized skill score in [0, 1] range. Returns 0.0 if primary_metric_mean is None.
+        """
+        if self.primary_metric_mean is None:
+            return 0.0
+        # Clamp to valid range: IC ∈ [-1, 1], AUC-excess ∈ [-0.5, 0.5]
+        # If primary_metric_mean is outside expected range (e.g., failed target with -999.5),
+        # clamp to ensure skill01 ∈ [0, 1]
+        normalized = 0.5 * (self.primary_metric_mean + 1.0)
+        # Clamp to [0, 1] range (handles edge cases like failed targets)
+        return max(0.0, min(1.0, normalized))
+    
+    @property
     def effective_primary_std(self) -> float:
         """Get effective primary std (prefers explicit, falls back to std_score)."""
         if self.primary_metric_std is not None:

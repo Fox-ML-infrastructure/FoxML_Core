@@ -114,6 +114,9 @@ def create_manifest(
                 target_index[target] = target_info
         manifest["target_index"] = target_index
     
+    # Add routing and training plan hashes for fast change detection
+    manifest["plan_hashes"] = _compute_plan_hashes(output_dir)
+    
     # Add trend reports references if they exist
     # trend_reports is at RESULTS/trend_reports/ (outside run directories)
     # Find RESULTS directory by walking up from output_dir
@@ -342,6 +345,51 @@ def _find_files(directory: Path) -> List[str]:
         if path.is_file():
             files.append(str(path.relative_to(directory.parent.parent)))
     return sorted(files)
+
+
+def _compute_plan_hashes(output_dir: Path) -> Dict[str, Optional[str]]:
+    """
+    Compute SHA256 hashes of routing and training plans for fast change detection.
+    
+    Args:
+        output_dir: Base run output directory
+    
+    Returns:
+        Dict with 'routing_plan_hash' and 'training_plan_hash' (None if files don't exist)
+    """
+    hashes = {
+        "routing_plan_hash": None,
+        "training_plan_hash": None
+    }
+    
+    globals_dir = output_dir / "globals"
+    
+    # Hash routing plan (globals/routing_plan/routing_plan.json)
+    routing_plan_path = globals_dir / "routing_plan" / "routing_plan.json"
+    if routing_plan_path.exists():
+        try:
+            with open(routing_plan_path, 'rb') as f:
+                routing_content = f.read()
+            hashes["routing_plan_hash"] = sha256_full(routing_content)
+        except Exception as e:
+            logger.debug(f"Failed to hash routing plan: {e}")
+    
+    # Hash training plan (globals/training_plan/master_training_plan.json or training_plan.json)
+    training_plan_dir = globals_dir / "training_plan"
+    training_plan_path = training_plan_dir / "master_training_plan.json"
+    if not training_plan_path.exists():
+        # Fallback to training_plan.json
+        training_plan_path = training_plan_dir / "training_plan.json"
+    
+    if training_plan_path.exists():
+        try:
+            with open(training_plan_path, 'rb') as f:
+                training_content = f.read()
+            hashes["training_plan_hash"] = sha256_full(training_content)
+        except Exception as e:
+            logger.debug(f"Failed to hash training plan: {e}")
+    
+    return hashes
 
 
 def _find_model_families(models_dir: Path) -> Dict[str, List[str]]:

@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Recent Highlights (Last 7 Days)
 
 #### 2026-01-08
+**Task-Aware Routing Fix** - Fixed critical bug where routing used fixed [0,1] thresholds on `auc` field, breaking regression targets (R² can be negative). Implemented unified `skill01` score that normalizes both regression IC and classification AUC-excess to [0,1] range. Fixed IC extraction bug (now extracts IC from model_metrics instead of using R²). Enhanced suspicious detection to be task-aware (uses tstat for stability check). Added routing and training plan hashes to manifest for fast change detection. All changes are backward compatible.
+
 **Dual Ranking and Filtering Mismatch Fix** - Fixed critical filtering mismatch between TARGET_RANKING and FEATURE_SELECTION that caused false positives. Removed "unknown but safe" features from ranking mode (now uses safe_family + registry only). Added dual ranking: screen evaluation (safe+registry) and strict evaluation (registry-only) with mismatch telemetry. Updated promotion logic to filter by `strict_viability_flag`. Prevents targets from ranking high using features unavailable in training. All new fields are optional and backward compatible.
 
 **Cross-Stage Issue Fixes** - Fixed similar issues across FEATURE_SELECTION and TRAINING stages for consistency and type safety.

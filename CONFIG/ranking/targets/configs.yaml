@@ -627,3 +627,26 @@ output:
 #
 # Estimated runtime per target: 1-3 hours for full universe (728 symbols)
 # Test first: python SCRIPTS/run_multi_target_selection.py --symbols AAPL,MSFT,GOOGL
+
+# ============================================================================
+# Routing Configuration
+# ============================================================================
+# Unified skill01 thresholds (works for both regression IC and classification AUC)
+# skill01 is normalized [0,1] score: 0.5 * (primary_metric_mean + 1.0)
+#   - Regression IC: [-1, 1] → [0, 1]
+#   - Classification AUC-excess: [-0.5, 0.5] → [0, 1]
+
+routing:
+  # Unified skill01 thresholds (primary, recommended)
+  skill01_threshold: 0.65  # Cross-sectional threshold (was auc_threshold)
+  symbol_skill01_threshold: 0.60  # Symbol-specific threshold (was symbol_auc_threshold)
+  frac_symbols_good_threshold: 0.5  # Fraction of symbols that must meet threshold
+  suspicious_skill01: 0.90  # Suspicious threshold (was suspicious_auc)
+  suspicious_symbol_skill01: 0.95  # Symbol suspicious threshold (was suspicious_symbol_auc)
+  
+  # Backward compatibility (deprecated, will be removed in future version)
+  # These map to skill01_threshold values above
+  auc_threshold: 0.65  # Maps to skill01_threshold
+  symbol_auc_threshold: 0.60  # Maps to symbol_skill01_threshold
+  suspicious_auc: 0.90  # Maps to suspicious_skill01
+  suspicious_symbol_auc: 0.95  # Maps to suspicious_symbol_skill01

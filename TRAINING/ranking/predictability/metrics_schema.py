@@ -397,6 +397,11 @@ def build_clean_metrics_dict(
     if skill_se is not None:
         primary_metric["skill_se"] = float(skill_se)
     
+    # Add skill01 (normalized [0,1] score for unified routing)
+    skill01 = result.skill01 if hasattr(result, 'skill01') else None
+    if skill01 is not None:
+        primary_metric["skill01"] = float(skill01)
+    
     # Build schema group
     schema = {
         "metrics": getattr(result, 'metrics_schema_version', '1.1'),

@@ -191,7 +191,7 @@ def save_rankings(
         # Create empty CSV file with headers
         empty_df = pd.DataFrame(columns=[
             'rank', 'target', 'target_column', 'composite_score', 'task_type',
-            'auc', 'std_score', 'mean_r2', 'std_r2', 'mean_importance',
+            'skill01', 'auc', 'std_score', 'mean_r2', 'std_r2', 'mean_importance',
             'consistency', 'n_models', 'leakage_flag', 'recommendation'
         ])
         empty_csv_path = globals_dir / "target_predictability_rankings.csv"
@@ -209,7 +209,8 @@ def save_rankings(
         'target_column': r.target_column,
         'composite_score': r.composite_score,
         'task_type': r.task_type.name,
-        'auc': r.auc,
+        'skill01': r.skill01 if hasattr(r, 'skill01') else None,  # Normalized [0,1] score for routing
+        'auc': r.auc,  # Deprecated: R² for regression, AUC for classification (kept for backward compat)
         'std_score': r.std_score,
         'mean_r2': r.auc,  # Backward compatibility
         'std_r2': r.std_score,  # Backward compatibility
@@ -291,7 +292,8 @@ def save_rankings(
                 'target': r.target,
                 'composite_score': float(r.composite_score),
                 'task_type': r.task_type.name,
-                'auc': float(r.auc),
+                'skill01': float(r.skill01) if hasattr(r, 'skill01') else None,  # Normalized [0,1] score for routing
+                'auc': float(r.auc),  # Deprecated: kept for backward compatibility
                 'leakage_flag': r.leakage_flag,
                 # Dual ranking fields (2026-01 filtering mismatch fix)
                 'score_screen': float(r.score_screen) if (hasattr(r, 'score_screen') and r.score_screen is not None) else None,

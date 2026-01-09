@@ -22,20 +22,24 @@ def _compute_target_routing_decisions(
     """
     Compute routing decisions for each target based on dual-view scores.
     
-    Routing rules:
-    - CROSS_SECTIONAL only: auc >= T_cs AND frac_symbols_good >= T_frac
-    - SYMBOL_SPECIFIC only: auc < T_cs AND exists symbol with auc >= T_sym
-    - BOTH: auc >= T_cs BUT performance is concentrated (high IQR / low frac_symbols_good)
-    - BLOCKED: auc >= 0.90 OR any symbol auc >= 0.95 → require label/split sanity tests
+    Uses skill01 (normalized [0,1] score) for unified routing across task types:
+    - Regression: skill01 = 0.5 * (IC + 1.0) where IC ∈ [-1, 1]
+    - Classification: skill01 = 0.5 * (AUC-excess + 1.0) where AUC-excess ∈ [-0.5, 0.5]
+    
+    Routing rules (using skill01 thresholds):
+    - CROSS_SECTIONAL only: skill01 >= T_cs AND frac_symbols_good >= T_frac
+    - SYMBOL_SPECIFIC only: skill01 < T_cs AND exists symbol with skill01 >= T_sym
+    - BOTH: skill01 >= T_cs BUT performance is concentrated (high IQR / low frac_symbols_good)
+    - BLOCKED: skill01 >= 0.90 (suspicious) UNLESS tstat > 3.0 (stable signal)
     
     Args:
-        results_cs: Cross-sectional results
+        results_cs: Cross-sectional results (TargetPredictabilityScore objects)
         results_sym: Symbol-specific results by target
         results_loso: LOSO results by target (optional)
         symbol_skip_reasons: Skip reasons by target and symbol (optional)
     
     Returns:
-        Dict mapping target -> routing decision dict
+        Dict mapping target -> routing decision dict (includes skill01_cs, skill01_sym_mean)
     """
     # Load thresholds from config
     try:
@@ -68,47 +72,59 @@ def _compute_target_routing_decisions(
     for target in all_targets:
         # Find cross-sectional result if it exists
         result_cs = None
-        auc = -999.0  # Default to failed score
+        skill01_cs = 0.0  # Default to failed score (skill01 is [0,1], so 0.0 = failed)
+        auc = -999.0  # Keep for backward compatibility (deprecated for routing)
         for r in results_cs:
             if r.target == target:
                 result_cs = r
-                auc = r.auc
+                # Use skill01 for routing (normalized [0,1] score works for both regression and classification)
+                skill01_cs = r.skill01 if hasattr(r, 'skill01') and r.skill01 is not None else 0.0
+                auc = r.auc  # Keep for backward compatibility
                 break
         
         # Get symbol-specific results for this target
         sym_results = results_sym.get(target, {})
         
-        # Compute symbol distribution stats
-        symbol_aucs = []
+        # Compute symbol distribution stats using skill01
+        symbol_skill01s = []
         if sym_results:
             for symbol, result_sym in sym_results.items():
-                if result_sym.auc != -999.0:  # Valid result
-                    symbol_aucs.append(result_sym.auc)
+                skill01_val = result_sym.skill01 if hasattr(result_sym, 'skill01') and result_sym.skill01 is not None else None
+                if skill01_val is not None and skill01_val > 0.0:  # Valid result (skill01 > 0)
+                    symbol_skill01s.append(skill01_val)
         
-        if symbol_aucs:
-            symbol_auc_mean = np.mean(symbol_aucs)
-            symbol_auc_median = np.median(symbol_aucs)
-            symbol_auc_min = np.min(symbol_aucs)
-            symbol_auc_max = np.max(symbol_aucs)
-            symbol_auc_iqr = np.percentile(symbol_aucs, 75) - np.percentile(symbol_aucs, 25)
-            frac_symbols_good = sum(1 for auc in symbol_aucs if auc >= T_sym) / len(symbol_aucs)
+        if symbol_skill01s:
+            symbol_skill01_mean = np.mean(symbol_skill01s)
+            symbol_skill01_median = np.median(symbol_skill01s)
+            symbol_skill01_min = np.min(symbol_skill01s)
+            symbol_skill01_max = np.max(symbol_skill01s)
+            symbol_skill01_iqr = np.percentile(symbol_skill01s, 75) - np.percentile(symbol_skill01s, 25)
+            frac_symbols_good = sum(1 for s01 in symbol_skill01s if s01 >= T_sym) / len(symbol_skill01s)
             winner_symbols = [sym for sym, result in sym_results.items() 
-                            if result.auc >= T_sym and result.auc != -999.0]
+                            if hasattr(result, 'skill01') and result.skill01 is not None and result.skill01 >= T_sym]
         else:
-            symbol_auc_mean = None
-            symbol_auc_median = None
-            symbol_auc_min = None
-            symbol_auc_max = None
-            symbol_auc_iqr = None
+            symbol_skill01_mean = None
+            symbol_skill01_median = None
+            symbol_skill01_min = None
+            symbol_skill01_max = None
+            symbol_skill01_iqr = None
             frac_symbols_good = 0.0
             winner_symbols = []
         
-        # Handle case where CS failed (auc = -999.0 or result_cs is None)
-        if result_cs is None or auc == -999.0:
+        # Initialize route to None (will be set by conditions below)
+        route = None
+        reason = None
+        
+        # Initialize route to None (will be set by conditions below)
+        route = None
+        reason = None
+        
+        # Handle case where CS failed (skill01 = 0.0 or result_cs is None)
+        if result_cs is None or skill01_cs <= 0.0:
             # CS failed - check if symbol-specific works
-            if symbol_aucs and max(symbol_aucs) >= T_sym:
+            if symbol_skill01s and max(symbol_skill01s) >= T_sym:
                 route = "SYMBOL_SPECIFIC"
-                reason = f"cs_failed (auc=-999.0) BUT exists symbol with auc >= {T_sym}"
+                reason = f"cs_failed (skill01={skill01_cs:.3f}) BUT exists symbol with skill01 >= {T_sym}"
                 winner_symbols_str = ', '.join(winner_symbols[:5])
                 if len(winner_symbols) > 5:
                     winner_symbols_str += f", ... ({len(winner_symbols)} total)"
@@ -116,43 +132,57 @@ def _compute_target_routing_decisions(
             else:
                 # CS failed and no good symbol-specific results
                 route = "BLOCKED"
-                if symbol_aucs:
-                    reason = f"cs_failed AND max_symbol_auc={max(symbol_aucs):.3f} < {T_sym} (no viable route)"
+                if symbol_skill01s:
+                    reason = f"cs_failed AND max_symbol_skill01={max(symbol_skill01s):.3f} < {T_sym} (no viable route)"
                 else:
                     reason = f"cs_failed AND no symbol-specific results (no viable route)"
         
-        # Check for suspicious scores (BLOCKED)
-        elif auc >= T_suspicious_cs or (symbol_aucs and max(symbol_aucs) >= T_suspicious_sym):
-            route = "BLOCKED"
-            reason = f"auc={auc:.3f} >= {T_suspicious_cs}" if auc >= T_suspicious_cs else \
-                    f"max_symbol_auc={max(symbol_aucs):.3f} >= {T_suspicious_sym}"
+        # Check for suspicious scores (BLOCKED) - task-aware: high skill01 + low tstat = suspicious
+        if route is None and (skill01_cs >= T_suspicious_cs or (symbol_skill01s and max(symbol_skill01s) >= T_suspicious_sym)):
+            # Additional check: if tstat available, verify signal stability
+            is_suspicious = True
+            if result_cs and hasattr(result_cs, 'primary_metric_tstat'):
+                tstat = result_cs.primary_metric_tstat
+                if tstat is not None and tstat > 3.0:  # Strong, stable signal
+                    # High skill01 + high tstat = legitimate strong signal
+                    is_suspicious = False
+                    logger.debug(f"High skill01 ({skill01_cs:.3f}) but stable (tstat={tstat:.2f}), not blocking")
+            
+            if is_suspicious:
+                route = "BLOCKED"
+                if skill01_cs >= T_suspicious_cs:
+                    reason = f"skill01={skill01_cs:.3f} >= {T_suspicious_cs} (suspicious high score)"
+                elif symbol_skill01s and max(symbol_skill01s) >= T_suspicious_sym:
+                    reason = f"max_symbol_skill01={max(symbol_skill01s):.3f} >= {T_suspicious_sym} (suspicious high score)"
+                else:
+                    reason = f"skill01={skill01_cs:.3f} or symbol_skill01 >= suspicious threshold"
         
         # CROSS_SECTIONAL only: strong CS performance + good symbol coverage
-        elif auc >= T_cs and frac_symbols_good >= T_frac:
+        if route is None and skill01_cs >= T_cs and frac_symbols_good >= T_frac:
             route = "CROSS_SECTIONAL"
-            reason = f"auc={auc:.3f} >= {T_cs} AND frac_symbols_good={frac_symbols_good:.2f} >= {T_frac}"
+            reason = f"skill01={skill01_cs:.3f} >= {T_cs} AND frac_symbols_good={frac_symbols_good:.2f} >= {T_frac}"
         
         # SYMBOL_SPECIFIC only: weak CS but some symbols work
-        elif auc < T_cs and symbol_aucs and max(symbol_aucs) >= T_sym:
+        if route is None and skill01_cs < T_cs and symbol_skill01s and max(symbol_skill01s) >= T_sym:
             route = "SYMBOL_SPECIFIC"
-            reason = f"auc={auc:.3f} < {T_cs} BUT exists symbol with auc >= {T_sym}"
+            reason = f"skill01={skill01_cs:.3f} < {T_cs} BUT exists symbol with skill01 >= {T_sym}"
             winner_symbols_str = ', '.join(winner_symbols[:5])
             if len(winner_symbols) > 5:
                 winner_symbols_str += f", ... ({len(winner_symbols)} total)"
             reason += f" (winners: {winner_symbols_str})"
         
         # BOTH: strong CS but concentrated performance
-        elif auc >= T_cs and symbol_aucs and (symbol_auc_iqr > 0.15 or frac_symbols_good < T_frac):
+        if route is None and skill01_cs >= T_cs and symbol_skill01s and symbol_skill01_iqr is not None and (symbol_skill01_iqr > 0.15 or frac_symbols_good < T_frac):
             route = "BOTH"
-            reason = f"auc={auc:.3f} >= {T_cs} BUT concentrated (IQR={symbol_auc_iqr:.3f}, frac_good={frac_symbols_good:.2f})"
+            reason = f"skill01={skill01_cs:.3f} >= {T_cs} BUT concentrated (IQR={symbol_skill01_iqr:.3f}, frac_good={frac_symbols_good:.2f})"
         
         # Default: CROSS_SECTIONAL (fallback)
-        else:
+        if route is None:
             route = "CROSS_SECTIONAL"
-            if len(symbol_aucs) == 0:
-                reason = f"default (auc={auc:.3f}, symbol_eval=0 symbols evaluable)"
+            if len(symbol_skill01s) == 0:
+                reason = f"default (skill01={skill01_cs:.3f}, symbol_eval=0 symbols evaluable)"
             else:
-                reason = f"default (auc={auc:.3f}, no strong symbol-specific signal)"
+                reason = f"default (skill01={skill01_cs:.3f}, no strong symbol-specific signal)"
         
         # Get skip reasons for this target
         target_skip_reasons = {}
@@ -162,15 +192,17 @@ def _compute_target_routing_decisions(
         routing_decisions[target] = {
             'route': route,
             'reason': reason,
-            'auc': auc,
-            'symbol_auc_mean': symbol_auc_mean,
-            'symbol_auc_median': symbol_auc_median,
-            'symbol_auc_min': symbol_auc_min,
-            'symbol_auc_max': symbol_auc_max,
-            'symbol_auc_iqr': symbol_auc_iqr,
+            'skill01_cs': skill01_cs,  # New: normalized skill score for routing
+            'skill01_sym_mean': symbol_skill01_mean,  # New: mean symbol skill01
+            'auc': auc,  # Deprecated: kept for backward compatibility (R² for regression, AUC for classification)
+            'symbol_auc_mean': symbol_skill01_mean,  # Deprecated: now contains skill01_mean, kept for backward compat
+            'symbol_auc_median': symbol_skill01_median,  # Deprecated: now contains skill01_median
+            'symbol_auc_min': symbol_skill01_min,  # Deprecated: now contains skill01_min
+            'symbol_auc_max': symbol_skill01_max,  # Deprecated: now contains skill01_max
+            'symbol_auc_iqr': symbol_skill01_iqr,  # Deprecated: now contains skill01_iqr
             'frac_symbols_good': frac_symbols_good,
             'winner_symbols': winner_symbols,
-            'n_symbols_evaluated': len(symbol_aucs) if symbol_aucs else 0,
+            'n_symbols_evaluated': len(symbol_skill01s) if symbol_skill01s else 0,
             'symbol_skip_reasons': target_skip_reasons if target_skip_reasons else None
         }
     
@@ -187,25 +219,27 @@ def _compute_single_target_routing_decision(
     Compute routing decision for a single target.
     
     This is a single-target version of _compute_target_routing_decisions for incremental saving.
+    Uses skill01 (normalized [0,1] score) for unified routing across task types.
     
     Args:
         target: Target name
-        result_cs: Cross-sectional result (or None if failed)
+        result_cs: Cross-sectional result (TargetPredictabilityScore or None if failed)
         sym_results: Symbol-specific results for this target
         symbol_skip_reasons: Skip reasons for symbols (optional)
     
     Returns:
-        Routing decision dict for this target
+        Routing decision dict for this target (includes skill01_cs, skill01_sym_mean)
     """
-    # Load thresholds from config
+    # Load thresholds from config (support both new skill01_threshold and legacy auc_threshold)
     try:
         from CONFIG.config_loader import get_cfg
         routing_cfg = get_cfg("target_ranking.routing", default={}, config_name="target_ranking_config")
-        T_cs = float(routing_cfg.get('auc_threshold', 0.65))
+        # New unified skill01 thresholds (works for both regression IC and classification AUC)
+        T_cs = float(routing_cfg.get('skill01_threshold', routing_cfg.get('auc_threshold', 0.65)))
         T_frac = float(routing_cfg.get('frac_symbols_good_threshold', 0.5))
-        T_sym = float(routing_cfg.get('symbol_auc_threshold', 0.60))
-        T_suspicious_cs = float(routing_cfg.get('suspicious_auc', 0.90))
-        T_suspicious_sym = float(routing_cfg.get('suspicious_symbol_auc', 0.95))
+        T_sym = float(routing_cfg.get('symbol_skill01_threshold', routing_cfg.get('symbol_auc_threshold', 0.60)))
+        T_suspicious_cs = float(routing_cfg.get('suspicious_skill01', routing_cfg.get('suspicious_auc', 0.90)))
+        T_suspicious_sym = float(routing_cfg.get('suspicious_symbol_skill01', routing_cfg.get('suspicious_symbol_auc', 0.95)))
     except Exception:
         # Fallback defaults
         T_cs = 0.65
@@ -214,40 +248,49 @@ def _compute_single_target_routing_decision(
         T_suspicious_cs = 0.90
         T_suspicious_sym = 0.95
     
-    # Get CS AUC
-    auc = result_cs.auc if result_cs and result_cs.auc != -999.0 else -999.0
+    # Get CS skill01 (normalized [0,1] score for unified routing)
+    skill01_cs = 0.0  # Default to failed score
+    auc = -999.0  # Keep for backward compatibility (deprecated for routing)
+    if result_cs:
+        skill01_cs = result_cs.skill01 if hasattr(result_cs, 'skill01') and result_cs.skill01 is not None else 0.0
+        auc = result_cs.auc  # Keep for backward compatibility
     
-    # Compute symbol distribution stats
-    symbol_aucs = []
+    # Compute symbol distribution stats using skill01
+    symbol_skill01s = []
     if sym_results:
         for symbol, result_sym in sym_results.items():
-            if result_sym.auc != -999.0:  # Valid result
-                symbol_aucs.append(result_sym.auc)
+            skill01_val = result_sym.skill01 if hasattr(result_sym, 'skill01') and result_sym.skill01 is not None else None
+            if skill01_val is not None and skill01_val > 0.0:  # Valid result (skill01 > 0)
+                symbol_skill01s.append(skill01_val)
     
-    if symbol_aucs:
-        symbol_auc_mean = np.mean(symbol_aucs)
-        symbol_auc_median = np.median(symbol_aucs)
-        symbol_auc_min = np.min(symbol_aucs)
-        symbol_auc_max = np.max(symbol_aucs)
-        symbol_auc_iqr = np.percentile(symbol_aucs, 75) - np.percentile(symbol_aucs, 25)
-        frac_symbols_good = sum(1 for auc in symbol_aucs if auc >= T_sym) / len(symbol_aucs)
+    if symbol_skill01s:
+        symbol_skill01_mean = np.mean(symbol_skill01s)
+        symbol_skill01_median = np.median(symbol_skill01s)
+        symbol_skill01_min = np.min(symbol_skill01s)
+        symbol_skill01_max = np.max(symbol_skill01s)
+        symbol_skill01_iqr = np.percentile(symbol_skill01s, 75) - np.percentile(symbol_skill01s, 25)
+        frac_symbols_good = sum(1 for s01 in symbol_skill01s if s01 >= T_sym) / len(symbol_skill01s)
         winner_symbols = [sym for sym, result in sym_results.items() 
-                        if result.auc >= T_sym and result.auc != -999.0]
+                        if hasattr(result, 'skill01') and result.skill01 is not None and result.skill01 >= T_sym]
     else:
-        symbol_auc_mean = None
-        symbol_auc_median = None
-        symbol_auc_min = None
-        symbol_auc_max = None
-        symbol_auc_iqr = None
+        symbol_skill01_mean = None
+        symbol_skill01_median = None
+        symbol_skill01_min = None
+        symbol_skill01_max = None
+        symbol_skill01_iqr = None
         frac_symbols_good = 0.0
         winner_symbols = []
     
-    # Handle case where CS failed (auc = -999.0 or result_cs is None)
-    if result_cs is None or auc == -999.0:
+    # Initialize route to None (will be set by conditions below)
+    route = None
+    reason = None
+    
+    # Handle case where CS failed (skill01 = 0.0 or result_cs is None)
+    if result_cs is None or skill01_cs <= 0.0:
         # CS failed - check if symbol-specific works
-        if symbol_aucs and max(symbol_aucs) >= T_sym:
+        if symbol_skill01s and max(symbol_skill01s) >= T_sym:
             route = "SYMBOL_SPECIFIC"
-            reason = f"cs_failed (auc=-999.0) BUT exists symbol with auc >= {T_sym}"
+            reason = f"cs_failed (skill01={skill01_cs:.3f}) BUT exists symbol with skill01 >= {T_sym}"
             winner_symbols_str = ', '.join(winner_symbols[:5])
             if len(winner_symbols) > 5:
                 winner_symbols_str += f", ... ({len(winner_symbols)} total)"
@@ -255,43 +298,57 @@ def _compute_single_target_routing_decision(
         else:
             # CS failed and no good symbol-specific results
             route = "BLOCKED"
-            if symbol_aucs:
-                reason = f"cs_failed AND max_symbol_auc={max(symbol_aucs):.3f} < {T_sym} (no viable route)"
+            if symbol_skill01s:
+                reason = f"cs_failed AND max_symbol_skill01={max(symbol_skill01s):.3f} < {T_sym} (no viable route)"
             else:
                 reason = f"cs_failed AND no symbol-specific results (no viable route)"
     
-    # Check for suspicious scores (BLOCKED)
-    elif auc >= T_suspicious_cs or (symbol_aucs and max(symbol_aucs) >= T_suspicious_sym):
-        route = "BLOCKED"
-        reason = f"auc={auc:.3f} >= {T_suspicious_cs}" if auc >= T_suspicious_cs else \
-                f"max_symbol_auc={max(symbol_aucs):.3f} >= {T_suspicious_sym}"
+    # Check for suspicious scores (BLOCKED) - task-aware: high skill01 + low tstat = suspicious
+    if route is None and (skill01_cs >= T_suspicious_cs or (symbol_skill01s and max(symbol_skill01s) >= T_suspicious_sym)):
+        # Additional check: if tstat available, verify signal stability
+        is_suspicious = True
+        if result_cs and hasattr(result_cs, 'primary_metric_tstat'):
+            tstat = result_cs.primary_metric_tstat
+            if tstat is not None and tstat > 3.0:  # Strong, stable signal
+                # High skill01 + high tstat = legitimate strong signal
+                is_suspicious = False
+                logger.debug(f"High skill01 ({skill01_cs:.3f}) but stable (tstat={tstat:.2f}), not blocking")
+        
+        if is_suspicious:
+            route = "BLOCKED"
+            if skill01_cs >= T_suspicious_cs:
+                reason = f"skill01={skill01_cs:.3f} >= {T_suspicious_cs} (suspicious high score)"
+            elif symbol_skill01s and max(symbol_skill01s) >= T_suspicious_sym:
+                reason = f"max_symbol_skill01={max(symbol_skill01s):.3f} >= {T_suspicious_sym} (suspicious high score)"
+            else:
+                reason = f"skill01={skill01_cs:.3f} or symbol_skill01 >= suspicious threshold"
     
     # CROSS_SECTIONAL only: strong CS performance + good symbol coverage
-    elif auc >= T_cs and frac_symbols_good >= T_frac:
+    if route is None and skill01_cs >= T_cs and frac_symbols_good >= T_frac:
         route = "CROSS_SECTIONAL"
-        reason = f"auc={auc:.3f} >= {T_cs} AND frac_symbols_good={frac_symbols_good:.2f} >= {T_frac}"
+        reason = f"skill01={skill01_cs:.3f} >= {T_cs} AND frac_symbols_good={frac_symbols_good:.2f} >= {T_frac}"
     
     # SYMBOL_SPECIFIC only: weak CS but some symbols work
-    elif auc < T_cs and symbol_aucs and max(symbol_aucs) >= T_sym:
+    if route is None and skill01_cs < T_cs and symbol_skill01s and max(symbol_skill01s) >= T_sym:
         route = "SYMBOL_SPECIFIC"
-        reason = f"auc={auc:.3f} < {T_cs} BUT exists symbol with auc >= {T_sym}"
+        reason = f"skill01={skill01_cs:.3f} < {T_cs} BUT exists symbol with skill01 >= {T_sym}"
         winner_symbols_str = ', '.join(winner_symbols[:5])
         if len(winner_symbols) > 5:
             winner_symbols_str += f", ... ({len(winner_symbols)} total)"
         reason += f" (winners: {winner_symbols_str})"
     
     # BOTH: strong CS but concentrated performance
-    elif auc >= T_cs and symbol_aucs and (symbol_auc_iqr > 0.15 or frac_symbols_good < T_frac):
+    if route is None and skill01_cs >= T_cs and symbol_skill01s and symbol_skill01_iqr is not None and (symbol_skill01_iqr > 0.15 or frac_symbols_good < T_frac):
         route = "BOTH"
-        reason = f"auc={auc:.3f} >= {T_cs} BUT concentrated (IQR={symbol_auc_iqr:.3f}, frac_good={frac_symbols_good:.2f})"
+        reason = f"skill01={skill01_cs:.3f} >= {T_cs} BUT concentrated (IQR={symbol_skill01_iqr:.3f}, frac_good={frac_symbols_good:.2f})"
     
     # Default: CROSS_SECTIONAL (fallback)
-    else:
+    if route is None:
         route = "CROSS_SECTIONAL"
-        if len(symbol_aucs) == 0:
-            reason = f"default (auc={auc:.3f}, symbol_eval=0 symbols evaluable)"
+        if len(symbol_skill01s) == 0:
+            reason = f"default (skill01={skill01_cs:.3f}, symbol_eval=0 symbols evaluable)"
         else:
-            reason = f"default (auc={auc:.3f}, no strong symbol-specific signal)"
+            reason = f"default (skill01={skill01_cs:.3f}, no strong symbol-specific signal)"
     
     # Get skip reasons for this target
     target_skip_reasons = symbol_skip_reasons if symbol_skip_reasons else {}
@@ -299,15 +356,17 @@ def _compute_single_target_routing_decision(
     return {
         'route': route,
         'reason': reason,
-        'auc': auc,
-        'symbol_auc_mean': symbol_auc_mean,
-        'symbol_auc_median': symbol_auc_median,
-        'symbol_auc_min': symbol_auc_min,
-        'symbol_auc_max': symbol_auc_max,
-        'symbol_auc_iqr': symbol_auc_iqr,
+        'skill01_cs': skill01_cs,  # New: normalized skill score for routing
+        'skill01_sym_mean': symbol_skill01_mean,  # New: mean symbol skill01
+        'auc': auc,  # Deprecated: kept for backward compatibility (R² for regression, AUC for classification)
+        'symbol_auc_mean': symbol_skill01_mean,  # Deprecated: now contains skill01_mean, kept for backward compat
+        'symbol_auc_median': symbol_skill01_median,  # Deprecated: now contains skill01_median
+        'symbol_auc_min': symbol_skill01_min,  # Deprecated: now contains skill01_min
+        'symbol_auc_max': symbol_skill01_max,  # Deprecated: now contains skill01_max
+        'symbol_auc_iqr': symbol_skill01_iqr,  # Deprecated: now contains skill01_iqr
         'frac_symbols_good': frac_symbols_good,
         'winner_symbols': winner_symbols,
-        'n_symbols_evaluated': len(symbol_aucs) if symbol_aucs else 0,
+        'n_symbols_evaluated': len(symbol_skill01s) if symbol_skill01s else 0,
         'symbol_skip_reasons': target_skip_reasons if target_skip_reasons else None
     }
 

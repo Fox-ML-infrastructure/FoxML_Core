@@ -7165,6 +7165,35 @@ def evaluate_target_predictability(
     if invalid_count > 0:
         invalid_reason_counts["model_evaluation_failed"] = invalid_count
     
+    # === FIX: Extract IC from model_metrics for regression (not R²) ===
+    # For regression, auc contains R² (can be negative), but we need IC for routing
+    # model_metrics contains full metrics dict: {model_name: {'ic': float, 'r2': float, ...}}
+    ic_mean = None
+    if final_task_type == TaskType.REGRESSION:
+        # Check if model_metrics is available (it's assigned earlier in the function)
+        try:
+            if model_metrics and isinstance(model_metrics, dict):
+                ic_values = []
+                for model_name, metrics in model_metrics.items():
+                    if isinstance(metrics, dict) and 'ic' in metrics:
+                        ic_val = metrics.get('ic')
+                        if ic_val is not None and not np.isnan(ic_val):
+                            ic_values.append(ic_val)
+                if ic_values:
+                    ic_mean = np.mean(ic_values)
+                    logger.debug(f"Extracted IC from model_metrics: {len(ic_values)} models, mean IC={ic_mean:.4f}")
+                else:
+                    logger.warning(f"No valid IC values found in model_metrics for regression target {target}")
+                    # Fallback: use 0.0 (null baseline) if IC not available
+                    ic_mean = 0.0
+            else:
+                logger.warning(f"model_metrics not available or invalid for regression target {target}, using 0.0 as fallback")
+                ic_mean = 0.0
+        except NameError:
+            # model_metrics not in scope (shouldn't happen, but defensive)
+            logger.warning(f"model_metrics not in scope for regression target {target}, using 0.0 as fallback")
+            ic_mean = 0.0
+    
     # Compute t-stat for skill normalization (universal signal-above-null metric)
     # Note: This will be recomputed in calculate_composite_score_tstat with proper guards,
     # but we compute it here for backward compatibility in snapshot
@@ -7184,17 +7213,34 @@ def evaluate_target_predictability(
     auc_mean_raw = None
     auc_excess_mean = None
     if final_task_type in (TaskType.BINARY_CLASSIFICATION, TaskType.MULTICLASS_CLASSIFICATION):
-        auc_mean_raw = auc  # Raw 0-1 scale
-        # Center around 0.5 (null baseline for random classifier)
-        auc_excess_mean = auc - 0.5
+        # Check for failed target (auc = -999.0 is sentinel for failed evaluation)
+        if auc < -900.0 or np.isnan(auc):
+            # Failed target: don't compute excess, use null baseline
+            auc_mean_raw = None
+            auc_excess_mean = None
+        else:
+            auc_mean_raw = auc  # Raw 0-1 scale
+            # Center around 0.5 (null baseline for random classifier)
+            auc_excess_mean = auc - 0.5
     
     # === Phase 3.1: Use centered primary_metric_mean for composite score ===
-    # Regression: IC already centered at 0 (null baseline)
+    # Regression: Use IC (centered at 0, null baseline) - FIXED: extract from model_metrics, not R²
     # Classification: Use AUC-excess (centered at 0, null baseline)
     if final_task_type == TaskType.REGRESSION:
-        primary_metric_mean_centered = auc  # IC already centered at 0
+        if ic_mean is not None:
+            primary_metric_mean_centered = ic_mean  # IC already centered at 0
+        else:
+            # Fallback: if IC not available, use 0.0 (null baseline)
+            # This should not happen if model_metrics is properly populated
+            logger.warning(f"IC not available for regression target {target}, using 0.0 as fallback")
+            primary_metric_mean_centered = 0.0
     else:
-        primary_metric_mean_centered = auc_excess_mean  # AUC - 0.5, centered at 0
+        # Classification: use AUC-excess if available, otherwise 0.0 (null baseline)
+        if auc_excess_mean is not None:
+            primary_metric_mean_centered = auc_excess_mean  # AUC - 0.5, centered at 0
+        else:
+            # Failed target or invalid auc: use 0.0 (null baseline)
+            primary_metric_mean_centered = 0.0
     
     # Compute primary_se (standard error) for SE-based stability
     if n_cs_valid > 1:
