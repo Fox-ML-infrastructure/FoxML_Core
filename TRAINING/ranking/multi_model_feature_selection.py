@@ -5103,15 +5103,9 @@ def save_multi_model_results(
             f"falling back to legacy path resolution. Pass universe_sig for canonical paths."
         )
     
-    # Walk up to find base run directory
-    for _ in range(10):
-        # Only stop if we find a run directory (has targets/, globals/, or cache/)
-        # Don't stop at RESULTS/ - continue to find actual run directory
-        if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
-            break
-        if not base_output_dir.parent.exists():
-            break
-        base_output_dir = base_output_dir.parent
+    # Walk up to find base run directory using SST helper
+    from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+    base_output_dir = get_run_root(base_output_dir)
     
     # Set up target-first structure if we found target and base directory (view/symbol-scoped)
     target_importances_dir = None
@@ -5120,7 +5114,8 @@ def save_multi_model_results(
     
     if target and base_output_dir.exists():
         try:
-            target_clean = target.replace('/', '_').replace('\\', '_')
+            from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+            target_clean = normalize_target_name(target)
             
             # Extract view and symbol from metadata (view is REQUIRED)
             view = metadata.get('view') if metadata else None
@@ -5281,7 +5276,8 @@ def save_multi_model_results(
     # Write only to target-first structure (no legacy root-level writes) - view/symbol-scoped
     if target and base_output_dir.exists():
         try:
-            target_clean = target.replace('/', '_').replace('\\', '_')
+            from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+            target_clean = normalize_target_name(target)
             # Extract view and symbol from metadata (view is REQUIRED)
             view = metadata.get('view') if metadata else None
             symbol = metadata.get('symbol') if metadata else None
@@ -5376,7 +5372,8 @@ def save_multi_model_results(
         if target and base_output_dir.exists():
             try:
                 from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
-                target_clean = target.replace('/', '_').replace('\\', '_')
+                from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+            target_clean = normalize_target_name(target)
                 run_root_dir = run_root(base_output_dir)
                 # Extract view and symbol from metadata (view is REQUIRED)
                 view = metadata.get('view') if metadata else None
@@ -5444,7 +5441,8 @@ def save_multi_model_results(
             if target and base_output_dir.exists():
                 try:
                     from TRAINING.orchestration.utils.target_first_paths import run_root, target_repro_file_path
-                    target_clean = target.replace('/', '_').replace('\\', '_')
+                    from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+            target_clean = normalize_target_name(target)
                     run_root_dir = run_root(base_output_dir)
                     # Extract view and symbol from metadata (view is REQUIRED)
                     view = metadata.get('view') if metadata else None

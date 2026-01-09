@@ -2049,16 +2049,12 @@ def _save_feature_importances(
     if output_dir is None:
         output_dir = _REPO_ROOT / "results"
     
-    # Find base run directory for target-first structure
-    base_output_dir = output_dir
-    for _ in range(10):
-        if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
-            break
-        if not base_output_dir.parent.exists():
-            break
-        base_output_dir = base_output_dir.parent
+    # Find base run directory for target-first structure using SST helper
+    from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+    base_output_dir = get_run_root(output_dir)
     
-    target_clean = target_column.replace('/', '_').replace('\\', '_')
+    from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+    target_clean = normalize_target_name(target_column)
     
     # PATCH 4: Use OutputLayout for properly scoped paths
     try:

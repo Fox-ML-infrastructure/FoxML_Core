@@ -922,21 +922,16 @@ def train_and_evaluate_models(
                     if target_column:
                         # Find base run directory
                         base_output_dir = output_dir
-                        for _ in range(10):
-                            # Only stop if we find a run directory (has targets/, globals/, or cache/)
-                            # Don't stop at RESULTS/ - continue to find actual run directory
-                            if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
-                                break
-                            if not base_output_dir.parent.exists():
-                                break
-                            base_output_dir = base_output_dir.parent
+                        from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+                        base_output_dir = get_run_root(base_output_dir)
                         
                         if base_output_dir.exists():
                             try:
                                 from TRAINING.orchestration.utils.target_first_paths import (
                                     ensure_scoped_artifact_dir, ensure_target_structure
                                 )
-                                target_clean = target_column.replace('/', '_').replace('\\', '_')
+                                from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                                target_clean = normalize_target_name(target_column)
                                 ensure_target_structure(base_output_dir, target_clean)
                                 target_artifact_dir = ensure_scoped_artifact_dir(
                                     base_output_dir, target_clean, "featureset_artifacts",
@@ -1348,19 +1343,14 @@ def train_and_evaluate_models(
                 try:
                     from TRAINING.stability.feature_importance import save_snapshot_hook
                     # Use target-first structure for snapshots
-                    target_clean = (target_column if target_column else 'unknown').replace('/', '_').replace('\\', '_')
+                    from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                    target_clean = normalize_target_name(target_column if target_column else 'unknown')
                     
                     # Find base run directory
                     base_output_dir = output_dir
                     if base_output_dir:
-                        for _ in range(10):
-                            # Only stop if we find a run directory (has targets/, globals/, or cache/)
-                            # Don't stop at RESULTS/ - continue to find actual run directory
-                            if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
-                                break
-                            if not base_output_dir.parent.exists():
-                                break
-                            base_output_dir = base_output_dir.parent
+                        from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+                        base_output_dir = get_run_root(base_output_dir)
                         
                         if base_output_dir.exists():
                             from TRAINING.orchestration.utils.target_first_paths import (
@@ -5380,7 +5370,8 @@ def evaluate_target_predictability(
         
         # Save feature exclusions to target-first structure scoped by view
         # (targets/<target>/reproducibility/<VIEW>/[symbol=...]/feature_exclusions/)
-        target_clean = target.replace('/', '_').replace('\\', '_')
+        from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+        target_clean = normalize_target_name(target)
         
         from TRAINING.orchestration.utils.target_first_paths import (
             ensure_scoped_artifact_dir, ensure_target_structure
@@ -5435,7 +5426,8 @@ def evaluate_target_predictability(
             if target_conditional_exclusions:
                 try:
                     import shutil
-                    safe_target = target.replace('/', '_').replace('\\', '_')
+                    from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                    safe_target = normalize_target_name(target)
                     exclusion_file = target_exclusion_dir / f"{safe_target}_exclusions.yaml"
                     legacy_exclusion_file = legacy_exclusion_dir / f"{safe_target}_exclusions.yaml"
                     if exclusion_file.exists():
@@ -5997,23 +5989,17 @@ def evaluate_target_predictability(
                 )
                 # Save to target-first structure (targets/<target>/reproducibility/featureset_artifacts/)
                 if target_column:
-                    # Find base run directory
-                    base_output_dir = output_dir
-                    for _ in range(10):
-                        # Only stop if we find a run directory (has targets/, globals/, or cache/)
-                        # Don't stop at RESULTS/ - continue to find actual run directory
-                        if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
-                            break
-                        if not base_output_dir.parent.exists():
-                            break
-                        base_output_dir = base_output_dir.parent
+                    # Find base run directory using SST helper
+                    from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+                    base_output_dir = get_run_root(output_dir)
                     
                     if base_output_dir.exists():
                         try:
                             from TRAINING.orchestration.utils.target_first_paths import (
-                                ensure_scoped_artifact_dir, ensure_target_structure
-                            )
-                            target_clean = target_column.replace('/', '_').replace('\\', '_')
+                            ensure_scoped_artifact_dir, ensure_target_structure
+                        )
+                        from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                        target_clean = normalize_target_name(target_column)
                             ensure_target_structure(base_output_dir, target_clean)
                             target_artifact_dir = ensure_scoped_artifact_dir(
                                 base_output_dir, target_clean, "featureset_artifacts",

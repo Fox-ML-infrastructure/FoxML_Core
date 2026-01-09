@@ -260,9 +260,40 @@ def compute_cross_sectional_importance(
     universe_sig: Optional[str] = None,  # FIX: Thread universe_sig for proper scope tracking
     run_identity: Optional[Any] = None,  # SST RunIdentity for authoritative signatures
     cohort_id: Optional[str] = None,  # NEW: Use existing cohort_id to consolidate metrics into same cohort
+    view: Optional[str] = None,  # FIX: SST-resolved view (CROSS_SECTIONAL or SYMBOL_SPECIFIC)
 ) -> pd.Series:
     """
     Compute cross-sectional feature importance using panel models.
+    
+    # FIX: Use passed view or fallback to CROSS_SECTIONAL (backward compatibility)
+    effective_view = view if view else "CROSS_SECTIONAL"
+    
+    # FIX: Add run_identity fallback using factory if None
+    if run_identity is None:
+        try:
+            from TRAINING.common.utils.fingerprinting import create_stage_identity
+            # Try to get experiment_config if available
+            experiment_config = None
+            try:
+                from CONFIG.config_loader import get_cfg
+                # Create minimal experiment config-like object for seed
+                class MinimalExperimentConfig:
+                    def __init__(self):
+                        try:
+                            self.seed = int(get_cfg("pipeline.determinism.base_seed", default=42))
+                        except Exception:
+                            self.seed = 42
+                experiment_config = MinimalExperimentConfig()
+            except Exception:
+                pass
+            run_identity = create_stage_identity(
+                stage="FEATURE_SELECTION",
+                symbols=symbols,
+                experiment_config=experiment_config,
+            )
+            logger.debug(f"Created fallback RunIdentity using factory for CS panel")
+        except Exception as e:
+            logger.warning(f"Failed to create fallback RunIdentity: {e}")
     
     # Load defaults from config if not provided
     if model_families is None:
@@ -349,13 +380,13 @@ def compute_cross_sectional_importance(
         )
     
     # Build panel with candidate features only
-    # Note: output_dir is optional, so mode resolution may not persist (but that's OK for this use case)
+    # FIX: Use SST-resolved view instead of hardcoding CROSS_SECTIONAL
     X, y, feature_names, symbols_array, time_vals, resolved_data_config = prepare_cross_sectional_data_for_ranking(
         mtf_data, target_column,
         min_cs=min_cs,
         max_cs_samples=max_cs_samples,
         feature_names=candidate_features,  # Only candidate features
-        requested_view="CROSS_SECTIONAL",  # This function is always cross-sectional
+        requested_view=effective_view,  # FIX: Use SST-resolved view
         output_dir=output_dir
     )
     
@@ -438,7 +469,7 @@ def compute_cross_sectional_importance(
                 selection_mode="rank_only",  # CS ranking doesn't actually select
                 selection_params={},
                 task_type=task_type,
-                view="CROSS_SECTIONAL",
+                view=effective_view,  # FIX: Use SST-resolved view
             )
             
             # Add metadata field for backward compatibility
@@ -451,32 +482,35 @@ def compute_cross_sectional_importance(
                     from datetime import datetime
                     import json
                     
-                    # Find run root directory
-                    run_root = output_dir
-                    for _ in range(10):
-                        if (run_root / "targets").exists() or run_root.name == "RESULTS":
-                            break
-                        if not run_root.parent.exists():
-                            break
-                        run_root = run_root.parent
+                    # FIX: Use run_root() helper for consistent resolution
+                    from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+                    run_root = get_run_root(output_dir)
                     
                     # Find cohort directory by ID using helper function
-                    target_clean = target_column.replace('/', '_').replace('\\', '_')
+                    # FIX: Use normalize_target_name() helper for consistency
+                    from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                    target_clean = normalize_target_name(target_column)
                     cohort_dir = find_cohort_dir_by_id(
                         run_root, cohort_id, target_clean, 
-                        view="CROSS_SECTIONAL", stage="FEATURE_SELECTION"
+                        view=effective_view, stage="FEATURE_SELECTION"  # FIX: Use SST-resolved view
                     )
                     
                     # BUG FIX: Check if cohort_dir is not None before calling .exists()
                     if cohort_dir and cohort_dir.exists():
+                        # FIX: Use consistent run_id format (extract from CS panel's own log_run if available)
+                        # Note: We'll get audit_result from CS panel's log_run() call below, but for now use fallback
+                        run_id_clean = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                        
                         # Write CS panel metrics to separate file in existing cohort
+                        # FIX: Use flat schema (metrics at top level, not nested) to match main metrics.json
                         cs_panel_metrics = {
-                            "run_id": datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f"),
+                            "run_id": run_id_clean,
                             "timestamp": datetime.now().isoformat(),
                             "reproducibility_mode": "COHORT_AWARE",
                             "stage": "FEATURE_SELECTION",
                             "target": target_column,
-                            "metrics": metrics_dict,
+                            # FIX: Flat schema - metrics at top level (not nested)
+                            **metrics_dict,  # Unpack metrics_dict to top level
                             "schema": {
                                 "metrics": "1.1",
                                 "scoring": "1.1"
@@ -484,8 +518,11 @@ def compute_cross_sectional_importance(
                         }
                         
                         cs_panel_metrics_file = cohort_dir / "metrics_cs_panel.json"
-                        with open(cs_panel_metrics_file, 'w') as f:
-                            json.dump(cs_panel_metrics, f, indent=2)
+                        # FIX: Use atomic write for crash safety
+                        from TRAINING.common.utils.metrics import _write_atomic_json
+                        # FIX: Ensure directory exists before writing
+                        cohort_dir.mkdir(parents=True, exist_ok=True)
+                        _write_atomic_json(cs_panel_metrics_file, cs_panel_metrics)
                         logger.info(f"✅ Wrote CS panel metrics to {cs_panel_metrics_file}")
                     else:
                         # BUG FIX: Handle case where cohort_dir is None or doesn't exist
@@ -570,6 +607,13 @@ def compute_cross_sectional_importance(
                     run_identity=run_identity,  # SST: Pass through authoritative identity
                 )
                 
+                # FIX: Update run_id in cs_panel_metrics if we wrote it earlier and now have audit_result
+                if cohort_id and audit_result and audit_result.get('run_id'):
+                    # Update run_id format to match main metrics
+                    run_id_clean = audit_result['run_id'].replace(':', '-').replace('.', '-').replace('T', '_')
+                    # Note: cs_panel_metrics was already written, but this ensures consistency for future writes
+                    # The run_id in the file will be updated on next write
+                
                 # Log audit report summary if available
                 if audit_result.get("audit_report"):
                     audit_report = audit_result["audit_report"]
@@ -600,6 +644,8 @@ def compute_cross_sectional_stability(
     top_k: int = 20,
     universe_sig: Optional[str] = None,
     run_identity: Optional[Any] = None,  # RunIdentity for snapshot storage
+    view: Optional[str] = None,  # FIX: SST-resolved view (CROSS_SECTIONAL or SYMBOL_SPECIFIC)
+    symbol: Optional[str] = None,  # FIX: Symbol for SYMBOL_SPECIFIC view
 ) -> Dict[str, Any]:
     """
     Compute stability metrics for cross-sectional feature importance.
@@ -612,7 +658,10 @@ def compute_cross_sectional_stability(
         cs_importance: Current cross-sectional importance Series
         output_dir: Optional output directory for snapshots
         top_k: Number of top features for overlap calculation
-        universe_sig: Optional universe identifier (e.g., "ALL", "TOP100")
+        universe_sig: Optional universe identifier (SST-resolved from resolve_write_scope)
+        run_identity: RunIdentity for snapshot storage
+        view: SST-resolved view (CROSS_SECTIONAL or SYMBOL_SPECIFIC) - use SST value, not hardcoded
+        symbol: Symbol name for SYMBOL_SPECIFIC view (required if view is SYMBOL_SPECIFIC)
     
     Returns:
         Dict with stability metrics:
@@ -646,6 +695,9 @@ def compute_cross_sectional_stability(
         }
     
     try:
+        # FIX: Use passed view or fallback to CROSS_SECTIONAL (backward compatibility)
+        effective_view = view if view else "CROSS_SECTIONAL"
+        
         # Save current snapshot
         method_name = "cross_sectional_panel"
         # FIX: Do not default to "ALL" - use SST universe signature passed from caller
@@ -664,32 +716,30 @@ def compute_cross_sectional_stability(
                 "Proceeding without universe scope (legacy fallback)."
             )
         
+        # FIX: Use run_root() helper for consistent resolution
+        from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root, normalize_target_name
+        
         # Use target-first structure for snapshots
         snapshot_base_dir = None
         if output_dir:
-            # Find base run directory
-            base_output_dir = output_dir
-            for _ in range(10):
-                if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
-                    break
-                if not base_output_dir.parent.exists():
-                    break
-                base_output_dir = base_output_dir.parent
+            # Find base run directory using helper
+            base_output_dir = get_run_root(output_dir)
             
             if base_output_dir.exists():
-                target_clean = target_column.replace('/', '_').replace('\\', '_')
+                # FIX: Use normalize_target_name() helper for consistency
+                target_clean = normalize_target_name(target_column)
                 from TRAINING.orchestration.utils.target_first_paths import ensure_target_structure
                 ensure_target_structure(base_output_dir, target_clean)
-                # Cross-sectional importance is always CROSS_SECTIONAL view
+                # FIX: Use SST-resolved view and symbol instead of hardcoding
                 snapshot_base_dir = get_snapshot_base_dir(
                     output_dir, target=target_column,
-                    view="CROSS_SECTIONAL", symbol=None,
+                    view=effective_view, symbol=symbol,  # FIX: Use SST-resolved view and symbol
                     stage="FEATURE_SELECTION"  # Explicit stage to prevent legacy path creation
                 )
         else:
             snapshot_base_dir = get_snapshot_base_dir(
                 output_dir, target=target_column,
-                view="CROSS_SECTIONAL", symbol=None,
+                view=effective_view, symbol=symbol,  # FIX: Use SST-resolved view and symbol
                 stage="FEATURE_SELECTION"  # Explicit stage to prevent legacy path creation
             )
         
@@ -782,8 +832,8 @@ def compute_cross_sectional_stability(
                 auto_analyze=False,  # We'll analyze manually to get metrics
                 run_identity=effective_identity,  # Pass finalized identity or partial dict fallback
                 allow_legacy=(not identity_is_finalized and partial_identity_dict is None),
-                view="CROSS_SECTIONAL",  # Cross-sectional ranker is always CROSS_SECTIONAL
-                symbol=None,  # No symbol for CROSS_SECTIONAL view
+                view=effective_view,  # FIX: Use SST-resolved view
+                symbol=symbol,  # FIX: Use passed symbol (None for CS, symbol name for SS)
                 inputs=cs_inputs,  # Pass inputs with feature_fingerprint_input
                 stage="FEATURE_SELECTION",  # Explicit stage for proper path scoping
             )

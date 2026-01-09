@@ -229,18 +229,14 @@ class MetricsWriter:
                 from TRAINING.orchestration.utils.target_first_paths import (
                     get_target_metrics_dir, ensure_target_structure
                 )
-                # Find base output directory (walk up from cohort_dir to find run root)
-                base_output_dir = cohort_dir
-                for _ in range(10):  # Limit depth
-                    if (base_output_dir / "REPRODUCIBILITY").exists() or (base_output_dir / "targets").exists():
-                        break
-                    if not base_output_dir.parent.exists():
-                        break
-                    base_output_dir = base_output_dir.parent
+                # Find base output directory (walk up from cohort_dir to find run root) using SST helper
+                from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+                base_output_dir = get_run_root(cohort_dir)
                 
                 # If we found a run directory, create reference pointer
                 if (base_output_dir / "targets").exists() or (base_output_dir / "REPRODUCIBILITY").exists():
-                    target_clean = target.replace('/', '_').replace('\\', '_')
+                    from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                    target_clean = normalize_target_name(target)
                     ensure_target_structure(base_output_dir, target_clean)
                     target_metrics_dir = get_target_metrics_dir(base_output_dir, target_clean)
                     
@@ -613,17 +609,13 @@ class MetricsWriter:
         if baseline_data is None and target:
             try:
                 from TRAINING.orchestration.utils.target_first_paths import get_target_metrics_dir
-                # Find base output directory
-                base_output_dir = baseline_cohort_dir
-                for _ in range(10):
-                    if (base_output_dir / "targets").exists() or (base_output_dir / "REPRODUCIBILITY").exists():
-                        break
-                    if not base_output_dir.parent.exists():
-                        break
-                    base_output_dir = base_output_dir.parent
+                # Find base output directory using SST helper
+                from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+                base_output_dir = get_run_root(baseline_cohort_dir)
                 
                 if (base_output_dir / "targets").exists():
-                    target_clean = target.replace('/', '_').replace('\\', '_')
+                    from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                    target_clean = normalize_target_name(target)
                     target_metrics_dir = get_target_metrics_dir(base_output_dir, target_clean)
                     if view in ["CROSS_SECTIONAL", "SYMBOL_SPECIFIC"]:
                         view_metrics_dir = target_metrics_dir / f"view={view}"

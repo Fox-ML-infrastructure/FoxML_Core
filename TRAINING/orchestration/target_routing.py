@@ -109,7 +109,8 @@ def load_target_confidence(output_dir: Path, target: str, view: Optional[str] = 
             break
         base_dir = base_dir.parent
     
-    target_clean = target.replace('/', '_').replace('\\', '_')
+    from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+    target_clean = normalize_target_name(target)
     target_repro_dir = get_target_reproducibility_dir(base_dir, target_clean)
     
     # Check view-scoped locations (new structure)
@@ -272,7 +273,8 @@ def save_target_routing_metadata(
             break
         base_dir = base_dir.parent
     
-    target_clean = target.replace('/', '_').replace('\\', '_')
+    from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+    target_clean = normalize_target_name(target)
     ensure_target_structure(base_dir, target_clean)
     decision_dir = get_target_decision_dir(base_dir, target_clean)
     decision_dir.mkdir(parents=True, exist_ok=True)

@@ -224,7 +224,8 @@ def update_manifest(
     if "target_index" not in manifest:
         manifest["target_index"] = {}
     
-    target_clean = target.replace('/', '_').replace('\\', '_')
+    from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+    target_clean = normalize_target_name(target)
     
     # Update or create target entry
     if target_clean not in manifest["target_index"]:
@@ -486,7 +487,8 @@ def create_target_metadata(
         get_target_reproducibility_dir, get_target_decision_dir, get_target_metrics_dir
     )
     
-    target_clean = target.replace('/', '_').replace('\\', '_')
+    from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+    target_clean = normalize_target_name(target)
     target_dir = output_dir / "targets" / target_clean
     
     if not target_dir.exists():

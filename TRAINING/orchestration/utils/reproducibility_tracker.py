@@ -932,17 +932,9 @@ class ReproducibilityTracker:
         Returns:
             Relative path string
         """
-        # Calculate relative path from cohort_dir to run root
-        run_root = self._repro_base_dir
-        # Walk up from cohort_dir to find run root
-        temp_dir = Path(cohort_dir)
-        for _ in range(10):
-            if (temp_dir / "targets").exists() or temp_dir.name in ["RESULTS", "intelligent_output"]:
-                run_root = temp_dir
-                break
-            if not temp_dir.parent.exists():
-                break
-            temp_dir = temp_dir.parent
+        # Calculate relative path from cohort_dir to run root using SST helper
+        from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+        run_root = get_run_root(Path(cohort_dir))
         
         # Calculate relative path
         try:
@@ -1441,6 +1433,18 @@ class ReproducibilityTracker:
         # END PR1 FIREWALL
         # ========================================================================
         
+        # FIX: Normalize cs_config before hashing to ensure consistent structure
+        # Always include all keys (even if None) to prevent different hashes for same config
+        cs_config_for_hash = cohort_metadata.get('cs_config', {}).copy()
+        # Ensure all expected keys are present (with None if missing)
+        expected_keys = ['min_cs', 'max_cs_samples', 'leakage_filter_version', 'universe_sig']
+        for key in expected_keys:
+            if key not in cs_config_for_hash:
+                cs_config_for_hash[key] = None
+        config_hash = hashlib.sha256(
+            json.dumps(cs_config_for_hash, sort_keys=True).encode()
+        ).hexdigest()[:8]
+        
         full_metadata = {
             "schema_version": REPRODUCIBILITY_SCHEMA_VERSION,
             "cohort_id": cohort_id,
@@ -1458,17 +1462,7 @@ class ReproducibilityTracker:
             "min_cs": cohort_metadata.get('cs_config', {}).get('min_cs'),
             "max_cs_samples": cohort_metadata.get('cs_config', {}).get('max_cs_samples'),
             "leakage_filter_version": cohort_metadata.get('cs_config', {}).get('leakage_filter_version', 'v1'),
-            # FIX: Normalize cs_config before hashing to ensure consistent structure
-            # Always include all keys (even if None) to prevent different hashes for same config
-            cs_config_for_hash = cohort_metadata.get('cs_config', {}).copy()
-            # Ensure all expected keys are present (with None if missing)
-            expected_keys = ['min_cs', 'max_cs_samples', 'leakage_filter_version', 'universe_sig']
-            for key in expected_keys:
-                if key not in cs_config_for_hash:
-                    cs_config_for_hash[key] = None
-            "config_hash": hashlib.sha256(
-                json.dumps(cs_config_for_hash, sort_keys=True).encode()
-            ).hexdigest()[:8],
+            "config_hash": config_hash,
             "seed": run_data.get('seed') or (additional_data.get('seed') if additional_data else None),
             "git_commit": self._get_git_commit(),
             "created_at": datetime.now().isoformat()
@@ -1939,15 +1933,9 @@ class ReproducibilityTracker:
                 # DiffTelemetry will find the RESULTS directory from there
                 base_output_dir = self._repro_base_dir
                 
-                # Walk up to find run directory (has REPRODUCIBILITY or targets subdirectory)
-                temp_dir = base_output_dir
-                for _ in range(10):  # Limit depth
-                    if (temp_dir / "REPRODUCIBILITY").exists() or (temp_dir / "targets").exists():
-                        base_output_dir = temp_dir
-                        break
-                    if not temp_dir.parent.exists():
-                        break
-                    temp_dir = temp_dir.parent
+                # Walk up to find run directory using SST helper
+                from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+                base_output_dir = get_run_root(base_output_dir)
                 
                 # Initialize telemetry (creates TELEMETRY directory if needed)
                 telemetry = DiffTelemetry(output_dir=base_output_dir)
@@ -2200,14 +2188,9 @@ class ReproducibilityTracker:
                 # Log at INFO level so it's visible
                 main_logger = _get_main_logger()
                 try:
-                    # Try to get a relative path for readability
-                    run_base = target_cohort_dir
-                    for _ in range(6):  # Walk up to find run directory
-                        if (run_base / "targets").exists() or run_base.name in ["RESULTS", "intelligent_output"]:
-                            break
-                        if not run_base.parent.exists():
-                            break
-                        run_base = run_base.parent
+                    # Try to get a relative path for readability using SST helper
+                    from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+                    run_base = get_run_root(target_cohort_dir)
                     rel_path = target_cohort_dir.relative_to(run_base) if run_base.exists() else target_cohort_dir
                     log_msg = f"📁 Reproducibility: Writing cohort data to {rel_path}"
                 except (ValueError, AttributeError):

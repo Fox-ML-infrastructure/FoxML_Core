@@ -213,16 +213,9 @@ class DiffTelemetry:
                 temp_dir = temp_dir.parent
         
         # Run-specific snapshot index: stored in run's globals/ (target-first structure)
-        # Find run directory (where targets/ or globals/ exists)
-        run_dir_for_globals = None
-        temp_dir = self.output_dir
-        for _ in range(10):  # Limit depth
-            if (temp_dir / "targets").exists() or (temp_dir / "globals").exists() or temp_dir.name in ["RESULTS", "intelligent_output"]:
-                run_dir_for_globals = temp_dir
-                break
-            if not temp_dir.parent.exists():
-                break
-            temp_dir = temp_dir.parent
+        # Find run directory using SST helper
+        from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+        run_dir_for_globals = get_run_root(self.output_dir)
         
         if run_dir_for_globals:
             from TRAINING.orchestration.utils.target_first_paths import get_globals_dir
@@ -274,16 +267,18 @@ class DiffTelemetry:
                             self._snapshots[key] = snap
                         elif key.count(':') >= 3:
                             # Previous format: run_id:stage:target:view - build new key with symbol
-                            target_clean = (snap.target or "unknown").replace('/', '_').replace('\\', '_')
+                            from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                            target_clean = normalize_target_name(snap.target or "unknown")
                             view_clean = snap.view or "UNKNOWN"
-                            symbol_clean = (snap.symbol or "NONE").replace('/', '_').replace('\\', '_')
+                            symbol_clean = normalize_target_name(snap.symbol or "NONE")
                             new_key = f"{snap.run_id}:{snap.stage}:{target_clean}:{view_clean}:{symbol_clean}"
                             self._snapshots[new_key] = snap
                         else:
                             # Legacy format: run_id or run_id:stage - build new key with target, view, symbol
-                            target_clean = (snap.target or "unknown").replace('/', '_').replace('\\', '_')
+                            from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                            target_clean = normalize_target_name(snap.target or "unknown")
                             view_clean = snap.view or "UNKNOWN"
-                            symbol_clean = (snap.symbol or "NONE").replace('/', '_').replace('\\', '_')
+                            symbol_clean = normalize_target_name(snap.symbol or "NONE")
                             new_key = f"{snap.run_id}:{snap.stage}:{target_clean}:{view_clean}:{symbol_clean}"
                             self._snapshots[new_key] = snap
             except Exception as e:
@@ -327,9 +322,10 @@ class DiffTelemetry:
             run_snapshots = existing_snapshots.copy()
             for snapshot_key, snap in self._snapshots.items():
                 # Build key: run_id:stage:target:view:symbol
-                target_clean = (snap.target or "unknown").replace('/', '_').replace('\\', '_')
+                from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                target_clean = normalize_target_name(snap.target or "unknown")
                 view_clean = snap.view or "UNKNOWN"
-                symbol_clean = (snap.symbol or "NONE").replace('/', '_').replace('\\', '_')
+                symbol_clean = normalize_target_name(snap.symbol or "NONE")
                 key = f"{snap.run_id}:{snap.stage}:{target_clean}:{view_clean}:{symbol_clean}"
                 run_snapshots[key] = snap.to_dict()
             
@@ -2119,14 +2115,9 @@ class DiffTelemetry:
                             current = current.parent
                     
                     if target:
-                        # Find run directory
-                        run_dir = cohort_path
-                        for _ in range(10):
-                            if (run_dir / "targets").exists() or run_dir.name == "RESULTS":
-                                break
-                            if not run_dir.parent.exists():
-                                break
-                            run_dir = run_dir.parent
+                        # Find run directory using SST helper
+                        from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+                        run_dir = get_run_root(cohort_path)
                         
                         # Try target-first metrics location
                         target_metrics_dir = run_dir / "targets" / target / "metrics"
@@ -2277,17 +2268,13 @@ class DiffTelemetry:
                         current = current.parent
                     
                     if target:
-                        # Find base output directory
-                        base_output_dir = cohort_path
-                        for _ in range(10):
-                            if (base_output_dir / "targets").exists():
-                                break
-                            if not base_output_dir.parent.exists():
-                                break
-                            base_output_dir = base_output_dir.parent
+                        # Find base output directory using SST helper
+                        from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+                        base_output_dir = get_run_root(cohort_path)
                         
                         if (base_output_dir / "targets").exists():
-                            target_clean = target.replace('/', '_').replace('\\', '_')
+                            from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                            target_clean = normalize_target_name(target)
                             target_metrics_dir = get_target_metrics_dir(base_output_dir, target_clean)
                             
                             # Try to find view from path
@@ -2647,18 +2634,9 @@ class DiffTelemetry:
                 
                 # Only create target-first structure for TARGET_RANKING and FEATURE_SELECTION
                 if stage in ['TARGET_RANKING', 'FEATURE_SELECTION'] and target and cohort_id:
-                    # Find base output directory (run directory)
-                    temp_dir = cohort_dir
-                    for _ in range(10):  # Limit depth
-                        if (temp_dir / "targets").exists() or (temp_dir.parent / "targets").exists():
-                            if (temp_dir / "targets").exists():
-                                base_output_dir = temp_dir
-                            else:
-                                base_output_dir = temp_dir.parent
-                            break
-                        if not temp_dir.parent.exists() or temp_dir.parent == temp_dir:
-                            break
-                        temp_dir = temp_dir.parent
+                    # Find base output directory (run directory) using SST helper
+                    from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+                    base_output_dir = get_run_root(cohort_dir)
                     
                     if base_output_dir:
                         from TRAINING.orchestration.utils.target_first_paths import (
@@ -2749,17 +2727,19 @@ class DiffTelemetry:
                                             self._snapshots[key] = snap
                                     elif key.count(':') >= 3:
                                         # Previous format (run_id:stage:target:view): build new key with symbol
-                                        target_clean = (snap.target or "unknown").replace('/', '_').replace('\\', '_')
+                                        from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                                        target_clean = normalize_target_name(snap.target or "unknown")
                                         view_clean = snap.view or "UNKNOWN"
-                                        symbol_clean = (snap.symbol or "NONE").replace('/', '_').replace('\\', '_')
+                                        symbol_clean = normalize_target_name(snap.symbol or "NONE")
                                         new_key = f"{snap.run_id}:{snap.stage}:{target_clean}:{view_clean}:{symbol_clean}"
                                         if new_key not in self._snapshots:
                                             self._snapshots[new_key] = snap
                                     else:
                                         # Legacy format (run_id:stage): build new key with target, view, symbol
-                                        target_clean = (snap.target or "unknown").replace('/', '_').replace('\\', '_')
+                                        from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                                        target_clean = normalize_target_name(snap.target or "unknown")
                                         view_clean = snap.view or "UNKNOWN"
-                                        symbol_clean = (snap.symbol or "NONE").replace('/', '_').replace('\\', '_')
+                                        symbol_clean = normalize_target_name(snap.symbol or "NONE")
                                         new_key = f"{snap.run_id}:{snap.stage}:{target_clean}:{view_clean}:{symbol_clean}"
                                         if new_key not in self._snapshots:
                                             self._snapshots[new_key] = snap
@@ -2884,9 +2864,10 @@ class DiffTelemetry:
         
         # Update index (keyed by run_id:stage:target:view:symbol for uniqueness across targets and symbols)
         # Include target, view, and symbol in key to prevent overwrites when multiple targets/symbols are processed
-        target_clean = (snapshot.target or "unknown").replace('/', '_').replace('\\', '_')
+        from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+        target_clean = normalize_target_name(snapshot.target or "unknown")
         view_clean = snapshot.view or "UNKNOWN"
-        symbol_clean = (snapshot.symbol or "NONE").replace('/', '_').replace('\\', '_')
+        symbol_clean = normalize_target_name(snapshot.symbol or "NONE")
         snapshot_key = f"{snapshot.run_id}:{snapshot.stage}:{target_clean}:{view_clean}:{symbol_clean}"
         self._snapshots[snapshot_key] = snapshot
         self._save_indices()
@@ -3351,7 +3332,8 @@ class DiffTelemetry:
             return snapshot
         
         # Search for the run directory containing this snapshot
-        target_clean = snapshot.target.replace('/', '_').replace('\\', '_')
+        from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+        target_clean = normalize_target_name(snapshot.target)
         stage_dir_name = snapshot.stage
         view_dir_name = snapshot.view
         
@@ -4175,7 +4157,8 @@ class DiffTelemetry:
                                                     snapshot_file_exists = False
                                                     cohort_subdir_found = None
                                                     if snap.stage and snap.view and snap.target:
-                                                        target_clean = snap.target.replace('/', '_').replace('\\', '_')
+                                                        from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                                                        target_clean = normalize_target_name(snap.target)
                                                         
                                                         # First, try target-first structure: targets/<target>/reproducibility/<view>/cohort=<cohort_id>/
                                                         target_repro_dir = run_subdir / "targets" / target_clean / "reproducibility"
@@ -4831,15 +4814,12 @@ class DiffTelemetry:
                 # stage = parsed.get("stage")  # Available if needed
                 
                 if target and view:
-                    # Find base_output_dir
+                    # Find base_output_dir using SST helper (if we're in targets/, go up one level first)
+                    from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
                     base_output_dir = Path(cohort_dir)
-                    for _ in range(10):
-                        if base_output_dir.name == "targets":
-                            base_output_dir = base_output_dir.parent
-                            break
-                        if not base_output_dir.parent.exists():
-                            break
+                    if base_output_dir.name == "targets":
                         base_output_dir = base_output_dir.parent
+                    base_output_dir = get_run_root(base_output_dir)
                     
                     from TRAINING.orchestration.utils.target_first_paths import get_target_metrics_dir
                     metrics_dir = get_target_metrics_dir(base_output_dir, target) / f"view={view}"
@@ -5035,7 +5015,8 @@ class DiffTelemetry:
         prev_cohort_dir = None
         if prev_snapshot and prev_snapshot.stage and prev_snapshot.view and prev_snapshot.target:
             # Reconstruct path similar to find_previous_comparable
-            target_clean = prev_snapshot.target.replace('/', '_').replace('\\', '_')
+            from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+            target_clean = normalize_target_name(prev_snapshot.target)
             if hasattr(self, 'run_dir') and self.run_dir:
                 results_dir = self.run_dir
                 while results_dir.parent.exists() and results_dir.name != "RESULTS":
@@ -5160,7 +5141,8 @@ class DiffTelemetry:
                 # Try to find baseline snapshot's cohort directory
                 baseline_cohort_dir = None
                 if baseline_snapshot.stage and baseline_snapshot.view and baseline_snapshot.target:
-                    target_clean = baseline_snapshot.target.replace('/', '_').replace('\\', '_')
+                    from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                    target_clean = normalize_target_name(baseline_snapshot.target)
                     if hasattr(self, 'run_dir') and self.run_dir:
                         results_dir = self.run_dir
                         while results_dir.parent.exists() and results_dir.name != "RESULTS":

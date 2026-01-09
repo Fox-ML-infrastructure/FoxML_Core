@@ -2,6 +2,19 @@
 
 All notable changes to FoxML Core will be documented in this file.
 
+## 2026-01-09
+
+### SST Compliance Fixes
+- **Target Name Normalization**: Added `normalize_target_name()` helper function and replaced **ALL** remaining instances (39+ total) of manual target normalization across **ALL** files - ensures consistent filesystem-safe target names across all path construction
+- **Path Resolution Consistency**: Replaced **ALL** remaining custom path resolution loops (30+ total) with `run_root()` helper across **ALL** files for consistent run root directory resolution
+- **Cross-Sectional Stability SST Parameters**: Added `view` and `symbol` parameters to `compute_cross_sectional_stability()` to use SST-resolved values instead of hardcoded defaults - ensures consistency with main feature selection stage
+- **Universe Signature Fix**: Fixed hardcoded `universe_sig="ALL"` in `metrics_aggregator.py` - now extracts from cohort metadata with proper fallback chain
+- **Internal Document Cleanup**: Removed all references to internal documentation from public-facing changelogs
+- **SST Audit**: Verified RunIdentity construction patterns and TRAINING stage SST usage - all verified as correct
+- **Determinism Verification**: All helper replacements verified to produce identical output as manual code, ensuring no non-determinism introduced
+- **Complete Migration**: **ALL** remaining SST helper opportunities have been migrated - the codebase now uses SST helpers consistently throughout
+- See [detailed changelog](DOCS/02_reference/changelog/2026-01-09-sst-consistency-fixes.md) for full details
+
 ## 2026-01-08
 
 ### FEATURE_SELECTION Cohort Consolidation

@@ -220,7 +220,8 @@ class FeatureAuditor:
                                            "null_fraction", "n_unique", "sample_value", "metadata"])
         
         # Write CSVs
-        safe_target = self.target.replace("/", "_").replace("\\", "_")
+        from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+        safe_target = normalize_target_name(self.target)
         summary_path = output_dir / f"feature_audit_{safe_target}_summary.csv"
         drop_path = output_dir / f"feature_audit_{safe_target}_drops.csv"
         

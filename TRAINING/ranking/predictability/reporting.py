@@ -282,7 +282,8 @@ def save_rankings(
     
     # Also save per-target slices for fast local inspection
     for i, r in enumerate(results):
-        target_clean = r.target.replace('/', '_').replace('\\', '_')
+        from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+        target_clean = normalize_target_name(r.target)
         try:
             ensure_target_structure(base_output_dir, target_clean)
             target_decision_dir = get_target_decision_dir(base_output_dir, target_clean)

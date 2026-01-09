@@ -18,6 +18,30 @@ logger = logging.getLogger(__name__)
 _view_mismatch_warned: Set[tuple] = set()
 
 
+def normalize_target_name(target: str) -> str:
+    """
+    Normalize target name for filesystem paths.
+    
+    This is the SST helper for target name normalization. Replaces '/' and '\\'
+    with '_' to prevent path issues. All path construction functions should use
+    this helper to ensure consistency.
+    
+    Args:
+        target: Target name (may contain '/' or '\\')
+    
+    Returns:
+        Normalized target name safe for filesystem paths
+    
+    Examples:
+        "fwd_ret/5d" -> "fwd_ret_5d"
+        "target\\name" -> "target_name"
+        "normal_target" -> "normal_target"
+    """
+    if not target:
+        return "unknown"
+    return target.replace('/', '_').replace('\\', '_')
+
+
 def get_target_dir(base_output_dir: Path, target: str) -> Path:
     """
     Get the target directory for a given target.
@@ -127,8 +151,14 @@ def get_target_reproducibility_dir(
     Examples:
         With stage: targets/fwd_ret_10m/reproducibility/stage=TARGET_RANKING/
         Without stage (legacy): targets/fwd_ret_10m/reproducibility/
+    
+    Note:
+        Target name is normalized internally (replaces '/' and '\\' with '_')
+        to ensure filesystem-safe paths. Callers can pass raw target names.
     """
-    base_repro = get_target_dir(base_output_dir, target) / "reproducibility"
+    # FIX: Normalize target name for consistent path construction (SST)
+    target_normalized = normalize_target_name(target)
+    base_repro = get_target_dir(base_output_dir, target_normalized) / "reproducibility"
     
     # Priority: explicit > SST > legacy
     resolved_stage = stage
@@ -382,6 +412,10 @@ def find_cohort_dir_by_id(
     try:
         target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage)
         view_dir = target_repro_dir / view
+        
+        # FIX: Add directory existence check before iterating
+        if not view_dir.exists() or not view_dir.is_dir():
+            return None
         
         # For SYMBOL_SPECIFIC, need to search in symbol= subdirectories
         if view == "SYMBOL_SPECIFIC":

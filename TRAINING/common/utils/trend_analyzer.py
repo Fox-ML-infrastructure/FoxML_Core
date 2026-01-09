@@ -1206,7 +1206,8 @@ class TrendAnalyzer:
             # Create trend_reports structure outside run directories
             trend_reports_dir = results_dir / "trend_reports"
             by_target_dir = trend_reports_dir / "by_target"
-            target_trend_dir = by_target_dir / target.replace('/', '_').replace('\\', '_')
+            from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+            target_trend_dir = by_target_dir / normalize_target_name(target)
             target_trend_dir.mkdir(parents=True, exist_ok=True)
             
             # Load artifact index

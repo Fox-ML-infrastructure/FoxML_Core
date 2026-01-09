@@ -574,7 +574,8 @@ def _process_combined_data_pandas(combined_df: pd.DataFrame, target: str, featur
                 import os
                 debug_dir = Path("debug_feature_coercion")
                 debug_dir.mkdir(exist_ok=True)
-                debug_path = debug_dir / f"all_nan_features_{target.replace('/', '_')}.npz"
+                from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                debug_path = debug_dir / f"all_nan_features_{normalize_target_name(target)}.npz"
                 np.savez_compressed(
                     debug_path,
                     feature_names=np.array(feature_names, dtype=object),

@@ -145,7 +145,8 @@ class MetricsAggregator:
             if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
                 break
         
-        target_clean = target.replace('/', '_').replace('\\', '_')
+        from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+        target_clean = normalize_target_name(target)
         
         # SST Architecture: Read from canonical location (reproducibility/cohort) first
         # Then check reference pointer, then legacy locations
@@ -309,6 +310,9 @@ class MetricsAggregator:
             except Exception as e:
                 logger.debug(f"Failed to load CS metrics from {confidence_path}: {e}")
         
+        # FIX: Extract universe_sig from SST (cohort metadata) before loading stability metrics
+        universe_sig = None
+        
         # FIX: If sample_size still None, try to load from cohort metadata.json
         if sample_size is None or sample_size == 0:
             try:
@@ -324,15 +328,46 @@ class MetricsAggregator:
                     if cohort_metadata_file.exists():
                         with open(cohort_metadata_file) as f:
                             cohort_meta = json.load(f)
-                            from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective
+                            from TRAINING.orchestration.utils.reproducibility.utils import extract_n_effective, extract_universe_sig
                             sample_size = extract_n_effective(cohort_meta)
                             if sample_size:
                                 logger.debug(f"Loaded sample_size={sample_size} from cohort metadata: {latest_cohort.name}")
+                            
+                            # FIX: Extract universe_sig from cohort metadata (SST)
+                            universe_sig = extract_universe_sig(cohort_meta)
+                            if universe_sig:
+                                logger.debug(f"Loaded universe_sig={universe_sig[:8]}... from cohort metadata: {latest_cohort.name}")
             except Exception as e:
-                logger.debug(f"Failed to load sample_size from cohort metadata: {e}")
+                logger.debug(f"Failed to load sample_size/universe_sig from cohort metadata: {e}")
         
-        # Load stability metrics
-        stability_metrics = self._load_stability_metrics(target, universe_sig="ALL")
+        # FIX: Fallback chain for universe_sig (SST → "ALL" as last resort)
+        if universe_sig is None:
+            # Try to extract from run context as fallback
+            try:
+                from TRAINING.orchestration.utils.run_context import load_run_context
+                context = load_run_context(base_output_dir)
+                if context:
+                    # Check if context has universe_sig or can derive from symbols
+                    if 'universe_sig' in context:
+                        universe_sig = context['universe_sig']
+                    elif 'symbols' in context:
+                        from TRAINING.orchestration.utils.run_context import compute_universe_signature
+                        symbols = context.get('symbols', [])
+                        if symbols:
+                            universe_sig = compute_universe_signature(symbols)
+            except Exception as e:
+                logger.debug(f"Could not extract universe_sig from run context: {e}")
+        
+        # FIX: Use SST universe_sig, fallback to "ALL" only as last resort
+        if universe_sig is None:
+            logger.warning(
+                f"Could not determine universe_sig for {target} from SST (cohort metadata or run context). "
+                f"Using 'ALL' as fallback. This may load stability metrics from wrong universe scope."
+            )
+            universe_sig = "ALL"  # Last resort fallback
+        
+        # Load stability metrics with SST-resolved universe_sig
+        stability_metrics = self._load_stability_metrics(target, universe_sig=universe_sig)
         
         # Classify stability
         stability = self._classify_stability_from_metrics(stability_metrics)
@@ -388,7 +423,8 @@ class MetricsAggregator:
             if not base_output_dir.parent.exists() or base_output_dir.name == "RESULTS":
                 break
         
-        target_clean = target.replace('/', '_').replace('\\', '_')
+        from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+        target_clean = normalize_target_name(target)
         
         # Try target-first structure first: targets/<target>/reproducibility/{view}/symbol=<symbol>/
         # Use view for path construction (SST)
@@ -613,7 +649,8 @@ class MetricsAggregator:
             symbol = None if view == "CROSS_SECTIONAL" else universe_sig
             
             # Build paths for snapshots (target-first with view scoping + legacy fallback)
-            target_clean = target.replace('/', '_').replace('\\', '_')
+            from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+            target_clean = normalize_target_name(target)
             
             # Try target-first structure with view scoping (new path)
             # NOTE: ensure_exists=False to avoid creating empty directories when reading

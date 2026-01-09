@@ -522,15 +522,9 @@ class FeatureSelectionSnapshot:
             try:
                 import json
                 # Walk up to find run root with globals/ directory
-                base_dir = Path(output_dir)
-                globals_dir = None
-                for _ in range(10):
-                    if (base_dir / "globals").exists():
-                        globals_dir = base_dir / "globals"
-                        break
-                    if not base_dir.parent.exists():
-                        break
-                    base_dir = base_dir.parent
+                from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+                base_dir = get_run_root(Path(output_dir))
+                globals_dir = base_dir / "globals" if (base_dir / "globals").exists() else None
                 
                 if globals_dir:
                     resolved_config_path = globals_dir / "config.resolved.json"

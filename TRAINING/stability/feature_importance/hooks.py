@@ -407,14 +407,8 @@ def analyze_all_stability_hook(
     # REMOVED: Legacy REPRODUCIBILITY path construction - only use target-first structure
     if output_dir:
         base_output_dir = output_dir
-        for _ in range(10):
-            # Only stop if we find a run directory (has targets/, globals/, or cache/)
-            # Don't stop at RESULTS/ - continue to find actual run directory
-            if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
-                break
-            if not base_output_dir.parent.exists():
-                break
-            base_output_dir = base_output_dir.parent
+        from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+        base_output_dir = get_run_root(base_output_dir)
     else:
         # Default: use get_snapshot_base_dir with None (artifacts/feature_importance)
         base_dir = get_snapshot_base_dir(None)

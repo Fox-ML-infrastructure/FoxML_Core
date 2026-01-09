@@ -162,6 +162,8 @@ def select_features_for_target(
     universe_sig: Optional[str] = None,  # Universe signature from SST (resolved_data_config)
     run_identity: Optional[Any] = None,  # Finalized RunIdentity for hash-based storage
 ) -> Tuple[List[str], pd.DataFrame]:
+    # FIX: Initialize cohort_id at function start to prevent NameError
+    cohort_id = None
     """
     Select top features for a target using multi-model consensus.
     
@@ -677,19 +679,13 @@ def select_features_for_target(
                             # Build snapshot path (matching TARGET_RANKING structure)
                             # output_dir is already at: REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/
                             # Use it directly to avoid nested structures
-                            target_clean = target_column.replace('/', '_').replace('\\', '_')
+                            from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                            target_clean = normalize_target_name(target_column)
                             
-                            # Find base run directory for target-first structure
+                            # Find base run directory for target-first structure using SST helper
                             # REMOVED: Legacy REPRODUCIBILITY/FEATURE_SELECTION path construction
-                            base_output_dir = output_dir
-                            for _ in range(10):
-                                # Only stop if we find a run directory (has targets/, globals/, or cache/)
-                                # Don't stop at RESULTS/ - continue to find actual run directory
-                                if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
-                                    break
-                                if not base_output_dir.parent.exists():
-                                    break
-                                base_output_dir = base_output_dir.parent
+                            from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+                            base_output_dir = get_run_root(output_dir)
                             
                             # Compute split_signature from fold info (folds are now finalized)
                             split_signature = None
@@ -1597,15 +1593,11 @@ def select_features_for_target(
             importance_dict = summary_df.set_index('feature')['consensus_score'].to_dict()
             
             # Use target-first structure for snapshots
-            target_clean = target_column.replace('/', '_').replace('\\', '_')
-            # Find base run directory
-            base_output_dir = output_dir
-            for _ in range(10):
-                if base_output_dir.name == "RESULTS" or (base_output_dir / "targets").exists():
-                    break
-                if not base_output_dir.parent.exists():
-                    break
-                base_output_dir = base_output_dir.parent
+            from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+            target_clean = normalize_target_name(target_column)
+            # Find base run directory using SST helper
+            from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+            base_output_dir = get_run_root(output_dir)
             
             if base_output_dir.exists():
                 from TRAINING.orchestration.utils.target_first_paths import (
@@ -1799,134 +1791,13 @@ def select_features_for_target(
     except Exception as e:
         logger.debug(f"Could not load mtf_data for cohort metadata: {e}")
     
-    # Check if cross-sectional ranking is enabled and we have enough symbols
-    min_cs_required = cs_config.get('min_cs', 10) if cs_config.get('enabled', False) else None
-    if (cs_config.get('enabled', False) and 
-        min_cs_required is not None and
-        len(symbols) >= min_cs_required):
-        
-        try:
-            from TRAINING.ranking.cross_sectional_feature_ranker import (
-                compute_cross_sectional_importance,
-                tag_features_by_importance
-            )
-            
-            top_k_candidates = cs_config.get('top_k_candidates', 50)
-            candidates = selected_features[:top_k_candidates]
-            
-            logger.info(f"🔍 Computing cross-sectional importance for {len(candidates)} candidate features...")
-            cs_importance = compute_cross_sectional_importance(
-                candidate_features=candidates,
-                target_column=target_column,
-                symbols=symbols,
-                data_dir=data_dir,
-                model_families=cs_config.get('model_families', ['lightgbm']),
-                min_cs=min_cs_required,
-                max_cs_samples=cs_config.get('max_cs_samples', 1000),
-                max_rows_per_symbol=max_samples_per_symbol,  # FIX: Consistent sample limit across stages
-                normalization=cs_config.get('normalization'),
-                model_configs=cs_config.get('model_configs'),
-                output_dir=output_dir,  # Pass output_dir for reproducibility tracking
-                universe_sig=universe_sig,  # FIX: Thread universe_sig for proper scope tracking
-                run_identity=run_identity,  # SST: Pass through authoritative identity
-                cohort_id=cohort_id,  # NEW: Pass cohort_id to consolidate into same cohort directory
-            )
-            
-            # Merge CS scores into summary_df
-            summary_df['cs_importance_score'] = summary_df['feature'].map(cs_importance).fillna(0.0)
-            
-            # Tag features
-            symbol_importance = summary_df.set_index('feature')['consensus_score']
-            cs_importance_aligned = cs_importance.reindex(symbol_importance.index, fill_value=0.0)
-            feature_categories = tag_features_by_importance(
-                symbol_importance=symbol_importance,
-                cs_importance=cs_importance_aligned,
-                symbol_threshold=cs_config.get('symbol_threshold', 0.1),
-                cs_threshold=cs_config.get('cs_threshold', 0.1)
-            )
-            # Map categories back to summary_df (preserve original index)
-            summary_df['feature_category'] = summary_df['feature'].map(feature_categories).fillna('UNKNOWN')
-            
-            logger.info(f"   ✅ Cross-sectional ranking complete")
-            category_counts = summary_df['feature_category'].value_counts()
-            for cat, count in category_counts.items():
-                logger.info(f"      {cat}: {count} features")
-            
-            # Cross-sectional stability tracking
-            try:
-                from TRAINING.ranking.cross_sectional_feature_ranker import (
-                    compute_cross_sectional_stability
-                )
-                
-                cs_stability = compute_cross_sectional_stability(
-                    target_column=target_column,
-                    cs_importance=cs_importance,
-                    output_dir=output_dir,
-                    top_k=20,
-                    universe_sig=universe_sig,  # Use SST universe signature (not hardcoded "ALL")
-                    run_identity=run_identity,  # Pass partial identity for snapshot storage
-                )
-                
-                # Compact logging (similar to per-model reproducibility)
-                if cs_stability['status'] == 'stable':
-                    logger.info(
-                        f"   [CS-STABILITY] ✅ STABLE: "
-                        f"overlap={cs_stability['mean_overlap']:.3f}±{cs_stability['std_overlap']:.3f}, "
-                        f"tau={cs_stability['mean_tau']:.3f if cs_stability['mean_tau'] is not None else 'N/A'}, "
-                        f"snapshots={cs_stability['n_snapshots']}"
-                    )
-                elif cs_stability['status'] == 'drifting':
-                    logger.warning(
-                        f"   [CS-STABILITY] ⚠️  DRIFTING: "
-                        f"overlap={cs_stability['mean_overlap']:.3f}±{cs_stability['std_overlap']:.3f}, "
-                        f"tau={cs_stability['mean_tau']:.3f if cs_stability['mean_tau'] is not None else 'N/A'}, "
-                        f"snapshots={cs_stability['n_snapshots']}"
-                    )
-                elif cs_stability['status'] == 'diverged':
-                    logger.warning(
-                        f"   [CS-STABILITY] ⚠️  DIVERGED: "
-                        f"overlap={cs_stability['mean_overlap']:.3f}±{cs_stability['std_overlap']:.3f}, "
-                        f"tau={cs_stability['mean_tau']:.3f if cs_stability['mean_tau'] is not None else 'N/A'}, "
-                        f"snapshots={cs_stability['n_snapshots']}"
-                    )
-                elif cs_stability['n_snapshots'] < 2:
-                    logger.debug(
-                        f"   [CS-STABILITY] First run (snapshots={cs_stability['n_snapshots']})"
-                    )
-                
-                # Store stability results for metadata
-                cs_stability_results = cs_stability
-                
-            except Exception as e:
-                logger.debug(f"CS stability tracking failed (non-critical): {e}")
-                cs_stability_results = None
-                
-        except ValueError as e:
-            # Handle insufficient symbols gracefully
-            error_msg = str(e)
-            if "requires >=" in error_msg and "symbols" in error_msg:
-                logger.warning(
-                    f"Cross-sectional ranking skipped: insufficient symbols "
-                    f"(have {len(symbols)}, need {min_cs_required}). "
-                    f"Falling back to symbol-specific ranking only."
-                )
-            else:
-                logger.warning(f"Cross-sectional ranking failed: {e}", exc_info=True)
-            summary_df['cs_importance_score'] = 0.0
-            summary_df['feature_category'] = 'SYMBOL_ONLY'  # Mark as symbol-only when CS fails
-        except Exception as e:
-            logger.warning(f"Cross-sectional ranking failed: {e}", exc_info=True)
-            summary_df['cs_importance_score'] = 0.0
-            summary_df['feature_category'] = 'UNKNOWN'
-            cs_stability_results = None
-    else:
+    # NOTE: Cross-sectional ranking computation moved to AFTER log_run() completes
+    # (see below after line 2594) to ensure cohort_id is available for consolidation
+    # Initialize CS scores and categories to defaults (will be updated after CS panel runs)
+    if 'summary_df' in locals():
         summary_df['cs_importance_score'] = 0.0
-        summary_df['feature_category'] = 'SYMBOL_ONLY'  # CS ranking not run
-        cs_stability_results = None
-        if len(symbols) < cs_config.get('min_symbols', 5):
-            logger.debug(f"Skipping cross-sectional ranking: only {len(symbols)} symbols (min: {cs_config.get('min_symbols', 5)})")
-        elif not cs_config.get('enabled', False):
-            logger.debug("Cross-sectional ranking disabled in config")
+        summary_df['feature_category'] = 'PENDING'  # Will be updated after CS panel completes
+    cs_stability_results = None
     
     # Run importance diff detector if enabled (optional diagnostic)
     # This compares models trained with all features vs. safe features only
@@ -2592,6 +2463,118 @@ def select_features_for_target(
                     trend = audit_result["trend_summary"]
                     # Trend summary is already logged by log_run, but we can add additional context here if needed
                     pass
+                
+                # FIX: Execute cross-sectional ranking AFTER log_run() completes to get cohort_id
+                # Check if cross-sectional ranking is enabled and we have enough symbols
+                min_cs_required = cs_config.get('min_cs', 10) if cs_config.get('enabled', False) else None
+                if (cs_config.get('enabled', False) and 
+                    min_cs_required is not None and
+                    len(symbols) >= min_cs_required):
+                    
+                    try:
+                        from TRAINING.ranking.cross_sectional_feature_ranker import (
+                            compute_cross_sectional_importance,
+                            tag_features_by_importance,
+                            compute_cross_sectional_stability
+                        )
+                        
+                        top_k_candidates = cs_config.get('top_k_candidates', 50)
+                        candidates = selected_features[:top_k_candidates]
+                        
+                        logger.info(f"🔍 Computing cross-sectional importance for {len(candidates)} candidate features...")
+                        # FIX: Pass SST-resolved view and universe_sig from resolve_write_scope
+                        effective_view_for_cs = view_for_writes if 'view_for_writes' in locals() else view
+                        effective_universe_sig_for_cs = universe_sig_for_writes if 'universe_sig_for_writes' in locals() else universe_sig
+                        
+                        cs_importance = compute_cross_sectional_importance(
+                            candidate_features=candidates,
+                            target_column=target_column,
+                            symbols=symbols,
+                            data_dir=data_dir,
+                            model_families=cs_config.get('model_families', ['lightgbm']),
+                            min_cs=min_cs_required,
+                            max_cs_samples=cs_config.get('max_cs_samples', 1000),
+                            max_rows_per_symbol=max_samples_per_symbol,  # FIX: Consistent sample limit across stages
+                            normalization=cs_config.get('normalization'),
+                            model_configs=cs_config.get('model_configs'),
+                            output_dir=output_dir,  # Pass output_dir for reproducibility tracking
+                            universe_sig=effective_universe_sig_for_cs,  # FIX: Use SST-resolved universe_sig
+                            run_identity=run_identity,  # SST: Pass through authoritative identity
+                            cohort_id=cohort_id,  # FIX: Now available from log_run() result
+                            view=effective_view_for_cs,  # FIX: Pass SST-resolved view
+                        )
+                        
+                        # Merge CS scores into summary_df
+                        summary_df['cs_importance_score'] = summary_df['feature'].map(cs_importance).fillna(0.0)
+                        
+                        # Tag features
+                        symbol_importance = summary_df.set_index('feature')['consensus_score']
+                        cs_importance_aligned = cs_importance.reindex(symbol_importance.index, fill_value=0.0)
+                        feature_categories = tag_features_by_importance(
+                            symbol_importance=symbol_importance,
+                            cs_importance=cs_importance_aligned,
+                            symbol_threshold=cs_config.get('symbol_threshold', 0.1),
+                            cs_threshold=cs_config.get('cs_threshold', 0.1)
+                        )
+                        # Map categories back to summary_df (preserve original index)
+                        summary_df['feature_category'] = summary_df['feature'].map(feature_categories).fillna('UNKNOWN')
+                        
+                        logger.info(f"   ✅ Cross-sectional ranking complete")
+                        category_counts = summary_df['feature_category'].value_counts()
+                        for cat, count in category_counts.items():
+                            logger.info(f"      {cat}: {count} features")
+                        
+                        # Cross-sectional stability tracking
+                        try:
+                            cs_stability = compute_cross_sectional_stability(
+                                target_column=target_column,
+                                cs_importance=cs_importance,
+                                output_dir=output_dir,
+                                top_k=20,
+                                universe_sig=effective_universe_sig_for_cs,  # FIX: Use SST-resolved universe_sig
+                                run_identity=run_identity,  # Pass partial identity for snapshot storage
+                                view=effective_view_for_cs,  # FIX: Pass SST-resolved view
+                                symbol=symbol_for_writes if 'symbol_for_writes' in locals() else None,  # FIX: Pass SST-resolved symbol
+                            )
+                            
+                            # Compact logging (similar to per-model reproducibility)
+                            if cs_stability['status'] == 'stable':
+                                logger.info(
+                                    f"   [CS-STABILITY] ✅ STABLE: "
+                                    f"overlap={cs_stability['mean_overlap']:.3f}±{cs_stability['std_overlap']:.3f}, "
+                                    f"tau={cs_stability['mean_tau']:.3f if cs_stability['mean_tau'] is not None else 'N/A'}, "
+                                    f"snapshots={cs_stability['n_snapshots']}"
+                                )
+                            elif cs_stability['status'] == 'drifting':
+                                logger.warning(
+                                    f"   [CS-STABILITY] ⚠️  DRIFTING: "
+                                    f"overlap={cs_stability['mean_overlap']:.3f}±{cs_stability['std_overlap']:.3f}, "
+                                    f"tau={cs_stability['mean_tau']:.3f if cs_stability['mean_tau'] is not None else 'N/A'}, "
+                                    f"snapshots={cs_stability['n_snapshots']}"
+                                )
+                            elif cs_stability['status'] == 'diverged':
+                                logger.warning(
+                                    f"   [CS-STABILITY] ⚠️  DIVERGED: "
+                                    f"overlap={cs_stability['mean_overlap']:.3f}±{cs_stability['std_overlap']:.3f}, "
+                                    f"tau={cs_stability['mean_tau']:.3f if cs_stability['mean_tau'] is not None else 'N/A'}, "
+                                    f"snapshots={cs_stability['n_snapshots']}"
+                                )
+                            elif cs_stability['n_snapshots'] < 2:
+                                logger.debug(
+                                    f"   [CS-STABILITY] First run (snapshots={cs_stability['n_snapshots']})"
+                                )
+                            
+                            # Store stability results for metadata
+                            cs_stability_results = cs_stability
+                            
+                        except Exception as e:
+                            logger.debug(f"CS stability tracking failed (non-critical): {e}")
+                            cs_stability_results = None
+                        
+                    except Exception as e:
+                        logger.warning(f"Cross-sectional ranking failed: {e}")
+                        import traceback
+                        logger.debug(traceback.format_exc())
                     
             except ImportError:
                 # Fallback to legacy API if RunContext not available

@@ -240,7 +240,8 @@ class RankingHarness:
             # FIX: Check if we're already inside REPRODUCIBILITY structure at target level
             # If output_dir is already REPRODUCIBILITY/FEATURE_SELECTION/CROSS_SECTIONAL/{target}/,
             # use it directly instead of reconstructing the path
-            target_clean = target.replace('/', '_').replace('\\', '_')
+            from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+            target_clean = normalize_target_name(target)
             
             # Check if we're already at the target level inside REPRODUCIBILITY
             is_already_in_repro = "REPRODUCIBILITY" in str(base_output_dir)
@@ -335,7 +336,8 @@ class RankingHarness:
                 if target_conditional_exclusions and 'legacy_exclusion_dir' in locals():
                     try:
                         import shutil
-                        safe_target = target.replace('/', '_').replace('\\', '_')
+                        from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                        safe_target = normalize_target_name(target)
                         exclusion_file = target_exclusion_dir / f"{safe_target}_exclusions.yaml"
                         legacy_exclusion_file = legacy_exclusion_dir / f"{safe_target}_exclusions.yaml"
                         if exclusion_file.exists():

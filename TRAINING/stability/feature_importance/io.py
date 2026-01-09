@@ -319,21 +319,17 @@ def get_snapshot_base_dir(
         # Try to use target-first structure
         # Find base run directory
         # Only stop if we find a run directory (has targets/, globals/, or cache/)
-        # Don't stop at RESULTS/ - continue to find actual run directory
-        base_output_dir = output_dir
-        for _ in range(10):
-            if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
-                break
-            if not base_output_dir.parent.exists():
-                break
-            base_output_dir = base_output_dir.parent
+        # Don't stop at RESULTS/ - continue to find actual run directory using SST helper
+        from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+        base_output_dir = get_run_root(output_dir)
         
         if base_output_dir.exists() and (base_output_dir / "targets").exists():
             try:
                 from TRAINING.orchestration.utils.target_first_paths import (
                     ensure_scoped_artifact_dir, get_scoped_artifact_dir, ensure_target_structure
                 )
-                target_clean = target.replace('/', '_').replace('\\', '_')
+                from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+                target_clean = normalize_target_name(target)
                 
                 if ensure_exists:
                     # Writing: create directories
@@ -517,15 +513,10 @@ def update_fs_snapshot_index(
     
     # Find globals directory
     globals_dir = None
-    # Try to find run root with globals/
-    base_dir = output_dir
-    for _ in range(10):
-        if (base_dir / "globals").exists():
-            globals_dir = base_dir / "globals"
-            break
-        if not base_dir.parent.exists():
-            break
-        base_dir = base_dir.parent
+    # Try to find run root with globals/ using SST helper
+    from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+    base_dir = get_run_root(output_dir)
+    globals_dir = base_dir / "globals" if (base_dir / "globals").exists() else None
     
     if globals_dir is None:
         # Create globals in output_dir

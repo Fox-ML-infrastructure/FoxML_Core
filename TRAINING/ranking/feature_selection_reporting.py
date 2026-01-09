@@ -83,8 +83,9 @@ def save_feature_selection_rankings(
     if view == "SYMBOL_SPECIFIC" and symbol is None:
         raise ValueError("symbol required when view='SYMBOL_SPECIFIC'")
     
-    # Clean target name for filesystem
-    target_clean = target_column.replace('/', '_').replace('\\', '_')
+    # Clean target name for filesystem using SST helper
+    from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+    target_clean = normalize_target_name(target_column)
     
     # Phase A: Use OutputLayout if universe_sig provided (new canonical path)
     # Otherwise fall back to legacy path resolution with warning
@@ -106,16 +107,8 @@ def save_feature_selection_rankings(
     
     # Find run directory from output_dir
     if output_dir and output_dir.exists():
-        temp_dir = Path(output_dir)
-        for _ in range(10):  # Limit depth
-            # Only stop if we find a run directory (has targets/, globals/, or cache/)
-            # Don't stop at RESULTS/ - continue to find actual run directory
-            if (temp_dir / "targets").exists() or (temp_dir / "globals").exists() or (temp_dir / "cache").exists():
-                base_output_dir = temp_dir
-                break
-            if not temp_dir.parent.exists() or temp_dir.parent == temp_dir:
-                break
-            temp_dir = temp_dir.parent
+        from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+        base_output_dir = get_run_root(Path(output_dir))
     
     # CRITICAL: Validate base_output_dir is not root and is absolute
     # If we walked all the way to root, fall back to original output_dir and try again
@@ -124,14 +117,8 @@ def save_feature_selection_rankings(
         base_output_dir = Path(output_dir) if output_dir else None
         # Final attempt: Try to find run directory from output_dir
         if base_output_dir and base_output_dir.exists():
-            temp_dir = base_output_dir
-            for _ in range(10):
-                if (temp_dir / "targets").exists() or (temp_dir / "globals").exists() or (temp_dir / "cache").exists():
-                    base_output_dir = temp_dir
-                    break
-                if not temp_dir.parent.exists() or temp_dir.parent == temp_dir:
-                    break
-                temp_dir = temp_dir.parent
+            from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+            base_output_dir = get_run_root(base_output_dir)
     
     # Target-first structure: save to targets/<target>/decision/
     from TRAINING.orchestration.utils.target_first_paths import (
@@ -176,15 +163,9 @@ def save_feature_selection_rankings(
             if base_output_dir == Path('/') or not base_output_dir.is_absolute() or str(base_output_dir) == '/':
                 logger.warning(f"Invalid base_output_dir for CSV save: {base_output_dir}, using output_dir: {output_dir}")
                 base_output_dir = output_dir
-                # Try to find run directory from output_dir
-                temp_dir = output_dir
-                for _ in range(10):
-                    if (temp_dir / "targets").exists() or (temp_dir / "globals").exists() or (temp_dir / "cache").exists():
-                        base_output_dir = temp_dir
-                        break
-                    if not temp_dir.parent.exists() or temp_dir.parent == temp_dir:
-                        break
-                    temp_dir = temp_dir.parent
+                # Try to find run directory from output_dir using SST helper
+                from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+                base_output_dir = get_run_root(output_dir)
             
             if not base_output_dir.exists():
                 logger.warning(f"base_output_dir does not exist for CSV save: {base_output_dir}, using output_dir: {output_dir}")
@@ -449,7 +430,8 @@ def save_feature_importances_for_reproducibility(
     """
     import pandas as pd
     
-    target_clean = target_column.replace('/', '_').replace('\\', '_')
+    from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
+    target_clean = normalize_target_name(target_column)
     
     # PATCH 4: Require universe_sig for proper scoping - don't write unscoped artifacts
     if not universe_sig:
@@ -461,31 +443,18 @@ def save_feature_importances_for_reproducibility(
     
     use_output_layout = True  # Always use OutputLayout now that universe_sig is required
     
-    # Find base run directory for target-first structure
-    base_output_dir = output_dir
-    for _ in range(10):
-        # Only stop if we find a run directory (has targets/, globals/, or cache/)
-        # Don't stop at RESULTS/ - continue to find actual run directory
-        if (base_output_dir / "targets").exists() or (base_output_dir / "globals").exists() or (base_output_dir / "cache").exists():
-            break
-        if not base_output_dir.parent.exists():
-            break
-        base_output_dir = base_output_dir.parent
+    # Find base run directory for target-first structure using SST helper
+    from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+    base_output_dir = get_run_root(output_dir)
     
     # CRITICAL: Validate base_output_dir is not root and is absolute
     # If we walked all the way to root, fall back to original output_dir
     if base_output_dir == Path('/') or not base_output_dir.is_absolute() or str(base_output_dir) == '/':
         logger.warning(f"Path resolution failed for feature importances - base_output_dir resolved to root or invalid: {base_output_dir}. Using original output_dir: {output_dir}")
         base_output_dir = output_dir
-        # Try to find run directory from output_dir instead
-        temp_dir = output_dir
-        for _ in range(10):
-            if (temp_dir / "targets").exists() or (temp_dir / "globals").exists() or (temp_dir / "cache").exists():
-                base_output_dir = temp_dir
-                break
-            if not temp_dir.parent.exists() or temp_dir.parent == temp_dir:
-                break
-            temp_dir = temp_dir.parent
+        # Try to find run directory from output_dir instead using SST helper
+        from TRAINING.orchestration.utils.target_first_paths import run_root as get_run_root
+        base_output_dir = get_run_root(output_dir)
     
     # Set up importances directory
     try:
