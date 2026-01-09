@@ -1110,3 +1110,127 @@ def save_overrides_config(
         logger.debug(f"Failed to save overrides config: {e}")
         return None
 
+
+def save_all_configs(
+    output_dir: Path,
+    experiment_config_name: Optional[str] = None
+) -> Optional[Path]:
+    """
+    Copy all config files from CONFIG directory to globals/configs/ preserving structure.
+    
+    This creates a complete snapshot of all configuration files used in the run,
+    enabling easy run recreation without needing access to the original CONFIG folder.
+    
+    Args:
+        output_dir: Base run output directory
+        experiment_config_name: Optional experiment config name (if used)
+        
+    Returns:
+        Path to globals/configs/ directory, or None if failed
+    """
+    try:
+        # Find CONFIG directory (walk up from this file)
+        manifest_file = Path(__file__).resolve()
+        repo_root = manifest_file.parents[3]  # utils -> orchestration -> TRAINING -> repo root
+        config_dir = repo_root / "CONFIG"
+        
+        if not config_dir.exists():
+            logger.warning(f"CONFIG directory not found at {config_dir}, skipping config dump")
+            return None
+        
+        globals_dir = output_dir / "globals"
+        configs_dest = globals_dir / "configs"
+        configs_dest.mkdir(parents=True, exist_ok=True)
+        
+        # Collect all YAML files from CONFIG directory
+        config_files = []
+        for yaml_file in config_dir.rglob("*.yaml"):
+            # Skip archive directory
+            if "archive" in yaml_file.parts:
+                continue
+            
+            # Skip Python files and READMEs
+            if yaml_file.name.endswith((".py", ".md")):
+                continue
+            
+            config_files.append(yaml_file)
+        
+        if not config_files:
+            logger.warning(f"No config files found in {config_dir}")
+            return None
+        
+        # Copy files preserving directory structure
+        copied_count = 0
+        failed_count = 0
+        config_list = []
+        
+        for src_file in config_files:
+            try:
+                # Get relative path from CONFIG directory
+                rel_path = src_file.relative_to(config_dir)
+                dest_file = configs_dest / rel_path
+                
+                # Create parent directories
+                dest_file.parent.mkdir(parents=True, exist_ok=True)
+                
+                # Copy file
+                import shutil
+                shutil.copy2(src_file, dest_file)
+                copied_count += 1
+                config_list.append(str(rel_path))
+            except Exception as e:
+                logger.debug(f"Failed to copy {src_file}: {e}")
+                failed_count += 1
+        
+        # Create INDEX.md listing all configs
+        index_path = configs_dest / "INDEX.md"
+        try:
+            with open(index_path, 'w') as f:
+                f.write("# Configuration Files Index\n\n")
+                f.write(f"This directory contains a snapshot of all configuration files from `CONFIG/` used in this run.\n\n")
+                f.write(f"**Total configs:** {copied_count}\n")
+                if experiment_config_name:
+                    f.write(f"**Experiment config:** `experiments/{experiment_config_name}.yaml`\n")
+                f.write("\n## Config Files by Category\n\n")
+                
+                # Group by category
+                categories = {}
+                for config_path in sorted(config_list):
+                    parts = Path(config_path).parts
+                    if len(parts) > 1:
+                        category = parts[0]
+                    else:
+                        category = "root"
+                    
+                    if category not in categories:
+                        categories[category] = []
+                    categories[category].append(config_path)
+                
+                # Write by category
+                for category in sorted(categories.keys()):
+                    f.write(f"### {category.capitalize()}/\n\n")
+                    for config_path in sorted(categories[category]):
+                        f.write(f"- `{config_path}`\n")
+                    f.write("\n")
+                
+                f.write("\n## Usage\n\n")
+                f.write("To recreate this run, use the configs in this directory as reference.\n")
+                f.write("The original CONFIG directory structure is preserved here.\n")
+        except Exception as e:
+            logger.debug(f"Failed to create INDEX.md: {e}")
+        
+        if copied_count > 0:
+            logger.info(f"✅ Saved {copied_count} config files to {configs_dest}")
+            if failed_count > 0:
+                logger.warning(f"   ⚠️  Failed to copy {failed_count} config files")
+            return configs_dest
+        else:
+            logger.warning(f"No config files were copied")
+            return None
+            
+    except Exception as e:
+        logger.warning(f"Failed to save all configs: {e}")
+        import traceback
+        logger.debug(f"Config dump traceback: {traceback.format_exc()}")
+        return None
+

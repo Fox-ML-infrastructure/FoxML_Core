@@ -152,6 +152,76 @@ def _sanitize_for_json(obj: Any) -> Any:
         return obj
 
 
+def _write_atomic_json_with_lock(
+    file_path: Path,
+    data: Dict[str, Any],
+    lock_timeout: float = 30.0
+) -> None:
+    """
+    Write JSON file atomically with file locking to prevent race conditions.
+    
+    Uses fcntl.flock with LOCK_EX to ensure exclusive access during write.
+    This prevents concurrent writes from multiple processes/threads.
+    
+    Args:
+        file_path: Target file path
+        data: Data to write (will be sanitized automatically)
+        lock_timeout: Maximum time to wait for lock (seconds)
+    
+    Raises:
+        IOError: If write fails or lock cannot be acquired
+    """
+    import time
+    
+    # Sanitize data before writing (convert Timestamps to ISO strings)
+    sanitized_data = _sanitize_for_json(data)
+    
+    # Create lock file (same directory, .lock extension)
+    lock_file = file_path.with_suffix('.lock')
+    
+    # Ensure parent directory exists
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    start_time = time.time()
+    lock_acquired = False
+    
+    try:
+        # Try to acquire lock with timeout
+        with open(lock_file, 'w') as lock_f:
+            # Non-blocking attempt first
+            try:
+                fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                lock_acquired = True
+            except BlockingIOError:
+                # Lock is held, wait for it with timeout
+                elapsed = 0
+                while elapsed < lock_timeout:
+                    try:
+                        fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        lock_acquired = True
+                        break
+                    except BlockingIOError:
+                        time.sleep(0.1)  # Wait 100ms before retry
+                        elapsed = time.time() - start_time
+                
+                if not lock_acquired:
+                    raise IOError(f"Could not acquire lock for {file_path} within {lock_timeout}s")
+            
+            # Lock acquired - perform write
+            _write_atomic_json(file_path, sanitized_data)
+            
+            # Lock is automatically released when file is closed
+    except Exception as e:
+        if lock_acquired:
+            # Release lock on error (if we had it)
+            try:
+                with open(lock_file, 'w') as lock_f:
+                    fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
+            except Exception:
+                pass
+        raise IOError(f"Failed to write locked JSON to {file_path}: {e}") from e
+
+
 def _construct_comparison_group_key_from_dict(comparison_group: Dict[str, Any], stage: str = "TRAINING") -> Optional[str]:
     """
     Construct comparison_group_key from comparison_group dict.
@@ -2093,7 +2163,7 @@ class ReproducibilityTracker:
         if target_cohort_dir:
             try:
                 target_metadata_file = target_cohort_dir / "metadata.json"
-                _write_atomic_json(target_metadata_file, _sanitize_for_json(full_metadata))
+                _write_atomic_json_with_lock(target_metadata_file, full_metadata)
                 # Log at INFO level so it's visible
                 main_logger = _get_main_logger()
                 try:
@@ -2305,7 +2375,7 @@ class ReproducibilityTracker:
             # Fallback: write metrics.json using unified canonical schema (atomically)
             # Write directly to target-first structure (metrics_file is already target_cohort_dir / "metrics.json")
             try:
-                _write_atomic_json(metrics_file, _sanitize_for_json(metrics_data))
+                _write_atomic_json_with_lock(metrics_file, metrics_data)
                 # Also write metrics.parquet for consistency
                 try:
                     import pandas as pd
@@ -4362,7 +4432,7 @@ class ReproducibilityTracker:
                     # Write metadata.json if missing (to target-first structure)
                     target_metadata_file = target_cohort_dir / "metadata.json"
                     if not target_metadata_file.exists():
-                        _write_atomic_json(target_metadata_file, _sanitize_for_json(minimal_metadata))
+                        _write_atomic_json_with_lock(target_metadata_file, minimal_metadata)
                         logger.info(f"✅ Wrote metadata.json (fallback) to {target_cohort_dir.name}/")
                     
                     # Write metrics.json if missing (to target-first structure)

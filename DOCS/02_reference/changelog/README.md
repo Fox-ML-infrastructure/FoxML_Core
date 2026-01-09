@@ -6,11 +6,20 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### January
 
+- **2026-01-08 (Comprehensive Config Dump and Hardware Docs)** — Added automatic copying of all CONFIG files to `globals/configs/` when runs are created, preserving directory structure. Enables easy run recreation without needing original CONFIG folder access. Updated README with detailed CPU/GPU recommendations for optimal performance and stability. All changes maintain backward compatibility.
+  → [View](2026-01-08-comprehensive-config-dump-and-hardware-docs.md)
+
+- **2026-01-08 (File Locking for JSON Writes)** — Added file locking around all JSON writes (metadata.json, snapshot.json, metrics.json, diff files) to prevent race conditions when multiple processes write to the same files concurrently. Created `_write_atomic_json_with_lock()` helper that sanitizes data (converts Timestamps to ISO strings) and acquires exclusive file lock before writing. Applied across all pipeline stages (TARGET_RANKING, FEATURE_SELECTION, TRAINING). Prevents data corruption, Timestamp serialization errors, and race conditions. Uses same locking pattern as existing index files. All changes maintain backward compatibility.
+  → [View](2026-01-08-file-locking-for-json-writes.md)
+
 - **2026-01-08 (Metrics SHA256 Structure Fix)** — Fixed misleading "metrics_sha256 cannot be computed" error logs. Root cause: metrics were spread as top-level keys in `run_data` instead of nested under `'metrics'` key. Fixed by adding `"metrics": metrics` to `run_data` in 3 locations, with fallback logic to reconstruct from top-level keys for backward compatibility. Metrics digest now computed correctly without error logs. All changes maintain backward compatibility.
   → [View](2026-01-08-metrics-sha256-structure-fix.md)
 
 - **2026-01-08 (Task-Aware Routing Fix)** — Fixed critical bug where routing used fixed [0,1] thresholds on `auc` field, breaking regression targets (R² can be negative). Implemented unified `skill01` score that normalizes both regression IC and classification AUC-excess to [0,1] range. Fixed IC extraction bug (now extracts IC from model_metrics instead of using R²). Enhanced suspicious detection to be task-aware (uses tstat for stability check). Added routing and training plan hashes to manifest for fast change detection. All changes are backward compatible.
   → [View](2026-01-08-task-aware-routing-fix.md)
+
+- **2026-01-08 (Comprehensive Config Dump and Documentation Updates)** — Added automatic copying of all CONFIG files to `globals/configs/` when runs are created, preserving directory structure. Enables easy run recreation without needing original CONFIG folder access. Updated README and tutorials to reflect 3-stage pipeline capabilities, dual-view support, and hardware requirements. Added detailed CPU/GPU recommendations for optimal performance and stability.
+  → [View](2026-01-08-comprehensive-config-dump-and-documentation-updates.md)
 
 - **2026-01-08 (Dual Ranking and Filtering Mismatch Fix)** — Fixed critical filtering mismatch between TARGET_RANKING and FEATURE_SELECTION that caused false positives. Removed "unknown but safe" features from ranking mode (now uses safe_family + registry only). Added dual ranking: screen evaluation (safe+registry) and strict evaluation (registry-only) with mismatch telemetry. Updated promotion logic to filter by `strict_viability_flag`. Prevents targets from ranking high using features unavailable in training. All new fields are optional and backward compatible. Improves pipeline trustworthiness without breaking existing functionality.
   → [View](2026-01-08-dual-ranking-filtering-mismatch-fix.md)

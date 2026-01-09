@@ -2096,6 +2096,19 @@ class IntelligentTrainer:
                 except Exception as e:
                     logger.debug(f"Could not save overrides config: {e}")
             
+            # Save all config files to globals/configs/ for run recreation
+            try:
+                from TRAINING.orchestration.utils.manifest import save_all_configs
+                experiment_config_name = None
+                if self.experiment_config and hasattr(self.experiment_config, 'name'):
+                    experiment_config_name = self.experiment_config.name
+                save_all_configs(
+                    output_dir=self.output_dir,
+                    experiment_config_name=experiment_config_name
+                )
+            except Exception as e:
+                logger.debug(f"Could not save all configs: {e}")
+            
             # Update manifest with config_fingerprint
             if resolved_config and 'config_fingerprint' in resolved_config:
                 try:

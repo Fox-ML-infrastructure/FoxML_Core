@@ -17,207 +17,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Recent Highlights (Last 7 Days)
 
 #### 2026-01-08
-**Metrics SHA256 Structure Fix** - Fixed misleading "metrics_sha256 cannot be computed" error logs. Root cause: metrics were spread as top-level keys in `run_data` instead of nested under `'metrics'` key. Fixed by adding `"metrics": metrics` to `run_data` in 3 locations, with fallback logic to reconstruct from top-level keys for backward compatibility. Metrics digest now computed correctly without error logs.
+**Comprehensive Config Dump** - Added automatic copying of all CONFIG files to `globals/configs/` when runs are created, preserving directory structure. Enables easy run recreation without needing original CONFIG folder access.
 
-**Task-Aware Routing Fix** - Fixed critical bug where routing used fixed [0,1] thresholds on `auc` field, breaking regression targets (R² can be negative). Implemented unified `skill01` score that normalizes both regression IC and classification AUC-excess to [0,1] range. Fixed IC extraction bug (now extracts IC from model_metrics instead of using R²). Enhanced suspicious detection to be task-aware (uses tstat for stability check). Added routing and training plan hashes to manifest for fast change detection. All changes are backward compatible.
+**Documentation Enhancements** - Updated README and tutorials to reflect 3-stage pipeline capabilities, dual-view support, and hardware requirements. Added detailed CPU/GPU recommendations for optimal performance and stability.
 
-**Dual Ranking and Filtering Mismatch Fix** - Fixed critical filtering mismatch between TARGET_RANKING and FEATURE_SELECTION that caused false positives. Removed "unknown but safe" features from ranking mode (now uses safe_family + registry only). Added dual ranking: screen evaluation (safe+registry) and strict evaluation (registry-only) with mismatch telemetry. Updated promotion logic to filter by `strict_viability_flag`. Prevents targets from ranking high using features unavailable in training. All new fields are optional and backward compatible.
+**File Locking for JSON Writes** - Added file locking around all JSON writes to prevent race conditions. Applied across all pipeline stages.
 
-**Cross-Stage Issue Fixes** - Fixed similar issues across FEATURE_SELECTION and TRAINING stages for consistency and type safety.
+**Metrics SHA256 Structure Fix** - Fixed metrics digest computation by ensuring metrics are nested under `'metrics'` key in `run_data`.
 
-**Cross-Stage Consistency Fixes**
-- **UPDATED**: Path import cleanup - Removed redundant `Path` imports in try blocks, added module-level imports
-- **FIXED**: Path import root cause - Fixed "name 'Path' is not defined" error in `schema.py` by adding module-level import (affects TARGET_RANKING and FEATURE_SELECTION stages)
-- **UPDATED**: Type casting - Added explicit `float()`/`int()` casts for all numeric config values used in comparisons
-- **UPDATED**: Universe signature extraction - FEATURE_SELECTION now prefers `run_identity.dataset_signature` over batch subsets
-- **AUDITED**: Config loading paths - Verified all `get_cfg()` calls use correct canonical paths
-- **BENEFIT**: Consistent patterns across all stages, preventing type errors and incorrect scoping
+**Task-Aware Routing Fix** - Fixed routing to use unified `skill01` score normalizing both regression IC and classification AUC-excess to [0,1] range.
 
-**Manifest and Determinism Fixes** - Fixed manifest.json schema consistency and deterministic fingerprint computation.
+**Dual Ranking and Filtering Mismatch Fix** - Fixed filtering mismatch between TARGET_RANKING and FEATURE_SELECTION, added dual ranking with mismatch telemetry.
 
-**Manifest.json Schema Fixes**
-- **UPDATED**: `create_manifest()` - Always includes `run_metadata` and `target_index` fields (empty dicts if not populated) for consistent schema
-- **NEW**: `update_manifest_with_run_hash()` - Updates manifest after run_hash is computed, ensuring completeness at end of run
-- **BENEFIT**: Manifest.json now has consistent schema with all required fields present
+**Cross-Stage Consistency Fixes** - Fixed Path imports, type casting, and config loading across all stages.
 
-**Deterministic Fingerprint Fix**
-- **FIXED**: `compute_deterministic_config_fingerprint()` - Now excludes `git.dirty` field (working directory state)
-  - Excludes: `run.run_id`, `run.timestamp`, `git.dirty`
-  - Keeps: `run.seed_global`, `run.mode`, `git.commit` (code version), all other deterministic fields
-- **BENEFIT**: Deterministic fingerprints are now truly stable across runs with identical settings
+**Manifest and Determinism Fixes** - Fixed manifest schema consistency and deterministic fingerprint computation.
 
-**Deterministic Run Hash Implementation** - Run hash now excludes run_id/timestamp for true determinism.
+**Config Cleanup** - Removed all symlinks from CONFIG directory, code now uses canonical paths directly.
 
-**Deterministic Config Fingerprint**
-- **NEW**: `deterministic_config_fingerprint` - SHA256 hash of resolved config excluding `run_id` and `timestamp`
-  - Enables comparison between runs with identical settings (same hash = same config)
-  - Stored alongside full `config_fingerprint` (includes run_id/timestamp for metadata)
-- **UPDATED**: `create_resolved_config()` - Now computes both fingerprints and saves to `config.resolved.json`
-- **UPDATED**: All snapshot types - Added `deterministic_config_fingerprint` field:
-  - `NormalizedSnapshot` (diff telemetry)
-  - `TrainingSnapshot`
-  - `FeatureSelectionSnapshot`
-- **UPDATED**: `compute_full_run_hash()` - Now uses `deterministic_config_fingerprint` instead of `config_fingerprint`
-  - Ensures run hash is deterministic across runs with identical settings
-  - Full `config_fingerprint` still available for metadata/tracking
-- **UPDATED**: `_compute_config_fingerprint_from_context()` - Extracts both fingerprints from resolved_metadata or config.resolved.json
-- **BENEFIT**: Run hash is now truly deterministic - same settings/data produce same hash, enabling quick comparison
+**Metrics Restructuring** - Grouped metrics structure for cleaner, non-redundant output with task-gating.
 
-**CONFIG Folder Cleanup and Symlink Removal** - Removed all symlinks, code now uses canonical paths directly.
+**Full Run Hash** - Deterministic run identifier with change detection and aggregation.
 
-**CONFIG Structure Simplification**
-- **REMOVED**: All symlinks from CONFIG directory (23 total)
-  - Root-level symlinks: `excluded_features.yaml`, `feature_registry.yaml`, `feature_groups.yaml`, `feature_target_schema.yaml`, `logging_config.yaml`, `target_configs.yaml`
-  - `training_config/` directory (17 symlinks) - entire directory removed
-  - Legacy directory symlinks: `feature_selection/`, `target_ranking/`
-- **UPDATED**: Config loader now uses canonical paths only (no fallback logic)
-  - `get_config_path()` - Returns canonical paths directly
-  - `load_training_config()` - Loads from `pipeline/training/` or `pipeline/` only
-  - `list_available_configs()` - Lists from canonical locations only
-- **UPDATED**: All code references updated to canonical paths
-  - `intelligent_trainer.py` - Updated help text and fallback paths
-  - `config_builder.py` - Removed symlink fallback logic
-- **VERIFIED**: Run hash and config tracking unchanged - fingerprints based on config content, not paths
-- **DOCUMENTATION**: Updated `CONFIG/README.md` and user-facing docs to reflect canonical paths
-
-**Metrics JSON Cleanup and Restructuring** - Smaller, non-redundant, semantically unambiguous metrics output.
-
-**Metrics Structure Overhaul**
-- **NEW**: Grouped metrics structure - All metrics now use logical grouping:
-  - `schema`: Version info (`metrics_schema_version`, `scoring_schema_version`)
-  - `scope`: View and task family
-  - `primary_metric`: Single source of truth (name, mean, std, se, skill_mean, skill_se, baseline)
-  - `coverage`: Counts as ints (n_cs_valid, n_cs_total, n_effective)
-  - `features`: Feature counts as ints (pre, post_prune, safe)
-  - `y_stats` or `label_stats`: Task-specific target stats
-  - `models`: Model scores (n as int, scores dict)
-  - `score`: Composite score and components
-- **FIX**: Removed duplicate fields - No more `auc`, `mean_r2`, `primary_metric_mean` aliases
-  - Single canonical path for each metric value
-  - Backward compatibility maintained via MetricsWriter handling nested structures
-- **FIX**: Count fields as ints - All count-like fields (`n_models`, `n_cs_valid`, `n_features_*`, etc.) are now integers, not floats
-- **FIX**: Task-gating - Hard validation prevents wrong metrics from appearing:
-  - Regression: No `auc`, `pos_rate`, `class_balance` (unless multiclass)
-  - Classification: No `r2`, `spearman_ic`, `y_stats`
-- **NEW**: Clean metrics builders for all stages:
-  - `build_clean_metrics_dict()` for TARGET_RANKING
-  - `build_clean_feature_selection_metrics()` for FEATURE_SELECTION
-  - `build_clean_training_metrics()` for TRAINING
-- **UPDATE**: All stages now output clean, grouped metrics:
-  - TARGET_RANKING: Uses `build_clean_metrics_dict()` in `model_evaluation.py`
-  - FEATURE_SELECTION: Uses `build_clean_feature_selection_metrics()` in `feature_selector.py` and `cross_sectional_feature_ranker.py`
-  - TRAINING: Uses `build_clean_training_metrics()` in `TrainingSnapshot.from_training_result()` and `training.py`
-
-**Delta Computation Updates** - Support for grouped metrics structure.
-
-- **NEW**: `_flatten_metrics_dict()` helper - Recursively flattens nested metrics with dot-notation keys
-  - Handles both old flat structure and new grouped structure
-  - Preserves backward compatibility
-- **UPDATE**: `_compute_metric_deltas()` - Now handles nested paths:
-  - Uses flattened metrics before comparison
-  - Supports paths like `primary_metric.mean`, `models.n`, `score.composite`
-  - Backward compatibility mapping for old flat keys (`auc` → `primary_metric.mean`, etc.)
-- **UPDATE**: Z-score computation - Uses new paths:
-  - `primary_metric.std` or `primary_metric.skill_se` instead of `std_score`
-  - `models.n` instead of `n_models`
-- **UPDATE**: Score metrics set - Includes both old flat keys and new nested paths
-
-**Full Run Hash with Change Detection** - Deterministic run identifier with change summary.
-
-- **NEW**: `compute_full_run_hash()` - Aggregates all global snapshots and computes deterministic SHA256 hash
-  - Loads all snapshot indices (TARGET_RANKING, FEATURE_SELECTION, TRAINING)
-  - Extracts deterministic fields only (fingerprints, signatures, digests, schema versions)
-  - Excludes non-deterministic fields (run_id, timestamp, snapshot_seq)
-  - Returns 16-character hex digest
-- **NEW**: `compute_run_hash_with_changes()` - Includes change detection and aggregation:
-  - Computes run hash (same as above)
-  - If previous run exists, computes diffs for all snapshots
-  - Aggregates change information:
-    - `changed_snapshots`: List of snapshots that changed (with stage, target, view, symbol, severity)
-    - `changed_keys_summary`: Aggregated list of all changed keys across all snapshots
-    - `severity_summary`: Highest severity level across all changes
-    - `metric_deltas_summary`: Summary of metric changes (counts by severity: noise, minor, major, none)
-    - `excluded_factors_summary`: Summary of excluded factors that changed
-- **NEW**: `save_run_hash()` - Saves run hash with changes to `globals/run_hash.json`
-  - Includes run_id, prev_run_id, snapshot_count, changes summary
-  - Automatically computed after pipeline completion
-- **NEW**: `get_run_hash_with_changes()` method in `DiffTelemetry` class
-- **INTEGRATION**: Run hash computation integrated into `intelligent_trainer.py`:
-  - Automatically computed after full pipeline completes
-  - Logs run hash and change summary
-  - Finds previous run ID for change detection
-- **INTEGRATION**: Run hash included in `manifest.json`:
-  - `run_hash`: 16-char hex digest
-  - `run_id`: Current run identifier
-  - `run_changes`: Change summary (severity, changed_snapshots_count)
-
-**Phase 3.1 Composite Score Fixes** - Family-correct, comparable, deterministic composite scoring.
-
-**Phase 3.1: SE-based stability and skill-gating**
-- **FIX**: Classification centering - Use `auc_excess_mean` (AUC - 0.5) for `primary_metric_mean` instead of raw AUC
-  - Regression: `primary_metric_mean = spearman_ic` (already centered at 0)
-  - Classification: `primary_metric_mean = auc_excess_mean` (centered at 0)
-- **FIX**: SE-based stability - Use `1 - clamp(se / se_ref, 0, 1)` instead of std-based
-  - Enables cross-family comparability (IC vs AUC units no longer matter)
-  - Per-task `se_ref` overrides in `metrics_schema.yaml`
-- **FIX**: Skill-gated composite - Use `composite = skill * quality` (multiplicative, not additive)
-  - Prevents no-skill targets from ranking high via coverage/stability alone
-  - `quality = w_cov * coverage + w_stab * stability`
-- **NEW**: `primary_se` field - Standard error (std / sqrt(n)) for SE-based stability
-- **NEW**: `scoring_signature` - SHA256 hash of scoring params for determinism
-- **NEW**: `validate_slice()` function - Foundation for per-slice invalid tracking (Phase 3.1.1)
-- **NEW**: Guards in t-stat computation - `n_valid < 2` → `t = 0.0`, `se_floor`, `tcap` clamping
-- **UPDATE**: `scoring_schema_version` bumped to `1.1` in all snapshot schemas
-- **UPDATE**: `CONFIG/ranking/metrics_schema.yaml` scoring section with Phase 3.1 params
-- **FIX**: Phase 3.1 metrics output - Canonical metric names now use centered values (`primary_metric_mean` instead of raw `auc`)
-  - All Phase 3.1 fields (`primary_se`, `scoring_signature`, `auc_excess_mean`, etc.) now appear in `metrics.json`, `metrics.parquet`, and `snapshot.json`
-  - Enables direct comparison of binary classification and regression targets via normalized composite scores
-- **FIX**: Phase 3.1 composite calculation error logging - Added explicit error-level logging with traceback
-  - Changed from WARNING to ERROR level so failures are definitely visible
-  - Includes full traceback to diagnose why Phase 3.1 composite calculation falls back to legacy
-  - Added debug logging when Phase 3.1 succeeds to confirm scoring_signature is computed
-- **NEW**: Task-aware field filtering - Metrics output now excludes task-irrelevant fields
-  - Regression targets: Excludes `auc_mean_raw` and `auc_excess_mean` (classification-only)
-  - Classification targets: Includes all relevant fields
-  - Cleaner, more focused metrics output per task type
-- **NEW**: Determinism tracking across all pipeline stages
-  - **TARGET_RANKING**: `scoring_signature` - SHA256 hash of composite scoring parameters
-  - **FEATURE_SELECTION**: `selection_signature` - SHA256 hash of selection parameters (mode, params, aggregation config)
-  - **TRAINING**: `hyperparameters_signature` - Already exists, hashes model hyperparameters
-  - Enables end-to-end determinism verification: TR → FS → Training
-  - Reuses existing fingerprint patterns for consistency
+**Phase 3.1 Composite Score Fixes** - SE-based stability and skill-gating for family-correct, comparable scoring.
 
 **Snapshot Contract Unification** - P0/P1 correctness fixes for TARGET_RANKING and FEATURE_SELECTION.
 
-**P0: TARGET_RANKING - Explicit metrics and invalid slice tracking**
-- **NEW**: `primary_metric_mean`, `primary_metric_std` fields in `TargetPredictabilityScore`
-  - Explicit authoritative values (deprecates overloaded `auc` field)
-- **NEW**: `primary_metric_tstat` - t-statistic for universal skill normalization
-  - `tstat = mean * sqrt(n_cs_valid) / std` - signal above null baseline
-- **NEW**: `n_cs_valid`, `n_cs_total`, `invalid_reason_counts` for invalid slice tracking
-  - Tracks why model evaluations were excluded from aggregation
-- **NEW**: `auc_mean_raw`, `auc_excess_mean` for classification targets
-  - `auc_excess_mean = auc - 0.5` - centered around random classifier baseline
-- **NEW**: `metrics_schema_version`, `scoring_schema_version` in all snapshot schemas
-  - Enables schema migration and backward compatibility tracking
-
-**P0: FEATURE_SELECTION - Selection mode clarification**
-- **NEW**: `selection_mode` field in `FeatureSelectionSnapshot`
-  - Values: `"rank_only"` | `"top_k"` | `"threshold"` | `"importance_cutoff"`
-  - Auto-inferred from `n_candidates` vs `n_selected` if not explicit
-- **NEW**: `n_candidates`, `n_selected`, `selection_params` fields
-  - Makes "did selection actually happen?" unambiguous
-- Updated `from_importance_snapshot()` and `create_fs_snapshot_from_importance()` APIs
-
-**P1: T-Stat Based Composite Scoring**
-- **NEW**: `calculate_composite_score_tstat()` in `composite_score.py`
-  - Bounded [0,1] composite score using t-stat skill normalization
-  - Components: `skill_score_01`, `coverage`, `stability` (all bounded [0,1])
-  - Sigmoid squash: `skill = sigmoid(tstat / k)` with configurable k
-- **NEW**: `scoring` section in `CONFIG/ranking/metrics_schema.yaml`
-  - Versioned parameters: `skill_squash_k`, `std_ref`, component weights
-  - Per-task `std_ref` overrides
-  - `scoring_signature` hashable for reproducibility
+> **For detailed technical changes:** See [Changelog Index](DOCS/02_reference/changelog/README.md) for per-day detailed changelogs with file paths, config keys, and implementation notes.
 
 #### 2026-01-07
 **Expanded Model Families for TARGET_RANKING/FEATURE_SELECTION** - Full task-type coverage.

@@ -89,6 +89,20 @@ FoxML Core is designed to scale from laptop experiments to production-scale depl
 **Universe Batching:**
 The pipeline supports batching large universes across multiple runs. While batching works, **running with as few batches as possible is ideal for best results** - it enables better cross-sectional analysis and more comprehensive feature selection across the full universe.
 
+**CPU Recommendations:**
+- **Stable clocks**: Disable turbo boost/overclocking features for stability and consistency
+- **Undervolting**: Slight undervolting is recommended for stability (reduces thermal throttling and power fluctuations)
+- **Newer CPUs**: Generally perform better due to improved instruction sets and efficiency
+- **Core count**: More cores are beneficial, but some operations are single-threaded, so core count only helps with parallel aspects of the pipeline
+- **Base clock speed**: Faster base clocks improve performance across all operations
+- **Best practice**: Disable turbo boost features and use stable, consistent clock speeds for reproducible results
+
+**GPU Considerations:**
+- **VRAM dependent**: GPU performance is primarily limited by available VRAM rather than compute cores
+- **Non-determinism**: GPU operations introduce slight non-determinism (generally within acceptable tolerances) due to parallel floating-point arithmetic where operation ordering is not guaranteed
+- **Strict mode**: For bitwise deterministic runs, GPU is automatically disabled for tree models (LightGBM, XGBoost, CatBoost) in strict mode
+- **Best practice**: More VRAM and newer GPU architectures generally provide better performance when GPU acceleration is enabled
+
 ---
 
 ## Domain Focus

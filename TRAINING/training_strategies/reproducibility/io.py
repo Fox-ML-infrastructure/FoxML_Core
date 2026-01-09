@@ -193,6 +193,73 @@ def _write_atomic_json(file_path: Path, data: Dict[str, Any]) -> None:
         raise IOError(f"Failed to write atomic JSON to {file_path}: {e}") from e
 
 
+def _write_atomic_json_with_lock(
+    file_path: Path,
+    data: Dict[str, Any],
+    lock_timeout: float = 30.0
+) -> None:
+    """
+    Write JSON file atomically with file locking to prevent race conditions.
+    
+    Uses fcntl.flock with LOCK_EX to ensure exclusive access during write.
+    This prevents concurrent writes from multiple processes/threads.
+    
+    Args:
+        file_path: Target file path
+        data: Data to write (will use default=str for serialization)
+        lock_timeout: Maximum time to wait for lock (seconds)
+    
+    Raises:
+        IOError: If write fails or lock cannot be acquired
+    """
+    import time
+    
+    # Create lock file (same directory, .lock extension)
+    lock_file = file_path.with_suffix('.lock')
+    
+    # Ensure parent directory exists
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    start_time = time.time()
+    lock_acquired = False
+    
+    try:
+        # Try to acquire lock with timeout
+        with open(lock_file, 'w') as lock_f:
+            # Non-blocking attempt first
+            try:
+                fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                lock_acquired = True
+            except BlockingIOError:
+                # Lock is held, wait for it with timeout
+                elapsed = 0
+                while elapsed < lock_timeout:
+                    try:
+                        fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        lock_acquired = True
+                        break
+                    except BlockingIOError:
+                        time.sleep(0.1)  # Wait 100ms before retry
+                        elapsed = time.time() - start_time
+                
+                if not lock_acquired:
+                    raise IOError(f"Could not acquire lock for {file_path} within {lock_timeout}s")
+            
+            # Lock acquired - perform write
+            _write_atomic_json(file_path, data)
+            
+            # Lock is automatically released when file is closed
+    except Exception as e:
+        if lock_acquired:
+            # Release lock on error (if we had it)
+            try:
+                with open(lock_file, 'w') as lock_f:
+                    fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
+            except Exception:
+                pass
+        raise IOError(f"Failed to write locked JSON to {file_path}: {e}") from e
+
+
 def save_training_snapshot(
     snapshot: TrainingSnapshot,
     output_dir: Path,
@@ -216,8 +283,8 @@ def save_training_snapshot(
         output_path = output_dir / filename
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Use atomic write for safety
-        _write_atomic_json(output_path, snapshot.to_dict())
+        # Use atomic write with locking for safety (prevents race conditions)
+        _write_atomic_json_with_lock(output_path, snapshot.to_dict())
         
         logger.debug(f"Saved training snapshot: {output_path}")
         return output_path
