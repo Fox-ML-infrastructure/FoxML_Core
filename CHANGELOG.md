@@ -4,6 +4,25 @@ All notable changes to FoxML Core will be documented in this file.
 
 ## 2026-01-08
 
+### FEATURE_SELECTION Cohort Consolidation
+- **Consolidated Duplicate Cohort Directories**: Fixed duplicate cohort directories in FEATURE_SELECTION stage - cross-sectional panel now writes `metrics_cs_panel.json` to the same cohort directory as main feature selection (`metrics.json`), eliminating duplicate directories and making output structure cleaner
+- **Cohort ID Passing**: Main feature selection now passes `cohort_id` to cross-sectional panel computation to ensure both use the same cohort directory
+- **Bug Fixes**: Fixed null pointer errors when `cohort_dir` or `audit_result` are `None` - added proper null checks before accessing attributes
+- **Backward Compatibility**: If `cohort_id` is not provided, CS panel falls back to creating its own cohort (legacy behavior)
+- See [detailed changelog](DOCS/02_reference/changelog/2026-01-08-feature-selection-reproducibility-fixes.md) for full details
+
+### FEATURE_SELECTION Reproducibility Fixes
+- **CatBoost Missing from Results:** Fixed CatBoost disappearing from results - removed `importance.sum() > 0` filter that excluded failed models, handle empty dicts by creating zero importance Series, ensure failed models appear in aggregation with zero consensus score
+- **Training Snapshot Validation:** Added validation that snapshot files actually exist after creation, improved error logging with full traceback at warning level
+- **Duplicate Cohort Directories:** Fixed inconsistent `cs_config` structure causing different `config_hash` values - normalize to always include all keys (even if None) for consistent hashing
+- **Missing universe_sig:** Fixed duplicate assignment overwriting `universe_sig` in metadata
+- **Missing snapshot/diff files:** Added validation after `finalize_run()` to verify required files are created
+- **Duplicate universe scopes:** Removed hardcoded `universe_sig="ALL"` default, use SST universe signature consistently, added fallback to extract from `run_identity.dataset_signature`
+- **Missing per-model snapshots:** Improved error logging from debug to warning level for per-model snapshot failures
+- **Missing deterministic_config_fingerprint:** Fixed path resolution to walk up directory tree to find run root
+- **Documentation:** Created comprehensive guide explaining which snapshots exist (`multi_model_aggregated` = source of truth, `cross_sectional_panel` = optional stability analysis) and which one to use
+- See [detailed changelog](DOCS/02_reference/changelog/2026-01-08-feature-selection-reproducibility-fixes.md) for full details
+
 ### File Overwrite and Plan Creation Fixes
 - **run_context.json:** Fixed stage history loss - now preserves `current_stage` and `stage_history` when `save_run_context()` is called after `save_stage_transition()`
 - **run_hash.json:** Fixed creation issues - improved error logging, fixed previous run lookup to search parent directories, added validation for missing snapshot indices

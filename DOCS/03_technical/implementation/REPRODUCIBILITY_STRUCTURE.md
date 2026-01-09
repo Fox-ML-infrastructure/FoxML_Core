@@ -49,8 +49,12 @@ All artifacts are organized under `targets/<target>/`, with global summaries in 
         │   │   └── model_agreement_matrix.csv
         │   ├── feature_importance_snapshots/  # Stability tracking snapshots
         │   │   └── {target}/
-        │   │       └── {method}/
-        │   │           └── {run_id}.json
+        │   │       ├── multi_model_aggregated/  # ✅ Source of truth (always created)
+        │   │       │   └── fs_snapshot.json
+        │   │       ├── cross_sectional_panel/   # Optional CS stability (if enabled)
+        │   │       │   └── fs_snapshot.json
+        │   │       └── {model_family}/          # Per-model snapshots (lightgbm, xgboost, etc.)
+        │   │           └── fs_snapshot.json
         │   ├── feature_exclusions/  # Feature exclusion tracking
         │   │   └── fwd_ret_{horizon}_exclusions.yaml
         │   ├── featureset_artifacts/ # Featureset artifacts
@@ -97,7 +101,12 @@ Each target has a self-contained directory structure:
 
 ### Reproducibility (`targets/<target>/reproducibility/`)
 - **Purpose**: Full audit trail for reproducibility and debugging
+- **Feature importance snapshots**: See [Feature Selection Snapshots](FEATURE_SELECTION_SNAPSHOTS.md) for which snapshot to use
+  - `multi_model_aggregated/`: ✅ Source of truth for feature selection results (always created)
+  - `cross_sectional_panel/`: Optional cross-sectional stability analysis (only if enabled)
+  - `{model_family}/`: Per-model importance snapshots (lightgbm, xgboost, etc.)
 - **Cohort directories**: `{view}/cohort={cohort_id}/` - Contains:
+  - **FEATURE_SELECTION stage**: Both `metrics.json` (main feature selection) and `metrics_cs_panel.json` (cross-sectional panel, if enabled) are stored in the same cohort directory for consolidation
   - `metadata.json` - Complete metadata with all reproducibility factors
   - **`metrics.parquet`** - **CANONICAL: Single Source of Truth (SST)** for metrics
   - **`metrics.json`** - Debug export (derived from parquet, human-readable)

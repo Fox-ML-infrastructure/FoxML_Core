@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### January
 
+- **2026-01-08 (FEATURE_SELECTION Reproducibility Fixes)** — Fixed critical reproducibility issues in FEATURE_SELECTION stage: CatBoost missing from results (removed filter excluding failed models, handle empty dicts), training snapshot validation (verify files exist after creation), duplicate cohort directories (normalize cs_config structure for consistent hashing, consolidated CS panel metrics into same cohort directory), missing universe_sig in metadata (fixed duplicate assignment), missing snapshot/diff files (added validation after finalize_run), duplicate universe scopes (removed hardcoded "ALL" default, added fallback from run_identity), missing per-model snapshots (improved error logging), missing deterministic_config_fingerprint (fixed path resolution). Created comprehensive documentation explaining which snapshots exist and which one to use (`multi_model_aggregated` = source of truth, `cross_sectional_panel` = optional stability). Fixed null pointer bugs in cohort consolidation (proper null checks for `cohort_dir` and `audit_result`). All fixes maintain backward compatibility.
+  → [View](2026-01-08-feature-selection-reproducibility-fixes.md)
+
 - **2026-01-08 (File Overwrite and Plan Creation Fixes)** — Fixed critical bugs causing data loss in `globals/` directory files and missing routing/training plan creation. Fixed `run_context.json` stage history loss, `run_hash.json` creation issues (previous run lookup, error logging), and routing/training plan creation (error visibility, save verification, manifest update). All fixes maintain backward compatibility.
   → [View](2026-01-08-file-overwrite-and-plan-creation-fixes.md)
 

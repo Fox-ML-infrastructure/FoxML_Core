@@ -517,18 +517,34 @@ class FeatureSelectionSnapshot:
                 config_fp = inputs.get("config_fingerprint")
         
         # If deterministic fingerprint not in inputs, try to load from config.resolved.json
+        # FIX: Walk up to find run root (output_dir may be target_repro_dir, not run root)
         if not deterministic_config_fp and output_dir:
             try:
                 import json
-                globals_dir = Path(output_dir) / "globals"
-                resolved_config_path = globals_dir / "config.resolved.json"
-                if resolved_config_path.exists():
-                    with open(resolved_config_path, 'r') as f:
-                        resolved_config = json.load(f)
-                    deterministic_config_fp = resolved_config.get('deterministic_config_fingerprint')
-                    if not config_fp:
-                        config_fp = resolved_config.get('config_fingerprint')
-            except Exception:
+                # Walk up to find run root with globals/ directory
+                base_dir = Path(output_dir)
+                globals_dir = None
+                for _ in range(10):
+                    if (base_dir / "globals").exists():
+                        globals_dir = base_dir / "globals"
+                        break
+                    if not base_dir.parent.exists():
+                        break
+                    base_dir = base_dir.parent
+                
+                if globals_dir:
+                    resolved_config_path = globals_dir / "config.resolved.json"
+                    if resolved_config_path.exists():
+                        with open(resolved_config_path, 'r') as f:
+                            resolved_config = json.load(f)
+                        deterministic_config_fp = resolved_config.get('deterministic_config_fingerprint')
+                        if not config_fp:
+                            config_fp = resolved_config.get('config_fingerprint')
+            except Exception as e:
+                # Log at debug level - this is a fallback path
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.debug(f"Failed to load deterministic_config_fingerprint from config.resolved.json: {e}")
                 pass  # Fallback to hparams_signature only
         
         # P0 correctness: Determine selection mode if not explicitly provided
@@ -608,6 +624,7 @@ class FeatureSelectionSnapshot:
             target_fingerprint=importance_snapshot.target_signature,  # Target definition hash
             metrics_sha256=metrics_sha256,  # Hash of outputs.metrics
             predictions_sha256=importance_snapshot.prediction_hash,  # Prediction determinism hash
+            artifacts_manifest_sha256=None,  # Feature selection typically doesn't produce model artifacts (no saved models)
             inputs=inputs or {},
             process=process or {},
             outputs=final_outputs,

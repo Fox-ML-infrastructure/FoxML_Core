@@ -259,6 +259,7 @@ def compute_cross_sectional_importance(
     output_dir: Optional[Path] = None,  # Optional output directory for reproducibility tracking
     universe_sig: Optional[str] = None,  # FIX: Thread universe_sig for proper scope tracking
     run_identity: Optional[Any] = None,  # SST RunIdentity for authoritative signatures
+    cohort_id: Optional[str] = None,  # NEW: Use existing cohort_id to consolidate metrics into same cohort
 ) -> pd.Series:
     """
     Compute cross-sectional feature importance using panel models.
@@ -404,75 +405,10 @@ def compute_cross_sectional_importance(
     logger.info(f"   ✅ Cross-sectional importance computed: top feature = {cs_importance.idxmax()} ({cs_importance.max():.4f})")
     
     # Track reproducibility for cross-sectional feature ranking (if output_dir provided)
-    # This is called from feature_selector.py, which may pass output_dir through
-    # We'll add tracking here but it's optional since the main tracking happens in feature_selector.py
-    # This provides separate tracking for CS ranking specifically
+    # NEW: If cohort_id is provided, write metrics_cs_panel.json to existing cohort (consolidate)
+    # Otherwise, create new cohort via log_run() (legacy behavior for backward compatibility)
     if output_dir is not None:
         try:
-            from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
-            from TRAINING.orchestration.utils.run_context import RunContext
-            from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata
-            from TRAINING.ranking.utils.leakage_filtering import _extract_horizon, _load_leakage_config
-            
-            # Use module-specific directory
-            module_output_dir = output_dir.parent / 'feature_selections' if (output_dir.parent / 'feature_selections').exists() else output_dir
-            
-            tracker = ReproducibilityTracker(
-                output_dir=module_output_dir,
-                search_previous_runs=True
-            )
-            
-            # Extract cohort metadata
-            # FIX: Pass universe_sig for proper scope tracking in telemetry
-            cohort_metadata = extract_cohort_metadata(
-                symbols=symbols,
-                mtf_data=None,  # Not available here, but symbols are enough for basic tracking
-                min_cs=min_cs,
-                max_cs_samples=max_cs_samples,
-                universe_sig=universe_sig  # FIX: Thread universe_sig through
-            )
-            
-            # FIX: Extract horizon_minutes from target column for COHORT_AWARE mode
-            horizon_minutes_for_ctx = None
-            if target_column:
-                try:
-                    leakage_config = _load_leakage_config()
-                    horizon_minutes_for_ctx = _extract_horizon(target_column, leakage_config)
-                except Exception:
-                    pass
-            
-            # FIX: Load seed from config for reproducibility tracking (matches feature_selector.py pattern)
-            ctx_seed = None
-            try:
-                from CONFIG.config_loader import get_cfg
-                ctx_seed = get_cfg("pipeline.determinism.base_seed", default=42)
-            except Exception:
-                ctx_seed = 42  # Fallback to default
-            
-            # Build RunContext
-            # FIX: Pass seed for train_seed in ComparisonGroup (required for FEATURE_SELECTION)
-            # FIX: Pass min_cs and max_cs_samples for resolved_metadata validation
-            ctx = RunContext(
-                stage="FEATURE_SELECTION",
-                target=target_column,
-                target_column=target_column,
-                X=X,  # Panel data
-                y=y,  # Panel labels
-                feature_names=feature_names,
-                symbols=symbols_array if 'symbols_array' in locals() else symbols,
-                time_vals=time_vals if 'time_vals' in locals() else None,
-                horizon_minutes=horizon_minutes_for_ctx,  # FIX: Extract from target column
-                purge_minutes=None,
-                embargo_minutes=None,
-                folds=None,
-                fold_timestamps=None,
-                data_interval_minutes=None,
-                seed=ctx_seed,  # FIX: Pass seed for train_seed requirement
-                min_cs=min_cs,  # FIX: Pass min_cs for resolved_metadata
-                max_cs_samples=max_cs_samples,  # FIX: Pass max_cs_samples for resolved_metadata
-                universe_sig=universe_sig  # FIX: Pass universe_sig for proper scope tracking
-            )
-            
             # Build clean, grouped metrics dict for cross-sectional feature ranking
             from TRAINING.ranking.predictability.metrics_schema import build_clean_feature_selection_metrics
             from TRAINING.common.utils.task_types import TaskType
@@ -508,25 +444,145 @@ def compute_cross_sectional_importance(
             # Add metadata field for backward compatibility
             metrics_dict["metric_name"] = "CS Importance Score"
             
-            # Use automated log_run API (includes trend analysis)
-            audit_result = tracker.log_run(
-                ctx, metrics_dict,
-                run_identity=run_identity,  # SST: Pass through authoritative identity
-            )
+            # NEW: If cohort_id provided, write to existing cohort (consolidate metrics)
+            if cohort_id:
+                try:
+                    from TRAINING.orchestration.utils.target_first_paths import find_cohort_dir_by_id
+                    from datetime import datetime
+                    import json
+                    
+                    # Find run root directory
+                    run_root = output_dir
+                    for _ in range(10):
+                        if (run_root / "targets").exists() or run_root.name == "RESULTS":
+                            break
+                        if not run_root.parent.exists():
+                            break
+                        run_root = run_root.parent
+                    
+                    # Find cohort directory by ID using helper function
+                    target_clean = target_column.replace('/', '_').replace('\\', '_')
+                    cohort_dir = find_cohort_dir_by_id(
+                        run_root, cohort_id, target_clean, 
+                        view="CROSS_SECTIONAL", stage="FEATURE_SELECTION"
+                    )
+                    
+                    # BUG FIX: Check if cohort_dir is not None before calling .exists()
+                    if cohort_dir and cohort_dir.exists():
+                        # Write CS panel metrics to separate file in existing cohort
+                        cs_panel_metrics = {
+                            "run_id": datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f"),
+                            "timestamp": datetime.now().isoformat(),
+                            "reproducibility_mode": "COHORT_AWARE",
+                            "stage": "FEATURE_SELECTION",
+                            "target": target_column,
+                            "metrics": metrics_dict,
+                            "schema": {
+                                "metrics": "1.1",
+                                "scoring": "1.1"
+                            },
+                        }
+                        
+                        cs_panel_metrics_file = cohort_dir / "metrics_cs_panel.json"
+                        with open(cs_panel_metrics_file, 'w') as f:
+                            json.dump(cs_panel_metrics, f, indent=2)
+                        logger.info(f"✅ Wrote CS panel metrics to {cs_panel_metrics_file}")
+                    else:
+                        # BUG FIX: Handle case where cohort_dir is None or doesn't exist
+                        if cohort_dir is None:
+                            logger.warning(f"⚠️  Could not find cohort directory for cohort_id={cohort_id}, falling back to legacy behavior")
+                        else:
+                            logger.warning(f"⚠️  Cohort directory not found: {cohort_dir}, falling back to legacy behavior")
+                        cohort_id = None  # Fall back to legacy behavior
+                except Exception as e:
+                    logger.warning(f"⚠️  Failed to write CS panel metrics to existing cohort: {e}, falling back to legacy behavior")
+                    cohort_id = None  # Fall back to legacy behavior
             
-            # Log audit report summary if available
-            if audit_result.get("audit_report"):
-                audit_report = audit_result["audit_report"]
-                if audit_report.get("violations"):
-                    logger.warning(f"⚠️  CS Ranking audit violations: {len(audit_report['violations'])}")
-                if audit_report.get("warnings"):
-                    logger.info(f"ℹ️  CS Ranking audit warnings: {len(audit_report['warnings'])}")
-            
-            # Log trend summary if available
-            if audit_result.get("trend_summary"):
-                trend = audit_result["trend_summary"]
-                # Trend summary is already logged by log_run
-                pass
+            # Legacy: Create new cohort if cohort_id not provided (backward compatibility)
+            if not cohort_id:
+                from TRAINING.orchestration.utils.reproducibility_tracker import ReproducibilityTracker
+                from TRAINING.orchestration.utils.run_context import RunContext
+                from TRAINING.orchestration.utils.cohort_metadata_extractor import extract_cohort_metadata
+                from TRAINING.ranking.utils.leakage_filtering import _extract_horizon, _load_leakage_config
+                
+                # Use module-specific directory
+                module_output_dir = output_dir.parent / 'feature_selections' if (output_dir.parent / 'feature_selections').exists() else output_dir
+                
+                tracker = ReproducibilityTracker(
+                    output_dir=module_output_dir,
+                    search_previous_runs=True
+                )
+                
+                # Extract cohort metadata
+                # FIX: Pass universe_sig for proper scope tracking in telemetry
+                cohort_metadata = extract_cohort_metadata(
+                    symbols=symbols,
+                    mtf_data=None,  # Not available here, but symbols are enough for basic tracking
+                    min_cs=min_cs,
+                    max_cs_samples=max_cs_samples,
+                    universe_sig=universe_sig  # FIX: Thread universe_sig through
+                )
+                
+                # FIX: Extract horizon_minutes from target column for COHORT_AWARE mode
+                horizon_minutes_for_ctx = None
+                if target_column:
+                    try:
+                        leakage_config = _load_leakage_config()
+                        horizon_minutes_for_ctx = _extract_horizon(target_column, leakage_config)
+                    except Exception:
+                        pass
+                
+                # FIX: Load seed from config for reproducibility tracking (matches feature_selector.py pattern)
+                ctx_seed = None
+                try:
+                    from CONFIG.config_loader import get_cfg
+                    ctx_seed = get_cfg("pipeline.determinism.base_seed", default=42)
+                except Exception:
+                    ctx_seed = 42  # Fallback to default
+                
+                # Build RunContext
+                # FIX: Pass seed for train_seed in ComparisonGroup (required for FEATURE_SELECTION)
+                # FIX: Pass min_cs and max_cs_samples for resolved_metadata validation
+                ctx = RunContext(
+                    stage="FEATURE_SELECTION",
+                    target=target_column,
+                    target_column=target_column,
+                    X=X,  # Panel data
+                    y=y,  # Panel labels
+                    feature_names=feature_names,
+                    symbols=symbols_array if 'symbols_array' in locals() else symbols,
+                    time_vals=time_vals if 'time_vals' in locals() else None,
+                    horizon_minutes=horizon_minutes_for_ctx,  # FIX: Extract from target column
+                    purge_minutes=None,
+                    embargo_minutes=None,
+                    folds=None,
+                    fold_timestamps=None,
+                    data_interval_minutes=None,
+                    seed=ctx_seed,  # FIX: Pass seed for train_seed requirement
+                    min_cs=min_cs,  # FIX: Pass min_cs for resolved_metadata
+                    max_cs_samples=max_cs_samples,  # FIX: Pass max_cs_samples for resolved_metadata
+                    universe_sig=universe_sig  # FIX: Pass universe_sig for proper scope tracking
+                )
+                
+                # Use automated log_run API (includes trend analysis)
+                audit_result = tracker.log_run(
+                    ctx, metrics_dict,
+                    run_identity=run_identity,  # SST: Pass through authoritative identity
+                )
+                
+                # Log audit report summary if available
+                if audit_result.get("audit_report"):
+                    audit_report = audit_result["audit_report"]
+                    if audit_report.get("violations"):
+                        logger.warning(f"⚠️  CS Ranking audit violations: {len(audit_report['violations'])}")
+                    if audit_report.get("warnings"):
+                        logger.info(f"ℹ️  CS Ranking audit warnings: {len(audit_report['warnings'])}")
+                
+                # Log trend summary if available
+                if audit_result.get("trend_summary"):
+                    trend = audit_result["trend_summary"]
+                    # Trend summary is already logged by log_run
+                    pass
                 
         except ImportError:
             # RunContext not available, skip tracking
@@ -592,8 +648,21 @@ def compute_cross_sectional_stability(
     try:
         # Save current snapshot
         method_name = "cross_sectional_panel"
-        if universe_sig is None:
-            universe_sig = "ALL"  # Default universe ID for cross-sectional
+        # FIX: Do not default to "ALL" - use SST universe signature passed from caller
+        # If None, try to extract from run_identity.dataset_signature as fallback
+        effective_universe_sig = universe_sig
+        if effective_universe_sig is None and run_identity is not None:
+            # Try to extract from run_identity.dataset_signature (SST fallback)
+            if hasattr(run_identity, 'dataset_signature') and run_identity.dataset_signature:
+                effective_universe_sig = run_identity.dataset_signature
+                logger.debug(f"Extracted universe_sig={effective_universe_sig[:8]}... from run_identity.dataset_signature for cross_sectional_panel")
+        
+        if effective_universe_sig is None:
+            logger.warning(
+                "universe_sig is None for cross_sectional_panel snapshot and could not extract from run_identity. "
+                "This violates SST - should use actual universe signature from resolved_data_config. "
+                "Proceeding without universe scope (legacy fallback)."
+            )
         
         # Use target-first structure for snapshots
         snapshot_base_dir = None
@@ -708,7 +777,7 @@ def compute_cross_sectional_stability(
                 target=target_column,
                 method=method_name,
                 importance_series=cs_importance,
-                universe_sig=universe_sig,
+                universe_sig=effective_universe_sig,  # Use effective_universe_sig (with fallback from run_identity)
                 output_dir=snapshot_base_dir,  # Use target-first structure
                 auto_analyze=False,  # We'll analyze manually to get metrics
                 run_identity=effective_identity,  # Pass finalized identity or partial dict fallback

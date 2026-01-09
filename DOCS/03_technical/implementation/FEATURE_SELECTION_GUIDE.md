@@ -29,6 +29,12 @@ SST Enforcement Design ensures feature selection uses the same `EnforcedFeatureS
 - **Same Reproducibility**: REPRODUCIBILITY/FEATURE_SELECTION/ structure matches TARGET_RANKING/
 - **Same Artifacts**: Feature importances, stability snapshots, leak detection summaries
 
+### Snapshot Structure
+- **`multi_model_aggregated`**: Source of truth for feature selection results (always created)
+- **`cross_sectional_panel`**: Optional cross-sectional stability analysis (only if `cross_sectional_ranking.enabled=True`)
+- **Per-model snapshots**: Individual model family importance (lightgbm, xgboost, etc.)
+- See [Feature Selection Snapshots](FEATURE_SELECTION_SNAPSHOTS.md) for detailed documentation
+
 ## Implementation Status
 
 ### Step 1: SingleTaskStrategy with Early Stopping
@@ -321,6 +327,7 @@ print(model.encoder.training)  # Should be False
 
 ## Related Documentation
 
+- [Feature Selection Snapshots](FEATURE_SELECTION_SNAPSHOTS.md) - **Which snapshot to use?** Detailed explanation of snapshot structure
 - [Ranking and Selection Consistency](../../01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) - Unified pipeline behavior (includes sklearn preprocessing)
 - [Intelligent Training Tutorial](../../01_tutorials/training/INTELLIGENT_TRAINING_TUTORIAL.md) - Automated feature selection workflow
 - [Feature Selection Tutorial](../../01_tutorials/training/FEATURE_SELECTION_TUTORIAL.md) - Manual feature selection tutorial

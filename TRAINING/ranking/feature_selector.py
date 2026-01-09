@@ -859,13 +859,28 @@ def select_features_for_target(
                             else:
                                 logger.error(f"Snapshot save failed ({mode} mode, continuing): {ve}")
                         except Exception as e:
-                            logger.debug(f"Stability snapshot save failed for {symbol_to_process} (non-critical): {e}")
+                            # FIX: Log at warning level so per-model snapshot failures are visible
+                            logger.warning(
+                                f"Per-model snapshot save failed for {model_family}/{symbol_to_process}: {e}. "
+                                f"This may indicate per-model snapshots are not being saved correctly."
+                            )
+                            import traceback
+                            logger.debug(f"Per-model snapshot traceback: {traceback.format_exc()}")
                     
                     # Convert to ImportanceResult format (per-symbol for SYMBOL_SPECIFIC)
                     for model_family in model_families_list:
-                        if model_family in all_feature_importances:
-                            importance_dict = all_feature_importances[model_family]
-                            importance_series = pd.Series(importance_dict)
+                            if model_family in all_feature_importances:
+                                importance_dict = all_feature_importances[model_family]
+                                # FIX: Handle empty dict case - create Series with zero importance for all features
+                                if not importance_dict:
+                                    # Empty dict means model failed - create zero importance for all features
+                                    # This ensures the family appears in results (even if with zero importance)
+                                    # Get feature_names from harness or use empty list as fallback
+                                    feature_names_for_series = feature_names_cleaned if 'feature_names_cleaned' in locals() else (feature_names if 'feature_names' in locals() else [])
+                                    importance_series = pd.Series(0.0, index=feature_names_for_series) if feature_names_for_series else pd.Series()
+                                    logger.warning(f"⚠️  {model_family}/{symbol_to_process}: Empty importance dict (model likely failed), using zero importance for {len(feature_names_for_series)} features")
+                                else:
+                                    importance_series = pd.Series(importance_dict)
                             result = FeatureImportanceResult(
                                 model_family=model_family,
                                 symbol=symbol_to_process,  # Per-symbol for SYMBOL_SPECIFIC
@@ -874,15 +889,17 @@ def select_features_for_target(
                                 train_score=model_scores.get(model_family, 0.0)
                             )
                             all_results.append(result)
+                            # Determine status based on whether importance is all zeros
+                            is_failed = not importance_dict or (len(importance_series) > 0 and importance_series.sum() == 0.0)
                             all_family_statuses.append({
-                                "status": "success",
+                                "status": "failed" if is_failed else "success",
                                 "family": model_family,
                                 "symbol": symbol_to_process,
                                 "score": float(model_scores.get(model_family, 0.0)),
-                                "top_feature": importance_series.idxmax() if len(importance_series) > 0 else None,
-                                "top_feature_score": float(importance_series.max()) if len(importance_series) > 0 else None,
-                                "error": None,
-                                "error_type": None
+                                "top_feature": importance_series.idxmax() if len(importance_series) > 0 and importance_series.sum() > 0 else None,
+                                "top_feature_score": float(importance_series.max()) if len(importance_series) > 0 and importance_series.sum() > 0 else None,
+                                "error": "Empty importance dict (model likely failed)" if is_failed else None,
+                                "error_type": "EmptyImportance" if is_failed else None
                             })
                     
                     # Check for missing model families (failed or skipped) - same as CROSS_SECTIONAL
@@ -1155,7 +1172,16 @@ def select_features_for_target(
                         for model_family in model_families_list:
                             if model_family in all_feature_importances:
                                 importance_dict = all_feature_importances[model_family]
-                                importance_series = pd.Series(importance_dict)
+                                # FIX: Handle empty dict case - create Series with zero importance for all features
+                                if not importance_dict:
+                                    # Empty dict means model failed - create zero importance for all features
+                                    # This ensures the family appears in results (even if with zero importance)
+                                    # Get feature_names from harness context
+                                    feature_names_for_series = feature_names if 'feature_names' in locals() else (feature_names_cleaned if 'feature_names_cleaned' in locals() else [])
+                                    importance_series = pd.Series(0.0, index=feature_names_for_series) if feature_names_for_series else pd.Series()
+                                    logger.warning(f"⚠️  {model_family}: Empty importance dict (model likely failed), using zero importance for {len(feature_names_for_series)} features")
+                                else:
+                                    importance_series = pd.Series(importance_dict)
                                 # For cross-sectional, we don't have per-symbol results, so use "ALL" as symbol
                                 result = FeatureImportanceResult(
                                     model_family=model_family,
@@ -1165,15 +1191,17 @@ def select_features_for_target(
                                     train_score=model_scores.get(model_family, 0.0)
                                 )
                                 all_results.append(result)
+                                # Determine status based on whether importance is all zeros
+                                is_failed = not importance_dict or (len(importance_series) > 0 and importance_series.sum() == 0.0)
                                 all_family_statuses.append({
-                                    "status": "success",
+                                    "status": "failed" if is_failed else "success",
                                     "family": model_family,
                                     "symbol": "ALL",
                                     "score": float(model_scores.get(model_family, 0.0)),
-                                    "top_feature": importance_series.idxmax() if len(importance_series) > 0 else None,
-                                    "top_feature_score": float(importance_series.max()) if len(importance_series) > 0 else None,
-                                    "error": None,
-                                    "error_type": None
+                                    "top_feature": importance_series.idxmax() if len(importance_series) > 0 and importance_series.sum() > 0 else None,
+                                    "top_feature_score": float(importance_series.max()) if len(importance_series) > 0 and importance_series.sum() > 0 else None,
+                                    "error": "Empty importance dict (model likely failed)" if is_failed else None,
+                                    "error_type": "EmptyImportance" if is_failed else None
                                 })
                         
                         # Check for missing model families (failed or skipped)
@@ -1801,6 +1829,7 @@ def select_features_for_target(
                 output_dir=output_dir,  # Pass output_dir for reproducibility tracking
                 universe_sig=universe_sig,  # FIX: Thread universe_sig for proper scope tracking
                 run_identity=run_identity,  # SST: Pass through authoritative identity
+                cohort_id=cohort_id,  # NEW: Pass cohort_id to consolidate into same cohort directory
             )
             
             # Merge CS scores into summary_df
@@ -1834,7 +1863,7 @@ def select_features_for_target(
                     cs_importance=cs_importance,
                     output_dir=output_dir,
                     top_k=20,
-                    universe_sig="ALL",  # Cross-sectional uses all symbols
+                    universe_sig=universe_sig,  # Use SST universe signature (not hardcoded "ALL")
                     run_identity=run_identity,  # Pass partial identity for snapshot storage
                 )
                 
@@ -2165,7 +2194,7 @@ def select_features_for_target(
                 cs_metadata_file = metadata_dir / "cross_sectional_stability_metadata.json"
                 cs_metadata = {
                     "target_column": target_column,
-                    "universe_sig": "ALL",
+                    "universe_sig": universe_sig if universe_sig else "UNKNOWN",  # Use SST universe signature
                     "method": "cross_sectional_panel",
                     "stability": cs_stability_results,
                     "timestamp": pd.Timestamp.now().isoformat()
@@ -2285,6 +2314,9 @@ def select_features_for_target(
                     library_versions = get_library_versions()
                     if library_versions:
                         additional_data_override['library_versions'] = library_versions
+                        logger.debug(f"Extracted library_versions: {list(library_versions.keys())}")
+                    else:
+                        logger.debug("No library_versions returned from get_library_versions()")
                 except ImportError:
                     # Fallback: collect versions manually
                     import sys
@@ -2490,12 +2522,15 @@ def select_features_for_target(
                 # Use automated log_run API (includes trend analysis)
                 # FIX: Pass RunContext to log_run (required for COHORT_AWARE mode)
                 # Pass hyperparameters via additional_data_override
+                cohort_id = None  # Extract cohort_id to pass to CS panel
                 try:
                     audit_result = tracker.log_run(
                         ctx_to_use, metrics_dict,
                         additional_data_override=additional_data_override,
                         run_identity=run_identity,  # SST: Pass through authoritative identity
                     )
+                    # Extract cohort_id from result to pass to CS panel (consolidate into same cohort)
+                    cohort_id = audit_result.get('cohort_id') if audit_result else None
                 except Exception as e:
                     # If COHORT_AWARE fails due to missing fields, fall back to legacy mode
                     if "Missing required fields" in str(e) or "COHORT_AWARE" in str(e):
@@ -2538,6 +2573,9 @@ def select_features_for_target(
                             ctx_minimal, metrics_dict,
                             run_identity=run_identity,  # SST: Pass through authoritative identity
                         )
+                        # Extract cohort_id from fallback result too
+                        if not cohort_id and audit_result:
+                            cohort_id = audit_result.get('cohort_id')
                     else:
                         raise
                 
@@ -2558,6 +2596,10 @@ def select_features_for_target(
             except ImportError:
                 # Fallback to legacy API if RunContext not available
                 logger.debug("RunContext not available, falling back to legacy reproducibility tracking")
+                
+                # BUG FIX: Initialize audit_result to None if ImportError occurs
+                audit_result = None
+                cohort_id = None  # Ensure cohort_id is None if ImportError
                 
                 # FIX: Ensure cohort variables are initialized (may not exist if exception occurred before initialization)
                 if 'cohort_metadata' not in locals():

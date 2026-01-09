@@ -225,7 +225,13 @@ def save_snapshot_hook(
                     comparable_key=comparable_key,
                 )
             except Exception as e:
-                logger.debug(f"Failed to create fs_snapshot (non-critical): {e}")
+                # FIX: Log at warning level so per-model fs_snapshot failures are visible
+                logger.warning(
+                    f"Failed to create fs_snapshot for {method} (target={target}, view={effective_view}): {e}. "
+                    f"This may indicate per-model snapshots are not being saved correctly."
+                )
+                import traceback
+                logger.debug(f"fs_snapshot creation traceback: {traceback.format_exc()}")
         
         # Auto-analyze if enabled
         if auto_analyze:

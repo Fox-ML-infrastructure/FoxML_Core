@@ -244,17 +244,15 @@ def extract_cohort_metadata(
     metadata['date_range'] = date_range if date_range else {}
     
     # 4. Build cs_config
-    # FIX: Always include min_cs and max_cs_samples keys even if None
-    # This ensures resolved_metadata validation doesn't fail on missing keys
-    # The validation requires these fields to exist (can be None, but must exist)
+    # FIX: Always include ALL keys (even if None) for consistent hashing
+    # This ensures config_hash is deterministic - same config values produce same hash
+    # even if keys are None vs missing (prevents duplicate cohort directories)
     cs_config = {
         'min_cs': int(min_cs) if min_cs is not None else None,
         'max_cs_samples': int(max_cs_samples) if max_cs_samples is not None else None,
+        'leakage_filter_version': str(leakage_filter_version) if leakage_filter_version is not None else None,
+        'universe_sig': str(universe_sig) if universe_sig is not None else None,
     }
-    if leakage_filter_version is not None:
-        cs_config['leakage_filter_version'] = str(leakage_filter_version)
-    if universe_sig is not None:
-        cs_config['universe_sig'] = str(universe_sig)
     
     metadata['cs_config'] = cs_config
     

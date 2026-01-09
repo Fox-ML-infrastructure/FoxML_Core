@@ -197,6 +197,7 @@ Research notes, design rationale, advanced topics. See [03_technical/README.md](
 
 ### Implementation
 - [Feature Selection Implementation](03_technical/implementation/FEATURE_SELECTION_GUIDE.md) - Feature selection implementation details (see also [Ranking and Selection Consistency](01_tutorials/training/RANKING_SELECTION_CONSISTENCY.md) for unified pipeline behavior)
+- [Feature Selection Snapshots](03_technical/implementation/FEATURE_SELECTION_SNAPSHOTS.md) - **NEW**: Which snapshot to use? Explains `multi_model_aggregated` (source of truth) vs `cross_sectional_panel` (optional stability)
 - [Training Optimization](03_technical/implementation/TRAINING_OPTIMIZATION_GUIDE.md) - Training optimization guide
 - [Duration System](03_technical/implementation/training_utils/DURATION_SYSTEM_FINAL.md) - Duration parsing and schema system
 - [Parallel Execution](03_technical/implementation/PARALLEL_EXECUTION.md) - Parallel execution infrastructure for target ranking and feature selection

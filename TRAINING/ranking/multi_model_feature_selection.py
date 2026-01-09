@@ -4093,19 +4093,34 @@ def process_single_symbol(
                     except Exception as fp_e:
                         logger.debug(f"    {family_name}: prediction fingerprint failed: {fp_e}")
                 
-                if importance is not None and importance.sum() > 0:
-                    result = ImportanceResult(
-                        model_family=family_name,
-                        symbol=symbol,
-                        importance_scores=importance,
-                        method=method,
-                        train_score=train_score
-                    )
-                    results.append(result)
-                    # Handle NaN scores gracefully (e.g., Boruta doesn't have a train score)
-                    score_str = f"{train_score:.4f}" if not math.isnan(train_score) else "N/A"
+                # FIX: Always create ImportanceResult, even if importance is zero (failed models)
+                # This ensures all enabled families appear in results, making failures visible
+                if importance is None:
+                    # Model failed completely - create zero importance for all features
+                    importance = pd.Series(0.0, index=feature_names)
+                    logger.warning(f"    {symbol}: {family_name} importance is None (model failed), using zero importance")
+                elif hasattr(importance, '__len__') and len(importance) == 0:
+                    # Empty Series - create zero importance for all features
+                    importance = pd.Series(0.0, index=feature_names)
+                    logger.warning(f"    {symbol}: {family_name} importance is empty (model likely failed), using zero importance")
+                
+                result = ImportanceResult(
+                    model_family=family_name,
+                    symbol=symbol,
+                    importance_scores=importance,
+                    method=method,
+                    train_score=train_score
+                )
+                results.append(result)
+                
+                # Handle NaN scores gracefully (e.g., Boruta doesn't have a train score)
+                score_str = f"{train_score:.4f}" if not math.isnan(train_score) else "N/A"
+                # Only log top feature if importance is non-zero (avoid errors on zero Series)
+                if importance.sum() > 0:
                     logger.info(f"    ✅ {family_name}: score={score_str}, "
                               f"top feature={importance.idxmax()} ({importance.max():.2f})")
+                else:
+                    logger.warning(f"    ⚠️  {family_name}: score={score_str}, importance is all zeros (model likely failed)")
                     
                     # Compute per-model reproducibility
                     previous_data = load_previous_model_results(output_dir, symbol, target_column, family_name)
@@ -4306,12 +4321,22 @@ def process_single_symbol(
                         })
                 else:
                     # Model returned but importance is None or all zeros (hard failure)
-                    logger.warning(f"    ⚠️  {family_name}: Model trained but returned invalid importance (None or all zeros)")
+                    # FIX: Still create ImportanceResult with zero importance so it appears in results
+                    logger.warning(f"    ⚠️  {family_name}: Model trained but returned invalid importance (None or all zeros), creating zero importance result")
+                    importance = pd.Series(0.0, index=feature_names)
+                    result = ImportanceResult(
+                        model_family=family_name,
+                        symbol=symbol,
+                        importance_scores=importance,
+                        method=method,
+                        train_score=train_score
+                    )
+                    results.append(result)
                     family_statuses.append({
                         "status": "failed",
                         "family": family_name,
                         "symbol": symbol,
-                        "score": None,
+                        "score": float(train_score) if not math.isnan(train_score) else None,
                         "top_feature": None,
                         "top_feature_score": None,
                         "error": "Invalid importance (None or all zeros)",
@@ -4480,11 +4505,30 @@ def aggregate_multi_model_importance(
     for family_name, results in family_results.items():
         # Combine importances across symbols for this family
         # CRITICAL: Check if we have any importance scores before concatenation
+        # FIX: Include empty Series (zero importance) so failed models still appear in aggregation
         importance_series_list = [r.importance_scores for r in results if hasattr(r, 'importance_scores') and r.importance_scores is not None]
         
         if not importance_series_list:
             logger.warning(f"⚠️  {family_name}: No importance scores available (all results have None or missing importance_scores)")
-            continue  # Skip this family
+            # FIX: Try to create zero importance Series from first result's index
+            # This ensures failed models still appear in aggregation (with zero importance)
+            if results:
+                # Try to get feature names from first result's importance_scores index
+                first_result = results[0]
+                if hasattr(first_result, 'importance_scores') and first_result.importance_scores is not None:
+                    feature_names_from_result = first_result.importance_scores.index if hasattr(first_result.importance_scores, 'index') else []
+                    if len(feature_names_from_result) > 0:
+                        importance_series_list = [pd.Series(0.0, index=feature_names_from_result)]
+                        logger.debug(f"  {family_name}: Created zero importance Series for aggregation ({len(feature_names_from_result)} features)")
+                    else:
+                        logger.warning(f"  {family_name}: Cannot create zero Series (no feature names), skipping aggregation")
+                        continue
+                else:
+                    logger.warning(f"  {family_name}: Cannot create zero Series (no importance_scores), skipping aggregation")
+                    continue
+            else:
+                logger.warning(f"  {family_name}: No results available, skipping aggregation")
+                continue
         
         importances_df = pd.concat(
             importance_series_list,
@@ -4493,9 +4537,19 @@ def aggregate_multi_model_importance(
         ).fillna(0)
         
         # CRITICAL: Check if importances_df is empty after concatenation
+        # FIX: Don't skip - even empty DataFrames should be aggregated (with zero importance)
+        # This ensures failed models appear in results
         if importances_df.empty:
-            logger.warning(f"⚠️  {family_name}: Empty importance DataFrame after concatenation (no features available)")
-            continue  # Skip this family
+            logger.warning(f"⚠️  {family_name}: Empty importance DataFrame after concatenation, using zero importance")
+            # Create zero importance Series from feature names if available
+            if importance_series_list and len(importance_series_list) > 0:
+                feature_names_from_series = importance_series_list[0].index if hasattr(importance_series_list[0], 'index') else []
+                if len(feature_names_from_series) > 0:
+                    importances_df = pd.DataFrame({0: pd.Series(0.0, index=feature_names_from_series)})
+                else:
+                    continue  # Can't proceed without feature names
+            else:
+                continue  # Can't proceed without any Series
         
         # Aggregate across symbols (mean by default)
         method = aggregation_config.get('per_symbol_method', 'mean')
@@ -4507,9 +4561,15 @@ def aggregate_multi_model_importance(
             family_score = importances_df.mean(axis=1)
         
         # CRITICAL: Check if family_score is empty after aggregation
+        # FIX: Don't skip - even zero importance should be included in aggregation
+        # This ensures failed models appear in results (with zero consensus score)
         if len(family_score) == 0 or family_score.empty:
-            logger.warning(f"⚠️  {family_name}: Empty family_score after aggregation (no features with importance scores)")
-            continue  # Skip this family
+            logger.warning(f"⚠️  {family_name}: Empty family_score after aggregation, using zero importance")
+            # Create zero importance Series from importances_df index
+            if not importances_df.empty:
+                family_score = pd.Series(0.0, index=importances_df.index)
+            else:
+                continue  # Can't proceed without DataFrame
         
         # Apply family weight
         weight = model_families_config[family_name].get('weight', 1.0)

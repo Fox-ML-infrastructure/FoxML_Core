@@ -645,17 +645,30 @@ def create_and_save_training_snapshot(
         # Save snapshot to cohort directory (JSON)
         saved_path = save_training_snapshot(snapshot, snapshot_dir)
         
+        # FIX: Validate that snapshot file was actually created
+        if saved_path and saved_path.exists():
+            logger.debug(f"✅ Training snapshot file verified: {saved_path}")
+        elif saved_path:
+            logger.warning(f"⚠️  Training snapshot save returned path but file doesn't exist: {saved_path}")
+        else:
+            logger.warning(f"⚠️  Training snapshot save returned None (save failed silently)")
+        
         # Also save Parquet format for querying
         try:
             save_training_metadata_parquet(snapshot, snapshot_dir)
         except Exception as e:
             logger.debug(f"Failed to save training metadata Parquet (non-critical): {e}")
         
-        if saved_path:
+        if saved_path and saved_path.exists():
             # Update global index
-            update_training_snapshot_index(snapshot, output_dir)
-            logger.info(f"Created training snapshot for {target}/{model_family} (cohort={cohort_id}): {saved_path}")
+            index_result = update_training_snapshot_index(snapshot, output_dir)
+            if index_result:
+                logger.info(f"Created training snapshot for {target}/{model_family} (cohort={cohort_id}): {saved_path}")
+            else:
+                logger.warning(f"⚠️  Training snapshot created but index update failed for {target}/{model_family}")
             return snapshot
+        else:
+            logger.error(f"❌ Training snapshot file not created for {target}/{model_family} (cohort={cohort_id})")
         
         return None
     except Exception as e:

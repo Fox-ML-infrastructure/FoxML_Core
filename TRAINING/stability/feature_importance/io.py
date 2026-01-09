@@ -643,11 +643,21 @@ def create_fs_snapshot_from_importance(
         
         # Update global index if output_dir provided
         if output_dir:
-            update_fs_snapshot_index(fs_snapshot, output_dir)
+            index_result = update_fs_snapshot_index(fs_snapshot, output_dir)
+            if index_result is None:
+                logger.warning(
+                    f"Failed to update fs_snapshot_index for {importance_snapshot.method} "
+                    f"(target={importance_snapshot.target}, view={view}). "
+                    f"Per-model snapshot may not be indexed."
+                )
         
         return fs_snapshot
     except Exception as e:
-        logger.warning(f"Failed to create FeatureSelectionSnapshot: {e}")
+        logger.warning(
+            f"Failed to create FeatureSelectionSnapshot for {importance_snapshot.method if hasattr(importance_snapshot, 'method') else 'unknown'}: {e}"
+        )
+        import traceback
+        logger.debug(f"FeatureSelectionSnapshot creation traceback: {traceback.format_exc()}")
         return None
 
 

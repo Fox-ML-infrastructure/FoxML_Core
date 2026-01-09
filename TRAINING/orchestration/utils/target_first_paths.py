@@ -359,6 +359,50 @@ def get_metrics_path_from_cohort_dir(cohort_dir: Path, base_output_dir: Optional
     return metrics_dir
 
 
+def find_cohort_dir_by_id(
+    base_output_dir: Path,
+    cohort_id: str,
+    target: str,
+    view: str = "CROSS_SECTIONAL",
+    stage: Optional[str] = None
+) -> Optional[Path]:
+    """
+    Find cohort directory by cohort_id.
+    
+    Args:
+        base_output_dir: Base run output directory
+        cohort_id: Cohort ID to find
+        target: Target name
+        view: View type ("CROSS_SECTIONAL" or "SYMBOL_SPECIFIC")
+        stage: Optional stage name (e.g., "FEATURE_SELECTION")
+    
+    Returns:
+        Path to cohort directory, or None if not found
+    """
+    try:
+        target_repro_dir = get_target_reproducibility_dir(base_output_dir, target, stage=stage)
+        view_dir = target_repro_dir / view
+        
+        # For SYMBOL_SPECIFIC, need to search in symbol= subdirectories
+        if view == "SYMBOL_SPECIFIC":
+            # Search all symbol= directories for the cohort
+            for symbol_dir in view_dir.iterdir():
+                if symbol_dir.is_dir() and symbol_dir.name.startswith("symbol="):
+                    cohort_dir = symbol_dir / f"cohort={cohort_id}"
+                    if cohort_dir.exists():
+                        return cohort_dir
+        else:
+            # CROSS_SECTIONAL: cohort is directly under view
+            cohort_dir = view_dir / f"cohort={cohort_id}"
+            if cohort_dir.exists():
+                return cohort_dir
+        
+        return None
+    except Exception as e:
+        logger.debug(f"Failed to find cohort directory by ID: {e}")
+        return None
+
+
 def get_cohort_dir_from_metrics_path(metrics_path: Path, base_output_dir: Optional[Path] = None) -> Optional[Path]:
     """
     Map a metrics path to the corresponding cohort directory (for finding diffs).

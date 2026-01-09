@@ -983,7 +983,25 @@ def train_models_for_interval_comprehensive(interval: str, targets: List[str],
                                             f"This may break reproducibility tracking for this model."
                                         )
                                         import traceback
-                                        logger.debug(f"Training snapshot traceback: {traceback.format_exc()}")
+                                        logger.warning(f"Training snapshot traceback: {traceback.format_exc()}")
+                                        # FIX: Verify snapshot file doesn't exist (might have been partially created)
+                                        try:
+                                            from TRAINING.training_strategies.reproducibility.io import get_training_snapshot_dir
+                                            snapshot_dir = get_training_snapshot_dir(
+                                                output_dir=base_run_dir,
+                                                target=target,
+                                                view="SYMBOL_SPECIFIC",
+                                                symbol=symbol,
+                                                stage="TRAINING",
+                                                cohort_id=symbol_cohort_id,
+                                            )
+                                            snapshot_path = snapshot_dir / "training_snapshot.json"
+                                            if snapshot_path.exists():
+                                                logger.info(f"✅ Training snapshot file exists despite exception: {snapshot_path}")
+                                            else:
+                                                logger.error(f"❌ Training snapshot file missing: {snapshot_path}")
+                                        except Exception as verify_err:
+                                            logger.debug(f"Could not verify training snapshot path: {verify_err}")
                             else:
                                 # Fallback: save model directly if no strategy_manager
                                 model_path = ArtifactPaths.model_file(model_dir, family, extension='joblib')

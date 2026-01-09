@@ -1453,14 +1453,21 @@ class ReproducibilityTracker:
             "symbols": symbols_list,  # Sorted, deduplicated list of symbols
             "date_start": cohort_metadata.get('date_range', {}).get('start_ts'),  # Changed from "date_start" to match finalize_run() expectations
             "date_end": cohort_metadata.get('date_range', {}).get('end_ts'),  # Changed from "date_end" to match finalize_run() expectations
-            "universe_sig": cohort_metadata.get('cs_config', {}).get('universe_sig'),
-            # Normalized universe_sig - _normalize_universe_sig checks both top-level and cs_config
-            "universe_sig": _normalize_universe_sig(cohort_metadata) if _normalize_universe_sig else cohort_metadata.get('cs_config', {}).get('universe_sig'),
+            # FIX: Single assignment with proper fallback - _normalize_universe_sig checks both top-level and cs_config
+            "universe_sig": _normalize_universe_sig(cohort_metadata) if _normalize_universe_sig else (cohort_metadata.get('cs_config', {}).get('universe_sig') or cohort_metadata.get('universe_sig')),
             "min_cs": cohort_metadata.get('cs_config', {}).get('min_cs'),
             "max_cs_samples": cohort_metadata.get('cs_config', {}).get('max_cs_samples'),
             "leakage_filter_version": cohort_metadata.get('cs_config', {}).get('leakage_filter_version', 'v1'),
+            # FIX: Normalize cs_config before hashing to ensure consistent structure
+            # Always include all keys (even if None) to prevent different hashes for same config
+            cs_config_for_hash = cohort_metadata.get('cs_config', {}).copy()
+            # Ensure all expected keys are present (with None if missing)
+            expected_keys = ['min_cs', 'max_cs_samples', 'leakage_filter_version', 'universe_sig']
+            for key in expected_keys:
+                if key not in cs_config_for_hash:
+                    cs_config_for_hash[key] = None
             "config_hash": hashlib.sha256(
-                json.dumps(cohort_metadata.get('cs_config', {}), sort_keys=True).encode()
+                json.dumps(cs_config_for_hash, sort_keys=True).encode()
             ).hexdigest()[:8],
             "seed": run_data.get('seed') or (additional_data.get('seed') if additional_data else None),
             "git_commit": self._get_git_commit(),
@@ -2051,7 +2058,10 @@ class ReproducibilityTracker:
                 # This ensures snapshot/diff computation uses the exact same data that will be written to metadata.json
                 # full_metadata is already built above (lines 1077-1292), we just haven't added diff_telemetry yet
                 if cohort_dir is None:
-                    logger.warning(f"⚠️  Cannot call finalize_run() for {target}: cohort_dir is None")
+                    logger.warning(
+                        f"⚠️  Cannot call finalize_run() for {target}/{stage_normalized}: cohort_dir is None. "
+                        f"Snapshot and diff files will not be created."
+                    )
                 else:
                     diff_telemetry_data = telemetry.finalize_run(
                         stage=stage_normalized,
@@ -2063,6 +2073,22 @@ class ReproducibilityTracker:
                         run_identity=run_identity,  # NEW: Pass RunIdentity for authoritative signatures
                         prediction_fingerprint=prediction_fingerprint,  # NEW: Pass prediction fingerprint
                     )
+                    
+                    # FIX: Validate that required files were created after finalize_run()
+                    required_files = ['snapshot.json', 'diff_prev.json']
+                    missing_files = []
+                    for filename in required_files:
+                        file_path = cohort_dir / filename
+                        if not file_path.exists():
+                            missing_files.append(filename)
+                    
+                    if missing_files:
+                        logger.warning(
+                            f"⚠️  finalize_run() completed but required files are missing in {cohort_dir}: {missing_files}. "
+                            f"This may indicate silent failures in snapshot/diff creation."
+                        )
+                    else:
+                        logger.debug(f"✅ finalize_run() created required files in {cohort_dir}")
                 
                 # Store diff telemetry data for integration into metadata/metrics
                 if diff_telemetry_data:
@@ -2070,7 +2096,11 @@ class ReproducibilityTracker:
                         additional_data = {}
                     additional_data['diff_telemetry'] = diff_telemetry_data
             except Exception as e:
-                logger.warning(f"⚠️  Diff telemetry failed (non-critical): {e}")
+                # FIX: Log at error level with more context - this is critical for reproducibility
+                logger.error(
+                    f"❌ Diff telemetry finalize_run() failed for {target}/{stage_normalized}: {e}. "
+                    f"This will prevent snapshot.json and diff files from being created, breaking reproducibility tracking."
+                )
                 import traceback
                 logger.debug(f"Diff telemetry traceback: {traceback.format_exc()}")
         
