@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### January
 
+- **2026-01-09 (Symbol Parameter Propagation Fix - Complete Path Construction)** — Fixed multiple issues where symbol parameter was not properly propagated: 1) "SYMBOL_SPECIFIC view requires symbol" error in save_feature_importances(), 2) Universe directories created under SYMBOL_SPECIFIC/ instead of SYMBOL_SPECIFIC/symbol=.../, 3) Missing feature importance snapshots per symbol. Fixed by passing symbol to resolve_write_scope(), adding fallback logic for symbol_for_importances, ensuring symbol is derived for all ensure_scoped_artifact_dir() calls, and adding validation in get_scoped_artifact_dir(). All artifact directories now correctly route to SYMBOL_SPECIFIC/symbol=.../universe=.../ paths. Maintains SST principles.
+  → [View](2026-01-09-sst-enum-migration.md)
+
 - **2026-01-09 (Symbol-Specific Routing Fix - View Propagation and Auto-Detection)** — Fixed critical bug where single-symbol runs were incorrectly routed to CROSS_SECTIONAL directories instead of SYMBOL_SPECIFIC/symbol=.../ directories. Root cause: auto-detected view was overridden by run context. Fixed by ensuring requested_view_from_context uses auto-detected SYMBOL_SPECIFIC view instead of loading from context, and added safety net auto-detection for view_for_importances. Fixes propagate through entire pipeline: requested_view → resolved_data_config → view_for_writes → all path construction. All artifacts (feature importances, metrics, snapshots) now route correctly. Maintains SST principles and backward compatibility.
   → [View](2026-01-09-sst-enum-migration.md)
 

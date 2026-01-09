@@ -4,6 +4,15 @@ All notable changes to FoxML Core will be documented in this file.
 
 ## 2026-01-09
 
+### Symbol Parameter Propagation Fix - Complete Path Construction
+- **Fixed Symbol Parameter Propagation for All Path Construction**: Resolved multiple issues where symbol parameter was not properly propagated, causing: 1) "SYMBOL_SPECIFIC view requires symbol" error in `save_feature_importances()`, 2) Universe directories created under `SYMBOL_SPECIFIC/` instead of `SYMBOL_SPECIFIC/symbol=.../`, 3) Missing feature importance snapshots per symbol
+  - **Fix #1 - resolve_write_scope()** (`model_evaluation.py` line 5671): Pass `symbol` parameter to `resolve_write_scope()` instead of `None`, enabling proper symbol derivation from SST config
+  - **Fix #2 - symbol_for_importances fallback** (`model_evaluation.py` lines 6548-6558): Added fallback logic to ensure `symbol_for_importances` is set when view is `SYMBOL_SPECIFIC`, extracting from function parameter or `resolved_data_config.symbols` if available
+  - **Fix #3 - ensure_scoped_artifact_dir() calls** (`model_evaluation.py` lines 939-943, 5395-5399, 6026-6030): Added symbol derivation logic for all artifact directory calls, extracting symbol from `symbols_array` or `symbols_to_load` when view is `SYMBOL_SPECIFIC` but symbol parameter is None
+  - **Fix #4 - get_scoped_artifact_dir() validation** (`target_first_paths.py` lines 254-260): Added warning when `SYMBOL_SPECIFIC` view is used without symbol parameter, helping identify routing issues
+  - **Impact**: All artifact directories (featureset_artifacts, feature_exclusions) now correctly route to `SYMBOL_SPECIFIC/symbol=.../universe=.../` instead of `SYMBOL_SPECIFIC/universe=.../`. Feature importances save successfully with correct symbol parameter. All path construction now properly includes symbol component for SYMBOL_SPECIFIC view
+  - **Maintains SST Principles**: Uses existing symbol derivation patterns from `resolve_write_scope()`, preserves backward compatibility
+
 ### Symbol-Specific Routing Fix - View Propagation and Auto-Detection
 - **Fixed Single-Symbol Runs Routing to CROSS_SECTIONAL**: Resolved critical bug where single-symbol runs were incorrectly routed to `CROSS_SECTIONAL` directories instead of `SYMBOL_SPECIFIC/symbol=.../` directories
   - **Root Cause**: Auto-detection at line 5300 correctly set `view = View.SYMBOL_SPECIFIC`, but `requested_view_from_context` was loaded from run context (which could be `CROSS_SECTIONAL`), overriding the auto-detected view before it was passed to data preparation function

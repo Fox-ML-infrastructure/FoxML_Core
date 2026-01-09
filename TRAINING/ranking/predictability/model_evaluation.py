@@ -936,9 +936,21 @@ def train_and_evaluate_models(
                                 from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
                                 target_clean = normalize_target_name(target_column)
                                 ensure_target_structure(base_output_dir, target_clean)
+                                
+                                # CRITICAL FIX: Ensure symbol is available for SYMBOL_SPECIFIC view
+                                symbol_for_artifact = symbol if ('symbol' in locals() and symbol) else None
+                                view_enum_for_artifact = View.from_string(view) if isinstance(view, str) else view
+                                if view_enum_for_artifact == View.SYMBOL_SPECIFIC and symbol_for_artifact is None:
+                                    # Try to get from symbols_array if available
+                                    if 'symbols_array' in locals() and symbols_array is not None and len(symbols_array) > 0:
+                                        unique_symbols = set(symbols_array)
+                                        if len(unique_symbols) == 1:
+                                            symbol_for_artifact = list(unique_symbols)[0]
+                                            logger.debug(f"Derived symbol={symbol_for_artifact} from symbols_array for POST_PRUNE artifact path")
+                                
                                 target_artifact_dir = ensure_scoped_artifact_dir(
                                     base_output_dir, target_clean, "featureset_artifacts",
-                                    view=view, symbol=symbol, universe_sig=train_universe_sig,
+                                    view=view, symbol=symbol_for_artifact, universe_sig=train_universe_sig,
                                     stage=Stage.TARGET_RANKING  # Explicit stage for proper scoping
                                 )
                                 post_prune_artifact.save(target_artifact_dir)
@@ -5392,9 +5404,18 @@ def evaluate_target_predictability(
             ensure_scoped_artifact_dir, ensure_target_structure
         )
         ensure_target_structure(base_output_dir, target_clean)
+        
+        # CRITICAL FIX: Ensure symbol is available for SYMBOL_SPECIFIC view
+        symbol_for_exclusion = symbol if ('symbol' in locals() and symbol) else None
+        if view_enum == View.SYMBOL_SPECIFIC and symbol_for_exclusion is None:
+            # Try to get from symbols_to_load if available
+            if 'symbols_to_load' in locals() and symbols_to_load and len(symbols_to_load) == 1:
+                symbol_for_exclusion = symbols_to_load[0]
+                logger.debug(f"Derived symbol={symbol_for_exclusion} from symbols_to_load for feature_exclusions path")
+        
         target_exclusion_dir = ensure_scoped_artifact_dir(
             base_output_dir, target_clean, "feature_exclusions",
-            view=view, symbol=symbol, universe_sig=early_universe_sig,
+            view=view, symbol=symbol_for_exclusion, universe_sig=early_universe_sig,
             stage=Stage.TARGET_RANKING  # Explicit stage for proper scoping
         )
         
@@ -5668,7 +5689,7 @@ def evaluate_target_predictability(
         view_for_writes, symbol_for_writes, universe_sig_for_writes = resolve_write_scope(
             resolved_data_config=resolved_data_config,
             caller_view=view_from_context,
-            caller_symbol=None,  # TARGET_RANKING doesn't have per-symbol processing
+            caller_symbol=symbol if ('symbol' in locals() and symbol) else None,  # Pass symbol if available for SYMBOL_SPECIFIC view
             strict=strict_scope
         )
     except Exception as e:
@@ -6023,9 +6044,21 @@ def evaluate_target_predictability(
                             from TRAINING.orchestration.utils.target_first_paths import normalize_target_name
                             target_clean = normalize_target_name(target_column)
                             ensure_target_structure(base_output_dir, target_clean)
+                            
+                            # CRITICAL FIX: Ensure symbol is available for SYMBOL_SPECIFIC view
+                            symbol_for_artifact = symbol if ('symbol' in locals() and symbol) else None
+                            view_enum_for_artifact = View.from_string(view) if isinstance(view, str) else view
+                            if view_enum_for_artifact == View.SYMBOL_SPECIFIC and symbol_for_artifact is None:
+                                # Try to get from symbols_array if available
+                                if 'symbols_array' in locals() and symbols_array is not None and len(symbols_array) > 0:
+                                    unique_symbols = set(symbols_array)
+                                    if len(unique_symbols) == 1:
+                                        symbol_for_artifact = list(unique_symbols)[0]
+                                        logger.debug(f"Derived symbol={symbol_for_artifact} from symbols_array for POST_GATEKEEPER artifact path")
+                            
                             target_artifact_dir = ensure_scoped_artifact_dir(
                                 base_output_dir, target_clean, "featureset_artifacts",
-                                view=view, symbol=symbol, universe_sig=early_universe_sig,
+                                view=view, symbol=symbol_for_artifact, universe_sig=early_universe_sig,
                                 stage=Stage.TARGET_RANKING  # Explicit stage for proper scoping
                             )
                             artifact.save(target_artifact_dir)
@@ -6544,6 +6577,20 @@ def evaluate_target_predictability(
             if view_for_importances == View.CROSS_SECTIONAL and symbol_for_importances is not None:
                 logger.info(f"Auto-detecting SYMBOL_SPECIFIC view for feature importances (symbol={symbol_for_importances} provided with CROSS_SECTIONAL)")
                 view_for_importances = View.SYMBOL_SPECIFIC
+            
+            # CRITICAL FIX: If view is SYMBOL_SPECIFIC, ensure symbol is set
+            if view_for_importances == View.SYMBOL_SPECIFIC and symbol_for_importances is None:
+                # Fallback: try to get symbol from function parameter or resolved_data_config
+                if 'symbol' in locals() and symbol:
+                    symbol_for_importances = symbol
+                    logger.debug(f"Using symbol={symbol_for_importances} from function parameter for SYMBOL_SPECIFIC view")
+                elif 'resolved_data_config' in locals() and resolved_data_config:
+                    sst_symbols = resolved_data_config.get('symbols', [])
+                    if len(sst_symbols) == 1:
+                        symbol_for_importances = sst_symbols[0]
+                        logger.debug(f"Derived symbol={symbol_for_importances} from resolved_data_config for SYMBOL_SPECIFIC view")
+                if symbol_for_importances is None:
+                    logger.warning(f"SYMBOL_SPECIFIC view but symbol is None - feature importances may fail to save")
             
             # Compute RunIdentity for target ranking snapshots
             target_ranking_identity = None

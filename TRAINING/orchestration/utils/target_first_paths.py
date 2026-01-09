@@ -254,6 +254,14 @@ def get_scoped_artifact_dir(
     # Add symbol for SYMBOL_SPECIFIC view
     if view_upper == View.SYMBOL_SPECIFIC.value and symbol:
         artifact_path = artifact_path / f"symbol={symbol}"
+    elif view_upper == View.SYMBOL_SPECIFIC.value and not symbol:
+        # CRITICAL: Validate symbol is provided for SYMBOL_SPECIFIC view
+        logger.warning(
+            f"SYMBOL_SPECIFIC view but symbol is None for {artifact_type}. "
+            f"Path will be created without symbol component, which may cause routing issues. "
+            f"Expected path: {view_upper}/symbol=<symbol>/universe=<universe>/ but got: {view_upper}/universe=<universe>/"
+        )
+        # Continue without symbol (may need to fix caller)
     
     # Add universe signature if provided
     if universe_sig:
