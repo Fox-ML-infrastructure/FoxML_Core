@@ -5307,10 +5307,17 @@ def evaluate_target_predictability(
     if isinstance(view, str) and view == "LOSO" and symbol is None:
         raise ValueError(f"symbol parameter required for LOSO view")
     if view_enum == View.CROSS_SECTIONAL and symbol is not None:
-        # Auto-detect: if symbol is provided, this should be SYMBOL_SPECIFIC view
-        logger.info(f"Auto-detecting SYMBOL_SPECIFIC view (symbol={symbol} provided with CROSS_SECTIONAL)")
-        view = View.SYMBOL_SPECIFIC
-        view_enum = View.SYMBOL_SPECIFIC
+        # CRITICAL FIX: Only auto-detect SYMBOL_SPECIFIC if this is actually a single-symbol run
+        # Check symbols parameter (list) to determine if single-symbol
+        is_single_symbol = (symbols and len(symbols) == 1) if symbols else False
+        if is_single_symbol:
+            logger.info(f"Auto-detecting SYMBOL_SPECIFIC view (symbol={symbol} provided with CROSS_SECTIONAL, single-symbol run)")
+            view = View.SYMBOL_SPECIFIC
+            view_enum = View.SYMBOL_SPECIFIC
+        else:
+            # Multi-symbol CROSS_SECTIONAL run - clear symbol to prevent incorrect SYMBOL_SPECIFIC detection
+            logger.debug(f"CROSS_SECTIONAL run with {len(symbols) if symbols else 'unknown'} symbols - keeping CROSS_SECTIONAL view, ignoring symbol parameter")
+            symbol = None
     
     # Load view from run context (SST) if available
     # For per-symbol loops, use cached view as requested_view to prevent view contract violations
@@ -6572,11 +6579,25 @@ def evaluate_target_predictability(
             symbol_for_importances = symbol_for_writes if 'symbol_for_writes' in locals() else (symbol if ('symbol' in locals() and symbol) else None)
             universe_sig_for_importances = universe_sig_for_writes if 'universe_sig_for_writes' in locals() else None
             
-            # CRITICAL FIX: Auto-detect SYMBOL_SPECIFIC view if symbol is provided (same logic as line 5297-5301)
-            # This ensures feature importances are saved to correct directory even if view_for_writes has wrong value
+            # CRITICAL FIX: Auto-detect SYMBOL_SPECIFIC view if symbol is provided (same logic as line 5309-5313)
+            # BUT ONLY if this is actually a single-symbol run (not multi-symbol CROSS_SECTIONAL)
             if view_for_importances == View.CROSS_SECTIONAL and symbol_for_importances is not None:
-                logger.info(f"Auto-detecting SYMBOL_SPECIFIC view for feature importances (symbol={symbol_for_importances} provided with CROSS_SECTIONAL)")
-                view_for_importances = View.SYMBOL_SPECIFIC
+                # Validate this is actually a single-symbol run before auto-detecting
+                is_single_symbol = False
+                if 'resolved_data_config' in locals() and resolved_data_config:
+                    sst_symbols = resolved_data_config.get('symbols', [])
+                    is_single_symbol = len(sst_symbols) == 1
+                elif 'symbols_array' in locals() and symbols_array is not None:
+                    is_single_symbol = len(symbols_array) == 1
+                
+                if is_single_symbol:
+                    logger.info(f"Auto-detecting SYMBOL_SPECIFIC view for feature importances (symbol={symbol_for_importances} provided with CROSS_SECTIONAL, single-symbol run)")
+                    view_for_importances = View.SYMBOL_SPECIFIC
+                else:
+                    # Multi-symbol CROSS_SECTIONAL run - clear symbol to prevent SYMBOL_SPECIFIC detection
+                    num_symbols = len(sst_symbols) if ('resolved_data_config' in locals() and resolved_data_config and resolved_data_config.get('symbols')) else (len(symbols_array) if ('symbols_array' in locals() and symbols_array is not None) else 'unknown')
+                    logger.debug(f"CROSS_SECTIONAL run with {num_symbols} symbols - keeping CROSS_SECTIONAL view, clearing symbol for feature importances")
+                    symbol_for_importances = None
             
             # CRITICAL FIX: If view is SYMBOL_SPECIFIC, ensure symbol is set
             if view_for_importances == View.SYMBOL_SPECIFIC and symbol_for_importances is None:

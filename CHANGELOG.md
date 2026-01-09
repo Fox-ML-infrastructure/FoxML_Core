@@ -4,6 +4,14 @@ All notable changes to FoxML Core will be documented in this file.
 
 ## 2026-01-09
 
+### Fix CROSS_SECTIONAL View Detection for Feature Importances
+- **Fixed Incorrect SYMBOL_SPECIFIC Detection for Multi-Symbol CROSS_SECTIONAL Runs**: Resolved issue where CROSS_SECTIONAL runs (10 symbols) were incorrectly detected as SYMBOL_SPECIFIC when saving feature importances, causing "SYMBOL_SPECIFIC view requires symbol" errors
+  - **Root Cause**: Auto-detection logic at function entry (line 5309-5313) converted CROSS_SECTIONAL to SYMBOL_SPECIFIC if `symbol` parameter was provided, without checking if it was actually a single-symbol run. For multi-symbol CROSS_SECTIONAL runs, `symbol` could be set from a previous target's state, causing incorrect auto-detection
+  - **Fix #1 - Function Entry Auto-Detection** (`model_evaluation.py` lines 5309-5318): Added validation to check `symbols` parameter length before auto-detecting SYMBOL_SPECIFIC. Only triggers auto-detection if `len(symbols) == 1`. For multi-symbol runs, clears the `symbol` parameter to prevent incorrect detection
+  - **Fix #2 - Feature Importances Auto-Detection** (`model_evaluation.py` lines 6575-6587): Added defensive validation in feature importances saving logic to check `resolved_data_config.symbols` or `symbols_array` length before auto-detecting SYMBOL_SPECIFIC. Clears `symbol_for_importances` for multi-symbol CROSS_SECTIONAL runs
+  - **Impact**: CROSS_SECTIONAL runs with multiple symbols now correctly maintain CROSS_SECTIONAL view and `symbol=None`. Feature importances save to correct directories. No "SS→CS promotion detected" warnings for legitimate CROSS_SECTIONAL runs. SYMBOL_SPECIFIC runs remain unaffected (explicit SYMBOL_SPECIFIC bypasses auto-detection, single-symbol runs still auto-detect correctly)
+  - **Maintains SST Principles**: Uses same validation pattern, preserves backward compatibility for legitimate SYMBOL_SPECIFIC runs
+
 ### Symbol Parameter Propagation Fix - All Stages (FEATURE_SELECTION and TRAINING)
 - **Fixed Symbol Parameter Propagation Across All Stages**: Applied comprehensive fixes to FEATURE_SELECTION and TRAINING stages to match TARGET_RANKING fixes
   - **FEATURE_SELECTION - View Auto-Detection** (`feature_selector.py` line 264): Added auto-detection to convert `CROSS_SECTIONAL` to `SYMBOL_SPECIFIC` when symbol is provided, matching TARGET_RANKING behavior

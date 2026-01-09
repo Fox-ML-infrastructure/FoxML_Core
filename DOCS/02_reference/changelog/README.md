@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### January
 
+- **2026-01-09 (Fix CROSS_SECTIONAL View Detection for Feature Importances)** — Fixed issue where CROSS_SECTIONAL runs (10 symbols) were incorrectly detected as SYMBOL_SPECIFIC when saving feature importances. Root cause: auto-detection converted CROSS_SECTIONAL to SYMBOL_SPECIFIC if symbol parameter was provided, without checking if it was actually a single-symbol run. Fixed by adding validation to check symbols parameter length before auto-detecting. Multi-symbol CROSS_SECTIONAL runs now correctly maintain CROSS_SECTIONAL view. SYMBOL_SPECIFIC runs remain unaffected. Maintains SST principles.
+  → [View](2026-01-09-sst-enum-migration.md)
+
 - **2026-01-09 (Symbol Parameter Propagation Fix - All Stages)** — Applied comprehensive fixes to FEATURE_SELECTION and TRAINING stages: added view auto-detection in feature_selector.py, added symbol validation in save_feature_importances_for_reproducibility(), added view auto-detection in save_multi_model_results(), added validation warning in get_training_snapshot_dir(), and verified ArtifactPaths.model_dir() symbol parameter. All three stages now have consistent symbol parameter propagation and validation. FEATURE_SELECTION and TRAINING stages will correctly route symbol-specific data to SYMBOL_SPECIFIC/symbol=.../ directories. Maintains SST principles with consistent patterns across all stages.
   → [View](2026-01-09-sst-enum-migration.md)
 
