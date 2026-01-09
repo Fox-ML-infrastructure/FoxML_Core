@@ -6,6 +6,9 @@ This directory contains detailed per-day changelogs for FoxML Core. For the ligh
 
 ### January
 
+- **2026-01-09 (Symbol-Specific Routing Fix - View Propagation and Auto-Detection)** — Fixed critical bug where single-symbol runs were incorrectly routed to CROSS_SECTIONAL directories instead of SYMBOL_SPECIFIC/symbol=.../ directories. Root cause: auto-detected view was overridden by run context. Fixed by ensuring requested_view_from_context uses auto-detected SYMBOL_SPECIFIC view instead of loading from context, and added safety net auto-detection for view_for_importances. Fixes propagate through entire pipeline: requested_view → resolved_data_config → view_for_writes → all path construction. All artifacts (feature importances, metrics, snapshots) now route correctly. Maintains SST principles and backward compatibility.
+  → [View](2026-01-09-sst-enum-migration.md)
+
 - **2026-01-09 (Comprehensive JSON/Parquet Serialization Fixes - SST Solution)** — Fixed critical JSON/Parquet serialization failures by creating centralized SST helpers (`sanitize_for_serialization()`, `safe_json_dump()`, `safe_dataframe_from_dict()`) that handle enum objects and pandas Timestamps. Replaced all direct `json.dump()` calls with `safe_json_dump()` across 11 files (136 instances). Fixed metrics duplication in metrics.json by extracting nested metrics dict before writing. All JSON and Parquet files now write successfully. Maintains SST principles with centralized helpers.
   → [View](2026-01-09-sst-enum-migration.md)
 

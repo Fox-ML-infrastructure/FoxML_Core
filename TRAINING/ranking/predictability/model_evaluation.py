@@ -5303,16 +5303,22 @@ def evaluate_target_predictability(
     # Load view from run context (SST) if available
     # For per-symbol loops, use cached view as requested_view to prevent view contract violations
     view_from_context = None
-    requested_view_from_context = view  # Default to view parameter
+    requested_view_from_context = view  # Default to view parameter (use auto-detected view if changed above)
     try:
         from TRAINING.orchestration.utils.run_context import load_run_context
         if output_dir:
             context = load_run_context(output_dir)
             if context:
                 view_from_context = context.get("view")
-                # For per-symbol loops (SYMBOL_SPECIFIC with single symbol), use cached view as requested_view
-                # This prevents the resolver from trying to change view to SINGLE_SYMBOL_TS
-                if view_enum == View.SYMBOL_SPECIFIC and view_from_context:
+                # CRITICAL FIX: If view was auto-detected to SYMBOL_SPECIFIC above, use it as requested_view
+                # This ensures the data preparation function receives the correct view instead of CROSS_SECTIONAL from context
+                if view_enum == View.SYMBOL_SPECIFIC and symbol is not None:
+                    # Use auto-detected view instead of context (prevents single-symbol runs from using CROSS_SECTIONAL)
+                    requested_view_from_context = View.SYMBOL_SPECIFIC.value
+                    logger.debug(f"Using auto-detected SYMBOL_SPECIFIC view as requested_view (symbol={symbol})")
+                elif view_enum == View.SYMBOL_SPECIFIC and view_from_context:
+                    # For per-symbol loops (SYMBOL_SPECIFIC with single symbol), use cached view as requested_view
+                    # This prevents the resolver from trying to change view to SINGLE_SYMBOL_TS
                     requested_view_from_context = view_from_context
                 else:
                     requested_view_from_context = context.get("requested_view") or view
@@ -6532,6 +6538,12 @@ def evaluate_target_predictability(
             view_for_importances = View.from_string(view_for_importances_raw) if isinstance(view_for_importances_raw, str) else view_for_importances_raw
             symbol_for_importances = symbol_for_writes if 'symbol_for_writes' in locals() else (symbol if ('symbol' in locals() and symbol) else None)
             universe_sig_for_importances = universe_sig_for_writes if 'universe_sig_for_writes' in locals() else None
+            
+            # CRITICAL FIX: Auto-detect SYMBOL_SPECIFIC view if symbol is provided (same logic as line 5297-5301)
+            # This ensures feature importances are saved to correct directory even if view_for_writes has wrong value
+            if view_for_importances == View.CROSS_SECTIONAL and symbol_for_importances is not None:
+                logger.info(f"Auto-detecting SYMBOL_SPECIFIC view for feature importances (symbol={symbol_for_importances} provided with CROSS_SECTIONAL)")
+                view_for_importances = View.SYMBOL_SPECIFIC
             
             # Compute RunIdentity for target ranking snapshots
             target_ranking_identity = None

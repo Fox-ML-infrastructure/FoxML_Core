@@ -4,6 +4,17 @@ All notable changes to FoxML Core will be documented in this file.
 
 ## 2026-01-09
 
+### Symbol-Specific Routing Fix - View Propagation and Auto-Detection
+- **Fixed Single-Symbol Runs Routing to CROSS_SECTIONAL**: Resolved critical bug where single-symbol runs were incorrectly routed to `CROSS_SECTIONAL` directories instead of `SYMBOL_SPECIFIC/symbol=.../` directories
+  - **Root Cause**: Auto-detection at line 5300 correctly set `view = View.SYMBOL_SPECIFIC`, but `requested_view_from_context` was loaded from run context (which could be `CROSS_SECTIONAL`), overriding the auto-detected view before it was passed to data preparation function
+  - **Fix #1 - View Propagation** (`model_evaluation.py` lines 5313-5318): After auto-detection sets `view = View.SYMBOL_SPECIFIC`, ensure `requested_view_from_context` uses the auto-detected view instead of loading from run context. This ensures `prepare_cross_sectional_data_for_ranking()` receives `SYMBOL_SPECIFIC` as `requested_view`, which then propagates to `resolved_data_config` and `view_for_writes` via `resolve_write_scope()`
+  - **Fix #2 - Feature Importances Auto-Detection** (`model_evaluation.py` lines 6542-6546): Added auto-detection for `view_for_importances` to check if `symbol_for_importances` is set and force `SYMBOL_SPECIFIC` view, even if `view_for_writes` has wrong value. This ensures feature importances are saved to correct directory as a safety net
+  - **Downstream Impact**: Fixes propagate through entire pipeline:
+    - `requested_view_from_context` → `prepare_cross_sectional_data_for_ranking()` → `resolved_data_config.view` → `resolve_write_scope()` → `view_for_writes` → all path construction
+    - Feature importances, metrics, snapshots, and all artifacts now route to correct `SYMBOL_SPECIFIC/symbol=.../` directories
+  - **Impact**: Single-symbol runs now correctly route to `SYMBOL_SPECIFIC/symbol=.../universe=.../` directories. Log messages now show `SYMBOL_SPECIFIC` instead of `CROSS_SECTIONAL (symbol=AMZN)`. All downstream path construction uses correct view
+  - **Maintains SST Principles**: Uses existing auto-detection pattern, preserves backward compatibility, and ensures consistent view handling throughout pipeline
+
 ### Comprehensive JSON/Parquet Serialization Fixes - SST Solution
 - **Fixed JSON Serialization with Enum Objects**: Resolved critical issue where Stage/View enum objects were written directly to JSON, causing serialization failures and missing output files
   - **New SST Helpers in `file_utils.py`**: Created centralized `sanitize_for_serialization()`, `safe_json_dump()`, and `safe_dataframe_from_dict()` helpers that recursively convert enum objects to strings and handle pandas Timestamps
