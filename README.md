@@ -1,9 +1,11 @@
 # FoxML Core — ML Cross-Sectional Infrastructure
 
-**FoxML is research-grade ML infrastructure. It assumes prior experience with Python, Linux, and quantitative workflows.**
+**FoxML is research-grade ML infrastructure. It assumes prior experience with Python, Linux, and quantitative workflows. Continued development will most likely be private going forward.
+Keeping every update OSS adds pressure that isn’t sustainable right now.This repository reflects a stable snapshot of the project, including key determinism work completed up to this point. This does not mean development has stopped — only that I won’t be as transparent about ongoing work.
+I also need to prioritize paid work.**
 
 > ⚠️ **Disclaimer:** This software is provided for research and educational purposes only. It does not constitute financial advice, and no guarantees of returns or performance are made. Use at your own risk.
-> Continued development will most likely be private from here, keeping every update OSS makes me feel pressured. This may have the updates that made it deterministic, but I cant quite remember. This doesnt mean development wont continue, just that i wont be as transparent going forward.
+>  
 
 > 💻 **Interface:** This is a command-line and config-driven system. There is no graphical UI, web dashboard, or visual interface. All interaction is via YAML configuration files and Python scripts.
 
