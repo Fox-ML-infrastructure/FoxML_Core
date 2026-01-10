@@ -2,7 +2,7 @@
 
 **FoxML is research-grade ML infrastructure. It assumes prior experience with Python, Linux, and quantitative workflows. Continued development will most likely be private going forward, I may continue pushing public updates, im not sure yet.
 This does not mean development has stopped — only that I won’t be as transparent about ongoing work.
-Im pretty sure that this will run with deterministic settings, if not someone can reach out and let me know im prioritizing continued development. 
+Im pretty sure that this will run with deterministic settings, if not someone can reach out and let me know.  
 | bin/run_deterministic.sh python TRAINING/orchestration/intelligent_trainer.py --experiment-config determinism_test |
 This is the command Ive been running tests with.**
 
