@@ -3,6 +3,7 @@
 **FoxML is research-grade ML infrastructure. It assumes prior experience with Python, Linux, and quantitative workflows.**
 
 > ⚠️ **Disclaimer:** This software is provided for research and educational purposes only. It does not constitute financial advice, and no guarantees of returns or performance are made. Use at your own risk.
+> Continued development will most likely be private from here. 
 
 > 💻 **Interface:** This is a command-line and config-driven system. There is no graphical UI, web dashboard, or visual interface. All interaction is via YAML configuration files and Python scripts.
 
