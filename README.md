@@ -1,7 +1,7 @@
 # FoxML Core — ML Cross-Sectional Infrastructure
 
-**FoxML is research-grade ML infrastructure. It assumes prior experience with Python, Linux, and quantitative workflows. Continued development will most likely be private going forward, I may continue pushing public updates, im not sure yet. 
-Keeping every update OSS adds pressure that isn’t sustainable right now.This repository reflects a stable snapshot of the project, including key determinism work completed up to this point. This does not mean development has stopped — only that I won’t be as transparent about ongoing work.
+**FoxML is research-grade ML infrastructure. It assumes prior experience with Python, Linux, and quantitative workflows. Continued development will most likely be private going forward, I may continue pushing public updates, im not sure yet.
+This does not mean development has stopped — only that I won’t be as transparent about ongoing work.
 Im pretty sure that this will run with deterministic settings, if not someone can reach out and let me know im prioritizing continued development. 
 | bin/run_deterministic.sh python TRAINING/orchestration/intelligent_trainer.py --experiment-config determinism_test |
 This is the command Ive been running tests with.**
