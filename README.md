@@ -3,7 +3,7 @@
 **FoxML is research-grade ML infrastructure. It assumes prior experience with Python, Linux, and quantitative workflows.**
 
 > ⚠️ **Disclaimer:** This software is provided for research and educational purposes only. It does not constitute financial advice, and no guarantees of returns or performance are made. Use at your own risk.
-> Continued development will most likely be private from here. 
+> Continued development will most likely be private from here, keeping every update OSS makes me feel pressured. This may have the updates that made it deterministic, but I cant quite remember. This doesnt mean development wont continue, just that i wont be as transparent going forward.
 
 > 💻 **Interface:** This is a command-line and config-driven system. There is no graphical UI, web dashboard, or visual interface. All interaction is via YAML configuration files and Python scripts.
 
@@ -11,16 +11,7 @@
 > - **AGPL-3.0** (open source)  
 > - **Commercial License** (for proprietary or for-profit use)  
 >
-> See [LICENSE](LICENSE) and [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md) for full terms.
-
-> **🔍 Reproducibility & Auditability:** This system supports **bitwise deterministic runs** via strict mode (`bin/run_deterministic.sh`) for financial audit compliance, plus comprehensive auditability (full tracking of inputs, configs, and outputs). See [Deterministic Runs](DOCS/02_reference/configuration/DETERMINISTIC_RUNS.md).
-
----
-
-> **⚠️ ACTIVE DEVELOPMENT — EXPECT BREAKING CHANGES**  
-> This project is under **heavy active development**. Breaking changes may occur without notice. APIs, configuration schemas, directory structures, and file formats may change between commits. Use at your own risk in production environments. See [ROADMAP.md](DOCS/02_reference/roadmap/ROADMAP.md) for current status and known issues.
-
-> **🎯 Version 1.0 Definition:** See [FOXML_1.0_MANIFEST.md](DOCS/00_executive/product/FOXML_1.0_MANIFEST.md) for the capability boundary that defines what constitutes FoxML 1.0.
+> See [LICENSE](LICENSE) and [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md) for full terms. 
 
 > **📝 See [CHANGELOG.md](CHANGELOG.md) for recent technical and compliance changes.**
 
